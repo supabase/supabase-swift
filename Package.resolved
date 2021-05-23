@@ -1,0 +1,16 @@
+{
+  "object": {
+    "pins": [
+      {
+        "package": "gotrue",
+        "repositoryURL": "https://github.com/satishbabariya/gotrue-swift.git",
+        "state": {
+          "branch": "main",
+          "revision": "23122002d9b13e19de957afe5ace353474ba6483",
+          "version": null
+        }
+      }
+    ]
+  },
+  "version": 1
+}
