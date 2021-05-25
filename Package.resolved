@@ -6,7 +6,16 @@
         "repositoryURL": "https://github.com/satishbabariya/gotrue-swift.git",
         "state": {
           "branch": "main",
-          "revision": "23122002d9b13e19de957afe5ace353474ba6483",
+          "revision": "d797d0f42eec30fd494498f8b59839c4d3173662",
+          "version": null
+        }
+      },
+      {
+        "package": "SupabaseStorage",
+        "repositoryURL": "https://github.com/satishbabariya/storage-swift.git",
+        "state": {
+          "branch": null,
+          "revision": "fc718b30956303cc098caf7e4ad27035b89022d5",
           "version": null
         }
       }

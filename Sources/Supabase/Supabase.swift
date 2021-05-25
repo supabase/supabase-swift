@@ -1,4 +1,5 @@
 import gotrue
+import SupabaseStorage
 
 public class SupabaseClient {
     var supabaseUrl: String
@@ -10,6 +11,12 @@ public class SupabaseClient {
     var storageUrl: String
 
     public var auth: GoTrueClient
+    public var storage: SupabaseStorageClient {
+        var headers: [String: String] = [:]
+        headers["apikey"] = supabaseKey
+        headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
+        return SupabaseStorageClient(url: storageUrl, headers: headers)
+    }
 
     public init(supabaseUrl: String, supabaseKey: String, schema: String = "public", autoRefreshToken: Bool = true) {
         self.supabaseUrl = supabaseUrl
