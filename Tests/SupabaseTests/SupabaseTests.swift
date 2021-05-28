@@ -21,6 +21,28 @@ final class SupabaseTests: XCTestCase {
         }
     }
 
+    func testSignIN() {
+        let e = expectation(description: "testSignIN")
+
+        supabase.auth.signIn(email: "sample@mail.com", password: "secret") { result in
+            switch result {
+            case let .success(session):
+                print(session)
+                XCTAssertNotNil(session.accessToken)
+            case let .failure(error):
+                print(error.localizedDescription)
+                XCTFail("testSignIN failed: \(error.localizedDescription)")
+            }
+            e.fulfill()
+        }
+
+        waitForExpectations(timeout: 30) { error in
+            if let error = error {
+                XCTFail("testSignIN failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func testListBuckets() {
         let e = expectation(description: "listBuckets")
 

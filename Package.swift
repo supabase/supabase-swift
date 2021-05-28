@@ -17,14 +17,14 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(name: "gotrue", url: "https://github.com/satishbabariya/gotrue-swift.git", .branch("main")),
-        .package(name: "SupabaseStorage", url: "https://github.com/satishbabariya/storage-swift.git", .revision("fc718b30956303cc098caf7e4ad27035b89022d5")),
+        .package(name: "GoTrue", url: "https://github.com/satishbabariya/gotrue-swift.git", .revision("7294ec73db53c2b66a0142a9e6d9a56fcf5d3d3a")),
+        .package(name: "SupabaseStorage", url: "https://github.com/satishbabariya/storage-swift.git", .revision("48961a9c08700d842a88da800cc3243c9538a8e3")),
 
     ],
     targets: [
         .target(
             name: "Supabase",
-            dependencies: ["gotrue", "SupabaseStorage"]
+            dependencies: ["GoTrue", "SupabaseStorage"]
         ),
         .testTarget(
             name: "SupabaseTests",

@@ -2,11 +2,11 @@
   "object": {
     "pins": [
       {
-        "package": "gotrue",
+        "package": "GoTrue",
         "repositoryURL": "https://github.com/satishbabariya/gotrue-swift.git",
         "state": {
-          "branch": "main",
-          "revision": "d797d0f42eec30fd494498f8b59839c4d3173662",
+          "branch": null,
+          "revision": "7294ec73db53c2b66a0142a9e6d9a56fcf5d3d3a",
           "version": null
         }
       },
@@ -15,7 +15,7 @@
         "repositoryURL": "https://github.com/satishbabariya/storage-swift.git",
         "state": {
           "branch": null,
-          "revision": "fc718b30956303cc098caf7e4ad27035b89022d5",
+          "revision": "48961a9c08700d842a88da800cc3243c9538a8e3",
           "version": null
         }
       }

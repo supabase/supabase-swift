@@ -1,4 +1,4 @@
-import gotrue
+import GoTrue
 import SupabaseStorage
 
 public class SupabaseClient {
