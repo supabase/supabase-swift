@@ -3,18 +3,18 @@
     "pins": [
       {
         "package": "GoTrue",
-        "repositoryURL": "https://github.com/satishbabariya/gotrue-swift.git",
+        "repositoryURL": "https://github.com/supabase/gotrue-swift.git",
         "state": {
-          "branch": null,
+          "branch": "main",
           "revision": "7294ec73db53c2b66a0142a9e6d9a56fcf5d3d3a",
           "version": null
         }
       },
       {
         "package": "SupabaseStorage",
-        "repositoryURL": "https://github.com/satishbabariya/storage-swift.git",
+        "repositoryURL": "https://github.com/supabase/storage-swift.git",
         "state": {
-          "branch": null,
+          "branch": "main",
           "revision": "48961a9c08700d842a88da800cc3243c9538a8e3",
           "version": null
         }
