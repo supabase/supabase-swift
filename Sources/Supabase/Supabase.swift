@@ -1,4 +1,5 @@
 import GoTrue
+import Realtime
 import SupabaseStorage
 
 public class SupabaseClient {
@@ -18,6 +19,8 @@ public class SupabaseClient {
         return SupabaseStorageClient(url: storageUrl, headers: headers)
     }
 
+    private var realtime: RealtimeClient
+
     public init(supabaseUrl: String, supabaseKey: String, schema: String = "public", autoRefreshToken: Bool = true) {
         self.supabaseUrl = supabaseUrl
         self.supabaseKey = supabaseKey
@@ -28,5 +31,6 @@ public class SupabaseClient {
         storageUrl = "\(supabaseUrl)/storage/v1"
 
         auth = GoTrueClient(url: authUrl, headers: ["apikey": supabaseKey], autoRefreshToken: autoRefreshToken)
+        realtime = RealtimeClient(endPoint: realtimeUrl, params: ["apikey": supabaseKey])
     }
 }

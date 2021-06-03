@@ -11,12 +11,39 @@
         }
       },
       {
+        "package": "Realtime",
+        "repositoryURL": "https://github.com/supabase/realtime-swift.git",
+        "state": {
+          "branch": "main",
+          "revision": "b1c19c05afd7145395aff8fd83f67162d9904cfc",
+          "version": null
+        }
+      },
+      {
+        "package": "Starscream",
+        "repositoryURL": "https://github.com/daltoniam/Starscream.git",
+        "state": {
+          "branch": null,
+          "revision": "e6b65c6d9077ea48b4a7bdda8994a1d3c6969c8d",
+          "version": "3.1.1"
+        }
+      },
+      {
         "package": "SupabaseStorage",
         "repositoryURL": "https://github.com/supabase/storage-swift.git",
         "state": {
           "branch": "main",
           "revision": "48961a9c08700d842a88da800cc3243c9538a8e3",
           "version": null
+        }
+      },
+      {
+        "package": "swift-nio-zlib-support",
+        "repositoryURL": "https://github.com/apple/swift-nio-zlib-support.git",
+        "state": {
+          "branch": null,
+          "revision": "37760e9a52030bb9011972c5213c3350fa9d41fd",
+          "version": "1.0.0"
         }
       }
     ]

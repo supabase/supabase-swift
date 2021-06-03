@@ -14,11 +14,12 @@ let package = Package(
     dependencies: [
         .package(name: "GoTrue", url: "https://github.com/supabase/gotrue-swift.git", .branch("main")),
         .package(name: "SupabaseStorage", url: "https://github.com/supabase/storage-swift.git", .branch("main")),
+        .package(name: "Realtime", url: "https://github.com/supabase/realtime-swift.git", .branch("main")),
     ],
     targets: [
         .target(
             name: "Supabase",
-            dependencies: ["GoTrue", "SupabaseStorage"]
+            dependencies: ["GoTrue", "SupabaseStorage", "Realtime"]
         ),
         .testTarget(
             name: "SupabaseTests",
