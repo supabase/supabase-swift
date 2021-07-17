@@ -1,4 +1,5 @@
 import GoTrue
+import PostgREST
 import Realtime
 import SupabaseStorage
 
@@ -10,18 +11,31 @@ public class SupabaseClient {
     var realtimeUrl: String
     var authUrl: String
     var storageUrl: String
-
+    
     public var auth: GoTrueClient
+    
     public var storage: SupabaseStorageClient {
         var headers: [String: String] = [:]
         headers["apikey"] = supabaseKey
         headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
         return SupabaseStorageClient(url: storageUrl, headers: headers)
     }
-
+    
+    public var database: PostgrestClient {
+        var headers: [String: String] = [:]
+        headers["apikey"] = supabaseKey
+        headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
+        return PostgrestClient(url: restUrl, headers: headers, schema: schema)
+    }
+    
     private var realtime: RealtimeClient
-
-    public init(supabaseUrl: String, supabaseKey: String, schema: String = "public", autoRefreshToken: Bool = true) {
+    
+    public init(
+        supabaseUrl: String,
+        supabaseKey: String,
+        schema: String = "public",
+        autoRefreshToken: Bool = true
+    ) {
         self.supabaseUrl = supabaseUrl
         self.supabaseKey = supabaseKey
         self.schema = schema
@@ -29,8 +43,12 @@ public class SupabaseClient {
         realtimeUrl = "\(supabaseUrl)/realtime/v1"
         authUrl = "\(supabaseUrl)/auth/v1"
         storageUrl = "\(supabaseUrl)/storage/v1"
-
-        auth = GoTrueClient(url: authUrl, headers: ["apikey": supabaseKey], autoRefreshToken: autoRefreshToken)
+        
+        auth = GoTrueClient(
+            url: authUrl,
+            headers: ["apikey": supabaseKey],
+            autoRefreshToken: autoRefreshToken
+        )
         realtime = RealtimeClient(endPoint: realtimeUrl, params: ["apikey": supabaseKey])
     }
 }
