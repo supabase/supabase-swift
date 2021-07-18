@@ -6,7 +6,16 @@
         "repositoryURL": "https://github.com/supabase/gotrue-swift.git",
         "state": {
           "branch": "main",
-          "revision": "7294ec73db53c2b66a0142a9e6d9a56fcf5d3d3a",
+          "revision": "1c5dd18636c76fdd58a620aa075485ef214eac7b",
+          "version": null
+        }
+      },
+      {
+        "package": "PostgREST",
+        "repositoryURL": "https://github.com/supabase/postgrest-swift",
+        "state": {
+          "branch": "master",
+          "revision": "b55a5b8646c397eb4dbc368e309e7cb04a5b281f",
           "version": null
         }
       },
@@ -15,7 +24,7 @@
         "repositoryURL": "https://github.com/supabase/realtime-swift.git",
         "state": {
           "branch": "main",
-          "revision": "b1c19c05afd7145395aff8fd83f67162d9904cfc",
+          "revision": "e3d06ee66ba6d2e7722ee1a580b613ed2456ed44",
           "version": null
         }
       },

@@ -1,10 +1,12 @@
-@testable import Supabase
 import SupabaseStorage
 import XCTest
 
-final class SupabaseTests: XCTestCase {
-    var supabase = SupabaseClient(supabaseUrl: SupabaseTests.supabaseUrl(), supabaseKey: SupabaseTests.supabaseKey())
+@testable import Supabase
 
+final class SupabaseTests: XCTestCase {
+    var supabase = SupabaseClient(
+        supabaseUrl: SupabaseTests.supabaseUrl(), supabaseKey: SupabaseTests.supabaseKey())
+    
     static func supabaseUrl() -> String {
         if let token = ProcessInfo.processInfo.environment["supabaseUrl"] {
             return token
@@ -12,7 +14,7 @@ final class SupabaseTests: XCTestCase {
             fatalError()
         }
     }
-
+    
     static func supabaseKey() -> String {
         if let url = ProcessInfo.processInfo.environment["supabaseKey"] {
             return url
@@ -20,10 +22,10 @@ final class SupabaseTests: XCTestCase {
             fatalError()
         }
     }
-
+    
     func testSignIN() {
         let e = expectation(description: "testSignIN")
-
+        
         supabase.auth.signIn(email: "sample@mail.com", password: "secret") { result in
             switch result {
             case let .success(session):
@@ -35,17 +37,17 @@ final class SupabaseTests: XCTestCase {
             }
             e.fulfill()
         }
-
+        
         waitForExpectations(timeout: 30) { error in
             if let error = error {
                 XCTFail("testSignIN failed: \(error.localizedDescription)")
             }
         }
     }
-
+    
     func testListBuckets() {
         let e = expectation(description: "listBuckets")
-
+        
         supabase.storage.listBuckets { result in
             switch result {
             case let .success(buckets):
@@ -56,21 +58,25 @@ final class SupabaseTests: XCTestCase {
             }
             e.fulfill()
         }
-
+        
         waitForExpectations(timeout: 30) { error in
             if let error = error {
                 XCTFail("listBuckets failed: \(error.localizedDescription)")
             }
         }
     }
-
+    
     func testUploadFile() {
         let e = expectation(description: "testUploadFile")
-        let data = try! Data(contentsOf: URL(string: "https://raw.githubusercontent.com/satishbabariya/storage-swift/main/README.md")!)
-
+        let data = try! Data(
+            contentsOf: URL(
+                string: "https://raw.githubusercontent.com/satishbabariya/storage-swift/main/README.md")!)
+        
         let file = File(name: "README.md", data: data, fileName: "README.md", contentType: "text/html")
-
-        supabase.storage.from(id: "Demo").upload(path: "\(UUID().uuidString).md", file: file, fileOptions: FileOptions(cacheControl: "3600")) { result in
+        
+        supabase.storage.from(id: "Demo").upload(
+            path: "\(UUID().uuidString).md", file: file, fileOptions: FileOptions(cacheControl: "3600")
+        ) { result in
             switch result {
             case let .success(res):
                 print(res)
@@ -81,15 +87,11 @@ final class SupabaseTests: XCTestCase {
             }
             e.fulfill()
         }
-
+        
         waitForExpectations(timeout: 30) { error in
             if let error = error {
                 XCTFail("testUploadFile failed: \(error.localizedDescription)")
             }
         }
     }
-
-    static var allTests = [
-        ("testListBuckets", testListBuckets),
-    ]
 }
