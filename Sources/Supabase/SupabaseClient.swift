@@ -17,7 +17,7 @@ import SupabaseStorage
  
  For more usage information read the README.md
  */
-public class Supabase {
+public class SupabaseClient {
     private var supabaseUrl: String
     private var supabaseKey: String
     private var schema: String
@@ -76,6 +76,3 @@ public class Supabase {
         realtime = RealtimeClient(endPoint: realtimeUrl, params: ["apikey": supabaseKey])
     }
 }
-
-@available(*, deprecated, message: "Use `Supabase` instead of `SupabaseClient`")
-typealias SupabaseClient = Supabase

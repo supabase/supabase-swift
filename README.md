@@ -27,9 +27,9 @@ If you're using Xcode, [use this guide](https://developer.apple.com/documentatio
 
 ## Usage
 
-For all requests made for supabase, you will need to initialize a `Supabase` object.
+For all requests made for supabase, you will need to initialize a `SupabaseClient` object.
 ```swift
-let client = Supabase(supabaseUrl: "{ Supabase URL }", supabaseKey: "{ Supabase anonymous Key }")
+let client = SupabaseClient(supabaseUrl: "{ Supabase URL }", supabaseKey: "{ Supabase anonymous Key }")
 ```
 This client object will be used for all the following examples.
 
