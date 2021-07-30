@@ -14,6 +14,8 @@ import SupabaseStorage
  3.  `realtime`
  4.  `storage`
  Each class listed is available under `Supabase.{name}`, eg: `Supabase.auth`
+ 
+ For more usage information read the README.md
  */
 public class Supabase {
     private var supabaseUrl: String
@@ -24,6 +26,7 @@ public class Supabase {
     private var authUrl: String
     private var storageUrl: String
     
+    /// Auth client for Supabase
     public var auth: GoTrueClient
     
     /// Storage client for Supabase.
@@ -42,6 +45,7 @@ public class Supabase {
         return PostgrestClient(url: restUrl, headers: headers, schema: schema)
     }
     
+    /// Realtime client for Supabase
     private var realtime: RealtimeClient
     
     /// Init `Supabase` with the provided parameters.
@@ -49,7 +53,7 @@ public class Supabase {
     ///   - supabaseUrl: Unique Supabase project url
     ///   - supabaseKey: Supabase anonymous API Key
     ///   - schema: Database schema name, defaults to `public`
-    ///   - autoRefreshToken: Toggles whether `Supabase.auth` automatically refreshes the auth token. Defaults to `true`
+    ///   - autoRefreshToken: Toggles whether `Supabase.auth` automatically refreshes auth tokens. Defaults to `true`
     public init(
         supabaseUrl: String,
         supabaseKey: String,
