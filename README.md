@@ -1,11 +1,26 @@
-# `supabase-swift`
+# supabase-swift
 
-Swift Client library to interact with Supabase.
+Supabase client for swift. Mirrors the design of [supabase-js](https://github.com/supabase/supabase-js/blob/master/README.md)
 
-- Documentation: https://supabase.io/docs/reference/swift/supabase-client
+## Installation
 
-## Sponsors
+Swift Package Manager:
 
-We are building the features of Firebase using enterprise-grade, open source products. We support existing communities wherever possible, and if the products don’t exist we build them and open source them ourselves. Thanks to these sponsors who are making the OSS ecosystem better for everyone.
+Add the following lines to your `Package.swift` file:
+```swift
+let package = Package(
+    ...
+    dependencies: [
+        ...
+        .package(name: "Supabase", url: "https://github.com/supabase/supabase-swift.git", .branch("main")),
+    ],
+    targets: [
+        .target(
+            name: "YourTargetName",
+            dependencies: ["Supabase"] // Add as a dependency
+        )
+    ]
+)
+```
 
-[![New Sponsor](https://user-images.githubusercontent.com/10214025/90518111-e74bbb00-e198-11ea-8f88-c9e3c1aa4b5b.png)](https://github.com/sponsors/supabase)
+If you're using Xcode, [use this guide](https://developer.apple.com/documentation/swift_packages/adding_package_dependencies_to_your_app) to add `supabase-swift` to your project. Use `https://github.com/supabase/supabase-swift.git` for the url when Xcode asks.
