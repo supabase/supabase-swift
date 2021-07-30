@@ -4,8 +4,7 @@ import XCTest
 @testable import Supabase
 
 final class SupabaseTests: XCTestCase {
-    var supabase = Supabase(
-        supabaseUrl: SupabaseTests.supabaseUrl(), supabaseKey: SupabaseTests.supabaseKey())
+    var supabase = Supabase(supabaseUrl: SupabaseTests.supabaseUrl(), supabaseKey: SupabaseTests.supabaseKey())
     
     static func supabaseUrl() -> String {
         if let token = ProcessInfo.processInfo.environment["supabaseUrl"] {
