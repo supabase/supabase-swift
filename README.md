@@ -1,8 +1,114 @@
-# `supabase-swift`
+# supabase-swift
 
-Swift Client library to interact with Supabase.
+Supabase client for swift. Mirrors the design of [supabase-js](https://github.com/supabase/supabase-js/blob/master/README.md)
 
-- Documentation: https://supabase.io/docs/reference/swift/supabase-client
+## Installation
+
+Swift Package Manager:
+
+Add the following lines to your `Package.swift` file:
+```swift
+let package = Package(
+    ...
+    dependencies: [
+        ...
+        .package(name: "Supabase", url: "https://github.com/supabase/supabase-swift.git", .branch("main")), // Add the package
+    ],
+    targets: [
+        .target(
+            name: "YourTargetName",
+            dependencies: ["Supabase"] // Add as a dependency
+        )
+    ]
+)
+```
+
+If you're using Xcode, [use this guide](https://developer.apple.com/documentation/swift_packages/adding_package_dependencies_to_your_app) to add `supabase-swift` to your project. Use `https://github.com/supabase/supabase-swift.git` for the url when Xcode asks.
+
+## Usage
+
+For all requests made for supabase, you will need to initialize a `SupabaseClient` object.
+```swift
+let client = SupabaseClient(supabaseUrl: "{ Supabase URL }", supabaseKey: "{ Supabase anonymous Key }")
+```
+This client object will be used for all the following examples.
+
+### Database
+
+Query todo table for all completed todos.
+```swift
+do {
+   let query = try client.database.from("todos")
+                                .select()
+                                .eq(column: "isDone", value: "true")
+                                
+   try query.execute { [weak self] (results) in
+       guard let self = self else { return }
+
+       // Handle results
+   }
+} catch {
+   print("Error querying for todos: \(error)")
+}
+```
+
+Insert a todo into the database.
+```swift
+struct Todo: Codable {
+    var id: UUID = UUID()
+    var label: String
+    var isDone: Bool = false
+}
+
+let todo = Todo(label: "Example todo!")
+
+do {
+    let jsonData: Data = try JSONEncoder().encode(todo)
+    let jsonDict: [String: Any] = try JSONSerialization.jsonObject(with: jsonData, options: .allowFragments))
+    
+    try client.database.from("todos")    
+                       .insert(values: jsonDict)
+                       .execute { results in
+        // Handle response
+    }
+} catch {
+   print("Error inserting the todo: \(error)")
+}
+```
+
+For more query examples visit [the Javascript docs](https://supabase.io/docs/reference/javascript/select) to learn more. The API design is a near 1:1 match.
+
+Execute an RPC
+```swift
+do {
+    try client.database.rpc(fn: "testFunction", parameters: nil).execute { result in
+        // Handle result
+    }
+} catch {
+   print("Error executing the RPC: \(error)")
+}
+```
+
+### Realtime
+
+> Realtime docs coming soon
+
+### Auth
+
+> Auth docs coming soon
+
+### Storage
+
+> Storage docs coming soon
+
+
+## Contributing
+
+- Fork the repo on GitHub
+- Clone the project to your own machine
+- Commit changes to your own branch
+- Push your work back up to your fork
+- Submit a Pull request so that we can review your changes and merge
 
 ## Sponsors
 

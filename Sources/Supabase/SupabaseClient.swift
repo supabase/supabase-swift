@@ -3,17 +3,33 @@ import PostgREST
 import Realtime
 import SupabaseStorage
 
+/**
+ The main class for accessing Supabase functionality
+ 
+ Initialize this class using `.init(supabaseURL: String, supabaseKey: String)`
+ 
+ There are four main classes contained by the `Supabase` class.
+ 1.  `auth`
+ 2.  `database`
+ 3.  `realtime`
+ 4.  `storage`
+ Each class listed is available under `Supabase.{name}`, eg: `Supabase.auth`
+ 
+ For more usage information read the README.md
+ */
 public class SupabaseClient {
-    var supabaseUrl: String
-    var supabaseKey: String
-    var schema: String
-    var restUrl: String
-    var realtimeUrl: String
-    var authUrl: String
-    var storageUrl: String
+    private var supabaseUrl: String
+    private var supabaseKey: String
+    private var schema: String
+    private var restUrl: String
+    private var realtimeUrl: String
+    private var authUrl: String
+    private var storageUrl: String
     
+    /// Auth client for Supabase
     public var auth: GoTrueClient
     
+    /// Storage client for Supabase.
     public var storage: SupabaseStorageClient {
         var headers: [String: String] = [:]
         headers["apikey"] = supabaseKey
@@ -21,6 +37,7 @@ public class SupabaseClient {
         return SupabaseStorageClient(url: storageUrl, headers: headers)
     }
     
+    /// Database client for Supabase.
     public var database: PostgrestClient {
         var headers: [String: String] = [:]
         headers["apikey"] = supabaseKey
@@ -28,8 +45,15 @@ public class SupabaseClient {
         return PostgrestClient(url: restUrl, headers: headers, schema: schema)
     }
     
+    /// Realtime client for Supabase
     private var realtime: RealtimeClient
     
+    /// Init `Supabase` with the provided parameters.
+    /// - Parameters:
+    ///   - supabaseUrl: Unique Supabase project url
+    ///   - supabaseKey: Supabase anonymous API Key
+    ///   - schema: Database schema name, defaults to `public`
+    ///   - autoRefreshToken: Toggles whether `Supabase.auth` automatically refreshes auth tokens. Defaults to `true`
     public init(
         supabaseUrl: String,
         supabaseKey: String,
