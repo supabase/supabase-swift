@@ -44,7 +44,7 @@ public class SupabaseClient {
     }
 
     /// Realtime client for Supabase
-    private var realtime: RealtimeClient
+    public var realtime: RealtimeClient
 
     private var defaultHeaders: [String: String]
 
