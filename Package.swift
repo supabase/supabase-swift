@@ -11,6 +11,12 @@ let package = Package(
             targets: ["Supabase"]
         )
     ],
+    platforms: [
+        .macOS(.v10),
+        .iOS(.v11),
+        .tvOS(.v11),
+        .watchOS(.v3)
+    ],
     dependencies: [
         .package(name: "GoTrue", url: "https://github.com/supabase/gotrue-swift.git", .branch("main")),
         .package(name: "SupabaseStorage", url: "https://github.com/supabase/storage-swift.git", .branch("main")),
