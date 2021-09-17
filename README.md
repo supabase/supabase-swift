@@ -12,7 +12,7 @@ let package = Package(
     ...
     dependencies: [
         ...
-        .package(name: "Supabase", url: "https://github.com/supabase/supabase-swift.git", .branch("main")), // Add the package
+        .package(name: "Supabase", url: "https://github.com/supabase/supabase-swift.git", .branch("master")), // Add the package
     ],
     targets: [
         .target(
@@ -37,43 +37,44 @@ This client object will be used for all the following examples.
 
 Query todo table for all completed todos.
 ```swift
-do {
-   let query = try client.database.from("todos")
-                                .select()
-                                .eq(column: "isDone", value: "true")
-                                
-   try query.execute { [weak self] (results) in
-       guard let self = self else { return }
+struct Todo: Codable {
+    var id: String = UUID().uuidString
+    var label: String
+    var isDone: Bool = false
+}
+```
 
-       // Handle results
-   }
-} catch {
-   print("Error querying for todos: \(error)")
+```swift
+let query = try client.database.from("todos")
+    .select()
+    .eq(column: "isDone", value: "true")
+                                
+query.execute { [weak self] results in
+    guard let self = self else { return }
+
+    switch results {
+    case let .success(response):
+        let todos = try? response.decoded(to: [Todo].self)
+        print(todos)
+    case let .failure(error):
+        print(error.localizedDescription)
+    }
 }
 ```
 
 Insert a todo into the database.
-```swift
-struct Todo: Codable {
-    var id: UUID = UUID()
-    var label: String
-    var isDone: Bool = false
-}
 
+```swift
 let todo = Todo(label: "Example todo!")
 
-do {
-    let jsonData: Data = try JSONEncoder().encode(todo)
-    let jsonDict: [String: Any] = try JSONSerialization.jsonObject(with: jsonData, options: .allowFragments))
-    
-    try client.database.from("todos")    
-                       .insert(values: jsonDict)
-                       .execute { results in
+let jsonData: Data = try JSONEncoder().encode(todo)
+let jsonDict: [String: Any] = try JSONSerialization.jsonObject(with: jsonData, options: .allowFragments))
+
+client.database.from("todos")    
+    .insert(values: jsonDict)
+    .execute { results in
         // Handle response
     }
-} catch {
-   print("Error inserting the todo: \(error)")
-}
 ```
 
 For more query examples visit [the Javascript docs](https://supabase.io/docs/reference/javascript/select) to learn more. The API design is a near 1:1 match.
