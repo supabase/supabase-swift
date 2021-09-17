@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "Supabase",
     platforms: [
-        .macOS(.v10),
+        .macOS(.v10_15),
         .iOS(.v11),
         .tvOS(.v11),
         .watchOS(.v3)
