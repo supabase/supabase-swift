@@ -5,17 +5,17 @@ import PackageDescription
 
 let package = Package(
     name: "Supabase",
-    products: [
-        .library(
-            name: "Supabase",
-            targets: ["Supabase"]
-        )
-    ],
     platforms: [
         .macOS(.v10),
         .iOS(.v11),
         .tvOS(.v11),
         .watchOS(.v3)
+    ],
+    products: [
+        .library(
+            name: "Supabase",
+            targets: ["Supabase"]
+        )
     ],
     dependencies: [
         .package(name: "GoTrue", url: "https://github.com/supabase/gotrue-swift.git", .branch("main")),
