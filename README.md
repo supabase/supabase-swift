@@ -96,7 +96,25 @@ do {
 
 ### Auth
 
-> Auth docs coming soon
+Sign up with email and password
+```swift
+client.auth.signUp(email: "test@mail.com", password: "password") { result in
+    switch result {
+    case let .success(session, user): print(user)
+    case let .failure(error): print(error.localizedDescription)
+    }
+}
+```
+
+Login up with email and password
+```swift
+client.auth.signIn(email: "test@mail.com", password: "password") { result in
+    switch result {
+    case let .success(session): print(session.accessToken, session.user)
+    case let .failure(error): print(error.localizedDescription)
+    }
+}
+```
 
 ### Storage
 
