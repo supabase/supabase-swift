@@ -2,6 +2,15 @@
   "object": {
     "pins": [
       {
+        "package": "AnyCodable",
+        "repositoryURL": "https://github.com/Flight-School/AnyCodable",
+        "state": {
+          "branch": null,
+          "revision": "b1a7a8a6186f2fcb28f7bda67cfc545de48b3c80",
+          "version": "0.6.2"
+        }
+      },
+      {
         "package": "GoTrue",
         "repositoryURL": "https://github.com/supabase/gotrue-swift.git",
         "state": {
@@ -14,9 +23,9 @@
         "package": "PostgREST",
         "repositoryURL": "https://github.com/supabase/postgrest-swift",
         "state": {
-          "branch": "master",
-          "revision": "b55a5b8646c397eb4dbc368e309e7cb04a5b281f",
-          "version": null
+          "branch": null,
+          "revision": "cd22ffe4d6219bf53d0951455492e517d6292e49",
+          "version": "0.0.1"
         }
       },
       {

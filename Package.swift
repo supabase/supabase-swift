@@ -21,7 +21,7 @@ let package = Package(
         .package(name: "GoTrue", url: "https://github.com/supabase/gotrue-swift.git", .branch("main")),
         .package(name: "SupabaseStorage", url: "https://github.com/supabase/storage-swift.git", .branch("main")),
         .package(name: "Realtime", url: "https://github.com/supabase/realtime-swift.git", .branch("main")),
-        .package(name: "PostgREST", url: "https://github.com/supabase/postgrest-swift", .branch("master")),
+        .package(name: "PostgREST", url: "https://github.com/supabase/postgrest-swift", .exact("0.0.1")),
     ],
     targets: [
         .target(
