@@ -14,9 +14,9 @@
         "package": "GoTrue",
         "repositoryURL": "https://github.com/supabase/gotrue-swift.git",
         "state": {
-          "branch": "main",
-          "revision": "1c5dd18636c76fdd58a620aa075485ef214eac7b",
-          "version": null
+          "branch": null,
+          "revision": "2f4c23529afd1eafc16aafa72d17d4bd46437bbc",
+          "version": "0.0.1"
         }
       },
       {
