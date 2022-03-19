@@ -20,10 +20,10 @@ let package = Package(
   dependencies: [
     .package(name: "GoTrue", url: "https://github.com/supabase/gotrue-swift.git", .exact("0.0.1")),
     .package(
-      name: "SupabaseStorage", url: "https://github.com/supabase/storage-swift.git", .branch("main")
+      name: "SupabaseStorage", url: "https://github.com/supabase/storage-swift.git", .exact("0.0.1")
     ),
     .package(
-      name: "Realtime", url: "https://github.com/supabase/realtime-swift.git", .branch("main")),
+      name: "Realtime", url: "https://github.com/supabase/realtime-swift.git", .exact("0.0.1")),
     .package(
       name: "PostgREST", url: "https://github.com/supabase/postgrest-swift", .exact("0.0.1")),
   ],

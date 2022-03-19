@@ -32,9 +32,9 @@
         "package": "Realtime",
         "repositoryURL": "https://github.com/supabase/realtime-swift.git",
         "state": {
-          "branch": "main",
-          "revision": "e3d06ee66ba6d2e7722ee1a580b613ed2456ed44",
-          "version": null
+          "branch": null,
+          "revision": "2b55564e1a724ca62067b0dc76e5e69439c30b76",
+          "version": "0.0.1"
         }
       },
       {
@@ -50,9 +50,9 @@
         "package": "SupabaseStorage",
         "repositoryURL": "https://github.com/supabase/storage-swift.git",
         "state": {
-          "branch": "main",
-          "revision": "48961a9c08700d842a88da800cc3243c9538a8e3",
-          "version": null
+          "branch": null,
+          "revision": "ecc1b8b860cc67096be241f15d370451ed93f3ae",
+          "version": "0.0.1"
         }
       },
       {
