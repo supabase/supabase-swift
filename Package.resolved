@@ -6,8 +6,8 @@
         "repositoryURL": "https://github.com/Flight-School/AnyCodable",
         "state": {
           "branch": null,
-          "revision": "b1a7a8a6186f2fcb28f7bda67cfc545de48b3c80",
-          "version": "0.6.2"
+          "revision": "22f302d4c048aafcda09a4ab5b8c0b03855316fb",
+          "version": "0.6.3"
         }
       },
       {
@@ -15,8 +15,8 @@
         "repositoryURL": "https://github.com/supabase/gotrue-swift.git",
         "state": {
           "branch": null,
-          "revision": "2f4c23529afd1eafc16aafa72d17d4bd46437bbc",
-          "version": "0.0.1"
+          "revision": "778a7bad79cfa9c5f6185ebe78d1da38cc1dea83",
+          "version": "0.0.2"
         }
       },
       {
