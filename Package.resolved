@@ -11,12 +11,30 @@
         }
       },
       {
-        "package": "GoTrue",
-        "repositoryURL": "https://github.com/supabase/gotrue-swift.git",
+        "package": "Get",
+        "repositoryURL": "https://github.com/kean/Get",
         "state": {
           "branch": null,
-          "revision": "778a7bad79cfa9c5f6185ebe78d1da38cc1dea83",
-          "version": "0.0.2"
+          "revision": "068b400e3850f0953ec25d11d3a3893c4538ffd5",
+          "version": "0.5.0"
+        }
+      },
+      {
+        "package": "GoTrue",
+        "repositoryURL": "https://github.com/supabase-community/gotrue-swift.git",
+        "state": {
+          "branch": "concurrency",
+          "revision": "d107c9fdb8fb3d2d179b7687b00abb58863e29cf",
+          "version": null
+        }
+      },
+      {
+        "package": "KeychainAccess",
+        "repositoryURL": "https://github.com/kishikawakatsumi/KeychainAccess",
+        "state": {
+          "branch": null,
+          "revision": "84e546727d66f1adc5439debad16270d0fdd04e7",
+          "version": "4.2.2"
         }
       },
       {
@@ -56,12 +74,39 @@
         }
       },
       {
+        "package": "ComposableKeychain",
+        "repositoryURL": "https://github.com/binaryscraping/swift-composable-keychain",
+        "state": {
+          "branch": null,
+          "revision": "3ebddfe9e9232218bada99ab6d6b3ca1fd94f112",
+          "version": "0.0.2"
+        }
+      },
+      {
         "package": "swift-nio-zlib-support",
         "repositoryURL": "https://github.com/apple/swift-nio-zlib-support.git",
         "state": {
           "branch": null,
           "revision": "37760e9a52030bb9011972c5213c3350fa9d41fd",
           "version": "1.0.0"
+        }
+      },
+      {
+        "package": "URLQueryEncoder",
+        "repositoryURL": "https://github.com/kean/URLQueryEncoder",
+        "state": {
+          "branch": null,
+          "revision": "4cc975d4d075d0e62699a796a08284e217d4ee93",
+          "version": "0.2.0"
+        }
+      },
+      {
+        "package": "xctest-dynamic-overlay",
+        "repositoryURL": "https://github.com/pointfreeco/xctest-dynamic-overlay",
+        "state": {
+          "branch": null,
+          "revision": "50a70a9d3583fe228ce672e8923010c8df2deddd",
+          "version": "0.2.1"
         }
       }
     ]
