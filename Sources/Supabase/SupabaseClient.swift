@@ -66,7 +66,7 @@ public class SupabaseClient {
     authUrl = "\(supabaseUrl)/auth/v1"
     storageUrl = "\(supabaseUrl)/storage/v1"
 
-    defaultHeaders = ["X-Client-Info": "supabase-swift/0.0.1", "apikey": supabaseKey]
+    defaultHeaders = ["X-Client-Info": "supabase-swift/0.0.5", "apikey": supabaseKey]
 
     auth = GoTrueClient(
       url: authUrl,
