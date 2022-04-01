@@ -25,7 +25,7 @@ let package = Package(
     .package(
       name: "Realtime", url: "https://github.com/supabase/realtime-swift.git", .exact("0.0.1")),
     .package(
-      name: "PostgREST", url: "https://github.com/supabase/postgrest-swift", .exact("0.0.1")),
+      name: "PostgREST", url: "https://github.com/supabase/postgrest-swift", .exact("0.0.2")),
   ],
   targets: [
     .target(
