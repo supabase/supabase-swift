@@ -25,8 +25,8 @@ public class SupabaseClient {
   private var authURL: URL
   private var storageURL: URL
 
-  /// Auth client for Supabase
-  public var auth: GoTrueClient
+  /// Auth client for Supabase.
+  public let auth: GoTrueClient
 
   /// Storage client for Supabase.
   public var storage: SupabaseStorageClient {
