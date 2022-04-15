@@ -12,11 +12,11 @@
       },
       {
         "package": "Get",
-        "repositoryURL": "https://github.com/binaryscraping/Get",
+        "repositoryURL": "https://github.com/kean/Get",
         "state": {
-          "branch": "main",
-          "revision": "10d7ff6fb29360d018448c4f1ce404a4ec5fa21f",
-          "version": null
+          "branch": null,
+          "revision": "38d21f68a79b08d0eb083f0690620658ffe3b159",
+          "version": "0.7.1"
         }
       },
       {
@@ -24,7 +24,7 @@
         "repositoryURL": "https://github.com/supabase-community/gotrue-swift.git",
         "state": {
           "branch": "concurrency",
-          "revision": "70ef74cbba1f1b666443ce8cfb080e82290e7a75",
+          "revision": "0655c502fbf923addd236aadd5c1b9318eacd603",
           "version": null
         }
       },
