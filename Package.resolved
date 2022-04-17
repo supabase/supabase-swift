@@ -6,17 +6,35 @@
         "repositoryURL": "https://github.com/Flight-School/AnyCodable",
         "state": {
           "branch": null,
-          "revision": "22f302d4c048aafcda09a4ab5b8c0b03855316fb",
-          "version": "0.6.3"
+          "revision": "11423ef0c756e8a1f6b4bb576dab9d97bc016c70",
+          "version": "0.6.4"
+        }
+      },
+      {
+        "package": "Get",
+        "repositoryURL": "https://github.com/kean/Get",
+        "state": {
+          "branch": null,
+          "revision": "38d21f68a79b08d0eb083f0690620658ffe3b159",
+          "version": "0.7.1"
         }
       },
       {
         "package": "GoTrue",
-        "repositoryURL": "https://github.com/supabase/gotrue-swift.git",
+        "repositoryURL": "https://github.com/supabase-community/gotrue-swift",
         "state": {
           "branch": null,
-          "revision": "778a7bad79cfa9c5f6185ebe78d1da38cc1dea83",
-          "version": "0.0.2"
+          "revision": "c42a0a50cfe7c77179041bfb3720f95cecd9ff21",
+          "version": "0.0.3"
+        }
+      },
+      {
+        "package": "KeychainAccess",
+        "repositoryURL": "https://github.com/kishikawakatsumi/KeychainAccess",
+        "state": {
+          "branch": null,
+          "revision": "84e546727d66f1adc5439debad16270d0fdd04e7",
+          "version": "4.2.2"
         }
       },
       {
@@ -56,12 +74,39 @@
         }
       },
       {
+        "package": "ComposableKeychain",
+        "repositoryURL": "https://github.com/binaryscraping/swift-composable-keychain",
+        "state": {
+          "branch": null,
+          "revision": "3ebddfe9e9232218bada99ab6d6b3ca1fd94f112",
+          "version": "0.0.2"
+        }
+      },
+      {
         "package": "swift-nio-zlib-support",
         "repositoryURL": "https://github.com/apple/swift-nio-zlib-support.git",
         "state": {
           "branch": null,
           "revision": "37760e9a52030bb9011972c5213c3350fa9d41fd",
           "version": "1.0.0"
+        }
+      },
+      {
+        "package": "URLQueryEncoder",
+        "repositoryURL": "https://github.com/kean/URLQueryEncoder",
+        "state": {
+          "branch": null,
+          "revision": "4cc975d4d075d0e62699a796a08284e217d4ee93",
+          "version": "0.2.0"
+        }
+      },
+      {
+        "package": "xctest-dynamic-overlay",
+        "repositoryURL": "https://github.com/pointfreeco/xctest-dynamic-overlay",
+        "state": {
+          "branch": null,
+          "revision": "50a70a9d3583fe228ce672e8923010c8df2deddd",
+          "version": "0.2.1"
         }
       }
     ]

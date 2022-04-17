@@ -1,3 +1,4 @@
+import Foundation
 import GoTrue
 import PostgREST
 import Realtime
@@ -16,29 +17,29 @@ import SupabaseStorage
 ///
 /// For more usage information read the README.md
 public class SupabaseClient {
-  private var supabaseUrl: String
+  private var supabaseURL: URL
   private var supabaseKey: String
   private var schema: String
-  private var restUrl: String
-  private var realtimeUrl: String
-  private var authUrl: String
-  private var storageUrl: String
+  private var restURL: URL
+  private var realtimeURL: URL
+  private var authURL: URL
+  private var storageURL: URL
 
-  /// Auth client for Supabase
-  public var auth: GoTrueClient
+  /// Auth client for Supabase.
+  public let auth: GoTrueClient
 
   /// Storage client for Supabase.
   public var storage: SupabaseStorageClient {
     var headers: [String: String] = defaultHeaders
     headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
-    return SupabaseStorageClient(url: storageUrl, headers: headers)
+    return SupabaseStorageClient(url: storageURL.absoluteString, headers: headers)
   }
 
   /// Database client for Supabase.
   public var database: PostgrestClient {
     var headers: [String: String] = defaultHeaders
     headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
-    return PostgrestClient(url: restUrl, headers: headers, schema: schema)
+    return PostgrestClient(url: restURL.absoluteString, headers: headers, schema: schema)
   }
 
   /// Realtime client for Supabase
@@ -48,31 +49,30 @@ public class SupabaseClient {
 
   /// Init `Supabase` with the provided parameters.
   /// - Parameters:
-  ///   - supabaseUrl: Unique Supabase project url
+  ///   - supabaseURL: Unique Supabase project url
   ///   - supabaseKey: Supabase anonymous API Key
   ///   - schema: Database schema name, defaults to `public`
   ///   - autoRefreshToken: Toggles whether `Supabase.auth` automatically refreshes auth tokens. Defaults to `true`
   public init(
-    supabaseUrl: String,
+    supabaseURL: URL,
     supabaseKey: String,
     schema: String = "public",
     autoRefreshToken: Bool = true
   ) {
-    self.supabaseUrl = supabaseUrl
+    self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.schema = schema
-    restUrl = "\(supabaseUrl)/rest/v1"
-    realtimeUrl = "\(supabaseUrl)/realtime/v1"
-    authUrl = "\(supabaseUrl)/auth/v1"
-    storageUrl = "\(supabaseUrl)/storage/v1"
+    restURL = supabaseURL.appendingPathComponent("/rest/v1")
+    realtimeURL = supabaseURL.appendingPathComponent("/realtime/v1")
+    authURL = supabaseURL.appendingPathComponent("/auth/v1")
+    storageURL = supabaseURL.appendingPathComponent("/storage/v1")
 
-    defaultHeaders = ["X-Client-Info": "supabase-swift/0.0.5", "apikey": supabaseKey]
+    defaultHeaders = ["X-Client-Info": "supabase-swift/0.0.4", "apikey": supabaseKey]
 
     auth = GoTrueClient(
-      url: authUrl,
-      headers: defaultHeaders,
-      autoRefreshToken: autoRefreshToken
+      url: authURL,
+      headers: defaultHeaders
     )
-    realtime = RealtimeClient(endPoint: realtimeUrl, params: defaultHeaders)
+    realtime = RealtimeClient(endPoint: realtimeURL.absoluteString, params: defaultHeaders)
   }
 }
