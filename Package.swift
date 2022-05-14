@@ -21,7 +21,7 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/supabase-community/gotrue-swift", .exactItem("0.0.3")),
     .package(
-      name: "SupabaseStorage", url: "https://github.com/supabase/storage-swift.git", .exact("0.0.1")
+      name: "SupabaseStorage", url: "https://github.com/supabase/storage-swift.git", .exact("0.0.2")
     ),
     .package(
       name: "Realtime", url: "https://github.com/supabase/realtime-swift.git", .exact("0.0.1")),
