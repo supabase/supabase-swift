@@ -39,7 +39,8 @@ public class SupabaseClient {
   public var database: PostgrestClient {
     var headers: [String: String] = defaultHeaders
     headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
-    return PostgrestClient(url: restURL.absoluteString, headers: headers, schema: schema)
+    return PostgrestClient(
+      url: restURL.absoluteString, headers: headers, fetch: nil, schema: schema)
   }
 
   /// Realtime client for Supabase

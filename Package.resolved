@@ -24,8 +24,8 @@
         "repositoryURL": "https://github.com/supabase-community/gotrue-swift",
         "state": {
           "branch": null,
-          "revision": "5a5aca5aa63fbb4639458dc0c044f17586c3c9d7",
-          "version": "0.0.4"
+          "revision": "d4e0cb73db890358fb6efaaae7ca9fb636720c24",
+          "version": "0.0.5"
         }
       },
       {
@@ -39,16 +39,16 @@
       },
       {
         "package": "PostgREST",
-        "repositoryURL": "https://github.com/supabase/postgrest-swift",
+        "repositoryURL": "https://github.com/supabase-community/postgrest-swift",
         "state": {
           "branch": null,
-          "revision": "6583648399a3ff3979d7df388a8e7ba740e14378",
-          "version": "0.0.2"
+          "revision": "ebb07f8da5e8e4dee251c5bcb9c7f6ead537e1d6",
+          "version": "0.0.4"
         }
       },
       {
         "package": "Realtime",
-        "repositoryURL": "https://github.com/supabase/realtime-swift.git",
+        "repositoryURL": "https://github.com/supabase-community/realtime-swift.git",
         "state": {
           "branch": null,
           "revision": "2b55564e1a724ca62067b0dc76e5e69439c30b76",
@@ -66,11 +66,11 @@
       },
       {
         "package": "SupabaseStorage",
-        "repositoryURL": "https://github.com/supabase/storage-swift.git",
+        "repositoryURL": "https://github.com/supabase-community/storage-swift.git",
         "state": {
           "branch": null,
-          "revision": "ecc1b8b860cc67096be241f15d370451ed93f3ae",
-          "version": "0.0.1"
+          "revision": "ebb1ee7370ec0d50bcfb38ce05279e1475aebbf8",
+          "version": "0.0.2"
         }
       },
       {

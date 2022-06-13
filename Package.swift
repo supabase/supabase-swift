@@ -19,23 +19,19 @@ let package = Package(
     )
   ],
   dependencies: [
-    .package(url: "https://github.com/supabase-community/gotrue-swift", .exactItem("0.0.4")),
-    .package(
-      name: "SupabaseStorage", url: "https://github.com/supabase/storage-swift.git", .exact("0.0.2")
-    ),
-    .package(
-      name: "Realtime", url: "https://github.com/supabase/realtime-swift.git", .exact("0.0.1")),
-    .package(
-      name: "PostgREST", url: "https://github.com/supabase/postgrest-swift", .exact("0.0.2")),
+    .package(url: "https://github.com/supabase-community/gotrue-swift", from: "0.0.5"),
+    .package(url: "https://github.com/supabase-community/storage-swift.git", from: "0.0.2"),
+    .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.1"),
+    .package(url: "https://github.com/supabase-community/postgrest-swift", from: "0.0.4"),
   ],
   targets: [
     .target(
       name: "Supabase",
       dependencies: [
         .product(name: "GoTrue", package: "gotrue-swift"),
-        "SupabaseStorage",
-        "Realtime",
-        "PostgREST",
+        .product(name: "SupabaseStorage", package: "storage-swift"),
+        .product(name: "Realtime", package: "realtime-swift"),
+        .product(name: "PostgREST", package: "postgrest-swift"),
       ]
     )
   ]
