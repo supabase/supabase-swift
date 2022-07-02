@@ -24,8 +24,8 @@
         "repositoryURL": "https://github.com/supabase-community/gotrue-swift",
         "state": {
           "branch": null,
-          "revision": "d4e0cb73db890358fb6efaaae7ca9fb636720c24",
-          "version": "0.0.5"
+          "revision": "4528eee600e7f2b67a357d9c1a50d4f855b8123c",
+          "version": "0.0.6"
         }
       },
       {
@@ -105,8 +105,8 @@
         "repositoryURL": "https://github.com/pointfreeco/xctest-dynamic-overlay",
         "state": {
           "branch": null,
-          "revision": "50a70a9d3583fe228ce672e8923010c8df2deddd",
-          "version": "0.2.1"
+          "revision": "8816142e27f1127d87c61cee4a0a5db93e9df7c4",
+          "version": "0.3.1"
         }
       }
     ]
