@@ -40,7 +40,21 @@ public class SupabaseClient {
     var headers: [String: String] = defaultHeaders
     headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
     return PostgrestClient(
-      url: restURL.absoluteString, headers: headers, fetch: nil, schema: schema)
+      url: restURL.absoluteString,
+      headers: headers,
+      adapters: [accessTokenAdapter],
+      schema: schema
+    )
+  }
+
+  private var accessTokenAdapter: BlockRequestAdapter {
+    BlockRequestAdapter { [weak auth] request, completion in
+      var request = request
+      if let accessToken = auth?.session?.accessToken {
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+      }
+      completion(.success(request))
+    }
   }
 
   /// Realtime client for Supabase
@@ -75,5 +89,14 @@ public class SupabaseClient {
       headers: defaultHeaders
     )
     realtime = RealtimeClient(endPoint: realtimeURL.absoluteString, params: defaultHeaders)
+  }
+}
+
+struct BlockRequestAdapter: RequestAdapter {
+  let block:
+    (_ request: URLRequest, _ completion: @escaping (Result<URLRequest, Error>) -> Void) -> Void
+
+  func adapt(_ request: URLRequest, completion: @escaping (Result<URLRequest, Error>) -> Void) {
+    block(request, completion)
   }
 }

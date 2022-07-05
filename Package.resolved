@@ -41,9 +41,9 @@
         "package": "PostgREST",
         "repositoryURL": "https://github.com/supabase-community/postgrest-swift",
         "state": {
-          "branch": null,
-          "revision": "ebb07f8da5e8e4dee251c5bcb9c7f6ead537e1d6",
-          "version": "0.0.4"
+          "branch": "request-adapters",
+          "revision": "2a87604c2698cbdaec47342d85b06785cb5baa57",
+          "version": null
         }
       },
       {
