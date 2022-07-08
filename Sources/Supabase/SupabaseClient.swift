@@ -42,19 +42,9 @@ public class SupabaseClient {
     return PostgrestClient(
       url: restURL.absoluteString,
       headers: headers,
-      adapters: [accessTokenAdapter],
-      schema: schema
+      schema: schema,
+      delegate: self
     )
-  }
-
-  private var accessTokenAdapter: BlockRequestAdapter {
-    BlockRequestAdapter { [weak auth] request, completion in
-      var request = request
-      if let accessToken = auth?.session?.accessToken {
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-      }
-      completion(.success(request))
-    }
   }
 
   /// Realtime client for Supabase
@@ -92,11 +82,23 @@ public class SupabaseClient {
   }
 }
 
-struct BlockRequestAdapter: RequestAdapter {
-  let block:
-    (_ request: URLRequest, _ completion: @escaping (Result<URLRequest, Error>) -> Void) -> Void
-
-  func adapt(_ request: URLRequest, completion: @escaping (Result<URLRequest, Error>) -> Void) {
-    block(request, completion)
+extension SupabaseClient: PostgrestClientDelegate {
+  public func client(
+    _ client: PostgrestClient,
+    willSendRequest request: URLRequest,
+    completion: @escaping (URLRequest) -> Void
+  ) {
+    Task {
+      do {
+        try await auth.refreshCurrentSessionIfNeeded()
+        var request = request
+        if let accessToken = auth.session?.accessToken {
+          request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        }
+        completion(request)
+      } catch {
+        completion(request)
+      }
+    }
   }
 }
