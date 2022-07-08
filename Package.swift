@@ -19,10 +19,10 @@ let package = Package(
     )
   ],
   dependencies: [
-    .package(url: "https://github.com/supabase-community/gotrue-swift", from: "0.0.5"),
+    .package(url: "https://github.com/supabase-community/gotrue-swift", from: "0.0.7"),
     .package(url: "https://github.com/supabase-community/storage-swift.git", from: "0.0.2"),
     .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.1"),
-    .package(url: "https://github.com/supabase-community/postgrest-swift", from: "0.0.4"),
+    .package(url: "https://github.com/supabase-community/postgrest-swift", from: "0.0.5"),
   ],
   targets: [
     .target(

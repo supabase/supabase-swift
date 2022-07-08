@@ -40,7 +40,11 @@ public class SupabaseClient {
     var headers: [String: String] = defaultHeaders
     headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
     return PostgrestClient(
-      url: restURL.absoluteString, headers: headers, fetch: nil, schema: schema)
+      url: restURL.absoluteString,
+      headers: headers,
+      schema: schema,
+      delegate: self
+    )
   }
 
   /// Realtime client for Supabase
@@ -75,5 +79,26 @@ public class SupabaseClient {
       headers: defaultHeaders
     )
     realtime = RealtimeClient(endPoint: realtimeURL.absoluteString, params: defaultHeaders)
+  }
+}
+
+extension SupabaseClient: PostgrestClientDelegate {
+  public func client(
+    _ client: PostgrestClient,
+    willSendRequest request: URLRequest,
+    completion: @escaping (URLRequest) -> Void
+  ) {
+    Task {
+      do {
+        try await auth.refreshCurrentSessionIfNeeded()
+        var request = request
+        if let accessToken = auth.session?.accessToken {
+          request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        }
+        completion(request)
+      } catch {
+        completion(request)
+      }
+    }
   }
 }

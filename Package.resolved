@@ -24,8 +24,8 @@
         "repositoryURL": "https://github.com/supabase-community/gotrue-swift",
         "state": {
           "branch": null,
-          "revision": "4528eee600e7f2b67a357d9c1a50d4f855b8123c",
-          "version": "0.0.6"
+          "revision": "023b7110c2c42ed1c03aa790d0a7272c48b2e957",
+          "version": "0.0.7"
         }
       },
       {
@@ -42,8 +42,8 @@
         "repositoryURL": "https://github.com/supabase-community/postgrest-swift",
         "state": {
           "branch": null,
-          "revision": "ebb07f8da5e8e4dee251c5bcb9c7f6ead537e1d6",
-          "version": "0.0.4"
+          "revision": "f7800664af17934fd80bed35f7d15736623e6cbb",
+          "version": "0.0.5"
         }
       },
       {
@@ -105,8 +105,8 @@
         "repositoryURL": "https://github.com/pointfreeco/xctest-dynamic-overlay",
         "state": {
           "branch": null,
-          "revision": "8816142e27f1127d87c61cee4a0a5db93e9df7c4",
-          "version": "0.3.1"
+          "revision": "046aba2944a7e197e5dc070836f8fe2d47d0e471",
+          "version": "0.3.2"
         }
       }
     ]
