@@ -23,9 +23,9 @@
         "package": "GoTrue",
         "repositoryURL": "https://github.com/supabase-community/gotrue-swift",
         "state": {
-          "branch": "main",
-          "revision": "adb11143da7a09c31b00c86155f8737960a58140",
-          "version": null
+          "branch": null,
+          "revision": "023b7110c2c42ed1c03aa790d0a7272c48b2e957",
+          "version": "0.0.7"
         }
       },
       {
@@ -41,9 +41,9 @@
         "package": "PostgREST",
         "repositoryURL": "https://github.com/supabase-community/postgrest-swift",
         "state": {
-          "branch": "request-adapters",
-          "revision": "cf96c518775aed3f3ce0996f8de0c319d9f2e357",
-          "version": null
+          "branch": null,
+          "revision": "f7800664af17934fd80bed35f7d15736623e6cbb",
+          "version": "0.0.5"
         }
       },
       {
