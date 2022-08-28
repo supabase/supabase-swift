@@ -15,8 +15,8 @@
         "repositoryURL": "https://github.com/kean/Get",
         "state": {
           "branch": null,
-          "revision": "b1137bf8315479cddc79fcb04d9db7bc8117e16f",
-          "version": "0.8.0"
+          "revision": "d2ded8526d647a8ca25905025cd5503dfe51e874",
+          "version": "2.0.0"
         }
       },
       {
@@ -24,8 +24,8 @@
         "repositoryURL": "https://github.com/supabase-community/gotrue-swift",
         "state": {
           "branch": null,
-          "revision": "023b7110c2c42ed1c03aa790d0a7272c48b2e957",
-          "version": "0.0.7"
+          "revision": "5947f9c2deac0b0dadbc04609fd05619e77bcfd4",
+          "version": "0.0.8"
         }
       },
       {
@@ -105,8 +105,8 @@
         "repositoryURL": "https://github.com/pointfreeco/xctest-dynamic-overlay",
         "state": {
           "branch": null,
-          "revision": "ef8e14e7ce1c0c304c644c6ba365d06c468ded6b",
-          "version": "0.3.3"
+          "revision": "38bc9242e4388b80bd23ddfdf3071428859e3260",
+          "version": "0.4.0"
         }
       }
     ]
