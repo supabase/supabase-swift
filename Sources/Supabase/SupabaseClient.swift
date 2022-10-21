@@ -62,11 +62,13 @@ public class SupabaseClient {
   public init(
     supabaseURL: URL,
     supabaseKey: String,
-    schema: String = "public"
+    schema: String = "public",
+    httpClient: HTTPClient = HTTPClient()
   ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.schema = schema
+    self.httpClient = httpClient
     restURL = supabaseURL.appendingPathComponent("/rest/v1")
     realtimeURL = supabaseURL.appendingPathComponent("/realtime/v1")
     authURL = supabaseURL.appendingPathComponent("/auth/v1")
@@ -84,8 +86,17 @@ public class SupabaseClient {
     realtime = RealtimeClient(endPoint: realtimeURL.absoluteString, params: defaultHeaders)
   }
 
-  private let defaultStorageHTTPClient = DefaultStorageHTTPClient()
-  private let defaultPostgrestHTTPClient = DefaultPostgrestHTTPClient()
+  public struct HTTPClient {
+    public let storage: StorageHTTPClient
+    public let postgrest: PostgrestHTTPClient
+
+    public init(storage: StorageHTTPClient? = nil, postgrest: PostgrestHTTPClient? = nil) {
+      self.storage = storage ?? DefaultStorageHTTPClient()
+      self.postgrest = postgrest ?? DefaultPostgrestHTTPClient()
+    }
+  }
+
+  private let httpClient: HTTPClient
 }
 
 extension SupabaseClient {
@@ -103,14 +114,14 @@ extension SupabaseClient {
 extension SupabaseClient: PostgrestHTTPClient {
   public func execute(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
     let request = try await adapt(request: request)
-    return try await defaultPostgrestHTTPClient.execute(request)
+    return try await httpClient.postgrest.execute(request)
   }
 }
 
 extension SupabaseClient: StorageHTTPClient {
   public func fetch(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
     let request = try await adapt(request: request)
-    return try await defaultStorageHTTPClient.fetch(request)
+    return try await httpClient.storage.fetch(request)
   }
 
   public func upload(
@@ -118,6 +129,6 @@ extension SupabaseClient: StorageHTTPClient {
     from data: Data
   ) async throws -> (Data, HTTPURLResponse) {
     let request = try await adapt(request: request)
-    return try await defaultStorageHTTPClient.upload(request, from: data)
+    return try await httpClient.storage.upload(request, from: data)
   }
 }
