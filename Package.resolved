@@ -41,9 +41,9 @@
         "package": "PostgREST",
         "repositoryURL": "https://github.com/supabase-community/postgrest-swift",
         "state": {
-          "branch": null,
-          "revision": "e949f57873118a44f301e4e6fee739ea589f6e7f",
-          "version": "0.0.6"
+          "branch": "refactor/http-client",
+          "revision": "0620cc8c5f86c218c8f1cfb36baf67a8307c82cc",
+          "version": null
         }
       },
       {
@@ -59,9 +59,9 @@
         "package": "SupabaseStorage",
         "repositoryURL": "https://github.com/supabase-community/storage-swift.git",
         "state": {
-          "branch": null,
-          "revision": "ebb1ee7370ec0d50bcfb38ce05279e1475aebbf8",
-          "version": "0.0.2"
+          "branch": "refactor",
+          "revision": "946151cf38ffd26e0ed0dbe3c73de9665be0af09",
+          "version": null
         }
       },
       {

@@ -4,35 +4,25 @@ import PostgREST
 import Realtime
 import SupabaseStorage
 
-/// The main class for accessing Supabase functionality
-///
-/// Initialize this class using `.init(supabaseURL: String, supabaseKey: String)`
-///
-/// There are four main classes contained by the `Supabase` class.
-/// 1.  `auth`
-/// 2.  `database`
-/// 3.  `realtime`
-/// 4.  `storage`
-/// Each class listed is available under `Supabase.{name}`, eg: `Supabase.auth`
-///
-/// For more usage information read the README.md
+/// Supabase Client.
 public class SupabaseClient {
-  private var supabaseURL: URL
-  private var supabaseKey: String
-  private var schema: String
-  private var restURL: URL
-  private var realtimeURL: URL
-  private var authURL: URL
-  private var storageURL: URL
+  private let supabaseURL: URL
+  private let supabaseKey: String
+  private let schema: String
+  private let restURL: URL
+  private let realtimeURL: URL
+  private let authURL: URL
+  private let storageURL: URL
 
-  /// Auth client for Supabase.
+  /// Supabase Auth allows you to create and manage user sessions for access to data that is secured
+  /// by access policies.
   public let auth: GoTrueClient
 
-  /// Storage client for Supabase.
+  /// Supabase Storage allows you to manage user-generated content, such as photos or videos.
   public var storage: SupabaseStorageClient {
     var headers: [String: String] = defaultHeaders
     headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
-    return SupabaseStorageClient(url: storageURL.absoluteString, headers: headers)
+    return SupabaseStorageClient(url: storageURL.absoluteString, headers: headers, http: self)
   }
 
   /// Database client for Supabase.
@@ -43,7 +33,7 @@ public class SupabaseClient {
       url: restURL.absoluteString,
       headers: headers,
       schema: schema,
-      delegate: self
+      http: self
     )
   }
 
@@ -57,16 +47,18 @@ public class SupabaseClient {
   ///   - supabaseURL: Unique Supabase project url
   ///   - supabaseKey: Supabase anonymous API Key
   ///   - schema: Database schema name, defaults to `public`
-  ///   - autoRefreshToken: Toggles whether `Supabase.auth` automatically refreshes auth tokens. Defaults to `true`
+  ///   - autoRefreshToken: Toggles whether `Supabase.auth` automatically refreshes auth tokens.
+  /// Defaults to `true`
   public init(
     supabaseURL: URL,
     supabaseKey: String,
     schema: String = "public",
-    autoRefreshToken: Bool = true
+    httpClient: HTTPClient = HTTPClient()
   ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.schema = schema
+    self.httpClient = httpClient
     restURL = supabaseURL.appendingPathComponent("/rest/v1")
     realtimeURL = supabaseURL.appendingPathComponent("/realtime/v1")
     authURL = supabaseURL.appendingPathComponent("/auth/v1")
@@ -83,25 +75,50 @@ public class SupabaseClient {
     )
     realtime = RealtimeClient(endPoint: realtimeURL.absoluteString, params: defaultHeaders)
   }
+
+  public struct HTTPClient {
+    public let storage: StorageHTTPClient
+    public let postgrest: PostgrestHTTPClient
+
+    public init(storage: StorageHTTPClient? = nil, postgrest: PostgrestHTTPClient? = nil) {
+      self.storage = storage ?? DefaultStorageHTTPClient()
+      self.postgrest = postgrest ?? DefaultPostgrestHTTPClient()
+    }
+  }
+
+  private let httpClient: HTTPClient
 }
 
-extension SupabaseClient: PostgrestClientDelegate {
-  public func client(
-    _ client: PostgrestClient,
-    willSendRequest request: URLRequest,
-    completion: @escaping (URLRequest) -> Void
-  ) {
-    Task {
-      do {
-        try await auth.refreshCurrentSessionIfNeeded()
-        var request = request
-        if let accessToken = auth.session?.accessToken {
-          request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        }
-        completion(request)
-      } catch {
-        completion(request)
-      }
+extension SupabaseClient {
+  func adapt(request: URLRequest) async throws -> URLRequest {
+    try await auth.refreshCurrentSessionIfNeeded()
+
+    var request = request
+    if let accessToken = auth.session?.accessToken {
+      request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
     }
+    return request
+  }
+}
+
+extension SupabaseClient: PostgrestHTTPClient {
+  public func execute(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    let request = try await adapt(request: request)
+    return try await httpClient.postgrest.execute(request)
+  }
+}
+
+extension SupabaseClient: StorageHTTPClient {
+  public func fetch(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    let request = try await adapt(request: request)
+    return try await httpClient.storage.fetch(request)
+  }
+
+  public func upload(
+    _ request: URLRequest,
+    from data: Data
+  ) async throws -> (Data, HTTPURLResponse) {
+    let request = try await adapt(request: request)
+    return try await httpClient.storage.upload(request, from: data)
   }
 }
