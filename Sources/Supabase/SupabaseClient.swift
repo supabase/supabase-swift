@@ -86,6 +86,7 @@ public class SupabaseClient {
   }
 
   private let defaultStorageHTTPClient = DefaultStorageHTTPClient()
+  private let defaultPostgrestHTTPClient = DefaultPostgrestHTTPClient()
 }
 
 extension SupabaseClient {
@@ -103,32 +104,7 @@ extension SupabaseClient {
 extension SupabaseClient: PostgrestHTTPClient {
   public func execute(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
     let request = try await adapt(request: request)
-    return try await DefaultHTTPClient().execute(request)
-  }
-}
-
-struct DefaultHTTPClient {
-  func execute(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-    try await withCheckedThrowingContinuation { continuation in
-      let dataTask = URLSession.shared.dataTask(with: request) { data, response, error in
-        if let error = error {
-          continuation.resume(throwing: error)
-          return
-        }
-
-        guard
-          let data = data,
-          let httpResponse = response as? HTTPURLResponse
-        else {
-          continuation.resume(throwing: URLError(.badServerResponse))
-          return
-        }
-
-        continuation.resume(returning: (data, httpResponse))
-      }
-
-      dataTask.resume()
-    }
+    return try await defaultPostgrestHTTPClient.execute(request)
   }
 }
 
