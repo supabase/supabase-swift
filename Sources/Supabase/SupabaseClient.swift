@@ -14,7 +14,8 @@ public class SupabaseClient {
   private let authURL: URL
   private let storageURL: URL
 
-  /// Supabase Auth allows you to create and manage user sessions for access to data that is secured by access policies.
+  /// Supabase Auth allows you to create and manage user sessions for access to data that is secured
+  /// by access policies.
   public let auth: GoTrueClient
 
   /// Supabase Storage allows you to manage user-generated content, such as photos or videos.

@@ -20,11 +20,11 @@ let package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/supabase-community/gotrue-swift", from: "0.0.7"),
-    .package(url: "https://github.com/supabase-community/storage-swift.git", branch: "refactor"),
+    .package(url: "https://github.com/supabase-community/storage-swift.git", branch: "master"),
     .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.1"),
     .package(
       url: "https://github.com/supabase-community/postgrest-swift",
-      branch: "refactor/http-client"
+      branch: "master"
     ),
   ],
   targets: [
