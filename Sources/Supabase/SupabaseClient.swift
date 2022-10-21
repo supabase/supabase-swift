@@ -32,7 +32,7 @@ public class SupabaseClient {
   public var storage: SupabaseStorageClient {
     var headers: [String: String] = defaultHeaders
     headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
-    return SupabaseStorageClient(url: storageURL.absoluteString, headers: headers)
+    return SupabaseStorageClient(url: storageURL.absoluteString, headers: headers, http: self)
   }
 
   /// Database client for Supabase.
@@ -57,12 +57,13 @@ public class SupabaseClient {
   ///   - supabaseURL: Unique Supabase project url
   ///   - supabaseKey: Supabase anonymous API Key
   ///   - schema: Database schema name, defaults to `public`
-  ///   - autoRefreshToken: Toggles whether `Supabase.auth` automatically refreshes auth tokens. Defaults to `true`
+  ///   - autoRefreshToken: Toggles whether `Supabase.auth` automatically refreshes auth tokens.
+  /// Defaults to `true`
   public init(
     supabaseURL: URL,
     supabaseKey: String,
     schema: String = "public",
-    autoRefreshToken: Bool = true
+    autoRefreshToken _: Bool = true
   ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
@@ -83,17 +84,25 @@ public class SupabaseClient {
     )
     realtime = RealtimeClient(endPoint: realtimeURL.absoluteString, params: defaultHeaders)
   }
+
+  private let defaultStorageHTTPClient = DefaultStorageHTTPClient()
 }
 
-extension SupabaseClient: PostgrestHTTPClient {
-  public func execute(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+extension SupabaseClient {
+  func adapt(request: URLRequest) async throws -> URLRequest {
     try await auth.refreshCurrentSessionIfNeeded()
 
     var request = request
     if let accessToken = auth.session?.accessToken {
       request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
     }
+    return request
+  }
+}
 
+extension SupabaseClient: PostgrestHTTPClient {
+  public func execute(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    let request = try await adapt(request: request)
     return try await DefaultHTTPClient().execute(request)
   }
 }
@@ -120,5 +129,20 @@ struct DefaultHTTPClient {
 
       dataTask.resume()
     }
+  }
+}
+
+extension SupabaseClient: StorageHTTPClient {
+  public func fetch(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    let request = try await adapt(request: request)
+    return try await defaultStorageHTTPClient.fetch(request)
+  }
+
+  public func upload(
+    _ request: URLRequest,
+    from data: Data
+  ) async throws -> (Data, HTTPURLResponse) {
+    let request = try await adapt(request: request)
+    return try await defaultStorageHTTPClient.upload(request, from: data)
   }
 }
