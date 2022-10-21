@@ -4,18 +4,7 @@ import PostgREST
 import Realtime
 import SupabaseStorage
 
-/// The main class for accessing Supabase functionality
-///
-/// Initialize this class using `.init(supabaseURL: String, supabaseKey: String)`
-///
-/// There are four main classes contained by the `Supabase` class.
-/// 1.  `auth`
-/// 2.  `database`
-/// 3.  `realtime`
-/// 4.  `storage`
-/// Each class listed is available under `Supabase.{name}`, eg: `Supabase.auth`
-///
-/// For more usage information read the README.md
+/// Supabase Client.
 public class SupabaseClient {
   private let supabaseURL: URL
   private let supabaseKey: String
@@ -25,10 +14,10 @@ public class SupabaseClient {
   private let authURL: URL
   private let storageURL: URL
 
-  /// Auth client for Supabase.
+  /// Supabase Auth allows you to create and manage user sessions for access to data that is secured by access policies.
   public let auth: GoTrueClient
 
-  /// Storage client for Supabase.
+  /// Supabase Storage allows you to manage user-generated content, such as photos or videos.
   public var storage: SupabaseStorageClient {
     var headers: [String: String] = defaultHeaders
     headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
