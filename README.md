@@ -30,7 +30,7 @@ If you're using Xcode, [use this guide](https://developer.apple.com/documentatio
 For all requests made for supabase, you will need to initialize a `SupabaseClient` object.
 
 ```swift
-let client = SupabaseClient(supabaseUrl: "{ Supabase URL }", supabaseKey: "{ Supabase anonymous Key }")
+let client = SupabaseClient(supabaseURL: "{ Supabase URL }", supabaseKey: "{ Supabase anonymous Key }")
 ```
 
 ## Contributing
