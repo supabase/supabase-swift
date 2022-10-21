@@ -62,8 +62,7 @@ public class SupabaseClient {
   public init(
     supabaseURL: URL,
     supabaseKey: String,
-    schema: String = "public",
-    autoRefreshToken _: Bool = true
+    schema: String = "public"
   ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
