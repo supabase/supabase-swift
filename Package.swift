@@ -26,6 +26,7 @@ let package = Package(
       url: "https://github.com/supabase-community/postgrest-swift",
       branch: "master"
     ),
+    .package(url: "https://github.com/supabase-community/functions-swift", branch: "main"),
   ],
   targets: [
     .target(
@@ -35,6 +36,7 @@ let package = Package(
         .product(name: "SupabaseStorage", package: "storage-swift"),
         .product(name: "Realtime", package: "realtime-swift"),
         .product(name: "PostgREST", package: "postgrest-swift"),
+        .product(name: "Functions", package: "functions-swift"),
       ]
     ),
   ]

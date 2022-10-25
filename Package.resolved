@@ -11,6 +11,15 @@
         }
       },
       {
+        "package": "functions-swift",
+        "repositoryURL": "https://github.com/supabase-community/functions-swift",
+        "state": {
+          "branch": "main",
+          "revision": "bdaf7b34ab7bc25b4aa8092fc384367d8ae7a11f",
+          "version": null
+        }
+      },
+      {
         "package": "Get",
         "repositoryURL": "https://github.com/kean/Get",
         "state": {

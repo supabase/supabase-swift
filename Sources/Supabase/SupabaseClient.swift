@@ -1,4 +1,5 @@
 import Foundation
+import Functions
 import GoTrue
 import PostgREST
 import Realtime
@@ -13,6 +14,7 @@ public class SupabaseClient {
   private let realtimeURL: URL
   private let authURL: URL
   private let storageURL: URL
+  private let functionsURL: URL
 
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured
   /// by access policies.
@@ -40,6 +42,17 @@ public class SupabaseClient {
   /// Realtime client for Supabase
   public var realtime: RealtimeClient
 
+  /// Supabase Functions allows you to deploy and invoke edge functions.
+  public var functions: FunctionsClient {
+    var headers: [String: String] = defaultHeaders
+    headers["Authorization"] = "Bearer \(auth.session?.accessToken ?? supabaseKey)"
+    return FunctionsClient(
+      url: functionsURL,
+      headers: headers,
+      http: self
+    )
+  }
+
   private var defaultHeaders: [String: String]
 
   /// Init `Supabase` with the provided parameters.
@@ -63,6 +76,7 @@ public class SupabaseClient {
     realtimeURL = supabaseURL.appendingPathComponent("/realtime/v1")
     authURL = supabaseURL.appendingPathComponent("/auth/v1")
     storageURL = supabaseURL.appendingPathComponent("/storage/v1")
+    functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
     defaultHeaders = [
       "X-Client-Info": "supabase-swift/\(version)",
@@ -77,12 +91,18 @@ public class SupabaseClient {
   }
 
   public struct HTTPClient {
-    public let storage: StorageHTTPClient
-    public let postgrest: PostgrestHTTPClient
+    let storage: StorageHTTPClient
+    let postgrest: PostgrestHTTPClient
+    let functions: FunctionsHTTPClient
 
-    public init(storage: StorageHTTPClient? = nil, postgrest: PostgrestHTTPClient? = nil) {
+    public init(
+      storage: StorageHTTPClient? = nil,
+      postgrest: PostgrestHTTPClient? = nil,
+      functions: FunctionsHTTPClient? = nil
+    ) {
       self.storage = storage ?? DefaultStorageHTTPClient()
       self.postgrest = postgrest ?? DefaultPostgrestHTTPClient()
+      self.functions = functions ?? DefaultFunctionsHTTPClient()
     }
   }
 
@@ -120,5 +140,15 @@ extension SupabaseClient: StorageHTTPClient {
   ) async throws -> (Data, HTTPURLResponse) {
     let request = try await adapt(request: request)
     return try await httpClient.storage.upload(request, from: data)
+  }
+}
+
+extension SupabaseClient: FunctionsHTTPClient {
+  public func execute(
+    _ request: URLRequest,
+    client: FunctionsClient
+  ) async throws -> (Data, HTTPURLResponse) {
+    let request = try await adapt(request: request)
+    return try await httpClient.functions.execute(request, client: client)
   }
 }
