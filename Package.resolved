@@ -1,12 +1,77 @@
 {
-  "pins" : [
-    {
-      "identity" : "functions-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase-community/functions-swift",
-      "state" : {
-        "revision" : "7d5dfce3673bb30bbb7e1fbb5e0afe01bbd92624",
-        "version" : "0.2.0"
+  "object": {
+    "pins": [
+      {
+        "package": "functions-swift",
+        "repositoryURL": "https://github.com/supabase-community/functions-swift",
+        "state": {
+          "branch": "main",
+          "revision": "bdaf7b34ab7bc25b4aa8092fc384367d8ae7a11f",
+          "version": null
+        }
+      },
+      {
+        "package": "Get",
+        "repositoryURL": "https://github.com/kean/Get",
+        "state": {
+          "branch": null,
+          "revision": "4750914f0fc8ae6c20a52d028b413d0cebce87fc",
+          "version": "2.1.4"
+        }
+      },
+      {
+        "package": "GoTrue",
+        "repositoryURL": "https://github.com/supabase-community/gotrue-swift",
+        "state": {
+          "branch": "stable-release",
+          "revision": "772a5d42fce3a66c00ef5a52deddad0606fb8ba6",
+          "version": null
+        }
+      },
+      {
+        "package": "KeychainAccess",
+        "repositoryURL": "https://github.com/kishikawakatsumi/KeychainAccess",
+        "state": {
+          "branch": null,
+          "revision": "84e546727d66f1adc5439debad16270d0fdd04e7",
+          "version": "4.2.2"
+        }
+      },
+      {
+        "package": "PostgREST",
+        "repositoryURL": "https://github.com/supabase-community/postgrest-swift",
+        "state": {
+          "branch": "release-candidate",
+          "revision": "abf168adc50ab3fa4668842b1ae0589bb38feb0b",
+          "version": null
+        }
+      },
+      {
+        "package": "Realtime",
+        "repositoryURL": "https://github.com/supabase-community/realtime-swift.git",
+        "state": {
+          "branch": null,
+          "revision": "0b985c687fe963f6bd818ff77a35c27247b98bb4",
+          "version": "0.0.2"
+        }
+      },
+      {
+        "package": "SupabaseStorage",
+        "repositoryURL": "https://github.com/supabase-community/storage-swift.git",
+        "state": {
+          "branch": "main",
+          "revision": "04703e499ca258899d7ad45717efe75b8ddc09ab",
+          "version": null
+        }
+      },
+      {
+        "package": "URLQueryEncoder",
+        "repositoryURL": "https://github.com/kean/URLQueryEncoder",
+        "state": {
+          "branch": null,
+          "revision": "4cc975d4d075d0e62699a796a08284e217d4ee93",
+          "version": "0.2.0"
+        }
       }
     },
     {

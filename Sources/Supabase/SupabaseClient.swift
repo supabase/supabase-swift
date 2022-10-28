@@ -50,7 +50,7 @@ public class SupabaseClient {
     FunctionsClient(
       url: functionsURL,
       headers: defaultHeaders,
-      apiClientDelegate: self
+      http: self
     )
   }
 
@@ -61,7 +61,6 @@ public class SupabaseClient {
   ///   - supabaseURL: Unique Supabase project url
   ///   - supabaseKey: Supabase anonymous API Key
   ///   - schema: Database schema name, defaults to `public`
-  ///   - headers: Optional headers for initializing the client.
   public init(
     supabaseURL: URL,
     supabaseKey: String,
@@ -97,11 +96,14 @@ public class SupabaseClient {
 
   public struct HTTPClient {
     let storage: StorageHTTPClient
+    let functions: FunctionsHTTPClient
 
     public init(
-      storage: StorageHTTPClient? = nil
+      storage: StorageHTTPClient? = nil,
+      functions: FunctionsHTTPClient? = nil
     ) {
       self.storage = storage ?? DefaultStorageHTTPClient()
+      self.functions = functions ?? DefaultFunctionsHTTPClient()
     }
   }
 
@@ -120,7 +122,7 @@ extension SupabaseClient: APIClientDelegate {
 }
 
 extension SupabaseClient {
-  func adapt(request: URLRequest) async -> URLRequest {
+  func adapt(request: URLRequest) async throws -> URLRequest {
     var request = request
     if let accessToken = try? await auth.session.accessToken {
       request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
