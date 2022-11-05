@@ -15,8 +15,8 @@
         "repositoryURL": "https://github.com/kean/Get",
         "state": {
           "branch": null,
-          "revision": "4750914f0fc8ae6c20a52d028b413d0cebce87fc",
-          "version": "2.1.4"
+          "revision": "7209fdb015686fd90918b2037cb2039206405bd3",
+          "version": "2.1.5"
         }
       },
       {
@@ -24,7 +24,7 @@
         "repositoryURL": "https://github.com/supabase-community/gotrue-swift",
         "state": {
           "branch": "stable-release",
-          "revision": "772a5d42fce3a66c00ef5a52deddad0606fb8ba6",
+          "revision": "7650c562f52b56e18fb8a682b6235ba74da64ab0",
           "version": null
         }
       },
@@ -42,7 +42,7 @@
         "repositoryURL": "https://github.com/supabase-community/postgrest-swift",
         "state": {
           "branch": "release-candidate",
-          "revision": "abf168adc50ab3fa4668842b1ae0589bb38feb0b",
+          "revision": "911e6c17c0f9abc7f585d76138ffa276b78abca9",
           "version": null
         }
       },

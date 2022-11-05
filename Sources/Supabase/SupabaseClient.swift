@@ -122,7 +122,7 @@ extension SupabaseClient: APIClientDelegate {
 }
 
 extension SupabaseClient {
-  func adapt(request: URLRequest) async throws -> URLRequest {
+  func adapt(request: URLRequest) async -> URLRequest {
     var request = request
     if let accessToken = try? await auth.session.accessToken {
       request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
@@ -143,5 +143,15 @@ extension SupabaseClient: StorageHTTPClient {
   ) async throws -> (Data, HTTPURLResponse) {
     let request = await adapt(request: request)
     return try await httpClient.storage.upload(request, from: data)
+  }
+}
+
+extension SupabaseClient: FunctionsHTTPClient {
+  public func execute(
+    _ request: URLRequest,
+    client: FunctionsClient
+  ) async throws -> (Data, HTTPURLResponse) {
+    let request = await adapt(request: request)
+    return try await httpClient.functions.execute(request, client: client)
   }
 }
