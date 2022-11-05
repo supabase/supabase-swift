@@ -111,7 +111,7 @@ public class SupabaseClient {
 
 extension SupabaseClient {
   func adapt(request: URLRequest) async throws -> URLRequest {
-    try await auth.refreshCurrentSessionIfNeeded()
+    try? await auth.refreshCurrentSessionIfNeeded()
 
     var request = request
     if let accessToken = auth.session?.accessToken {
