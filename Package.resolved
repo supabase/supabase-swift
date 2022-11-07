@@ -42,7 +42,7 @@
         "repositoryURL": "https://github.com/supabase-community/postgrest-swift",
         "state": {
           "branch": "release-candidate",
-          "revision": "911e6c17c0f9abc7f585d76138ffa276b78abca9",
+          "revision": "71404de0aed2289137d7749addecd449804e32ad",
           "version": null
         }
       },
