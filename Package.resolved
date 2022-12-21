@@ -41,8 +41,8 @@
         "package": "PostgREST",
         "repositoryURL": "https://github.com/supabase-community/postgrest-swift",
         "state": {
-          "branch": "release-candidate",
-          "revision": "71404de0aed2289137d7749addecd449804e32ad",
+          "branch": "master",
+          "revision": "02b1e40d89d2d265a148b1fbffe6b98df5a6c687",
           "version": null
         }
       },
@@ -69,8 +69,8 @@
         "repositoryURL": "https://github.com/kean/URLQueryEncoder",
         "state": {
           "branch": null,
-          "revision": "4cc975d4d075d0e62699a796a08284e217d4ee93",
-          "version": "0.2.0"
+          "revision": "4ce950479707ea109f229d7230ec074a133b15d7",
+          "version": "0.2.1"
         }
       }
     },

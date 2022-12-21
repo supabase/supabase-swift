@@ -24,7 +24,7 @@ let package = Package(
     .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.1"),
     .package(
       url: "https://github.com/supabase-community/postgrest-swift",
-      branch: "release-candidate"
+      branch: "master"
     ),
     .package(url: "https://github.com/supabase-community/functions-swift", branch: "main"),
   ],
