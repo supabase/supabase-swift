@@ -5,9 +5,9 @@
         "package": "functions-swift",
         "repositoryURL": "https://github.com/supabase-community/functions-swift",
         "state": {
-          "branch": "main",
-          "revision": "b6e4ea9ba2ae333e60dbc259099807980644787c",
-          "version": null
+          "branch": null,
+          "revision": "7d5dfce3673bb30bbb7e1fbb5e0afe01bbd92624",
+          "version": "0.2.0"
         }
       },
       {
