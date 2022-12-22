@@ -50,7 +50,7 @@ public class SupabaseClient {
     FunctionsClient(
       url: functionsURL,
       headers: defaultHeaders,
-      http: self
+      apiClientDelegate: self
     )
   }
 
@@ -96,14 +96,11 @@ public class SupabaseClient {
 
   public struct HTTPClient {
     let storage: StorageHTTPClient
-    let functions: FunctionsHTTPClient
 
     public init(
-      storage: StorageHTTPClient? = nil,
-      functions: FunctionsHTTPClient? = nil
+      storage: StorageHTTPClient? = nil
     ) {
       self.storage = storage ?? DefaultStorageHTTPClient()
-      self.functions = functions ?? DefaultFunctionsHTTPClient()
     }
   }
 
@@ -143,15 +140,5 @@ extension SupabaseClient: StorageHTTPClient {
   ) async throws -> (Data, HTTPURLResponse) {
     let request = await adapt(request: request)
     return try await httpClient.storage.upload(request, from: data)
-  }
-}
-
-extension SupabaseClient: FunctionsHTTPClient {
-  public func execute(
-    _ request: URLRequest,
-    client: FunctionsClient
-  ) async throws -> (Data, HTTPURLResponse) {
-    let request = await adapt(request: request)
-    return try await httpClient.functions.execute(request, client: client)
   }
 }
