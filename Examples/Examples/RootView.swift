@@ -10,6 +10,7 @@ import SwiftUI
 
 struct RootView: View {
   @State var authEvent: AuthChangeEvent?
+  @EnvironmentObject var auth: AuthController
 
   var body: some View {
     Group {
@@ -24,6 +25,8 @@ struct RootView: View {
         withAnimation {
           authEvent = event
         }
+
+        auth.session = try? await supabase.auth.session
       }
     }
   }

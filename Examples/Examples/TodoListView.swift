@@ -10,6 +10,8 @@ import SwiftUI
 import SwiftUINavigation
 
 struct TodoListView: View {
+  @EnvironmentObject var auth: AuthController
+
   @State var todos: IdentifiedArrayOf<Todo> = []
   @State var error: Error?
 
@@ -48,7 +50,7 @@ struct TodoListView: View {
       ToolbarItem(placement: .primaryAction) {
         Button {
           withAnimation {
-            createTodoRequest = .init(description: "", isComplete: false)
+            createTodoRequest = .init(description: "", isComplete: false, ownerID: auth.currentUserID)
           }
         } label: {
           Label("Add", systemImage: "plus")
@@ -102,7 +104,7 @@ struct TodoListView: View {
     do {
       error = nil
 
-      let updateRequest = UpdateTodoRequest(isComplete: updatedTodo.isComplete)
+      let updateRequest = UpdateTodoRequest(isComplete: updatedTodo.isComplete, ownerID: auth.currentUserID)
       updatedTodo = try await supabase.database.from("todos")
         .update(values: updateRequest, returning: .representation)
         .eq(column: "id", value: updatedTodo.id)

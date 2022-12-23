@@ -6,15 +6,26 @@
 //
 
 import SwiftUI
+import GoTrue
 
-final class AuthController: ObservableObject {}
+final class AuthController: ObservableObject {
+  @Published var session: Session?
+
+  var currentUserID: UUID {
+    guard let id = session?.user.id else {
+      preconditionFailure("Required session.")
+    }
+
+    return id
+  }
+}
 
 struct AuthView: View {
   enum Mode {
     case signIn, signUp
   }
 
-  @StateObject var auth = AuthController()
+  @EnvironmentObject var auth: AuthController
 
   @State var email = ""
   @State var password = ""
