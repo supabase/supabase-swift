@@ -94,3 +94,5 @@ iOSInjectionProject/
 /Packages
 /*.xcodeproj
 /.swiftpm
+
+Secrets.swift
