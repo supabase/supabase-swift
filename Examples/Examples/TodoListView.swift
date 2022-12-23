@@ -81,8 +81,8 @@ struct TodoListView: View {
         todos = IdentifiedArrayOf(
           uniqueElements: try await supabase.database.from("todos")
             .select()
-            .execute(returning: [Todo].self)
-            .value
+            .execute()
+            .value as [Todo]
         )
       } catch {
         self.error = error
@@ -98,10 +98,10 @@ struct TodoListView: View {
     do {
       error = nil
 
-      let createdTodo = try await supabase.database.from("todos")
+      let createdTodo: Todo = try await supabase.database.from("todos")
         .insert(values: createTodoRequest, returning: .representation)
         .single()
-        .execute(returning: Todo.self)
+        .execute()
         .value
 
       withAnimation {
@@ -130,7 +130,7 @@ struct TodoListView: View {
         .update(values: updateRequest, returning: .representation)
         .eq(column: "id", value: updatedTodo.id)
         .single()
-        .execute(returning: Todo.self)
+        .execute()
         .value
       todos[id: updatedTodo.id] = updatedTodo
     } catch {
