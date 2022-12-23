@@ -24,24 +24,26 @@ struct TodoListView: View {
       }
 
       IfLet($createTodoRequest) { $createTodoRequest in
-        Section {
-          TextField("Description", text: $createTodoRequest.description)
-          Button("Save") {
-            Task { await saveNewTodoButtonTapped() }
+        AddTodoListView(request: $createTodoRequest) { result in
+          withAnimation {
+            self.createTodoRequest = nil
+
+            switch result {
+            case let .success(todo):
+              error = nil
+              _ = todos.insert(todo, at: 0)
+            case let .failure(error):
+              self.error = error
+            }
           }
         }
       }
 
       ForEach(todos) { todo in
-        HStack {
-          Text(todo.description)
-          Spacer()
-          Button {
-            Task { await toggleCompletion(of: todo) }
-          } label: {
-            Image(systemName: todo.isComplete ? "checkmark.circle.fill" : "circle")
+        TodoListRow(todo: todo) {
+          Task {
+            await toggleCompletion(of: todo)
           }
-          .buttonStyle(.plain)
         }
       }
       .onDelete { indexSet in
@@ -87,30 +89,6 @@ struct TodoListView: View {
       } catch {
         self.error = error
       }
-    }
-  }
-
-  func saveNewTodoButtonTapped() async {
-    guard let createTodoRequest else {
-      return
-    }
-
-    do {
-      error = nil
-
-      let createdTodo: Todo = try await supabase.database.from("todos")
-        .insert(values: createTodoRequest, returning: .representation)
-        .single()
-        .execute()
-        .value
-
-      withAnimation {
-        todos.insert(createdTodo, at: 0)
-        self.createTodoRequest = nil
-      }
-
-    } catch {
-      self.error = error
     }
   }
 
