@@ -44,17 +44,30 @@ struct TodoListView: View {
           .buttonStyle(.plain)
         }
       }
+      .onDelete { indexSet in
+        Task {
+          await delete(at: indexSet)
+        }
+      }
     }
     .animation(.default, value: todos)
     .navigationTitle("Todos")
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
-        Button {
-          withAnimation {
-            createTodoRequest = .init(description: "", isComplete: false, ownerID: auth.currentUserID)
+        if createTodoRequest == nil {
+          Button {
+            withAnimation {
+              createTodoRequest = .init(description: "", isComplete: false, ownerID: auth.currentUserID)
+            }
+          } label: {
+            Label("Add", systemImage: "plus")
           }
-        } label: {
-          Label("Add", systemImage: "plus")
+        } else {
+          Button("Cancel", role: .cancel) {
+            withAnimation {
+              createTodoRequest = nil
+            }
+          }
         }
       }
     }
@@ -118,6 +131,27 @@ struct TodoListView: View {
       todos[id: todo.id] = todo
 
       self.error = error
+    }
+  }
+
+  func delete(at offset: IndexSet) async {
+    let oldTodos = todos
+
+    do {
+      error = nil
+      let todosToDelete = offset.map { todos[$0] }
+
+      self.todos.remove(atOffsets: offset)
+
+      try await supabase.database.from("todos")
+        .delete()
+        .in(column: "id", value: todosToDelete.map(\.id))
+        .execute()
+    } catch {
+      self.error = error
+
+      // rollback todos on error.
+      self.todos = oldTodos
     }
   }
 }
