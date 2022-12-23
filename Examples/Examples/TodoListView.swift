@@ -33,14 +33,15 @@ struct TodoListView: View {
       }
 
       ForEach(todos) { todo in
-        Button {
-          Task { await toggleCompletion(of: todo) }
-        } label: {
-          HStack {
-            Text(todo.description)
-            Spacer()
+        HStack {
+          Text(todo.description)
+          Spacer()
+          Button {
+            Task { await toggleCompletion(of: todo) }
+          } label: {
             Image(systemName: todo.isComplete ? "checkmark.circle.fill" : "circle")
           }
+          .buttonStyle(.plain)
         }
       }
     }

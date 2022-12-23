@@ -51,9 +51,7 @@ struct AuthView: View {
         }
 
         if let error {
-          Text(String(describing: error))
-            .foregroundColor(.red)
-            .font(.footnote)
+          ErrorText(error)
         }
       }
 
