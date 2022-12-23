@@ -16,7 +16,7 @@ let package = Package(
     .library(
       name: "Supabase",
       targets: ["Supabase"]
-    )
+    ),
   ],
   dependencies: [
     .package(url: "https://github.com/supabase-community/gotrue-swift", branch: "main"),

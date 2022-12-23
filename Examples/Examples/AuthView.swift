@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 22/12/22.
 //
 
-import SwiftUI
 import GoTrue
+import SwiftUI
 
 final class AuthController: ObservableObject {
   @Published var session: Session?

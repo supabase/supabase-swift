@@ -57,7 +57,11 @@ struct TodoListView: View {
         if createTodoRequest == nil {
           Button {
             withAnimation {
-              createTodoRequest = .init(description: "", isComplete: false, ownerID: auth.currentUserID)
+              createTodoRequest = .init(
+                description: "",
+                isComplete: false,
+                ownerID: auth.currentUserID
+              )
             }
           } label: {
             Label("Add", systemImage: "plus")
@@ -118,7 +122,10 @@ struct TodoListView: View {
     do {
       error = nil
 
-      let updateRequest = UpdateTodoRequest(isComplete: updatedTodo.isComplete, ownerID: auth.currentUserID)
+      let updateRequest = UpdateTodoRequest(
+        isComplete: updatedTodo.isComplete,
+        ownerID: auth.currentUserID
+      )
       updatedTodo = try await supabase.database.from("todos")
         .update(values: updateRequest, returning: .representation)
         .eq(column: "id", value: updatedTodo.id)
@@ -141,7 +148,7 @@ struct TodoListView: View {
       error = nil
       let todosToDelete = offset.map { todos[$0] }
 
-      self.todos.remove(atOffsets: offset)
+      todos.remove(atOffsets: offset)
 
       try await supabase.database.from("todos")
         .delete()
@@ -151,7 +158,7 @@ struct TodoListView: View {
       self.error = error
 
       // rollback todos on error.
-      self.todos = oldTodos
+      todos = oldTodos
     }
   }
 }
