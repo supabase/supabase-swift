@@ -10,7 +10,7 @@ import SwiftUI
 struct HomeView: View {
   var body: some View {
     NavigationStack {
-      Text("Hello, World!")
+      TodoListView()
         .toolbar {
           ToolbarItem(placement: .cancellationAction) {
             Button("Sign out") {

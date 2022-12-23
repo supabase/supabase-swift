@@ -5,13 +5,13 @@
 //  Created by Guilherme Souza on 22/12/22.
 //
 
-import SwiftUI
 import Supabase
+import SwiftUI
 
 @main
 struct ExamplesApp: App {
   @State var supabaseInitialized = false
-  
+
   var body: some Scene {
     WindowGroup {
       main

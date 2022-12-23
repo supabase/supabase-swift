@@ -15,6 +15,11 @@
 		7956405E2954ADE00088A06F /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405D2954ADE00088A06F /* Secrets.swift */; };
 		795640602954AE140088A06F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405F2954AE140088A06F /* AuthView.swift */; };
 		795640622955AD2B0088A06F /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640612955AD2B0088A06F /* HomeView.swift */; };
+		795640662955AE9C0088A06F /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640652955AE9C0088A06F /* TodoListView.swift */; };
+		795640682955AEB30088A06F /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640672955AEB30088A06F /* Models.swift */; };
+		7956406A2955AFBD0088A06F /* ErrorText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640692955AFBD0088A06F /* ErrorText.swift */; };
+		7956406D2955B3500088A06F /* SwiftUINavigation in Frameworks */ = {isa = PBXBuildFile; productRef = 7956406C2955B3500088A06F /* SwiftUINavigation */; };
+		795640702955B5190088A06F /* IdentifiedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 7956406F2955B5190088A06F /* IdentifiedCollections */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +33,9 @@
 		7956405F2954AE140088A06F /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		795640612955AD2B0088A06F /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		795640632955ADFB0088A06F /* _Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = _Secrets.swift; sourceTree = "<group>"; };
+		795640652955AE9C0088A06F /* TodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListView.swift; sourceTree = "<group>"; };
+		795640672955AEB30088A06F /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		795640692955AFBD0088A06F /* ErrorText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorText.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -35,6 +43,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				795640702955B5190088A06F /* IdentifiedCollections in Frameworks */,
+				7956406D2955B3500088A06F /* SwiftUINavigation in Frameworks */,
 				7956405C2954AC3E0088A06F /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -71,6 +81,9 @@
 				7956405D2954ADE00088A06F /* Secrets.swift */,
 				795640612955AD2B0088A06F /* HomeView.swift */,
 				795640632955ADFB0088A06F /* _Secrets.swift */,
+				795640652955AE9C0088A06F /* TodoListView.swift */,
+				795640672955AEB30088A06F /* Models.swift */,
+				795640692955AFBD0088A06F /* ErrorText.swift */,
 			);
 			path = Examples;
 			sourceTree = "<group>";
@@ -108,6 +121,8 @@
 			name = Examples;
 			packageProductDependencies = (
 				7956405B2954AC3E0088A06F /* Supabase */,
+				7956406C2955B3500088A06F /* SwiftUINavigation */,
+				7956406F2955B5190088A06F /* IdentifiedCollections */,
 			);
 			productName = Examples;
 			productReference = 793895C62954ABFF0044F2B8 /* Examples.app */;
@@ -137,6 +152,10 @@
 				Base,
 			);
 			mainGroup = 793895BD2954ABFF0044F2B8;
+			packageReferences = (
+				7956406B2955B3500088A06F /* XCRemoteSwiftPackageReference "swiftui-navigation" */,
+				7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */,
+			);
 			productRefGroup = 793895C72954ABFF0044F2B8 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -164,7 +183,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */,
+				7956406A2955AFBD0088A06F /* ErrorText.swift in Sources */,
 				7956405E2954ADE00088A06F /* Secrets.swift in Sources */,
+				795640682955AEB30088A06F /* Models.swift in Sources */,
+				795640662955AE9C0088A06F /* TodoListView.swift in Sources */,
 				795640602954AE140088A06F /* AuthView.swift in Sources */,
 				795640622955AD2B0088A06F /* HomeView.swift in Sources */,
 				793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */,
@@ -382,10 +404,39 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		7956406B2955B3500088A06F /* XCRemoteSwiftPackageReference "swiftui-navigation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swiftui-navigation.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.4.5;
+			};
+		};
+		7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-identified-collections.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.5.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		7956405B2954AC3E0088A06F /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Supabase;
+		};
+		7956406C2955B3500088A06F /* SwiftUINavigation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7956406B2955B3500088A06F /* XCRemoteSwiftPackageReference "swiftui-navigation" */;
+			productName = SwiftUINavigation;
+		};
+		7956406F2955B5190088A06F /* IdentifiedCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */;
+			productName = IdentifiedCollections;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

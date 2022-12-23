@@ -7,9 +7,7 @@
 
 import SwiftUI
 
-final class AuthController: ObservableObject {
-
-}
+final class AuthController: ObservableObject {}
 
 struct AuthView: View {
   enum Mode {
@@ -49,7 +47,10 @@ struct AuthView: View {
       }
 
       Section {
-        Button(mode == .signIn ? "Don't have an account? Sign up." : "Already have an account? Sign in.") {
+        Button(
+          mode == .signIn ? "Don't have an account? Sign up." :
+            "Already have an account? Sign in."
+        ) {
           withAnimation {
             mode = mode == .signIn ? .signUp : .signIn
           }
