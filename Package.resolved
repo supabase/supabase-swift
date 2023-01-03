@@ -20,6 +20,15 @@
         }
       },
       {
+        "package": "GetExtensions",
+        "repositoryURL": "https://github.com/binaryscraping/GetExtensions",
+        "state": {
+          "branch": null,
+          "revision": "aa20f38721142eb6592b2c8f11179d32d7d70ae3",
+          "version": "1.0.0"
+        }
+      },
+      {
         "package": "GoTrue",
         "repositoryURL": "https://github.com/supabase-community/gotrue-swift",
         "state": {
@@ -41,9 +50,9 @@
         "package": "PostgREST",
         "repositoryURL": "https://github.com/supabase-community/postgrest-swift",
         "state": {
-          "branch": "master",
-          "revision": "d96b5641e0c1574592f83deb73b5484c94f5ce0c",
-          "version": null
+          "branch": null,
+          "revision": "a3c2d6a2ede94d2529edf063b056b1a66fd9cdc2",
+          "version": "1.0.0"
         }
       },
       {
