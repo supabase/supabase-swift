@@ -59,10 +59,12 @@ public class SupabaseClient {
   ///   - supabaseURL: Unique Supabase project url
   ///   - supabaseKey: Supabase anonymous API Key
   ///   - schema: Database schema name, defaults to `public`
+  ///   - headers: Optional headers for initializing the client.
   public init(
     supabaseURL: URL,
     supabaseKey: String,
     schema: String = "public",
+    headers: [String: String] = [:],
     httpClient: HTTPClient = HTTPClient()
   ) {
     self.supabaseURL = supabaseURL
@@ -73,7 +75,7 @@ public class SupabaseClient {
     defaultHeaders = [
       "X-Client-Info": "supabase-swift/\(version)",
       "apikey": supabaseKey,
-    ]
+    ].merging(headers) { old, _ in old }
 
     auth = GoTrueClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),

@@ -41,7 +41,7 @@ let package = Package(
             "-warn-concurrency",
             "-enable-actor-data-race-checks",
           ]
-        )
+        ),
       ]
     ),
   ]
