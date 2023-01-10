@@ -16,7 +16,7 @@ let package = Package(
     .library(
       name: "Supabase",
       targets: ["Supabase"]
-    ),
+    )
   ],
   dependencies: [
     .package(url: "https://github.com/supabase-community/gotrue-swift", from: "0.1.0"),
@@ -41,8 +41,8 @@ let package = Package(
             "-warn-concurrency",
             "-enable-actor-data-race-checks",
           ]
-        ),
+        )
       ]
-    ),
+    )
   ]
 )

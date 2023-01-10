@@ -37,11 +37,11 @@ public class SupabaseClient {
 
   /// Realtime client for Supabase
   public var realtime: RealtimeClient {
-      RealtimeClient(
-        endPoint: supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
-        params: defaultHeaders
-      )
-    }
+    RealtimeClient(
+      endPoint: supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
+      params: defaultHeaders
+    )
+  }
 
   /// Supabase Functions allows you to deploy and invoke edge functions.
   public var functions: FunctionsClient {
@@ -75,7 +75,7 @@ public class SupabaseClient {
     defaultHeaders = [
       "X-Client-Info": "supabase-swift/\(version)",
       "apikey": supabaseKey,
-    ].merging(headers) { old, _ in old }
+    ].merging(headers) { _, new in new }
 
     auth = GoTrueClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
