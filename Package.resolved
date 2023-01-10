@@ -32,8 +32,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/gotrue-swift",
       "state" : {
-        "revision" : "7989dcbc5ee55451c4a4d43d0dce2c333389d3b4",
-        "version" : "0.1.0"
+        "revision" : "052fff22d1c2ffa4c3a6b3b58432e251f352891b",
+        "version" : "0.1.1"
       }
     },
     {
