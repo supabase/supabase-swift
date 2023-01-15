@@ -34,14 +34,6 @@ let package = Package(
         .product(name: "Realtime", package: "realtime-swift"),
         .product(name: "PostgREST", package: "postgrest-swift"),
         .product(name: "Functions", package: "functions-swift"),
-      ],
-      swiftSettings: [
-        .unsafeFlags(
-          [
-            "-warn-concurrency",
-            "-enable-actor-data-race-checks",
-          ]
-        )
       ]
     )
   ]
