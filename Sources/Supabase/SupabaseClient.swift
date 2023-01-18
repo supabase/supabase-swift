@@ -61,6 +61,7 @@ public class SupabaseClient {
   ///   - supabaseURL: Unique Supabase project url
   ///   - supabaseKey: Supabase anonymous API Key
   ///   - schema: Database schema name, defaults to `public`
+  ///   - headers: Optional headers for initializing the client.
   public init(
     supabaseURL: URL,
     supabaseKey: String,
