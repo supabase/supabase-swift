@@ -20,7 +20,7 @@ let package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/supabase-community/gotrue-swift", from: "0.1.0"),
-    .package(url: "https://github.com/supabase-community/storage-swift.git", branch: "main"),
+    .package(url: "https://github.com/supabase-community/storage-swift.git", from: "0.1.0"),
     .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.1"),
     .package(url: "https://github.com/supabase-community/postgrest-swift", from: "1.0.0"),
     .package(url: "https://github.com/supabase-community/functions-swift", from: "0.2.0"),
@@ -34,14 +34,6 @@ let package = Package(
         .product(name: "Realtime", package: "realtime-swift"),
         .product(name: "PostgREST", package: "postgrest-swift"),
         .product(name: "Functions", package: "functions-swift"),
-      ],
-      swiftSettings: [
-        .unsafeFlags(
-          [
-            "-warn-concurrency",
-            "-enable-actor-data-race-checks",
-          ]
-        )
       ]
     ),
     .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),

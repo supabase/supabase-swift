@@ -36,7 +36,6 @@
 		7956405D2954ADE00088A06F /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		7956405F2954AE140088A06F /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		795640612955AD2B0088A06F /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
-		795640632955ADFB0088A06F /* _Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = _Secrets.swift; sourceTree = "<group>"; };
 		795640652955AE9C0088A06F /* TodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListView.swift; sourceTree = "<group>"; };
 		795640672955AEB30088A06F /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		795640692955AFBD0088A06F /* ErrorText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorText.swift; sourceTree = "<group>"; };
@@ -84,7 +83,6 @@
 				793895CB2954ABFF0044F2B8 /* RootView.swift */,
 				7956405D2954ADE00088A06F /* Secrets.swift */,
 				795640612955AD2B0088A06F /* HomeView.swift */,
-				795640632955ADFB0088A06F /* _Secrets.swift */,
 				795640652955AE9C0088A06F /* TodoListView.swift */,
 				795640672955AEB30088A06F /* Models.swift */,
 				795640692955AFBD0088A06F /* ErrorText.swift */,
