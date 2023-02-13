@@ -35,6 +35,7 @@ let package = Package(
         .product(name: "PostgREST", package: "postgrest-swift"),
         .product(name: "Functions", package: "functions-swift"),
       ]
-    )
+    ),
+    .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
   ]
 )

@@ -11,7 +11,8 @@ public class SupabaseClient {
   private let supabaseURL: URL
   private let supabaseKey: String
   private let schema: String
-  private let functionsURL: URL
+
+  let functionsURL: URL
 
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured
   /// by access policies.
