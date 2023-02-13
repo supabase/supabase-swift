@@ -86,7 +86,7 @@ public class SupabaseClient {
 
     let isPlatform =
       supabaseURL.absoluteString.contains("supabase.co")
-      || supabaseURL.absoluteString.contains("supabase.in")
+        || supabaseURL.absoluteString.contains("supabase.in")
     if isPlatform {
       let urlParts = supabaseURL.absoluteString.split(separator: ".")
       functionsURL = URL(string: "\(urlParts[0]).functions.\(urlParts[1]).\(urlParts[2])")!
