@@ -12,6 +12,8 @@ public class SupabaseClient {
   private let supabaseKey: String
   private let schema: String
 
+  let functionsURL: URL
+
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured
   /// by access policies.
   public let auth: GoTrueClient
@@ -46,7 +48,7 @@ public class SupabaseClient {
   /// Supabase Functions allows you to deploy and invoke edge functions.
   public var functions: FunctionsClient {
     FunctionsClient(
-      url: supabaseURL.appendingPathComponent("/functions/v1"),
+      url: functionsURL,
       headers: defaultHeaders,
       apiClientDelegate: self
     )
@@ -81,6 +83,16 @@ public class SupabaseClient {
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       headers: defaultHeaders
     )
+
+    let isPlatform =
+      supabaseURL.absoluteString.contains("supabase.co")
+      || supabaseURL.absoluteString.contains("supabase.in")
+    if isPlatform {
+      let urlParts = supabaseURL.absoluteString.split(separator: ".")
+      functionsURL = URL(string: "\(urlParts[0]).functions.\(urlParts[1]).\(urlParts[2])")!
+    } else {
+      functionsURL = supabaseURL.appendingPathComponent("functions/v1")
+    }
   }
 
   public struct HTTPClient {
