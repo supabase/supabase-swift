@@ -173,6 +173,69 @@ Task {
 
 - Other Social Logins if using a webview will be similar to above and just follow the [Supabase's Documentation](https://supabase.com/docs/guides/auth/) for their setup
 
+## Basic CRUD Implementation
+
+Import and Initialize the Supabase client
+
+```swift
+let client = SupabaseClient(supabaseURL: "{ Supabase URL }", supabaseKey: "{ Supabase anonymous Key }")
+```
+
+### Insert Data
+
+Create a model which follows the data structure of your table.
+
+```swift
+struct InsertModel: Encodable {
+    let id: Int? // you can choose to omit this depending on how you've setup your table
+    let title: String?
+    let desc: String?
+}
+
+let insertData = InsertModel(title: "Test", desc: "Test Desc")
+let query = client.database
+            .from("{ Your Table Name }")
+            .insert(values: insertData,
+                    returning: .representation) // you will need to add this to return the added data
+            .select(columns: "id") // specifiy which column names to be returned. Leave it empty for all columns
+            
+Task {
+    do {
+        if let response = try? await query.execute(),
+           let data = try? response.underlyingResponse.data  {
+           let returnArray = try JSONDecoder().decode([InsertModel].self, from:  data)
+            print("### Returned: \(returnArray.first)")
+        }
+    } catch {
+        print("### Insert Error: \(error)")
+    }
+}
+```
+
+### Select Data
+
+Using the same model as before
+
+```swift
+let insertData = InsertModel(title: "Test", desc: "Test Desc")
+let query = client.database
+            .from("{ Your Table Name }")
+            .select() // keep it empty for all, else specify returned data
+            .match(query: ["title" : insertData.title, "desc": insertData.desc]) // equal to multiple or single 
+            
+Task {
+    do {
+        if let response = try? await query.execute(),
+           let data = try? response.underlyingResponse.data  {
+            let returnArray = try JSONDecoder().decode([InsertModel].self, from:  data)
+            print("### Returned: \(returnArray.first)")
+        }
+    } catch {
+        print("### Insert Error: \(error)")
+    }
+}
+```
+
 ## Contributing
 
 - Fork the repo on GitHub
