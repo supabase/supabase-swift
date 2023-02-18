@@ -198,14 +198,12 @@ let query = client.database
             .insert(values: insertData,
                     returning: .representation) // you will need to add this to return the added data
             .select(columns: "id") // specifiy which column names to be returned. Leave it empty for all columns
+            .single() // specify you want to return a single value.
             
 Task {
     do {
-        if let response = try? await query.execute(),
-           let data = try? response.underlyingResponse.data  {
-           let returnArray = try JSONDecoder().decode([InsertModel].self, from:  data)
-            print("### Returned: \(returnArray.first)")
-        }
+        let response: InsertModel = try await query.execute().value
+        print("### Returned: \(response)")
     } catch {
         print("### Insert Error: \(error)")
     }
