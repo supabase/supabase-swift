@@ -219,15 +219,13 @@ let insertData = InsertModel(title: "Test", desc: "Test Desc")
 let query = client.database
             .from("{ Your Table Name }")
             .select() // keep it empty for all, else specify returned data
-            .match(query: ["title" : insertData.title, "desc": insertData.desc]) // equal to multiple or single 
+            .match(query: ["title" : insertData.title, "desc": insertData.desc])
+            .single()
             
 Task {
     do {
-        if let response = try? await query.execute(),
-           let data = try? response.underlyingResponse.data  {
-            let returnArray = try JSONDecoder().decode([InsertModel].self, from:  data)
-            print("### Returned: \(returnArray.first)")
-        }
+        let response: InsertModel = try await query.execute().value
+        print("### Returned: \(response)")
     } catch {
         print("### Insert Error: \(error)")
     }
