@@ -43,7 +43,7 @@ Inside the `SupabaseClient` instance created before, you can find an `auth` prop
 Task {
   do {
       try await client.auth.signUp(email: email, password: password)
-      let session = try await client.session
+      let session = try await client.auth.session
       print("### Session Info: \(session)") 
   } catch {
       print("### Sign Up Error: \(error)")
@@ -57,7 +57,7 @@ Task {
 Task {
   do {
       try await client.auth.signIn(email: email, password: password)
-      let session = try await client.session
+      let session = try await client.auth.session
       print("### Session Info: \(session)") 
   } catch {
       print("### Sign Up Error: \(error)")
