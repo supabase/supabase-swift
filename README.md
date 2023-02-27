@@ -2,6 +2,23 @@
 
 Supabase client for swift. Mirrors the design of [supabase-js](https://github.com/supabase/supabase-js/blob/master/README.md).
 
+## Contents
+- [Installation](#installation)
+- [Usage](#usage)
+- [Login Implementation](#login-implementation)
+- [Social Login Implementation](#social-login-implementation)
+    - [Setup Callback URL](#setup-callback-url)
+    - [Google Sign In](#google-sign-in)
+    - [Apple Sign In](#apple-sign-in)
+    - [Other Social Logins](#other-social-logins)
+- [Basic CRUD Implementation](#basic-crud-implementation)
+    - [Insert Data](#insert-data)
+    - [Select Data](#select-data)
+- [Contributing](#contributing)
+- [Sponsors](#sponsors)
+
+---
+
 ## Installation
 
 Swift Package Manager:
