@@ -106,7 +106,7 @@ var safariVC: SFSafariViewController?
 ```swift
 Task {
     do {
-        let url = try await client.getOAuthSignInURL(provider: Provider.google, redirectTo: URL(string: {Your Callback URL})!)
+        let url = try await client.auth.getOAuthSignInURL(provider: Provider.google, redirectTo: URL(string: {Your Callback URL})!)
         safariVC = SFSafariViewController(url: url as URL)
         self.present(safariVC!, animated: true, completion: nil)
     } catch {
@@ -161,7 +161,7 @@ NotificationCenter.default.addObserver(
 ```swift
 Task {
     do {
-        let url = try await client.getOAuthSignInURL(provider: **Provider.apple**, redirectTo: URL(string: {Your Callback URL})!)
+        let url = try await client.auth.getOAuthSignInURL(provider: **Provider.apple**, redirectTo: URL(string: {Your Callback URL})!)
         safariVC = SFSafariViewController(url: url as URL)
         self.present(safariVC!, animated: true, completion: nil)
     } catch {
