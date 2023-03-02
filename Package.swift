@@ -16,14 +16,14 @@ let package = Package(
     .library(
       name: "Supabase",
       targets: ["Supabase"]
-    )
+    ),
   ],
   dependencies: [
-    .package(url: "https://github.com/supabase-community/gotrue-swift", from: "0.1.0"),
+    .package(url: "https://github.com/supabase-community/gotrue-swift", from: "1.0.0"),
     .package(url: "https://github.com/supabase-community/storage-swift.git", from: "0.1.0"),
     .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.1"),
     .package(url: "https://github.com/supabase-community/postgrest-swift", from: "1.0.0"),
-    .package(url: "https://github.com/supabase-community/functions-swift", from: "0.2.0"),
+    .package(url: "https://github.com/supabase-community/functions-swift", from: "1.0.0"),
   ],
   targets: [
     .target(

@@ -86,7 +86,7 @@ public class SupabaseClient {
 
     let isPlatform =
       supabaseURL.absoluteString.contains("supabase.co")
-      || supabaseURL.absoluteString.contains("supabase.in")
+        || supabaseURL.absoluteString.contains("supabase.in")
     if isPlatform {
       let urlParts = supabaseURL.absoluteString.split(separator: ".")
       functionsURL = URL(string: "\(urlParts[0]).functions.\(urlParts[1]).\(urlParts[2])")!
@@ -110,12 +110,7 @@ public class SupabaseClient {
 
 extension SupabaseClient: APIClientDelegate {
   public func client(_: APIClient, willSendRequest request: inout URLRequest) async throws {
-    if let session = try? await auth.session {
-      request.setValue(
-        "\(session.tokenType) \(session.accessToken)",
-        forHTTPHeaderField: "Authorization"
-      )
-    }
+    request = await adapt(request: request)
   }
 }
 
