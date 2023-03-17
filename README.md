@@ -200,7 +200,7 @@ First, import and initialize `SupabaseClient`, as explained in "Usage" section.
 - Create a model which follows your table's data structure:
 
 ```swift
-struct InsertModel: Encodable {
+struct InsertModel: Encodable, Decodable {
     let id: Int? // you can choose to omit this depending on how you've setup your table
     let title: String?
     let desc: String?
@@ -216,7 +216,7 @@ let query = client.database
             
 Task {
     do {
-        let response: InsertModel = try await query.execute().value
+        let response: [InsertModel] = try await query.execute().value
         print("### Returned: \(response)")
     } catch {
         print("### Insert Error: \(error)")
@@ -238,7 +238,7 @@ let query = client.database
             
 Task {
     do {
-        let response: InsertModel = try await query.execute().value
+        let response: [InsertModel] = try await query.execute().value
         print("### Returned: \(response)")
     } catch {
         print("### Insert Error: \(error)")
