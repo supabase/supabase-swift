@@ -8,11 +8,15 @@ import SupabaseStorage
 
 /// Supabase Client.
 public class SupabaseClient {
-  private let supabaseURL: URL
-  private let supabaseKey: String
-  private let schema: String
-
+  let supabaseURL: URL
+  let supabaseKey: String
+  let storageURL: URL
+  let databaseURL: URL
+  let realtimeURL: URL
+  let authURL: URL
   let functionsURL: URL
+
+  let schema: String
 
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured
   /// by access policies.
@@ -21,7 +25,7 @@ public class SupabaseClient {
   /// Supabase Storage allows you to manage user-generated content, such as photos or videos.
   public var storage: SupabaseStorageClient {
     SupabaseStorageClient(
-      url: supabaseURL.appendingPathComponent("/storage/v1").absoluteString,
+      url: storageURL.absoluteString,
       headers: defaultHeaders,
       http: self
     )
@@ -30,7 +34,7 @@ public class SupabaseClient {
   /// Database client for Supabase.
   public var database: PostgrestClient {
     PostgrestClient(
-      url: supabaseURL.appendingPathComponent("/rest/v1"),
+      url: databaseURL,
       headers: defaultHeaders,
       schema: schema,
       apiClientDelegate: self
@@ -40,7 +44,7 @@ public class SupabaseClient {
   /// Realtime client for Supabase
   public var realtime: RealtimeClient {
     RealtimeClient(
-      endPoint: supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
+      endPoint: realtimeURL.absoluteString,
       params: defaultHeaders
     )
   }
@@ -54,7 +58,7 @@ public class SupabaseClient {
     )
   }
 
-  private var defaultHeaders: [String: String]
+  private(set) var defaultHeaders: [String: String]
 
   /// Create a new client.
   public init(
@@ -64,6 +68,11 @@ public class SupabaseClient {
   ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
+    authURL = supabaseURL.appendingPathComponent("/auth/v1")
+    storageURL = supabaseURL.appendingPathComponent("/storage/v1")
+    databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
+    realtimeURL = supabaseURL.appendingPathComponent("/realtime/v1")
+
     schema = options.db.schema
     httpClient = options.global.httpClient
 
@@ -73,7 +82,7 @@ public class SupabaseClient {
     ].merging(options.global.headers) { _, new in new }
 
     auth = GoTrueClient(
-      url: supabaseURL.appendingPathComponent("/auth/v1"),
+      url: authURL,
       headers: defaultHeaders,
       localStorage: options.auth.storage
     )
