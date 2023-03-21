@@ -80,8 +80,8 @@ struct TodoListView: View {
     .task {
       do {
         error = nil
-        todos = IdentifiedArrayOf(
-          uniqueElements: try await supabase.database.from("todos")
+        todos = try await IdentifiedArrayOf(
+          uniqueElements: supabase.database.from("todos")
             .select()
             .execute()
             .value as [Todo]
