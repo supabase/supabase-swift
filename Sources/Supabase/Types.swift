@@ -17,14 +17,10 @@ public struct SupabaseClientOptions {
   }
 
   public struct AuthOptions {
-    /// Optional key name used for storing tokens in local storage.
-    public let storageKey: String?
-
     /// A storage provider. Used to store the logged-in session.
     public let storage: GoTrueLocalStorage?
 
-    public init(storageKey: String? = nil, storage: GoTrueLocalStorage? = nil) {
-      self.storageKey = storageKey
+    public init(storage: GoTrueLocalStorage? = nil) {
       self.storage = storage
     }
   }

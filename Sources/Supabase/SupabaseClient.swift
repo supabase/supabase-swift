@@ -74,7 +74,8 @@ public class SupabaseClient {
 
     auth = GoTrueClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
-      headers: defaultHeaders
+      headers: defaultHeaders,
+      localStorage: options.auth.storage
     )
 
     let isPlatform =
