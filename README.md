@@ -220,7 +220,9 @@ First, import and initialize `SupabaseClient`, as explained in "Usage" section.
 
 ### Insert Data
 
+- You can either use `Codable` or `Encodable` and `Decodable` protocols for the model's struct. However without either, you will get an error saying `Cannot convert value of type 'Void' to specified type 'InsertModel'` when trying to cast the response to your model.
 - Create a model which follows your table's data structure:
+
 
 ```swift
 struct InsertModel: Encodable, Decodable {
