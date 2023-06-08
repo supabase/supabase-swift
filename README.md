@@ -61,7 +61,30 @@ Task {
   do {
       try await client.auth.signUp(email: email, password: password)
       let session = try await client.auth.session
-      print("### Session Info: \(session)") 
+      print("### Session Info: \(session)")
+  } catch {
+      print("### Sign Up Error: \(error)")
+  }
+}
+```
+
+If you wish to add metadata for the user, you can pass it as part of the `data` parameter, just be sure to `import GoTrue` first to use the User metadata values.
+
+```swift
+Task {
+  do {
+      try await client.auth.signUp(
+        email: email,
+        password: password,
+        data: [
+          "name": .string("John Doe"),
+          "age": .number(25),
+          "some_boolean_parameter": .bool(true)
+        ]
+      )
+
+      let session = try await client.auth.session
+      print("### Session Info: \(session)")
   } catch {
       print("### Sign Up Error: \(error)")
   }
@@ -75,7 +98,7 @@ Task {
   do {
       try await client.auth.signIn(email: email, password: password)
       let session = try await client.auth.session
-      print("### Session Info: \(session)") 
+      print("### Session Info: \(session)")
   } catch {
       print("### Sign Up Error: \(error)")
   }
@@ -154,7 +177,7 @@ NotificationCenter.default.addObserver(
             selector: #selector(self.oAuthCallback(_:)),
             name: NSNotification.Name(rawValue: "OAuthCallBack"),
             object: nil)
-            
+
 @objc func oAuthCallback(_ notification: NSNotification){
     guard let url = notification.userInfo?["url"] as? URL  else { return }
     Task {
@@ -171,7 +194,7 @@ NotificationCenter.default.addObserver(
 
 ### Apple Sign In
 
-- Setup Apple Auth as per [Supabase's Documentation](https://supabase.com/docs/guides/auth/social-login/auth-apple). 
+- Setup Apple Auth as per [Supabase's Documentation](https://supabase.com/docs/guides/auth/social-login/auth-apple).
 - For Sign in with Apple follow the above as per Google Sign In and just replace the provider.
 - Once the user moves to the `SFSafariViewController`, an Apple native pop-up will slide up to continue with the sign in.
 
@@ -197,7 +220,9 @@ First, import and initialize `SupabaseClient`, as explained in "Usage" section.
 
 ### Insert Data
 
+- You can either use `Codable` or `Encodable` and `Decodable` protocols for the model's struct. However without either, you will get an error saying `Cannot convert value of type 'Void' to specified type 'InsertModel'` when trying to cast the response to your model.
 - Create a model which follows your table's data structure:
+
 
 ```swift
 struct InsertModel: Encodable, Decodable {
@@ -213,7 +238,7 @@ let query = client.database
                     returning: .representation) // you will need to add this to return the added data
             .select(columns: "id") // specifiy which column names to be returned. Leave it empty for all columns
             .single() // specify you want to return a single value.
-            
+
 Task {
     do {
         let response: [InsertModel] = try await query.execute().value
@@ -235,13 +260,86 @@ let query = client.database
             .select() // keep it empty for all, else specify returned data
             .match(query: ["title" : insertData.title, "desc": insertData.desc])
             .single()
-            
+
 Task {
     do {
         let response: [InsertModel] = try await query.execute().value
         print("### Returned: \(response)")
     } catch {
-        print("### Insert Error: \(error)")
+        print("### Select Error: \(error)")
+    }
+}
+```
+
+### Update Data
+
+- Using the same model as before:
+
+```swift
+// Assuming the record above was inserted with id 1
+let updateData = InsertModel(id: 1, title: "Test Edited", desc: "Test Desc Edited")
+let query = client.database
+            .from("{ Your Table Name }")
+            .update(values: updateData,
+                    returning: .representation) // you will need to add this to return the updated data
+            .select(columns: "id") // specifiy which column names to be returned. Leave it empty for all columns
+            .single() // specify you want to return a single value.
+
+Task {
+    do {
+        let response: [InsertModel] = try await query.execute().value
+        print("### Returned: \(response)")
+    } catch {
+        print("### Update Error: \(error)")
+    }
+}
+```
+
+### Delete Data
+
+```swift
+let query = client.database
+            .from("{ Your Table Name }")
+            .delete(returning: .representation) // you will need to add this to return the deleted data
+            .match(
+                query: ["id" : 1] // assuming the record above was inserted with id 1
+                // You can add additional conditions here
+            )
+            .select() // specifiy which column names to be returned. Leave it empty for all columns
+            .single()
+
+Task {
+    do {
+        let response: [InsertModel] = try await query.execute().value
+        print("### Returned: \(response)")
+    } catch {
+        print("### Delete Error: \(error)")
+    }
+}
+```
+
+## Postgres Functions
+
+- Unlike the JavaScript library, you can't use the `rpc` method on the `SupabaseClient`, instead you need to use the `rpc` method on the `PostgresClient`:
+
+```swift
+struct YourFunctionNameParams: Codable {
+    let param1: String
+    let param2: String
+}
+
+let query = client.database.rpc(
+    fn: "your_function_name",
+    params: YourFunctionNameParams(param1: "param1", param2: "param2")
+)
+// Like in Supabase-js, you can use the `.single` method to return a single value.
+
+Task {
+    do {
+        let response: [DataModel] = try await query.execute().value // Where DataModel is the model of the data returned by the function
+        print("### Returned: \(response)")
+    } catch {
+        print("### RPC Error: \(error)")
     }
 }
 ```
