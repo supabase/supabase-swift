@@ -78,6 +78,7 @@ public class SupabaseClient {
 
     defaultHeaders = [
       "X-Client-Info": "supabase-swift/\(version)",
+      "Authorization": "Bearer \(supabaseKey)",
       "apikey": supabaseKey,
     ].merging(options.global.headers) { _, new in new }
 
