@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/functions-swift",
       "state" : {
-        "revision" : "7d5dfce3673bb30bbb7e1fbb5e0afe01bbd92624",
-        "version" : "0.2.0"
+        "revision" : "c680cdfc53399376bdece299b1387b4fb3da514e",
+        "version" : "1.0.0"
       }
     },
     {
@@ -32,8 +32,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/gotrue-swift",
       "state" : {
-        "revision" : "052fff22d1c2ffa4c3a6b3b58432e251f352891b",
-        "version" : "0.1.1"
+        "revision" : "a972c99bf0ed745047ec7bc6231460f6738d004e",
+        "version" : "1.1.1"
       }
     },
     {
@@ -68,8 +68,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/storage-swift.git",
       "state" : {
-        "revision" : "04703e499ca258899d7ad45717efe75b8ddc09ab",
-        "version" : "0.1.0"
+        "revision" : "db67ce7764ef80e7941cea6bc4a0104c88e060f8",
+        "version" : "0.1.3"
       }
     },
     {

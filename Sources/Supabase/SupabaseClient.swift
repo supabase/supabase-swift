@@ -72,6 +72,7 @@ public class SupabaseClient {
     storageURL = supabaseURL.appendingPathComponent("/storage/v1")
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     realtimeURL = supabaseURL.appendingPathComponent("/realtime/v1")
+    functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
     schema = options.db.schema
     httpClient = options.global.httpClient
@@ -86,16 +87,6 @@ public class SupabaseClient {
       headers: defaultHeaders,
       localStorage: options.auth.storage
     )
-
-    let isPlatform =
-      supabaseURL.absoluteString.contains("supabase.co")
-        || supabaseURL.absoluteString.contains("supabase.in")
-    if isPlatform {
-      let urlParts = supabaseURL.absoluteString.split(separator: ".")
-      functionsURL = URL(string: "\(urlParts[0]).functions.\(urlParts[1]).\(urlParts[2])")!
-    } else {
-      functionsURL = supabaseURL.appendingPathComponent("functions/v1")
-    }
   }
 
   public struct HTTPClient {
