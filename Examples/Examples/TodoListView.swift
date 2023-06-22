@@ -26,7 +26,7 @@ struct TodoListView: View {
       IfLet($createTodoRequest) { $createTodoRequest in
         AddTodoListView(request: $createTodoRequest) { result in
           withAnimation {
-            self.createTodoRequest = nil
+            createTodoRequest = nil
 
             switch result {
             case let .success(todo):
