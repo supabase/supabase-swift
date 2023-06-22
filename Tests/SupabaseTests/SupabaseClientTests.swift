@@ -38,6 +38,8 @@ final class SupabaseClientTests: XCTestCase {
     XCTAssertEqual(client.storageURL.absoluteString, "https://project-ref.supabase.co/storage/v1")
     XCTAssertEqual(client.databaseURL.absoluteString, "https://project-ref.supabase.co/rest/v1")
     XCTAssertEqual(client.realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")
+    XCTAssertEqual(client.functionsURL.absoluteString, "https://project-ref.supabase.co/functions/v1")
+
     XCTAssertEqual(
       client.defaultHeaders,
       [
@@ -47,25 +49,5 @@ final class SupabaseClientTests: XCTestCase {
         "Authorization": "Bearer ANON_KEY"
       ]
     )
-  }
-
-  func testFunctionsURL() {
-    var client = SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "ANON_KEY"
-    )
-    XCTAssertEqual(client.functionsURL.absoluteString, "https://project-ref.functions.supabase.co")
-
-    client = SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.in")!,
-      supabaseKey: "ANON_KEY"
-    )
-    XCTAssertEqual(client.functionsURL.absoluteString, "https://project-ref.functions.supabase.in")
-
-    client = SupabaseClient(
-      supabaseURL: URL(string: "https://custom-domain.com")!,
-      supabaseKey: "ANON_KEY"
-    )
-    XCTAssertEqual(client.functionsURL.absoluteString, "https://custom-domain.com/functions/v1")
   }
 }
