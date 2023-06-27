@@ -1,9 +1,10 @@
 // swift-tools-version:5.7
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import Foundation
 import PackageDescription
 
-let package = Package(
+var package = Package(
   name: "Supabase",
   platforms: [
     .iOS(.v13),
@@ -18,13 +19,7 @@ let package = Package(
       targets: ["Supabase"]
     ),
   ],
-  dependencies: [
-    .package(url: "https://github.com/supabase-community/gotrue-swift", from: "1.0.0"),
-    .package(url: "https://github.com/supabase-community/storage-swift.git", from: "0.1.1"),
-    .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.2"),
-    .package(url: "https://github.com/supabase-community/postgrest-swift", from: "1.0.0"),
-    .package(url: "https://github.com/supabase-community/functions-swift", from: "1.0.0"),
-  ],
+  dependencies: [],
   targets: [
     .target(
       name: "Supabase",
@@ -39,3 +34,25 @@ let package = Package(
     .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
   ]
 )
+
+if ProcessInfo.processInfo.environment["USE_LOCAL_PACKAGES"] != nil {
+  package.dependencies.append(
+    contentsOf: [
+      .package(path: "../gotrue-swift"),
+      .package(path: "../storage-swift"),
+      .package(path: "../realtime-swift"),
+      .package(path: "../postgrest-swift"),
+      .package(path: "../functions-swift"),
+    ]
+  )
+} else {
+  package.dependencies.append(
+    contentsOf: [
+      .package(url: "https://github.com/supabase-community/gotrue-swift", from: "1.0.0"),
+      .package(url: "https://github.com/supabase-community/storage-swift.git", from: "0.1.1"),
+      .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.2"),
+      .package(url: "https://github.com/supabase-community/postgrest-swift", from: "1.0.0"),
+      .package(url: "https://github.com/supabase-community/functions-swift", from: "1.0.0"),
+    ]
+  )
+}
