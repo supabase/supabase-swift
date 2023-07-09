@@ -1,10 +1,10 @@
 import Foundation
-import Functions
+@_exported import Functions
 import Get
-import GoTrue
-import PostgREST
-import Realtime
-import SupabaseStorage
+@_exported import GoTrue
+@_exported import PostgREST
+@_exported import Realtime
+@_exported import SupabaseStorage
 
 /// Supabase Client.
 public class SupabaseClient {
