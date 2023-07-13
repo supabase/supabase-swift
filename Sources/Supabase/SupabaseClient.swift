@@ -35,9 +35,9 @@ public class SupabaseClient {
   public var database: PostgrestClient {
     PostgrestClient(
       url: databaseURL,
-      headers: defaultHeaders,
       schema: schema,
-      apiClientDelegate: self
+      headers: defaultHeaders,
+      fetch: fetch
     )
   }
 
@@ -54,7 +54,7 @@ public class SupabaseClient {
     FunctionsClient(
       url: functionsURL,
       headers: defaultHeaders,
-      apiClientDelegate: self
+      fetch: fetch
     )
   }
 
@@ -101,6 +101,11 @@ public class SupabaseClient {
   }
 
   private let httpClient: HTTPClient
+
+  @Sendable
+  private func fetch(_ request: URLRequest) async throws -> (Data, URLResponse) {
+    try await URLSession.shared.data(for: adapt(request: request))
+  }
 }
 
 extension SupabaseClient: APIClientDelegate {
