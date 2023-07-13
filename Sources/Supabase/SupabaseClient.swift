@@ -1,6 +1,5 @@
 import Foundation
 @_exported import Functions
-import Get
 @_exported import GoTrue
 @_exported import PostgREST
 @_exported import Realtime
@@ -105,12 +104,6 @@ public class SupabaseClient {
   @Sendable
   private func fetch(_ request: URLRequest) async throws -> (Data, URLResponse) {
     try await URLSession.shared.data(for: adapt(request: request))
-  }
-}
-
-extension SupabaseClient: APIClientDelegate {
-  public func client(_: APIClient, willSendRequest request: inout URLRequest) async throws {
-    request = await adapt(request: request)
   }
 }
 
