@@ -26,7 +26,10 @@ public class SupabaseClient {
     SupabaseStorageClient(
       url: storageURL.absoluteString,
       headers: defaultHeaders,
-      http: self
+      session: StorageHTTPSession(
+        fetch: fetch,
+        upload: upload
+      )
     )
   }
 
@@ -58,6 +61,7 @@ public class SupabaseClient {
   }
 
   private(set) var defaultHeaders: [String: String]
+  private let session: URLSession
 
   /// Create a new client.
   public init(
@@ -74,7 +78,7 @@ public class SupabaseClient {
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
     schema = options.db.schema
-    httpClient = options.global.httpClient
+    session = options.global.session
 
     defaultHeaders = [
       "X-Client-Info": "supabase-swift/\(version)",
@@ -89,45 +93,24 @@ public class SupabaseClient {
     )
   }
 
-  public struct HTTPClient {
-    let storage: StorageHTTPClient
-
-    public init(
-      storage: StorageHTTPClient? = nil
-    ) {
-      self.storage = storage ?? DefaultStorageHTTPClient()
-    }
-  }
-
-  private let httpClient: HTTPClient
-
   @Sendable
   private func fetch(_ request: URLRequest) async throws -> (Data, URLResponse) {
-    try await URLSession.shared.data(for: adapt(request: request))
+    try await session.data(for: adapt(request: request))
   }
-}
 
-extension SupabaseClient {
-  func adapt(request: URLRequest) async -> URLRequest {
+  @Sendable
+  private func upload(
+    _ request: URLRequest,
+    from data: Data
+  ) async throws -> (Data, URLResponse) {
+    try await session.upload(for: adapt(request: request), from: data)
+  }
+
+  private func adapt(request: URLRequest) async -> URLRequest {
     var request = request
     if let accessToken = try? await auth.session.accessToken {
       request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
     }
     return request
-  }
-}
-
-extension SupabaseClient: StorageHTTPClient {
-  public func fetch(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-    let request = await adapt(request: request)
-    return try await httpClient.storage.fetch(request)
-  }
-
-  public func upload(
-    _ request: URLRequest,
-    from data: Data
-  ) async throws -> (Data, HTTPURLResponse) {
-    let request = await adapt(request: request)
-    return try await httpClient.storage.upload(request, from: data)
   }
 }

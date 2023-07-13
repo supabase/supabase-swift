@@ -49,10 +49,19 @@ if ProcessInfo.processInfo.environment["USE_LOCAL_PACKAGES"] != nil {
   package.dependencies.append(
     contentsOf: [
       .package(url: "https://github.com/supabase-community/gotrue-swift", from: "1.0.0"),
-      .package(url: "https://github.com/supabase-community/storage-swift.git", from: "0.1.1"),
+      .package(
+        url: "https://github.com/supabase-community/storage-swift.git",
+        branch: "dependency-free"
+      ),
       .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.2"),
-      .package(url: "https://github.com/supabase-community/postgrest-swift", branch: "dependency-free"),
-      .package(url: "https://github.com/supabase-community/functions-swift", branch: "dependency-free"),
+      .package(
+        url: "https://github.com/supabase-community/postgrest-swift",
+        branch: "dependency-free"
+      ),
+      .package(
+        url: "https://github.com/supabase-community/functions-swift",
+        branch: "dependency-free"
+      ),
     ]
   )
 }
