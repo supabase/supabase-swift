@@ -36,11 +36,14 @@ struct AddTodoListView: View {
 
 struct AddTodoListView_Previews: PreviewProvider {
   static var previews: some View {
-    AddTodoListView(request: .constant(.init(
-      description: "",
-      isComplete: false,
-      ownerID: UUID()
-    ))) { _ in
+    AddTodoListView(
+      request: .constant(
+        .init(
+          description: "",
+          isComplete: false,
+          ownerID: UUID()
+        ))
+    ) { _ in
     }
   }
 }

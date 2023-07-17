@@ -7,6 +7,7 @@ import Foundation
 
 /// Supabase Client.
 public class SupabaseClient {
+  let options: SupabaseClientOptions
   let supabaseURL: URL
   let supabaseKey: String
   let storageURL: URL
@@ -15,11 +16,16 @@ public class SupabaseClient {
   let authURL: URL
   let functionsURL: URL
 
-  let schema: String
-
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured
   /// by access policies.
-  public let auth: GoTrueClient
+  public var auth: GoTrueClient {
+    GoTrueClient(
+      url: authURL,
+      headers: defaultHeaders,
+      localStorage: options.auth.storage,
+      fetch: fetch
+    )
+  }
 
   /// Supabase Storage allows you to manage user-generated content, such as photos or videos.
   public var storage: SupabaseStorageClient {
@@ -37,7 +43,7 @@ public class SupabaseClient {
   public var database: PostgrestClient {
     PostgrestClient(
       url: databaseURL,
-      schema: schema,
+      schema: options.db.schema,
       headers: defaultHeaders,
       fetch: fetch
     )
@@ -61,7 +67,9 @@ public class SupabaseClient {
   }
 
   private(set) var defaultHeaders: [String: String]
-  private let session: URLSession
+  private var session: URLSession {
+    options.global.session
+  }
 
   /// Create a new client.
   public init(
@@ -76,21 +84,13 @@ public class SupabaseClient {
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     realtimeURL = supabaseURL.appendingPathComponent("/realtime/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
-
-    schema = options.db.schema
-    session = options.global.session
+    self.options = options
 
     defaultHeaders = [
       "X-Client-Info": "supabase-swift/\(version)",
       "Authorization": "Bearer \(supabaseKey)",
       "apikey": supabaseKey,
     ].merging(options.global.headers) { _, new in new }
-
-    auth = GoTrueClient(
-      url: authURL,
-      headers: defaultHeaders,
-      localStorage: options.auth.storage
-    )
   }
 
   @Sendable
