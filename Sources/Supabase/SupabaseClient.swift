@@ -1,6 +1,5 @@
 import Foundation
 @_exported import Functions
-import Get
 @_exported import GoTrue
 @_exported import PostgREST
 @_exported import Realtime
@@ -8,6 +7,7 @@ import Get
 
 /// Supabase Client.
 public class SupabaseClient {
+  let options: SupabaseClientOptions
   let supabaseURL: URL
   let supabaseKey: String
   let storageURL: URL
@@ -16,18 +16,26 @@ public class SupabaseClient {
   let authURL: URL
   let functionsURL: URL
 
-  let schema: String
-
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured
   /// by access policies.
-  public let auth: GoTrueClient
+  public var auth: GoTrueClient {
+    GoTrueClient(
+      url: authURL,
+      headers: defaultHeaders,
+      localStorage: options.auth.storage,
+      fetch: fetch
+    )
+  }
 
   /// Supabase Storage allows you to manage user-generated content, such as photos or videos.
   public var storage: SupabaseStorageClient {
     SupabaseStorageClient(
       url: storageURL.absoluteString,
       headers: defaultHeaders,
-      http: self
+      session: StorageHTTPSession(
+        fetch: fetch,
+        upload: upload
+      )
     )
   }
 
@@ -35,9 +43,9 @@ public class SupabaseClient {
   public var database: PostgrestClient {
     PostgrestClient(
       url: databaseURL,
+      schema: options.db.schema,
       headers: defaultHeaders,
-      schema: schema,
-      apiClientDelegate: self
+      fetch: fetch
     )
   }
 
@@ -54,11 +62,14 @@ public class SupabaseClient {
     FunctionsClient(
       url: functionsURL,
       headers: defaultHeaders,
-      apiClientDelegate: self
+      fetch: fetch
     )
   }
 
   private(set) var defaultHeaders: [String: String]
+  private var session: URLSession {
+    options.global.session
+  }
 
   /// Create a new client.
   public init(
@@ -73,63 +84,33 @@ public class SupabaseClient {
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     realtimeURL = supabaseURL.appendingPathComponent("/realtime/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
-
-    schema = options.db.schema
-    httpClient = options.global.httpClient
+    self.options = options
 
     defaultHeaders = [
       "X-Client-Info": "supabase-swift/\(version)",
       "Authorization": "Bearer \(supabaseKey)",
       "apikey": supabaseKey,
     ].merging(options.global.headers) { _, new in new }
-
-    auth = GoTrueClient(
-      url: authURL,
-      headers: defaultHeaders,
-      localStorage: options.auth.storage
-    )
   }
 
-  public struct HTTPClient {
-    let storage: StorageHTTPClient
-
-    public init(
-      storage: StorageHTTPClient? = nil
-    ) {
-      self.storage = storage ?? DefaultStorageHTTPClient()
-    }
+  @Sendable
+  private func fetch(_ request: URLRequest) async throws -> (Data, URLResponse) {
+    try await session.data(for: adapt(request: request))
   }
 
-  private let httpClient: HTTPClient
-}
-
-extension SupabaseClient: APIClientDelegate {
-  public func client(_: APIClient, willSendRequest request: inout URLRequest) async throws {
-    request = await adapt(request: request)
+  @Sendable
+  private func upload(
+    _ request: URLRequest,
+    from data: Data
+  ) async throws -> (Data, URLResponse) {
+    try await session.upload(for: adapt(request: request), from: data)
   }
-}
 
-extension SupabaseClient {
-  func adapt(request: URLRequest) async -> URLRequest {
+  private func adapt(request: URLRequest) async -> URLRequest {
     var request = request
     if let accessToken = try? await auth.session.accessToken {
       request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
     }
     return request
-  }
-}
-
-extension SupabaseClient: StorageHTTPClient {
-  public func fetch(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-    let request = await adapt(request: request)
-    return try await httpClient.storage.fetch(request)
-  }
-
-  public func upload(
-    _ request: URLRequest,
-    from data: Data
-  ) async throws -> (Data, HTTPURLResponse) {
-    let request = await adapt(request: request)
-    return try await httpClient.storage.upload(request, from: data)
   }
 }

@@ -5,26 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/functions-swift",
       "state" : {
-        "revision" : "c680cdfc53399376bdece299b1387b4fb3da514e",
-        "version" : "1.0.0"
-      }
-    },
-    {
-      "identity" : "get",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/kean/Get",
-      "state" : {
-        "revision" : "12830cc64f31789ae6f4352d2d51d03a25fc3741",
-        "version" : "2.1.6"
-      }
-    },
-    {
-      "identity" : "getextensions",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/binaryscraping/GetExtensions",
-      "state" : {
-        "revision" : "aa20f38721142eb6592b2c8f11179d32d7d70ae3",
-        "version" : "1.0.0"
+        "branch" : "dependency-free",
+        "revision" : "5e12b7c4a206a29910dd64f6f23faed437955089"
       }
     },
     {
@@ -32,8 +14,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/gotrue-swift",
       "state" : {
-        "revision" : "6c7d119bf236fe0071ff05f3639fdde6f05e759a",
-        "version" : "1.2.0"
+        "branch" : "dependency-free",
+        "revision" : "4eece4fe9d8a6596ec5dedd2ffc14a9594cd2134"
       }
     },
     {
@@ -50,8 +32,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/postgrest-swift",
       "state" : {
-        "revision" : "a3c2d6a2ede94d2529edf063b056b1a66fd9cdc2",
-        "version" : "1.0.0"
+        "branch" : "dependency-free",
+        "revision" : "ef3faa36a6987d34c8d32bab1cf545d40bf1a182"
       }
     },
     {
@@ -68,17 +50,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/storage-swift.git",
       "state" : {
-        "revision" : "db67ce7764ef80e7941cea6bc4a0104c88e060f8",
-        "version" : "0.1.3"
-      }
-    },
-    {
-      "identity" : "urlqueryencoder",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/kean/URLQueryEncoder",
-      "state" : {
-        "revision" : "4ce950479707ea109f229d7230ec074a133b15d7",
-        "version" : "0.2.1"
+        "branch" : "dependency-free",
+        "revision" : "62bf80cc46e22088ca390e506b1a712f4774a018"
       }
     }
   ],

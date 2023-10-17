@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/functions-swift",
       "state" : {
-        "revision" : "c680cdfc53399376bdece299b1387b4fb3da514e",
-        "version" : "1.0.0"
+        "branch" : "dependency-free",
+        "revision" : "479a3112f5ffdbeaec05f9b19124ab621c69d44a"
       }
     },
     {
@@ -16,15 +16,6 @@
       "state" : {
         "revision" : "12830cc64f31789ae6f4352d2d51d03a25fc3741",
         "version" : "2.1.6"
-      }
-    },
-    {
-      "identity" : "getextensions",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/binaryscraping/GetExtensions",
-      "state" : {
-        "revision" : "aa20f38721142eb6592b2c8f11179d32d7d70ae3",
-        "version" : "1.0.0"
       }
     },
     {
@@ -50,8 +41,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/postgrest-swift",
       "state" : {
-        "revision" : "a3c2d6a2ede94d2529edf063b056b1a66fd9cdc2",
-        "version" : "1.0.0"
+        "branch" : "dependency-free",
+        "revision" : "ef3faa36a6987d34c8d32bab1cf545d40bf1a182"
       }
     },
     {
@@ -68,8 +59,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/storage-swift.git",
       "state" : {
-        "revision" : "db67ce7764ef80e7941cea6bc4a0104c88e060f8",
-        "version" : "0.1.3"
+        "branch" : "dependency-free",
+        "revision" : "62bf80cc46e22088ca390e506b1a712f4774a018"
       }
     },
     {

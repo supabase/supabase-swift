@@ -27,11 +27,11 @@ public struct SupabaseClientOptions {
 
   public struct GlobalOptions {
     public let headers: [String: String]
-    public let httpClient: SupabaseClient.HTTPClient
+    public let session: URLSession
 
-    public init(headers: [String: String] = [:], httpClient: SupabaseClient.HTTPClient = .init()) {
+    public init(headers: [String: String] = [:], session: URLSession = .shared) {
       self.headers = headers
-      self.httpClient = httpClient
+      self.session = session
     }
   }
 

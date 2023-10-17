@@ -1,6 +1,7 @@
 import GoTrue
-@testable import Supabase
 import XCTest
+
+@testable import Supabase
 
 final class GoTrueLocalStorageMock: GoTrueLocalStorage {
   func store(key _: String, value _: Data) throws {}

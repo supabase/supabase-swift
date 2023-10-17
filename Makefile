@@ -13,4 +13,4 @@ build-example:
 		-destination platform="$(PLATFORM_IOS)" || exit 1;
 
 format:
-	@swiftformat .
+	@swift format -i -r .
