@@ -17,7 +17,8 @@ var package = Package(
     .library(name: "Functions", targets: ["Functions"]),
     .library(name: "GoTrue", targets: ["GoTrue"]),
     .library(name: "PostgREST", targets: ["PostgREST"]),
-    .library(name: "Supabase", targets: ["Supabase", "Functions", "PostgREST", "GoTrue"]),
+    .library(name: "Realtime", targets: ["Realtime"]),
+    .library(name: "Supabase", targets: ["Supabase", "Functions", "PostgREST", "GoTrue", "Realtime"]),
   ],
   dependencies: [
     .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
@@ -40,14 +41,9 @@ var package = Package(
         "Mocker",
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
       ],
-      resources: [
-        .process("Resources")
-      ]
+      resources: [.process("Resources")]
     ),
-    .target(
-      name: "PostgREST",
-      dependencies: []
-    ),
+    .target(name: "PostgREST"),
     .testTarget(
       name: "PostgRESTTests",
       dependencies: [
@@ -58,17 +54,17 @@ var package = Package(
           condition: .when(platforms: [.iOS, .macOS, .tvOS])
         ),
       ],
-      exclude: [
-        "__Snapshots__"
-      ]
+      exclude: ["__Snapshots__"]
     ),
     .testTarget(name: "PostgRESTIntegrationTests", dependencies: ["PostgREST"]),
+    .target(name: "Realtime"),
+    .testTarget(name: "RealtimeTests", dependencies: ["Realtime"]),
     .target(
       name: "Supabase",
       dependencies: [
         "GoTrue",
         .product(name: "SupabaseStorage", package: "storage-swift"),
-        .product(name: "Realtime", package: "realtime-swift"),
+        "Realtime",
         "PostgREST",
         "Functions",
       ]
@@ -81,7 +77,6 @@ if ProcessInfo.processInfo.environment["USE_LOCAL_PACKAGES"] != nil {
   package.dependencies.append(
     contentsOf: [
       .package(path: "../storage-swift"),
-      .package(path: "../realtime-swift"),
     ]
   )
 } else {
@@ -91,7 +86,6 @@ if ProcessInfo.processInfo.environment["USE_LOCAL_PACKAGES"] != nil {
         url: "https://github.com/supabase-community/storage-swift.git",
         branch: "dependency-free"
       ),
-      .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.2"),
     ]
   )
 }
