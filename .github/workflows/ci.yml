@@ -43,4 +43,4 @@ jobs:
       - name: Copy Secrets file
         run: cp Examples/Examples/_Secrets.swift Examples/Examples/Secrets.swift
       - name: Build example
-        run: PLATFORM="${{ matrix.platform }}" make test-library
+        run: PLATFORM="${{ matrix.platform }}" make build-example
