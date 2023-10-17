@@ -1,15 +1,6 @@
 {
   "pins" : [
     {
-      "identity" : "gotrue-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase-community/gotrue-swift",
-      "state" : {
-        "branch" : "dependency-free",
-        "revision" : "4eece4fe9d8a6596ec5dedd2ffc14a9594cd2134"
-      }
-    },
-    {
       "identity" : "keychainaccess",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kishikawakatsumi/KeychainAccess",

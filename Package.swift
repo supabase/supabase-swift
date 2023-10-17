@@ -14,37 +14,36 @@ var package = Package(
     .tvOS(.v13),
   ],
   products: [
-    .library(
-      name: "Supabase",
-      targets: ["Supabase", "Functions", "PostgREST"]
-    ),
-    .library(
-      name: "Functions",
-      targets: ["Functions"]
-    ),
-    .library(
-      name: "PostgREST",
-      targets: ["PostgREST"]
-    )
+    .library(name: "Functions", targets: ["Functions"]),
+    .library(name: "GoTrue", targets: ["GoTrue"]),
+    .library(name: "PostgREST", targets: ["PostgREST"]),
+    .library(name: "Supabase", targets: ["Supabase", "Functions", "PostgREST", "GoTrue"]),
   ],
   dependencies: [
+    .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.1"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
   ],
   targets: [
-    .target(
-      name: "Supabase",
-      dependencies: [
-        .product(name: "GoTrue", package: "gotrue-swift"),
-        .product(name: "SupabaseStorage", package: "storage-swift"),
-        .product(name: "Realtime", package: "realtime-swift"),
-        "PostgREST",
-        "Functions",
-      ]
-    ),
-    .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
     .target(name: "Functions"),
     .testTarget(name: "FunctionsTests", dependencies: ["Functions", "Mocker"]),
+    .target(
+      name: "GoTrue",
+      dependencies: [
+        .product(name: "KeychainAccess", package: "KeychainAccess")
+      ]
+    ),
+    .testTarget(
+      name: "GoTrueTests",
+      dependencies: [
+        "GoTrue",
+        "Mocker",
+        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+      ],
+      resources: [
+        .process("Resources")
+      ]
+    ),
     .target(
       name: "PostgREST",
       dependencies: []
@@ -64,13 +63,23 @@ var package = Package(
       ]
     ),
     .testTarget(name: "PostgRESTIntegrationTests", dependencies: ["PostgREST"]),
+    .target(
+      name: "Supabase",
+      dependencies: [
+        "GoTrue",
+        .product(name: "SupabaseStorage", package: "storage-swift"),
+        .product(name: "Realtime", package: "realtime-swift"),
+        "PostgREST",
+        "Functions",
+      ]
+    ),
+    .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
   ]
 )
 
 if ProcessInfo.processInfo.environment["USE_LOCAL_PACKAGES"] != nil {
   package.dependencies.append(
     contentsOf: [
-      .package(path: "../gotrue-swift"),
       .package(path: "../storage-swift"),
       .package(path: "../realtime-swift"),
     ]
@@ -78,10 +87,6 @@ if ProcessInfo.processInfo.environment["USE_LOCAL_PACKAGES"] != nil {
 } else {
   package.dependencies.append(
     contentsOf: [
-      .package(
-        url: "https://github.com/supabase-community/gotrue-swift",
-        branch: "dependency-free"
-      ),
       .package(
         url: "https://github.com/supabase-community/storage-swift.git",
         branch: "dependency-free"
