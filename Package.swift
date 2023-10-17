@@ -17,9 +17,15 @@ var package = Package(
     .library(
       name: "Supabase",
       targets: ["Supabase"]
+    ),
+    .library(
+      name: "Functions",
+      targets: ["Functions"]
     )
   ],
-  dependencies: [],
+  dependencies: [
+    .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.1"),
+  ],
   targets: [
     .target(
       name: "Supabase",
@@ -28,10 +34,12 @@ var package = Package(
         .product(name: "SupabaseStorage", package: "storage-swift"),
         .product(name: "Realtime", package: "realtime-swift"),
         .product(name: "PostgREST", package: "postgrest-swift"),
-        .product(name: "Functions", package: "functions-swift"),
+        "Functions",
       ]
     ),
     .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
+    .target(name: "Functions"),
+    .testTarget(name: "FunctionsTests", dependencies: ["Functions", "Mocker"]),
   ]
 )
 
@@ -42,7 +50,6 @@ if ProcessInfo.processInfo.environment["USE_LOCAL_PACKAGES"] != nil {
       .package(path: "../storage-swift"),
       .package(path: "../realtime-swift"),
       .package(path: "../postgrest-swift"),
-      .package(path: "../functions-swift"),
     ]
   )
 } else {
@@ -59,10 +66,6 @@ if ProcessInfo.processInfo.environment["USE_LOCAL_PACKAGES"] != nil {
       .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.2"),
       .package(
         url: "https://github.com/supabase-community/postgrest-swift",
-        branch: "dependency-free"
-      ),
-      .package(
-        url: "https://github.com/supabase-community/functions-swift",
         branch: "dependency-free"
       ),
     ]

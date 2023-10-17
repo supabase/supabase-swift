@@ -1,15 +1,6 @@
 {
   "pins" : [
     {
-      "identity" : "functions-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase-community/functions-swift",
-      "state" : {
-        "branch" : "dependency-free",
-        "revision" : "5e12b7c4a206a29910dd64f6f23faed437955089"
-      }
-    },
-    {
       "identity" : "gotrue-swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/gotrue-swift",
@@ -25,6 +16,15 @@
       "state" : {
         "revision" : "84e546727d66f1adc5439debad16270d0fdd04e7",
         "version" : "4.2.2"
+      }
+    },
+    {
+      "identity" : "mocker",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/WeTransfer/Mocker",
+      "state" : {
+        "revision" : "4384e015cae4916a6828252467a4437173c7ae17",
+        "version" : "3.0.1"
       }
     },
     {

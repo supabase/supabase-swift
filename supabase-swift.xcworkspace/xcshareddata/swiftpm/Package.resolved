@@ -1,30 +1,12 @@
 {
   "pins" : [
     {
-      "identity" : "functions-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase-community/functions-swift",
-      "state" : {
-        "branch" : "dependency-free",
-        "revision" : "479a3112f5ffdbeaec05f9b19124ab621c69d44a"
-      }
-    },
-    {
-      "identity" : "get",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/kean/Get",
-      "state" : {
-        "revision" : "12830cc64f31789ae6f4352d2d51d03a25fc3741",
-        "version" : "2.1.6"
-      }
-    },
-    {
       "identity" : "gotrue-swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/gotrue-swift",
       "state" : {
-        "revision" : "6c7d119bf236fe0071ff05f3639fdde6f05e759a",
-        "version" : "1.2.0"
+        "branch" : "dependency-free",
+        "revision" : "6dc6d577ce88613cd1ae17b2367228e4d684b101"
       }
     },
     {
@@ -34,6 +16,15 @@
       "state" : {
         "revision" : "84e546727d66f1adc5439debad16270d0fdd04e7",
         "version" : "4.2.2"
+      }
+    },
+    {
+      "identity" : "mocker",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/WeTransfer/Mocker",
+      "state" : {
+        "revision" : "4384e015cae4916a6828252467a4437173c7ae17",
+        "version" : "3.0.1"
       }
     },
     {
@@ -106,15 +97,6 @@
       "state" : {
         "revision" : "2aa885e719087ee19df251c08a5980ad3e787f12",
         "version" : "0.8.0"
-      }
-    },
-    {
-      "identity" : "urlqueryencoder",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/kean/URLQueryEncoder",
-      "state" : {
-        "revision" : "4ce950479707ea109f229d7230ec074a133b15d7",
-        "version" : "0.2.1"
       }
     },
     {
