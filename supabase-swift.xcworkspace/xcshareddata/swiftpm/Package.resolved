@@ -28,15 +28,6 @@
       }
     },
     {
-      "identity" : "postgrest-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase-community/postgrest-swift",
-      "state" : {
-        "branch" : "dependency-free",
-        "revision" : "ef3faa36a6987d34c8d32bab1cf545d40bf1a182"
-      }
-    },
-    {
       "identity" : "realtime-swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/realtime-swift.git",
@@ -88,6 +79,24 @@
       "state" : {
         "revision" : "d01446a78fb768adc9a78cbb6df07767c8ccfc29",
         "version" : "0.8.0"
+      }
+    },
+    {
+      "identity" : "swift-snapshot-testing",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-snapshot-testing",
+      "state" : {
+        "revision" : "bb0ea08db8e73324fe6c3727f755ca41a23ff2f4",
+        "version" : "1.14.2"
+      }
+    },
+    {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-syntax.git",
+      "state" : {
+        "revision" : "74203046135342e4a4a627476dd6caf8b28fe11b",
+        "version" : "509.0.0"
       }
     },
     {

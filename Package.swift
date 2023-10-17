@@ -16,15 +16,20 @@ var package = Package(
   products: [
     .library(
       name: "Supabase",
-      targets: ["Supabase"]
+      targets: ["Supabase", "Functions", "PostgREST"]
     ),
     .library(
       name: "Functions",
       targets: ["Functions"]
+    ),
+    .library(
+      name: "PostgREST",
+      targets: ["PostgREST"]
     )
   ],
   dependencies: [
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.1"),
+    .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
   ],
   targets: [
     .target(
@@ -33,13 +38,32 @@ var package = Package(
         .product(name: "GoTrue", package: "gotrue-swift"),
         .product(name: "SupabaseStorage", package: "storage-swift"),
         .product(name: "Realtime", package: "realtime-swift"),
-        .product(name: "PostgREST", package: "postgrest-swift"),
+        "PostgREST",
         "Functions",
       ]
     ),
     .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
     .target(name: "Functions"),
     .testTarget(name: "FunctionsTests", dependencies: ["Functions", "Mocker"]),
+    .target(
+      name: "PostgREST",
+      dependencies: []
+    ),
+    .testTarget(
+      name: "PostgRESTTests",
+      dependencies: [
+        "PostgREST",
+        .product(
+          name: "SnapshotTesting",
+          package: "swift-snapshot-testing",
+          condition: .when(platforms: [.iOS, .macOS, .tvOS])
+        ),
+      ],
+      exclude: [
+        "__Snapshots__"
+      ]
+    ),
+    .testTarget(name: "PostgRESTIntegrationTests", dependencies: ["PostgREST"]),
   ]
 )
 
@@ -49,7 +73,6 @@ if ProcessInfo.processInfo.environment["USE_LOCAL_PACKAGES"] != nil {
       .package(path: "../gotrue-swift"),
       .package(path: "../storage-swift"),
       .package(path: "../realtime-swift"),
-      .package(path: "../postgrest-swift"),
     ]
   )
 } else {
@@ -64,10 +87,6 @@ if ProcessInfo.processInfo.environment["USE_LOCAL_PACKAGES"] != nil {
         branch: "dependency-free"
       ),
       .package(url: "https://github.com/supabase-community/realtime-swift.git", from: "0.0.2"),
-      .package(
-        url: "https://github.com/supabase-community/postgrest-swift",
-        branch: "dependency-free"
-      ),
     ]
   )
 }
