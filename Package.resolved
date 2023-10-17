@@ -1,24 +1,6 @@
 {
   "pins" : [
     {
-      "identity" : "functions-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase-community/functions-swift",
-      "state" : {
-        "branch" : "dependency-free",
-        "revision" : "5e12b7c4a206a29910dd64f6f23faed437955089"
-      }
-    },
-    {
-      "identity" : "gotrue-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase-community/gotrue-swift",
-      "state" : {
-        "branch" : "dependency-free",
-        "revision" : "4eece4fe9d8a6596ec5dedd2ffc14a9594cd2134"
-      }
-    },
-    {
       "identity" : "keychainaccess",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kishikawakatsumi/KeychainAccess",
@@ -28,30 +10,30 @@
       }
     },
     {
-      "identity" : "postgrest-swift",
+      "identity" : "mocker",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase-community/postgrest-swift",
+      "location" : "https://github.com/WeTransfer/Mocker",
       "state" : {
-        "branch" : "dependency-free",
-        "revision" : "ef3faa36a6987d34c8d32bab1cf545d40bf1a182"
+        "revision" : "4384e015cae4916a6828252467a4437173c7ae17",
+        "version" : "3.0.1"
       }
     },
     {
-      "identity" : "realtime-swift",
+      "identity" : "swift-snapshot-testing",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase-community/realtime-swift.git",
+      "location" : "https://github.com/pointfreeco/swift-snapshot-testing",
       "state" : {
-        "revision" : "0b985c687fe963f6bd818ff77a35c27247b98bb4",
-        "version" : "0.0.2"
+        "revision" : "bb0ea08db8e73324fe6c3727f755ca41a23ff2f4",
+        "version" : "1.14.2"
       }
     },
     {
-      "identity" : "storage-swift",
+      "identity" : "swift-syntax",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase-community/storage-swift.git",
+      "location" : "https://github.com/apple/swift-syntax.git",
       "state" : {
-        "branch" : "dependency-free",
-        "revision" : "62bf80cc46e22088ca390e506b1a712f4774a018"
+        "revision" : "74203046135342e4a4a627476dd6caf8b28fe11b",
+        "version" : "509.0.0"
       }
     }
   ],

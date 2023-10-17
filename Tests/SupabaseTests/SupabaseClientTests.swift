@@ -18,7 +18,6 @@ final class SupabaseClientTests: XCTestCase {
     let customSchema = "custom_schema"
     let localStorage = GoTrueLocalStorageMock()
     let customHeaders = ["header_field": "header_value"]
-    let httpClient = SupabaseClient.HTTPClient(storage: nil)
 
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -28,7 +27,7 @@ final class SupabaseClientTests: XCTestCase {
         auth: SupabaseClientOptions.AuthOptions(storage: localStorage),
         global: SupabaseClientOptions.GlobalOptions(
           headers: customHeaders,
-          httpClient: httpClient
+          session: .shared
         )
       )
     )

@@ -13,7 +13,6 @@
 		793895D22954AC000044F2B8 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 793895D12954AC000044F2B8 /* Preview Assets.xcassets */; };
 		794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1212955F26A008C9526 /* AddTodoListView.swift */; };
 		794EF1242955F3DE008C9526 /* TodoListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1232955F3DE008C9526 /* TodoListRow.swift */; };
-		7956405C2954AC3E0088A06F /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 7956405B2954AC3E0088A06F /* Supabase */; };
 		7956405E2954ADE00088A06F /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405D2954ADE00088A06F /* Secrets.swift */; };
 		795640602954AE140088A06F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405F2954AE140088A06F /* AuthView.swift */; };
 		795640622955AD2B0088A06F /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640612955AD2B0088A06F /* HomeView.swift */; };
@@ -22,6 +21,7 @@
 		7956406A2955AFBD0088A06F /* ErrorText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640692955AFBD0088A06F /* ErrorText.swift */; };
 		7956406D2955B3500088A06F /* SwiftUINavigation in Frameworks */ = {isa = PBXBuildFile; productRef = 7956406C2955B3500088A06F /* SwiftUINavigation */; };
 		795640702955B5190088A06F /* IdentifiedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 7956406F2955B5190088A06F /* IdentifiedCollections */; };
+		79719ECE2ADF26C400737804 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79719ECD2ADF26C400737804 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,7 +48,7 @@
 			files = (
 				795640702955B5190088A06F /* IdentifiedCollections in Frameworks */,
 				7956406D2955B3500088A06F /* SwiftUINavigation in Frameworks */,
-				7956405C2954AC3E0088A06F /* Supabase in Frameworks */,
+				79719ECE2ADF26C400737804 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -124,9 +124,9 @@
 			);
 			name = Examples;
 			packageProductDependencies = (
-				7956405B2954AC3E0088A06F /* Supabase */,
 				7956406C2955B3500088A06F /* SwiftUINavigation */,
 				7956406F2955B5190088A06F /* IdentifiedCollections */,
+				79719ECD2ADF26C400737804 /* Supabase */,
 			);
 			productName = Examples;
 			productReference = 793895C62954ABFF0044F2B8 /* Examples.app */;
@@ -140,7 +140,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1410;
-				LastUpgradeCheck = 1410;
+				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					793895C52954ABFF0044F2B8 = {
 						CreatedOnToolsVersion = 14.1;
@@ -235,9 +235,11 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -293,9 +295,11 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -319,6 +323,7 @@
 				CODE_SIGN_ENTITLEMENTS = Examples/Examples.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Examples/Preview Content\"";
 				DEVELOPMENT_TEAM = ELTTE7K8TT;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -357,6 +362,7 @@
 				CODE_SIGN_ENTITLEMENTS = Examples/Examples.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Examples/Preview Content\"";
 				DEVELOPMENT_TEAM = ELTTE7K8TT;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -416,7 +422,7 @@
 			repositoryURL = "https://github.com/pointfreeco/swiftui-navigation.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.4.5;
+				minimumVersion = 1.0.0;
 			};
 		};
 		7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */ = {
@@ -424,16 +430,12 @@
 			repositoryURL = "https://github.com/pointfreeco/swift-identified-collections.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.5.0;
+				minimumVersion = 1.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		7956405B2954AC3E0088A06F /* Supabase */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Supabase;
-		};
 		7956406C2955B3500088A06F /* SwiftUINavigation */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7956406B2955B3500088A06F /* XCRemoteSwiftPackageReference "swiftui-navigation" */;
@@ -443,6 +445,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */;
 			productName = IdentifiedCollections;
+		};
+		79719ECD2ADF26C400737804 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Supabase;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
