@@ -53,8 +53,6 @@ public final class GoTrueClient {
     authEventChangeSubject.shareReplay(1).eraseToAnyPublisher()
   }
 
-  //  private let initializationTask: Task<Void, Never>
-
   /// Returns the session, refreshing it if necessary.
   public var session: Session {
     get async throws {
@@ -95,15 +93,6 @@ public final class GoTrueClient {
       }
     }
   }
-
-  /// Initialize the client session from storage.
-  ///
-  /// This method should be called on the app startup, for making sure that the client is fully
-  /// initialized
-  /// before proceeding.
-  //  public func initialize() async {
-  //    await initializationTask.value
-  //  }
 
   /// Creates a new user.
   /// - Parameters:

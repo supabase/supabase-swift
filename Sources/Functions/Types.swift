@@ -28,7 +28,7 @@ public struct FunctionInvokeOptions {
   let body: Data?
 
   /// Initializes the `FunctionInvokeOptions` structure.
-  /// 
+  ///
   /// - Parameters:
   ///   - method: Method to use in the function invocation.
   ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)

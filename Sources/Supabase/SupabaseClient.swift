@@ -32,10 +32,7 @@ public class SupabaseClient {
     SupabaseStorageClient(
       url: storageURL.absoluteString,
       headers: defaultHeaders,
-      session: StorageHTTPSession(
-        fetch: fetch,
-        upload: upload
-      )
+      session: StorageHTTPSession(fetch: fetch, upload: upload)
     )
   }
 
@@ -51,10 +48,7 @@ public class SupabaseClient {
 
   /// Realtime client for Supabase
   public var realtime: RealtimeClient {
-    RealtimeClient(
-      endPoint: realtimeURL.absoluteString,
-      params: defaultHeaders
-    )
+    RealtimeClient(realtimeURL.absoluteString, params: defaultHeaders)
   }
 
   /// Supabase Functions allows you to deploy and invoke edge functions.

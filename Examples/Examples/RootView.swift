@@ -21,7 +21,7 @@ struct RootView: View {
       }
     }
     .task {
-      for await event in supabase.auth.authEventChange {
+      for await event in supabase.auth.authEventChange.values {
         withAnimation {
           authEvent = event
         }
