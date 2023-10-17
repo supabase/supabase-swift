@@ -1,4 +1,4 @@
-PLATFORM_IOS = iOS Simulator,name=iPhone 15 Pro Max
+PLATFORM_IOS = iOS Simulator,name=iPhone 14 Pro Max
 
 test-library:
 	xcodebuild test \
