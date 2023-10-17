@@ -3,7 +3,7 @@ import Foundation
 @_exported import GoTrue
 @_exported import PostgREST
 @_exported import Realtime
-@_exported import SupabaseStorage
+@_exported import Storage
 
 /// Supabase Client.
 public class SupabaseClient {

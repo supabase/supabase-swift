@@ -18,7 +18,8 @@ var package = Package(
     .library(name: "GoTrue", targets: ["GoTrue"]),
     .library(name: "PostgREST", targets: ["PostgREST"]),
     .library(name: "Realtime", targets: ["Realtime"]),
-    .library(name: "Supabase", targets: ["Supabase", "Functions", "PostgREST", "GoTrue", "Realtime"]),
+    .library(name: "Storage", targets: ["Storage"]),
+    .library(name: "Supabase", targets: ["Supabase", "Functions", "PostgREST", "GoTrue", "Realtime", "Storage"]),
   ],
   dependencies: [
     .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
@@ -59,11 +60,13 @@ var package = Package(
     .testTarget(name: "PostgRESTIntegrationTests", dependencies: ["PostgREST"]),
     .target(name: "Realtime"),
     .testTarget(name: "RealtimeTests", dependencies: ["Realtime"]),
+    .target(name: "Storage"),
+    .testTarget(name: "StorageTests", dependencies: ["Storage"]),
     .target(
       name: "Supabase",
       dependencies: [
         "GoTrue",
-        .product(name: "SupabaseStorage", package: "storage-swift"),
+        "Storage",
         "Realtime",
         "PostgREST",
         "Functions",
@@ -72,20 +75,3 @@ var package = Package(
     .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
   ]
 )
-
-if ProcessInfo.processInfo.environment["USE_LOCAL_PACKAGES"] != nil {
-  package.dependencies.append(
-    contentsOf: [
-      .package(path: "../storage-swift"),
-    ]
-  )
-} else {
-  package.dependencies.append(
-    contentsOf: [
-      .package(
-        url: "https://github.com/supabase-community/storage-swift.git",
-        branch: "dependency-free"
-      ),
-    ]
-  )
-}
