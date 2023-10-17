@@ -1,9 +1,9 @@
-PLATFORM_IOS = iOS Simulator,name=iPhone 14 Pro Max
+PLATFORM_IOS = iOS Simulator,name=iPhone 15 Pro Max
 
 test-library:
 	xcodebuild test \
 		-workspace supabase-swift.xcworkspace \
-		-scheme Supabase \
+		-scheme Supabase-Package \
 		-destination platform="$(PLATFORM_IOS)" || exit 1;
 
 build-example:

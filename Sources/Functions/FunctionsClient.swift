@@ -2,7 +2,7 @@ import Foundation
 
 /// An actor representing a client for invoking functions.
 public actor FunctionsClient {
-  /// Typealias for the fetch handler used to make requests.
+  /// Fetch handler used to make requests.
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
     Data, URLResponse
   )
@@ -90,7 +90,7 @@ public actor FunctionsClient {
   ) async throws -> (Data, HTTPURLResponse) {
     let url = self.url.appendingPathComponent(functionName)
     var urlRequest = URLRequest(url: url)
-    urlRequest.allHTTPHeaderFields = invokeOptions.headers.merging(headers) { first, _ in first }
+    urlRequest.allHTTPHeaderFields = invokeOptions.headers.merging(headers) { invoke, _ in invoke }
     urlRequest.httpMethod = (invokeOptions.method ?? .post).rawValue
     urlRequest.httpBody = invokeOptions.body
 
