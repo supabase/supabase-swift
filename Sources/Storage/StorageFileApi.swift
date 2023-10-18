@@ -36,7 +36,7 @@ public class StorageFileApi: StorageApi {
   ///   - fileOptions: HTTP headers. For example `cacheControl`
   public func upload(path: String, file: File, fileOptions: FileOptions?) async throws -> AnyJSON {
     guard let url = URL(string: "\(url)/object/\(bucketId)/\(path)") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     let formData = FormData()
@@ -59,7 +59,7 @@ public class StorageFileApi: StorageApi {
   ///   - fileOptions: HTTP headers. For example `cacheControl`
   public func update(path: String, file: File, fileOptions: FileOptions?) async throws -> AnyJSON {
     guard let url = URL(string: "\(url)/object/\(bucketId)/\(path)") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     let formData = FormData()
@@ -82,7 +82,7 @@ public class StorageFileApi: StorageApi {
   /// `folder/image-copy.png`.
   public func move(fromPath: String, toPath: String) async throws -> [String: AnyJSON] {
     guard let url = URL(string: "\(url)/object/move") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     return try await fetch(
@@ -99,23 +99,17 @@ public class StorageFileApi: StorageApi {
   /// `folder/image.png`.
   ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL
   /// which is valid for one minute.
-  public func createSignedURL(path: String, expiresIn: Int) async throws -> URL {
+  public func createSignedURL(path: String, expiresIn: Int) async throws -> SignedURL {
     guard let url = URL(string: "\(url)/object/sign/\(bucketId)/\(path)") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
-    struct Response: Decodable {
-      let signedURL: URL
-    }
-
-    let response: Response = try await fetch(
+    return try await fetch(
       url: url,
       method: .post,
       parameters: ["expiresIn": expiresIn],
       headers: headers
     )
-
-    return response.signedURL
   }
 
   /// Deletes files within the same bucket
@@ -124,7 +118,7 @@ public class StorageFileApi: StorageApi {
   /// [`folder/image.png`].
   public func remove(paths: [String]) async throws -> [FileObject] {
     guard let url = URL(string: "\(url)/object/\(bucketId)") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     return try await fetch(
@@ -144,7 +138,7 @@ public class StorageFileApi: StorageApi {
     options: SearchOptions? = nil
   ) async throws -> [FileObject] {
     guard let url = URL(string: "\(url)/object/list/\(bucketId)") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     var parameters: [String: Any] = ["prefix": path ?? ""]
@@ -170,7 +164,7 @@ public class StorageFileApi: StorageApi {
   @discardableResult
   public func download(path: String) async throws -> Data {
     guard let url = URL(string: "\(url)/object/\(bucketId)/\(path)") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     return try await fetch(url: url, parameters: nil)
@@ -191,7 +185,7 @@ public class StorageFileApi: StorageApi {
     var queryItems: [URLQueryItem] = []
 
     guard var components = URLComponents(string: url) else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     if download {
@@ -208,7 +202,7 @@ public class StorageFileApi: StorageApi {
     components.queryItems = !queryItems.isEmpty ? queryItems : nil
 
     guard let generatedUrl = components.url else {
-      throw StorageError(message: "badUrl")
+      throw URLError(.badURL)
     }
 
     return generatedUrl

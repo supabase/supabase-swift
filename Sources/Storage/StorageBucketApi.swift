@@ -19,7 +19,7 @@ public class StorageBucketApi: StorageApi {
   /// Retrieves the details of all Storage buckets within an existing product.
   public func listBuckets() async throws -> [Bucket] {
     guard let url = URL(string: "\(url)/bucket") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     return try await fetch(url: url, method: .get, parameters: nil, headers: headers)
@@ -30,7 +30,7 @@ public class StorageBucketApi: StorageApi {
   ///   - id: The unique identifier of the bucket you would like to retrieve.
   public func getBucket(id: String) async throws -> Bucket {
     guard let url = URL(string: "\(url)/bucket/\(id)") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     return try await fetch(url: url, method: .get, parameters: nil, headers: headers)
@@ -45,7 +45,7 @@ public class StorageBucketApi: StorageApi {
     options: BucketOptions = .init()
   ) async throws -> [String: AnyJSON] {
     guard let url = URL(string: "\(url)/bucket") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     var params: [String: Any] = [
@@ -71,7 +71,7 @@ public class StorageBucketApi: StorageApi {
   @discardableResult
   public func emptyBucket(id: String) async throws -> [String: AnyJSON] {
     guard let url = URL(string: "\(url)/bucket/\(id)/empty") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     return try await fetch(url: url, method: .post, parameters: [:], headers: headers)
@@ -83,7 +83,7 @@ public class StorageBucketApi: StorageApi {
   ///   - id: The unique identifier of the bucket you would like to delete.
   public func deleteBucket(id: String) async throws -> [String: AnyJSON] {
     guard let url = URL(string: "\(url)/bucket/\(id)") else {
-      throw StorageError(message: "badURL")
+      throw URLError(.badURL)
     }
 
     return try await fetch(url: url, method: .delete, parameters: [:], headers: headers)

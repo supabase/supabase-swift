@@ -95,16 +95,6 @@ public class StorageApi {
       return try JSONDecoder().decode(T.self, from: response)
     }
 
-    let json = try JSONSerialization.jsonObject(with: response)
-
-    if let dict = json as? [String: Any], let message = dict["message"] as? String {
-      throw StorageError(statusCode: statusCode, message: message)
-    }
-
-    if let dict = json as? [String: Any], let error = dict["error"] as? String {
-      throw StorageError(statusCode: statusCode, message: error)
-    }
-
-    throw StorageError(statusCode: statusCode, message: "something went wrong")
+    throw try JSONDecoder().decode(StorageError.self, from: response)
   }
 }
