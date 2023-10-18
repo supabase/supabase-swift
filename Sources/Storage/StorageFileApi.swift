@@ -90,7 +90,7 @@ public class StorageFileApi: StorageApi {
         )
       )
     )
-    .decoded(as: [String: AnyJSON].self, decoder: configuration.decoder)
+    .decoded(decoder: configuration.decoder)
   }
 
   /// Create signed url to download file without requiring permissions. This URL can be valid for a
@@ -108,7 +108,7 @@ public class StorageFileApi: StorageApi {
         body: configuration.encoder.encode(["expiresIn": expiresIn])
       )
     )
-    .decoded(as: SignedURL.self, decoder: configuration.decoder)
+    .decoded(decoder: configuration.decoder)
   }
 
   /// Deletes files within the same bucket
@@ -123,7 +123,7 @@ public class StorageFileApi: StorageApi {
         body: configuration.encoder.encode(["prefixes": paths])
       )
     )
-    .decoded(as: [FileObject].self, decoder: configuration.decoder)
+    .decoded(decoder: configuration.decoder)
   }
 
   /// Lists all the files within a bucket.
@@ -140,7 +140,7 @@ public class StorageFileApi: StorageApi {
         method: "POST",
         body: configuration.encoder.encode(options ?? DEFAULT_SEARCH_OPTIONS))
     )
-    .decoded(as: [FileObject].self, decoder: configuration.decoder)
+    .decoded(decoder: configuration.decoder)
   }
 
   /// Downloads a file.
@@ -191,15 +191,5 @@ public class StorageFileApi: StorageApi {
     }
 
     return generatedUrl
-  }
-
-  @available(*, deprecated, renamed: "getPublicURL")
-  public func getPublicUrl(
-    path: String,
-    download: Bool = false,
-    fileName: String = "",
-    options: TransformOptions? = nil
-  ) throws -> URL {
-    try getPublicURL(path: path, download: download, fileName: fileName, options: options)
   }
 }

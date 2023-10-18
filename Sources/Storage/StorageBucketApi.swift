@@ -16,7 +16,7 @@ public class StorageBucketApi: StorageApi {
   /// Retrieves the details of all Storage buckets within an existing product.
   public func listBuckets() async throws -> [Bucket] {
     try await execute(Request(path: "/bucket", method: "GET"))
-      .decoded(as: [Bucket].self, decoder: configuration.decoder)
+      .decoded(decoder: configuration.decoder)
   }
 
   /// Retrieves the details of an existing Storage bucket.
@@ -24,7 +24,7 @@ public class StorageBucketApi: StorageApi {
   ///   - id: The unique identifier of the bucket you would like to retrieve.
   public func getBucket(id: String) async throws -> Bucket {
     try await execute(Request(path: "/bucket/\(id)", method: "GET"))
-      .decoded(as: Bucket.self, decoder: configuration.decoder)
+      .decoded(decoder: configuration.decoder)
   }
 
   /// Creates a new Storage bucket

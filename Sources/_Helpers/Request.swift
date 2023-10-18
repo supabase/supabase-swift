@@ -62,7 +62,7 @@ public struct Response {
     self.response = response
   }
 
-  public func decoded<T: Decodable>(as _: T.Type, decoder: JSONDecoder) throws -> T {
+  public func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder) throws -> T {
     try decoder.decode(T.self, from: data)
   }
 }
