@@ -1,4 +1,4 @@
-public struct SearchOptions {
+public struct SearchOptions: Encodable {
   /// The number of files you want to be returned.
   public var limit: Int?
 

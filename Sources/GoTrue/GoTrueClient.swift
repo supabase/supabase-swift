@@ -1,6 +1,8 @@
 import Combine
 import Foundation
-@_exported import _Helpers
+@_spi(Internal) import _Helpers
+
+public typealias AnyJSON = _Helpers.AnyJSON
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

@@ -1,18 +1,44 @@
 import Foundation
+@_spi(Internal) import _Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
 public class StorageApi {
-  var url: String
-  var headers: [String: String]
-  var session: StorageHTTPSession
+  var configuration: StorageClientConfiguration
 
-  init(url: String, headers: [String: String], session: StorageHTTPSession) {
-    self.url = url
-    self.headers = headers
-    self.session = session
+  var url: String {
+    configuration.url.absoluteString
+  }
+  var headers: [String: String] {
+    configuration.headers
+  }
+  var session: StorageHTTPSession {
+    configuration.session
+  }
+
+  init(configuration: StorageClientConfiguration) {
+    self.configuration = configuration
+  }
+
+  @discardableResult
+  func execute(_ request: Request) async throws -> Response {
+    var request = request
+    request.headers.merge(configuration.headers) { _, new in new }
+    let urlRequest = try request.urlRequest(withBaseURL: configuration.url)
+
+    let (data, response) = try await configuration.session.fetch(urlRequest)
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw URLError(.badServerResponse)
+    }
+
+    guard (200..<300).contains(httpResponse.statusCode) else {
+      let error = try configuration.decoder.decode(StorageError.self, from: data)
+      throw error
+    }
+
+    return Response(data: data, response: httpResponse)
   }
 
   internal enum HTTPMethod: String {
@@ -25,35 +51,6 @@ public class StorageApi {
     case options = "OPTIONS"
     case trace = "TRACE"
     case patch = "PATCH"
-  }
-
-  @discardableResult
-  internal func fetch<T: Decodable>(
-    url: URL,
-    method: HTTPMethod = .get,
-    parameters: [String: Any]?,
-    headers: [String: String]? = nil
-  ) async throws -> T {
-    var request = URLRequest(url: url)
-    request.httpMethod = method.rawValue
-
-    if var headers = headers {
-      headers.merge(self.headers) { $1 }
-      request.allHTTPHeaderFields = headers
-    } else {
-      request.allHTTPHeaderFields = self.headers
-    }
-
-    if let parameters = parameters {
-      request.httpBody = try JSONSerialization.data(withJSONObject: parameters, options: [])
-    }
-
-    let (data, response) = try await session.fetch(request)
-    guard let httpResonse = response as? HTTPURLResponse else {
-      throw URLError(.badServerResponse)
-    }
-
-    return try parse(response: data, statusCode: httpResonse.statusCode)
   }
 
   internal func fetch<T: Decodable>(

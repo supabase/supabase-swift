@@ -30,9 +30,11 @@ public class SupabaseClient {
   /// Supabase Storage allows you to manage user-generated content, such as photos or videos.
   public var storage: SupabaseStorageClient {
     SupabaseStorageClient(
-      url: storageURL.absoluteString,
-      headers: defaultHeaders,
-      session: StorageHTTPSession(fetch: fetch, upload: upload)
+      configuration: StorageClientConfiguration(
+        url: storageURL,
+        headers: defaultHeaders,
+        session: StorageHTTPSession(fetch: fetch, upload: upload)
+      )
     )
   }
 
