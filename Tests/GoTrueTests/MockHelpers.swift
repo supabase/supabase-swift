@@ -1,5 +1,4 @@
 import Foundation
-import Mocker
 
 @testable import GoTrue
 

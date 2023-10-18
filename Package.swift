@@ -25,12 +25,11 @@ var package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
-    .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.1"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
   ],
   targets: [
     .target(name: "Functions"),
-    .testTarget(name: "FunctionsTests", dependencies: ["Functions", "Mocker"]),
+    .testTarget(name: "FunctionsTests", dependencies: ["Functions"]),
     .target(
       name: "GoTrue",
       dependencies: [
@@ -41,7 +40,6 @@ var package = Package(
       name: "GoTrueTests",
       dependencies: [
         "GoTrue",
-        "Mocker",
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
       ],
       resources: [.process("Resources")]
@@ -51,11 +49,7 @@ var package = Package(
       name: "PostgRESTTests",
       dependencies: [
         "PostgREST",
-        .product(
-          name: "SnapshotTesting",
-          package: "swift-snapshot-testing",
-          condition: .when(platforms: [.iOS, .macOS, .tvOS])
-        ),
+        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
       ],
       exclude: ["__Snapshots__"]
     ),
