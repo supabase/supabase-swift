@@ -7,13 +7,13 @@ public struct Bucket: Identifiable, Hashable, Codable {
   public var isPublic: Bool
   public var createdAt: Date
   public var updatedAt: Date
-  public var allowedMimeTypes: [String]
-  public var fileSizeLimit: Int
+  public var allowedMimeTypes: [String]?
+  public var fileSizeLimit: Int?
 
   public init(
     id: String, name: String, owner: String, isPublic: Bool, createdAt: Date, updatedAt: Date,
-    allowedMimeTypes: [String],
-    fileSizeLimit: Int
+    allowedMimeTypes: [String]?,
+    fileSizeLimit: Int?
   ) {
     self.id = id
     self.name = name
@@ -31,7 +31,7 @@ public struct Bucket: Identifiable, Hashable, Codable {
     case owner
     case isPublic = "public"
     case createdAt = "created_at"
-    case updatedAt = "deleted_at"
+    case updatedAt = "updated_at"
     case allowedMimeTypes = "allowed_mime_types"
     case fileSizeLimit = "file_size_limit"
   }

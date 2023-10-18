@@ -7,11 +7,11 @@ import Foundation
 
 /// Storage Bucket API
 public class StorageBucketApi: StorageApi {
-  override public init(configuration: StorageClientConfiguration) {
-    var configuration = configuration
-    configuration.headers["Content-Type"] = "application/json"
-    super.init(configuration: configuration)
-  }
+  //  override public init(configuration: StorageClientConfiguration) {
+  //    var configuration = configuration
+  //    configuration.headers["Content-Type"] = "application/json"
+  //    super.init(configuration: configuration)
+  //  }
 
   /// Retrieves the details of all Storage buckets within an existing product.
   public func listBuckets() async throws -> [Bucket] {

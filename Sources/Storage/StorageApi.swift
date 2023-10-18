@@ -18,7 +18,7 @@ public class StorageApi {
     configuration.session
   }
 
-  init(configuration: StorageClientConfiguration) {
+  public init(configuration: StorageClientConfiguration) {
     self.configuration = configuration
   }
 
