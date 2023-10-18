@@ -30,20 +30,17 @@ public class StorageFileApi: StorageApi {
   /// bucket must already exist before attempting to upload.
   ///   - file: The File object to be stored in the bucket.
   ///   - fileOptions: HTTP headers. For example `cacheControl`
-  public func upload(path: String, file: File, fileOptions: FileOptions?) async throws -> AnyJSON {
-    guard let url = URL(string: "\(url)/object/\(bucketId)/\(path)") else {
-      throw URLError(.badURL)
-    }
-
+  public func upload(path: String, file: File, fileOptions: FileOptions?) async throws {
     let formData = FormData()
     formData.append(file: file)
 
-    return try await fetch(
-      url: url,
-      method: .post,
-      formData: formData,
-      headers: headers,
-      fileOptions: fileOptions
+    try await execute(
+      Request(
+        path: "/object/\(bucketId)/\(path)",
+        method: "POST",
+        formData: formData,
+        options: fileOptions
+      )
     )
   }
 
@@ -53,20 +50,17 @@ public class StorageFileApi: StorageApi {
   /// already exist before attempting to upload.
   ///   - file: The file object to be stored in the bucket.
   ///   - fileOptions: HTTP headers. For example `cacheControl`
-  public func update(path: String, file: File, fileOptions: FileOptions?) async throws -> AnyJSON {
-    guard let url = URL(string: "\(url)/object/\(bucketId)/\(path)") else {
-      throw URLError(.badURL)
-    }
-
+  public func update(path: String, file: File, fileOptions: FileOptions?) async throws {
     let formData = FormData()
     formData.append(file: file)
 
-    return try await fetch(
-      url: url,
-      method: .put,
-      formData: formData,
-      headers: headers,
-      fileOptions: fileOptions
+    try await execute(
+      Request(
+        path: "/object/\(bucketId)/\(path)",
+        method: "PUT",
+        formData: formData,
+        options: fileOptions
+      )
     )
   }
 
@@ -169,7 +163,8 @@ public class StorageFileApi: StorageApi {
   ) throws -> URL {
     var queryItems: [URLQueryItem] = []
 
-    guard var components = URLComponents(string: url) else {
+    guard var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: true)
+    else {
       throw URLError(.badURL)
     }
 
