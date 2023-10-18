@@ -28,12 +28,14 @@ var package = Package(
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
   ],
   targets: [
+    .target(name: "_Helpers"),
     .target(name: "Functions"),
     .testTarget(name: "FunctionsTests", dependencies: ["Functions"]),
     .target(
       name: "GoTrue",
       dependencies: [
-        .product(name: "KeychainAccess", package: "KeychainAccess")
+        "_Helpers",
+        .product(name: "KeychainAccess", package: "KeychainAccess"),
       ]
     ),
     .testTarget(
@@ -56,7 +58,7 @@ var package = Package(
     .testTarget(name: "PostgRESTIntegrationTests", dependencies: ["PostgREST"]),
     .target(name: "Realtime"),
     .testTarget(name: "RealtimeTests", dependencies: ["Realtime"]),
-    .target(name: "Storage"),
+    .target(name: "Storage", dependencies: ["_Helpers"]),
     .testTarget(name: "StorageTests", dependencies: ["Storage"]),
     .target(
       name: "Supabase",

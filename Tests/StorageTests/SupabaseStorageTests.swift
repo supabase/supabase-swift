@@ -19,11 +19,13 @@ final class SupabaseStorageTests: XCTestCase {
   let bucket = "public"
 
   let storage = SupabaseStorageClient(
-    url: supabaseURL,
-    headers: [
-      "Authorization": "Bearer \(apiKey)",
-      "apikey": apiKey,
-    ]
+    configuration: StorageClientConfiguration(
+      url: URL(string: supabaseURL)!,
+      headers: [
+        "Authorization": "Bearer \(apiKey)",
+        "apikey": apiKey,
+      ]
+    )
   )
 
   let uploadData = try! Data(

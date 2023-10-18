@@ -1,4 +1,4 @@
-public struct SortBy {
+public struct SortBy: Encodable {
   public var column: String?
   public var order: String?
 

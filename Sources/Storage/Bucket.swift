@@ -1,28 +1,38 @@
-public struct Bucket: Hashable {
+import Foundation
+
+public struct Bucket: Identifiable, Hashable, Codable {
   public var id: String
   public var name: String
   public var owner: String
   public var isPublic: Bool
-  public var createdAt: String
-  public var updatedAt: String
+  public var createdAt: Date
+  public var updatedAt: Date
+  public var allowedMimeTypes: [String]?
+  public var fileSizeLimit: Int?
 
-  init?(from dictionary: [String: Any]) {
-    guard
-      let id = dictionary["id"] as? String,
-      let name = dictionary["name"] as? String,
-      let owner = dictionary["owner"] as? String,
-      let createdAt = dictionary["created_at"] as? String,
-      let updatedAt = dictionary["updated_at"] as? String,
-      let isPublic = dictionary["public"] as? Bool
-    else {
-      return nil
-    }
-
+  public init(
+    id: String, name: String, owner: String, isPublic: Bool, createdAt: Date, updatedAt: Date,
+    allowedMimeTypes: [String]?,
+    fileSizeLimit: Int?
+  ) {
     self.id = id
     self.name = name
     self.owner = owner
     self.isPublic = isPublic
     self.createdAt = createdAt
     self.updatedAt = updatedAt
+    self.allowedMimeTypes = allowedMimeTypes
+    self.fileSizeLimit = fileSizeLimit
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case name
+    case owner
+    case isPublic = "public"
+    case createdAt = "created_at"
+    case updatedAt = "updated_at"
+    case allowedMimeTypes = "allowed_mime_types"
+    case fileSizeLimit = "file_size_limit"
   }
 }

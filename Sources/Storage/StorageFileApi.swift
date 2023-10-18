@@ -1,4 +1,5 @@
 import Foundation
+@_spi(Internal) import _Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -18,14 +19,9 @@ public class StorageFileApi: StorageApi {
   /// The bucket id to operate on.
   var bucketId: String
 
-  /// StorageFileApi initializer
-  /// - Parameters:
-  ///   - url: Storage HTTP URL
-  ///   - headers: HTTP headers.
-  ///   - bucketId: The bucket id to operate on.
-  init(url: String, headers: [String: String], bucketId: String, session: StorageHTTPSession) {
+  init(bucketId: String, configuration: StorageClientConfiguration) {
     self.bucketId = bucketId
-    super.init(url: url, headers: headers, session: session)
+    super.init(configuration: configuration)
   }
 
   /// Uploads a file to an existing bucket.
@@ -34,20 +30,17 @@ public class StorageFileApi: StorageApi {
   /// bucket must already exist before attempting to upload.
   ///   - file: The File object to be stored in the bucket.
   ///   - fileOptions: HTTP headers. For example `cacheControl`
-  public func upload(path: String, file: File, fileOptions: FileOptions?) async throws -> Any {
-    guard let url = URL(string: "\(url)/object/\(bucketId)/\(path)") else {
-      throw StorageError(message: "badURL")
-    }
-
+  public func upload(path: String, file: File, fileOptions: FileOptions?) async throws {
     let formData = FormData()
     formData.append(file: file)
 
-    return try await fetch(
-      url: url,
-      method: .post,
-      formData: formData,
-      headers: headers,
-      fileOptions: fileOptions
+    try await execute(
+      Request(
+        path: "/object/\(bucketId)/\(path)",
+        method: "POST",
+        formData: formData,
+        options: fileOptions
+      )
     )
   }
 
@@ -57,20 +50,17 @@ public class StorageFileApi: StorageApi {
   /// already exist before attempting to upload.
   ///   - file: The file object to be stored in the bucket.
   ///   - fileOptions: HTTP headers. For example `cacheControl`
-  public func update(path: String, file: File, fileOptions: FileOptions?) async throws -> Any {
-    guard let url = URL(string: "\(url)/object/\(bucketId)/\(path)") else {
-      throw StorageError(message: "badURL")
-    }
-
+  public func update(path: String, file: File, fileOptions: FileOptions?) async throws {
     let formData = FormData()
     formData.append(file: file)
 
-    return try await fetch(
-      url: url,
-      method: .put,
-      formData: formData,
-      headers: headers,
-      fileOptions: fileOptions
+    try await execute(
+      Request(
+        path: "/object/\(bucketId)/\(path)",
+        method: "PUT",
+        formData: formData,
+        options: fileOptions
+      )
     )
   }
 
@@ -80,22 +70,21 @@ public class StorageFileApi: StorageApi {
   /// `folder/image.png`.
   ///   - toPath: The new file path, including the new file name. For example
   /// `folder/image-copy.png`.
-  public func move(fromPath: String, toPath: String) async throws -> [String: Any] {
-    guard let url = URL(string: "\(url)/object/move") else {
-      throw StorageError(message: "badURL")
-    }
-
-    let response = try await fetch(
-      url: url, method: .post,
-      parameters: ["bucketId": bucketId, "sourceKey": fromPath, "destinationKey": toPath],
-      headers: headers
+  public func move(fromPath: String, toPath: String) async throws -> [String: AnyJSON] {
+    try await execute(
+      Request(
+        path: "/object/move",
+        method: "POST",
+        body: configuration.encoder.encode(
+          [
+            "bucketId": bucketId,
+            "sourceKey": fromPath,
+            "destinationKey": toPath,
+          ]
+        )
+      )
     )
-
-    guard let dict = response as? [String: Any] else {
-      throw StorageError(message: "failed to parse response")
-    }
-
-    return dict
+    .decoded(decoder: configuration.decoder)
   }
 
   /// Create signed url to download file without requiring permissions. This URL can be valid for a
@@ -105,25 +94,15 @@ public class StorageFileApi: StorageApi {
   /// `folder/image.png`.
   ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL
   /// which is valid for one minute.
-  public func createSignedURL(path: String, expiresIn: Int) async throws -> URL {
-    guard let url = URL(string: "\(url)/object/sign/\(bucketId)/\(path)") else {
-      throw StorageError(message: "badURL")
-    }
-
-    let response = try await fetch(
-      url: url,
-      method: .post,
-      parameters: ["expiresIn": expiresIn],
-      headers: headers
+  public func createSignedURL(path: String, expiresIn: Int) async throws -> SignedURL {
+    try await execute(
+      Request(
+        path: "/object/sign/\(bucketId)/\(path)",
+        method: "POST",
+        body: configuration.encoder.encode(["expiresIn": expiresIn])
+      )
     )
-    guard
-      let dict = response as? [String: Any],
-      let signedURLString = dict["signedURL"] as? String,
-      let signedURL = URL(string: self.url.appending(signedURLString))
-    else {
-      throw StorageError(message: "failed to parse response")
-    }
-    return signedURL
+    .decoded(decoder: configuration.decoder)
   }
 
   /// Deletes files within the same bucket
@@ -131,21 +110,14 @@ public class StorageFileApi: StorageApi {
   ///   - paths: An array of files to be deletes, including the path and file name. For example
   /// [`folder/image.png`].
   public func remove(paths: [String]) async throws -> [FileObject] {
-    guard let url = URL(string: "\(url)/object/\(bucketId)") else {
-      throw StorageError(message: "badURL")
-    }
-
-    let response = try await fetch(
-      url: url,
-      method: .delete,
-      parameters: ["prefixes": paths],
-      headers: headers
+    try await execute(
+      Request(
+        path: "/object/\(bucketId)",
+        method: "DELETE",
+        body: configuration.encoder.encode(["prefixes": paths])
+      )
     )
-    guard let array = response as? [[String: Any]] else {
-      throw StorageError(message: "failed to parse response")
-    }
-
-    return array.compactMap { FileObject(from: $0) }
+    .decoded(decoder: configuration.decoder)
   }
 
   /// Lists all the files within a bucket.
@@ -156,30 +128,13 @@ public class StorageFileApi: StorageApi {
     path: String? = nil,
     options: SearchOptions? = nil
   ) async throws -> [FileObject] {
-    guard let url = URL(string: "\(url)/object/list/\(bucketId)") else {
-      throw StorageError(message: "badURL")
-    }
-
-    var parameters: [String: Any] = ["prefix": path ?? ""]
-    parameters["limit"] = options?.limit ?? DEFAULT_SEARCH_OPTIONS.limit
-    parameters["offset"] = options?.offset ?? DEFAULT_SEARCH_OPTIONS.offset
-    parameters["search"] = options?.search ?? DEFAULT_SEARCH_OPTIONS.search
-
-    if let sortBy = options?.sortBy ?? DEFAULT_SEARCH_OPTIONS.sortBy {
-      parameters["sortBy"] = [
-        "column": sortBy.column,
-        "order": sortBy.order,
-      ]
-    }
-
-    let response = try await fetch(
-      url: url, method: .post, parameters: parameters, headers: headers)
-
-    guard let array = response as? [[String: Any]] else {
-      throw StorageError(message: "failed to parse response")
-    }
-
-    return array.compactMap { FileObject(from: $0) }
+    try await execute(
+      Request(
+        path: "/object/list/\(bucketId)",
+        method: "POST",
+        body: configuration.encoder.encode(options ?? DEFAULT_SEARCH_OPTIONS))
+    )
+    .decoded(decoder: configuration.decoder)
   }
 
   /// Downloads a file.
@@ -188,15 +143,10 @@ public class StorageFileApi: StorageApi {
   /// `folder/image.png`.
   @discardableResult
   public func download(path: String) async throws -> Data {
-    guard let url = URL(string: "\(url)/object/\(bucketId)/\(path)") else {
-      throw StorageError(message: "badURL")
-    }
-
-    let response = try await fetch(url: url, parameters: nil)
-    guard let data = response as? Data else {
-      throw StorageError(message: "failed to parse response")
-    }
-    return data
+    try await execute(
+      Request(path: "/object/\(bucketId)/\(path)", method: "GET")
+    )
+    .data
   }
 
   /// Returns a public url for an asset.
@@ -213,8 +163,9 @@ public class StorageFileApi: StorageApi {
   ) throws -> URL {
     var queryItems: [URLQueryItem] = []
 
-    guard var components = URLComponents(string: url) else {
-      throw StorageError(message: "badURL")
+    guard var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: true)
+    else {
+      throw URLError(.badURL)
     }
 
     if download {
@@ -231,19 +182,9 @@ public class StorageFileApi: StorageApi {
     components.queryItems = !queryItems.isEmpty ? queryItems : nil
 
     guard let generatedUrl = components.url else {
-      throw StorageError(message: "badUrl")
+      throw URLError(.badURL)
     }
 
     return generatedUrl
-  }
-
-  @available(*, deprecated, renamed: "getPublicURL")
-  public func getPublicUrl(
-    path: String,
-    download: Bool = false,
-    fileName: String = "",
-    options: TransformOptions? = nil
-  ) throws -> URL {
-    try getPublicURL(path: path, download: download, fileName: fileName, options: options)
   }
 }
