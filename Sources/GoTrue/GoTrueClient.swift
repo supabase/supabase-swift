@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+@_exported import _Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

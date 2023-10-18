@@ -28,12 +28,12 @@ public class StorageApi {
   }
 
   @discardableResult
-  internal func fetch(
+  internal func fetch<T: Decodable>(
     url: URL,
     method: HTTPMethod = .get,
     parameters: [String: Any]?,
     headers: [String: String]? = nil
-  ) async throws -> Any {
+  ) async throws -> T {
     var request = URLRequest(url: url)
     request.httpMethod = method.rawValue
 
@@ -53,32 +53,22 @@ public class StorageApi {
       throw URLError(.badServerResponse)
     }
 
-    if let mimeType = httpResonse.mimeType {
-      switch mimeType {
-      case "application/json":
-        let json = try JSONSerialization.jsonObject(with: data, options: [])
-        return try parse(response: json, statusCode: httpResonse.statusCode)
-      default:
-        return try parse(response: data, statusCode: httpResonse.statusCode)
-      }
-    } else {
-      throw StorageError(message: "failed to get response")
-    }
+    return try parse(response: data, statusCode: httpResonse.statusCode)
   }
 
-  internal func fetch(
+  internal func fetch<T: Decodable>(
     url: URL,
     method: HTTPMethod = .post,
     formData: FormData,
     headers: [String: String]? = nil,
     fileOptions: FileOptions? = nil,
     jsonSerialization: Bool = true
-  ) async throws -> Any {
+  ) async throws -> T {
     var request = URLRequest(url: url)
     request.httpMethod = method.rawValue
 
     if let fileOptions = fileOptions {
-      request.setValue(fileOptions.cacheControl, forHTTPHeaderField: "cacheControl")
+      request.setValue(fileOptions.cacheControl, forHTTPHeaderField: "Cache-Control")
     }
 
     var allHTTPHeaderFields = self.headers
@@ -97,27 +87,24 @@ public class StorageApi {
       throw URLError(.badServerResponse)
     }
 
-    if jsonSerialization {
-      let json = try JSONSerialization.jsonObject(with: data, options: [])
-      return try parse(response: json, statusCode: httpResonse.statusCode)
-    }
-
-    if let dataString = String(data: data, encoding: .utf8) {
-      return dataString
-    }
-
-    throw StorageError(message: "failed to get response")
+    return try parse(response: data, statusCode: httpResonse.statusCode)
   }
 
-  private func parse(response: Any, statusCode: Int) throws -> Any {
-    if statusCode == 200 || 200..<300 ~= statusCode {
-      return response
-    } else if let dict = response as? [String: Any], let message = dict["message"] as? String {
-      throw StorageError(statusCode: statusCode, message: message)
-    } else if let dict = response as? [String: Any], let error = dict["error"] as? String {
-      throw StorageError(statusCode: statusCode, message: error)
-    } else {
-      throw StorageError(statusCode: statusCode, message: "something went wrong")
+  private func parse<T: Decodable>(response: Data, statusCode: Int) throws -> T {
+    if 200..<300 ~= statusCode {
+      return try JSONDecoder().decode(T.self, from: response)
     }
+
+    let json = try JSONSerialization.jsonObject(with: response)
+
+    if let dict = json as? [String: Any], let message = dict["message"] as? String {
+      throw StorageError(statusCode: statusCode, message: message)
+    }
+
+    if let dict = json as? [String: Any], let error = dict["error"] as? String {
+      throw StorageError(statusCode: statusCode, message: error)
+    }
+
+    throw StorageError(statusCode: statusCode, message: "something went wrong")
   }
 }

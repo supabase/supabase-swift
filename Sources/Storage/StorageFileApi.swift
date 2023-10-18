@@ -34,7 +34,7 @@ public class StorageFileApi: StorageApi {
   /// bucket must already exist before attempting to upload.
   ///   - file: The File object to be stored in the bucket.
   ///   - fileOptions: HTTP headers. For example `cacheControl`
-  public func upload(path: String, file: File, fileOptions: FileOptions?) async throws -> Any {
+  public func upload(path: String, file: File, fileOptions: FileOptions?) async throws -> AnyJSON {
     guard let url = URL(string: "\(url)/object/\(bucketId)/\(path)") else {
       throw StorageError(message: "badURL")
     }
@@ -57,7 +57,7 @@ public class StorageFileApi: StorageApi {
   /// already exist before attempting to upload.
   ///   - file: The file object to be stored in the bucket.
   ///   - fileOptions: HTTP headers. For example `cacheControl`
-  public func update(path: String, file: File, fileOptions: FileOptions?) async throws -> Any {
+  public func update(path: String, file: File, fileOptions: FileOptions?) async throws -> AnyJSON {
     guard let url = URL(string: "\(url)/object/\(bucketId)/\(path)") else {
       throw StorageError(message: "badURL")
     }
@@ -80,22 +80,16 @@ public class StorageFileApi: StorageApi {
   /// `folder/image.png`.
   ///   - toPath: The new file path, including the new file name. For example
   /// `folder/image-copy.png`.
-  public func move(fromPath: String, toPath: String) async throws -> [String: Any] {
+  public func move(fromPath: String, toPath: String) async throws -> [String: AnyJSON] {
     guard let url = URL(string: "\(url)/object/move") else {
       throw StorageError(message: "badURL")
     }
 
-    let response = try await fetch(
+    return try await fetch(
       url: url, method: .post,
       parameters: ["bucketId": bucketId, "sourceKey": fromPath, "destinationKey": toPath],
       headers: headers
     )
-
-    guard let dict = response as? [String: Any] else {
-      throw StorageError(message: "failed to parse response")
-    }
-
-    return dict
   }
 
   /// Create signed url to download file without requiring permissions. This URL can be valid for a
@@ -110,20 +104,18 @@ public class StorageFileApi: StorageApi {
       throw StorageError(message: "badURL")
     }
 
-    let response = try await fetch(
+    struct Response: Decodable {
+      let signedURL: URL
+    }
+
+    let response: Response = try await fetch(
       url: url,
       method: .post,
       parameters: ["expiresIn": expiresIn],
       headers: headers
     )
-    guard
-      let dict = response as? [String: Any],
-      let signedURLString = dict["signedURL"] as? String,
-      let signedURL = URL(string: self.url.appending(signedURLString))
-    else {
-      throw StorageError(message: "failed to parse response")
-    }
-    return signedURL
+
+    return response.signedURL
   }
 
   /// Deletes files within the same bucket
@@ -135,17 +127,12 @@ public class StorageFileApi: StorageApi {
       throw StorageError(message: "badURL")
     }
 
-    let response = try await fetch(
+    return try await fetch(
       url: url,
       method: .delete,
       parameters: ["prefixes": paths],
       headers: headers
     )
-    guard let array = response as? [[String: Any]] else {
-      throw StorageError(message: "failed to parse response")
-    }
-
-    return array.compactMap { FileObject(from: $0) }
   }
 
   /// Lists all the files within a bucket.
@@ -172,14 +159,8 @@ public class StorageFileApi: StorageApi {
       ]
     }
 
-    let response = try await fetch(
+    return try await fetch(
       url: url, method: .post, parameters: parameters, headers: headers)
-
-    guard let array = response as? [[String: Any]] else {
-      throw StorageError(message: "failed to parse response")
-    }
-
-    return array.compactMap { FileObject(from: $0) }
   }
 
   /// Downloads a file.
@@ -192,11 +173,7 @@ public class StorageFileApi: StorageApi {
       throw StorageError(message: "badURL")
     }
 
-    let response = try await fetch(url: url, parameters: nil)
-    guard let data = response as? Data else {
-      throw StorageError(message: "failed to parse response")
-    }
-    return data
+    return try await fetch(url: url, parameters: nil)
   }
 
   /// Returns a public url for an asset.

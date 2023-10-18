@@ -1,4 +1,5 @@
 import Foundation
+@_exported import _Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -21,12 +22,7 @@ public class StorageBucketApi: StorageApi {
       throw StorageError(message: "badURL")
     }
 
-    let response = try await fetch(url: url, method: .get, parameters: nil, headers: headers)
-    guard let dict = response as? [[String: Any]] else {
-      throw StorageError(message: "failed to parse response")
-    }
-
-    return dict.compactMap { Bucket(from: $0) }
+    return try await fetch(url: url, method: .get, parameters: nil, headers: headers)
   }
 
   /// Retrieves the details of an existing Storage bucket.
@@ -37,15 +33,7 @@ public class StorageBucketApi: StorageApi {
       throw StorageError(message: "badURL")
     }
 
-    let response = try await fetch(url: url, method: .get, parameters: nil, headers: headers)
-    guard
-      let dict = response as? [String: Any],
-      let bucket = Bucket(from: dict)
-    else {
-      throw StorageError(message: "failed to parse response")
-    }
-
-    return bucket
+    return try await fetch(url: url, method: .get, parameters: nil, headers: headers)
   }
 
   /// Creates a new Storage bucket
@@ -55,7 +43,7 @@ public class StorageBucketApi: StorageApi {
   public func createBucket(
     id: String,
     options: BucketOptions = .init()
-  ) async throws -> [String: Any] {
+  ) async throws -> [String: AnyJSON] {
     guard let url = URL(string: "\(url)/bucket") else {
       throw StorageError(message: "badURL")
     }
@@ -69,49 +57,35 @@ public class StorageBucketApi: StorageApi {
     params["file_size_limit"] = options.fileSizeLimit
     params["allowed_mime_types"] = options.allowedMimeTypes
 
-    let response = try await fetch(
+    return try await fetch(
       url: url,
       method: .post,
       parameters: params,
       headers: headers
     )
-
-    guard let dict = response as? [String: Any] else {
-      throw StorageError(message: "failed to parse response")
-    }
-
-    return dict
   }
 
   /// Removes all objects inside a single bucket.
   /// - Parameters:
   ///   - id: The unique identifier of the bucket you would like to empty.
   @discardableResult
-  public func emptyBucket(id: String) async throws -> [String: Any] {
+  public func emptyBucket(id: String) async throws -> [String: AnyJSON] {
     guard let url = URL(string: "\(url)/bucket/\(id)/empty") else {
       throw StorageError(message: "badURL")
     }
 
-    let response = try await fetch(url: url, method: .post, parameters: [:], headers: headers)
-    guard let dict = response as? [String: Any] else {
-      throw StorageError(message: "failed to parse response")
-    }
-    return dict
+    return try await fetch(url: url, method: .post, parameters: [:], headers: headers)
   }
 
   /// Deletes an existing bucket. A bucket can't be deleted with existing objects inside it.
   /// You must first `empty()` the bucket.
   /// - Parameters:
   ///   - id: The unique identifier of the bucket you would like to delete.
-  public func deleteBucket(id: String) async throws -> [String: Any] {
+  public func deleteBucket(id: String) async throws -> [String: AnyJSON] {
     guard let url = URL(string: "\(url)/bucket/\(id)") else {
       throw StorageError(message: "badURL")
     }
 
-    let response = try await fetch(url: url, method: .delete, parameters: [:], headers: headers)
-    guard let dict = response as? [String: Any] else {
-      throw StorageError(message: "failed to parse response")
-    }
-    return dict
+    return try await fetch(url: url, method: .delete, parameters: [:], headers: headers)
   }
 }

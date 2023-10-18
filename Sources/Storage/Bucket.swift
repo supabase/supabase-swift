@@ -1,4 +1,4 @@
-public struct Bucket: Hashable {
+public struct Bucket: Identifiable, Hashable, Codable {
   public var id: String
   public var name: String
   public var owner: String
@@ -6,23 +6,23 @@ public struct Bucket: Hashable {
   public var createdAt: String
   public var updatedAt: String
 
-  init?(from dictionary: [String: Any]) {
-    guard
-      let id = dictionary["id"] as? String,
-      let name = dictionary["name"] as? String,
-      let owner = dictionary["owner"] as? String,
-      let createdAt = dictionary["created_at"] as? String,
-      let updatedAt = dictionary["updated_at"] as? String,
-      let isPublic = dictionary["public"] as? Bool
-    else {
-      return nil
-    }
-
+  public init(
+    id: String, name: String, owner: String, isPublic: Bool, createdAt: String, updatedAt: String
+  ) {
     self.id = id
     self.name = name
     self.owner = owner
     self.isPublic = isPublic
     self.createdAt = createdAt
     self.updatedAt = updatedAt
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case name
+    case owner
+    case isPublic = "public"
+    case createdAt = "created_at"
+    case updatedAt = "deleted_at"
   }
 }
