@@ -6,7 +6,8 @@ on:
       - main
   pull_request:
     branches:
-      - "*"
+      - '*'
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -15,27 +16,17 @@ concurrency:
 jobs:
   library:
     runs-on: macos-13
-    strategy:
-      matrix:
-        platform: 
-          - iOS Simulator,name=iPhone 14 Pro Max
-          - macOS
-          - tvOS Simulator,name=Apple TV
-          - watchOS Simulator,name=Apple Watch Series 7 (45mm)
-
+    name: Test Library
     steps:
       - uses: actions/checkout@v3
       - name: Select Xcode 14.3
         run: sudo xcode-select -s /Applications/Xcode_14.3.app
       - name: Run tests
-        run: PLATFORM="${{ matrix.platform }}" make test-library
+        run: make test-library
 
   example:
     runs-on: macos-13
-    strategy:
-      matrix:
-        platform: 
-          - iOS Simulator,name=iPhone 14 Pro Max
+    name: Build Example
     steps:
       - uses: actions/checkout@v3
       - name: Select Xcode 14.3
@@ -43,4 +34,4 @@ jobs:
       - name: Copy Secrets file
         run: cp Examples/Examples/_Secrets.swift Examples/Examples/Secrets.swift
       - name: Build example
-        run: PLATFORM="${{ matrix.platform }}" make build-example
+        run: make build-example
