@@ -5,10 +5,13 @@
 //  Created by Guilherme Souza on 19/10/23.
 //
 
+import OSLog
 import SwiftUI
 
 @MainActor
 final class ProductDetailsViewModel: ObservableObject {
+  private let logger = Logger.make(category: "ProductDetailsViewModel")
+
   private let productId: Product.ID?
 
   private let updateProductUseCase: any UpdateProductUseCase
@@ -55,6 +58,7 @@ final class ProductDetailsViewModel: ObservableObject {
     let result: Result<Void, Error>
 
     if let productId {
+      logger.info("Will update product: \(productId)")
       result = await updateProductUseCase.execute(
         input: UpdateProductParams(
           id: productId,
@@ -65,6 +69,7 @@ final class ProductDetailsViewModel: ObservableObject {
         )
       )
     } else {
+      logger.info("Will add product")
       result = await createProductUseCase.execute(
         input: CreateProductParams(name: name, price: price, image: nil)
       )
@@ -72,10 +77,11 @@ final class ProductDetailsViewModel: ObservableObject {
 
     switch result {
     case .failure(let error):
-      dump(error)
+      logger.error("Save failed: \(error)")
       onCompletion(false)
       return false
     case .success:
+      logger.error("Save succeeded")
       onCompletion(true)
       return true
     }

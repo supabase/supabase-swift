@@ -5,10 +5,12 @@
 //  Created by Guilherme Souza on 19/10/23.
 //
 
+import OSLog
 import SwiftUI
 
 @MainActor
 final class ProductListViewModel: ObservableObject {
+  private let logger = Logger.make(category: "ProductListViewModel")
   private let productRepository: ProductRepository
 
   @Published var products: [Product] = []
@@ -25,8 +27,10 @@ final class ProductListViewModel: ObservableObject {
 
     do {
       products = try await productRepository.getProducts()
+      logger.info("Products loaded.")
       self.error = nil
     } catch {
+      logger.error("Error loading products: \(error)")
       self.error = error
     }
   }
