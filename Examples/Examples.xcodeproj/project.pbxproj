@@ -34,7 +34,6 @@
 		79C591EE2AE1258B0088A9C8 /* AuthenticationRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C591ED2AE1258B0088A9C8 /* AuthenticationRepository.swift */; };
 		79C591F02AE126120088A9C8 /* ProductListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C591EF2AE126120088A9C8 /* ProductListViewModel.swift */; };
 		79C591F22AE127180088A9C8 /* ProductListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C591F12AE127180088A9C8 /* ProductListView.swift */; };
-		79C591F42AE12A0D0088A9C8 /* AddProductView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C591F32AE12A0D0088A9C8 /* AddProductView.swift */; };
 		79C591F62AE12AAC0088A9C8 /* ProductDetailsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C591F52AE12AAC0088A9C8 /* ProductDetailsViewModel.swift */; };
 		79C591F82AE12B850088A9C8 /* ProductDetailsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C591F72AE12B850088A9C8 /* ProductDetailsView.swift */; };
 		79C591FB2AE12FDE0088A9C8 /* UseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C591FA2AE12FDE0088A9C8 /* UseCase.swift */; };
@@ -76,7 +75,6 @@
 		79C591ED2AE1258B0088A9C8 /* AuthenticationRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationRepository.swift; sourceTree = "<group>"; };
 		79C591EF2AE126120088A9C8 /* ProductListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductListViewModel.swift; sourceTree = "<group>"; };
 		79C591F12AE127180088A9C8 /* ProductListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductListView.swift; sourceTree = "<group>"; };
-		79C591F32AE12A0D0088A9C8 /* AddProductView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProductView.swift; sourceTree = "<group>"; };
 		79C591F52AE12AAC0088A9C8 /* ProductDetailsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductDetailsViewModel.swift; sourceTree = "<group>"; };
 		79C591F72AE12B850088A9C8 /* ProductDetailsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductDetailsView.swift; sourceTree = "<group>"; };
 		79C591FA2AE12FDE0088A9C8 /* UseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UseCase.swift; sourceTree = "<group>"; };
@@ -119,6 +117,63 @@
 				79C591E92AE089230088A9C8 /* Product.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		79018AD32AE1DA1B006EA669 /* ProductList */ = {
+			isa = PBXGroup;
+			children = (
+				79C591EF2AE126120088A9C8 /* ProductListViewModel.swift */,
+				79C591F12AE127180088A9C8 /* ProductListView.swift */,
+			);
+			path = ProductList;
+			sourceTree = "<group>";
+		};
+		79018AD42AE1DA25006EA669 /* ProductDetails */ = {
+			isa = PBXGroup;
+			children = (
+				79C591F52AE12AAC0088A9C8 /* ProductDetailsViewModel.swift */,
+				79C591F72AE12B850088A9C8 /* ProductDetailsView.swift */,
+			);
+			path = ProductDetails;
+			sourceTree = "<group>";
+		};
+		79018AD52AE1DA31006EA669 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				79018AD42AE1DA25006EA669 /* ProductDetails */,
+				79018AD32AE1DA1B006EA669 /* ProductList */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		79018AD62AE1DA4C006EA669 /* Application */ = {
+			isa = PBXGroup;
+			children = (
+				79C591DD2AE0880F0088A9C8 /* AppView.swift */,
+				79C592002AE1561D0088A9C8 /* Dependencies.swift */,
+				79C591DB2AE0880F0088A9C8 /* ProductSampleApp.swift */,
+			);
+			path = Application;
+			sourceTree = "<group>";
+		};
+		79018AD72AE1DA64006EA669 /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				79C591FE2AE1527C0088A9C8 /* Config.swift */,
+				79C592092AE159E20088A9C8 /* Logger.swift */,
+				79C5920B2AE1B8820088A9C8 /* Result.swift */,
+			);
+			path = Helpers;
+			sourceTree = "<group>";
+		};
+		79018AD92AE1DA75006EA669 /* SupportFiles */ = {
+			isa = PBXGroup;
+			children = (
+				79C591DF2AE088110088A9C8 /* Assets.xcassets */,
+				79C591E12AE088110088A9C8 /* Preview Content */,
+				79C591FC2AE152590088A9C8 /* Config.plist */,
+			);
+			path = SupportFiles;
 			sourceTree = "<group>";
 		};
 		793895BD2954ABFF0044F2B8 = {
@@ -178,22 +233,12 @@
 		79C591DA2AE0880F0088A9C8 /* ProductSample */ = {
 			isa = PBXGroup;
 			children = (
+				79018AD62AE1DA4C006EA669 /* Application */,
 				79C5920F2AE1CCE80088A9C8 /* Data */,
 				79C591F92AE12FD10088A9C8 /* Domain */,
-				79C591DB2AE0880F0088A9C8 /* ProductSampleApp.swift */,
-				79C591DD2AE0880F0088A9C8 /* AppView.swift */,
-				79C591DF2AE088110088A9C8 /* Assets.xcassets */,
-				79C591E12AE088110088A9C8 /* Preview Content */,
-				79C591EF2AE126120088A9C8 /* ProductListViewModel.swift */,
-				79C591F12AE127180088A9C8 /* ProductListView.swift */,
-				79C591F32AE12A0D0088A9C8 /* AddProductView.swift */,
-				79C591F52AE12AAC0088A9C8 /* ProductDetailsViewModel.swift */,
-				79C591F72AE12B850088A9C8 /* ProductDetailsView.swift */,
-				79C591FC2AE152590088A9C8 /* Config.plist */,
-				79C591FE2AE1527C0088A9C8 /* Config.swift */,
-				79C592002AE1561D0088A9C8 /* Dependencies.swift */,
-				79C592092AE159E20088A9C8 /* Logger.swift */,
-				79C5920B2AE1B8820088A9C8 /* Result.swift */,
+				79018AD52AE1DA31006EA669 /* Features */,
+				79018AD72AE1DA64006EA669 /* Helpers */,
+				79018AD92AE1DA75006EA669 /* SupportFiles */,
 			);
 			path = ProductSample;
 			sourceTree = "<group>";
@@ -382,7 +427,6 @@
 				79018ACF2AE1D6CF006EA669 /* DeleteProductUseCase.swift in Sources */,
 				79C5920A2AE159E20088A9C8 /* Logger.swift in Sources */,
 				79C591FB2AE12FDE0088A9C8 /* UseCase.swift in Sources */,
-				79C591F42AE12A0D0088A9C8 /* AddProductView.swift in Sources */,
 				79C592062AE159250088A9C8 /* UpdateProductUseCase.swift in Sources */,
 				79C591EA2AE089230088A9C8 /* Product.swift in Sources */,
 				79C592082AE159390088A9C8 /* GetProductUseCase.swift in Sources */,
@@ -594,7 +638,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"ProductSample/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"ProductSample/SupportFiles/Preview Content\"";
 				DEVELOPMENT_TEAM = ELTTE7K8TT;
 				ENABLE_PREVIEWS = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
@@ -629,7 +673,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"ProductSample/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"ProductSample/SupportFiles/Preview Content\"";
 				DEVELOPMENT_TEAM = ELTTE7K8TT;
 				ENABLE_PREVIEWS = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
