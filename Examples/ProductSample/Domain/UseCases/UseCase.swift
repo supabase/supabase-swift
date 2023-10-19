@@ -14,3 +14,9 @@ protocol UseCase<Input, Output> {
 
   func execute(input: Input) -> Output
 }
+
+extension UseCase where Input == Void {
+  func execute() -> Output {
+    self.execute(input: ())
+  }
+}

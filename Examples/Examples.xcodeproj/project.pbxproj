@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		79018ACF2AE1D6CF006EA669 /* DeleteProductUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018ACE2AE1D6CF006EA669 /* DeleteProductUseCase.swift */; };
+		79018AD12AE1D775006EA669 /* GetProductsUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018AD02AE1D775006EA669 /* GetProductsUseCase.swift */; };
 		793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895C92954ABFF0044F2B8 /* ExamplesApp.swift */; };
 		793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895CB2954ABFF0044F2B8 /* RootView.swift */; };
 		793895CE2954AC000044F2B8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 793895CD2954AC000044F2B8 /* Assets.xcassets */; };
@@ -48,6 +50,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		79018ACE2AE1D6CF006EA669 /* DeleteProductUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteProductUseCase.swift; sourceTree = "<group>"; };
+		79018AD02AE1D775006EA669 /* GetProductsUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetProductsUseCase.swift; sourceTree = "<group>"; };
 		793895C62954ABFF0044F2B8 /* Examples.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Examples.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		793895C92954ABFF0044F2B8 /* ExamplesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExamplesApp.swift; sourceTree = "<group>"; };
 		793895CB2954ABFF0044F2B8 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -109,6 +113,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		79018AD22AE1D7DE006EA669 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				79C591E92AE089230088A9C8 /* Product.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		793895BD2954ABFF0044F2B8 = {
 			isa = PBXGroup;
 			children = (
@@ -197,7 +209,7 @@
 		79C591F92AE12FD10088A9C8 /* Domain */ = {
 			isa = PBXGroup;
 			children = (
-				79C591E92AE089230088A9C8 /* Product.swift */,
+				79018AD22AE1D7DE006EA669 /* Models */,
 				79C592022AE159070088A9C8 /* UseCases */,
 			);
 			path = Domain;
@@ -210,6 +222,8 @@
 				79C592032AE159130088A9C8 /* CreateProductUseCase.swift */,
 				79C592052AE159250088A9C8 /* UpdateProductUseCase.swift */,
 				79C592072AE159390088A9C8 /* GetProductUseCase.swift */,
+				79018ACE2AE1D6CF006EA669 /* DeleteProductUseCase.swift */,
+				79018AD02AE1D775006EA669 /* GetProductsUseCase.swift */,
 			);
 			path = UseCases;
 			sourceTree = "<group>";
@@ -357,6 +371,7 @@
 				79C591DE2AE0880F0088A9C8 /* AppView.swift in Sources */,
 				79C591DC2AE0880F0088A9C8 /* ProductSampleApp.swift in Sources */,
 				79C591F62AE12AAC0088A9C8 /* ProductDetailsViewModel.swift in Sources */,
+				79018AD12AE1D775006EA669 /* GetProductsUseCase.swift in Sources */,
 				79C592042AE159130088A9C8 /* CreateProductUseCase.swift in Sources */,
 				79C592012AE1561D0088A9C8 /* Dependencies.swift in Sources */,
 				79C591F22AE127180088A9C8 /* ProductListView.swift in Sources */,
@@ -364,6 +379,7 @@
 				79C591F02AE126120088A9C8 /* ProductListViewModel.swift in Sources */,
 				79C5920C2AE1B8820088A9C8 /* Result.swift in Sources */,
 				79C591FF2AE1527C0088A9C8 /* Config.swift in Sources */,
+				79018ACF2AE1D6CF006EA669 /* DeleteProductUseCase.swift in Sources */,
 				79C5920A2AE159E20088A9C8 /* Logger.swift in Sources */,
 				79C591FB2AE12FDE0088A9C8 /* UseCase.swift in Sources */,
 				79C591F42AE12A0D0088A9C8 /* AddProductView.swift in Sources */,

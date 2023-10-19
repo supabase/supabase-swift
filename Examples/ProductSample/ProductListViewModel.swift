@@ -11,14 +11,20 @@ import SwiftUI
 @MainActor
 final class ProductListViewModel: ObservableObject {
   private let logger = Logger.make(category: "ProductListViewModel")
-  private let productRepository: ProductRepository
+
+  private let deleteProductUseCase: any DeleteProductUseCase
+  private let getProductsUseCase: any GetProductsUseCase
 
   @Published var products: [Product] = []
   @Published var isLoading = false
   @Published var error: Error?
 
-  init(productRepository: ProductRepository = Dependencies.productRepository) {
-    self.productRepository = productRepository
+  init(
+    deleteProductUseCase: any DeleteProductUseCase = Dependencies.deleteProductUseCase,
+    getProductsUseCase: any GetProductsUseCase = Dependencies.getProductsUseCase
+  ) {
+    self.deleteProductUseCase = deleteProductUseCase
+    self.getProductsUseCase = getProductsUseCase
   }
 
   func loadProducts() async {
@@ -26,7 +32,7 @@ final class ProductListViewModel: ObservableObject {
     defer { isLoading = false }
 
     do {
-      products = try await productRepository.getProducts()
+      products = try await getProductsUseCase.execute().value
       logger.info("Products loaded.")
       self.error = nil
     } catch {
@@ -46,7 +52,7 @@ final class ProductListViewModel: ObservableObject {
     self.products.removeAll { $0.id == product.id }
 
     do {
-      try await productRepository.deleteProduct(id: product.id)
+      try await deleteProductUseCase.execute(input: product.id).value
       self.error = nil
     } catch {
       logger.error("Failed to remove product: \(product.id) error: \(error)")

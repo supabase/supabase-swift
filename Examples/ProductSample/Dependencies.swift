@@ -35,4 +35,12 @@ enum Dependencies {
   static let getProductUseCase: any GetProductUseCase = GetProductUseCaseImpl(
     productRepository: productRepository
   )
+
+  static let deleteProductUseCase: any DeleteProductUseCase = DeleteProductUseCaseImpl(
+    repository: productRepository
+  )
+
+  static let getProductsUseCase: any GetProductsUseCase = GetProductsUseCaseImpl(
+    repository: productRepository
+  )
 }
