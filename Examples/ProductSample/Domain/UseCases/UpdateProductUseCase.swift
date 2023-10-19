@@ -8,50 +8,36 @@
 import Foundation
 import Supabase
 
+struct ImageUploadParams {
+  let fileName: String
+  let fileExtension: String?
+  let mimeType: String?
+  let data: Data
+}
+
 struct UpdateProductParams {
   var id: String
   var name: String?
   var price: Double?
-
-  var imageName: String?
-  var imageFile: Data?
+  var image: ImageUploadParams?
 }
 
-protocol UpdateProductUseCase: UseCase<UpdateProductParams, Result<Void, Error>> {}
+protocol UpdateProductUseCase: UseCase<UpdateProductParams, Task<Void, Error>> {}
 
 struct UpdateProductUseCaseImpl: UpdateProductUseCase {
   let repository: ProductRepository
+  let imageUploadUseCase: any ImageUploadUseCase
 
-  // TODO: Abstract storage access
-  let storage: SupabaseStorageClient
+  func execute(input: UpdateProductParams) -> Task<(), Error> {
+    Task {
+      var imageFilePath: String?
 
-  func execute(input: UpdateProductParams) async -> Result<(), Error> {
-    do {
-      var image: String?
-
-      if let imageName = input.imageName, let imageFile = input.imageFile, !imageFile.isEmpty {
-        let filePath = "\(imageName).png"
-        let imageFilePath = try await storage.from(id: "product-images")
-          .upload(
-            path: filePath,
-            file: File(
-              name: filePath, data: imageFile, fileName: filePath, contentType: "image/png"),
-            fileOptions: FileOptions(contentType: "image/png", upsert: true)
-          )
-
-        image = buildImageURL(imageFilePath: imageFilePath)
+      if let image = input.image {
+        imageFilePath = try await imageUploadUseCase.execute(input: image).value
       }
 
       try await repository.updateProduct(
-        id: input.id, name: input.name, price: input.price, image: image)
-      return .success(())
-    } catch {
-      return .failure(error)
+        id: input.id, name: input.name, price: input.price, image: imageFilePath)
     }
-  }
-
-  private func buildImageURL(imageFilePath: String) -> String {
-    storage.configuration.url.appendingPathComponent("object/public/\(imageFilePath)")
-      .absoluteString
   }
 }

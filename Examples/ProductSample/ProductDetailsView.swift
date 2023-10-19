@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 19/10/23.
 //
 
+import PhotosUI
 import SwiftUI
 
 struct ProductDetailsView: View {
@@ -14,6 +15,29 @@ struct ProductDetailsView: View {
 
   var body: some View {
     Form {
+      Section {
+        Group {
+          switch model.imageSource {
+          case .remote(let url):
+            AsyncImage(url: url)
+          case .local(let productImage):
+            productImage.image
+              .resizable()
+          case .none:
+            Color.clear
+          }
+        }
+        .scaledToFit()
+        .frame(width: 80)
+        .overlay {
+          PhotosPicker(selection: $model.imageSelection, matching: .images) {
+            Image(systemName: "pencil.circle.fill")
+              .symbolRenderingMode(.multicolor)
+              .font(.system(size: 30))
+              .foregroundColor(.accentColor)
+          }
+        }
+      }
       Section {
         TextField("Product Name", text: $model.name)
         TextField("Product Price", value: $model.price, formatter: NumberFormatter())

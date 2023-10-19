@@ -6,6 +6,7 @@
 //
 
 import OSLog
+import PhotosUI
 import SwiftUI
 
 @MainActor
@@ -20,7 +21,36 @@ final class ProductDetailsViewModel: ObservableObject {
 
   @Published var name: String = ""
   @Published var price: Double = 0
+  @Published private var imageURL: URL?
 
+  enum ImageSource {
+    case remote(URL)
+    case local(ProductImage)
+  }
+
+  var imageSource: ImageSource? {
+    if case let .success(image) = self.image {
+      return .local(image)
+    }
+
+    if let imageURL {
+      return .remote(imageURL)
+    }
+
+    return nil
+  }
+
+  @Published var imageSelection: PhotosPickerItem? {
+    didSet {
+      if let imageSelection {
+        Task {
+          await loadTransferable(from: imageSelection)
+        }
+      }
+    }
+  }
+
+  @Published private var image: Result<ProductImage, Error>?
   @Published var isSavingProduct = false
 
   let onCompletion: (Bool) -> Void
@@ -42,11 +72,20 @@ final class ProductDetailsViewModel: ObservableObject {
   func loadProductIfNeeded() async {
     guard let productId else { return }
 
-    switch await getProductUseCase.execute(input: productId) {
-    case .success(let product):
+    do {
+      let product = try await getProductUseCase.execute(input: productId).value
       name = product.name
       price = product.price
-    case .failure(let error):
+
+      if let image = product.image,
+        let signedPath = try? await Dependencies.supabase.storage.from(id: "product-images")
+          .createSignedURL(path: image, expiresIn: 3600).signedURL
+      {
+
+        imageURL = Dependencies.supabase.storage.configuration.url.appendingPathComponent(
+          signedPath.path)
+      }
+    } catch {
       dump(error)
     }
   }
@@ -55,35 +94,74 @@ final class ProductDetailsViewModel: ObservableObject {
     isSavingProduct = true
     defer { isSavingProduct = false }
 
-    let result: Result<Void, Error>
-
-    if let productId {
-      logger.info("Will update product: \(productId)")
-      result = await updateProductUseCase.execute(
-        input: UpdateProductParams(
-          id: productId,
-          name: name,
-          price: price,
-          imageName: nil,
-          imageFile: nil
-        )
-      )
-    } else {
-      logger.info("Will add product")
-      result = await createProductUseCase.execute(
-        input: CreateProductParams(name: name, price: price, image: nil)
+    let imageUploadParams = image?.value.map { image in
+      ImageUploadParams(
+        fileName: UUID().uuidString,
+        fileExtension: imageSelection?.supportedContentTypes.first?.preferredFilenameExtension,
+        mimeType: imageSelection?.supportedContentTypes.first?.preferredMIMEType,
+        data: image.data
       )
     }
 
-    switch result {
-    case .failure(let error):
-      logger.error("Save failed: \(error)")
-      onCompletion(false)
-      return false
-    case .success:
+    do {
+      if let productId {
+        logger.info("Will update product: \(productId)")
+
+        try await updateProductUseCase.execute(
+          input: UpdateProductParams(
+            id: productId,
+            name: name,
+            price: price,
+            image: imageUploadParams
+          )
+        ).value
+      } else {
+        logger.info("Will add product")
+        try await createProductUseCase.execute(
+          input: CreateProductParams(
+            name: name,
+            price: price,
+            image: imageUploadParams
+          )
+        ).value
+      }
+
       logger.error("Save succeeded")
       onCompletion(true)
       return true
+    } catch {
+      logger.error("Save failed: \(error)")
+      onCompletion(false)
+      return false
     }
   }
+
+  private func loadTransferable(from imageSelection: PhotosPickerItem) async {
+    do {
+      let image = try await imageSelection.loadTransferable(type: ProductImage.self)
+      self.image = image.map(Result.success)
+    } catch {
+      self.image = .failure(error)
+    }
+  }
+}
+
+struct ProductImage: Transferable {
+  let image: Image
+  let data: Data
+
+  static var transferRepresentation: some TransferRepresentation {
+    DataRepresentation(importedContentType: .image) { data in
+      guard let uiImage = UIImage(data: data) else {
+        throw TransferError.importFailed
+      }
+
+      let image = Image(uiImage: uiImage)
+      return ProductImage(image: image, data: data)
+    }
+  }
+}
+
+enum TransferError: Error {
+  case importFailed
 }

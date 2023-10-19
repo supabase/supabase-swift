@@ -43,6 +43,8 @@
 		79C592062AE159250088A9C8 /* UpdateProductUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C592052AE159250088A9C8 /* UpdateProductUseCase.swift */; };
 		79C592082AE159390088A9C8 /* GetProductUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C592072AE159390088A9C8 /* GetProductUseCase.swift */; };
 		79C5920A2AE159E20088A9C8 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C592092AE159E20088A9C8 /* Logger.swift */; };
+		79C5920C2AE1B8820088A9C8 /* Result.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C5920B2AE1B8820088A9C8 /* Result.swift */; };
+		79C5920E2AE1C56D0088A9C8 /* ImageUploadUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C5920D2AE1C56D0088A9C8 /* ImageUploadUseCase.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -81,6 +83,8 @@
 		79C592052AE159250088A9C8 /* UpdateProductUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateProductUseCase.swift; sourceTree = "<group>"; };
 		79C592072AE159390088A9C8 /* GetProductUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetProductUseCase.swift; sourceTree = "<group>"; };
 		79C592092AE159E20088A9C8 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
+		79C5920B2AE1B8820088A9C8 /* Result.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Result.swift; sourceTree = "<group>"; };
+		79C5920D2AE1C56D0088A9C8 /* ImageUploadUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageUploadUseCase.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -179,6 +183,7 @@
 				79C591FE2AE1527C0088A9C8 /* Config.swift */,
 				79C592002AE1561D0088A9C8 /* Dependencies.swift */,
 				79C592092AE159E20088A9C8 /* Logger.swift */,
+				79C5920B2AE1B8820088A9C8 /* Result.swift */,
 			);
 			path = ProductSample;
 			sourceTree = "<group>";
@@ -206,6 +211,7 @@
 				79C592032AE159130088A9C8 /* CreateProductUseCase.swift */,
 				79C592052AE159250088A9C8 /* UpdateProductUseCase.swift */,
 				79C592072AE159390088A9C8 /* GetProductUseCase.swift */,
+				79C5920D2AE1C56D0088A9C8 /* ImageUploadUseCase.swift */,
 			);
 			path = UseCases;
 			sourceTree = "<group>";
@@ -346,7 +352,9 @@
 				79C592042AE159130088A9C8 /* CreateProductUseCase.swift in Sources */,
 				79C592012AE1561D0088A9C8 /* Dependencies.swift in Sources */,
 				79C591F22AE127180088A9C8 /* ProductListView.swift in Sources */,
+				79C5920E2AE1C56D0088A9C8 /* ImageUploadUseCase.swift in Sources */,
 				79C591F02AE126120088A9C8 /* ProductListViewModel.swift in Sources */,
+				79C5920C2AE1B8820088A9C8 /* Result.swift in Sources */,
 				79C591FF2AE1527C0088A9C8 /* Config.swift in Sources */,
 				79C5920A2AE159E20088A9C8 /* Logger.swift in Sources */,
 				79C591FB2AE12FDE0088A9C8 /* UseCase.swift in Sources */,

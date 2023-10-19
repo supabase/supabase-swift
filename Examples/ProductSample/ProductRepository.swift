@@ -8,8 +8,14 @@
 import Foundation
 import Supabase
 
+struct InsertProductDto: Encodable {
+  let name: String
+  let price: Double
+  let image: String?
+}
+
 protocol ProductRepository {
-  func createProduct(_ product: CreateProductParams) async throws
+  func createProduct(_ product: InsertProductDto) async throws
   func getProducts() async throws -> [Product]
   func getProduct(id: Product.ID) async throws -> Product
   func deleteProduct(id: Product.ID) async throws
@@ -19,7 +25,7 @@ protocol ProductRepository {
 struct ProductRepositoryImpl: ProductRepository {
   let supabase: SupabaseClient
 
-  func createProduct(_ product: CreateProductParams) async throws {
+  func createProduct(_ product: InsertProductDto) async throws {
     try await supabase.database.from("products").insert(values: product).execute()
   }
 
