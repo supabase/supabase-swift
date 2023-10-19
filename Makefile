@@ -13,7 +13,7 @@ test-library:
 	done;
 
 build-example:
-	for example in "ProductSample"; do \
+	for example in "Examples" "ProductSample"; do \
 		xcodebuild build \
 			-workspace supabase-swift.xcworkspace \
 			-scheme "$$example" \

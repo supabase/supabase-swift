@@ -18,8 +18,15 @@ struct AddProductRoute: Identifiable, Hashable {
 @MainActor
 final class AppViewModel: ObservableObject {
   let productListModel = ProductListViewModel()
+  let authViewModel = AuthViewModel()
+
+  enum AuthState {
+    case authenticated
+    case notAuthenticated
+  }
 
   @Published var addProductRoute: AddProductRoute?
+  @Published var authState: AuthState?
 
   func productDetailViewModel(with productId: String?) -> ProductDetailsViewModel {
     ProductDetailsViewModel(productId: productId) { [weak self] updated in
@@ -34,6 +41,18 @@ struct AppView: View {
   @StateObject var model = AppViewModel()
 
   var body: some View {
+    switch model.authState {
+    case .authenticated:
+      authenticatedView
+    case .notAuthenticated:
+      notAuthenticatedView
+    case .none:
+      ProgressView()
+    }
+
+  }
+
+  var authenticatedView: some View {
     NavigationStack {
       ProductListView()
         .toolbar {
@@ -54,6 +73,10 @@ struct AppView: View {
         ProductDetailsView(model: model.productDetailViewModel(with: nil))
       }
     }
+  }
+
+  var notAuthenticatedView: some View {
+    AuthView(model: model.authViewModel)
   }
 }
 

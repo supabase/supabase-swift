@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		79018ACF2AE1D6CF006EA669 /* DeleteProductUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018ACE2AE1D6CF006EA669 /* DeleteProductUseCase.swift */; };
 		79018AD12AE1D775006EA669 /* GetProductsUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018AD02AE1D775006EA669 /* GetProductsUseCase.swift */; };
+		79018ADB2AE1DAF2006EA669 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018ADA2AE1DAF2006EA669 /* AuthView.swift */; };
+		79018ADE2AE1DB03006EA669 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018ADD2AE1DB03006EA669 /* AuthViewModel.swift */; };
 		793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895C92954ABFF0044F2B8 /* ExamplesApp.swift */; };
 		793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895CB2954ABFF0044F2B8 /* RootView.swift */; };
 		793895CE2954AC000044F2B8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 793895CD2954AC000044F2B8 /* Assets.xcassets */; };
@@ -51,6 +53,8 @@
 /* Begin PBXFileReference section */
 		79018ACE2AE1D6CF006EA669 /* DeleteProductUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteProductUseCase.swift; sourceTree = "<group>"; };
 		79018AD02AE1D775006EA669 /* GetProductsUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetProductsUseCase.swift; sourceTree = "<group>"; };
+		79018ADA2AE1DAF2006EA669 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		79018ADD2AE1DB03006EA669 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		793895C62954ABFF0044F2B8 /* Examples.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Examples.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		793895C92954ABFF0044F2B8 /* ExamplesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExamplesApp.swift; sourceTree = "<group>"; };
 		793895CB2954ABFF0044F2B8 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -140,6 +144,7 @@
 		79018AD52AE1DA31006EA669 /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				79018ADC2AE1DAF6006EA669 /* Auth */,
 				79018AD42AE1DA25006EA669 /* ProductDetails */,
 				79018AD32AE1DA1B006EA669 /* ProductList */,
 			);
@@ -174,6 +179,15 @@
 				79C591FC2AE152590088A9C8 /* Config.plist */,
 			);
 			path = SupportFiles;
+			sourceTree = "<group>";
+		};
+		79018ADC2AE1DAF6006EA669 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				79018ADA2AE1DAF2006EA669 /* AuthView.swift */,
+				79018ADD2AE1DB03006EA669 /* AuthViewModel.swift */,
+			);
+			path = Auth;
 			sourceTree = "<group>";
 		};
 		793895BD2954ABFF0044F2B8 = {
@@ -427,9 +441,11 @@
 				79018ACF2AE1D6CF006EA669 /* DeleteProductUseCase.swift in Sources */,
 				79C5920A2AE159E20088A9C8 /* Logger.swift in Sources */,
 				79C591FB2AE12FDE0088A9C8 /* UseCase.swift in Sources */,
+				79018ADB2AE1DAF2006EA669 /* AuthView.swift in Sources */,
 				79C592062AE159250088A9C8 /* UpdateProductUseCase.swift in Sources */,
 				79C591EA2AE089230088A9C8 /* Product.swift in Sources */,
 				79C592082AE159390088A9C8 /* GetProductUseCase.swift in Sources */,
+				79018ADE2AE1DB03006EA669 /* AuthViewModel.swift in Sources */,
 				79C591EE2AE1258B0088A9C8 /* AuthenticationRepository.swift in Sources */,
 				79C591EC2AE089510088A9C8 /* ProductRepository.swift in Sources */,
 				79C591F82AE12B850088A9C8 /* ProductDetailsView.swift in Sources */,
