@@ -24,24 +24,53 @@ public class StorageFileApi: StorageApi {
     super.init(configuration: configuration)
   }
 
+  struct UploadResponse: Decodable {
+    let Key: String
+  }
+
+  func uploadOrUpdate(
+    method: String,
+    path: String,
+    file: Data,
+    fileOptions: FileOptions
+  ) async throws -> String {
+    let contentType = fileOptions.contentType
+    var headers = [
+      "x-upsert": "\(fileOptions.upsert)"
+    ]
+
+    headers["duplex"] = fileOptions.duplex
+
+    let fileName = fileName(fromPath: path)
+
+    let form = FormData()
+    form.append(
+      file: File(name: fileName, data: file, fileName: fileName, contentType: contentType)
+    )
+
+    return try await execute(
+      Request(
+        path: "/object/\(bucketId)/\(path)",
+        method: method,
+        formData: form,
+        options: fileOptions,
+        headers: headers
+      )
+    )
+    .decoded(as: UploadResponse.self, decoder: configuration.decoder).Key
+  }
+
   /// Uploads a file to an existing bucket.
   /// - Parameters:
   ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`. The
   /// bucket must already exist before attempting to upload.
   ///   - file: The File object to be stored in the bucket.
   ///   - fileOptions: HTTP headers. For example `cacheControl`
-  public func upload(path: String, file: File, fileOptions: FileOptions?) async throws {
-    let formData = FormData()
-    formData.append(file: file)
-
-    try await execute(
-      Request(
-        path: "/object/\(bucketId)/\(path)",
-        method: "POST",
-        formData: formData,
-        options: fileOptions
-      )
-    )
+  @discardableResult
+  public func upload(path: String, file: File, fileOptions: FileOptions = FileOptions())
+    async throws -> String
+  {
+    try await uploadOrUpdate(method: "POST", path: path, file: file.data, fileOptions: fileOptions)
   }
 
   /// Replaces an existing file at the specified path with a new one.
@@ -50,18 +79,10 @@ public class StorageFileApi: StorageApi {
   /// already exist before attempting to upload.
   ///   - file: The file object to be stored in the bucket.
   ///   - fileOptions: HTTP headers. For example `cacheControl`
-  public func update(path: String, file: File, fileOptions: FileOptions?) async throws {
-    let formData = FormData()
-    formData.append(file: file)
-
-    try await execute(
-      Request(
-        path: "/object/\(bucketId)/\(path)",
-        method: "PUT",
-        formData: formData,
-        options: fileOptions
-      )
-    )
+  public func update(path: String, file: File, fileOptions: FileOptions = FileOptions())
+    async throws -> String
+  {
+    try await uploadOrUpdate(method: "PUT", path: path, file: file.data, fileOptions: fileOptions)
   }
 
   /// Moves an existing file, optionally renaming it at the same time.
