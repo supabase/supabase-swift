@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+@MainActor
 final class ProductDetailsViewModel: ObservableObject {
   private let productId: Product.ID?
 
@@ -17,15 +18,14 @@ final class ProductDetailsViewModel: ObservableObject {
   @Published var name: String = ""
   @Published var price: Double = 0
 
+  @Published var isSavingProduct = false
+
   let onCompletion: (Bool) -> Void
 
   init(
-    updateProductUseCase: any UpdateProductUseCase = UpdateProductUseCaseImpl(
-      repository: ProductRepositoryImpl(supabase: supabase), storage: supabase.storage),
-    createProductUseCase: any CreateProductUseCase = CreateProductUseCaseImpl(
-      repository: ProductRepositoryImpl(supabase: supabase)),
-    getProductUseCase: any GetProductUseCase = GetProductUseCaseImpl(
-      repository: ProductRepositoryImpl(supabase: supabase)),
+    updateProductUseCase: any UpdateProductUseCase = Dependencies.updateProductUseCase,
+    createProductUseCase: any CreateProductUseCase = Dependencies.createProductUseCase,
+    getProductUseCase: any GetProductUseCase = Dependencies.getProductUseCase,
     productId: Product.ID?,
     onCompletion: @escaping (Bool) -> Void
   ) {
@@ -48,7 +48,10 @@ final class ProductDetailsViewModel: ObservableObject {
     }
   }
 
-  func saveButtonTapped() async {
+  func saveButtonTapped() async -> Bool {
+    isSavingProduct = true
+    defer { isSavingProduct = false }
+
     let result: Result<Void, Error>
 
     if let productId {
@@ -71,8 +74,10 @@ final class ProductDetailsViewModel: ObservableObject {
     case .failure(let error):
       dump(error)
       onCompletion(false)
+      return false
     case .success:
       onCompletion(true)
+      return true
     }
   }
 }

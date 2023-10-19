@@ -9,13 +9,13 @@ import SwiftUI
 
 @MainActor
 final class ProductListViewModel: ObservableObject {
-  let productRepository: ProductRepository
+  private let productRepository: ProductRepository
 
   @Published var products: [Product] = []
   @Published var isLoading = false
   @Published var error: Error?
 
-  init(productRepository: ProductRepository = ProductRepositoryImpl(supabase: supabase)) {
+  init(productRepository: ProductRepository = Dependencies.productRepository) {
     self.productRepository = productRepository
   }
 

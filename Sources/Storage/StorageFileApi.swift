@@ -209,3 +209,7 @@ public class StorageFileApi: StorageApi {
     return generatedUrl
   }
 }
+
+private func fileName(fromPath path: String) -> String {
+  (path as NSString).lastPathComponent
+}

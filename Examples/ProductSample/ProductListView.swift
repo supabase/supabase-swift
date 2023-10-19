@@ -25,7 +25,7 @@ struct ProductListView: View {
 
       ForEach(model.products) { product in
         NavigationLink(value: ProductDetailRoute(productId: product.id)) {
-          Text(product.name)
+          LabeledContent(product.name, value: product.price.formatted(.currency(code: "USD")))
         }
       }
     }

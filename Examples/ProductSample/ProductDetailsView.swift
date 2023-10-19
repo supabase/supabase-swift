@@ -10,6 +10,8 @@ import SwiftUI
 struct ProductDetailsView: View {
   @ObservedObject var model: ProductDetailsViewModel
 
+  @Environment(\.dismiss) private var dismiss
+
   var body: some View {
     Form {
       Section {
@@ -17,10 +19,19 @@ struct ProductDetailsView: View {
         TextField("Product Price", value: $model.price, formatter: NumberFormatter())
       }
     }
+    .task { await model.loadProductIfNeeded() }
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
-        Button("Save") {
-          Task { await model.saveButtonTapped() }
+        if model.isSavingProduct {
+          ProgressView()
+        } else {
+          Button("Save") {
+            Task {
+              if await model.saveButtonTapped() {
+                dismiss()
+              }
+            }
+          }
         }
       }
     }

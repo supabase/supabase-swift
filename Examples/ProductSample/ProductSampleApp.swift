@@ -16,8 +16,3 @@ struct ProductSampleApp: App {
     }
   }
 }
-
-let supabase = SupabaseClient(
-  supabaseURL: URL(string: Config.SUPABASE_URL)!,
-  supabaseKey: Config.SUPABASE_ANON_KEY
-)
