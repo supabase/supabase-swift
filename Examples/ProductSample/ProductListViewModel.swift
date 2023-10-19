@@ -35,13 +35,21 @@ final class ProductListViewModel: ObservableObject {
     }
   }
 
-  func removeItem(product: Product) async {
+  func didSwipeToDelete(_ indexes: IndexSet) async {
+    for index in indexes {
+      let product = products[index]
+      await removeItem(product: product)
+    }
+  }
+
+  private func removeItem(product: Product) async {
     self.products.removeAll { $0.id == product.id }
 
     do {
       try await productRepository.deleteProduct(id: product.id)
       self.error = nil
     } catch {
+      logger.error("Failed to remove product: \(product.id) error: \(error)")
       self.error = error
     }
 

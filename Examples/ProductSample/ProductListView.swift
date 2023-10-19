@@ -28,6 +28,11 @@ struct ProductListView: View {
           LabeledContent(product.name, value: product.price.formatted(.currency(code: "USD")))
         }
       }
+      .onDelete { indexSet in
+        Task {
+          await model.didSwipeToDelete(indexSet)
+        }
+      }
     }
     .listStyle(.plain)
     .overlay {

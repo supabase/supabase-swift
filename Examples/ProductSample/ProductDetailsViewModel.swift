@@ -78,7 +78,7 @@ final class ProductDetailsViewModel: ObservableObject {
         imageSource = ProductImage(data: data).map(ImageSource.remote)
       }
     } catch {
-      dump(error)
+      logger.error("Error loading product: \(error)")
     }
   }
 
