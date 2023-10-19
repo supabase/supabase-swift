@@ -164,6 +164,7 @@ public class StorageFileApi: StorageApi {
   /// `folder/image.png`.
   @discardableResult
   public func download(path: String) async throws -> Data {
+    // TODO: implement missing functionality from https://github.com/supabase/storage-js/blob/main/src/packages/StorageFileApi.ts#L466
     try await execute(
       Request(path: "/object/\(bucketId)/\(path)", method: "GET")
     )

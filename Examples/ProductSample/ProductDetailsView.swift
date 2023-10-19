@@ -17,13 +17,10 @@ struct ProductDetailsView: View {
     Form {
       Section {
         Group {
-          switch model.imageSource {
-          case .remote(let url):
-            AsyncImage(url: url)
-          case .local(let productImage):
+          if let productImage = model.imageSource?.productImage {
             productImage.image
               .resizable()
-          case .none:
+          } else {
             Color.clear
           }
         }

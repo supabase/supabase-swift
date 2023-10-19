@@ -58,6 +58,11 @@ struct ProductRepositoryImpl: ProductRepository {
       params["image"] = .string(image)
     }
 
+    if params.isEmpty {
+      // nothing to update, just return.
+      return
+    }
+
     try await supabase.database.from("products")
       .update(values: params)
       .eq(column: "id", value: id)

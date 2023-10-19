@@ -18,26 +18,20 @@ final class ProductDetailsViewModel: ObservableObject {
   private let updateProductUseCase: any UpdateProductUseCase
   private let createProductUseCase: any CreateProductUseCase
   private let getProductUseCase: any GetProductUseCase
+  private let productImageStorage: ProductImageStorageRepository
 
   @Published var name: String = ""
   @Published var price: Double = 0
-  @Published private var imageURL: URL?
 
   enum ImageSource {
-    case remote(URL)
+    case remote(ProductImage)
     case local(ProductImage)
-  }
 
-  var imageSource: ImageSource? {
-    if case let .success(image) = self.image {
-      return .local(image)
+    var productImage: ProductImage {
+      switch self {
+      case .remote(let image), .local(let image): image
+      }
     }
-
-    if let imageURL {
-      return .remote(imageURL)
-    }
-
-    return nil
   }
 
   @Published var imageSelection: PhotosPickerItem? {
@@ -50,7 +44,7 @@ final class ProductDetailsViewModel: ObservableObject {
     }
   }
 
-  @Published private var image: Result<ProductImage, Error>?
+  @Published var imageSource: ImageSource?
   @Published var isSavingProduct = false
 
   let onCompletion: (Bool) -> Void
@@ -59,12 +53,14 @@ final class ProductDetailsViewModel: ObservableObject {
     updateProductUseCase: any UpdateProductUseCase = Dependencies.updateProductUseCase,
     createProductUseCase: any CreateProductUseCase = Dependencies.createProductUseCase,
     getProductUseCase: any GetProductUseCase = Dependencies.getProductUseCase,
+    productImageStorage: ProductImageStorageRepository = Dependencies.productImageStorageRepository,
     productId: Product.ID?,
     onCompletion: @escaping (Bool) -> Void
   ) {
     self.updateProductUseCase = updateProductUseCase
     self.createProductUseCase = createProductUseCase
     self.getProductUseCase = getProductUseCase
+    self.productImageStorage = productImageStorage
     self.productId = productId
     self.onCompletion = onCompletion
   }
@@ -77,13 +73,9 @@ final class ProductDetailsViewModel: ObservableObject {
       name = product.name
       price = product.price
 
-      if let image = product.image,
-        let signedPath = try? await Dependencies.supabase.storage.from(id: "product-images")
-          .createSignedURL(path: image, expiresIn: 3600).signedURL
-      {
-
-        imageURL = Dependencies.supabase.storage.configuration.url.appendingPathComponent(
-          signedPath.path)
+      if let image = product.image {
+        let data = try await productImageStorage.downloadImage(image)
+        imageSource = ProductImage(data: data).map(ImageSource.remote)
       }
     } catch {
       dump(error)
@@ -94,14 +86,17 @@ final class ProductDetailsViewModel: ObservableObject {
     isSavingProduct = true
     defer { isSavingProduct = false }
 
-    let imageUploadParams = image?.value.map { image in
-      ImageUploadParams(
-        fileName: UUID().uuidString,
-        fileExtension: imageSelection?.supportedContentTypes.first?.preferredFilenameExtension,
-        mimeType: imageSelection?.supportedContentTypes.first?.preferredMIMEType,
-        data: image.data
-      )
-    }
+    let imageUploadParams =
+      if case let .local(image) = imageSource {
+        ImageUploadParams(
+          fileName: UUID().uuidString,
+          fileExtension: imageSelection?.supportedContentTypes.first?.preferredFilenameExtension,
+          mimeType: imageSelection?.supportedContentTypes.first?.preferredMIMEType,
+          data: image.data
+        )
+      } else {
+        ImageUploadParams?.none
+      }
 
     do {
       if let productId {
@@ -137,11 +132,8 @@ final class ProductDetailsViewModel: ObservableObject {
   }
 
   private func loadTransferable(from imageSelection: PhotosPickerItem) async {
-    do {
-      let image = try await imageSelection.loadTransferable(type: ProductImage.self)
-      self.image = image.map(Result.success)
-    } catch {
-      self.image = .failure(error)
+    if let image = try? await imageSelection.loadTransferable(type: ProductImage.self) {
+      self.imageSource = .local(image)
     }
   }
 }
@@ -152,13 +144,23 @@ struct ProductImage: Transferable {
 
   static var transferRepresentation: some TransferRepresentation {
     DataRepresentation(importedContentType: .image) { data in
-      guard let uiImage = UIImage(data: data) else {
+      guard let image = ProductImage(data: data) else {
         throw TransferError.importFailed
       }
 
-      let image = Image(uiImage: uiImage)
-      return ProductImage(image: image, data: data)
+      return image
     }
+  }
+}
+
+extension ProductImage {
+  init?(data: Data) {
+    guard let uiImage = UIImage(data: data) else {
+      return nil
+    }
+
+    let image = Image(uiImage: uiImage)
+    self.init(image: image, data: data)
   }
 }
 

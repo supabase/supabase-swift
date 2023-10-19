@@ -44,7 +44,7 @@
 		79C592082AE159390088A9C8 /* GetProductUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C592072AE159390088A9C8 /* GetProductUseCase.swift */; };
 		79C5920A2AE159E20088A9C8 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C592092AE159E20088A9C8 /* Logger.swift */; };
 		79C5920C2AE1B8820088A9C8 /* Result.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C5920B2AE1B8820088A9C8 /* Result.swift */; };
-		79C5920E2AE1C56D0088A9C8 /* ImageUploadUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C5920D2AE1C56D0088A9C8 /* ImageUploadUseCase.swift */; };
+		79C592112AE1CD040088A9C8 /* ProductImageStorageRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C592102AE1CD040088A9C8 /* ProductImageStorageRepository.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -84,7 +84,7 @@
 		79C592072AE159390088A9C8 /* GetProductUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetProductUseCase.swift; sourceTree = "<group>"; };
 		79C592092AE159E20088A9C8 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		79C5920B2AE1B8820088A9C8 /* Result.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Result.swift; sourceTree = "<group>"; };
-		79C5920D2AE1C56D0088A9C8 /* ImageUploadUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageUploadUseCase.swift; sourceTree = "<group>"; };
+		79C592102AE1CD040088A9C8 /* ProductImageStorageRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductImageStorageRepository.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -166,14 +166,12 @@
 		79C591DA2AE0880F0088A9C8 /* ProductSample */ = {
 			isa = PBXGroup;
 			children = (
+				79C5920F2AE1CCE80088A9C8 /* Data */,
 				79C591F92AE12FD10088A9C8 /* Domain */,
 				79C591DB2AE0880F0088A9C8 /* ProductSampleApp.swift */,
 				79C591DD2AE0880F0088A9C8 /* AppView.swift */,
 				79C591DF2AE088110088A9C8 /* Assets.xcassets */,
 				79C591E12AE088110088A9C8 /* Preview Content */,
-				79C591E92AE089230088A9C8 /* Product.swift */,
-				79C591EB2AE089510088A9C8 /* ProductRepository.swift */,
-				79C591ED2AE1258B0088A9C8 /* AuthenticationRepository.swift */,
 				79C591EF2AE126120088A9C8 /* ProductListViewModel.swift */,
 				79C591F12AE127180088A9C8 /* ProductListView.swift */,
 				79C591F32AE12A0D0088A9C8 /* AddProductView.swift */,
@@ -199,6 +197,7 @@
 		79C591F92AE12FD10088A9C8 /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				79C591E92AE089230088A9C8 /* Product.swift */,
 				79C592022AE159070088A9C8 /* UseCases */,
 			);
 			path = Domain;
@@ -211,9 +210,18 @@
 				79C592032AE159130088A9C8 /* CreateProductUseCase.swift */,
 				79C592052AE159250088A9C8 /* UpdateProductUseCase.swift */,
 				79C592072AE159390088A9C8 /* GetProductUseCase.swift */,
-				79C5920D2AE1C56D0088A9C8 /* ImageUploadUseCase.swift */,
 			);
 			path = UseCases;
+			sourceTree = "<group>";
+		};
+		79C5920F2AE1CCE80088A9C8 /* Data */ = {
+			isa = PBXGroup;
+			children = (
+				79C591EB2AE089510088A9C8 /* ProductRepository.swift */,
+				79C591ED2AE1258B0088A9C8 /* AuthenticationRepository.swift */,
+				79C592102AE1CD040088A9C8 /* ProductImageStorageRepository.swift */,
+			);
+			path = Data;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -352,7 +360,7 @@
 				79C592042AE159130088A9C8 /* CreateProductUseCase.swift in Sources */,
 				79C592012AE1561D0088A9C8 /* Dependencies.swift in Sources */,
 				79C591F22AE127180088A9C8 /* ProductListView.swift in Sources */,
-				79C5920E2AE1C56D0088A9C8 /* ImageUploadUseCase.swift in Sources */,
+				79C592112AE1CD040088A9C8 /* ProductImageStorageRepository.swift in Sources */,
 				79C591F02AE126120088A9C8 /* ProductListViewModel.swift in Sources */,
 				79C5920C2AE1B8820088A9C8 /* Result.swift in Sources */,
 				79C591FF2AE1527C0088A9C8 /* Config.swift in Sources */,

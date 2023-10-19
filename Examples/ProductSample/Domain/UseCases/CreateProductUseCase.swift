@@ -17,18 +17,18 @@ struct CreateProductParams {
 protocol CreateProductUseCase: UseCase<CreateProductParams, Task<Void, Error>> {}
 
 struct CreateProductUseCaseImpl: CreateProductUseCase {
-  let repository: ProductRepository
-  let imageUploadUseCase: any ImageUploadUseCase
+  let productRepository: ProductRepository
+  let productImageStorageRepository: ProductImageStorageRepository
 
   func execute(input: CreateProductParams) -> Task<(), Error> {
     Task {
       var imageFilePath: String?
 
       if let image = input.image {
-        imageFilePath = try await imageUploadUseCase.execute(input: image).value
+        imageFilePath = try await productImageStorageRepository.uploadImage(image)
       }
 
-      try await repository.createProduct(
+      try await productRepository.createProduct(
         InsertProductDto(name: input.name, price: input.price, image: imageFilePath)
       )
     }

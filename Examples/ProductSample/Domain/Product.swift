@@ -11,5 +11,9 @@ struct Product: Identifiable, Decodable {
   let id: String
   let name: String
   let price: Double
-  let image: String?
+  let image: ImageKey?
+}
+
+struct ImageKey: RawRepresentable, Decodable {
+  var rawValue: String
 }
