@@ -13,9 +13,12 @@ protocol CreateProductUseCase: UseCase<CreateProductParams, Task<Void, Error>> {
 struct CreateProductUseCaseImpl: CreateProductUseCase {
   let productRepository: ProductRepository
   let productImageStorageRepository: ProductImageStorageRepository
+  let authenticationRepository: AuthenticationRepository
 
   func execute(input: CreateProductParams) -> Task<(), Error> {
     Task {
+      let ownerID = try await authenticationRepository.currentUserID
+
       var imageFilePath: String?
 
       if let image = input.image {
@@ -23,7 +26,8 @@ struct CreateProductUseCaseImpl: CreateProductUseCase {
       }
 
       try await productRepository.createProduct(
-        InsertProductDto(name: input.name, price: input.price, image: imageFilePath)
+        InsertProductDto(
+          name: input.name, price: input.price, image: imageFilePath, ownerID: ownerID)
       )
     }
   }

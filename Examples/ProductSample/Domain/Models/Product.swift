@@ -7,6 +7,10 @@
 
 import Foundation
 
+import struct GoTrue.User
+
+typealias UserID = User.ID
+
 struct Product: Identifiable, Decodable {
   let id: String
   let name: String

@@ -11,6 +11,8 @@ import Supabase
 protocol AuthenticationRepository {
   var authStateListener: AsyncStream<AuthenticationState> { get }
 
+  var currentUserID: UUID { get async throws }
+
   func signIn(email: String, password: String) async throws
   func signUp(email: String, password: String) async throws -> SignUpResult
   func signInWithApple() async throws
@@ -45,6 +47,12 @@ struct AuthenticationRepositoryImpl: AuthenticationRepository {
   }
 
   let authStateListener: AsyncStream<AuthenticationState>
+
+  var currentUserID: UUID {
+    get async throws {
+      try await client.session.user.id
+    }
+  }
 
   func signIn(email: String, password: String) async throws {
     try await client.signIn(email: email, password: password)

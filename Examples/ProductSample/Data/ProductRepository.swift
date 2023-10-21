@@ -12,6 +12,14 @@ struct InsertProductDto: Encodable {
   let name: String
   let price: Double
   let image: String?
+  let ownerID: UserID
+
+  enum CodingKeys: String, CodingKey {
+    case name
+    case price
+    case image
+    case ownerID = "owner_id"
+  }
 }
 
 protocol ProductRepository {

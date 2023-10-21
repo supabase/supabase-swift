@@ -32,7 +32,8 @@ enum Dependencies {
 
   static let createProductUseCase: any CreateProductUseCase = CreateProductUseCaseImpl(
     productRepository: productRepository,
-    productImageStorageRepository: productImageStorageRepository
+    productImageStorageRepository: productImageStorageRepository,
+    authenticationRepository: authenticationRepository
   )
 
   static let getProductUseCase: any GetProductUseCase = GetProductUseCaseImpl(
