@@ -15,16 +15,22 @@ struct StoredSession: Codable {
   }
 }
 
-actor SessionManager {
-  typealias SessionRefresher = @Sendable (_ refreshToken: String) async throws -> Session
+protocol SessionRefresher: AnyObject {
+  func refreshSession(refreshToken: String) async throws -> Session
+}
 
+actor SessionManager {
   private var task: Task<Session, Error>?
   private let localStorage: GoTrueLocalStorage
-  private let sessionRefresher: SessionRefresher
 
-  init(localStorage: GoTrueLocalStorage, sessionRefresher: @escaping SessionRefresher) {
+  private weak var sessionRefresher: SessionRefresher?
+
+  init(localStorage: GoTrueLocalStorage) {
     self.localStorage = localStorage
-    self.sessionRefresher = sessionRefresher
+  }
+
+  func setSessionRefresher(_ refresher: SessionRefresher?) {
+    sessionRefresher = refresher
   }
 
   func session() async throws -> Session {
@@ -41,11 +47,16 @@ actor SessionManager {
     }
 
     task = Task {
-      defer { self.task = nil }
+      defer { task = nil }
 
-      let session = try await sessionRefresher(currentSession.session.refreshToken)
-      try update(session)
-      return session
+      if let session = try await sessionRefresher?.refreshSession(
+        refreshToken: currentSession.session.refreshToken)
+      {
+        try update(session)
+        return session
+      }
+
+      throw GoTrueError.sessionNotFound
     }
 
     return try await task!.value

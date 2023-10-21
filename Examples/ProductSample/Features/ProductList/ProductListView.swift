@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ProductListView: View {
-  @StateObject var model = ProductListViewModel()
+  @ObservedObject var model: ProductListViewModel
 
   var body: some View {
     List {
@@ -50,5 +50,5 @@ struct ProductListView: View {
 }
 
 #Preview {
-  ProductListView()
+  ProductListView(model: ProductListViewModel())
 }

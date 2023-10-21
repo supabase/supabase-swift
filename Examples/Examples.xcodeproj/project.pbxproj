@@ -11,6 +11,7 @@
 		79018AD12AE1D775006EA669 /* GetProductsUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018AD02AE1D775006EA669 /* GetProductsUseCase.swift */; };
 		79018ADB2AE1DAF2006EA669 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018ADA2AE1DAF2006EA669 /* AuthView.swift */; };
 		79018ADE2AE1DB03006EA669 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018ADD2AE1DB03006EA669 /* AuthViewModel.swift */; };
+		79018AE02AE309EE006EA669 /* SignInUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018ADF2AE309EE006EA669 /* SignInUseCase.swift */; };
 		793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895C92954ABFF0044F2B8 /* ExamplesApp.swift */; };
 		793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895CB2954ABFF0044F2B8 /* RootView.swift */; };
 		793895CE2954AC000044F2B8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 793895CD2954AC000044F2B8 /* Assets.xcassets */; };
@@ -55,6 +56,8 @@
 		79018AD02AE1D775006EA669 /* GetProductsUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetProductsUseCase.swift; sourceTree = "<group>"; };
 		79018ADA2AE1DAF2006EA669 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		79018ADD2AE1DB03006EA669 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
+		79018ADF2AE309EE006EA669 /* SignInUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInUseCase.swift; sourceTree = "<group>"; };
+		79018AE12AE3D0E3006EA669 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		793895C62954ABFF0044F2B8 /* Examples.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Examples.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		793895C92954ABFF0044F2B8 /* ExamplesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExamplesApp.swift; sourceTree = "<group>"; };
 		793895CB2954ABFF0044F2B8 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -247,6 +250,7 @@
 		79C591DA2AE0880F0088A9C8 /* ProductSample */ = {
 			isa = PBXGroup;
 			children = (
+				79018AE12AE3D0E3006EA669 /* Info.plist */,
 				79018AD62AE1DA4C006EA669 /* Application */,
 				79C5920F2AE1CCE80088A9C8 /* Data */,
 				79C591F92AE12FD10088A9C8 /* Domain */,
@@ -283,6 +287,7 @@
 				79C592072AE159390088A9C8 /* GetProductUseCase.swift */,
 				79018ACE2AE1D6CF006EA669 /* DeleteProductUseCase.swift */,
 				79018AD02AE1D775006EA669 /* GetProductsUseCase.swift */,
+				79018ADF2AE309EE006EA669 /* SignInUseCase.swift */,
 			);
 			path = UseCases;
 			sourceTree = "<group>";
@@ -436,6 +441,7 @@
 				79C591F22AE127180088A9C8 /* ProductListView.swift in Sources */,
 				79C592112AE1CD040088A9C8 /* ProductImageStorageRepository.swift in Sources */,
 				79C591F02AE126120088A9C8 /* ProductListViewModel.swift in Sources */,
+				79018AE02AE309EE006EA669 /* SignInUseCase.swift in Sources */,
 				79C5920C2AE1B8820088A9C8 /* Result.swift in Sources */,
 				79C591FF2AE1527C0088A9C8 /* Config.swift in Sources */,
 				79018ACF2AE1D6CF006EA669 /* DeleteProductUseCase.swift in Sources */,
@@ -659,6 +665,7 @@
 				ENABLE_PREVIEWS = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ProductSample/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -694,6 +701,7 @@
 				ENABLE_PREVIEWS = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ProductSample/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

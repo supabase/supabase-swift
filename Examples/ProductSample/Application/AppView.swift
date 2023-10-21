@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 18/10/23.
 //
 
+import OSLog
 import SwiftUI
 
 struct ProductDetailRoute: Hashable {
@@ -17,23 +18,56 @@ struct AddProductRoute: Identifiable, Hashable {
 
 @MainActor
 final class AppViewModel: ObservableObject {
-  let productListModel = ProductListViewModel()
-  let authViewModel = AuthViewModel()
+  private let logger = Logger.make(category: "AppViewModel")
+  private let authenticationRepository: AuthenticationRepository
 
   enum AuthState {
-    case authenticated
-    case notAuthenticated
+    case authenticated(ProductListViewModel)
+    case notAuthenticated(AuthViewModel)
   }
 
   @Published var addProductRoute: AddProductRoute?
   @Published var authState: AuthState?
 
+  private var authStateListenerTask: Task<Void, Never>?
+
+  init(authenticationRepository: AuthenticationRepository = Dependencies.authenticationRepository) {
+    self.authenticationRepository = authenticationRepository
+
+    authStateListenerTask = Task {
+      for await state in authenticationRepository.authStateListener {
+        logger.debug("auth state changed: \(String(describing: state))")
+
+        if Task.isCancelled {
+          logger.debug("auth state task cancelled, returning.")
+          return
+        }
+
+        self.authState =
+          switch state {
+          case .signedIn: .authenticated(.init())
+          case .signedOut: .notAuthenticated(.init())
+          }
+      }
+    }
+  }
+
+  deinit {
+    authStateListenerTask?.cancel()
+  }
+
   func productDetailViewModel(with productId: String?) -> ProductDetailsViewModel {
     ProductDetailsViewModel(productId: productId) { [weak self] updated in
       Task {
-        await self?.productListModel.loadProducts()
+        if case let .authenticated(model) = self?.authState {
+          await model.loadProducts()
+        }
       }
     }
+  }
+
+  func signOutButtonTapped() async {
+    await authenticationRepository.signOut()
   }
 }
 
@@ -42,41 +76,45 @@ struct AppView: View {
 
   var body: some View {
     switch model.authState {
-    case .authenticated:
-      authenticatedView
-    case .notAuthenticated:
-      notAuthenticatedView
+    case .authenticated(let model):
+      authenticatedView(model: model)
+    case .notAuthenticated(let model):
+      notAuthenticatedView(model: model)
     case .none:
       ProgressView()
     }
-
   }
 
-  var authenticatedView: some View {
+  func authenticatedView(model: ProductListViewModel) -> some View {
     NavigationStack {
-      ProductListView()
+      ProductListView(model: model)
         .toolbar {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Sign out") {
+              Task { await self.model.signOutButtonTapped() }
+            }
+          }
           ToolbarItem(placement: .primaryAction) {
             Button {
-              model.addProductRoute = .init()
+              self.model.addProductRoute = .init()
             } label: {
               Label("Add", systemImage: "plus")
             }
           }
         }
         .navigationDestination(for: ProductDetailRoute.self) { route in
-          ProductDetailsView(model: model.productDetailViewModel(with: route.productId))
+          ProductDetailsView(model: self.model.productDetailViewModel(with: route.productId))
         }
     }
-    .sheet(item: $model.addProductRoute) { _ in
+    .sheet(item: self.$model.addProductRoute) { _ in
       NavigationStack {
-        ProductDetailsView(model: model.productDetailViewModel(with: nil))
+        ProductDetailsView(model: self.model.productDetailViewModel(with: nil))
       }
     }
   }
 
-  var notAuthenticatedView: some View {
-    AuthView(model: model.authViewModel)
+  func notAuthenticatedView(model: AuthViewModel) -> some View {
+    AuthView(model: model)
   }
 }
 

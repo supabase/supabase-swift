@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 @_spi(Internal) import _Helpers
 
@@ -7,6 +6,14 @@ public typealias AnyJSON = _Helpers.AnyJSON
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
+
+public final class AuthStateListenerHandle {
+  let handler: (AuthChangeEvent) -> Void
+
+  init(handler: @escaping (AuthChangeEvent) -> Void) {
+    self.handler = handler
+  }
+}
 
 public final class GoTrueClient {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
@@ -45,16 +52,8 @@ public final class GoTrueClient {
   }
 
   private let configuration: Configuration
-  private lazy var sessionManager = SessionManager(
-    localStorage: self.configuration.localStorage,
-    sessionRefresher: { try await self.refreshSession(refreshToken: $0) }
-  )
-
-  private let authEventChangeSubject = PassthroughSubject<AuthChangeEvent, Never>()
-  /// Asynchronous sequence of authentication change events emitted during life of `GoTrueClient`.
-  public var authEventChange: AnyPublisher<AuthChangeEvent, Never> {
-    authEventChangeSubject.shareReplay(1).eraseToAnyPublisher()
-  }
+  private let sessionManager: SessionManager
+  private var initializationTask: Task<Void, Never>?
 
   /// Returns the session, refreshing it if necessary.
   public var session: Session {
@@ -62,6 +61,8 @@ public final class GoTrueClient {
       try await sessionManager.session()
     }
   }
+
+  private var authChangeListeners = LockIsolated([ObjectIdentifier: AuthStateListenerHandle]())
 
   public convenience init(
     url: URL,
@@ -79,21 +80,55 @@ public final class GoTrueClient {
         encoder: encoder,
         decoder: decoder,
         fetch: fetch
-      ))
+      )
+    )
   }
+
 
   public init(configuration: Configuration) {
     var configuration = configuration
     configuration.headers["X-Client-Info"] = "gotrue-swift/\(version)"
     self.configuration = configuration
+    sessionManager = SessionManager(localStorage: configuration.localStorage)
 
-    Task {
+    initializationTask = Task(priority: .userInitiated) { [weak self] in
+      await self?.sessionManager.setSessionRefresher(self)
+
       do {
-        _ = try await sessionManager.session()
-        authEventChangeSubject.send(.signedIn)
+        _ = try await self?.sessionManager.session()
+        self?.emitAuthChangeEvent(.signedIn)
+      } catch is CancellationError {
+        // no-op
       } catch {
-        authEventChangeSubject.send(.signedOut)
+        self?.emitAuthChangeEvent(.signedOut)
       }
+    }
+  }
+
+  deinit {
+    initializationTask?.cancel()
+  }
+  
+  /// Listen for ``AuthChangeEvent`` events.
+  /// - Parameter onChange: Closure to call when a new event is triggered.
+  /// - Returns: A handle that can be used to unsubscribe from changes.
+  public func addAuthStateChangeListener(onChange: @escaping (AuthChangeEvent) -> Void)
+    -> AuthStateListenerHandle
+  {
+    let handle = AuthStateListenerHandle(handler: onChange)
+
+    authChangeListeners.withValue {
+      $0[ObjectIdentifier(handle)] = handle
+    }
+
+    return handle
+  }
+  
+  /// Unsubscribe from changes.
+  /// - Parameter handle: The handle to unsubscribe.
+  public func removeAuthStateChangeListener(_ handle: AuthStateListenerHandle) {
+    authChangeListeners.withValue {
+      $0[ObjectIdentifier(handle)] = nil
     }
   }
 
@@ -166,7 +201,7 @@ public final class GoTrueClient {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      authEventChangeSubject.send(.signedIn)
+      emitAuthChangeEvent(.signedIn)
     }
 
     return response
@@ -226,7 +261,7 @@ public final class GoTrueClient {
 
     if session.user.emailConfirmedAt != nil || session.user.confirmedAt != nil {
       try await sessionManager.update(session)
-      authEventChangeSubject.send(.signedIn)
+      emitAuthChangeEvent(.signedIn)
     }
 
     return session
@@ -335,32 +370,6 @@ public final class GoTrueClient {
     return url
   }
 
-  @discardableResult
-  public func refreshSession(refreshToken: String) async throws -> Session {
-    do {
-      let session = try await execute(
-        .init(
-          path: "/token",
-          method: "POST",
-          query: [URLQueryItem(name: "grant_type", value: "refresh_token")],
-          body: configuration.encoder.encode(UserCredentials(refreshToken: refreshToken))
-        )
-      ).decoded(as: Session.self, decoder: configuration.decoder)
-
-      if session.user.phoneConfirmedAt != nil || session.user.emailConfirmedAt != nil
-        || session
-          .user.confirmedAt != nil
-      {
-        try await sessionManager.update(session)
-        authEventChangeSubject.send(.signedIn)
-      }
-
-      return session
-    } catch {
-      throw error
-    }
-  }
-
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
   public func session(from url: URL, storeSession: Bool = true) async throws -> Session {
@@ -406,10 +415,10 @@ public final class GoTrueClient {
 
     if storeSession {
       try await sessionManager.update(session)
-      authEventChangeSubject.send(.signedIn)
+      emitAuthChangeEvent(.signedIn)
 
       if let type = params.first(where: { $0.name == "type" })?.value, type == "recovery" {
-        authEventChangeSubject.send(.passwordRecovery)
+        emitAuthChangeEvent(.passwordRecovery)
       }
     }
 
@@ -459,13 +468,13 @@ public final class GoTrueClient {
     }
 
     try await sessionManager.update(session)
-    authEventChangeSubject.send(.tokenRefreshed)
+    emitAuthChangeEvent(.tokenRefreshed)
     return session
   }
 
   /// Signs out the current user, if there is a logged in user.
   public func signOut() async throws {
-    defer { authEventChangeSubject.send(.signedOut) }
+    defer { emitAuthChangeEvent(.signedOut) }
 
     let session = try? await sessionManager.session()
     if session != nil {
@@ -541,7 +550,7 @@ public final class GoTrueClient {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      authEventChangeSubject.send(.signedIn)
+      emitAuthChangeEvent(.signedIn)
     }
 
     return response
@@ -556,7 +565,7 @@ public final class GoTrueClient {
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = user
     try await sessionManager.update(session)
-    authEventChangeSubject.send(.userUpdated)
+    emitAuthChangeEvent(.userUpdated)
     return user
   }
 
@@ -595,6 +604,8 @@ public final class GoTrueClient {
 
   @discardableResult
   private func execute(_ request: Request) async throws -> Response {
+    await initializationTask?.value
+
     var request = request
     request.headers.merge(configuration.headers) { r, _ in r }
     let urlRequest = try request.urlRequest(withBaseURL: configuration.url)
@@ -611,4 +622,44 @@ public final class GoTrueClient {
 
     return Response(data: data, response: httpResponse)
   }
+
+  private func emitAuthChangeEvent(_ event: AuthChangeEvent) {
+    let listeners = authChangeListeners.value.values
+    for listener in listeners {
+      listener.handler(event)
+    }
+  }
+}
+
+extension GoTrueClient: SessionRefresher {
+  @discardableResult
+  public func refreshSession(refreshToken: String) async throws -> Session {
+    do {
+      let session = try await execute(
+        .init(
+          path: "/token",
+          method: "POST",
+          query: [URLQueryItem(name: "grant_type", value: "refresh_token")],
+          body: configuration.encoder.encode(UserCredentials(refreshToken: refreshToken))
+        )
+      ).decoded(as: Session.self, decoder: configuration.decoder)
+
+      if session.user.phoneConfirmedAt != nil || session.user.emailConfirmedAt != nil
+        || session
+          .user.confirmedAt != nil
+      {
+        try await sessionManager.update(session)
+        emitAuthChangeEvent(.signedIn)
+      }
+
+      return session
+    } catch {
+      throw error
+    }
+  }
+}
+
+extension GoTrueClient {
+  public static let didChangeAuthStateNotification = Notification.Name(
+    "DID_CHANGE_AUTH_STATE_NOTIFICATION")
 }

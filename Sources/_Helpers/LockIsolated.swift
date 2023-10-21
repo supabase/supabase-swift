@@ -7,16 +7,17 @@
 
 import Foundation
 
-final class LockIsolated<Value>: @unchecked Sendable {
+@_spi(Internal)
+public final class LockIsolated<Value>: @unchecked Sendable {
   private let lock = NSRecursiveLock()
   private var _value: Value
 
-  init(_ value: Value) {
+  public init(_ value: Value) {
     self._value = value
   }
 
   @discardableResult
-  func withValue<T>(_ block: (inout Value) throws -> T) rethrows -> T {
+  public func withValue<T>(_ block: (inout Value) throws -> T) rethrows -> T {
     try lock.sync {
       var value = self._value
       defer { self._value = value }
@@ -24,7 +25,7 @@ final class LockIsolated<Value>: @unchecked Sendable {
     }
   }
 
-  var value: Value {
+  public var value: Value {
     lock.sync { self._value }
   }
 }
