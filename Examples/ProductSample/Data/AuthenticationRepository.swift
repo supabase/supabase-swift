@@ -8,16 +8,6 @@
 import Foundation
 import Supabase
 
-enum AuthenticationState {
-  case signedIn
-  case signedOut
-}
-
-enum SignUpResult {
-  case success
-  case requiresConfirmation
-}
-
 protocol AuthenticationRepository {
   var authStateListener: AsyncStream<AuthenticationState> { get }
 

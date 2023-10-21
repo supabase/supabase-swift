@@ -8,14 +8,6 @@
 import OSLog
 import SwiftUI
 
-struct ProductDetailRoute: Hashable {
-  let productId: String
-}
-
-struct AddProductRoute: Identifiable, Hashable {
-  var id: AnyHashable { self }
-}
-
 @MainActor
 final class AppViewModel: ObservableObject {
   private let logger = Logger.make(category: "AppViewModel")

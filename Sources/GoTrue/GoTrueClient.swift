@@ -84,7 +84,6 @@ public final class GoTrueClient {
     )
   }
 
-
   public init(configuration: Configuration) {
     var configuration = configuration
     configuration.headers["X-Client-Info"] = "gotrue-swift/\(version)"
@@ -108,7 +107,7 @@ public final class GoTrueClient {
   deinit {
     initializationTask?.cancel()
   }
-  
+
   /// Listen for ``AuthChangeEvent`` events.
   /// - Parameter onChange: Closure to call when a new event is triggered.
   /// - Returns: A handle that can be used to unsubscribe from changes.
@@ -123,7 +122,7 @@ public final class GoTrueClient {
 
     return handle
   }
-  
+
   /// Unsubscribe from changes.
   /// - Parameter handle: The handle to unsubscribe.
   public func removeAuthStateChangeListener(_ handle: AuthStateListenerHandle) {

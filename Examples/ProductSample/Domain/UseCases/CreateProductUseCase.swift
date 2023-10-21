@@ -8,12 +8,6 @@
 import Foundation
 import Supabase
 
-struct CreateProductParams {
-  let name: String
-  let price: Double
-  let image: ImageUploadParams?
-}
-
 protocol CreateProductUseCase: UseCase<CreateProductParams, Task<Void, Error>> {}
 
 struct CreateProductUseCaseImpl: CreateProductUseCase {

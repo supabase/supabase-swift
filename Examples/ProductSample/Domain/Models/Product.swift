@@ -17,3 +17,23 @@ struct Product: Identifiable, Decodable {
 struct ImageKey: RawRepresentable, Decodable {
   var rawValue: String
 }
+
+struct CreateProductParams {
+  let name: String
+  let price: Double
+  let image: ImageUploadParams?
+}
+
+struct ImageUploadParams {
+  let fileName: String
+  let fileExtension: String?
+  let mimeType: String?
+  let data: Data
+}
+
+struct UpdateProductParams {
+  var id: String
+  var name: String?
+  var price: Double?
+  var image: ImageUploadParams?
+}

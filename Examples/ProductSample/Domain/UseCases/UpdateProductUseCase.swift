@@ -8,20 +8,6 @@
 import Foundation
 import Supabase
 
-struct ImageUploadParams {
-  let fileName: String
-  let fileExtension: String?
-  let mimeType: String?
-  let data: Data
-}
-
-struct UpdateProductParams {
-  var id: String
-  var name: String?
-  var price: Double?
-  var image: ImageUploadParams?
-}
-
 protocol UpdateProductUseCase: UseCase<UpdateProductParams, Task<Void, Error>> {}
 
 struct UpdateProductUseCaseImpl: UpdateProductUseCase {
