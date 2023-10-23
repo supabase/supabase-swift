@@ -13,10 +13,12 @@ test-library:
 	done;
 
 build-example:
-	xcodebuild build \
-		-workspace supabase-swift.xcworkspace \
-		-scheme Examples \
-		-destination platform="$(PLATFORM_IOS)" || exit 1;
+	for example in "Examples" "ProductSample"; do \
+		xcodebuild build \
+			-workspace supabase-swift.xcworkspace \
+			-scheme "$$example" \
+			-destination platform="$(PLATFORM_IOS)" || exit 1; \
+	done;
 
 format:
 	@swift format -i -r .

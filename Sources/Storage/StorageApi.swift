@@ -6,7 +6,7 @@ import Foundation
 #endif
 
 public class StorageApi {
-  var configuration: StorageClientConfiguration
+  public let configuration: StorageClientConfiguration
 
   public init(configuration: StorageClientConfiguration) {
     self.configuration = configuration
@@ -33,9 +33,17 @@ public class StorageApi {
 }
 
 extension Request {
-  init(path: String, method: String, formData: FormData, options: FileOptions?) {
-    var headers = ["Content-Type": formData.contentType]
-    headers["Cache-Control"] = options?.cacheControl
+  init(
+    path: String, method: String, formData: FormData, options: FileOptions,
+    headers: [String: String] = [:]
+  ) {
+    var headers = headers
+    if headers["Content-Type"] == nil {
+      headers["Content-Type"] = formData.contentType
+    }
+    if headers["Cache-Control"] == nil {
+      headers["Cache-Control"] = "max-age=\(options.cacheControl)"
+    }
     self.init(
       path: path,
       method: method,

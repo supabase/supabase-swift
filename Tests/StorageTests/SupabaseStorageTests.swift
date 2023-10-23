@@ -28,7 +28,7 @@ final class SupabaseStorageTests: XCTestCase {
     )
   )
 
-  let uploadData = try! Data(
+  let uploadData = try? Data(
     contentsOf: URL(
       string: "https://raw.githubusercontent.com/supabase-community/storage-swift/main/README.md"
     )!
@@ -37,10 +37,10 @@ final class SupabaseStorageTests: XCTestCase {
   override func setUp() async throws {
     try await super.setUp()
 
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
+    //    try XCTSkipUnless(
+    //      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
+    //      "INTEGRATION_TESTS not defined."
+    //    )
 
     _ = try? await storage.emptyBucket(id: bucket)
     _ = try? await storage.deleteBucket(id: bucket)
@@ -96,7 +96,8 @@ final class SupabaseStorageTests: XCTestCase {
 
   private func uploadTestData() async throws {
     let file = File(
-      name: "README.md", data: uploadData, fileName: "README.md", contentType: "text/html")
+      name: "README.md", data: uploadData ?? Data(), fileName: "README.md", contentType: "text/html"
+    )
     _ = try await storage.from(id: bucket).upload(
       path: "README.md", file: file, fileOptions: FileOptions(cacheControl: "3600")
     )

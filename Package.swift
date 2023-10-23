@@ -51,6 +51,7 @@ var package = Package(
       name: "PostgRESTTests",
       dependencies: [
         "PostgREST",
+        "_Helpers",
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
       ],
       exclude: ["__Snapshots__"]
