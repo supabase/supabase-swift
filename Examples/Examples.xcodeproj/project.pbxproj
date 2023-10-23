@@ -60,7 +60,7 @@
 		79018ADA2AE1DAF2006EA669 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		79018ADD2AE1DB03006EA669 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		79018ADF2AE309EE006EA669 /* SignInUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInUseCase.swift; sourceTree = "<group>"; };
-		79018AE12AE3D0E3006EA669 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		79018AE12AE3D0E3006EA669 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		79018AE32AE3F185006EA669 /* Routes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Routes.swift; sourceTree = "<group>"; };
 		79018AE52AE3F1E4006EA669 /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
 		79018AE72AE3F1F3006EA669 /* SignUpUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignUpUseCase.swift; sourceTree = "<group>"; };
@@ -184,6 +184,7 @@
 		79018AD92AE1DA75006EA669 /* SupportFiles */ = {
 			isa = PBXGroup;
 			children = (
+				79018AE12AE3D0E3006EA669 /* Info.plist */,
 				79C591DF2AE088110088A9C8 /* Assets.xcassets */,
 				79C591E12AE088110088A9C8 /* Preview Content */,
 				79C591FC2AE152590088A9C8 /* Config.plist */,
@@ -265,13 +266,12 @@
 		79C591DA2AE0880F0088A9C8 /* ProductSample */ = {
 			isa = PBXGroup;
 			children = (
-				79018AE22AE3F17D006EA669 /* Routes */,
-				79018AE12AE3D0E3006EA669 /* Info.plist */,
 				79018AD62AE1DA4C006EA669 /* Application */,
 				79C5920F2AE1CCE80088A9C8 /* Data */,
 				79C591F92AE12FD10088A9C8 /* Domain */,
 				79018AD52AE1DA31006EA669 /* Features */,
 				79018AD72AE1DA64006EA669 /* Helpers */,
+				79018AE22AE3F17D006EA669 /* Routes */,
 				79018AD92AE1DA75006EA669 /* SupportFiles */,
 			);
 			path = ProductSample;
@@ -685,7 +685,7 @@
 				ENABLE_PREVIEWS = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = ProductSample/Info.plist;
+				INFOPLIST_FILE = ProductSample/SupportFIles/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -721,7 +721,7 @@
 				ENABLE_PREVIEWS = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = ProductSample/Info.plist;
+				INFOPLIST_FILE = ProductSample/SupportFIles/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
