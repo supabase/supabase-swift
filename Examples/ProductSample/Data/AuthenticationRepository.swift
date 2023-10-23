@@ -26,9 +26,10 @@ struct AuthenticationRepositoryImpl: AuthenticationRepository {
     self.client = client
 
     let (stream, continuation) = AsyncStream.makeStream(of: AuthenticationState.self)
-    let handle = client.addAuthStateChangeListener { event in
+    let handle = client.onAuthStateChange { event, session in
       let state: AuthenticationState? =
         switch event {
+        case .initialSession: session != nil ? .signedIn : .signedOut
         case .signedIn: AuthenticationState.signedIn
         case .signedOut: AuthenticationState.signedOut
         case .passwordRecovery, .tokenRefreshed, .userUpdated, .userDeleted: nil
@@ -40,7 +41,7 @@ struct AuthenticationRepositoryImpl: AuthenticationRepository {
     }
 
     continuation.onTermination = { _ in
-      client.removeAuthStateChangeListener(handle)
+      handle.unsubscribe()
     }
 
     self.authStateListener = stream

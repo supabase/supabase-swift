@@ -14,7 +14,7 @@ struct UnimplementedError: Error {}
 
 final class RequestsTests: XCTestCase {
 
-  var localStorage: InMemoryLocalStorage!
+  var storage: SessionStorageMock!
 
   func testSignUpWithEmailAndPassword() async {
     let sut = makeSUT()
@@ -104,9 +104,9 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testGetOAuthSignInURL() throws {
+  func testGetOAuthSignInURL() async throws {
     let sut = makeSUT()
-    let url = try sut.getOAuthSignInURL(
+    let url = try await sut.getOAuthSignInURL(
       provider: .github, scopes: "read,write",
       redirectTo: URL(string: "https://dummy-url.com/redirect")!,
       queryParams: [("extra_key", "extra_value")]
@@ -168,7 +168,7 @@ final class RequestsTests: XCTestCase {
 
   func testSetSessionWithAFutureExpirationDate() async throws {
     let sut = makeSUT()
-    try localStorage.storeSession(.init(session: .validSession))
+    storage.session = .success(.init(session: .validSession))
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
@@ -191,6 +191,7 @@ final class RequestsTests: XCTestCase {
 
   func testSignOut() async {
     let sut = makeSUT()
+    storage.session = .success(.init(session: .validSession))
     await assert {
       try await sut.signOut()
     }
@@ -223,7 +224,7 @@ final class RequestsTests: XCTestCase {
 
   func testUpdateUser() async throws {
     let sut = makeSUT()
-    try localStorage.storeSession(StoredSession(session: .validSession))
+    storage.session = .success(StoredSession(session: .validSession))
     await assert {
       try await sut.update(
         user: UserAttributes(
@@ -264,27 +265,29 @@ final class RequestsTests: XCTestCase {
     testName: String = #function,
     line: UInt = #line
   ) -> GoTrueClient {
-    localStorage = InMemoryLocalStorage()
+    storage = SessionStorageMock()
     let encoder = JSONEncoder.goTrue
     encoder.outputFormatting = .sortedKeys
 
     return GoTrueClient(
-      url: clientURL,
-      headers: ["apikey": "dummy.api.key"],
-      localStorage: localStorage,
-      encoder: encoder,
-      fetch: { request in
-        DispatchQueue.main.sync {
-          assertSnapshot(
-            of: request, as: .curl, record: record, file: file, testName: testName, line: line)
-        }
+      configuration: GoTrueClient.Configuration(
+        url: clientURL,
+        headers: ["apikey": "dummy.api.key"],
+        encoder: encoder,
+        fetch: { request in
+          DispatchQueue.main.sync {
+            assertSnapshot(
+              of: request, as: .curl, record: record, file: file, testName: testName, line: line)
+          }
 
-        if let fetch {
-          return try await fetch(request)
-        }
+          if let fetch {
+            return try await fetch(request)
+          }
 
-        throw UnimplementedError()
-      }
+          throw UnimplementedError()
+        }
+      ),
+      sessionManager: DefaultSessionManager(storage: storage)
     )
   }
 }
@@ -296,6 +299,14 @@ extension Session {
     accessToken: "accesstoken",
     tokenType: "bearer",
     expiresIn: 120,
+    refreshToken: "refreshtoken",
+    user: User(fromMockNamed: "user")
+  )
+
+  static let expiredSession = Session(
+    accessToken: "accesstoken",
+    tokenType: "bearer",
+    expiresIn: 60,
     refreshToken: "refreshtoken",
     user: User(fromMockNamed: "user")
   )

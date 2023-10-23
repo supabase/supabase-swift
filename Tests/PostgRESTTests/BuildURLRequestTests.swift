@@ -20,7 +20,7 @@ final class BuildURLRequestTests: XCTestCase {
   }
 
   func testBuildRequest() async throws {
-    let runningTestCase = LockIsolated(Optional<TestCase>.none)
+    let runningTestCase = ActorIsolated(Optional<TestCase>.none)
 
     let client = PostgrestClient(
       url: url, schema: nil,

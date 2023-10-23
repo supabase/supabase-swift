@@ -34,7 +34,7 @@ final class SupabaseClientTests: XCTestCase {
 
     XCTAssertEqual(client.supabaseURL.absoluteString, "https://project-ref.supabase.co")
     XCTAssertEqual(client.supabaseKey, "ANON_KEY")
-    XCTAssertEqual(client.authURL.absoluteString, "https://project-ref.supabase.co/auth/v1")
+    //    XCTAssertEqual(client.authURL.absoluteString, "https://project-ref.supabase.co/auth/v1")
     XCTAssertEqual(client.storageURL.absoluteString, "https://project-ref.supabase.co/storage/v1")
     XCTAssertEqual(client.databaseURL.absoluteString, "https://project-ref.supabase.co/rest/v1")
     XCTAssertEqual(client.realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")

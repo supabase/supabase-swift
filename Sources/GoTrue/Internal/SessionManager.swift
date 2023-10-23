@@ -19,14 +19,21 @@ protocol SessionRefresher: AnyObject {
   func refreshSession(refreshToken: String) async throws -> Session
 }
 
-actor SessionManager {
+protocol SessionManager: Sendable {
+  func setSessionRefresher(_ refresher: SessionRefresher?) async
+  func session() async throws -> Session
+  func update(_ session: Session) async throws
+  func remove() async
+}
+
+actor DefaultSessionManager: SessionManager {
   private var task: Task<Session, Error>?
-  private let localStorage: GoTrueLocalStorage
+  private let storage: SessionStorage
 
   private weak var sessionRefresher: SessionRefresher?
 
-  init(localStorage: GoTrueLocalStorage) {
-    self.localStorage = localStorage
+  init(storage: SessionStorage) {
+    self.storage = storage
   }
 
   func setSessionRefresher(_ refresher: SessionRefresher?) {
@@ -38,7 +45,7 @@ actor SessionManager {
       return try await task.value
     }
 
-    guard let currentSession = try localStorage.getSession() else {
+    guard let currentSession = try storage.getSession() else {
       throw GoTrueError.sessionNotFound
     }
 
@@ -63,26 +70,34 @@ actor SessionManager {
   }
 
   func update(_ session: Session) throws {
-    try localStorage.storeSession(StoredSession(session: session))
+    try storage.storeSession(StoredSession(session: session))
   }
 
   func remove() {
-    localStorage.deleteSession()
+    storage.deleteSession()
   }
 }
 
-extension GoTrueLocalStorage {
+protocol SessionStorage {
+  func getSession() throws -> StoredSession?
+  func storeSession(_ session: StoredSession) throws
+  func deleteSession()
+}
+
+struct DefaultSessionStorage: SessionStorage {
+  let localStorage: GoTrueLocalStorage
+
   func getSession() throws -> StoredSession? {
-    try retrieve(key: "supabase.session").flatMap {
+    try localStorage.retrieve(key: "supabase.session").flatMap {
       try JSONDecoder.goTrue.decode(StoredSession.self, from: $0)
     }
   }
 
   func storeSession(_ session: StoredSession) throws {
-    try store(key: "supabase.session", value: JSONEncoder.goTrue.encode(session))
+    try localStorage.store(key: "supabase.session", value: JSONEncoder.goTrue.encode(session))
   }
 
   func deleteSession() {
-    try? remove(key: "supabase.session")
+    try? localStorage.remove(key: "supabase.session")
   }
 }

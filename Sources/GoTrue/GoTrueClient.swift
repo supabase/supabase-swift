@@ -7,15 +7,17 @@ public typealias AnyJSON = _Helpers.AnyJSON
   import FoundationNetworking
 #endif
 
-public final class AuthStateListenerHandle {
-  let handler: (AuthChangeEvent) -> Void
+public struct AuthStateListenerHandle {
+  let id: UUID
+  let onChange: (AuthChangeEvent, Session?) -> Void
+  let onUnsubscribe: () -> Void
 
-  init(handler: @escaping (AuthChangeEvent) -> Void) {
-    self.handler = handler
+  public func unsubscribe() {
+    onUnsubscribe()
   }
 }
 
-public final class GoTrueClient {
+public actor GoTrueClient {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
     Data,
     URLResponse
@@ -62,9 +64,10 @@ public final class GoTrueClient {
     }
   }
 
-  private var authChangeListeners = LockIsolated([ObjectIdentifier: AuthStateListenerHandle]())
+  private let authChangeListeners = ActorIsolated([UUID: AuthStateListenerHandle]())
+  private let initialSessionTasks = ActorIsolated([UUID: Task<Void, Never>]())
 
-  public convenience init(
+  public init(
     url: URL,
     headers: [String: String] = [:],
     localStorage: GoTrueLocalStorage? = nil,
@@ -85,50 +88,73 @@ public final class GoTrueClient {
   }
 
   public init(configuration: Configuration) {
+    self.init(
+      configuration: configuration,
+      sessionManager: DefaultSessionManager(
+        storage: DefaultSessionStorage(localStorage: configuration.localStorage)
+      )
+    )
+  }
+
+  init(configuration: Configuration, sessionManager: SessionManager) {
     var configuration = configuration
     configuration.headers["X-Client-Info"] = "gotrue-swift/\(version)"
     self.configuration = configuration
-    sessionManager = SessionManager(localStorage: configuration.localStorage)
+    self.sessionManager = sessionManager
+  }
+
+  deinit {
+    initializationTask?.cancel()
+    initialSessionTasks.value.values.forEach { $0.cancel() }
+  }
+
+  public func initialization() async {
+    if let initializationTask {
+      await initializationTask.value
+      return
+    }
 
     initializationTask = Task(priority: .userInitiated) { [weak self] in
       await self?.sessionManager.setSessionRefresher(self)
 
       do {
         _ = try await self?.sessionManager.session()
-        self?.emitAuthChangeEvent(.signedIn)
+        await self?.emitAuthChangeEvent(.signedIn)
       } catch is CancellationError {
         // no-op
       } catch {
-        self?.emitAuthChangeEvent(.signedOut)
+        await self?.emitAuthChangeEvent(.signedOut)
       }
     }
-  }
 
-  deinit {
-    initializationTask?.cancel()
+    await initializationTask?.value
   }
 
   /// Listen for ``AuthChangeEvent`` events.
   /// - Parameter onChange: Closure to call when a new event is triggered.
   /// - Returns: A handle that can be used to unsubscribe from changes.
-  public func addAuthStateChangeListener(onChange: @escaping (AuthChangeEvent) -> Void)
-    -> AuthStateListenerHandle
-  {
-    let handle = AuthStateListenerHandle(handler: onChange)
+  public nonisolated func onAuthStateChange(
+    onChange: @escaping (AuthChangeEvent, Session?) -> Void
+  ) -> AuthStateListenerHandle {
+    let id = UUID()
+
+    let handle = AuthStateListenerHandle(id: id, onChange: onChange) { [self, id] in
+      self.authChangeListeners.withValue {
+        $0[id] = nil
+      }
+    }
 
     authChangeListeners.withValue {
-      $0[ObjectIdentifier(handle)] = handle
+      $0[id] = handle
+    }
+
+    initialSessionTasks.withValue {
+      $0[id] = Task {
+        await emitInitialSession(id: id)
+      }
     }
 
     return handle
-  }
-
-  /// Unsubscribe from changes.
-  /// - Parameter handle: The handle to unsubscribe.
-  public func removeAuthStateChangeListener(_ handle: AuthStateListenerHandle) {
-    authChangeListeners.withValue {
-      $0[ObjectIdentifier(handle)] = nil
-    }
   }
 
   /// Creates a new user.
@@ -200,7 +226,7 @@ public final class GoTrueClient {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      emitAuthChangeEvent(.signedIn)
+      await emitAuthChangeEvent(.signedIn)
     }
 
     return response
@@ -260,7 +286,7 @@ public final class GoTrueClient {
 
     if session.user.emailConfirmedAt != nil || session.user.confirmedAt != nil {
       try await sessionManager.update(session)
-      emitAuthChangeEvent(.signedIn)
+      await emitAuthChangeEvent(.signedIn)
     }
 
     return session
@@ -414,10 +440,10 @@ public final class GoTrueClient {
 
     if storeSession {
       try await sessionManager.update(session)
-      emitAuthChangeEvent(.signedIn)
+      await emitAuthChangeEvent(.signedIn)
 
       if let type = params.first(where: { $0.name == "type" })?.value, type == "recovery" {
-        emitAuthChangeEvent(.passwordRecovery)
+        await emitAuthChangeEvent(.passwordRecovery)
       }
     }
 
@@ -467,16 +493,14 @@ public final class GoTrueClient {
     }
 
     try await sessionManager.update(session)
-    emitAuthChangeEvent(.tokenRefreshed)
+    await emitAuthChangeEvent(.tokenRefreshed)
     return session
   }
 
   /// Signs out the current user, if there is a logged in user.
   public func signOut() async throws {
-    defer { emitAuthChangeEvent(.signedOut) }
-
-    let session = try? await sessionManager.session()
-    if session != nil {
+    do {
+      _ = try await sessionManager.session()
       try await authorizedExecute(
         .init(
           path: "/logout",
@@ -484,6 +508,10 @@ public final class GoTrueClient {
         )
       )
       await sessionManager.remove()
+      await emitAuthChangeEvent(.signedOut)
+    } catch {
+      await emitAuthChangeEvent(.signedOut)
+      throw error
     }
   }
 
@@ -549,7 +577,7 @@ public final class GoTrueClient {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      emitAuthChangeEvent(.signedIn)
+      await emitAuthChangeEvent(.signedIn)
     }
 
     return response
@@ -564,7 +592,7 @@ public final class GoTrueClient {
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = user
     try await sessionManager.update(session)
-    emitAuthChangeEvent(.userUpdated)
+    await emitAuthChangeEvent(.userUpdated)
     return user
   }
 
@@ -622,11 +650,17 @@ public final class GoTrueClient {
     return Response(data: data, response: httpResponse)
   }
 
-  private func emitAuthChangeEvent(_ event: AuthChangeEvent) {
+  private func emitAuthChangeEvent(_ event: AuthChangeEvent) async {
+    let session = try? await self.session
     let listeners = authChangeListeners.value.values
     for listener in listeners {
-      listener.handler(event)
+      listener.onChange(event, session)
     }
+  }
+
+  private func emitInitialSession(id: UUID) async {
+    let session = try? await self.session
+    authChangeListeners.value[id]?.onChange(.initialSession, session)
   }
 }
 
@@ -648,7 +682,7 @@ extension GoTrueClient: SessionRefresher {
           .user.confirmedAt != nil
       {
         try await sessionManager.update(session)
-        emitAuthChangeEvent(.signedIn)
+        await emitAuthChangeEvent(.signedIn)
       }
 
       return session

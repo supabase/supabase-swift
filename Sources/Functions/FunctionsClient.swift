@@ -34,8 +34,12 @@ public actor FunctionsClient {
   /// Updates the authorization header.
   ///
   /// - Parameter token: The new JWT token sent in the authorization header.
-  public func setAuth(token: String) {
-    headers["Authorization"] = "Bearer \(token)"
+  public func setAuth(token: String?) {
+    if let token {
+      headers["Authorization"] = "Bearer \(token)"
+    } else {
+      headers["Authorization"] = nil
+    }
   }
 
   /// Invokes a function and decodes the response.
