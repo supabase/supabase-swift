@@ -162,7 +162,7 @@ public class PostgrestBuilder {
       }
       return nil
     }
-    .map { key, value in
+    .map { (key, value) -> String in
       let escapedKey = escape(key)
       let escapedValue = escape(value)
       return "\(escapedKey)=\(escapedValue)"
