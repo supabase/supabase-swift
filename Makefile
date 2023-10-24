@@ -1,4 +1,5 @@
 PLATFORM ?= iOS Simulator,name=iPhone 15 Pro
+EXAMPLE ?= ProductSample
 
 test-library:
 	xcodebuild test \
@@ -7,12 +8,10 @@ test-library:
 		-destination platform="$(PLATFORM)" || exit 1;
 
 build-example:
-	for example in "Examples" "ProductSample"; do \
-		xcodebuild build \
-			-workspace supabase-swift.xcworkspace \
-			-scheme "$$example" \
-			-destination platform="$(PLATFORM)" || exit 1; \
-	done;
+	xcodebuild build \
+		-workspace supabase-swift.xcworkspace \
+		-scheme "$(EXAMPLE)" \
+		-destination platform="$(PLATFORM)" || exit 1;
 
 format:
 	@swift format -i -r .

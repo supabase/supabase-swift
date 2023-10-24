@@ -37,15 +37,16 @@ jobs:
       matrix:
         platform:
           - iOS Simulator,name=iPhone 14 Pro
+        example:
+          - Examples
+          - ProductSample
     runs-on: macos-13
     name: Build Example
     steps:
       - uses: actions/checkout@v3
       - name: Select Xcode 14.3
         run: sudo xcode-select -s /Applications/Xcode_14.3.app
-      - name: Copy Secrets file
-        run: |
-          cp Examples/Examples/_Secrets.swift Examples/Examples/Secrets.swift
-          cp Examples/ProductSample/SupportFiles/_Config.plist Examples/ProductSample/SupportFiles/Config.plist
+      - name: Run pre-build script
+        run: sh Examples/${{ matrix.example }}/.ci/pre_build.sh || exit 0;
       - name: Build example
-        run: env PLATFORM="${{ matrix.platform }}" make build-example
+        run: env PLATFORM="${{ matrix.platform }}" EXAMPLE="${{ matrix.example }}" make build-example
