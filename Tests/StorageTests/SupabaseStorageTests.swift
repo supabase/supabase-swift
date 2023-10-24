@@ -37,10 +37,10 @@ final class SupabaseStorageTests: XCTestCase {
   override func setUp() async throws {
     try await super.setUp()
 
-    //    try XCTSkipUnless(
-    //      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-    //      "INTEGRATION_TESTS not defined."
-    //    )
+    try XCTSkipUnless(
+      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
+      "INTEGRATION_TESTS not defined."
+    )
 
     _ = try? await storage.emptyBucket(id: bucket)
     _ = try? await storage.deleteBucket(id: bucket)
