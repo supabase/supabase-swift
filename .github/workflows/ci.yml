@@ -44,6 +44,8 @@ jobs:
       - name: Select Xcode 14.3
         run: sudo xcode-select -s /Applications/Xcode_14.3.app
       - name: Copy Secrets file
-        run: cp Examples/Examples/_Secrets.swift Examples/Examples/Secrets.swift
+        run: |
+          cp Examples/Examples/_Secrets.swift Examples/Examples/Secrets.swift
+          cp Examples/ProductSample/SupportFiles/_Config.plist Examples/ProductSample/SupportFiles/Config.plist
       - name: Build example
         run: env PLATFORM="${{ matrix.platform }}" make build-example
