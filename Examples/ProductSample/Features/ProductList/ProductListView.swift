@@ -48,7 +48,3 @@ struct ProductListView: View {
     }
   }
 }
-
-#Preview {
-  ProductListView(model: ProductListViewModel())
-}

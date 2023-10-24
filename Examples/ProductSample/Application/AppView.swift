@@ -109,7 +109,3 @@ struct AppView: View {
     AuthView(model: model)
   }
 }
-
-#Preview {
-  AppView()
-}

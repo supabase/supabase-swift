@@ -58,7 +58,3 @@ struct ProductDetailsView: View {
     }
   }
 }
-
-#Preview {
-  ProductDetailsView(model: ProductDetailsViewModel(productId: nil) { _ in })
-}

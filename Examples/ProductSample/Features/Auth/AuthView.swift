@@ -61,7 +61,3 @@ struct AuthView: View {
     }
   }
 }
-
-#Preview {
-  AuthView(model: AuthViewModel())
-}
