@@ -1,6 +1,7 @@
 import Foundation
 import KeychainAccess
 
+/// A locally stored ``Session``, it contains metadata such as `expirationDate`.
 struct StoredSession: Codable {
   var session: Session
   var expirationDate: Date

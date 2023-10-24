@@ -29,7 +29,6 @@ struct AuthenticationRepositoryImpl: AuthenticationRepository {
     let handle = client.onAuthStateChange { event, session in
       let state: AuthenticationState? =
         switch event {
-        case .initialSession: session != nil ? .signedIn : .signedOut
         case .signedIn: AuthenticationState.signedIn
         case .signedOut: AuthenticationState.signedOut
         case .passwordRecovery, .tokenRefreshed, .userUpdated, .userDeleted: nil

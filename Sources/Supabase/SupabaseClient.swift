@@ -118,7 +118,7 @@ public class SupabaseClient {
   }
 
   private func handleTokenChanged(event: AuthChangeEvent, session: Session?) {
-    let supportedEvents: [AuthChangeEvent] = [.initialSession, .signedIn, .tokenRefreshed]
+    let supportedEvents: [AuthChangeEvent] = [.signedIn, .tokenRefreshed]
     guard supportedEvents.contains(event) else { return }
 
     // TODO: Set auth on realtime client

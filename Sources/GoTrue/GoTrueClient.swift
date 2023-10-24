@@ -64,8 +64,8 @@ public actor GoTrueClient {
     }
   }
 
-  private let authChangeListeners = ActorIsolated([UUID: AuthStateListenerHandle]())
-  private let initialSessionTasks = ActorIsolated([UUID: Task<Void, Never>]())
+  let authChangeListeners = ActorIsolated([UUID: AuthStateListenerHandle]())
+  let initialSessionTasks = ActorIsolated([UUID: Task<Void, Never>]())
 
   public init(
     url: URL,
@@ -140,6 +140,11 @@ public actor GoTrueClient {
 
     let handle = AuthStateListenerHandle(id: id, onChange: onChange) { [self, id] in
       self.authChangeListeners.withValue {
+        $0[id] = nil
+      }
+
+      self.initialSessionTasks.withValue {
+        $0[id]?.cancel()
         $0[id] = nil
       }
     }
@@ -659,8 +664,13 @@ public actor GoTrueClient {
   }
 
   private func emitInitialSession(id: UUID) async {
-    let session = try? await self.session
-    authChangeListeners.value[id]?.onChange(.initialSession, session)
+    await initialization()
+
+    if let session = try? await self.session {
+      authChangeListeners.value[id]?.onChange(.signedIn, session)
+    } else {
+      authChangeListeners.value[id]?.onChange(.signedOut, nil)
+    }
   }
 }
 
