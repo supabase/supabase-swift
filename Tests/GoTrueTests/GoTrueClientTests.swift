@@ -97,10 +97,14 @@ final class GoTrueClientTests: XCTestCase {
   }
 }
 
-private class SessionManagerMock: SessionManager {
+private final class SessionManagerMock: SessionManager, @unchecked Sendable {
+  private let lock = NSRecursiveLock()
+
   weak var sessionRefresher: SessionRefresher?
   func setSessionRefresher(_ refresher: GoTrue.SessionRefresher?) async {
-    sessionRefresher = refresher
+    lock.withLock {
+      sessionRefresher = refresher
+    }
   }
 
   var sessionResult: Result<Session, Error>!

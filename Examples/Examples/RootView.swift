@@ -10,6 +10,8 @@ import SwiftUI
 
 struct RootView: View {
   @State var authEvent: AuthChangeEvent?
+  @State var handle: AuthStateListenerHandle?
+
   @EnvironmentObject var auth: AuthController
 
   var body: some View {
@@ -20,14 +22,16 @@ struct RootView: View {
         HomeView()
       }
     }
-    .task {
-      for await event in supabase.auth.authEventChange.values {
+    .onAppear {
+      handle = supabase.auth.onAuthStateChange { event, session in
         withAnimation {
           authEvent = event
         }
-
-        auth.session = try? await supabase.auth.session
+        auth.session = session
       }
+    }
+    .onDisappear {
+      handle?.unsubscribe()
     }
   }
 }
