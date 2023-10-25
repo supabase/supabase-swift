@@ -125,11 +125,11 @@ final class CodeVerifierStorageMock: CodeVerifierStorage {
   func getCodeVerifier() throws -> String? {
     codeVerifier
   }
-  
+
   func storeCodeVerifier(_ code: String) throws {
     codeVerifier = code
   }
-  
+
   func deleteCodeVerifier() throws {
     codeVerifier = nil
   }

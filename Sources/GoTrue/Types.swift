@@ -35,42 +35,14 @@ public struct UserCredentials: Codable, Hashable, Sendable {
   }
 }
 
-public struct SignUpRequest: Codable, Hashable, Sendable {
-  public var email: String?
-  public var password: String?
-  public var phone: String?
-  public var data: [String: AnyJSON]?
-  public var gotrueMetaSecurity: GoTrueMetaSecurity?
-  public var codeChallenge: String?
-  public var codeChallengeMethod: String?
-
-  public init(
-    email: String? = nil,
-    password: String? = nil,
-    phone: String? = nil,
-    data: [String: AnyJSON]? = nil,
-    gotrueMetaSecurity: GoTrueMetaSecurity? = nil,
-    codeChallenge: String? = nil,
-    codeChallengeMethod: String? = nil
-  ) {
-    self.email = email
-    self.password = password
-    self.phone = phone
-    self.data = data
-    self.gotrueMetaSecurity = gotrueMetaSecurity
-    self.codeChallenge = codeChallenge
-    self.codeChallengeMethod = codeChallengeMethod
-  }
-
-  public enum CodingKeys: String, CodingKey {
-    case email
-    case password
-    case phone
-    case data
-    case gotrueMetaSecurity = "gotrue_meta_security"
-    case codeChallenge = "code_challenge"
-    case codeChallengeMethod = "code_challenge_method"
-  }
+struct SignUpRequest: Codable, Hashable, Sendable {
+  var email: String?
+  var password: String?
+  var phone: String?
+  var data: [String: AnyJSON]?
+  var gotrueMetaSecurity: GoTrueMetaSecurity?
+  var codeChallenge: String?
+  var codeChallengeMethod: String?
 }
 
 public struct Session: Codable, Hashable, Sendable {
@@ -108,16 +80,6 @@ public struct Session: Codable, Hashable, Sendable {
     self.expiresIn = expiresIn
     self.refreshToken = refreshToken
     self.user = user
-  }
-
-  public enum CodingKeys: String, CodingKey {
-    case providerToken = "provider_token"
-    case providerRefreshToken = "provider_refresh_token"
-    case accessToken = "access_token"
-    case tokenType = "token_type"
-    case expiresIn = "expires_in"
-    case refreshToken = "refresh_token"
-    case user
   }
 }
 
@@ -186,35 +148,12 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     self.updatedAt = updatedAt
     self.identities = identities
   }
-
-  public enum CodingKeys: String, CodingKey {
-    case id
-    case appMetadata = "app_metadata"
-    case userMetadata = "user_metadata"
-    case aud
-    case confirmationSentAt = "confirmation_sent_at"
-    case recoverySentAt = "recovery_sent_at"
-    case emailChangeSentAt = "email_change_sent_at"
-    case newEmail = "new_email"
-    case invitedAt = "invited_at"
-    case actionLink = "action_link"
-    case email
-    case phone
-    case createdAt = "created_at"
-    case confirmedAt = "confirmed_at"
-    case emailConfirmedAt = "email_confirmed_at"
-    case phoneConfirmedAt = "phone_confirmed_at"
-    case lastSignInAt = "last_sign_in_at"
-    case role
-    case updatedAt = "updated_at"
-    case identities
-  }
 }
 
 public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   public var id: String
-  public var userID: UUID
-  public var identityData: [String: AnyJSON]
+  public var userId: UUID
+  public var identityData: [String: AnyJSON]?
   public var provider: String
   public var createdAt: Date
   public var lastSignInAt: Date
@@ -222,7 +161,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
 
   public init(
     id: String,
-    userID: UUID,
+    userId: UUID,
     identityData: [String: AnyJSON],
     provider: String,
     createdAt: Date,
@@ -230,35 +169,12 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     updatedAt: Date
   ) {
     self.id = id
-    self.userID = userID
+    self.userId = userId
     self.identityData = identityData
     self.provider = provider
     self.createdAt = createdAt
     self.lastSignInAt = lastSignInAt
     self.updatedAt = updatedAt
-  }
-
-  public enum CodingKeys: String, CodingKey {
-    case id
-    case userID = "user_id"
-    case identityData = "identity_data"
-    case provider
-    case createdAt = "created_at"
-    case lastSignInAt = "last_sign_in_at"
-    case updatedAt = "updated_at"
-  }
-
-  public init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    userID = try container.decode(UUID.self, forKey: .userID)
-    identityData =
-      try container
-      .decodeIfPresent([String: AnyJSON].self, forKey: .identityData) ?? [:]
-    provider = try container.decode(String.self, forKey: .provider)
-    createdAt = try container.decode(Date.self, forKey: .createdAt)
-    lastSignInAt = try container.decode(Date.self, forKey: .lastSignInAt)
-    updatedAt = try container.decode(Date.self, forKey: .updatedAt)
   }
 }
 
