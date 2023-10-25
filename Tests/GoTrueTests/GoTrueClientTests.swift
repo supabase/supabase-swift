@@ -53,10 +53,10 @@ final class GoTrueClientTests: XCTestCase {
       expectation.fulfill()
     }
 
-    var listeners = await sut.authChangeListeners.value
+    var listeners = sut.mutableState.value.authChangeListeners
     XCTAssertNotNil(listeners[handle.id])
 
-    var tasks = await sut.initialSessionTasks.value
+    var tasks = sut.mutableState.value.initialSessionTasks
     XCTAssertNotNil(tasks[handle.id])
 
     await fulfillment(of: [expectation])
@@ -66,10 +66,10 @@ final class GoTrueClientTests: XCTestCase {
 
     handle.unsubscribe()
 
-    listeners = await sut.authChangeListeners.value
+    listeners = sut.mutableState.value.authChangeListeners
     XCTAssertNil(listeners[handle.id])
 
-    tasks = await sut.initialSessionTasks.value
+    tasks = sut.mutableState.value.initialSessionTasks
     XCTAssertNil(tasks[handle.id])
   }
 

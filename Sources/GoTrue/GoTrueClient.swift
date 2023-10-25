@@ -73,8 +73,7 @@ public final class GoTrueClient {
     var initializationTask: Task<Void, Never>?
   }
 
-  private let lock = NSRecursiveLock()
-  private var mutableState = MutableState()
+  let mutableState = LockIsolated(MutableState())
 
   public convenience init(
     url: URL,
@@ -121,9 +120,9 @@ public final class GoTrueClient {
   }
 
   deinit {
-    lock.withLock {
-      mutableState.initializationTask?.cancel()
-      mutableState.initialSessionTasks.values.forEach { $0.cancel() }
+    mutableState.withValue {
+      $0.initializationTask?.cancel()
+      $0.initialSessionTasks.values.forEach { $0.cancel() }
     }
   }
 
@@ -131,7 +130,7 @@ public final class GoTrueClient {
     _debug("start")
     defer { _debug("end") }
 
-    if let initializationTask = lock.withLock({ mutableState.initializationTask }) {
+    if let initializationTask = mutableState.value.initializationTask {
       _debug("initializationTask exists, will wait for completion.")
       await initializationTask.value
       return
@@ -159,8 +158,8 @@ public final class GoTrueClient {
       }
     }
 
-    lock.withLock {
-      mutableState.initializationTask = initializationTask
+    mutableState.withValue {
+      $0.initializationTask = initializationTask
     }
 
     await initializationTask.value
@@ -178,10 +177,10 @@ public final class GoTrueClient {
     let id = UUID()
 
     let handle = AuthStateListenerHandle(id: id, onChange: onChange) { [id] in
-      self.lock.withLock {
-        self.mutableState.authChangeListeners[id] = nil
-        self.mutableState.initialSessionTasks[id]?.cancel()
-        self.mutableState.initialSessionTasks[id] = nil
+      self.mutableState.withValue {
+        $0.authChangeListeners[id] = nil
+        $0.initialSessionTasks[id]?.cancel()
+        $0.initialSessionTasks[id] = nil
       }
 
       self._debug("handle \(id) unsubscribed")
@@ -193,9 +192,9 @@ public final class GoTrueClient {
       await emitInitialSession(id: id)
     }
 
-    lock.withLock {
-      mutableState.authChangeListeners[id] = handle
-      mutableState.initialSessionTasks[id] = emitInitialSessionTask
+    mutableState.withValue {
+      $0.authChangeListeners[id] = handle
+      $0.initialSessionTasks[id] = emitInitialSessionTask
     }
 
     self._debug("handle \(id) attached")
@@ -769,7 +768,7 @@ public final class GoTrueClient {
     defer { _debug("end") }
 
     let session = try? await self.session
-    let listeners = lock.withLock { mutableState.authChangeListeners.values }
+    let listeners = mutableState.value.authChangeListeners.values
     for listener in listeners {
       listener.onChange(event, session)
     }
@@ -783,26 +782,23 @@ public final class GoTrueClient {
 
     let session = try? await self.session
 
-    lock.withLock {
-      if let session {
-        mutableState.authChangeListeners[id]?.onChange(.signedIn, session)
-      } else {
-        mutableState.authChangeListeners[id]?.onChange(.signedOut, nil)
-      }
+    if let session {
+      mutableState.value.authChangeListeners[id]?.onChange(.signedIn, session)
+    } else {
+      mutableState.value.authChangeListeners[id]?.onChange(.signedOut, nil)
     }
   }
 
   #if DEBUG
-  private var _debugCountLock = NSRecursiveLock()
-  private var _debugCount = 0
+  private let _debugCount = LockIsolated(0)
   private func _debug(
     _ message: String,
     function: StaticString = #function,
     line: UInt = #line
   ) {
-    _debugCountLock.withLock {
-      debugPrint("\(_debugCount) [GoTrueClient] \(function):\(line) \(message)")
-      _debugCount += 1
+    _debugCount.withValue {
+      debugPrint("\($0) [GoTrueClient] \(function):\(line) \(message)")
+      $0 += 1
     }
   }
   #else
