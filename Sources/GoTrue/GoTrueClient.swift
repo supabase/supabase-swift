@@ -799,25 +799,25 @@ public final class GoTrueClient {
   }
 
   #if DEBUG
-  private let _debugCount = LockIsolated(0)
-  private func _debug(
-    _ message: String,
-    function: StaticString = #function,
-    line: UInt = #line
-  ) {
-    _debugCount.withValue {
-      debugPrint("\($0) [GoTrueClient] \(function):\(line) \(message)")
-      $0 += 1
+    private let _debugCount = LockIsolated(0)
+    private func _debug(
+      _ message: String,
+      function: StaticString = #function,
+      line: UInt = #line
+    ) {
+      _debugCount.withValue {
+        debugPrint("\($0) [GoTrueClient] \(function):\(line) \(message)")
+        $0 += 1
+      }
     }
-  }
   #else
-  private func _debug(
-    _ message: String,
-    function: StaticString = #function,
-    line: UInt = #line
-  ) {
-    // no-op
-  }
+    private func _debug(
+      _ message: String,
+      function: StaticString = #function,
+      line: UInt = #line
+    ) {
+      // no-op
+    }
   #endif
 
   private func isImplicitGrantFlow(url: URL) -> Bool {

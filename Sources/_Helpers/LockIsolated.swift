@@ -19,7 +19,6 @@ public final class LockIsolated<Value>: @unchecked Sendable {
     }
   }
 
-
   public func setValue(_ newValue: @autoclosure @Sendable () throws -> Value) rethrows {
     try self.lock.sync {
       self._value = try newValue()

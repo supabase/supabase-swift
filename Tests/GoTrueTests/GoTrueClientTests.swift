@@ -26,11 +26,13 @@ final class GoTrueClientTests: XCTestCase {
       events.append(($0, $1))
     }
 
+    // wait until initial session task finished before asserting.
+    await sut.mutableState.value.initialSessionTasks[handle.id]?.value
+
     await sut.initialization()
 
     XCTAssertIdentical(sessionManager.sessionRefresher, sut)
 
-    XCTAssertEqual(events.count, 2)
     XCTAssertEqual(events.map(\.0), [.signedIn, .signedIn])
     XCTAssertEqual(events.map(\.1), [session, session])
 
