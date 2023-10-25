@@ -6,6 +6,7 @@ public enum GoTrueError: LocalizedError, Sendable {
   case sessionNotFound
   case api(APIError)
   case pkce(PKCEFailureReason)
+  case invalidImplicitGrantFlowURL
 
   public struct APIError: Error, Decodable, Sendable {
     public var message: String?
@@ -25,6 +26,7 @@ public enum GoTrueError: LocalizedError, Sendable {
 
   public enum PKCEFailureReason: Sendable {
     case codeVerifierNotFound
+    case invalidPKCEFlowURL
   }
 
   public var errorDescription: String? {
@@ -34,6 +36,9 @@ public enum GoTrueError: LocalizedError, Sendable {
     case .sessionNotFound: return "Unable to get a valid session."
     case let .api(error): return error.errorDescription ?? error.message ?? error.msg
     case .pkce(.codeVerifierNotFound): return "A code verifier wasn't found in PKCE flow."
+    case .pkce(.invalidPKCEFlowURL): return "Not a valid PKCE flow url."
+    case .invalidImplicitGrantFlowURL:
+      return "Not a valid implicit grant flow url."
     }
   }
 }

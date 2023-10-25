@@ -431,12 +431,12 @@ public final class GoTrueClient {
   }
 
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
-  public func exchangeCodeForSession(authCode: String) async throws -> AuthResponse {
+  public func exchangeCodeForSession(authCode: String) async throws -> Session {
     guard let codeVerifier = try codeVerifierStorage.getCodeVerifier() else {
       throw GoTrueError.pkce(.codeVerifierNotFound)
     }
     do {
-      let response: AuthResponse = try await execute(
+      let session: Session = try await execute(
         .init(
           path: "/token",
           method: "POST",
@@ -453,12 +453,10 @@ public final class GoTrueClient {
 
       try codeVerifierStorage.deleteCodeVerifier()
 
-      if case let .session(session) = response {
-        try await sessionManager.update(session)
-        await emitAuthChangeEvent(.signedIn)
-      }
+      try await sessionManager.update(session)
+      await emitAuthChangeEvent(.signedIn)
 
-      return response
+      return session
     } catch {
       throw error
     }
@@ -505,11 +503,24 @@ public final class GoTrueClient {
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
   public func session(from url: URL, storeSession: Bool = true) async throws -> Session {
-    guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-      throw URLError(.badURL)
+    if configuration.flowType == .implicit, !isImplicitGrantFlow(url: url) {
+      throw GoTrueError.invalidImplicitGrantFlowURL
     }
 
-    let params = extractParams(from: components.fragment ?? "")
+    if configuration.flowType == .pkce, !isPKCEFlow(url: url) {
+      throw GoTrueError.pkce(.invalidPKCEFlowURL)
+    }
+
+    let params = extractParams(from: url)
+
+    if isPKCEFlow(url: url) {
+      guard let code = params.first(where: { $0.name == "code" })?.value else {
+        throw GoTrueError.pkce(.codeVerifierNotFound)
+      }
+
+      let session = try await exchangeCodeForSession(authCode: code)
+      return session
+    }
 
     if let errorDescription = params.first(where: { $0.name == "error_description" })?.value {
       throw GoTrueError.api(.init(errorDescription: errorDescription))
@@ -810,6 +821,19 @@ public final class GoTrueClient {
     // no-op
   }
   #endif
+
+  private func isImplicitGrantFlow(url: URL) -> Bool {
+    let fragments = extractParams(from: url)
+    return fragments.contains {
+      $0.name == "access_token" || $0.name == "error_description"
+    }
+  }
+
+  private func isPKCEFlow(url: URL) -> Bool {
+    let fragments = extractParams(from: url)
+    let currentCodeVerifier = try? codeVerifierStorage.getCodeVerifier()
+    return fragments.contains(where: { $0.name == "code" }) && currentCodeVerifier != nil
+  }
 }
 
 extension GoTrueClient: SessionRefresher {
