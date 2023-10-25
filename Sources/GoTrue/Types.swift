@@ -26,13 +26,6 @@ public struct UserCredentials: Codable, Hashable, Sendable {
     self.phone = phone
     self.refreshToken = refreshToken
   }
-
-  public enum CodingKeys: String, CodingKey {
-    case email
-    case password
-    case phone
-    case refreshToken = "refresh_token"
-  }
 }
 
 struct SignUpRequest: Codable, Hashable, Sendable {
@@ -234,14 +227,6 @@ public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
     self.gotrueMetaSecurity = gotrueMetaSecurity
   }
 
-  public enum CodingKeys: String, CodingKey {
-    case provider
-    case idToken = "id_token"
-    case accessToken = "access_token"
-    case nonce
-    case gotrueMetaSecurity = "gotrue_meta_security"
-  }
-
   public enum Provider: String, Codable, Hashable, Sendable {
     case google, apple, azure, facebook
   }
@@ -252,10 +237,6 @@ public struct GoTrueMetaSecurity: Codable, Hashable, Sendable {
 
   public init(captchaToken: String) {
     self.captchaToken = captchaToken
-  }
-
-  public enum CodingKeys: String, CodingKey {
-    case captchaToken = "captcha_token"
   }
 }
 
@@ -269,34 +250,12 @@ struct OTPParams: Codable, Hashable, Sendable {
   var codeChallengeMethod: String?
 }
 
-public struct VerifyOTPParams: Codable, Hashable, Sendable {
-  public var email: String?
-  public var phone: String?
-  public var token: String
-  public var type: OTPType
-  public var gotrueMetaSecurity: GoTrueMetaSecurity?
-
-  public init(
-    email: String? = nil,
-    phone: String? = nil,
-    token: String,
-    type: OTPType,
-    gotrueMetaSecurity: GoTrueMetaSecurity? = nil
-  ) {
-    self.email = email
-    self.phone = phone
-    self.token = token
-    self.type = type
-    self.gotrueMetaSecurity = gotrueMetaSecurity
-  }
-
-  public enum CodingKeys: String, CodingKey {
-    case email
-    case phone
-    case token
-    case type
-    case gotrueMetaSecurity = "gotrue_meta_security"
-  }
+struct VerifyOTPParams: Codable, Hashable, Sendable {
+  var email: String?
+  var phone: String?
+  var token: String
+  var type: OTPType
+  var gotrueMetaSecurity: GoTrueMetaSecurity?
 }
 
 public enum OTPType: String, Codable, CaseIterable, Sendable {
@@ -368,19 +327,9 @@ public struct UserAttributes: Codable, Hashable, Sendable {
   }
 }
 
-public struct RecoverParams: Codable, Hashable, Sendable {
-  public var email: String
-  public var gotrueMetaSecurity: GoTrueMetaSecurity?
-
-  public init(email: String, gotrueMetaSecurity: GoTrueMetaSecurity? = nil) {
-    self.email = email
-    self.gotrueMetaSecurity = gotrueMetaSecurity
-  }
-
-  public enum CodingKeys: String, CodingKey {
-    case email
-    case gotrueMetaSecurity = "gotrue_meta_security"
-  }
+struct RecoverParams: Codable, Hashable, Sendable {
+  var email: String
+  var gotrueMetaSecurity: GoTrueMetaSecurity?
 }
 
 public enum AuthFlowType {
