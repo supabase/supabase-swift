@@ -17,7 +17,7 @@ public struct AuthStateListenerHandle {
   }
 }
 
-public actor GoTrueClient {
+public final class GoTrueClient {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
     Data,
     URLResponse
@@ -26,6 +26,7 @@ public actor GoTrueClient {
   public struct Configuration {
     public let url: URL
     public var headers: [String: String]
+    public let flowType: AuthFlowType
     public let localStorage: GoTrueLocalStorage
     public let encoder: JSONEncoder
     public let decoder: JSONDecoder
@@ -34,6 +35,7 @@ public actor GoTrueClient {
     public init(
       url: URL,
       headers: [String: String] = [:],
+      flowType: AuthFlowType = .implicit,
       localStorage: GoTrueLocalStorage? = nil,
       encoder: JSONEncoder = .goTrue,
       decoder: JSONDecoder = .goTrue,
@@ -41,6 +43,7 @@ public actor GoTrueClient {
     ) {
       self.url = url
       self.headers = headers
+      self.flowType = flowType
       self.localStorage =
         localStorage
         ?? KeychainLocalStorage(
@@ -55,7 +58,7 @@ public actor GoTrueClient {
 
   private let configuration: Configuration
   private let sessionManager: SessionManager
-  private var initializationTask: Task<Void, Never>?
+  private let codeVerifierStorage: CodeVerifierStorage
 
   /// Returns the session, refreshing it if necessary.
   public var session: Session {
@@ -64,12 +67,18 @@ public actor GoTrueClient {
     }
   }
 
-  let authChangeListeners = ActorIsolated([UUID: AuthStateListenerHandle]())
-  let initialSessionTasks = ActorIsolated([UUID: Task<Void, Never>]())
+  struct MutableState {
+    var authChangeListeners: [UUID: AuthStateListenerHandle] = [:]
+    var initialSessionTasks: [UUID: Task<Void, Never>] = [:]
+    var initializationTask: Task<Void, Never>?
+  }
 
-  public init(
+  let mutableState = LockIsolated(MutableState())
+
+  public convenience init(
     url: URL,
     headers: [String: String] = [:],
+    flowType: AuthFlowType = .implicit,
     localStorage: GoTrueLocalStorage? = nil,
     encoder: JSONEncoder = .goTrue,
     decoder: JSONDecoder = .goTrue,
@@ -79,6 +88,7 @@ public actor GoTrueClient {
       configuration: Configuration(
         url: url,
         headers: headers,
+        flowType: flowType,
         localStorage: localStorage,
         encoder: encoder,
         decoder: decoder,
@@ -87,77 +97,107 @@ public actor GoTrueClient {
     )
   }
 
-  public init(configuration: Configuration) {
+  public convenience init(configuration: Configuration) {
     self.init(
       configuration: configuration,
       sessionManager: DefaultSessionManager(
         storage: DefaultSessionStorage(localStorage: configuration.localStorage)
-      )
+      ),
+      codeVerifierStorage: DefaultCodeVerifierStorage(localStorage: configuration.localStorage)
     )
   }
 
-  init(configuration: Configuration, sessionManager: SessionManager) {
+  init(
+    configuration: Configuration,
+    sessionManager: SessionManager,
+    codeVerifierStorage: CodeVerifierStorage
+  ) {
     var configuration = configuration
     configuration.headers["X-Client-Info"] = "gotrue-swift/\(version)"
     self.configuration = configuration
     self.sessionManager = sessionManager
+    self.codeVerifierStorage = codeVerifierStorage
   }
 
   deinit {
-    initializationTask?.cancel()
-    initialSessionTasks.value.values.forEach { $0.cancel() }
+    mutableState.withValue {
+      $0.initializationTask?.cancel()
+      $0.initialSessionTasks.values.forEach { $0.cancel() }
+    }
   }
 
   public func initialization() async {
-    if let initializationTask {
+    _debug("start")
+    defer { _debug("end") }
+
+    if let initializationTask = mutableState.value.initializationTask {
+      _debug("initializationTask exists, will wait for completion.")
       await initializationTask.value
       return
     }
 
-    initializationTask = Task(priority: .userInitiated) { [weak self] in
-      await self?.sessionManager.setSessionRefresher(self)
+    let initializationTask = Task(priority: .userInitiated) { [weak self] in
+      guard let self else { return }
+
+      _debug("initializationTask started running")
+      defer { _debug("initializationTask finished running") }
+
+      await sessionManager.setSessionRefresher(self)
 
       do {
-        _ = try await self?.sessionManager.session()
-        await self?.emitAuthChangeEvent(.signedIn)
+        _debug("initializationTask with fetch session")
+        _ = try await sessionManager.session()
+        _debug("initializationTask fetch session found, will emit event")
+
+        await emitAuthChangeEvent(.signedIn)
       } catch is CancellationError {
-        // no-op
+        _debug("initializationTask cancelled")
       } catch {
-        await self?.emitAuthChangeEvent(.signedOut)
+        _debug("initializationTask fetch session not found, will emit event")
+        await emitAuthChangeEvent(.signedOut)
       }
     }
 
-    await initializationTask?.value
+    mutableState.withValue {
+      $0.initializationTask = initializationTask
+    }
+
+    await initializationTask.value
   }
 
   /// Listen for ``AuthChangeEvent`` events.
   /// - Parameter onChange: Closure to call when a new event is triggered.
   /// - Returns: A handle that can be used to unsubscribe from changes.
-  public nonisolated func onAuthStateChange(
+  public func onAuthStateChange(
     onChange: @escaping (AuthChangeEvent, Session?) -> Void
   ) -> AuthStateListenerHandle {
+    _debug("start")
+    defer { _debug("end") }
+
     let id = UUID()
 
-    let handle = AuthStateListenerHandle(id: id, onChange: onChange) { [self, id] in
-      self.authChangeListeners.withValue {
-        $0[id] = nil
+    let handle = AuthStateListenerHandle(id: id, onChange: onChange) { [id] in
+      self.mutableState.withValue {
+        $0.authChangeListeners[id] = nil
+        $0.initialSessionTasks[id]?.cancel()
+        $0.initialSessionTasks[id] = nil
       }
 
-      self.initialSessionTasks.withValue {
-        $0[id]?.cancel()
-        $0[id] = nil
-      }
+      self._debug("handle \(id) unsubscribed")
     }
 
-    authChangeListeners.withValue {
-      $0[id] = handle
+    let emitInitialSessionTask = Task {
+      _debug("emitInitialSessionTask start")
+      defer { _debug("emitInitialSessionTask end") }
+      await emitInitialSession(id: id)
     }
 
-    initialSessionTasks.withValue {
-      $0[id] = Task {
-        await emitInitialSession(id: id)
-      }
+    mutableState.withValue {
+      $0.authChangeListeners[id] = handle
+      $0.initialSessionTasks[id] = emitInitialSessionTask
     }
+
+    self._debug("handle \(id) attached")
 
     return handle
   }
@@ -175,7 +215,9 @@ public actor GoTrueClient {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
-    try await _signUp(
+    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+
+    return try await _signUp(
       request: .init(
         path: "/signup",
         method: "POST",
@@ -187,11 +229,29 @@ public actor GoTrueClient {
             email: email,
             password: password,
             data: data,
-            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
+            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:)),
+            codeChallenge: codeChallenge,
+            codeChallengeMethod: codeChallengeMethod
           )
         )
       )
     )
+  }
+
+  private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {
+    if configuration.flowType == .pkce {
+      let codeVerifier = PKCE.generateCodeVerifier()
+
+      // TODO: log thrown error
+      try? codeVerifierStorage.storeCodeVerifier(codeVerifier)
+
+      let codeChallenge = PKCE.generateCodeChallenge(from: codeVerifier)
+      let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
+
+      return (codeChallenge, codeChallengeMethod)
+    }
+
+    return (nil, nil)
   }
 
   /// Creates a new user.
@@ -310,22 +370,30 @@ public actor GoTrueClient {
   ///   - captchaToken: Captcha verification token.
   public func signInWithOTP(
     email: String,
-    redirectTo _: URL? = nil,
-    shouldCreateUser: Bool? = nil,
+    redirectTo: URL? = nil,
+    shouldCreateUser: Bool = true,
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
   ) async throws {
     await sessionManager.remove()
+
+    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+
     try await execute(
       .init(
         path: "/otp",
         method: "POST",
+        query: [
+          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) }
+        ].compactMap { $0 },
         body: configuration.encoder.encode(
           OTPParams(
             email: email,
             createUser: shouldCreateUser,
             data: data,
-            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
+            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:)),
+            codeChallenge: codeChallenge,
+            codeChallengeMethod: codeChallengeMethod
           )
         )
       )
@@ -341,7 +409,7 @@ public actor GoTrueClient {
   ///   - captchaToken: Captcha verification token.
   public func signInWithOTP(
     phone: String,
-    shouldCreateUser: Bool? = nil,
+    shouldCreateUser: Bool = true,
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
   ) async throws {
@@ -360,6 +428,38 @@ public actor GoTrueClient {
         )
       )
     )
+  }
+
+  /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
+  public func exchangeCodeForSession(authCode: String) async throws -> Session {
+    guard let codeVerifier = try codeVerifierStorage.getCodeVerifier() else {
+      throw GoTrueError.pkce(.codeVerifierNotFound)
+    }
+    do {
+      let session: Session = try await execute(
+        .init(
+          path: "/token",
+          method: "POST",
+          query: [URLQueryItem(name: "grant_type", value: "pkce")],
+          body: configuration.encoder.encode(
+            [
+              "auth_code": authCode,
+              "code_verifier": codeVerifier,
+            ]
+          )
+        )
+      )
+      .decoded(decoder: configuration.decoder)
+
+      try codeVerifierStorage.deleteCodeVerifier()
+
+      try await sessionManager.update(session)
+      await emitAuthChangeEvent(.signedIn)
+
+      return session
+    } catch {
+      throw error
+    }
   }
 
   /// Log in an existing user via a third-party provider.
@@ -403,11 +503,24 @@ public actor GoTrueClient {
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
   public func session(from url: URL, storeSession: Bool = true) async throws -> Session {
-    guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-      throw URLError(.badURL)
+    if configuration.flowType == .implicit, !isImplicitGrantFlow(url: url) {
+      throw GoTrueError.invalidImplicitGrantFlowURL
     }
 
-    let params = extractParams(from: components.fragment ?? "")
+    if configuration.flowType == .pkce, !isPKCEFlow(url: url) {
+      throw GoTrueError.pkce(.invalidPKCEFlowURL)
+    }
+
+    let params = extractParams(from: url)
+
+    if isPKCEFlow(url: url) {
+      guard let code = params.first(where: { $0.name == "code" })?.value else {
+        throw GoTrueError.pkce(.codeVerifierNotFound)
+      }
+
+      let session = try await exchangeCodeForSession(authCode: code)
+      return session
+    }
 
     if let errorDescription = params.first(where: { $0.name == "error_description" })?.value {
       throw GoTrueError.api(.init(errorDescription: errorDescription))
@@ -591,14 +704,22 @@ public actor GoTrueClient {
   /// Updates user data, if there is a logged in user.
   @discardableResult
   public func update(user: UserAttributes) async throws -> User {
+    var user = user
+
+    if user.email != nil {
+      let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+      user.codeChallenge = codeChallenge
+      user.codeChallengeMethod = codeChallengeMethod
+    }
+
     var session = try await sessionManager.session()
-    let user = try await authorizedExecute(
+    let updatedUser = try await authorizedExecute(
       .init(path: "/user", method: "PUT", body: configuration.encoder.encode(user))
     ).decoded(as: User.self, decoder: configuration.decoder)
-    session.user = user
+    session.user = updatedUser
     try await sessionManager.update(session)
     await emitAuthChangeEvent(.userUpdated)
-    return user
+    return updatedUser
   }
 
   /// Sends a reset request to an email address.
@@ -636,8 +757,6 @@ public actor GoTrueClient {
 
   @discardableResult
   private func execute(_ request: Request) async throws -> Response {
-    await initializationTask?.value
-
     var request = request
     request.headers.merge(configuration.headers) { r, _ in r }
     let urlRequest = try request.urlRequest(withBaseURL: configuration.url)
@@ -656,21 +775,64 @@ public actor GoTrueClient {
   }
 
   private func emitAuthChangeEvent(_ event: AuthChangeEvent) async {
+    _debug("start")
+    defer { _debug("end") }
+
     let session = try? await self.session
-    let listeners = authChangeListeners.value.values
+    let listeners = mutableState.value.authChangeListeners.values
     for listener in listeners {
       listener.onChange(event, session)
     }
   }
 
   private func emitInitialSession(id: UUID) async {
+    _debug("start")
+    defer { _debug("end") }
+
     await initialization()
 
-    if let session = try? await self.session {
-      authChangeListeners.value[id]?.onChange(.signedIn, session)
+    let session = try? await self.session
+
+    if let session {
+      mutableState.value.authChangeListeners[id]?.onChange(.signedIn, session)
     } else {
-      authChangeListeners.value[id]?.onChange(.signedOut, nil)
+      mutableState.value.authChangeListeners[id]?.onChange(.signedOut, nil)
     }
+  }
+
+  #if DEBUG
+  private let _debugCount = LockIsolated(0)
+  private func _debug(
+    _ message: String,
+    function: StaticString = #function,
+    line: UInt = #line
+  ) {
+    _debugCount.withValue {
+      debugPrint("\($0) [GoTrueClient] \(function):\(line) \(message)")
+      $0 += 1
+    }
+  }
+  #else
+  private func _debug(
+    _ message: String,
+    function: StaticString = #function,
+    line: UInt = #line
+  ) {
+    // no-op
+  }
+  #endif
+
+  private func isImplicitGrantFlow(url: URL) -> Bool {
+    let fragments = extractParams(from: url)
+    return fragments.contains {
+      $0.name == "access_token" || $0.name == "error_description"
+    }
+  }
+
+  private func isPKCEFlow(url: URL) -> Bool {
+    let fragments = extractParams(from: url)
+    let currentCodeVerifier = try? codeVerifierStorage.getCodeVerifier()
+    return fragments.contains(where: { $0.name == "code" }) && currentCodeVerifier != nil
   }
 }
 

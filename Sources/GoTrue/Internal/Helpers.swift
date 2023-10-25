@@ -1,5 +1,23 @@
 import Foundation
 
+func extractParams(from url: URL) -> [(name: String, value: String)] {
+  guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+    return []
+  }
+
+  if let fragment = components.fragment {
+    return extractParams(from: fragment)
+  }
+
+  if let queryItems = components.queryItems {
+    return queryItems.map {
+      (name: $0.name, value: $0.value ?? "")
+    }
+  }
+
+  return []
+}
+
 func extractParams(from fragment: String) -> [(name: String, value: String)] {
   let components =
     fragment

@@ -80,6 +80,7 @@ public class SupabaseClient {
     auth = GoTrueClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       headers: defaultHeaders,
+      flowType: options.auth.flowType,
       localStorage: options.auth.storage
     )
 
