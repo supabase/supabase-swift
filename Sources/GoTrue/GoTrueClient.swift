@@ -17,7 +17,7 @@ public struct AuthStateListenerHandle {
   }
 }
 
-public actor GoTrueClient {
+public final class GoTrueClient {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
     Data,
     URLResponse
@@ -59,7 +59,6 @@ public actor GoTrueClient {
   private let configuration: Configuration
   private let sessionManager: SessionManager
   private let codeVerifierStorage: CodeVerifierStorage
-  private var initializationTask: Task<Void, Never>?
 
   /// Returns the session, refreshing it if necessary.
   public var session: Session {
@@ -68,10 +67,16 @@ public actor GoTrueClient {
     }
   }
 
-  let authChangeListeners = ActorIsolated([UUID: AuthStateListenerHandle]())
-  let initialSessionTasks = ActorIsolated([UUID: Task<Void, Never>]())
+  struct MutableState {
+    var authChangeListeners: [UUID: AuthStateListenerHandle] = [:]
+    var initialSessionTasks: [UUID: Task<Void, Never>] = [:]
+    var initializationTask: Task<Void, Never>?
+  }
 
-  public init(
+  private let lock = NSRecursiveLock()
+  private var mutableState = MutableState()
+
+  public convenience init(
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = .implicit,
@@ -93,7 +98,7 @@ public actor GoTrueClient {
     )
   }
 
-  public init(configuration: Configuration) {
+  public convenience init(configuration: Configuration) {
     self.init(
       configuration: configuration,
       sessionManager: DefaultSessionManager(
@@ -116,60 +121,84 @@ public actor GoTrueClient {
   }
 
   deinit {
-    initializationTask?.cancel()
-    initialSessionTasks.value.values.forEach { $0.cancel() }
+    lock.withLock {
+      mutableState.initializationTask?.cancel()
+      mutableState.initialSessionTasks.values.forEach { $0.cancel() }
+    }
   }
 
   public func initialization() async {
-    if let initializationTask {
+    _debug("start")
+    defer { _debug("end") }
+
+    if let initializationTask = lock.withLock({ mutableState.initializationTask }) {
+      _debug("initializationTask exists, will wait for completion.")
       await initializationTask.value
       return
     }
 
-    initializationTask = Task(priority: .userInitiated) { [weak self] in
-      await self?.sessionManager.setSessionRefresher(self)
+    let initializationTask = Task(priority: .userInitiated) { [weak self] in
+      guard let self else { return }
+
+      _debug("initializationTask started running")
+      defer { _debug("initializationTask finished running") }
+
+      await sessionManager.setSessionRefresher(self)
 
       do {
-        _ = try await self?.sessionManager.session()
-        await self?.emitAuthChangeEvent(.signedIn)
+        _debug("initializationTask with fetch session")
+        _ = try await sessionManager.session()
+        _debug("initializationTask fetch session found, will emit event")
+
+        await emitAuthChangeEvent(.signedIn)
       } catch is CancellationError {
-        // no-op
+        _debug("initializationTask cancelled")
       } catch {
-        await self?.emitAuthChangeEvent(.signedOut)
+        _debug("initializationTask fetch session not found, will emit event")
+        await emitAuthChangeEvent(.signedOut)
       }
     }
 
-    await initializationTask?.value
+    lock.withLock {
+      mutableState.initializationTask = initializationTask
+    }
+
+    await initializationTask.value
   }
 
   /// Listen for ``AuthChangeEvent`` events.
   /// - Parameter onChange: Closure to call when a new event is triggered.
   /// - Returns: A handle that can be used to unsubscribe from changes.
-  public nonisolated func onAuthStateChange(
+  public func onAuthStateChange(
     onChange: @escaping (AuthChangeEvent, Session?) -> Void
   ) -> AuthStateListenerHandle {
+    _debug("start")
+    defer { _debug("end") }
+
     let id = UUID()
 
-    let handle = AuthStateListenerHandle(id: id, onChange: onChange) { [self, id] in
-      self.authChangeListeners.withValue {
-        $0[id] = nil
+    let handle = AuthStateListenerHandle(id: id, onChange: onChange) { [id] in
+      self.lock.withLock {
+        self.mutableState.authChangeListeners[id] = nil
+        self.mutableState.initialSessionTasks[id]?.cancel()
+        self.mutableState.initialSessionTasks[id] = nil
       }
 
-      self.initialSessionTasks.withValue {
-        $0[id]?.cancel()
-        $0[id] = nil
-      }
+      self._debug("handle \(id) unsubscribed")
     }
 
-    authChangeListeners.withValue {
-      $0[id] = handle
+    let emitInitialSessionTask = Task {
+      _debug("emitInitialSessionTask start")
+      defer { _debug("emitInitialSessionTask end") }
+      await emitInitialSession(id: id)
     }
 
-    initialSessionTasks.withValue {
-      $0[id] = Task {
-        await emitInitialSession(id: id)
-      }
+    lock.withLock {
+      mutableState.authChangeListeners[id] = handle
+      mutableState.initialSessionTasks[id] = emitInitialSessionTask
     }
+
+    self._debug("handle \(id) attached")
 
     return handle
   }
@@ -718,8 +747,6 @@ public actor GoTrueClient {
 
   @discardableResult
   private func execute(_ request: Request) async throws -> Response {
-    await initializationTask?.value
-
     var request = request
     request.headers.merge(configuration.headers) { r, _ in r }
     let urlRequest = try request.urlRequest(withBaseURL: configuration.url)
@@ -738,22 +765,55 @@ public actor GoTrueClient {
   }
 
   private func emitAuthChangeEvent(_ event: AuthChangeEvent) async {
+    _debug("start")
+    defer { _debug("end") }
+
     let session = try? await self.session
-    let listeners = authChangeListeners.value.values
+    let listeners = lock.withLock { mutableState.authChangeListeners.values }
     for listener in listeners {
       listener.onChange(event, session)
     }
   }
 
   private func emitInitialSession(id: UUID) async {
+    _debug("start")
+    defer { _debug("end") }
+
     await initialization()
 
-    if let session = try? await self.session {
-      authChangeListeners.value[id]?.onChange(.signedIn, session)
-    } else {
-      authChangeListeners.value[id]?.onChange(.signedOut, nil)
+    let session = try? await self.session
+
+    lock.withLock {
+      if let session {
+        mutableState.authChangeListeners[id]?.onChange(.signedIn, session)
+      } else {
+        mutableState.authChangeListeners[id]?.onChange(.signedOut, nil)
+      }
     }
   }
+
+  #if DEBUG
+  private var _debugCountLock = NSRecursiveLock()
+  private var _debugCount = 0
+  private func _debug(
+    _ message: String,
+    function: StaticString = #function,
+    line: UInt = #line
+  ) {
+    _debugCountLock.withLock {
+      debugPrint("\(_debugCount) [GoTrueClient] \(function):\(line) \(message)")
+      _debugCount += 1
+    }
+  }
+  #else
+  private func _debug(
+    _ message: String,
+    function: StaticString = #function,
+    line: UInt = #line
+  ) {
+    // no-op
+  }
+  #endif
 }
 
 extension GoTrueClient: SessionRefresher {
