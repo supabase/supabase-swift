@@ -287,7 +287,8 @@ final class RequestsTests: XCTestCase {
           throw UnimplementedError()
         }
       ),
-      sessionManager: DefaultSessionManager(storage: storage)
+      sessionManager: DefaultSessionManager(storage: storage),
+      codeVerifierStorage: CodeVerifierStorageMock()
     )
   }
 }

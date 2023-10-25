@@ -13,6 +13,7 @@ import XCTest
 final class GoTrueClientTests: XCTestCase {
 
   fileprivate var sessionManager: SessionManagerMock!
+  fileprivate var codeVerifierStorage: CodeVerifierStorageMock!
 
   func testInitialization() async throws {
     let session = Session.validSession
@@ -74,6 +75,7 @@ final class GoTrueClientTests: XCTestCase {
 
   private func makeSUT(fetch: GoTrueClient.FetchHandler? = nil) -> GoTrueClient {
     sessionManager = SessionManagerMock()
+    codeVerifierStorage = CodeVerifierStorageMock()
     let sut = GoTrueClient(
       configuration: GoTrueClient.Configuration(
         url: clientURL,
@@ -86,7 +88,8 @@ final class GoTrueClientTests: XCTestCase {
           throw UnimplementedError()
         }
       ),
-      sessionManager: sessionManager
+      sessionManager: sessionManager,
+      codeVerifierStorage: codeVerifierStorage
     )
 
     addTeardownBlock { [weak sut] in
@@ -115,4 +118,19 @@ private final class SessionManagerMock: SessionManager, @unchecked Sendable {
   func update(_ session: GoTrue.Session) async throws {}
 
   func remove() async {}
+}
+
+final class CodeVerifierStorageMock: CodeVerifierStorage {
+  var codeVerifier: String?
+  func getCodeVerifier() throws -> String? {
+    codeVerifier
+  }
+  
+  func storeCodeVerifier(_ code: String) throws {
+    codeVerifier = code
+  }
+  
+  func deleteCodeVerifier() throws {
+    codeVerifier = nil
+  }
 }

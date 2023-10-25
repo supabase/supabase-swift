@@ -41,19 +41,25 @@ public struct SignUpRequest: Codable, Hashable, Sendable {
   public var phone: String?
   public var data: [String: AnyJSON]?
   public var gotrueMetaSecurity: GoTrueMetaSecurity?
+  public var codeChallenge: String?
+  public var codeChallengeMethod: String?
 
   public init(
     email: String? = nil,
     password: String? = nil,
     phone: String? = nil,
     data: [String: AnyJSON]? = nil,
-    gotrueMetaSecurity: GoTrueMetaSecurity? = nil
+    gotrueMetaSecurity: GoTrueMetaSecurity? = nil,
+    codeChallenge: String? = nil,
+    codeChallengeMethod: String? = nil
   ) {
     self.email = email
     self.password = password
     self.phone = phone
     self.data = data
     self.gotrueMetaSecurity = gotrueMetaSecurity
+    self.codeChallenge = codeChallenge
+    self.codeChallengeMethod = codeChallengeMethod
   }
 
   public enum CodingKeys: String, CodingKey {
@@ -62,6 +68,8 @@ public struct SignUpRequest: Codable, Hashable, Sendable {
     case phone
     case data
     case gotrueMetaSecurity = "gotrue_meta_security"
+    case codeChallenge = "code_challenge"
+    case codeChallengeMethod = "code_challenge_method"
   }
 }
 
@@ -335,34 +343,14 @@ public struct GoTrueMetaSecurity: Codable, Hashable, Sendable {
   }
 }
 
-public struct OTPParams: Codable, Hashable, Sendable {
-  public var email: String?
-  public var phone: String?
-  public var createUser: Bool
-  public var data: [String: AnyJSON]?
-  public var gotrueMetaSecurity: GoTrueMetaSecurity?
-
-  public init(
-    email: String? = nil,
-    phone: String? = nil,
-    createUser: Bool? = nil,
-    data: [String: AnyJSON]? = nil,
-    gotrueMetaSecurity: GoTrueMetaSecurity? = nil
-  ) {
-    self.email = email
-    self.phone = phone
-    self.createUser = createUser ?? true
-    self.data = data
-    self.gotrueMetaSecurity = gotrueMetaSecurity
-  }
-
-  public enum CodingKeys: String, CodingKey {
-    case email
-    case phone
-    case createUser = "create_user"
-    case data
-    case gotrueMetaSecurity = "gotrue_meta_security"
-  }
+struct OTPParams: Codable, Hashable, Sendable {
+  var email: String?
+  var phone: String?
+  var createUser: Bool
+  var data: [String: AnyJSON]?
+  var gotrueMetaSecurity: GoTrueMetaSecurity?
+  var codeChallenge: String?
+  var codeChallengeMethod: String?
 }
 
 public struct VerifyOTPParams: Codable, Hashable, Sendable {
@@ -446,6 +434,9 @@ public struct UserAttributes: Codable, Hashable, Sendable {
   /// first and last name.
   public var data: [String: AnyJSON]?
 
+  var codeChallenge: String?
+  var codeChallengeMethod: String?
+
   public init(
     email: String? = nil,
     phone: String? = nil,
@@ -458,14 +449,6 @@ public struct UserAttributes: Codable, Hashable, Sendable {
     self.password = password
     self.emailChangeToken = emailChangeToken
     self.data = data
-  }
-
-  public enum CodingKeys: String, CodingKey {
-    case email
-    case phone
-    case password
-    case emailChangeToken = "email_change_token"
-    case data
   }
 }
 
@@ -482,6 +465,11 @@ public struct RecoverParams: Codable, Hashable, Sendable {
     case email
     case gotrueMetaSecurity = "gotrue_meta_security"
   }
+}
+
+public enum AuthFlowType {
+  case implicit
+  case pkce
 }
 
 // MARK: - Encodable & Decodable
@@ -501,6 +489,7 @@ private let dateFormatter = { () -> ISO8601DateFormatter in
 extension JSONDecoder {
   public static let goTrue = { () -> JSONDecoder in
     let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
     decoder.dateDecodingStrategy = .custom { decoder in
       let container = try decoder.singleValueContainer()
       let string = try container.decode(String.self)
@@ -524,6 +513,7 @@ extension JSONDecoder {
 extension JSONEncoder {
   public static let goTrue = { () -> JSONEncoder in
     let encoder = JSONEncoder()
+    encoder.keyEncodingStrategy = .convertToSnakeCase
     encoder.dateEncodingStrategy = .custom { date, encoder in
       var container = encoder.singleValueContainer()
       let string = dateFormatter.string(from: date)
