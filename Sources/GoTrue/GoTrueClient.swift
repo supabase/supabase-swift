@@ -502,7 +502,7 @@ public final class GoTrueClient {
 
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
-  public func session(from url: URL, storeSession: Bool = true) async throws -> Session {
+  public func session(from url: URL) async throws -> Session {
     if configuration.flowType == .implicit, !isImplicitGrantFlow(url: url) {
       throw GoTrueError.invalidImplicitGrantFlowURL
     }
@@ -556,13 +556,11 @@ public final class GoTrueClient {
       user: user
     )
 
-    if storeSession {
-      try await sessionManager.update(session)
-      await emitAuthChangeEvent(.signedIn)
+    try await sessionManager.update(session)
+    await emitAuthChangeEvent(.signedIn)
 
-      if let type = params.first(where: { $0.name == "type" })?.value, type == "recovery" {
-        await emitAuthChangeEvent(.passwordRecovery)
-      }
+    if let type = params.first(where: { $0.name == "type" })?.value, type == "recovery" {
+      await emitAuthChangeEvent(.passwordRecovery)
     }
 
     return session
