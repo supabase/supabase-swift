@@ -68,6 +68,9 @@ public actor GoTrueClient {
     }
   }
 
+  /// Namespace for accessing multi-factor authentication API.
+  public let mfa: GoTrueMFA
+
   struct AuthChangeListener {
     var initialSessionTask: Task<Void, Never>
     var continuation: AsyncStream<AuthChangeEvent>.Continuation
@@ -118,6 +121,7 @@ public actor GoTrueClient {
     self.api = APIClient(configuration: configuration, sessionManager: sessionManager)
     self.sessionManager = sessionManager
     self.codeVerifierStorage = codeVerifierStorage
+    self.mfa = GoTrueMFA()
   }
 
   deinit {

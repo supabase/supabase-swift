@@ -337,6 +337,55 @@ public enum AuthFlowType {
   case pkce
 }
 
+public enum FactorType: String, Codable {
+  case totp
+}
+
+public struct MFAEnrollParams: Encodable, Hashable {
+  public let factorType: FactorType = .totp
+  /// Domain which the user is enrolled with.
+  public let issuer: String?
+  /// Human readable name assigned to the factor.
+  public let friendlyName: String?
+
+  public init(issuer: String?, friendlyName: String?) {
+    self.issuer = issuer
+    self.friendlyName = friendlyName
+  }
+}
+
+public struct AuthMFAEnrollResponse: Decodable, Hashable {
+  /// ID of the factor that was just enrolled (in an unverified state).
+  public let id: String
+
+  /// Type of MFA factor. Only `totp` supported for now.
+  public let type: FactorType
+
+  /// TOTP enrollment information.
+  public var totp: TOTP
+
+  public struct TOTP: Decodable, Hashable {
+    /// Contains a QR code encoding the authenticator URI. You can convert it to a URL by prepending `data:image/svg+xml;utf-8,` to the value. Avoid logging this value to the console.
+    public let qrCode: String
+
+    /// The TOTP secret (also encoded in the QR code). Show this secret in a password-style field to the user, in case they are unable to scan the QR code. Avoid logging this value to the console.
+    public let secret: String
+
+    /// The authenticator URI encoded within the QR code, should you need to use it. Avoid loggin this value to the console.
+    public let url: String
+  }
+}
+
+public struct MFAChallengeParams { /* Define parameters */  }
+public struct MFAVerifyParams { /* Define parameters */  }
+public struct MFAUnenrollParams { /* Define parameters */  }
+public struct MFAChallengeAndVerifyParams { /* Define parameters */  }
+public struct AuthMFAChallengeResponse { /* Define response */  }
+public struct AuthMFAVerifyResponse { /* Define response */  }
+public struct AuthMFAUnenrollResponse { /* Define response */  }
+public struct AuthMFAListFactorsResponse { /* Define response */  }
+public struct AuthMFAGetAuthenticatorAssuranceLevelResponse { /* Define response */  }
+
 // MARK: - Encodable & Decodable
 
 private let dateFormatterWithFractionalSeconds = { () -> ISO8601DateFormatter in
