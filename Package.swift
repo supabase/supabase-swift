@@ -1,10 +1,10 @@
-// swift-tools-version:5.7
+// swift-tools-version:5.9
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import Foundation
 import PackageDescription
 
-var package = Package(
+let package = Package(
   name: "Supabase",
   platforms: [
     .iOS(.v13),
@@ -74,3 +74,9 @@ var package = Package(
     .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
   ]
 )
+
+for target in package.targets where !target.isTest {
+  target.swiftSettings = [
+    .enableUpcomingFeature("StrictConcurrency=complete")
+  ]
+}

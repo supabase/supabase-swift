@@ -27,7 +27,7 @@ final class AppViewModel: ObservableObject {
     self.authenticationRepository = authenticationRepository
 
     authStateListenerTask = Task {
-      for await state in authenticationRepository.authStateListener {
+      for await state in await authenticationRepository.authStateListener() {
         logger.debug("auth state changed: \(String(describing: state))")
 
         if Task.isCancelled {

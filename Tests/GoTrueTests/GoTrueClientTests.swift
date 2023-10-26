@@ -15,64 +15,38 @@ final class GoTrueClientTests: XCTestCase {
   fileprivate var sessionManager: SessionManagerMock!
   fileprivate var codeVerifierStorage: CodeVerifierStorageMock!
 
-  func testInitialization() async throws {
-    let session = Session.validSession
-
-    let sut = makeSUT()
-    sessionManager.sessionResult = .success(session)
-
-    var events: [(AuthChangeEvent, Session?)] = []
-    let handle = sut.onAuthStateChange {
-      events.append(($0, $1))
-    }
-
-    // wait until initial session task finished before asserting.
-    await sut.mutableState.value.initialSessionTasks[handle.id]?.value
-
-    await sut.initialization()
-
-    XCTAssertIdentical(sessionManager.sessionRefresher, sut)
-
-    XCTAssertEqual(events.map(\.0), [.signedIn, .signedIn])
-    XCTAssertEqual(events.map(\.1), [session, session])
-
-    handle.unsubscribe()
-  }
-
   func testOnAuthStateChange() async throws {
     let session = Session.validSession
 
     let sut = makeSUT()
     sessionManager.sessionResult = .success(session)
 
-    await sut.initialization()
+    let events = ActorIsolated([AuthChangeEvent]())
+    let expectation = self.expectation(description: "onAuthStateChangeEnd")
 
-    var event: (AuthChangeEvent, Session?)?
-    let expectation = self.expectation(description: "onAuthStateChange")
+    let authStateStream = await sut.onAuthStateChange()
 
-    let handle = sut.onAuthStateChange {
-      event = ($0, $1)
-      expectation.fulfill()
+    let streamTask = Task {
+      for await event in authStateStream {
+        events.withValue {
+          $0.append(event)
+        }
+
+        expectation.fulfill()
+      }
     }
 
-    var listeners = sut.mutableState.value.authChangeListeners
-    XCTAssertNotNil(listeners[handle.id])
-
-    var tasks = sut.mutableState.value.initialSessionTasks
-    XCTAssertNotNil(tasks[handle.id])
+    var listeners = await sut.authChangeListeners
+    XCTAssertEqual(listeners.count, 1)
 
     await fulfillment(of: [expectation])
 
-    XCTAssertEqual(event?.0, .signedIn)
-    XCTAssertEqual(event?.1, session)
+    XCTAssertEqual(events.value, [.signedIn])
 
-    handle.unsubscribe()
+    streamTask.cancel()
 
-    listeners = sut.mutableState.value.authChangeListeners
-    XCTAssertNil(listeners[handle.id])
-
-    tasks = sut.mutableState.value.initialSessionTasks
-    XCTAssertNil(tasks[handle.id])
+    listeners = await sut.authChangeListeners
+    XCTAssertEqual(listeners.count, 0)
   }
 
   private func makeSUT(fetch: GoTrueClient.FetchHandler? = nil) -> GoTrueClient {

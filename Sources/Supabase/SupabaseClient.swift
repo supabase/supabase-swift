@@ -50,7 +50,7 @@ public class SupabaseClient {
   )
 
   private(set) var defaultHeaders: [String: String]
-  private var authStateListener: AuthStateListenerHandle?
+  private var listenForAuthEventsTask: Task<Void, Never>?
 
   private var session: URLSession {
     options.global.session
@@ -88,7 +88,7 @@ public class SupabaseClient {
   }
 
   deinit {
-    authStateListener?.unsubscribe()
+    listenForAuthEventsTask?.cancel()
   }
 
   @Sendable
@@ -113,8 +113,11 @@ public class SupabaseClient {
   }
 
   private func listenForAuthEvents() {
-    authStateListener = auth.onAuthStateChange { [weak self] event, session in
-      self?.handleTokenChanged(event: event, session: session)
+    listenForAuthEventsTask = Task {
+      for await event in await auth.onAuthStateChange() {
+        let session = try? await auth.session
+        handleTokenChanged(event: event, session: session)
+      }
     }
   }
 

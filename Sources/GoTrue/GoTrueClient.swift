@@ -7,17 +7,17 @@ public typealias AnyJSON = _Helpers.AnyJSON
   import FoundationNetworking
 #endif
 
-public struct AuthStateListenerHandle {
+public struct AuthStateListenerHandle: Sendable {
   let id: UUID
-  let onChange: (AuthChangeEvent, Session?) -> Void
-  let onUnsubscribe: () -> Void
+  let onChange: @Sendable (AuthChangeEvent, Session?) -> Void
+  let onUnsubscribe: @Sendable () -> Void
 
   public func unsubscribe() {
     onUnsubscribe()
   }
 }
 
-public final class GoTrueClient {
+public actor GoTrueClient {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
     Data,
     URLResponse
@@ -67,15 +67,14 @@ public final class GoTrueClient {
     }
   }
 
-  struct MutableState {
-    var authChangeListeners: [UUID: AuthStateListenerHandle] = [:]
-    var initialSessionTasks: [UUID: Task<Void, Never>] = [:]
-    var initializationTask: Task<Void, Never>?
+  struct AuthChangeListener {
+    var initialSessionTask: Task<Void, Never>
+    var continuation: AsyncStream<AuthChangeEvent>.Continuation
   }
 
-  let mutableState = LockIsolated(MutableState())
+  private(set) var authChangeListeners: [UUID: AuthChangeListener] = [:]
 
-  public convenience init(
+  public init(
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = .implicit,
@@ -97,7 +96,7 @@ public final class GoTrueClient {
     )
   }
 
-  public convenience init(configuration: Configuration) {
+  public init(configuration: Configuration) {
     self.init(
       configuration: configuration,
       sessionManager: DefaultSessionManager(
@@ -120,86 +119,38 @@ public final class GoTrueClient {
   }
 
   deinit {
-    mutableState.withValue {
-      $0.initializationTask?.cancel()
-      $0.initialSessionTasks.values.forEach { $0.cancel() }
+    authChangeListeners.forEach {
+      $0.value.continuation.finish()
     }
   }
 
-  public func initialization() async {
-    _debug("start")
-    defer { _debug("end") }
-
-    if let initializationTask = mutableState.value.initializationTask {
-      _debug("initializationTask exists, will wait for completion.")
-      await initializationTask.value
-      return
-    }
-
-    let initializationTask = Task(priority: .userInitiated) { [weak self] in
-      guard let self else { return }
-
-      _debug("initializationTask started running")
-      defer { _debug("initializationTask finished running") }
-
-      await sessionManager.setSessionRefresher(self)
-
-      do {
-        _debug("initializationTask with fetch session")
-        _ = try await sessionManager.session()
-        _debug("initializationTask fetch session found, will emit event")
-
-        await emitAuthChangeEvent(.signedIn)
-      } catch is CancellationError {
-        _debug("initializationTask cancelled")
-      } catch {
-        _debug("initializationTask fetch session not found, will emit event")
-        await emitAuthChangeEvent(.signedOut)
-      }
-    }
-
-    mutableState.withValue {
-      $0.initializationTask = initializationTask
-    }
-
-    await initializationTask.value
-  }
-
-  /// Listen for ``AuthChangeEvent`` events.
-  /// - Parameter onChange: Closure to call when a new event is triggered.
-  /// - Returns: A handle that can be used to unsubscribe from changes.
-  public func onAuthStateChange(
-    onChange: @escaping (AuthChangeEvent, Session?) -> Void
-  ) -> AuthStateListenerHandle {
-    _debug("start")
-    defer { _debug("end") }
-
+  public func onAuthStateChange() -> AsyncStream<AuthChangeEvent> {
     let id = UUID()
 
-    let handle = AuthStateListenerHandle(id: id, onChange: onChange) { [id] in
-      self.mutableState.withValue {
-        $0.authChangeListeners[id] = nil
-        $0.initialSessionTasks[id]?.cancel()
-        $0.initialSessionTasks[id] = nil
-      }
+    let (stream, continuation) = AsyncStream<AuthChangeEvent>.makeStream()
 
-      self._debug("handle \(id) unsubscribed")
+    continuation.onTermination = { [self, id] _ in
+      Task(priority: .high) {
+        await removeStream(at: id)
+      }
     }
 
-    let emitInitialSessionTask = Task {
+    let emitInitialSessionTask = Task { [id] in
       _debug("emitInitialSessionTask start")
       defer { _debug("emitInitialSessionTask end") }
-      await emitInitialSession(id: id)
+      await emitInitialSession(forStreamWithID: id)
     }
 
-    mutableState.withValue {
-      $0.authChangeListeners[id] = handle
-      $0.initialSessionTasks[id] = emitInitialSessionTask
-    }
+    authChangeListeners[id] = AuthChangeListener(
+      initialSessionTask: emitInitialSessionTask,
+      continuation: continuation
+    )
 
-    self._debug("handle \(id) attached")
+    return stream
+  }
 
-    return handle
+  private func removeStream(at id: UUID) {
+    authChangeListeners[id] = nil
   }
 
   /// Creates a new user.
@@ -242,8 +193,11 @@ public final class GoTrueClient {
     if configuration.flowType == .pkce {
       let codeVerifier = PKCE.generateCodeVerifier()
 
-      // TODO: log thrown error
-      try? codeVerifierStorage.storeCodeVerifier(codeVerifier)
+      do {
+        try codeVerifierStorage.storeCodeVerifier(codeVerifier)
+      } catch {
+        _debug("Error storing code verifier: \(error)")
+      }
 
       let codeChallenge = PKCE.generateCodeChallenge(from: codeVerifier)
       let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
@@ -776,49 +730,32 @@ public final class GoTrueClient {
     _debug("start")
     defer { _debug("end") }
 
-    let session = try? await self.session
-    let listeners = mutableState.value.authChangeListeners.values
+    let listeners = authChangeListeners.values
     for listener in listeners {
-      listener.onChange(event, session)
+      listener.continuation.yield(event)
     }
   }
 
-  private func emitInitialSession(id: UUID) async {
+  private func emitInitialSession(forStreamWithID id: UUID) async {
     _debug("start")
     defer { _debug("end") }
 
-    await initialization()
+    guard let continuation = authChangeListeners[id]?.continuation else {
+      _debug("No continuation found for id: \(id)")
+      return
+    }
 
     let session = try? await self.session
-
-    if let session {
-      mutableState.value.authChangeListeners[id]?.onChange(.signedIn, session)
-    } else {
-      mutableState.value.authChangeListeners[id]?.onChange(.signedOut, nil)
-    }
+    continuation.yield(session != nil ? .signedIn : .signedOut)
   }
 
-  #if DEBUG
-    private let _debugCount = LockIsolated(0)
-    private func _debug(
-      _ message: String,
-      function: StaticString = #function,
-      line: UInt = #line
-    ) {
-      _debugCount.withValue {
-        debugPrint("\($0) [GoTrueClient] \(function):\(line) \(message)")
-        $0 += 1
-      }
-    }
-  #else
-    private func _debug(
-      _ message: String,
-      function: StaticString = #function,
-      line: UInt = #line
-    ) {
-      // no-op
-    }
-  #endif
+  private func _debug(
+    _ message: String,
+    function: StaticString = #function,
+    line: UInt = #line
+  ) {
+    debugPrint("[GoTrueClient] \(function):\(line) \(message)")
+  }
 
   private func isImplicitGrantFlow(url: URL) -> Bool {
     let fragments = extractParams(from: url)
