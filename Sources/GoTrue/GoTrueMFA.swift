@@ -6,13 +6,29 @@
 //
 
 import Foundation
+@_spi(Internal) import _Helpers
 
 /// Contains the full multi-factor authentication API.
 public actor GoTrueMFA {
-  /// Starts the enrollment process for a new Multi-Factor Authentication (MFA)
-  /// factor. This method creates a new `unverified` factor.
-  /// To verify a factor, present the QR code or secret to the user and ask them to add it to their
-  /// authenticator app.
+  let api: APIClient
+  let sessionManager: SessionManager
+  let configuration: GoTrueClient.Configuration
+  let eventEmitter: EventEmitter
+
+  init(
+    api: APIClient,
+    sessionManager: SessionManager,
+    configuration: GoTrueClient.Configuration,
+    eventEmitter: EventEmitter
+  ) {
+    self.api = api
+    self.sessionManager = sessionManager
+    self.configuration = configuration
+    self.eventEmitter = eventEmitter
+  }
+
+  /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method creates a new `unverified` factor.
+  /// To verify a factor, present the QR code or secret to the user and ask them to add it to their authenticator app.
   /// The user has to enter the code from their authenticator app to verify it.
   ///
   /// Upon verifying a factor, all other sessions are logged out and the current session's authenticator level is promoted to `aal2`.
@@ -20,7 +36,20 @@ public actor GoTrueMFA {
   /// - Parameter params: The parameters for enrolling a new MFA factor.
   /// - Returns: An authentication response after enrolling the factor.
   public func enroll(params: MFAEnrollParams) async throws -> AuthMFAEnrollResponse {
-    fatalError()
+    let response: AuthMFAEnrollResponse = try await api.authorizedExecute(
+      Request(
+        path: "/factors", method: "POST",
+        body: configuration.encoder.encode(params)
+      )
+    )
+    .decoded(decoder: configuration.decoder)
+
+    // TODO: check if we really need this.
+    //    if let qrCode = response.totp?.qrCode {
+    //      response.totp?.qrCode = "data:image/svg+xml;utf-8,\(qrCode)"
+    //    }
+
+    return response
   }
 
   /// Prepares a challenge used to verify that a user has access to a MFA factor.
@@ -28,7 +57,10 @@ public actor GoTrueMFA {
   /// - Parameter params: The parameters for creating a challenge.
   /// - Returns: An authentication response with the challenge information.
   public func challenge(params: MFAChallengeParams) async throws -> AuthMFAChallengeResponse {
-    fatalError()
+    try await api.authorizedExecute(
+      Request(path: "/factors/\(params.factorId)/challenge", method: "POST")
+    )
+    .decoded(decoder: configuration.decoder)
   }
 
   /// Verifies a code against a challenge. The verification code is
@@ -37,7 +69,18 @@ public actor GoTrueMFA {
   /// - Parameter params: The parameters for verifying the MFA factor.
   /// - Returns: An authentication response after verifying the factor.
   public func verify(params: MFAVerifyParams) async throws -> AuthMFAVerifyResponse {
-    fatalError()
+    let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
+      Request(
+        path: "/factors/\(params.factorId)/verify", method: "POST",
+        body: configuration.encoder.encode(params)
+      )
+    ).decoded(decoder: configuration.decoder)
+
+    try await sessionManager.update(response)
+
+    await eventEmitter.emit(.mfaChallengeVerified)
+
+    return response
   }
 
   /// Unenroll removes a MFA factor.
@@ -46,7 +89,10 @@ public actor GoTrueMFA {
   /// - Parameter params: The parameters for unenrolling an MFA factor.
   /// - Returns: An authentication response after unenrolling the factor.
   public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
-    fatalError()
+    try await api.authorizedExecute(
+      Request(path: "/factors/\(params.factorId)", method: "DELETE")
+    )
+    .decoded(decoder: configuration.decoder)
   }
 
   /// Helper method which creates a challenge and immediately uses the given code to verify against it thereafter. The verification code is
@@ -57,14 +103,22 @@ public actor GoTrueMFA {
   public func challengeAndVerify(params: MFAChallengeAndVerifyParams) async throws
     -> AuthMFAVerifyResponse
   {
-    fatalError()
+    let response = try await challenge(params: MFAChallengeParams(factorId: params.factorId))
+    return try await verify(
+      params: MFAVerifyParams(
+        factorId: params.factorId, challengeId: response.id, code: params.code))
   }
 
   /// Returns the list of MFA factors enabled for this user.
   ///
   /// - Returns: An authentication response with the list of MFA factors.
   public func listFactors() async throws -> AuthMFAListFactorsResponse {
-    fatalError()
+    let user = try await sessionManager.session().user
+    let factors = user.factors ?? []
+    let totp = factors.filter {
+      $0.factorType == .totp && $0.status == .verified
+    }
+    return AuthMFAListFactorsResponse(all: factors, totp: totp)
   }
 
   /// Returns the Authenticator Assurance Level (AAL) for the active session.
@@ -73,6 +127,44 @@ public actor GoTrueMFA {
   public func getAuthenticatorAssuranceLevel() async throws
     -> AuthMFAGetAuthenticatorAssuranceLevelResponse
   {
-    fatalError()
+    do {
+      let session = try await sessionManager.session()
+      let payload = try decode(jwt: session.accessToken)
+
+      var currentLevel: AuthenticatorAssuranceLevels?
+
+      if let aal = payload["aal"].flatMap({ $0 as? String }).flatMap(
+        AuthenticatorAssuranceLevels.init)
+      {
+        currentLevel = aal
+      }
+
+      var nextLevel = currentLevel
+
+      let verifiedFactors = session.user.factors?.filter({ $0.status == .verified }) ?? []
+      if !verifiedFactors.isEmpty {
+        nextLevel = .aal2
+      }
+
+      var currentAuthenticationMethods: [AMREntry] = []
+
+      if let amr = payload["amr"] as? [Any] {
+        currentAuthenticationMethods = amr.compactMap(AMREntry.init(value:))
+      }
+
+      return AuthMFAGetAuthenticatorAssuranceLevelResponse(
+        currentLevel: currentLevel,
+        nextLevel: nextLevel,
+        currentAuthenticationMethods: currentAuthenticationMethods
+      )
+    } catch GoTrueError.sessionNotFound {
+      return AuthMFAGetAuthenticatorAssuranceLevelResponse(
+        currentLevel: nil,
+        nextLevel: nil,
+        currentAuthenticationMethods: []
+      )
+    } catch {
+      throw error
+    }
   }
 }

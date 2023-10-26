@@ -7,6 +7,7 @@ public enum AuthChangeEvent: String, Sendable {
   case tokenRefreshed = "TOKEN_REFRESHED"
   case userUpdated = "USER_UPDATED"
   case userDeleted = "USER_DELETED"
+  case mfaChallengeVerified = "MFA_CHALLENGE_VERIFIED"
 }
 
 public struct UserCredentials: Codable, Hashable, Sendable {
@@ -97,6 +98,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public var role: String?
   public var updatedAt: Date
   public var identities: [UserIdentity]?
+  public var factors: [Factor]?
 
   public init(
     id: UUID,
@@ -118,7 +120,8 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     lastSignInAt: Date? = nil,
     role: String? = nil,
     updatedAt: Date,
-    identities: [UserIdentity]? = nil
+    identities: [UserIdentity]? = nil,
+    factors: [Factor]? = nil
   ) {
     self.id = id
     self.appMetadata = appMetadata
@@ -140,6 +143,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     self.role = role
     self.updatedAt = updatedAt
     self.identities = identities
+    self.factors = factors
   }
 }
 
@@ -337,8 +341,31 @@ public enum AuthFlowType {
   case pkce
 }
 
-public enum FactorType: String, Codable {
+public enum FactorType: String, Codable, Sendable {
   case totp
+}
+
+public enum FactorStatus: String, Codable, Sendable {
+  case verified
+  case unverified
+}
+
+/// An MFA Factor.
+public struct Factor: Codable, Hashable, Sendable {
+  /// ID of the factor.
+  public let id: String
+
+  /// Friendly name of the factor, useful to disambiguate between multiple factors.
+  public let friendlyMame: String?
+
+  /// Type of factor. Only `totp` supported with this version but may change in future versions.
+  public let factorType: FactorType
+
+  /// Factor's status.
+  public let status: FactorStatus
+
+  public let createdAt: Date
+  public let updatedAt: Date
 }
 
 public struct MFAEnrollParams: Encodable, Hashable {
@@ -362,11 +389,11 @@ public struct AuthMFAEnrollResponse: Decodable, Hashable {
   public let type: FactorType
 
   /// TOTP enrollment information.
-  public var totp: TOTP
+  public var totp: TOTP?
 
   public struct TOTP: Decodable, Hashable {
     /// Contains a QR code encoding the authenticator URI. You can convert it to a URL by prepending `data:image/svg+xml;utf-8,` to the value. Avoid logging this value to the console.
-    public let qrCode: String
+    public var qrCode: String
 
     /// The TOTP secret (also encoded in the QR code). Show this secret in a password-style field to the user, in case they are unable to scan the QR code. Avoid logging this value to the console.
     public let secret: String
@@ -376,15 +403,105 @@ public struct AuthMFAEnrollResponse: Decodable, Hashable {
   }
 }
 
-public struct MFAChallengeParams { /* Define parameters */  }
-public struct MFAVerifyParams { /* Define parameters */  }
-public struct MFAUnenrollParams { /* Define parameters */  }
-public struct MFAChallengeAndVerifyParams { /* Define parameters */  }
-public struct AuthMFAChallengeResponse { /* Define response */  }
-public struct AuthMFAVerifyResponse { /* Define response */  }
-public struct AuthMFAUnenrollResponse { /* Define response */  }
-public struct AuthMFAListFactorsResponse { /* Define response */  }
-public struct AuthMFAGetAuthenticatorAssuranceLevelResponse { /* Define response */  }
+public struct MFAChallengeParams: Encodable, Hashable {
+  /// ID of the factor to be challenged. Returned in ``GoTrueMFA.enroll(params:)``.
+  public let factorId: String
+}
+
+public struct MFAVerifyParams: Encodable, Hashable {
+  /// ID of the factor being verified. Returned in ``GoTrueMFA.enroll(params:)``.
+  public let factorId: String
+
+  /// ID of the challenge being verified. Returned in challenge().
+  public let challengeId: String
+
+  /// Verification code provided by the user.
+  public let code: String
+}
+
+public struct MFAUnenrollParams: Encodable, Hashable {
+  /// ID of the factor to unenroll. Returned in ``GoTrueMFA.enroll(params:)``.
+  public let factorId: String
+}
+
+public struct MFAChallengeAndVerifyParams: Encodable, Hashable {
+  /// ID of the factor to be challenged. Returned in ``GoTrueMFA.enroll(params:)``.
+  public let factorId: String
+
+  /// Verification code provided by the user.
+  public let code: String
+}
+
+public struct AuthMFAChallengeResponse: Decodable, Hashable {
+  /// ID of the newly created challenge.
+  public let id: String
+
+  /// Timestamp in UNIX seconds when this challenge will no longer be usable.
+  public let expiresAt: TimeInterval
+}
+
+public typealias AuthMFAVerifyResponse = Session
+
+public struct AuthMFAUnenrollResponse: Decodable, Hashable {
+  /// ID of the factor that was successfully unenrolled.
+  public let factorId: String
+}
+
+public struct AuthMFAListFactorsResponse: Decodable, Hashable {
+  /// All available factors (verified and unverified).
+  public let all: [Factor]
+
+  /// Only verified TOTP factors. (A subset of `all`.)
+  public let totp: [Factor]
+}
+
+public enum AuthenticatorAssuranceLevels: String, Codable {
+  case aal1
+  case aal2
+}
+
+/// An authentication method reference (AMR) entry.
+///
+/// An entry designates what method was used by the user to verify their identity and at what time.
+public struct AMREntry: Decodable, Hashable {
+  /// Authentication method name.
+  public let method: Method
+
+  /// Timestamp when the method was successfully used.
+  public let timestamp: TimeInterval
+
+  public enum Method: String, Decodable {
+    case password
+    case otp
+    case oauth
+    case mfaTOTP = "mfa/totp"
+  }
+}
+
+extension AMREntry {
+  init?(value: Any) {
+    guard let dict = value as? [String: Any],
+      let method = dict["method"].flatMap({ $0 as? String }).flatMap(Method.init),
+      let timestamp = dict["timestamp"].flatMap({ $0 as? TimeInterval })
+    else {
+      return nil
+    }
+
+    self.method = method
+    self.timestamp = timestamp
+  }
+}
+
+public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable {
+  /// Current AAL level of the session.
+  public let currentLevel: AuthenticatorAssuranceLevels?
+
+  /// Next possible AAL level for the session. If the next level is higher than the current one, the user should go through MFA.
+  public let nextLevel: AuthenticatorAssuranceLevels?
+
+  /// A list of all authentication methods attached to this session. Use the information here to detect the last time a user verified a factor, for example if implementing a step-up scenario.
+  public let currentAuthenticationMethods: [AMREntry]
+}
 
 // MARK: - Encodable & Decodable
 

@@ -17,6 +17,57 @@ public struct AuthStateListenerHandle: Sendable {
   }
 }
 
+actor EventEmitter {
+  //  struct AuthChangeListener {
+  //    var initialSessionTask: Task<Void, Never>
+  //    var continuation: AsyncStream<AuthChangeEvent>.Continuation
+  //  }
+
+  deinit {
+    continuations.values.forEach {
+      $0.finish()
+    }
+  }
+
+  private(set) var continuations: [UUID: AsyncStream<AuthChangeEvent>.Continuation] = [:]
+
+  func attachListener() -> (id: UUID, stream: AsyncStream<AuthChangeEvent>) {
+    let id = UUID()
+
+    let (stream, continuation) = AsyncStream<AuthChangeEvent>.makeStream()
+
+    continuation.onTermination = { [self, id] _ in
+      Task(priority: .high) {
+        await removeStream(at: id)
+      }
+    }
+
+    //    let emitInitialSessionTask = Task { [id] in
+    //      _debug("emitInitialSessionTask start")
+    //      defer { _debug("emitInitialSessionTask end") }
+    //      await emitInitialSession(forStreamWithID: id)
+    //    }
+
+    continuations[id] = continuation
+
+    return (id, stream)
+  }
+
+  private func removeStream(at id: UUID) {
+    self.continuations[id] = nil
+  }
+
+  func emit(_ event: AuthChangeEvent, id: UUID? = nil) {
+    if let id {
+      continuations[id]?.yield(event)
+    } else {
+      for continuation in continuations.values {
+        continuation.yield(event)
+      }
+    }
+  }
+}
+
 public actor GoTrueClient {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
     Data,
@@ -60,6 +111,7 @@ public actor GoTrueClient {
   private let api: APIClient
   private let sessionManager: SessionManager
   private let codeVerifierStorage: CodeVerifierStorage
+  private let eventEmitter: EventEmitter
 
   /// Returns the session, refreshing it if necessary.
   public var session: Session {
@@ -70,13 +122,6 @@ public actor GoTrueClient {
 
   /// Namespace for accessing multi-factor authentication API.
   public let mfa: GoTrueMFA
-
-  struct AuthChangeListener {
-    var initialSessionTask: Task<Void, Never>
-    var continuation: AsyncStream<AuthChangeEvent>.Continuation
-  }
-
-  private(set) var authChangeListeners: [UUID: AuthChangeListener] = [:]
 
   public init(
     url: URL,
@@ -121,42 +166,28 @@ public actor GoTrueClient {
     self.api = APIClient(configuration: configuration, sessionManager: sessionManager)
     self.sessionManager = sessionManager
     self.codeVerifierStorage = codeVerifierStorage
-    self.mfa = GoTrueMFA()
+    self.eventEmitter = EventEmitter()
+
+    self.mfa = GoTrueMFA(
+      api: api, sessionManager: sessionManager, configuration: configuration,
+      eventEmitter: eventEmitter)
   }
 
-  deinit {
-    authChangeListeners.forEach {
-      $0.value.continuation.finish()
-    }
-  }
-
-  public func onAuthStateChange() -> AsyncStream<AuthChangeEvent> {
-    let id = UUID()
-
-    let (stream, continuation) = AsyncStream<AuthChangeEvent>.makeStream()
-
-    continuation.onTermination = { [self, id] _ in
-      Task(priority: .high) {
-        await removeStream(at: id)
-      }
-    }
+  public func onAuthStateChange() async -> AsyncStream<AuthChangeEvent> {
+    let (id, stream) = await eventEmitter.attachListener()
 
     let emitInitialSessionTask = Task { [id] in
       _debug("emitInitialSessionTask start")
       defer { _debug("emitInitialSessionTask end") }
       await emitInitialSession(forStreamWithID: id)
     }
-
-    authChangeListeners[id] = AuthChangeListener(
-      initialSessionTask: emitInitialSessionTask,
-      continuation: continuation
-    )
+    //
+    //    authChangeListeners[id] = AuthChangeListener(
+    //      initialSessionTask: emitInitialSessionTask,
+    //      continuation: continuation
+    //    )
 
     return stream
-  }
-
-  private func removeStream(at id: UUID) {
-    authChangeListeners[id] = nil
   }
 
   /// Creates a new user.
@@ -251,7 +282,7 @@ public actor GoTrueClient {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      await emitAuthChangeEvent(.signedIn)
+      await eventEmitter.emit(.signedIn)
     }
 
     return response
@@ -311,7 +342,7 @@ public actor GoTrueClient {
 
     if session.user.emailConfirmedAt != nil || session.user.confirmedAt != nil {
       try await sessionManager.update(session)
-      await emitAuthChangeEvent(.signedIn)
+      await eventEmitter.emit(.signedIn)
     }
 
     return session
@@ -414,7 +445,7 @@ public actor GoTrueClient {
       try codeVerifierStorage.deleteCodeVerifier()
 
       try await sessionManager.update(session)
-      await emitAuthChangeEvent(.signedIn)
+      await eventEmitter.emit(.signedIn)
 
       return session
     } catch {
@@ -517,10 +548,10 @@ public actor GoTrueClient {
     )
 
     try await sessionManager.update(session)
-    await emitAuthChangeEvent(.signedIn)
+    await eventEmitter.emit(.signedIn)
 
     if let type = params.first(where: { $0.name == "type" })?.value, type == "recovery" {
-      await emitAuthChangeEvent(.passwordRecovery)
+      await eventEmitter.emit(.passwordRecovery)
     }
 
     return session
@@ -569,7 +600,7 @@ public actor GoTrueClient {
     }
 
     try await sessionManager.update(session)
-    await emitAuthChangeEvent(.tokenRefreshed)
+    await eventEmitter.emit(.tokenRefreshed)
     return session
   }
 
@@ -584,9 +615,9 @@ public actor GoTrueClient {
         )
       )
       await sessionManager.remove()
-      await emitAuthChangeEvent(.signedOut)
+      await eventEmitter.emit(.signedOut)
     } catch {
-      await emitAuthChangeEvent(.signedOut)
+      await eventEmitter.emit(.signedOut)
       throw error
     }
   }
@@ -653,7 +684,7 @@ public actor GoTrueClient {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      await emitAuthChangeEvent(.signedIn)
+      await eventEmitter.emit(.signedIn)
     }
 
     return response
@@ -676,7 +707,7 @@ public actor GoTrueClient {
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
     try await sessionManager.update(session)
-    await emitAuthChangeEvent(.userUpdated)
+    await eventEmitter.emit(.userUpdated)
     return updatedUser
   }
 
@@ -703,27 +734,12 @@ public actor GoTrueClient {
     )
   }
 
-  private func emitAuthChangeEvent(_ event: AuthChangeEvent) async {
-    _debug("start")
-    defer { _debug("end") }
-
-    let listeners = authChangeListeners.values
-    for listener in listeners {
-      listener.continuation.yield(event)
-    }
-  }
-
   private func emitInitialSession(forStreamWithID id: UUID) async {
     _debug("start")
     defer { _debug("end") }
 
-    guard let continuation = authChangeListeners[id]?.continuation else {
-      _debug("No continuation found for id: \(id)")
-      return
-    }
-
     let session = try? await self.session
-    continuation.yield(session != nil ? .signedIn : .signedOut)
+    await eventEmitter.emit(session != nil ? .signedIn : .signedOut, id: id)
   }
 
   private func _debug(
@@ -766,7 +782,7 @@ extension GoTrueClient: SessionRefresher {
           .user.confirmedAt != nil
       {
         try await sessionManager.update(session)
-        await emitAuthChangeEvent(.signedIn)
+        await eventEmitter.emit(.signedIn)
       }
 
       return session
