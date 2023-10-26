@@ -57,6 +57,7 @@ public actor GoTrueClient {
   }
 
   private let configuration: Configuration
+  private let api: APIClient
   private let sessionManager: SessionManager
   private let codeVerifierStorage: CodeVerifierStorage
 
@@ -114,6 +115,7 @@ public actor GoTrueClient {
     var configuration = configuration
     configuration.headers["X-Client-Info"] = "gotrue-swift/\(version)"
     self.configuration = configuration
+    self.api = APIClient(configuration: configuration, sessionManager: sessionManager)
     self.sessionManager = sessionManager
     self.codeVerifierStorage = codeVerifierStorage
   }
@@ -238,7 +240,7 @@ public actor GoTrueClient {
 
   private func _signUp(request: Request) async throws -> AuthResponse {
     await sessionManager.remove()
-    let response = try await execute(request).decoded(
+    let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
       decoder: configuration.decoder
     )
@@ -298,7 +300,7 @@ public actor GoTrueClient {
   private func _signIn(request: Request) async throws -> Session {
     await sessionManager.remove()
 
-    let session = try await execute(request).decoded(
+    let session = try await api.execute(request).decoded(
       as: Session.self,
       decoder: configuration.decoder
     )
@@ -333,7 +335,7 @@ public actor GoTrueClient {
 
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    try await execute(
+    try await api.execute(
       .init(
         path: "/otp",
         method: "POST",
@@ -368,7 +370,7 @@ public actor GoTrueClient {
     captchaToken: String? = nil
   ) async throws {
     await sessionManager.remove()
-    try await execute(
+    try await api.execute(
       .init(
         path: "/otp",
         method: "POST",
@@ -390,7 +392,7 @@ public actor GoTrueClient {
       throw GoTrueError.pkce(.codeVerifierNotFound)
     }
     do {
-      let session: Session = try await execute(
+      let session: Session = try await api.execute(
         .init(
           path: "/token",
           method: "POST",
@@ -492,7 +494,7 @@ public actor GoTrueClient {
     let providerToken = params.first(where: { $0.name == "provider_token" })?.value
     let providerRefreshToken = params.first(where: { $0.name == "provider_refresh_token" })?.value
 
-    let user = try await execute(
+    let user = try await api.execute(
       .init(
         path: "/user",
         method: "GET",
@@ -547,7 +549,7 @@ public actor GoTrueClient {
     if hasExpired {
       session = try await refreshSession(refreshToken: refreshToken)
     } else {
-      let user = try await authorizedExecute(.init(path: "/user", method: "GET"))
+      let user = try await api.authorizedExecute(.init(path: "/user", method: "GET"))
         .decoded(as: User.self, decoder: configuration.decoder)
       session = Session(
         accessToken: accessToken,
@@ -571,7 +573,7 @@ public actor GoTrueClient {
   public func signOut() async throws {
     do {
       _ = try await sessionManager.session()
-      try await authorizedExecute(
+      try await api.authorizedExecute(
         .init(
           path: "/logout",
           method: "POST"
@@ -640,7 +642,7 @@ public actor GoTrueClient {
   private func _verifyOTP(request: Request) async throws -> AuthResponse {
     await sessionManager.remove()
 
-    let response = try await execute(request).decoded(
+    let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
       decoder: configuration.decoder
     )
@@ -665,7 +667,7 @@ public actor GoTrueClient {
     }
 
     var session = try await sessionManager.session()
-    let updatedUser = try await authorizedExecute(
+    let updatedUser = try await api.authorizedExecute(
       .init(path: "/user", method: "PUT", body: configuration.encoder.encode(user))
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
@@ -680,7 +682,7 @@ public actor GoTrueClient {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    try await execute(
+    try await api.execute(
       .init(
         path: "/recover",
         method: "POST",
@@ -695,35 +697,6 @@ public actor GoTrueClient {
         )
       )
     )
-  }
-
-  @discardableResult
-  private func authorizedExecute(_ request: Request) async throws -> Response {
-    let session = try await sessionManager.session()
-
-    var request = request
-    request.headers["Authorization"] = "Bearer \(session.accessToken)"
-
-    return try await execute(request)
-  }
-
-  @discardableResult
-  private func execute(_ request: Request) async throws -> Response {
-    var request = request
-    request.headers.merge(configuration.headers) { r, _ in r }
-    let urlRequest = try request.urlRequest(withBaseURL: configuration.url)
-
-    let (data, response) = try await configuration.fetch(urlRequest)
-    guard let httpResponse = response as? HTTPURLResponse else {
-      throw URLError(.badServerResponse)
-    }
-
-    guard (200..<300).contains(httpResponse.statusCode) else {
-      let apiError = try configuration.decoder.decode(GoTrueError.APIError.self, from: data)
-      throw GoTrueError.api(apiError)
-    }
-
-    return Response(data: data, response: httpResponse)
   }
 
   private func emitAuthChangeEvent(_ event: AuthChangeEvent) async {
@@ -775,7 +748,7 @@ extension GoTrueClient: SessionRefresher {
   @discardableResult
   public func refreshSession(refreshToken: String) async throws -> Session {
     do {
-      let session = try await execute(
+      let session = try await api.execute(
         .init(
           path: "/token",
           method: "POST",
