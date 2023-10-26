@@ -7,21 +7,9 @@ public typealias AnyJSON = _Helpers.AnyJSON
   import FoundationNetworking
 #endif
 
-public struct AuthStateListenerHandle: Sendable {
-  let id: UUID
-  let onChange: @Sendable (AuthChangeEvent, Session?) -> Void
-  let onUnsubscribe: @Sendable () -> Void
-
-  public func unsubscribe() {
-    onUnsubscribe()
-  }
-}
-
 public actor GoTrueClient {
-  public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
-    Data,
-    URLResponse
-  )
+  public typealias FetchHandler = 
+    @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
 
   public struct Configuration {
     public let url: URL
@@ -95,31 +83,50 @@ public actor GoTrueClient {
   }
 
   public init(configuration: Configuration) {
+    var configuration = configuration
+    configuration.headers["X-Client-Info"] = "gotrue-swift/\(version)"
+
+    let sessionManager = DefaultSessionManager(
+      storage: DefaultSessionStorage(
+        localStorage: configuration.localStorage
+      )
+    )
+    let codeVerifierStorage = DefaultCodeVerifierStorage(localStorage: configuration.localStorage)
+    let api = APIClient(configuration: configuration, sessionManager: sessionManager)
+    let eventEmitter = DefaultEventEmitter()
+
+    let mfa = GoTrueMFA(
+      api: api, 
+      sessionManager: sessionManager,
+      configuration: configuration,
+      eventEmitter: eventEmitter
+    )
+
     self.init(
       configuration: configuration,
-      sessionManager: DefaultSessionManager(
-        storage: DefaultSessionStorage(localStorage: configuration.localStorage)
-      ),
-      codeVerifierStorage: DefaultCodeVerifierStorage(localStorage: configuration.localStorage)
+      sessionManager: sessionManager,
+      codeVerifierStorage: codeVerifierStorage,
+      api: api,
+      eventEmitter: eventEmitter,
+      mfa: mfa
     )
   }
 
+  /// This internal initializer is here only for easy injecting mock instances when testing.
   init(
     configuration: Configuration,
     sessionManager: SessionManager,
-    codeVerifierStorage: CodeVerifierStorage
+    codeVerifierStorage: CodeVerifierStorage,
+    api: APIClient,
+    eventEmitter: EventEmitter,
+    mfa: GoTrueMFA
   ) {
-    var configuration = configuration
-    configuration.headers["X-Client-Info"] = "gotrue-swift/\(version)"
     self.configuration = configuration
-    self.api = APIClient(configuration: configuration, sessionManager: sessionManager)
+    self.api = api
     self.sessionManager = sessionManager
     self.codeVerifierStorage = codeVerifierStorage
-    self.eventEmitter = DefaultEventEmitter()
-
-    self.mfa = GoTrueMFA(
-      api: api, sessionManager: sessionManager, configuration: configuration,
-      eventEmitter: eventEmitter)
+    self.eventEmitter = eventEmitter
+    self.mfa = mfa
   }
 
   public func onAuthStateChange() async -> AsyncStream<AuthChangeEvent> {
@@ -130,6 +137,8 @@ public actor GoTrueClient {
       defer { _debug("emitInitialSessionTask end") }
       await emitInitialSession(forStreamWithID: id)
     }
+
+    // TODO: store the emitInitialSessionTask somewhere, and cancel it when AsyncStream finishes.
     //
     //    authChangeListeners[id] = AuthChangeListener(
     //      initialSessionTask: emitInitialSessionTask,
