@@ -116,7 +116,7 @@ public actor GoTrueMFA {
     let user = try await sessionManager.session().user
     let factors = user.factors ?? []
     let totp = factors.filter {
-      $0.factorType == .totp && $0.status == .verified
+      $0.factorType == "totp" && $0.status == .verified
     }
     return AuthMFAListFactorsResponse(all: factors, totp: totp)
   }
@@ -133,9 +133,7 @@ public actor GoTrueMFA {
 
       var currentLevel: AuthenticatorAssuranceLevels?
 
-      if let aal = payload["aal"].flatMap({ $0 as? String }).flatMap(
-        AuthenticatorAssuranceLevels.init)
-      {
+      if let aal = payload["aal"] as? AuthenticatorAssuranceLevels {
         currentLevel = aal
       }
 
@@ -143,7 +141,7 @@ public actor GoTrueMFA {
 
       let verifiedFactors = session.user.factors?.filter({ $0.status == .verified }) ?? []
       if !verifiedFactors.isEmpty {
-        nextLevel = .aal2
+        nextLevel = "aal2"
       }
 
       var currentAuthenticationMethods: [AMREntry] = []

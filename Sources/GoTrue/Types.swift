@@ -341,9 +341,7 @@ public enum AuthFlowType {
   case pkce
 }
 
-public enum FactorType: String, Codable, Sendable {
-  case totp
-}
+public typealias FactorType = String
 
 public enum FactorStatus: String, Codable, Sendable {
   case verified
@@ -359,7 +357,7 @@ public struct Factor: Codable, Hashable, Sendable {
   public let friendlyMame: String?
 
   /// Type of factor. Only `totp` supported with this version but may change in future versions.
-  public let factorType: FactorType
+  public let factorType: String
 
   /// Factor's status.
   public let status: FactorStatus
@@ -369,7 +367,7 @@ public struct Factor: Codable, Hashable, Sendable {
 }
 
 public struct MFAEnrollParams: Encodable, Hashable {
-  public let factorType: FactorType = .totp
+  public let factorType: FactorType = "totp"
   /// Domain which the user is enrolled with.
   public let issuer: String?
   /// Human readable name assigned to the factor.
@@ -455,10 +453,7 @@ public struct AuthMFAListFactorsResponse: Decodable, Hashable {
   public let totp: [Factor]
 }
 
-public enum AuthenticatorAssuranceLevels: String, Codable {
-  case aal1
-  case aal2
-}
+public typealias AuthenticatorAssuranceLevels = String
 
 /// An authentication method reference (AMR) entry.
 ///
@@ -470,19 +465,14 @@ public struct AMREntry: Decodable, Hashable {
   /// Timestamp when the method was successfully used.
   public let timestamp: TimeInterval
 
-  public enum Method: String, Decodable {
-    case password
-    case otp
-    case oauth
-    case mfaTOTP = "mfa/totp"
-  }
+  public typealias Method = String
 }
 
 extension AMREntry {
   init?(value: Any) {
     guard let dict = value as? [String: Any],
-      let method = dict["method"].flatMap({ $0 as? String }).flatMap(Method.init),
-      let timestamp = dict["timestamp"].flatMap({ $0 as? TimeInterval })
+      let method = dict["method"] as? Method,
+      let timestamp = dict["timestamp"] as? TimeInterval
     else {
       return nil
     }

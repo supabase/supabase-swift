@@ -269,26 +269,43 @@ final class RequestsTests: XCTestCase {
     let encoder = JSONEncoder.goTrue
     encoder.outputFormatting = .sortedKeys
 
-    return GoTrueClient(
-      configuration: GoTrueClient.Configuration(
-        url: clientURL,
-        headers: ["apikey": "dummy.api.key"],
-        encoder: encoder,
-        fetch: { request in
-          DispatchQueue.main.sync {
-            assertSnapshot(
-              of: request, as: .curl, record: record, file: file, testName: testName, line: line)
-          }
+    let sessionManager = DefaultSessionManager(storage: storage)
 
-          if let fetch {
-            return try await fetch(request)
-          }
-
-          throw UnimplementedError()
+    let configuration = GoTrueClient.Configuration(
+      url: clientURL,
+      headers: ["apikey": "dummy.api.key"],
+      encoder: encoder,
+      fetch: { request in
+        DispatchQueue.main.sync {
+          assertSnapshot(
+            of: request, as: .curl, record: record, file: file, testName: testName, line: line)
         }
-      ),
-      sessionManager: DefaultSessionManager(storage: storage),
-      codeVerifierStorage: CodeVerifierStorageMock()
+
+        if let fetch {
+          return try await fetch(request)
+        }
+
+        throw UnimplementedError()
+      }
+    )
+
+    let eventEmitter = DefaultEventEmitter()
+
+    // TODO: Inject a mocked APIClient
+    let api = APIClient(configuration: configuration, sessionManager: sessionManager)
+
+    // TODO: Inject a mocked GoTrueMFA
+    let mfa = GoTrueMFA(
+      api: api, sessionManager: sessionManager, configuration: configuration,
+      eventEmitter: eventEmitter)
+
+    return GoTrueClient(
+      configuration: configuration,
+      sessionManager: sessionManager,
+      codeVerifierStorage: CodeVerifierStorageMock(),
+      api: api,
+      eventEmitter: eventEmitter,
+      mfa: mfa
     )
   }
 }

@@ -8,7 +8,7 @@ public typealias AnyJSON = _Helpers.AnyJSON
 #endif
 
 public actor GoTrueClient {
-  public typealias FetchHandler = 
+  public typealias FetchHandler =
     @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
 
   public struct Configuration {
@@ -29,6 +29,11 @@ public actor GoTrueClient {
       decoder: JSONDecoder = .goTrue,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
     ) {
+      var headers = headers
+      if headers["X-Client-Info"] == nil {
+        headers["X-Client-Info"] = "gotrue-swift/\(version)"
+      }
+
       self.url = url
       self.headers = headers
       self.flowType = flowType
@@ -48,7 +53,7 @@ public actor GoTrueClient {
   private let api: APIClient
   private let sessionManager: SessionManager
   private let codeVerifierStorage: CodeVerifierStorage
-  private let eventEmitter: EventEmitter
+  let eventEmitter: EventEmitter
 
   /// Returns the session, refreshing it if necessary.
   public var session: Session {
@@ -83,9 +88,6 @@ public actor GoTrueClient {
   }
 
   public init(configuration: Configuration) {
-    var configuration = configuration
-    configuration.headers["X-Client-Info"] = "gotrue-swift/\(version)"
-
     let sessionManager = DefaultSessionManager(
       storage: DefaultSessionStorage(
         localStorage: configuration.localStorage
@@ -96,7 +98,7 @@ public actor GoTrueClient {
     let eventEmitter = DefaultEventEmitter()
 
     let mfa = GoTrueMFA(
-      api: api, 
+      api: api,
       sessionManager: sessionManager,
       configuration: configuration,
       eventEmitter: eventEmitter
