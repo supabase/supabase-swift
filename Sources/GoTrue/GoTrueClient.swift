@@ -17,57 +17,6 @@ public struct AuthStateListenerHandle: Sendable {
   }
 }
 
-actor EventEmitter {
-  //  struct AuthChangeListener {
-  //    var initialSessionTask: Task<Void, Never>
-  //    var continuation: AsyncStream<AuthChangeEvent>.Continuation
-  //  }
-
-  deinit {
-    continuations.values.forEach {
-      $0.finish()
-    }
-  }
-
-  private(set) var continuations: [UUID: AsyncStream<AuthChangeEvent>.Continuation] = [:]
-
-  func attachListener() -> (id: UUID, stream: AsyncStream<AuthChangeEvent>) {
-    let id = UUID()
-
-    let (stream, continuation) = AsyncStream<AuthChangeEvent>.makeStream()
-
-    continuation.onTermination = { [self, id] _ in
-      Task(priority: .high) {
-        await removeStream(at: id)
-      }
-    }
-
-    //    let emitInitialSessionTask = Task { [id] in
-    //      _debug("emitInitialSessionTask start")
-    //      defer { _debug("emitInitialSessionTask end") }
-    //      await emitInitialSession(forStreamWithID: id)
-    //    }
-
-    continuations[id] = continuation
-
-    return (id, stream)
-  }
-
-  private func removeStream(at id: UUID) {
-    self.continuations[id] = nil
-  }
-
-  func emit(_ event: AuthChangeEvent, id: UUID? = nil) {
-    if let id {
-      continuations[id]?.yield(event)
-    } else {
-      for continuation in continuations.values {
-        continuation.yield(event)
-      }
-    }
-  }
-}
-
 public actor GoTrueClient {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
     Data,
@@ -166,7 +115,7 @@ public actor GoTrueClient {
     self.api = APIClient(configuration: configuration, sessionManager: sessionManager)
     self.sessionManager = sessionManager
     self.codeVerifierStorage = codeVerifierStorage
-    self.eventEmitter = EventEmitter()
+    self.eventEmitter = DefaultEventEmitter()
 
     self.mfa = GoTrueMFA(
       api: api, sessionManager: sessionManager, configuration: configuration,
