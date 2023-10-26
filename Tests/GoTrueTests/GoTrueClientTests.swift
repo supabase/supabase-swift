@@ -45,6 +45,8 @@ final class GoTrueClientTests: XCTestCase {
 
     streamTask.cancel()
 
+    await Task.megaYield()
+
     listeners = await sut.authChangeListeners
     XCTAssertEqual(listeners.count, 0)
   }
