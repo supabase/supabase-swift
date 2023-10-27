@@ -2,13 +2,12 @@ import Foundation
 @_spi(Internal) import _Helpers
 
 actor APIClient {
+  private var configuration: GoTrueClient.Configuration {
+    Dependencies.current.value!.configuration
+  }
 
-  private let configuration: GoTrueClient.Configuration
-  private let sessionManager: SessionManager
-
-  init(configuration: GoTrueClient.Configuration, sessionManager: SessionManager) {
-    self.configuration = configuration
-    self.sessionManager = sessionManager
+  private var sessionManager: SessionManager {
+    Dependencies.current.value!.sessionManager
   }
 
   @discardableResult

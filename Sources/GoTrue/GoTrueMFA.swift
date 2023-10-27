@@ -1,30 +1,22 @@
-//
-//  File.swift
-//
-//
-//  Created by Guilherme Souza on 26/10/23.
-//
-
 import Foundation
 @_spi(Internal) import _Helpers
 
 /// Contains the full multi-factor authentication API.
 public actor GoTrueMFA {
-  let api: APIClient
-  let sessionManager: SessionManager
-  let configuration: GoTrueClient.Configuration
-  let eventEmitter: EventEmitter
+  private var api: APIClient {
+    Dependencies.current.value!.api
+  }
 
-  init(
-    api: APIClient,
-    sessionManager: SessionManager,
-    configuration: GoTrueClient.Configuration,
-    eventEmitter: EventEmitter
-  ) {
-    self.api = api
-    self.sessionManager = sessionManager
-    self.configuration = configuration
-    self.eventEmitter = eventEmitter
+  private var sessionManager: SessionManager {
+    Dependencies.current.value!.sessionManager
+  }
+
+  private var configuration: GoTrueClient.Configuration {
+    Dependencies.current.value!.configuration
+  }
+
+  private var eventEmitter: EventEmitter {
+    Dependencies.current.value!.eventEmitter
   }
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method creates a new `unverified` factor.
@@ -36,20 +28,13 @@ public actor GoTrueMFA {
   /// - Parameter params: The parameters for enrolling a new MFA factor.
   /// - Returns: An authentication response after enrolling the factor.
   public func enroll(params: MFAEnrollParams) async throws -> AuthMFAEnrollResponse {
-    let response: AuthMFAEnrollResponse = try await api.authorizedExecute(
+    try await api.authorizedExecute(
       Request(
         path: "/factors", method: "POST",
         body: configuration.encoder.encode(params)
       )
     )
     .decoded(decoder: configuration.decoder)
-
-    // TODO: check if we really need this.
-    //    if let qrCode = response.totp?.qrCode {
-    //      response.totp?.qrCode = "data:image/svg+xml;utf-8,\(qrCode)"
-    //    }
-
-    return response
   }
 
   /// Prepares a challenge used to verify that a user has access to a MFA factor.

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+@_spi(Internal) import _Helpers
 
 /// A locally stored ``Session``, it contains metadata such as `expirationDate`.
 struct StoredSession: Codable {
@@ -29,7 +30,9 @@ protocol SessionStorage {
 }
 
 struct DefaultSessionStorage: SessionStorage {
-  let localStorage: GoTrueLocalStorage
+  private var localStorage: GoTrueLocalStorage {
+    Dependencies.current.value!.configuration.localStorage
+  }
 
   func getSession() throws -> StoredSession? {
     try localStorage.retrieve(key: "supabase.session").flatMap {

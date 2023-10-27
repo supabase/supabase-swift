@@ -49,11 +49,23 @@ public actor GoTrueClient {
     }
   }
 
-  private let configuration: Configuration
-  private let api: APIClient
-  private let sessionManager: SessionManager
+  private var configuration: Configuration {
+    Dependencies.current.value!.configuration
+  }
+
+  private var api: APIClient {
+    Dependencies.current.value!.api
+  }
+
+  private var sessionManager: SessionManager {
+    Dependencies.current.value!.sessionManager
+  }
+
   private let codeVerifierStorage: CodeVerifierStorage
-  let eventEmitter: EventEmitter
+
+  private var eventEmitter: EventEmitter {
+    Dependencies.current.value!.eventEmitter
+  }
 
   /// Returns the session, refreshing it if necessary.
   public var session: Session {
@@ -88,21 +100,12 @@ public actor GoTrueClient {
   }
 
   public init(configuration: Configuration) {
-    let sessionManager = DefaultSessionManager(
-      storage: DefaultSessionStorage(
-        localStorage: configuration.localStorage
-      )
-    )
-    let codeVerifierStorage = DefaultCodeVerifierStorage(localStorage: configuration.localStorage)
-    let api = APIClient(configuration: configuration, sessionManager: sessionManager)
-    let eventEmitter = DefaultEventEmitter()
+    let sessionStorage = DefaultSessionStorage()
+    let sessionManager = DefaultSessionManager()
 
-    let mfa = GoTrueMFA(
-      api: api,
-      sessionManager: sessionManager,
-      configuration: configuration,
-      eventEmitter: eventEmitter
-    )
+    let codeVerifierStorage = DefaultCodeVerifierStorage()
+    let api = APIClient()
+    let eventEmitter = DefaultEventEmitter()
 
     self.init(
       configuration: configuration,
@@ -110,7 +113,7 @@ public actor GoTrueClient {
       codeVerifierStorage: codeVerifierStorage,
       api: api,
       eventEmitter: eventEmitter,
-      mfa: mfa
+      sessionStorage: sessionStorage
     )
   }
 
@@ -121,14 +124,21 @@ public actor GoTrueClient {
     codeVerifierStorage: CodeVerifierStorage,
     api: APIClient,
     eventEmitter: EventEmitter,
-    mfa: GoTrueMFA
+    sessionStorage: SessionStorage
   ) {
-    self.configuration = configuration
-    self.api = api
-    self.sessionManager = sessionManager
     self.codeVerifierStorage = codeVerifierStorage
-    self.eventEmitter = eventEmitter
-    self.mfa = mfa
+    self.mfa = GoTrueMFA()
+
+    Dependencies.current.setValue(
+      Dependencies(
+        configuration: configuration,
+        sessionManager: sessionManager,
+        api: api,
+        eventEmitter: eventEmitter,
+        sessionStorage: sessionStorage,
+        sessionRefresher: self
+      )
+    )
   }
 
   public func onAuthStateChange() async -> AsyncStream<AuthChangeEvent> {
