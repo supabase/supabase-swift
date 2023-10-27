@@ -19,6 +19,7 @@
 // THE SOFTWARE.
 
 import Foundation
+@_spi(Internal) import _Helpers
 
 public enum SocketError: Error {
 
@@ -34,11 +35,11 @@ public typealias PayloadClosure = () -> Payload?
 
 /// Struct that gathers callbacks assigned to the Socket
 struct StateChangeCallbacks {
-  var open: SynchronizedArray<(ref: String, callback: Delegated<URLResponse?, Void>)> = .init()
-  var close: SynchronizedArray<(ref: String, callback: Delegated<(Int, String?), Void>)> = .init()
-  var error: SynchronizedArray<(ref: String, callback: Delegated<(Error, URLResponse?), Void>)> =
-    .init()
-  var message: SynchronizedArray<(ref: String, callback: Delegated<Message, Void>)> = .init()
+  var open: LockIsolated<[(ref: String, callback: Delegated<URLResponse?, Void>)]> = .init([])
+  var close: LockIsolated<[(ref: String, callback: Delegated<(Int, String?), Void>)]> = .init([])
+  var error: LockIsolated<[(ref: String, callback: Delegated<(Error, URLResponse?), Void>)]> =
+    .init([])
+  var message: LockIsolated<[(ref: String, callback: Delegated<Message, Void>)]> = .init([])
 }
 
 /// ## Socket Connection
@@ -162,6 +163,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   /// The connection to the server
   var connection: PhoenixTransport? = nil
+
+  var accessToken: String?
 
   //----------------------------------------------------------------------
   // MARK: - Initialization
@@ -300,12 +303,12 @@ public class RealtimeClient: PhoenixTransportDelegate {
     self.connection?.disconnect(code: code.rawValue, reason: reason)
     self.connection = nil
 
-    // The socket connection has been torndown, heartbeats are not needed
+    // The socket connection has been turndown, heartbeats are not needed
     self.heartbeatTimer?.stop()
 
     // Since the connection's delegate was nil'd out, inform all state
     // callbacks that the connection has closed
-    self.stateChangeCallbacks.close.forEach({ $0.callback.call((code.rawValue, reason)) })
+    self.stateChangeCallbacks.close.value.forEach({ $0.callback.call((code.rawValue, reason)) })
     callback?()
   }
 
@@ -343,7 +346,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<URLResponse?, Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return self.append(callback: delegated, to: &self.stateChangeCallbacks.open)
+    return stateChangeCallbacks.open.withValue {
+      self.append(callback: delegated, to: &$0)
+    }
   }
 
   /// Registers callbacks for connection open events. Automatically handles
@@ -384,7 +389,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<URLResponse?, Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return self.append(callback: delegated, to: &self.stateChangeCallbacks.open)
+    return stateChangeCallbacks.open.withValue {
+      self.append(callback: delegated, to: &$0)
+    }
   }
 
   /// Registers callbacks for connection close events. Does not handle retain
@@ -417,7 +424,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Int, String?), Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return self.append(callback: delegated, to: &self.stateChangeCallbacks.close)
+    return stateChangeCallbacks.close.withValue {
+      self.append(callback: delegated, to: &$0)
+    }
   }
 
   /// Registers callbacks for connection close events. Automatically handles
@@ -458,7 +467,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Int, String?), Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return self.append(callback: delegated, to: &self.stateChangeCallbacks.close)
+    return stateChangeCallbacks.close.withValue {
+      self.append(callback: delegated, to: &$0)
+    }
   }
 
   /// Registers callbacks for connection error events. Does not handle retain
@@ -476,7 +487,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Error, URLResponse?), Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return self.append(callback: delegated, to: &self.stateChangeCallbacks.error)
+    return stateChangeCallbacks.error.withValue {
+      self.append(callback: delegated, to: &$0)
+    }
   }
 
   /// Registers callbacks for connection error events. Automatically handles
@@ -498,7 +511,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Error, URLResponse?), Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return self.append(callback: delegated, to: &self.stateChangeCallbacks.error)
+    return stateChangeCallbacks.error.withValue {
+      self.append(callback: delegated, to: &$0)
+    }
   }
 
   /// Registers callbacks for connection message events. Does not handle
@@ -517,7 +532,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<Message, Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return self.append(callback: delegated, to: &self.stateChangeCallbacks.message)
+    return stateChangeCallbacks.message.withValue {
+      append(callback: delegated, to: &$0)
+    }
   }
 
   /// Registers callbacks for connection message events. Automatically handles
@@ -539,10 +556,12 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<Message, Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return self.append(callback: delegated, to: &self.stateChangeCallbacks.message)
+    return stateChangeCallbacks.message.withValue {
+      self.append(callback: delegated, to: &$0)
+    }
   }
 
-  private func append<T>(callback: T, to array: inout SynchronizedArray<(ref: String, callback: T)>)
+  private func append<T>(callback: T, to array: inout [(ref: String, callback: T)])
     -> String
   {
     let ref = makeRef()
@@ -554,10 +573,10 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// call this method when you are finished when the Socket in order to release
   /// any references held by the socket.
   public func releaseCallbacks() {
-    self.stateChangeCallbacks.open.removeAll()
-    self.stateChangeCallbacks.close.removeAll()
-    self.stateChangeCallbacks.error.removeAll()
-    self.stateChangeCallbacks.message.removeAll()
+    self.stateChangeCallbacks.open.setValue([])
+    self.stateChangeCallbacks.close.setValue([])
+    self.stateChangeCallbacks.error.setValue([])
+    self.stateChangeCallbacks.message.setValue([])
   }
 
   //----------------------------------------------------------------------
@@ -574,9 +593,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// - return: A new channel
   public func channel(
     _ topic: String,
-    params: [String: Any] = [:]
+    params: RealtimeChannelOptions = .init()
   ) -> RealtimeChannel {
-    let channel = RealtimeChannel(topic: topic, params: params, socket: self)
+    let channel = RealtimeChannel(topic: topic, params: params.json, socket: self)
     self.channels.append(channel)
 
     return channel
@@ -602,18 +621,26 @@ public class RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - Parameter refs: List of refs returned by calls to `onOpen`, `onClose`, etc
   public func off(_ refs: [String]) {
-    self.stateChangeCallbacks.open = self.stateChangeCallbacks.open.filter({
-      !refs.contains($0.ref)
-    })
-    self.stateChangeCallbacks.close = self.stateChangeCallbacks.close.filter({
-      !refs.contains($0.ref)
-    })
-    self.stateChangeCallbacks.error = self.stateChangeCallbacks.error.filter({
-      !refs.contains($0.ref)
-    })
-    self.stateChangeCallbacks.message = self.stateChangeCallbacks.message.filter({
-      !refs.contains($0.ref)
-    })
+    self.stateChangeCallbacks.open.withValue {
+      $0 = $0.filter({
+        !refs.contains($0.ref)
+      })
+    }
+    self.stateChangeCallbacks.close.withValue {
+      $0 = $0.filter({
+        !refs.contains($0.ref)
+      })
+    }
+    self.stateChangeCallbacks.error.withValue {
+      $0 = $0.filter({
+        !refs.contains($0.ref)
+      })
+    }
+    self.stateChangeCallbacks.message.withValue {
+      $0 = $0.filter({
+        !refs.contains($0.ref)
+      })
+    }
   }
 
   //----------------------------------------------------------------------
@@ -689,7 +716,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     self.resetHeartbeat()
 
     // Inform all onOpen callbacks that the Socket has opened
-    self.stateChangeCallbacks.open.forEach({ $0.callback.call((response)) })
+    self.stateChangeCallbacks.open.value.forEach({ $0.callback.call((response)) })
   }
 
   internal func onConnectionClosed(code: Int, reason: String?) {
@@ -707,7 +734,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       self.reconnectTimer.scheduleTimeout()
     }
 
-    self.stateChangeCallbacks.close.forEach({ $0.callback.call((code, reason)) })
+    self.stateChangeCallbacks.close.value.forEach({ $0.callback.call((code, reason)) })
   }
 
   internal func onConnectionError(_ error: Error, response: URLResponse?) {
@@ -717,7 +744,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     self.triggerChannelError()
 
     // Inform any state callbacks of the error
-    self.stateChangeCallbacks.error.forEach({ $0.callback.call((error, response)) })
+    self.stateChangeCallbacks.error.value.forEach({ $0.callback.call((error, response)) })
   }
 
   internal func onConnectionMessage(_ rawMessage: String) {
@@ -745,7 +772,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       .forEach({ $0.trigger(message) })
 
     // Inform all onMessage callbacks of the message
-    self.stateChangeCallbacks.message.forEach({ $0.callback.call(message) })
+    self.stateChangeCallbacks.message.value.forEach({ $0.callback.call(message) })
   }
 
   /// Triggers an error event to all of the connected Channels

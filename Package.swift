@@ -59,7 +59,7 @@ let package = Package(
       exclude: ["__Snapshots__"]
     ),
     .testTarget(name: "PostgRESTIntegrationTests", dependencies: ["PostgREST"]),
-    .target(name: "Realtime"),
+    .target(name: "Realtime", dependencies: ["_Helpers"]),
     .testTarget(name: "RealtimeTests", dependencies: ["Realtime"]),
     .target(name: "Storage", dependencies: ["_Helpers"]),
     .testTarget(name: "StorageTests", dependencies: ["Storage"]),

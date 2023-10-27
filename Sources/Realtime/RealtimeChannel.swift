@@ -20,6 +20,7 @@
 
 import Foundation
 import Swift
+@_spi(Internal) import _Helpers
 
 /// Container class of bindings to the channel
 struct Binding {
@@ -27,11 +28,73 @@ struct Binding {
   // The event that the Binding is bound to
   let event: String
 
-  // The reference number of the Binding
-  let ref: Int
+  let filter: [String: String]
 
   // The callback to be triggered
   let callback: Delegated<Message, Void>
+
+  let id: String?
+}
+
+public struct RealtimeChannelOptions: Encodable {
+  public let config: Config
+
+  public init(config: Config = .init()) {
+    self.config = config
+  }
+
+  public struct Config: Encodable {
+    public let broadcast: Broadcast
+    public let presence: Presence
+
+    public init(broadcast: Broadcast = .init(), presence: Presence = .init()) {
+      self.broadcast = broadcast
+      self.presence = presence
+    }
+
+    public struct Broadcast: Encodable {
+      /// this, also known as self option enables client to receive message it broadcast
+      public let this: Bool
+
+      /// ack option instructs server to acknowledge that broadcast message was received
+      public let ack: Bool
+
+      public init(this: Bool = false, ack: Bool = false) {
+        self.this = this
+        self.ack = ack
+      }
+
+      enum CodingKeys: String, CodingKey {
+        case this = "self"
+        case ack
+      }
+    }
+
+    public struct Presence: Encodable {
+      /// key option is used to track presence payload across clients
+      public let key: String
+
+      public init(key: String = "") {
+        self.key = key
+      }
+    }
+  }
+
+  var json: [String: Any] {
+    do {
+      let data = try JSONEncoder().encode(self)
+      return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    } catch {
+      return [:]
+    }
+  }
+}
+
+public enum RealtimeSubscribeStates {
+  case subscribed
+  case timedOut
+  case closed
+  case channelError
 }
 
 ///
@@ -72,10 +135,7 @@ public class RealtimeChannel {
   var state: ChannelState
 
   /// Collection of event bindings
-  var syncBindingsDel: SynchronizedArray<Binding>
-
-  /// Tracks event binding ref counters
-  var bindingRef: Int
+  let bindings: LockIsolated<[String: [Binding]]>
 
   /// Timout when attempting to join a RealtimeChannel
   var timeout: TimeInterval
@@ -105,8 +165,7 @@ public class RealtimeChannel {
     self.topic = topic
     self.params = params
     self.socket = socket
-    self.syncBindingsDel = SynchronizedArray()
-    self.bindingRef = 0
+    self.bindings = LockIsolated([:])
     self.timeout = socket.timeout
     self.joinedOnce = false
     self.pushBuffer = []
@@ -253,19 +312,100 @@ public class RealtimeChannel {
   /// - parameter timeout: Optional. Defaults to RealtimeChannel's timeout
   /// - return: Push event
   @discardableResult
-  public func join(timeout: TimeInterval? = nil) -> Push {
+  public func subscribe(
+    callback: ((RealtimeSubscribeStates, Error?) -> Void)?,
+    timeout: TimeInterval? = nil
+  ) -> RealtimeChannel {
     guard !joinedOnce else {
       fatalError(
         "tried to join multiple times. 'join' "
           + "can only be called a single time per channel instance")
     }
 
+    self.onError { _ in
+      // TODO: build error object
+      callback?(.channelError, nil)
+    }
+
+    self.onClose { _ in
+      callback?(.closed, nil)
+    }
+
     // Join the RealtimeChannel
-    if let safeTimeout = timeout { self.timeout = safeTimeout }
+    if let safeTimeout = timeout {
+      self.timeout = safeTimeout
+    }
+
+    params["postgres_changes"] = bindings.value["postgres_changes", default: []].map(\.filter)
+
+    if let accessToken = socket?.accessToken {
+      params["access_token"] = accessToken
+    }
 
     self.joinedOnce = true
     self.rejoin()
-    return joinPush
+
+    joinPush
+      .receive("ok") { [weak self] message in
+        guard let self else { return }
+
+        guard let serverPostgresFilters = message.payload["postgres_changes"] as? [[String: String]]
+        else {
+          callback?(.subscribed, nil)
+          return
+        }
+
+        let clientPostgresBindings = self.bindings.value["postgres_changes"] ?? []
+        let bindingsCount = clientPostgresBindings.count
+        var newPostgresBindings: [Binding] = []
+
+        for i in 0..<bindingsCount {
+          let clientPostgresBinding = clientPostgresBindings[i]
+
+          let event = clientPostgresBinding.filter["event"]
+          let schema = clientPostgresBinding.filter["schema"]
+          let table = clientPostgresBinding.filter["table"]
+          let filter = clientPostgresBinding.filter["filter"]
+
+          let serverPostgresFilter = serverPostgresFilters[i]
+
+          if serverPostgresFilter["event"] == event,
+            serverPostgresFilter["schema"] == schema,
+            serverPostgresFilter["table"] == table,
+            serverPostgresFilter["filter"] == filter
+          {
+            newPostgresBindings.append(
+              Binding(
+                event: clientPostgresBinding.event,
+                filter: clientPostgresBinding.filter,
+                callback: clientPostgresBinding.callback,
+                id: serverPostgresFilter["id"]
+              )
+            )
+          } else {
+            self.leave()
+
+            // TODO: define error object
+            callback?(.channelError, nil)
+
+            return
+          }
+        }
+
+        self.bindings.withValue {
+          $0["postgres_changes"] = newPostgresBindings
+        }
+        callback?(.subscribed, nil)
+      }
+      .receive("error") { message in
+        // TODO: build error object
+        callback?(.channelError, nil)
+      }
+      .receive("timeout") { _ in
+        callback?(.timedOut, nil)
+      }
+
+    return self
   }
 
   /// Hook into when the RealtimeChannel is closed. Does not handle retain cycles.
@@ -281,7 +421,7 @@ public class RealtimeChannel {
   /// - parameter callback: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onClose(_ callback: @escaping ((Message) -> Void)) -> Int {
+  public func onClose(_ callback: @escaping ((Message) -> Void)) -> RealtimeChannel {
     return self.on(ChannelEvent.close, callback: callback)
   }
 
@@ -302,7 +442,7 @@ public class RealtimeChannel {
   public func delegateOnClose<Target: AnyObject>(
     to owner: Target,
     callback: @escaping ((Target, Message) -> Void)
-  ) -> Int {
+  ) -> RealtimeChannel {
     return self.delegateOn(ChannelEvent.close, to: owner, callback: callback)
   }
 
@@ -320,7 +460,7 @@ public class RealtimeChannel {
   /// - parameter callback: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onError(_ callback: @escaping ((_ message: Message) -> Void)) -> Int {
+  public func onError(_ callback: @escaping ((_ message: Message) -> Void)) -> RealtimeChannel {
     return self.on(ChannelEvent.error, callback: callback)
   }
 
@@ -341,7 +481,7 @@ public class RealtimeChannel {
   public func delegateOnError<Target: AnyObject>(
     to owner: Target,
     callback: @escaping ((Target, Message) -> Void)
-  ) -> Int {
+  ) -> RealtimeChannel {
     return self.delegateOn(ChannelEvent.error, to: owner, callback: callback)
   }
 
@@ -369,7 +509,7 @@ public class RealtimeChannel {
   /// - parameter callback: Called with the event's message
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func on(_ event: String, callback: @escaping ((Message) -> Void)) -> Int {
+  public func on(_ event: String, callback: @escaping ((Message) -> Void)) -> RealtimeChannel {
     var delegated = Delegated<Message, Void>()
     delegated.manuallyDelegate(with: callback)
 
@@ -405,7 +545,7 @@ public class RealtimeChannel {
     _ event: String,
     to owner: Target,
     callback: @escaping ((Target, Message) -> Void)
-  ) -> Int {
+  ) -> RealtimeChannel {
     var delegated = Delegated<Message, Void>()
     delegated.delegate(to: owner, with: callback)
 
@@ -414,12 +554,15 @@ public class RealtimeChannel {
 
   /// Shared method between `on` and `manualOn`
   @discardableResult
-  private func on(_ event: String, delegated: Delegated<Message, Void>) -> Int {
-    let ref = bindingRef
-    self.bindingRef = ref + 1
+  private func on(
+    _ event: String, filter: [String: String] = [:], delegated: Delegated<Message, Void>
+  ) -> RealtimeChannel {
+    self.bindings.withValue {
+      $0[event.lowercased(), default: []].append(
+        Binding(event: event, filter: filter, callback: delegated, id: nil))
+    }
 
-    self.syncBindingsDel.append(Binding(event: event, ref: ref, callback: delegated))
-    return ref
+    return self
   }
 
   /// Unsubscribes from a channel event. If a `ref` is given, only the exact
@@ -441,9 +584,11 @@ public class RealtimeChannel {
   ///
   /// - parameter event: Event to unsubscribe from
   /// - paramter ref: Ref counter returned when subscribing. Can be omitted
-  public func off(_ event: String, ref: Int? = nil) {
-    self.syncBindingsDel.removeAll { (bind) -> Bool in
-      bind.event == event && (ref == nil || ref == bind.ref)
+  public func off(_ event: String, filter: [String: String] = [:]) {
+    bindings.withValue {
+      $0[event.lowercased()] = $0[event.lowercased(), default: []].filter { bind in
+        !(bind.event.lowercased() == event.lowercased() && bind.filter == filter)
+      }
     }
   }
 
@@ -594,9 +739,7 @@ public class RealtimeChannel {
   func trigger(_ message: Message) {
     let handledMessage = self.onMessage(message)
 
-    self.syncBindingsDel
-      .filter({ return $0.event == message.event })
-      .forEach({ $0.callback.call(handledMessage) })
+    self.bindings.value[message.event.lowercased()]?.forEach({ $0.callback.call(handledMessage) })
   }
 
   /// Triggers an event to the correct event bindings created by
