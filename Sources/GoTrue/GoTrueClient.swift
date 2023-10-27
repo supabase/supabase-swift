@@ -61,7 +61,9 @@ public actor GoTrueClient {
     Dependencies.current.value!.sessionManager
   }
 
-  private let codeVerifierStorage: CodeVerifierStorage
+  private var codeVerifierStorage: CodeVerifierStorage {
+    Dependencies.current.value!.codeVerifierStorage
+  }
 
   private var eventEmitter: EventEmitter {
     Dependencies.current.value!.eventEmitter
@@ -100,15 +102,12 @@ public actor GoTrueClient {
   }
 
   public init(configuration: Configuration) {
-    let sessionManager = DefaultSessionManager()
-
-    let codeVerifierStorage = DefaultCodeVerifierStorage()
     let api = APIClient()
 
     self.init(
       configuration: configuration,
-      sessionManager: sessionManager,
-      codeVerifierStorage: codeVerifierStorage,
+      sessionManager: .live,
+      codeVerifierStorage: .live,
       api: api,
       eventEmitter: .live,
       sessionStorage: .live
@@ -124,7 +123,6 @@ public actor GoTrueClient {
     eventEmitter: EventEmitter,
     sessionStorage: SessionStorage
   ) {
-    self.codeVerifierStorage = codeVerifierStorage
     self.mfa = GoTrueMFA()
 
     Dependencies.current.setValue(
@@ -138,7 +136,8 @@ public actor GoTrueClient {
           refreshSession: { [weak self] in
             try await self?.refreshSession(refreshToken: $0) ?? .empty
           }
-        )
+        ),
+        codeVerifierStorage: codeVerifierStorage
       )
     )
   }

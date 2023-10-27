@@ -12,21 +12,18 @@ import XCTest
 
 final class GoTrueClientTests: XCTestCase {
 
-  fileprivate var sessionManager: SessionManagerMock!
-  fileprivate var codeVerifierStorage: CodeVerifierStorageMock!
   fileprivate var api: APIClient!
 
   func testOnAuthStateChange() async throws {
     let session = Session.validSession
-
     let sut = makeSUT()
-    sessionManager.sessionResult = .success(session)
 
     let events = ActorIsolated([AuthChangeEvent]())
     let expectation = self.expectation(description: "onAuthStateChangeEnd")
 
     await withDependencies {
       $0.eventEmitter = .live
+      $0.sessionManager.session = { session }
     } operation: {
       let authStateStream = await sut.onAuthStateChange()
 
@@ -49,9 +46,6 @@ final class GoTrueClientTests: XCTestCase {
   }
 
   private func makeSUT(fetch: GoTrueClient.FetchHandler? = nil) -> GoTrueClient {
-    sessionManager = SessionManagerMock()
-    codeVerifierStorage = CodeVerifierStorageMock()
-
     let configuration = GoTrueClient.Configuration(
       url: clientURL,
       headers: ["apikey": "dummy.api.key"],
@@ -68,8 +62,8 @@ final class GoTrueClientTests: XCTestCase {
 
     let sut = GoTrueClient(
       configuration: configuration,
-      sessionManager: sessionManager,
-      codeVerifierStorage: codeVerifierStorage,
+      sessionManager: .mock,
+      codeVerifierStorage: .mock,
       api: api,
       eventEmitter: .mock,
       sessionStorage: .mock
@@ -80,40 +74,5 @@ final class GoTrueClientTests: XCTestCase {
     }
 
     return sut
-  }
-}
-
-private final class SessionManagerMock: SessionManager, @unchecked Sendable {
-  private let lock = NSRecursiveLock()
-
-  var sessionRefresher: SessionRefresher?
-  func setSessionRefresher(_ refresher: GoTrue.SessionRefresher?) async {
-    lock.withLock {
-      sessionRefresher = refresher
-    }
-  }
-
-  var sessionResult: Result<Session, Error>!
-  func session() async throws -> GoTrue.Session {
-    try sessionResult.get()
-  }
-
-  func update(_ session: GoTrue.Session) async throws {}
-
-  func remove() async {}
-}
-
-final class CodeVerifierStorageMock: CodeVerifierStorage {
-  var codeVerifier: String?
-  func getCodeVerifier() throws -> String? {
-    codeVerifier
-  }
-
-  func storeCodeVerifier(_ code: String) throws {
-    codeVerifier = code
-  }
-
-  func deleteCodeVerifier() throws {
-    codeVerifier = nil
   }
 }

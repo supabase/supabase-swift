@@ -22,7 +22,7 @@ final class SessionManagerTests: XCTestCase {
     await withDependencies {
       $0.sessionStorage.getSession = { nil }
     } operation: {
-      let sut = DefaultSessionManager()
+      let sut = SessionManager.live
 
       do {
         _ = try await sut.session()
@@ -40,7 +40,7 @@ final class SessionManagerTests: XCTestCase {
         .init(session: .validSession)
       }
     } operation: {
-      let sut = DefaultSessionManager()
+      let sut = SessionManager.live
 
       let session = try await sut.session()
       XCTAssertEqual(session, .validSession)
@@ -70,7 +70,7 @@ final class SessionManagerTests: XCTestCase {
         return await refreshSessionStream.first { _ in true } ?? .empty
       }
     } operation: {
-      let sut = DefaultSessionManager()
+      let sut = SessionManager.live
 
       // Fire N tasks and call sut.session()
       let tasks = (0..<10).map { _ in
@@ -97,43 +97,4 @@ final class SessionManagerTests: XCTestCase {
       XCTAssertEqual(try result.map { try $0.get() }, (0..<10).map { _ in validSession })
     }
   }
-}
-
-extension EventEmitter {
-  static let mock = Self(
-    attachListener: unimplemented("attachListener"), emit: unimplemented("emit"))
-}
-
-extension SessionStorage {
-  static let mock = Self(
-    getSession: unimplemented("getSession"),
-    storeSession: unimplemented("storeSession"),
-    deleteSession: unimplemented("deleteSession")
-  )
-}
-
-extension SessionRefresher {
-  static let mock = Self(refreshSession: unimplemented("refreshSession"))
-}
-
-extension Dependencies {
-  static let mock = Dependencies(
-    configuration: GoTrueClient.Configuration(url: clientURL),
-    sessionManager: DefaultSessionManager(),
-    api: APIClient(),
-    eventEmitter: .mock,
-    sessionStorage: .mock,
-    sessionRefresher: .mock
-  )
-}
-
-func withDependencies(_ mutation: (inout Dependencies) -> Void, operation: () async throws -> Void)
-  async rethrows
-{
-  let current = Dependencies.current.value ?? .mock
-  var copy = current
-  mutation(&copy)
-  Dependencies.current.withValue { $0 = copy }
-  defer { Dependencies.current.setValue(current) }
-  try await operation()
 }

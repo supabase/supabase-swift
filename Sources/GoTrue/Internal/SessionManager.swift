@@ -6,13 +6,24 @@ struct SessionRefresher: Sendable {
   var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
 }
 
-protocol SessionManager: Sendable {
-  func session() async throws -> Session
-  func update(_ session: Session) async throws
-  func remove() async
+struct SessionManager: Sendable {
+  var session: @Sendable () async throws -> Session
+  var update: @Sendable (_ session: Session) async throws -> Void
+  var remove: @Sendable () async -> Void
 }
 
-actor DefaultSessionManager: SessionManager {
+extension SessionManager {
+  static var live: Self = {
+    let manager = _LiveSessionManager()
+    return Self(
+      session: { try await manager.session() },
+      update: { try await manager.update($0) },
+      remove: { await manager.remove() }
+    )
+  }()
+}
+
+actor _LiveSessionManager {
   private var task: Task<Session, Error>?
 
   private var storage: SessionStorage {

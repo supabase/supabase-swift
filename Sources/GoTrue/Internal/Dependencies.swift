@@ -10,4 +10,5 @@ struct Dependencies: Sendable {
   var eventEmitter: EventEmitter
   var sessionStorage: SessionStorage
   var sessionRefresher: SessionRefresher
+  var codeVerifierStorage: CodeVerifierStorage
 }

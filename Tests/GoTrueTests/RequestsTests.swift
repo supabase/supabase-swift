@@ -17,88 +17,122 @@ final class RequestsTests: XCTestCase {
   func testSignUpWithEmailAndPassword() async {
     let sut = makeSUT()
 
-    await assert {
-      try await sut.signUp(
-        email: "example@mail.com",
-        password: "the.pass",
-        data: ["custom_key": .string("custom_value")],
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "dummy-captcha"
-      )
+    await withDependencies {
+      $0.sessionManager.remove = {}
+    } operation: {
+      await assert {
+        try await sut.signUp(
+          email: "example@mail.com",
+          password: "the.pass",
+          data: ["custom_key": .string("custom_value")],
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "dummy-captcha"
+        )
+      }
     }
   }
 
   func testSignUpWithPhoneAndPassword() async {
     let sut = makeSUT()
-    await assert {
-      try await sut.signUp(
-        phone: "+1 202-918-2132",
-        password: "the.pass",
-        data: ["custom_key": .string("custom_value")],
-        captchaToken: "dummy-captcha"
-      )
+
+    await withDependencies {
+      $0.sessionManager.remove = {}
+    } operation: {
+      await assert {
+        try await sut.signUp(
+          phone: "+1 202-918-2132",
+          password: "the.pass",
+          data: ["custom_key": .string("custom_value")],
+          captchaToken: "dummy-captcha"
+        )
+      }
     }
   }
 
   func testSignInWithEmailAndPassword() async {
     let sut = makeSUT()
-    await assert {
-      try await sut.signIn(
-        email: "example@mail.com",
-        password: "the.pass"
-      )
+
+    await withDependencies {
+      $0.sessionManager.remove = {}
+    } operation: {
+      await assert {
+        try await sut.signIn(
+          email: "example@mail.com",
+          password: "the.pass"
+        )
+      }
     }
   }
 
   func testSignInWithPhoneAndPassword() async {
     let sut = makeSUT()
-    await assert {
-      try await sut.signIn(
-        phone: "+1 202-918-2132",
-        password: "the.pass"
-      )
+
+    await withDependencies {
+      $0.sessionManager.remove = {}
+    } operation: {
+      await assert {
+        try await sut.signIn(
+          phone: "+1 202-918-2132",
+          password: "the.pass"
+        )
+      }
     }
   }
 
   func testSignInWithIdToken() async {
     let sut = makeSUT()
-    await assert {
-      try await sut.signInWithIdToken(
-        credentials: OpenIDConnectCredentials(
-          provider: .apple,
-          idToken: "id-token",
-          accessToken: "access-token",
-          nonce: "nonce",
-          gotrueMetaSecurity: GoTrueMetaSecurity(
-            captchaToken: "captcha-token"
+
+    await withDependencies {
+      $0.sessionManager.remove = {}
+    } operation: {
+      await assert {
+        try await sut.signInWithIdToken(
+          credentials: OpenIDConnectCredentials(
+            provider: .apple,
+            idToken: "id-token",
+            accessToken: "access-token",
+            nonce: "nonce",
+            gotrueMetaSecurity: GoTrueMetaSecurity(
+              captchaToken: "captcha-token"
+            )
           )
         )
-      )
+      }
     }
   }
 
   func testSignInWithOTPUsingEmail() async {
     let sut = makeSUT()
-    await assert {
-      try await sut.signInWithOTP(
-        email: "example@mail.com",
-        redirectTo: URL(string: "https://supabase.com"),
-        shouldCreateUser: true,
-        data: ["custom_key": .string("custom_value")],
-        captchaToken: "dummy-captcha"
-      )
+
+    await withDependencies {
+      $0.sessionManager.remove = {}
+    } operation: {
+      await assert {
+        try await sut.signInWithOTP(
+          email: "example@mail.com",
+          redirectTo: URL(string: "https://supabase.com"),
+          shouldCreateUser: true,
+          data: ["custom_key": .string("custom_value")],
+          captchaToken: "dummy-captcha"
+        )
+      }
     }
   }
 
   func testSignInWithOTPUsingPhone() async {
     let sut = makeSUT()
-    await assert {
-      try await sut.signInWithOTP(
-        phone: "+1 202-918-2132",
-        shouldCreateUser: true,
-        data: ["custom_key": .string("custom_value")],
-        captchaToken: "dummy-captcha"
-      )
+
+    await withDependencies {
+      $0.sessionManager.remove = {}
+    } operation: {
+      await assert {
+        try await sut.signInWithOTP(
+          phone: "+1 202-918-2132",
+          shouldCreateUser: true,
+          data: ["custom_key": .string("custom_value")],
+          captchaToken: "dummy-captcha"
+        )
+      }
     }
   }
 
@@ -133,7 +167,9 @@ final class RequestsTests: XCTestCase {
     })
 
     try await withDependencies {
+      $0.sessionManager.update = { _ in }
       $0.sessionStorage.storeSession = { _ in }
+      $0.codeVerifierStorage.getCodeVerifier = { nil }
       $0.eventEmitter = .live
     } operation: {
       let url = URL(
@@ -155,17 +191,22 @@ final class RequestsTests: XCTestCase {
 
   func testSessionFromURLWithMissingComponent() async {
     let sut = makeSUT()
-    let url = URL(
-      string:
-        "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
-    )!
 
-    do {
-      _ = try await sut.session(from: url)
-    } catch let error as URLError {
-      XCTAssertEqual(error.code, .badURL)
-    } catch {
-      XCTFail("Unexpected error thrown: \(error.localizedDescription)")
+    await withDependencies {
+      $0.codeVerifierStorage.getCodeVerifier = { nil }
+    } operation: {
+      let url = URL(
+        string:
+          "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
+      )!
+
+      do {
+        _ = try await sut.session(from: url)
+      } catch let error as URLError {
+        XCTAssertEqual(error.code, .badURL)
+      } catch {
+        XCTFail("Unexpected error thrown: \(error.localizedDescription)")
+      }
     }
   }
 
@@ -173,8 +214,8 @@ final class RequestsTests: XCTestCase {
     let sut = makeSUT()
 
     await withDependencies {
-      $0.sessionStorage.getSession = {
-        .init(session: .validSession)
+      $0.sessionManager.session = {
+        .validSession
       }
     } operation: {
       let accessToken =
@@ -200,10 +241,8 @@ final class RequestsTests: XCTestCase {
   func testSignOut() async {
     let sut = makeSUT()
     await withDependencies {
-      $0.sessionStorage.getSession = {
-        .init(session: .validSession)
-      }
-      $0.eventEmitter = .live
+      $0.sessionManager.session = { .validSession }
+      $0.eventEmitter = .noop
     } operation: {
       await assert {
         try await sut.signOut()
@@ -213,26 +252,36 @@ final class RequestsTests: XCTestCase {
 
   func testVerifyOTPUsingEmail() async {
     let sut = makeSUT()
-    await assert {
-      try await sut.verifyOTP(
-        email: "example@mail.com",
-        token: "123456",
-        type: .magiclink,
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "captcha-token"
-      )
+
+    await withDependencies {
+      $0.sessionManager.remove = {}
+    } operation: {
+      await assert {
+        try await sut.verifyOTP(
+          email: "example@mail.com",
+          token: "123456",
+          type: .magiclink,
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "captcha-token"
+        )
+      }
     }
   }
 
   func testVerifyOTPUsingPhone() async {
     let sut = makeSUT()
-    await assert {
-      try await sut.verifyOTP(
-        phone: "+1 202-918-2132",
-        token: "123456",
-        type: .sms,
-        captchaToken: "captcha-token"
-      )
+
+    await withDependencies {
+      $0.sessionManager.remove = {}
+    } operation: {
+      await assert {
+        try await sut.verifyOTP(
+          phone: "+1 202-918-2132",
+          token: "123456",
+          type: .sms,
+          captchaToken: "captcha-token"
+        )
+      }
     }
   }
 
@@ -240,8 +289,8 @@ final class RequestsTests: XCTestCase {
     let sut = makeSUT()
 
     await withDependencies {
-      $0.sessionStorage.getSession = {
-        .init(session: .validSession)
+      $0.sessionManager.session = {
+        .validSession
       }
     } operation: {
       await assert {
@@ -285,13 +334,8 @@ final class RequestsTests: XCTestCase {
     testName: String = #function,
     line: UInt = #line
   ) -> GoTrueClient {
-    var storage = SessionStorage.mock
-    storage.deleteSession = {}
-
     let encoder = JSONEncoder.goTrue
     encoder.outputFormatting = .sortedKeys
-
-    let sessionManager = DefaultSessionManager()
 
     let configuration = GoTrueClient.Configuration(
       url: clientURL,
@@ -316,31 +360,11 @@ final class RequestsTests: XCTestCase {
 
     return GoTrueClient(
       configuration: configuration,
-      sessionManager: sessionManager,
-      codeVerifierStorage: CodeVerifierStorageMock(),
+      sessionManager: .mock,
+      codeVerifierStorage: .mock,
       api: api,
       eventEmitter: .mock,
-      sessionStorage: storage
+      sessionStorage: .mock
     )
   }
-}
-
-let clientURL = URL(string: "http://localhost:54321/auth/v1")!
-
-extension Session {
-  static let validSession = Session(
-    accessToken: "accesstoken",
-    tokenType: "bearer",
-    expiresIn: 120,
-    refreshToken: "refreshtoken",
-    user: User(fromMockNamed: "user")
-  )
-
-  static let expiredSession = Session(
-    accessToken: "accesstoken",
-    tokenType: "bearer",
-    expiresIn: 60,
-    refreshToken: "refreshtoken",
-    user: User(fromMockNamed: "user")
-  )
 }
