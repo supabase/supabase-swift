@@ -1,12 +1,12 @@
 import Foundation
 import KeychainAccess
+@_spi(Internal) import _Helpers
 
-protocol SessionRefresher: AnyObject {
-  func refreshSession(refreshToken: String) async throws -> Session
+struct SessionRefresher: Sendable {
+  var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
 }
 
 protocol SessionManager: Sendable {
-  func setSessionRefresher(_ refresher: SessionRefresher?) async
   func session() async throws -> Session
   func update(_ session: Session) async throws
   func remove() async
@@ -14,16 +14,13 @@ protocol SessionManager: Sendable {
 
 actor DefaultSessionManager: SessionManager {
   private var task: Task<Session, Error>?
-  private let storage: SessionStorage
 
-  private weak var sessionRefresher: SessionRefresher?
-
-  init(storage: SessionStorage) {
-    self.storage = storage
+  private var storage: SessionStorage {
+    Dependencies.current.value!.sessionStorage
   }
 
-  func setSessionRefresher(_ refresher: SessionRefresher?) {
-    sessionRefresher = refresher
+  private var sessionRefresher: SessionRefresher {
+    Dependencies.current.value!.sessionRefresher
   }
 
   func session() async throws -> Session {
@@ -42,14 +39,9 @@ actor DefaultSessionManager: SessionManager {
     task = Task {
       defer { task = nil }
 
-      if let session = try await sessionRefresher?.refreshSession(
-        refreshToken: currentSession.session.refreshToken)
-      {
-        try update(session)
-        return session
-      }
-
-      throw GoTrueError.sessionNotFound
+      let session = try await sessionRefresher.refreshSession(currentSession.session.refreshToken)
+      try update(session)
+      return session
     }
 
     return try await task!.value
@@ -60,6 +52,6 @@ actor DefaultSessionManager: SessionManager {
   }
 
   func remove() {
-    storage.deleteSession()
+    try? storage.deleteSession()
   }
 }

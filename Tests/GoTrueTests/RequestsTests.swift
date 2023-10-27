@@ -7,15 +7,13 @@
 
 import SnapshotTesting
 import XCTest
+@_spi(Internal) import _Helpers
 
 @testable import GoTrue
 
 struct UnimplementedError: Error {}
 
 final class RequestsTests: XCTestCase {
-
-  var storage: SessionStorageMock!
-
   func testSignUpWithEmailAndPassword() async {
     let sut = makeSUT()
 
@@ -134,20 +132,24 @@ final class RequestsTests: XCTestCase {
       return (json(named: "user"), HTTPURLResponse())
     })
 
-    let url = URL(
-      string:
-        "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
-    )!
+    try await withDependencies {
+      $0.sessionStorage.storeSession = { _ in }
+    } operation: {
+      let url = URL(
+        string:
+          "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
+      )!
 
-    let session = try await sut.session(from: url)
-    let expectedSession = Session(
-      accessToken: "accesstoken",
-      tokenType: "bearer",
-      expiresIn: 60,
-      refreshToken: "refreshtoken",
-      user: User(fromMockNamed: "user")
-    )
-    XCTAssertEqual(session, expectedSession)
+      let session = try await sut.session(from: url)
+      let expectedSession = Session(
+        accessToken: "accesstoken",
+        tokenType: "bearer",
+        expiresIn: 60,
+        refreshToken: "refreshtoken",
+        user: User(fromMockNamed: "user")
+      )
+      XCTAssertEqual(session, expectedSession)
+    }
   }
 
   func testSessionFromURLWithMissingComponent() async {
@@ -168,13 +170,18 @@ final class RequestsTests: XCTestCase {
 
   func testSetSessionWithAFutureExpirationDate() async throws {
     let sut = makeSUT()
-    storage.session = .success(.init(session: .validSession))
 
-    let accessToken =
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
+    await withDependencies {
+      $0.sessionStorage.getSession = {
+        .init(session: .validSession)
+      }
+    } operation: {
+      let accessToken =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
 
-    await assert {
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      await assert {
+        try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      }
     }
   }
 
@@ -191,9 +198,14 @@ final class RequestsTests: XCTestCase {
 
   func testSignOut() async {
     let sut = makeSUT()
-    storage.session = .success(.init(session: .validSession))
-    await assert {
-      try await sut.signOut()
+    await withDependencies {
+      $0.sessionStorage.getSession = {
+        .init(session: .validSession)
+      }
+    } operation: {
+      await assert {
+        try await sut.signOut()
+      }
     }
   }
 
@@ -224,17 +236,23 @@ final class RequestsTests: XCTestCase {
 
   func testUpdateUser() async throws {
     let sut = makeSUT()
-    storage.session = .success(StoredSession(session: .validSession))
-    await assert {
-      try await sut.update(
-        user: UserAttributes(
-          email: "example@mail.com",
-          phone: "+1 202-918-2132",
-          password: "another.pass",
-          emailChangeToken: "123456",
-          data: ["custom_key": .string("custom_value")]
+
+    await withDependencies {
+      $0.sessionStorage.getSession = {
+        .init(session: .validSession)
+      }
+    } operation: {
+      await assert {
+        try await sut.update(
+          user: UserAttributes(
+            email: "example@mail.com",
+            phone: "+1 202-918-2132",
+            password: "another.pass",
+            emailChangeToken: "123456",
+            data: ["custom_key": .string("custom_value")]
+          )
         )
-      )
+      }
     }
   }
 
@@ -265,30 +283,44 @@ final class RequestsTests: XCTestCase {
     testName: String = #function,
     line: UInt = #line
   ) -> GoTrueClient {
-    storage = SessionStorageMock()
+    var storage = SessionStorage.mock
+    storage.deleteSession = {}
+
     let encoder = JSONEncoder.goTrue
     encoder.outputFormatting = .sortedKeys
 
-    return GoTrueClient(
-      configuration: GoTrueClient.Configuration(
-        url: clientURL,
-        headers: ["apikey": "dummy.api.key"],
-        encoder: encoder,
-        fetch: { request in
-          DispatchQueue.main.sync {
-            assertSnapshot(
-              of: request, as: .curl, record: record, file: file, testName: testName, line: line)
-          }
+    let sessionManager = DefaultSessionManager()
 
-          if let fetch {
-            return try await fetch(request)
-          }
-
-          throw UnimplementedError()
+    let configuration = GoTrueClient.Configuration(
+      url: clientURL,
+      headers: ["apikey": "dummy.api.key"],
+      encoder: encoder,
+      fetch: { request in
+        DispatchQueue.main.sync {
+          assertSnapshot(
+            of: request, as: .curl, record: record, file: file, testName: testName, line: line)
         }
-      ),
-      sessionManager: DefaultSessionManager(storage: storage),
-      codeVerifierStorage: CodeVerifierStorageMock()
+
+        if let fetch {
+          return try await fetch(request)
+        }
+
+        throw UnimplementedError()
+      }
+    )
+
+    let eventEmitter = DefaultEventEmitter()
+
+    // TODO: Inject a mocked APIClient
+    let api = APIClient()
+
+    return GoTrueClient(
+      configuration: configuration,
+      sessionManager: sessionManager,
+      codeVerifierStorage: CodeVerifierStorageMock(),
+      api: api,
+      eventEmitter: eventEmitter,
+      sessionStorage: storage
     )
   }
 }

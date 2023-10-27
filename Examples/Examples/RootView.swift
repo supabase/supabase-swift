@@ -9,29 +9,23 @@ import GoTrue
 import SwiftUI
 
 struct RootView: View {
-  @State var authEvent: AuthChangeEvent?
-  @State var handle: AuthStateListenerHandle?
-
   @EnvironmentObject var auth: AuthController
 
   var body: some View {
     Group {
-      if authEvent == .signedOut {
+      if auth.session == nil {
         AuthView()
       } else {
         HomeView()
       }
     }
-    .onAppear {
-      handle = supabase.auth.onAuthStateChange { event, session in
-        withAnimation {
-          authEvent = event
-        }
-        auth.session = session
-      }
+    .task {
+      await auth.observeAuth()
     }
-    .onDisappear {
-      handle?.unsubscribe()
+    .onOpenURL { url in
+      Task {
+        try? await supabase.auth.session(from: url)
+      }
     }
   }
 }

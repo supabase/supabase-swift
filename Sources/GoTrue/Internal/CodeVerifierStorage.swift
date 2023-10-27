@@ -1,11 +1,5 @@
-//
-//  File.swift
-//
-//
-//  Created by Guilherme Souza on 24/10/23.
-//
-
 import Foundation
+@_spi(Internal) import _Helpers
 
 protocol CodeVerifierStorage {
   func getCodeVerifier() throws -> String?
@@ -14,7 +8,10 @@ protocol CodeVerifierStorage {
 }
 
 struct DefaultCodeVerifierStorage: CodeVerifierStorage {
-  let localStorage: GoTrueLocalStorage
+  private var localStorage: GoTrueLocalStorage {
+    Dependencies.current.value!.configuration.localStorage
+  }
+
   private let key = "supabase.code-verifier"
 
   func getCodeVerifier() throws -> String? {

@@ -32,7 +32,8 @@ struct AuthenticationRepositoryImpl: AuthenticationRepository {
       switch event {
       case .signedIn: AuthenticationState.signedIn
       case .signedOut: AuthenticationState.signedOut
-      case .passwordRecovery, .tokenRefreshed, .userUpdated, .userDeleted: nil
+      case .passwordRecovery, .tokenRefreshed, .userUpdated, .userDeleted, .mfaChallengeVerified:
+        nil
       }
     }
     .eraseToStream()

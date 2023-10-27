@@ -14,6 +14,8 @@ final class GoTrueClientTests: XCTestCase {
 
   fileprivate var sessionManager: SessionManagerMock!
   fileprivate var codeVerifierStorage: CodeVerifierStorageMock!
+  fileprivate var eventEmitter: DefaultEventEmitter!
+  fileprivate var api: APIClient!
 
   func testOnAuthStateChange() async throws {
     let session = Session.validSession
@@ -36,38 +38,39 @@ final class GoTrueClientTests: XCTestCase {
       }
     }
 
-    var listeners = await sut.authChangeListeners
-    XCTAssertEqual(listeners.count, 1)
-
     await fulfillment(of: [expectation])
 
     XCTAssertEqual(events.value, [.signedIn])
 
     streamTask.cancel()
-
-    await Task.megaYield()
-
-    listeners = await sut.authChangeListeners
-    XCTAssertEqual(listeners.count, 0)
   }
 
   private func makeSUT(fetch: GoTrueClient.FetchHandler? = nil) -> GoTrueClient {
     sessionManager = SessionManagerMock()
     codeVerifierStorage = CodeVerifierStorageMock()
-    let sut = GoTrueClient(
-      configuration: GoTrueClient.Configuration(
-        url: clientURL,
-        headers: ["apikey": "dummy.api.key"],
-        fetch: { request in
-          if let fetch {
-            return try await fetch(request)
-          }
+    eventEmitter = DefaultEventEmitter()
 
-          throw UnimplementedError()
+    let configuration = GoTrueClient.Configuration(
+      url: clientURL,
+      headers: ["apikey": "dummy.api.key"],
+      fetch: { request in
+        if let fetch {
+          return try await fetch(request)
         }
-      ),
+
+        throw UnimplementedError()
+      }
+    )
+
+    api = APIClient()
+
+    let sut = GoTrueClient(
+      configuration: configuration,
       sessionManager: sessionManager,
-      codeVerifierStorage: codeVerifierStorage
+      codeVerifierStorage: codeVerifierStorage,
+      api: api,
+      eventEmitter: eventEmitter,
+      sessionStorage: .mock
     )
 
     addTeardownBlock { [weak sut] in
@@ -81,7 +84,7 @@ final class GoTrueClientTests: XCTestCase {
 private final class SessionManagerMock: SessionManager, @unchecked Sendable {
   private let lock = NSRecursiveLock()
 
-  weak var sessionRefresher: SessionRefresher?
+  var sessionRefresher: SessionRefresher?
   func setSessionRefresher(_ refresher: GoTrue.SessionRefresher?) async {
     lock.withLock {
       sessionRefresher = refresher
