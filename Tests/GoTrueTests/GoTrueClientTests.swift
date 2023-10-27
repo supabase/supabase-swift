@@ -14,7 +14,6 @@ final class GoTrueClientTests: XCTestCase {
 
   fileprivate var sessionManager: SessionManagerMock!
   fileprivate var codeVerifierStorage: CodeVerifierStorageMock!
-  fileprivate var eventEmitter: DefaultEventEmitter!
   fileprivate var api: APIClient!
 
   func testOnAuthStateChange() async throws {
@@ -26,29 +25,32 @@ final class GoTrueClientTests: XCTestCase {
     let events = ActorIsolated([AuthChangeEvent]())
     let expectation = self.expectation(description: "onAuthStateChangeEnd")
 
-    let authStateStream = await sut.onAuthStateChange()
+    await withDependencies {
+      $0.eventEmitter = .live
+    } operation: {
+      let authStateStream = await sut.onAuthStateChange()
 
-    let streamTask = Task {
-      for await event in authStateStream {
-        events.withValue {
-          $0.append(event)
+      let streamTask = Task {
+        for await event in authStateStream {
+          events.withValue {
+            $0.append(event)
+          }
+
+          expectation.fulfill()
         }
-
-        expectation.fulfill()
       }
+
+      await fulfillment(of: [expectation])
+
+      XCTAssertEqual(events.value, [.signedIn])
+
+      streamTask.cancel()
     }
-
-    await fulfillment(of: [expectation])
-
-    XCTAssertEqual(events.value, [.signedIn])
-
-    streamTask.cancel()
   }
 
   private func makeSUT(fetch: GoTrueClient.FetchHandler? = nil) -> GoTrueClient {
     sessionManager = SessionManagerMock()
     codeVerifierStorage = CodeVerifierStorageMock()
-    eventEmitter = DefaultEventEmitter()
 
     let configuration = GoTrueClient.Configuration(
       url: clientURL,
@@ -69,7 +71,7 @@ final class GoTrueClientTests: XCTestCase {
       sessionManager: sessionManager,
       codeVerifierStorage: codeVerifierStorage,
       api: api,
-      eventEmitter: eventEmitter,
+      eventEmitter: .mock,
       sessionStorage: .mock
     )
 

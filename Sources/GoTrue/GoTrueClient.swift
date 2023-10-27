@@ -104,14 +104,13 @@ public actor GoTrueClient {
 
     let codeVerifierStorage = DefaultCodeVerifierStorage()
     let api = APIClient()
-    let eventEmitter = DefaultEventEmitter()
 
     self.init(
       configuration: configuration,
       sessionManager: sessionManager,
       codeVerifierStorage: codeVerifierStorage,
       api: api,
-      eventEmitter: eventEmitter,
+      eventEmitter: .live,
       sessionStorage: .live
     )
   }
@@ -147,18 +146,11 @@ public actor GoTrueClient {
   public func onAuthStateChange() async -> AsyncStream<AuthChangeEvent> {
     let (id, stream) = await eventEmitter.attachListener()
 
-    let emitInitialSessionTask = Task { [id] in
+    Task { [id] in
       _debug("emitInitialSessionTask start")
       defer { _debug("emitInitialSessionTask end") }
       await emitInitialSession(forStreamWithID: id)
     }
-
-    // TODO: store the emitInitialSessionTask somewhere, and cancel it when AsyncStream finishes.
-    //
-    //    authChangeListeners[id] = AuthChangeListener(
-    //      initialSessionTask: emitInitialSessionTask,
-    //      continuation: continuation
-    //    )
 
     return stream
   }
@@ -734,7 +726,7 @@ public actor GoTrueClient {
     defer { _debug("end") }
 
     let session = try? await self.session
-    await eventEmitter.emit(session != nil ? .signedIn : .signedOut, id: id)
+    await eventEmitter.emit(session != nil ? .signedIn : .signedOut, id)
   }
 
   private func _debug(

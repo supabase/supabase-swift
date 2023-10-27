@@ -1,53 +1,48 @@
 import Foundation
 @_spi(Internal) import _Helpers
 
-protocol EventEmitter: Sendable {
-  func attachListener() async -> (id: UUID, stream: AsyncStream<AuthChangeEvent>)
-  func emit(_ event: AuthChangeEvent, id: UUID?) async
+struct EventEmitter: Sendable {
+  var attachListener: @Sendable () async -> (id: UUID, stream: AsyncStream<AuthChangeEvent>)
+  var emit: @Sendable (_ event: AuthChangeEvent, _ id: UUID?) async -> Void
 }
 
 extension EventEmitter {
   func emit(_ event: AuthChangeEvent) async {
-    await emit(event, id: nil)
+    await emit(event, nil)
   }
 }
 
-actor DefaultEventEmitter: EventEmitter {
-  deinit {
-    continuations.values.forEach {
-      $0.finish()
-    }
-  }
+extension EventEmitter {
+  static var live: Self = {
+    let continuations = ActorIsolated([UUID: AsyncStream<AuthChangeEvent>.Continuation]())
 
-  private(set) var continuations: [UUID: AsyncStream<AuthChangeEvent>.Continuation] = [:]
+    return Self(
+      attachListener: {
+        let id = UUID()
 
-  func attachListener() -> (id: UUID, stream: AsyncStream<AuthChangeEvent>) {
-    let id = UUID()
+        let (stream, continuation) = AsyncStream<AuthChangeEvent>.makeStream()
 
-    let (stream, continuation) = AsyncStream<AuthChangeEvent>.makeStream()
+        continuation.onTermination = { [id] _ in
+          continuations.withValue {
+            $0[id] = nil
+          }
+        }
 
-    continuation.onTermination = { [self, id] _ in
-      Task(priority: .high) {
-        await removeStream(at: id)
+        continuations.withValue {
+          $0[id] = continuation
+        }
+
+        return (id, stream)
+      },
+      emit: { event, id in
+        if let id {
+          continuations.value[id]?.yield(event)
+        } else {
+          for continuation in continuations.value.values {
+            continuation.yield(event)
+          }
+        }
       }
-    }
-
-    continuations[id] = continuation
-
-    return (id, stream)
-  }
-
-  func emit(_ event: AuthChangeEvent, id: UUID? = nil) {
-    if let id {
-      continuations[id]?.yield(event)
-    } else {
-      for continuation in continuations.values {
-        continuation.yield(event)
-      }
-    }
-  }
-
-  private func removeStream(at id: UUID) {
-    self.continuations[id] = nil
-  }
+    )
+  }()
 }

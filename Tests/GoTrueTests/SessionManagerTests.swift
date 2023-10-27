@@ -99,6 +99,11 @@ final class SessionManagerTests: XCTestCase {
   }
 }
 
+extension EventEmitter {
+  static let mock = Self(
+    attachListener: unimplemented("attachListener"), emit: unimplemented("emit"))
+}
+
 extension SessionStorage {
   static let mock = Self(
     getSession: unimplemented("getSession"),
@@ -116,7 +121,7 @@ extension Dependencies {
     configuration: GoTrueClient.Configuration(url: clientURL),
     sessionManager: DefaultSessionManager(),
     api: APIClient(),
-    eventEmitter: DefaultEventEmitter(),
+    eventEmitter: .mock,
     sessionStorage: .mock,
     sessionRefresher: .mock
   )

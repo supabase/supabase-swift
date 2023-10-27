@@ -134,6 +134,7 @@ final class RequestsTests: XCTestCase {
 
     try await withDependencies {
       $0.sessionStorage.storeSession = { _ in }
+      $0.eventEmitter = .live
     } operation: {
       let url = URL(
         string:
@@ -202,6 +203,7 @@ final class RequestsTests: XCTestCase {
       $0.sessionStorage.getSession = {
         .init(session: .validSession)
       }
+      $0.eventEmitter = .live
     } operation: {
       await assert {
         try await sut.signOut()
@@ -309,8 +311,6 @@ final class RequestsTests: XCTestCase {
       }
     )
 
-    let eventEmitter = DefaultEventEmitter()
-
     // TODO: Inject a mocked APIClient
     let api = APIClient()
 
@@ -319,7 +319,7 @@ final class RequestsTests: XCTestCase {
       sessionManager: sessionManager,
       codeVerifierStorage: CodeVerifierStorageMock(),
       api: api,
-      eventEmitter: eventEmitter,
+      eventEmitter: .mock,
       sessionStorage: storage
     )
   }
