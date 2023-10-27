@@ -373,7 +373,7 @@ public struct MFAEnrollParams: Encodable, Hashable {
   /// Human readable name assigned to the factor.
   public let friendlyName: String?
 
-  public init(issuer: String?, friendlyName: String?) {
+  public init(issuer: String? = nil, friendlyName: String? = nil) {
     self.issuer = issuer
     self.friendlyName = friendlyName
   }
@@ -458,7 +458,7 @@ public typealias AuthenticatorAssuranceLevels = String
 /// An authentication method reference (AMR) entry.
 ///
 /// An entry designates what method was used by the user to verify their identity and at what time.
-public struct AMREntry: Decodable, Hashable {
+public struct AMREntry: Decodable, Hashable, Sendable {
   /// Authentication method name.
   public let method: Method
 
@@ -482,7 +482,7 @@ extension AMREntry {
   }
 }
 
-public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable {
+public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable, Sendable {
   /// Current AAL level of the session.
   public let currentLevel: AuthenticatorAssuranceLevels?
 

@@ -29,6 +29,7 @@
 		7956406A2955AFBD0088A06F /* ErrorText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640692955AFBD0088A06F /* ErrorText.swift */; };
 		7956406D2955B3500088A06F /* SwiftUINavigation in Frameworks */ = {isa = PBXBuildFile; productRef = 7956406C2955B3500088A06F /* SwiftUINavigation */; };
 		795640702955B5190088A06F /* IdentifiedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 7956406F2955B5190088A06F /* IdentifiedCollections */; };
+		796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796298982AEBBA77000AA957 /* MFAFlow.swift */; };
 		79719ECE2ADF26C400737804 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79719ECD2ADF26C400737804 /* Supabase */; };
 		79C591DC2AE0880F0088A9C8 /* ProductSampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C591DB2AE0880F0088A9C8 /* ProductSampleApp.swift */; };
 		79C591DE2AE0880F0088A9C8 /* AppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C591DD2AE0880F0088A9C8 /* AppView.swift */; };
@@ -78,6 +79,8 @@
 		795640652955AE9C0088A06F /* TodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListView.swift; sourceTree = "<group>"; };
 		795640672955AEB30088A06F /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		795640692955AFBD0088A06F /* ErrorText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorText.swift; sourceTree = "<group>"; };
+		796298982AEBBA77000AA957 /* MFAFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MFAFlow.swift; sourceTree = "<group>"; };
+		7962989A2AEBBD9F000AA957 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		79C591D92AE0880F0088A9C8 /* ProductSample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ProductSample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		79C591DB2AE0880F0088A9C8 /* ProductSampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSampleApp.swift; sourceTree = "<group>"; };
 		79C591DD2AE0880F0088A9C8 /* AppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppView.swift; sourceTree = "<group>"; };
@@ -231,6 +234,7 @@
 		793895C82954ABFF0044F2B8 /* Examples */ = {
 			isa = PBXGroup;
 			children = (
+				7962989A2AEBBD9F000AA957 /* Info.plist */,
 				793895CD2954AC000044F2B8 /* Assets.xcassets */,
 				7956405F2954AE140088A06F /* AuthView.swift */,
 				793895CF2954AC000044F2B8 /* Examples.entitlements */,
@@ -244,6 +248,7 @@
 				795640692955AFBD0088A06F /* ErrorText.swift */,
 				794EF1212955F26A008C9526 /* AddTodoListView.swift */,
 				794EF1232955F3DE008C9526 /* TodoListRow.swift */,
+				796298982AEBBA77000AA957 /* MFAFlow.swift */,
 			);
 			path = Examples;
 			sourceTree = "<group>";
@@ -432,6 +437,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */,
 				793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */,
 				7956406A2955AFBD0088A06F /* ErrorText.swift in Sources */,
 				794EF1242955F3DE008C9526 /* TodoListRow.swift in Sources */,
@@ -534,6 +540,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -597,6 +604,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -624,6 +632,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Examples/Info.plist;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.Examples;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -642,6 +652,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Examples/Info.plist;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.Examples;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

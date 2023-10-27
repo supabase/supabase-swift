@@ -8,6 +8,7 @@
 import GoTrue
 import SwiftUI
 
+@MainActor
 final class AuthController: ObservableObject {
   @Published var session: Session?
 
@@ -17,6 +18,16 @@ final class AuthController: ObservableObject {
     }
 
     return id
+  }
+
+  func observeAuth() async {
+    for await event in await supabase.auth.onAuthStateChange() {
+      guard event == .signedIn || event == .signedOut else {
+        return
+      }
+
+      session = try? await supabase.auth.session
+    }
   }
 }
 
@@ -74,7 +85,8 @@ struct AuthView: View {
       case .signIn:
         try await supabase.auth.signIn(email: email, password: password)
       case .signUp:
-        try await supabase.auth.signUp(email: email, password: password)
+        try await supabase.auth.signUp(
+          email: email, password: password, redirectTo: URL(string: "com.supabase.Examples://")!)
       }
     } catch {
       withAnimation {
