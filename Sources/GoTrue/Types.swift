@@ -349,12 +349,12 @@ public enum FactorStatus: String, Codable, Sendable {
 }
 
 /// An MFA Factor.
-public struct Factor: Codable, Hashable, Sendable {
+public struct Factor: Identifiable, Codable, Hashable, Sendable {
   /// ID of the factor.
   public let id: String
 
   /// Friendly name of the factor, useful to disambiguate between multiple factors.
-  public let friendlyMame: String?
+  public let friendlyName: String?
 
   /// Type of factor. Only `totp` supported with this version but may change in future versions.
   public let factorType: String
@@ -366,7 +366,7 @@ public struct Factor: Codable, Hashable, Sendable {
   public let updatedAt: Date
 }
 
-public struct MFAEnrollParams: Encodable, Hashable {
+public struct MFAEnrollParams: Encodable, Hashable, Sendable {
   public let factorType: FactorType = "totp"
   /// Domain which the user is enrolled with.
   public let issuer: String?
@@ -379,7 +379,7 @@ public struct MFAEnrollParams: Encodable, Hashable {
   }
 }
 
-public struct AuthMFAEnrollResponse: Decodable, Hashable {
+public struct AuthMFAEnrollResponse: Decodable, Hashable, Sendable {
   /// ID of the factor that was just enrolled (in an unverified state).
   public let id: String
 
@@ -389,15 +389,15 @@ public struct AuthMFAEnrollResponse: Decodable, Hashable {
   /// TOTP enrollment information.
   public var totp: TOTP?
 
-  public struct TOTP: Decodable, Hashable {
+  public struct TOTP: Decodable, Hashable, Sendable {
     /// Contains a QR code encoding the authenticator URI. You can convert it to a URL by prepending `data:image/svg+xml;utf-8,` to the value. Avoid logging this value to the console.
     public var qrCode: String
 
     /// The TOTP secret (also encoded in the QR code). Show this secret in a password-style field to the user, in case they are unable to scan the QR code. Avoid logging this value to the console.
     public let secret: String
 
-    /// The authenticator URI encoded within the QR code, should you need to use it. Avoid loggin this value to the console.
-    public let url: String
+    /// The authenticator URI encoded within the QR code, should you need to use it. Avoid logging this value to the console.
+    public let uri: String
   }
 }
 
@@ -417,20 +417,29 @@ public struct MFAVerifyParams: Encodable, Hashable {
   public let code: String
 }
 
-public struct MFAUnenrollParams: Encodable, Hashable {
+public struct MFAUnenrollParams: Encodable, Hashable, Sendable {
   /// ID of the factor to unenroll. Returned in ``GoTrueMFA.enroll(params:)``.
   public let factorId: String
+
+  public init(factorId: String) {
+    self.factorId = factorId
+  }
 }
 
-public struct MFAChallengeAndVerifyParams: Encodable, Hashable {
+public struct MFAChallengeAndVerifyParams: Encodable, Hashable, Sendable {
   /// ID of the factor to be challenged. Returned in ``GoTrueMFA.enroll(params:)``.
   public let factorId: String
 
   /// Verification code provided by the user.
   public let code: String
+
+  public init(factorId: String, code: String) {
+    self.factorId = factorId
+    self.code = code
+  }
 }
 
-public struct AuthMFAChallengeResponse: Decodable, Hashable {
+public struct AuthMFAChallengeResponse: Decodable, Hashable, Sendable {
   /// ID of the newly created challenge.
   public let id: String
 
@@ -440,12 +449,12 @@ public struct AuthMFAChallengeResponse: Decodable, Hashable {
 
 public typealias AuthMFAVerifyResponse = Session
 
-public struct AuthMFAUnenrollResponse: Decodable, Hashable {
+public struct AuthMFAUnenrollResponse: Decodable, Hashable, Sendable {
   /// ID of the factor that was successfully unenrolled.
   public let factorId: String
 }
 
-public struct AuthMFAListFactorsResponse: Decodable, Hashable {
+public struct AuthMFAListFactorsResponse: Decodable, Hashable, Sendable {
   /// All available factors (verified and unverified).
   public let all: [Factor]
 

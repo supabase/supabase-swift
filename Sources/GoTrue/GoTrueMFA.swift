@@ -88,6 +88,7 @@ public actor GoTrueMFA {
   ///
   /// - Parameter params: The parameters for unenrolling an MFA factor.
   /// - Returns: An authentication response after unenrolling the factor.
+  @discardableResult
   public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
     try await api.authorizedExecute(
       Request(path: "/factors/\(params.factorId)", method: "DELETE")
@@ -100,6 +101,7 @@ public actor GoTrueMFA {
   ///
   /// - Parameter params: The parameters for creating and verifying a challenge.
   /// - Returns: An authentication response after verifying the challenge.
+  @discardableResult
   public func challengeAndVerify(params: MFAChallengeAndVerifyParams) async throws
     -> AuthMFAVerifyResponse
   {
