@@ -22,11 +22,12 @@ import Foundation
 
 /// Represnts pushing data to a `Channel` through the `Socket`
 public class Push {
-  /// The channel sending the Push
-  public weak var channel: Channel?
 
-  /// The event, for example `ChannelEvent.join`
-  public let event: ChannelEvent
+  /// The channel sending the Push
+  public weak var channel: RealtimeChannel?
+
+  /// The event, for example `phx_join`
+  public let event: String
 
   /// The payload, for example ["user_id": "abc123"]
   public var payload: Payload
@@ -44,7 +45,7 @@ public class Push {
   var timeoutWorkItem: DispatchWorkItem?
 
   /// Hooks into a Push. Where .receive("ok", callback(Payload)) are stored
-  var receiveHooks: [PushStatus: [Delegated<Message, Void>]]
+  var receiveHooks: [String: [Delegated<Message, Void>]]
 
   /// True if the Push has been sent
   var sent: Bool
@@ -53,7 +54,7 @@ public class Push {
   var ref: String?
 
   /// The event that is associated with the reference ID of the Push
-  var refEvent: ChannelEvent?
+  var refEvent: String?
 
   /// Initializes a Push
   ///
@@ -62,8 +63,8 @@ public class Push {
   /// - parameter payload: Optional. The Payload to send, e.g. ["user_id": "abc123"]
   /// - parameter timeout: Optional. The push timeout. Default is 10.0s
   init(
-    channel: Channel,
-    event: ChannelEvent,
+    channel: RealtimeChannel,
+    event: String,
     payload: Payload = [:],
     timeout: TimeInterval = Defaults.timeoutInterval
   ) {
@@ -71,33 +72,33 @@ public class Push {
     self.event = event
     self.payload = payload
     self.timeout = timeout
-    receivedMessage = nil
-    timeoutTimer = TimerQueue.main
-    receiveHooks = [:]
-    sent = false
-    ref = nil
+    self.receivedMessage = nil
+    self.timeoutTimer = TimerQueue.main
+    self.receiveHooks = [:]
+    self.sent = false
+    self.ref = nil
   }
 
   /// Resets and sends the Push
   /// - parameter timeout: Optional. The push timeout. Default is 10.0s
   public func resend(_ timeout: TimeInterval = Defaults.timeoutInterval) {
     self.timeout = timeout
-    reset()
-    send()
+    self.reset()
+    self.send()
   }
 
   /// Sends the Push. If it has already timed out, then the call will
   /// be ignored and return early. Use `resend` in this case.
   public func send() {
-    guard !hasReceived(status: .timeout) else { return }
+    guard !hasReceived(status: "timeout") else { return }
 
-    startTimeout()
-    sent = true
-    channel?.socket?.push(
-      topic: channel?.topic ?? .all,
-      event: event,
-      payload: payload,
-      ref: ref,
+    self.startTimeout()
+    self.sent = true
+    self.channel?.socket?.push(
+      topic: channel?.topic ?? "",
+      event: self.event,
+      payload: self.payload,
+      ref: self.ref,
       joinRef: channel?.joinRef
     )
   }
@@ -120,13 +121,13 @@ public class Push {
   /// - parameter callback: Callback to fire when the status is recevied
   @discardableResult
   public func receive(
-    _ status: PushStatus,
+    _ status: String,
     callback: @escaping ((Message) -> Void)
   ) -> Push {
     var delegated = Delegated<Message, Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return receive(status, delegated: delegated)
+    return self.receive(status, delegated: delegated)
   }
 
   /// Receive a specific event when sending an Outbound message. Automatically
@@ -146,21 +147,21 @@ public class Push {
   /// - parameter callback: Callback to fire when the status is recevied
   @discardableResult
   public func delegateReceive<Target: AnyObject>(
-    _ status: PushStatus,
+    _ status: String,
     to owner: Target,
     callback: @escaping ((Target, Message) -> Void)
   ) -> Push {
     var delegated = Delegated<Message, Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return receive(status, delegated: delegated)
+    return self.receive(status, delegated: delegated)
   }
 
   /// Shared behavior between `receive` calls
   @discardableResult
-  internal func receive(_ status: PushStatus, delegated: Delegated<Message, Void>) -> Push {
+  internal func receive(_ status: String, delegated: Delegated<Message, Void>) -> Push {
     // If the message has already been received, pass it to the callback immediately
-    if hasReceived(status: status), let receivedMessage = receivedMessage {
+    if hasReceived(status: status), let receivedMessage = self.receivedMessage {
       delegated.call(receivedMessage)
     }
 
@@ -177,31 +178,31 @@ public class Push {
 
   /// Resets the Push as it was after it was first tnitialized.
   internal func reset() {
-    cancelRefEvent()
-    ref = nil
-    refEvent = nil
-    receivedMessage = nil
-    sent = false
+    self.cancelRefEvent()
+    self.ref = nil
+    self.refEvent = nil
+    self.receivedMessage = nil
+    self.sent = false
   }
 
   /// Finds the receiveHook which needs to be informed of a status response
   ///
   /// - parameter status: Status which was received, e.g. "ok", "error", "timeout"
   /// - parameter response: Response that was received
-  private func matchReceive(_ status: PushStatus, message: Message) {
-    receiveHooks[status]?.forEach { $0.call(message) }
+  private func matchReceive(_ status: String, message: Message) {
+    receiveHooks[status]?.forEach({ $0.call(message) })
   }
 
   /// Reverses the result on channel.on(ChannelEvent, callback) that spawned the Push
   private func cancelRefEvent() {
-    guard let refEvent = refEvent else { return }
-    channel?.off(refEvent)
+    guard let refEvent = self.refEvent else { return }
+    self.channel?.off(refEvent)
   }
 
   /// Cancel any ongoing Timeout Timer
   internal func cancelTimeout() {
-    timeoutWorkItem?.cancel()
-    timeoutWorkItem = nil
+    self.timeoutWorkItem?.cancel()
+    self.timeoutWorkItem = nil
   }
 
   /// Starts the Timer which will trigger a timeout after a specific _timeout_
@@ -209,7 +210,7 @@ public class Push {
   internal func startTimeout() {
     // Cancel any existing timeout before starting a new one
     if let safeWorkItem = timeoutWorkItem, !safeWorkItem.isCancelled {
-      cancelTimeout()
+      self.cancelTimeout()
     }
 
     guard
@@ -218,7 +219,7 @@ public class Push {
     else { return }
 
     let ref = socket.makeRef()
-    let refEvent = ChannelEvent.channelReply(ref)
+    let refEvent = channel.replyEventName(ref)
 
     self.ref = ref
     self.refEvent = refEvent
@@ -237,29 +238,29 @@ public class Push {
 
     /// Setup and start the Timeout timer.
     let workItem = DispatchWorkItem {
-      self.trigger(.timeout, payload: [:])
+      self.trigger("timeout", payload: [:])
     }
 
-    timeoutWorkItem = workItem
-    timeoutTimer.queue(timeInterval: timeout, execute: workItem)
+    self.timeoutWorkItem = workItem
+    self.timeoutTimer.queue(timeInterval: timeout, execute: workItem)
   }
 
   /// Checks if a status has already been received by the Push.
   ///
   /// - parameter status: Status to check
   /// - return: True if given status has been received by the Push.
-  internal func hasReceived(status: PushStatus) -> Bool {
-    return receivedMessage?.status == status
+  internal func hasReceived(status: String) -> Bool {
+    return self.receivedMessage?.status == status
   }
 
   /// Triggers an event to be sent though the Channel
-  internal func trigger(_ status: PushStatus, payload: Payload) {
+  internal func trigger(_ status: String, payload: Payload) {
     /// If there is no ref event, then there is nothing to trigger on the channel
-    guard let refEvent = refEvent else { return }
+    guard let refEvent = self.refEvent else { return }
 
     var mutPayload = payload
     mutPayload["status"] = status
 
-    channel?.trigger(event: refEvent, payload: mutPayload)
+    self.channel?.trigger(event: refEvent, payload: mutPayload)
   }
 }

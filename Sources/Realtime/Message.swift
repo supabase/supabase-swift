@@ -22,6 +22,7 @@ import Foundation
 
 /// Data that is received from the Server.
 public class Message {
+
   /// Reference number. Empty if missing
   public let ref: String
 
@@ -29,10 +30,10 @@ public class Message {
   internal let joinRef: String?
 
   /// Message topic
-  public let topic: ChannelTopic
+  public let topic: String
 
   /// Message event
-  public let event: ChannelEvent
+  public let event: String
 
   /// The raw payload from the Message, including a nested response from
   /// phx_reply events. It is recommended to use `payload` instead.
@@ -49,39 +50,37 @@ public class Message {
   /// ```swift
   /// message.payload["status"]
   /// ```
-  public var status: PushStatus? {
-    guard let status = rawPayload["status"] as? String else {
-      return nil
-    }
-    return PushStatus(rawValue: status)
+  public var status: String? {
+    return rawPayload["status"] as? String
   }
 
   init(
     ref: String = "",
-    topic: ChannelTopic = .all,
-    event: ChannelEvent = .all,
+    topic: String = "",
+    event: String = "",
     payload: Payload = [:],
     joinRef: String? = nil
   ) {
     self.ref = ref
     self.topic = topic
     self.event = event
-    rawPayload = payload
+    self.rawPayload = payload
     self.joinRef = joinRef
   }
 
   init?(json: [Any?]) {
     guard json.count > 4 else { return nil }
-    joinRef = json[0] as? String
-    ref = json[1] as? String ?? ""
+    self.joinRef = json[0] as? String
+    self.ref = json[1] as? String ?? ""
 
-    if let topic = (json[2] as? String).flatMap(ChannelTopic.init(rawValue:)),
-      let event = (json[3] as? String).flatMap(ChannelEvent.init(rawValue:)),
+    if let topic = json[2] as? String,
+      let event = json[3] as? String,
       let payload = json[4] as? Payload
     {
+
       self.topic = topic
       self.event = event
-      rawPayload = payload
+      self.rawPayload = payload
     } else {
       return nil
     }

@@ -23,6 +23,7 @@
 /// instead of added as a dependency to reduce the number of packages that
 /// ship with SwiftPhoenixClient
 public struct Delegated<Input, Output> {
+
   private(set) var callback: ((Input) -> Output?)?
 
   public init() {}
@@ -40,21 +41,23 @@ public struct Delegated<Input, Output> {
   }
 
   public func call(_ input: Input) -> Output? {
-    return callback?(input)
+    return self.callback?(input)
   }
 
   public var isDelegateSet: Bool {
     return callback != nil
   }
+
 }
 
 extension Delegated {
+
   public mutating func stronglyDelegate<Target: AnyObject>(
     to target: Target,
     with callback: @escaping (Target, Input) -> Output
   ) {
     self.callback = { input in
-      callback(target, input)
+      return callback(target, input)
     }
   }
 
@@ -63,40 +66,49 @@ extension Delegated {
   }
 
   public mutating func removeDelegate() {
-    callback = nil
+    self.callback = nil
   }
+
 }
 
 extension Delegated where Input == Void {
+
   public mutating func delegate<Target: AnyObject>(
     to target: Target,
     with callback: @escaping (Target) -> Output
   ) {
-    delegate(to: target, with: { target, _ in callback(target) })
+    self.delegate(to: target, with: { target, voidInput in callback(target) })
   }
 
   public mutating func stronglyDelegate<Target: AnyObject>(
     to target: Target,
     with callback: @escaping (Target) -> Output
   ) {
-    stronglyDelegate(to: target, with: { target, _ in callback(target) })
+    self.stronglyDelegate(to: target, with: { target, voidInput in callback(target) })
   }
+
 }
 
 extension Delegated where Input == Void {
+
   public func call() -> Output? {
-    return call(())
+    return self.call(())
   }
+
 }
 
 extension Delegated where Output == Void {
+
   public func call(_ input: Input) {
-    callback?(input)
+    self.callback?(input)
   }
+
 }
 
 extension Delegated where Input == Void, Output == Void {
+
   public func call() {
-    call(())
+    self.call(())
   }
+
 }
