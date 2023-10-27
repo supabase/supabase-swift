@@ -11,7 +11,7 @@ public actor GoTrueClient {
   public typealias FetchHandler =
     @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
 
-  public struct Configuration {
+  public struct Configuration: Sendable {
     public let url: URL
     public var headers: [String: String]
     public let flowType: AuthFlowType
@@ -100,7 +100,6 @@ public actor GoTrueClient {
   }
 
   public init(configuration: Configuration) {
-    let sessionStorage = DefaultSessionStorage()
     let sessionManager = DefaultSessionManager()
 
     let codeVerifierStorage = DefaultCodeVerifierStorage()
@@ -113,7 +112,7 @@ public actor GoTrueClient {
       codeVerifierStorage: codeVerifierStorage,
       api: api,
       eventEmitter: eventEmitter,
-      sessionStorage: sessionStorage
+      sessionStorage: .live
     )
   }
 
@@ -136,7 +135,11 @@ public actor GoTrueClient {
         api: api,
         eventEmitter: eventEmitter,
         sessionStorage: sessionStorage,
-        sessionRefresher: self
+        sessionRefresher: SessionRefresher(
+          refreshSession: { [weak self] in
+            try await self?.refreshSession(refreshToken: $0) ?? .empty
+          }
+        )
       )
     )
   }
@@ -704,6 +707,28 @@ public actor GoTrueClient {
     )
   }
 
+  @discardableResult
+  public func refreshSession(refreshToken: String) async throws -> Session {
+    let session = try await api.execute(
+      .init(
+        path: "/token",
+        method: "POST",
+        query: [URLQueryItem(name: "grant_type", value: "refresh_token")],
+        body: configuration.encoder.encode(UserCredentials(refreshToken: refreshToken))
+      )
+    ).decoded(as: Session.self, decoder: configuration.decoder)
+
+    if session.user.phoneConfirmedAt != nil || session.user.emailConfirmedAt != nil
+      || session
+        .user.confirmedAt != nil
+    {
+      try await sessionManager.update(session)
+      await eventEmitter.emit(.signedIn)
+    }
+
+    return session
+  }
+
   private func emitInitialSession(forStreamWithID id: UUID) async {
     _debug("start")
     defer { _debug("end") }
@@ -731,34 +756,6 @@ public actor GoTrueClient {
     let fragments = extractParams(from: url)
     let currentCodeVerifier = try? codeVerifierStorage.getCodeVerifier()
     return fragments.contains(where: { $0.name == "code" }) && currentCodeVerifier != nil
-  }
-}
-
-extension GoTrueClient: SessionRefresher {
-  @discardableResult
-  public func refreshSession(refreshToken: String) async throws -> Session {
-    do {
-      let session = try await api.execute(
-        .init(
-          path: "/token",
-          method: "POST",
-          query: [URLQueryItem(name: "grant_type", value: "refresh_token")],
-          body: configuration.encoder.encode(UserCredentials(refreshToken: refreshToken))
-        )
-      ).decoded(as: Session.self, decoder: configuration.decoder)
-
-      if session.user.phoneConfirmedAt != nil || session.user.emailConfirmedAt != nil
-        || session
-          .user.confirmedAt != nil
-      {
-        try await sessionManager.update(session)
-        await eventEmitter.emit(.signedIn)
-      }
-
-      return session
-    } catch {
-      throw error
-    }
   }
 }
 

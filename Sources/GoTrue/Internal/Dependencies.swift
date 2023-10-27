@@ -1,7 +1,7 @@
 import Foundation
 @_spi(Internal) import _Helpers
 
-struct Dependencies {
+struct Dependencies: Sendable {
   static let current = LockIsolated(Dependencies?.none)
 
   var configuration: GoTrueClient.Configuration

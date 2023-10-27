@@ -26,6 +26,7 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
+    .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
   ],
   targets: [
     .target(name: "_Helpers"),
@@ -43,6 +44,7 @@ let package = Package(
       dependencies: [
         "GoTrue",
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
       ],
       resources: [.process("Resources")]
     ),

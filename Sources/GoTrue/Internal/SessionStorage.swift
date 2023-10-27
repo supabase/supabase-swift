@@ -23,28 +23,30 @@ struct StoredSession: Codable {
   }
 }
 
-protocol SessionStorage {
-  func getSession() throws -> StoredSession?
-  func storeSession(_ session: StoredSession) throws
-  func deleteSession()
+struct SessionStorage: Sendable {
+  var getSession: @Sendable () throws -> StoredSession?
+  var storeSession: @Sendable (_ session: StoredSession) throws -> Void
+  var deleteSession: @Sendable () throws -> Void
 }
 
-struct DefaultSessionStorage: SessionStorage {
-  private var localStorage: GoTrueLocalStorage {
-    Dependencies.current.value!.configuration.localStorage
-  }
-
-  func getSession() throws -> StoredSession? {
-    try localStorage.retrieve(key: "supabase.session").flatMap {
-      try JSONDecoder.goTrue.decode(StoredSession.self, from: $0)
+extension SessionStorage {
+  static var live: Self = {
+    var localStorage: GoTrueLocalStorage {
+      Dependencies.current.value!.configuration.localStorage
     }
-  }
 
-  func storeSession(_ session: StoredSession) throws {
-    try localStorage.store(key: "supabase.session", value: JSONEncoder.goTrue.encode(session))
-  }
-
-  func deleteSession() {
-    try? localStorage.remove(key: "supabase.session")
-  }
+    return Self(
+      getSession: {
+        try localStorage.retrieve(key: "supabase.session").flatMap {
+          try JSONDecoder.goTrue.decode(StoredSession.self, from: $0)
+        }
+      },
+      storeSession: {
+        try localStorage.store(key: "supabase.session", value: JSONEncoder.goTrue.encode($0))
+      },
+      deleteSession: {
+        try localStorage.remove(key: "supabase.session")
+      }
+    )
+  }()
 }

@@ -75,6 +75,21 @@ public struct Session: Codable, Hashable, Sendable {
     self.refreshToken = refreshToken
     self.user = user
   }
+
+  static let empty = Session(
+    accessToken: "",
+    tokenType: "",
+    expiresIn: 0,
+    refreshToken: "",
+    user: User(
+      id: UUID(),
+      appMetadata: [:],
+      userMetadata: [:],
+      aud: "",
+      createdAt: Date(),
+      updatedAt: Date()
+    )
+  )
 }
 
 public struct User: Codable, Hashable, Identifiable, Sendable {
@@ -336,7 +351,7 @@ struct RecoverParams: Codable, Hashable, Sendable {
   var gotrueMetaSecurity: GoTrueMetaSecurity?
 }
 
-public enum AuthFlowType {
+public enum AuthFlowType: Sendable {
   case implicit
   case pkce
 }

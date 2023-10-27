@@ -62,7 +62,7 @@ final class GoTrueClientTests: XCTestCase {
       }
     )
 
-    api = APIClient(configuration: configuration, sessionManager: sessionManager)
+    api = APIClient()
 
     let sut = GoTrueClient(
       configuration: configuration,
@@ -70,12 +70,7 @@ final class GoTrueClientTests: XCTestCase {
       codeVerifierStorage: codeVerifierStorage,
       api: api,
       eventEmitter: eventEmitter,
-      mfa: GoTrueMFA(
-        api: api,
-        sessionManager: sessionManager,
-        configuration: configuration,
-        eventEmitter: eventEmitter
-      )
+      sessionStorage: .mock
     )
 
     addTeardownBlock { [weak sut] in
@@ -89,7 +84,7 @@ final class GoTrueClientTests: XCTestCase {
 private final class SessionManagerMock: SessionManager, @unchecked Sendable {
   private let lock = NSRecursiveLock()
 
-  weak var sessionRefresher: SessionRefresher?
+  var sessionRefresher: SessionRefresher?
   func setSessionRefresher(_ refresher: GoTrue.SessionRefresher?) async {
     lock.withLock {
       sessionRefresher = refresher

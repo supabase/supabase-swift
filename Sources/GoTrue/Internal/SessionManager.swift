@@ -2,8 +2,8 @@ import Foundation
 import KeychainAccess
 @_spi(Internal) import _Helpers
 
-protocol SessionRefresher: AnyObject {
-  func refreshSession(refreshToken: String) async throws -> Session
+struct SessionRefresher: Sendable {
+  var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
 }
 
 protocol SessionManager: Sendable {
@@ -39,8 +39,7 @@ actor DefaultSessionManager: SessionManager {
     task = Task {
       defer { task = nil }
 
-      let session = try await sessionRefresher.refreshSession(
-        refreshToken: currentSession.session.refreshToken)
+      let session = try await sessionRefresher.refreshSession(currentSession.session.refreshToken)
       try update(session)
       return session
     }
@@ -53,6 +52,6 @@ actor DefaultSessionManager: SessionManager {
   }
 
   func remove() {
-    storage.deleteSession()
+    try? storage.deleteSession()
   }
 }
