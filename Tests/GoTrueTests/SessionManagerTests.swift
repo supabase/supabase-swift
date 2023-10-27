@@ -54,6 +54,8 @@ final class SessionManagerTests: XCTestCase {
     let storeSessionCallCount = ActorIsolated(0)
     let refreshSessionCallCount = ActorIsolated(0)
 
+    let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
+
     try await withDependencies {
       $0.sessionStorage.getSession = {
         .init(session: currentSession)
@@ -65,7 +67,7 @@ final class SessionManagerTests: XCTestCase {
       }
       $0.sessionRefresher.refreshSession = { refreshToken in
         refreshSessionCallCount.withValue { $0 += 1 }
-        return validSession
+        return await refreshSessionStream.first { _ in true } ?? .empty
       }
     } operation: {
       let sut = DefaultSessionManager()
@@ -76,6 +78,11 @@ final class SessionManagerTests: XCTestCase {
           try await sut.session()
         }
       }
+
+      await Task.megaYield()
+
+      refreshSessionContinuation.yield(validSession)
+      refreshSessionContinuation.finish()
 
       // Await for all tasks to complete.
       var result: [Result<Session, Error>] = []
