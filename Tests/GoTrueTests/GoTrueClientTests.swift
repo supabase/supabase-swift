@@ -115,12 +115,3 @@ final class CodeVerifierStorageMock: CodeVerifierStorage {
     codeVerifier = nil
   }
 }
-//
-//final class EventEmitterMock: EventEmitter {
-//  func attachListener() async -> (id: UUID, stream: AsyncStream<AuthChangeEvent>) {
-//    return (UUID(), AsyncStream.makeStream().stream)
-//  }
-//
-//  func emit(_ event: AuthChangeEvent, id: UUID?) async {
-//  }
-//}
