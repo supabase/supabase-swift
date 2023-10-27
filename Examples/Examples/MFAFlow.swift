@@ -99,6 +99,7 @@ struct MFAEnrollView: View {
     }
   }
 
+  @MainActor
   private func enableButtonTapped() {
     Task {
       do {
@@ -112,8 +113,56 @@ struct MFAEnrollView: View {
 }
 
 struct MFAVerifyView: View {
+  @Environment(\.dismiss) private var dismiss
+  @State private var verificationCode = ""
+  @State private var error: Error?
+
   var body: some View {
-    Text("Verify")
+    Form {
+      Section {
+        TextField("Code", text: $verificationCode)
+      }
+
+      if let error {
+        Section {
+          Text(error.localizedDescription).foregroundStyle(.red)
+        }
+      }
+    }
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel", role: .cancel) {
+          dismiss()
+        }
+      }
+
+      ToolbarItem(placement: .primaryAction) {
+        Button("Verify") {
+          verifyButtonTapped()
+        }
+        .disabled(verificationCode.isEmpty)
+      }
+    }
+  }
+
+  @MainActor
+  private func verifyButtonTapped() {
+    Task {
+      do {
+        error = nil
+
+        let factors = try await supabase.auth.mfa.listFactors()
+        guard let totpFactor = factors.totp.first else {
+          debugPrint("No TOTP factor found.")
+          return
+        }
+
+        try await supabase.auth.mfa.challengeAndVerify(
+          params: MFAChallengeAndVerifyParams(factorId: totpFactor.id, code: verificationCode))
+      } catch {
+        self.error = error
+      }
+    }
   }
 }
 
@@ -153,6 +202,6 @@ struct MFAVerifiedView: View {
 
 struct MFADisabledView: View {
   var body: some View {
-    Text("Disabled")
+    Text(MFAStatus.disabled.description)
   }
 }
