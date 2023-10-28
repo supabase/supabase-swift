@@ -72,11 +72,11 @@ public class Defaults {
 /// Represents the multiple states that a Channel can be in
 /// throughout it's lifecycle.
 public enum ChannelState: String {
-  case closed = "closed"
-  case errored = "errored"
-  case joined = "joined"
-  case joining = "joining"
-  case leaving = "leaving"
+  case closed
+  case errored
+  case joined
+  case joining
+  case leaving
 }
 
 /// Represents the different events that can be sent through
@@ -88,6 +88,10 @@ public struct ChannelEvent {
   public static let reply = "phx_reply"
   public static let error = "phx_error"
   public static let close = "phx_close"
+  public static let accessToken = "access_token"
+  public static let postgresChanges = "postgres_changes"
+  public static let broadcast = "broadcast"
+  public static let presence = "presence"
 
   static func isLifecyleEvent(_ event: String) -> Bool {
     switch event {

@@ -249,6 +249,11 @@ public class RealtimeClient: PhoenixTransportDelegate {
     return self.connection?.readyState ?? .closed
   }
 
+  public func setAuth(_ token: String?) {
+    self.accessToken = token
+    // TODO: set token on channels
+  }
+
   /// Connects the Socket. The params passed to the Socket on initialization
   /// will be sent through the connection. If the Socket is already connected,
   /// then this call will be ignored.
@@ -595,7 +600,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     _ topic: String,
     params: RealtimeChannelOptions = .init()
   ) -> RealtimeChannel {
-    let channel = RealtimeChannel(topic: topic, params: params.json, socket: self)
+    let channel = RealtimeChannel(topic: topic, params: params.asDictionary, socket: self)
     self.channels.append(channel)
 
     return channel

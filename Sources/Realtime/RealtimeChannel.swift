@@ -24,10 +24,7 @@ import Swift
 
 /// Container class of bindings to the channel
 struct Binding {
-
-  // The event that the Binding is bound to
-  let event: String
-
+  let type: String
   let filter: [String: String]
 
   // The callback to be triggered
@@ -36,57 +33,64 @@ struct Binding {
   let id: String?
 }
 
-public struct RealtimeChannelOptions: Encodable {
-  public let config: Config
+public struct ChannelFilter {
+  public let event: String?
+  public let schema: String?
+  public let table: String?
+  public let filter: String?
 
-  public init(config: Config = .init()) {
-    self.config = config
+  public init(
+    event: String? = nil, schema: String? = nil, table: String? = nil, filter: String? = nil
+  ) {
+    self.event = event
+    self.schema = schema
+    self.table = table
+    self.filter = filter
   }
 
-  public struct Config: Encodable {
-    public let broadcast: Broadcast
-    public let presence: Presence
+  var asDictionary: [String: String] {
+    [
+      "event": event,
+      "schema": schema,
+      "table": table,
+      "filter": filter,
+    ].compactMapValues { $0 }
+  }
+}
 
-    public init(broadcast: Broadcast = .init(), presence: Presence = .init()) {
-      self.broadcast = broadcast
-      self.presence = presence
-    }
+public enum ChannelResponse {
+  case ok, timedOut, rateLimited, error
+}
 
-    public struct Broadcast: Encodable {
-      /// this, also known as self option enables client to receive message it broadcast
-      public let this: Bool
+public enum RealtimeListenTypes: String {
+  case postgresChanges = "postgres_changes"
+  case broadcast
+  case presence
+}
 
-      /// ack option instructs server to acknowledge that broadcast message was received
-      public let ack: Bool
+public struct RealtimeChannelOptions {
+  public var ack: Bool
+  public var this: Bool
+  public var key: String
 
-      public init(this: Bool = false, ack: Bool = false) {
-        self.this = this
-        self.ack = ack
-      }
-
-      enum CodingKeys: String, CodingKey {
-        case this = "self"
-        case ack
-      }
-    }
-
-    public struct Presence: Encodable {
-      /// key option is used to track presence payload across clients
-      public let key: String
-
-      public init(key: String = "") {
-        self.key = key
-      }
-    }
+  public init(ack: Bool = false, this: Bool = false, key: String = "") {
+    self.ack = ack
+    self.this = this
+    self.key = key
   }
 
-  var json: [String: Any] {
-    do {
-      let data = try JSONEncoder().encode(self)
-      return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
-    } catch {
-      return [:]
-    }
+  var asDictionary: [String: Any] {
+    [
+      "config": [
+        "broadcast": [
+          "ack": ack,
+          "self": this,
+        ],
+        "presence": [
+          "key": key
+        ],
+      ]
+    ]
   }
 }
 
@@ -128,6 +132,8 @@ public class RealtimeChannel {
     didSet { self.joinPush.payload = params }
   }
 
+  public private(set) lazy var presence = Presence(channel: self)
+
   /// The Socket that the channel belongs to
   weak var socket: RealtimeClient?
 
@@ -137,7 +143,7 @@ public class RealtimeChannel {
   /// Collection of event bindings
   let bindings: LockIsolated<[String: [Binding]]>
 
-  /// Timout when attempting to join a RealtimeChannel
+  /// Timeout when attempting to join a RealtimeChannel
   var timeout: TimeInterval
 
   /// Set to true once the channel calls .join()
@@ -336,11 +342,22 @@ public class RealtimeChannel {
       self.timeout = safeTimeout
     }
 
-    params["postgres_changes"] = bindings.value["postgres_changes", default: []].map(\.filter)
+    let broadcast = (params["config"] as? [String: Any])?["broadcast"]
+    let presence = (params["config"] as? [String: Any])?["presence"]
+
+    var accessTokenPayload: Payload = [:]
+    var config: Payload = [
+      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? []
+    ]
+
+    config["broadcast"] = broadcast
+    config["presence"] = presence
 
     if let accessToken = socket?.accessToken {
-      params["access_token"] = accessToken
+      accessTokenPayload["access_token"] = accessToken
     }
+
+    params["config"] = config
 
     self.joinedOnce = true
     self.rejoin()
@@ -349,13 +366,17 @@ public class RealtimeChannel {
       .receive("ok") { [weak self] message in
         guard let self else { return }
 
+        if socket?.accessToken != nil {
+          socket?.setAuth(socket?.accessToken)
+        }
+
         guard let serverPostgresFilters = message.payload["postgres_changes"] as? [[String: String]]
         else {
           callback?(.subscribed, nil)
           return
         }
 
-        let clientPostgresBindings = self.bindings.value["postgres_changes"] ?? []
+        let clientPostgresBindings = bindings.value["postgres_changes"] ?? []
         let bindingsCount = clientPostgresBindings.count
         var newPostgresBindings: [Binding] = []
 
@@ -376,7 +397,7 @@ public class RealtimeChannel {
           {
             newPostgresBindings.append(
               Binding(
-                event: clientPostgresBinding.event,
+                type: clientPostgresBinding.type,
                 filter: clientPostgresBinding.filter,
                 callback: clientPostgresBinding.callback,
                 id: serverPostgresFilter["id"]
@@ -406,6 +427,29 @@ public class RealtimeChannel {
       }
 
     return self
+  }
+
+  public func presenceState() -> Presence.State {
+    presence.state
+  }
+
+  public func track(payload: Payload, opts: Payload = [:]) async -> ChannelResponse {
+    await self.send(
+      type: .presence,
+      payload: [
+        "event": "track",
+        "payload": payload,
+      ],
+      opts: opts
+    )
+  }
+
+  public func untrack(opts: Payload = [:]) async -> ChannelResponse {
+    await self.send(
+      type: .presence,
+      payload: ["event": "untrack"],
+      opts: opts
+    )
   }
 
   /// Hook into when the RealtimeChannel is closed. Does not handle retain cycles.
@@ -555,11 +599,11 @@ public class RealtimeChannel {
   /// Shared method between `on` and `manualOn`
   @discardableResult
   private func on(
-    _ event: String, filter: [String: String] = [:], delegated: Delegated<Message, Void>
+    _ type: String, filter: ChannelFilter = .init(), delegated: Delegated<Message, Void>
   ) -> RealtimeChannel {
     self.bindings.withValue {
-      $0[event.lowercased(), default: []].append(
-        Binding(event: event, filter: filter, callback: delegated, id: nil))
+      $0[type.lowercased(), default: []].append(
+        Binding(type: type.lowercased(), filter: filter.asDictionary, callback: delegated, id: nil))
     }
 
     return self
@@ -584,10 +628,10 @@ public class RealtimeChannel {
   ///
   /// - parameter event: Event to unsubscribe from
   /// - paramter ref: Ref counter returned when subscribing. Can be omitted
-  public func off(_ event: String, filter: [String: String] = [:]) {
+  public func off(_ type: String, filter: [String: String] = [:]) {
     bindings.withValue {
-      $0[event.lowercased()] = $0[event.lowercased(), default: []].filter { bind in
-        !(bind.event.lowercased() == event.lowercased() && bind.filter == filter)
+      $0[type.lowercased()] = $0[type.lowercased(), default: []].filter { bind in
+        !(bind.type.lowercased() == type.lowercased() && bind.filter == filter)
       }
     }
   }
@@ -628,6 +672,54 @@ public class RealtimeChannel {
     }
 
     return pushEvent
+  }
+
+  public func send(
+    type: RealtimeListenTypes,
+    event: String? = nil,
+    payload: Payload,
+    opts: Payload = [:]
+  ) async -> ChannelResponse {
+    await withCheckedContinuation { continuation in
+      var payload = payload
+      payload["type"] = type.rawValue
+      if let event {
+        payload["event"] = event
+      }
+
+      if !canPush, type == .broadcast {
+        // TODO: make HTTP request
+      } else {
+        let push = self.push(
+          type.rawValue, payload: payload,
+          timeout: (opts["timeout"] as? TimeInterval) ?? self.timeout)
+
+        // TODO: Check if following code is possible to implement.
+        //        if push.rateLimited {
+        //          continuation.resume(returning: .rateLimited)
+        //          return
+        //        }
+
+        if let type = payload["type"] as? String, type == "broadcast",
+          let config = self.params["config"] as? [String: Any],
+          let broadcast = config["broadcast"] as? [String: Any]
+        {
+          let ack = broadcast["ack"] as? Bool
+          if ack == nil || ack == false {
+            continuation.resume(returning: .ok)
+            return
+          }
+        }
+
+        push
+          .receive("ok") { _ in
+            continuation.resume(returning: .ok)
+          }
+          .receive("timeout") { _ in
+            continuation.resume(returning: .timedOut)
+          }
+      }
+    }
   }
 
   /// Leaves the channel
