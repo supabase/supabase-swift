@@ -856,6 +856,34 @@ public class RealtimeChannel {
     self.trigger(message)
   }
 
+  func trigger(type: String, payload: Payload, ref: String?) {
+    let typeLower = type.lowercased()
+
+    let events = Set([
+      ChannelEvent.close,
+      ChannelEvent.error,
+      ChannelEvent.leave,
+      ChannelEvent.join,
+    ])
+
+    if let ref, events.contains(typeLower), ref != joinRef {
+      return
+    }
+
+    // TODO: call onMessage to with the payload
+    var handledPayload = payload
+
+    if ["insert", "update", "delete"].contains(typeLower) {
+      let bindings = self.bindings.value["postgres_changes", default: []].filter { bind in
+        bind.filter["event"] == "*" || bind.filter["event"]?.lowercased() == typeLower
+      }
+
+      for binding in bindings {
+        handledPayload = getEnrichedPayload(payload)
+      }
+    }
+  }
+
   /// - parameter ref: The ref of the event push
   /// - return: The event name of the reply
   func replyEventName(_ ref: String) -> String {
