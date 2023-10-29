@@ -13,7 +13,7 @@ struct AddTodoListView: View {
 
   var body: some View {
     Section {
-      TextField("Description", text: $request.description)
+      TextField("Task", text: $request.task)
       Button("Save") {
         Task { await saveButtonTapped() }
       }
@@ -39,9 +39,9 @@ struct AddTodoListView_Previews: PreviewProvider {
     AddTodoListView(
       request: .constant(
         .init(
-          description: "",
+          task: "",
           isComplete: false,
-          ownerID: UUID()
+          userId: UUID()
         ))
     ) { _ in
     }

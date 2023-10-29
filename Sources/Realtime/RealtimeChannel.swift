@@ -879,7 +879,7 @@ public class RealtimeChannel {
       }
 
       for binding in bindings {
-        handledPayload = getEnrichedPayload(payload)
+//        handledPayload = getEnrichedPayload(payload)
       }
     }
   }
