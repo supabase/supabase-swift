@@ -600,7 +600,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
     _ topic: String,
     params: RealtimeChannelOptions = .init()
   ) -> RealtimeChannel {
-    let channel = RealtimeChannel(topic: topic, params: params.asDictionary, socket: self)
+    let channel = RealtimeChannel(
+      topic: "realtime:\(topic)", params: params.asDictionary, socket: self)
     self.channels.append(channel)
 
     return channel

@@ -67,7 +67,8 @@ struct AuthView: View {
 
       Section {
         Button(
-          model.mode == .signIn ? "Don't have an account? Sign up." : "Already have an account? Sign in."
+          model.mode == .signIn
+            ? "Don't have an account? Sign up." : "Already have an account? Sign in."
         ) {
           withAnimation {
             model.mode = model.mode == .signIn ? .signUp : .signIn

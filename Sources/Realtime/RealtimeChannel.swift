@@ -290,7 +290,7 @@ public class RealtimeChannel {
     }
 
     // Perform when the join reply is received
-    self.delegateOn(ChannelEvent.reply, to: self) { (self, message) in
+    self.delegateOn(ChannelEvent.reply, filter: ChannelFilter(), to: self) { (self, message) in
       // Trigger bindings
       self.trigger(
         event: self.replyEventName(message.ref),
@@ -319,7 +319,7 @@ public class RealtimeChannel {
   /// - return: Push event
   @discardableResult
   public func subscribe(
-    callback: ((RealtimeSubscribeStates, Error?) -> Void)?,
+    callback: ((RealtimeSubscribeStates, Error?) -> Void)? = nil,
     timeout: TimeInterval? = nil
   ) -> RealtimeChannel {
     guard !joinedOnce else {
@@ -342,8 +342,8 @@ public class RealtimeChannel {
       self.timeout = safeTimeout
     }
 
-    let broadcast = (params["config"] as? [String: Any])?["broadcast"]
-    let presence = (params["config"] as? [String: Any])?["presence"]
+    let broadcast = params["config", as: [String: Any].self]?["broadcast"]
+    let presence = params["config", as: [String: Any].self]?["presence"]
 
     var accessTokenPayload: Payload = [:]
     var config: Payload = [
@@ -466,7 +466,7 @@ public class RealtimeChannel {
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
   public func onClose(_ callback: @escaping ((Message) -> Void)) -> RealtimeChannel {
-    return self.on(ChannelEvent.close, callback: callback)
+    return self.on(ChannelEvent.close, filter: ChannelFilter(), callback: callback)
   }
 
   /// Hook into when the RealtimeChannel is closed. Automatically handles retain
@@ -487,7 +487,8 @@ public class RealtimeChannel {
     to owner: Target,
     callback: @escaping ((Target, Message) -> Void)
   ) -> RealtimeChannel {
-    return self.delegateOn(ChannelEvent.close, to: owner, callback: callback)
+    return self.delegateOn(
+      ChannelEvent.close, filter: ChannelFilter(), to: owner, callback: callback)
   }
 
   /// Hook into when the RealtimeChannel receives an Error. Does not handle retain
@@ -505,7 +506,7 @@ public class RealtimeChannel {
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
   public func onError(_ callback: @escaping ((_ message: Message) -> Void)) -> RealtimeChannel {
-    return self.on(ChannelEvent.error, callback: callback)
+    return self.on(ChannelEvent.error, filter: ChannelFilter(), callback: callback)
   }
 
   /// Hook into when the RealtimeChannel receives an Error. Automatically handles
@@ -526,7 +527,8 @@ public class RealtimeChannel {
     to owner: Target,
     callback: @escaping ((Target, Message) -> Void)
   ) -> RealtimeChannel {
-    return self.delegateOn(ChannelEvent.error, to: owner, callback: callback)
+    return self.delegateOn(
+      ChannelEvent.error, filter: ChannelFilter(), to: owner, callback: callback)
   }
 
   /// Subscribes on channel events. Does not handle retain cycles. Use
@@ -553,11 +555,15 @@ public class RealtimeChannel {
   /// - parameter callback: Called with the event's message
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func on(_ event: String, callback: @escaping ((Message) -> Void)) -> RealtimeChannel {
+  public func on(
+    _ event: String,
+    filter: ChannelFilter,
+    callback: @escaping ((Message) -> Void)
+  ) -> RealtimeChannel {
     var delegated = Delegated<Message, Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return self.on(event, delegated: delegated)
+    return self.on(event, filter: filter, delegated: delegated)
   }
 
   /// Subscribes on channel events. Automatically handles retain cycles. Use
@@ -587,19 +593,20 @@ public class RealtimeChannel {
   @discardableResult
   public func delegateOn<Target: AnyObject>(
     _ event: String,
+    filter: ChannelFilter,
     to owner: Target,
     callback: @escaping ((Target, Message) -> Void)
   ) -> RealtimeChannel {
     var delegated = Delegated<Message, Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return self.on(event, delegated: delegated)
+    return self.on(event, filter: filter, delegated: delegated)
   }
 
   /// Shared method between `on` and `manualOn`
   @discardableResult
   private func on(
-    _ type: String, filter: ChannelFilter = .init(), delegated: Delegated<Message, Void>
+    _ type: String, filter: ChannelFilter, delegated: Delegated<Message, Void>
   ) -> RealtimeChannel {
     self.bindings.withValue {
       $0[type.lowercased(), default: []].append(
@@ -829,9 +836,50 @@ public class RealtimeChannel {
   ///
   /// - parameter message: Message to pass to the event bindings
   func trigger(_ message: Message) {
+    let typeLower = message.event.lowercased()
+
+    let events = Set([
+      ChannelEvent.close,
+      ChannelEvent.error,
+      ChannelEvent.leave,
+      ChannelEvent.join,
+    ])
+
+    if message.ref != message.joinRef, events.contains(typeLower) {
+      return
+    }
+
     let handledMessage = self.onMessage(message)
 
-    self.bindings.value[message.event.lowercased()]?.forEach({ $0.callback.call(handledMessage) })
+    let bindings: [Binding]
+
+    if ["insert", "update", "delete"].contains(typeLower) {
+      bindings = self.bindings.value["postgres_changes", default: []].filter { bind in
+        bind.filter["event"] == "*" || bind.filter["event"] == typeLower
+      }
+    } else {
+      bindings = self.bindings.value[typeLower, default: []].filter { bind in
+        if ["broadcast", "presence", "postgres_changes"].contains(typeLower) {
+          let bindEvent = bind.filter["event"]?.lowercased()
+
+          if let bindId = bind.id.flatMap(Int.init) {
+            let ids = message.payload["ids", as: [Int].self] ?? []
+            return ids.contains(bindId)
+              && (bindEvent == "*"
+                || bindEvent
+                  == message.payload["data", as: [String: Any].self]?["type", as: String.self]?
+                  .lowercased())
+          }
+
+          return bindEvent == "*"
+            || bindEvent == message.payload["event", as: String.self]?.lowercased()
+        }
+
+        return bind.type.lowercased() == typeLower
+      }
+    }
+
+    bindings.forEach { $0.callback.call(handledMessage) }
   }
 
   /// Triggers an event to the correct event bindings created by
@@ -854,34 +902,6 @@ public class RealtimeChannel {
       payload: payload,
       joinRef: joinRef ?? self.joinRef)
     self.trigger(message)
-  }
-
-  func trigger(type: String, payload: Payload, ref: String?) {
-    let typeLower = type.lowercased()
-
-    let events = Set([
-      ChannelEvent.close,
-      ChannelEvent.error,
-      ChannelEvent.leave,
-      ChannelEvent.join,
-    ])
-
-    if let ref, events.contains(typeLower), ref != joinRef {
-      return
-    }
-
-    // TODO: call onMessage to with the payload
-    var handledPayload = payload
-
-    if ["insert", "update", "delete"].contains(typeLower) {
-      let bindings = self.bindings.value["postgres_changes", default: []].filter { bind in
-        bind.filter["event"] == "*" || bind.filter["event"]?.lowercased() == typeLower
-      }
-
-      for binding in bindings {
-//        handledPayload = getEnrichedPayload(payload)
-      }
-    }
   }
 
   /// - parameter ref: The ref of the event push
@@ -932,4 +952,10 @@ extension RealtimeChannel {
     return state == .leaving
   }
 
+}
+
+extension Dictionary where Key == String, Value == Any {
+  subscript<T>(_ key: Key, as as: T.Type) -> T? {
+    self[key] as? T
+  }
 }

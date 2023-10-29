@@ -168,8 +168,7 @@ struct MFAVerifyView: View {
 
 struct MFAVerifiedView: View {
   var factors: [Factor] {
-    [
-    ]
+    []
   }
 
   var body: some View {

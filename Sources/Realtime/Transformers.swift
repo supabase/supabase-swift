@@ -1,6 +1,6 @@
 //
 //  File.swift
-//  
+//
 //
 //  Created by Guilherme Souza on 28/10/23.
 //
@@ -56,7 +56,8 @@ private func convertChangeData(
   }
 
   record.forEach { key, value in
-    result[key] = convertColumn(columnName: key, columns: parsedColumns, record: record, skipTypes: skipTypes ?? [])
+    result[key] = convertColumn(
+      columnName: key, columns: parsedColumns, record: record, skipTypes: skipTypes ?? [])
   }
 
   return result
@@ -99,20 +100,20 @@ func convertCell(type: String, value: Any) -> Any {
   case .json, .jsonb:
     return toJSON(value)
   case .timestamp:
-    return toTimestrampString(value) as Any // Format to be consistent with PostgREST
-  case .abstime, // To allow users to cast it based on Timezone
-      .date, // To allow users to cast it based on Timezone
-      .daterange,
-      .int4range,
-      .int8range,
-      .money,
-      .reltime, // To allow users to cast it based on Timezone
-      .text,
-      .time, // To allow users to cast it based on Timezone
-      .timestamptz, // To allow users to cast it based on Timezone
-      .timetz, // To allow users to cast it based on Timezone
-      .tsrange,
-      .tstzrange:
+    return toTimestrampString(value) as Any  // Format to be consistent with PostgREST
+  case .abstime,  // To allow users to cast it based on Timezone
+    .date,  // To allow users to cast it based on Timezone
+    .daterange,
+    .int4range,
+    .int8range,
+    .money,
+    .reltime,  // To allow users to cast it based on Timezone
+    .text,
+    .time,  // To allow users to cast it based on Timezone
+    .timestamptz,  // To allow users to cast it based on Timezone
+    .timetz,  // To allow users to cast it based on Timezone
+    .tsrange,
+    .tstzrange:
     return value
   case .none:
     return value
@@ -121,35 +122,35 @@ func convertCell(type: String, value: Any) -> Any {
 
 func toArray(value: Any, type: String) -> Any {
   return value
-//  guard let value = value as? String else {
-//    return value
-//  }
-//
-//  let closeBrace = value.last
-//  let openBrace = value.first
-//
-//  // Confirm value is a Postgres array by checking curly brackets
-//  if openBrace == "{" && closeBrace == "}" {
-//    let valTrim = value.dropFirst().dropLast()
-//    var arr: [Any] = []
-//
-//    do {
-//      let data = Data("[\(valTrim)]".utf8)
-//      arr = try JSONSerialization.jsonObject(with: data) as? [Any] ?? []
-//    } catch {
-//      
-//    }
-//    return arr.map{(convertCell(type: type, value: <#T##Any#>))}
-    // TODO: find a better solution to separate Postgres array data
-//    try {
-//      arr = json.decode('[$valTrim]') as List;
-//    } catch (_) {
-      // WARNING: splitting on comma does not cover all edge cases
-//      arr = valTrim != '' ? valTrim.split(',') : [];
-//    }
+  //  guard let value = value as? String else {
+  //    return value
+  //  }
+  //
+  //  let closeBrace = value.last
+  //  let openBrace = value.first
+  //
+  //  // Confirm value is a Postgres array by checking curly brackets
+  //  if openBrace == "{" && closeBrace == "}" {
+  //    let valTrim = value.dropFirst().dropLast()
+  //    var arr: [Any] = []
+  //
+  //    do {
+  //      let data = Data("[\(valTrim)]".utf8)
+  //      arr = try JSONSerialization.jsonObject(with: data) as? [Any] ?? []
+  //    } catch {
+  //
+  //    }
+  //    return arr.map{(convertCell(type: type, value: <#T##Any#>))}
+  // TODO: find a better solution to separate Postgres array data
+  //    try {
+  //      arr = json.decode('[$valTrim]') as List;
+  //    } catch (_) {
+  // WARNING: splitting on comma does not cover all edge cases
+  //      arr = valTrim != '' ? valTrim.split(',') : [];
+  //    }
 
-//    return arr.map((val) => convertCell(type, val)).toList();
-//  }
+  //    return arr.map((val) => convertCell(type, val)).toList();
+  //  }
 }
 
 func toBoolean(_ value: Any) -> Bool? {
@@ -214,7 +215,7 @@ private func getEnrichedPayload(_ payload: Payload) -> Payload {
     "table": table,
     "commit_timestamp": commitTimestamp,
     "eventType": type,
-    "errors": errors
+    "errors": errors,
   ].compactMapValues { $0 }
 
   for (key, value) in getPayloadRecords(postgresChanges) {

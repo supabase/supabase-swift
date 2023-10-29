@@ -6,8 +6,8 @@
 //
 
 import IdentifiedCollections
-import SwiftUI
 import Supabase
+import SwiftUI
 import SwiftUINavigation
 
 struct TodoListView: View {

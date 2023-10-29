@@ -109,8 +109,6 @@ struct AsyncButton_PreviewProvider: PreviewProvider {
   }
 }
 
-import SwiftUI
-
 private enum LoadingEnvironmentKey: EnvironmentKey {
   static let defaultValue = false
 }

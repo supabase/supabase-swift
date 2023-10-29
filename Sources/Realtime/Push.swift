@@ -225,8 +225,8 @@ public class Push {
     self.refEvent = refEvent
 
     /// If a response is received  before the Timer triggers, cancel timer
-    /// and match the recevied event to it's corresponding hook
-    channel.delegateOn(refEvent, to: self) { (self, message) in
+    /// and match the received event to it's corresponding hook
+    channel.delegateOn(refEvent, filter: ChannelFilter(), to: self) { (self, message) in
       self.cancelRefEvent()
       self.cancelTimeout()
       self.receivedMessage = message
