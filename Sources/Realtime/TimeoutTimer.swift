@@ -44,37 +44,36 @@ import Foundation
 
 // sourcery: AutoMockable
 class TimeoutTimer {
-
   /// Callback to be informed when the underlying Timer fires
-  var callback = Delegated<(), Void>()
+  var callback = Delegated<Void, Void>()
 
   /// Provides TimeInterval to use when scheduling the timer
   var timerCalculation = Delegated<Int, TimeInterval>()
 
   /// The work to be done when the queue fires
-  var workItem: DispatchWorkItem? = nil
+  var workItem: DispatchWorkItem?
 
   /// The number of times the underlyingTimer hass been set off.
   var tries: Int = 0
 
   /// The Queue to execute on. In testing, this is overridden
-  var queue: TimerQueue = TimerQueue.main
+  var queue: TimerQueue = .main
 
   /// Resets the Timer, clearing the number of tries and stops
   /// any scheduled timeout.
   func reset() {
-    self.tries = 0
-    self.clearTimer()
+    tries = 0
+    clearTimer()
   }
 
   /// Schedules a timeout callback to fire after a calculated timeout duration.
   func scheduleTimeout() {
     // Clear any ongoing timer, not resetting the number of tries
-    self.clearTimer()
+    clearTimer()
 
     // Get the next calculated interval, in milliseconds. Do not
     // start the timer if the interval is returned as nil.
-    guard let timeInterval = self.timerCalculation.call(self.tries + 1) else { return }
+    guard let timeInterval = timerCalculation.call(tries + 1) else { return }
 
     let workItem = DispatchWorkItem {
       self.tries += 1
@@ -82,20 +81,19 @@ class TimeoutTimer {
     }
 
     self.workItem = workItem
-    self.queue.queue(timeInterval: timeInterval, execute: workItem)
+    queue.queue(timeInterval: timeInterval, execute: workItem)
   }
 
   /// Invalidates any ongoing Timer. Will not clear how many tries have been made
   private func clearTimer() {
-    self.workItem?.cancel()
-    self.workItem = nil
+    workItem?.cancel()
+    workItem = nil
   }
 }
 
 /// Wrapper class around a DispatchQueue. Allows for providing a fake clock
 /// during tests.
 class TimerQueue {
-
   // Can be overriden in tests
   static var main = TimerQueue()
 

@@ -23,7 +23,6 @@
 /// instead of added as a dependency to reduce the number of packages that
 /// ship with SwiftPhoenixClient
 public struct Delegated<Input, Output> {
-
   private(set) var callback: ((Input) -> Output?)?
 
   public init() {}
@@ -33,7 +32,7 @@ public struct Delegated<Input, Output> {
     with callback: @escaping (Target, Input) -> Output
   ) {
     self.callback = { [weak target] input in
-      guard let target = target else {
+      guard let target else {
         return nil
       }
       return callback(target, input)
@@ -41,23 +40,21 @@ public struct Delegated<Input, Output> {
   }
 
   public func call(_ input: Input) -> Output? {
-    return self.callback?(input)
+    callback?(input)
   }
 
   public var isDelegateSet: Bool {
-    return callback != nil
+    callback != nil
   }
-
 }
 
 extension Delegated {
-
   public mutating func stronglyDelegate<Target: AnyObject>(
     to target: Target,
     with callback: @escaping (Target, Input) -> Output
   ) {
     self.callback = { input in
-      return callback(target, input)
+      callback(target, input)
     }
   }
 
@@ -66,49 +63,40 @@ extension Delegated {
   }
 
   public mutating func removeDelegate() {
-    self.callback = nil
+    callback = nil
   }
-
 }
 
 extension Delegated where Input == Void {
-
   public mutating func delegate<Target: AnyObject>(
     to target: Target,
     with callback: @escaping (Target) -> Output
   ) {
-    self.delegate(to: target, with: { target, voidInput in callback(target) })
+    delegate(to: target, with: { target, _ in callback(target) })
   }
 
   public mutating func stronglyDelegate<Target: AnyObject>(
     to target: Target,
     with callback: @escaping (Target) -> Output
   ) {
-    self.stronglyDelegate(to: target, with: { target, voidInput in callback(target) })
+    stronglyDelegate(to: target, with: { target, _ in callback(target) })
   }
-
 }
 
 extension Delegated where Input == Void {
-
   public func call() -> Output? {
-    return self.call(())
+    call(())
   }
-
 }
 
 extension Delegated where Output == Void {
-
   public func call(_ input: Input) {
-    self.callback?(input)
+    callback?(input)
   }
-
 }
 
 extension Delegated where Input == Void, Output == Void {
-
   public func call() {
-    self.call(())
+    call(())
   }
-
 }

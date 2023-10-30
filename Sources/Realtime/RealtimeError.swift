@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  RealtimeError.swift
 //
 //
 //  Created by Guilherme Souza on 30/10/23.

@@ -21,7 +21,8 @@ let package = Package(
     .library(name: "Storage", targets: ["Storage"]),
     .library(
       name: "Supabase",
-      targets: ["Supabase", "Functions", "PostgREST", "GoTrue", "Realtime", "Storage"]),
+      targets: ["Supabase", "Functions", "PostgREST", "GoTrue", "Realtime", "Storage"]
+    ),
   ],
   dependencies: [
     .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),

@@ -28,10 +28,11 @@ import Foundation
  */
 
 class HeartbeatTimer {
+  // ----------------------------------------------------------------------
 
-  //----------------------------------------------------------------------
   // MARK: - Dependencies
-  //----------------------------------------------------------------------
+
+  // ----------------------------------------------------------------------
   // The interval to wait before firing the Timer
   let timeInterval: TimeInterval
 
@@ -44,13 +45,15 @@ class HeartbeatTimer {
   // UUID which specifies the Timer instance. Verifies that timers are different
   let uuid: String = UUID().uuidString
 
-  //----------------------------------------------------------------------
+  // ----------------------------------------------------------------------
+
   // MARK: - Properties
-  //----------------------------------------------------------------------
+
+  // ----------------------------------------------------------------------
   // The underlying, cancelable, resettable, timer.
-  private var temporaryTimer: DispatchSourceTimer? = nil
+  private var temporaryTimer: DispatchSourceTimer?
   // The event handler that is called by the timer when it fires.
-  private var temporaryEventHandler: (() -> Void)? = nil
+  private var temporaryEventHandler: (() -> Void)?
 
   /**
    Create a new HeartbeatTimer
@@ -89,7 +92,8 @@ class HeartbeatTimer {
       timer.schedule(
         deadline: DispatchTime.now() + self.timeInterval,
         repeating: self.timeInterval,
-        leeway: self.leeway)
+        leeway: self.leeway
+      )
 
       // Start the timer
       timer.resume()
@@ -111,7 +115,7 @@ class HeartbeatTimer {
    True if the Timer exists and has not been cancelled. False otherwise
    */
   var isValid: Bool {
-    guard let timer = self.temporaryTimer else { return false }
+    guard let timer = temporaryTimer else { return false }
     return !timer.isCancelled
   }
 
@@ -121,12 +125,12 @@ class HeartbeatTimer {
    */
   func fire() {
     guard isValid else { return }
-    self.temporaryEventHandler?()
+    temporaryEventHandler?()
   }
 }
 
 extension HeartbeatTimer: Equatable {
   static func == (lhs: HeartbeatTimer, rhs: HeartbeatTimer) -> Bool {
-    return lhs.uuid == rhs.uuid
+    lhs.uuid == rhs.uuid
   }
 }
