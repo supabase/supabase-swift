@@ -21,7 +21,7 @@
 import Foundation
 
 /// Data that is received from the Server.
-public class Message {
+public struct Message {
   /// Reference number. Empty if missing
   public let ref: String
 
@@ -36,7 +36,7 @@ public class Message {
 
   /// The raw payload from the Message, including a nested response from
   /// phx_reply events. It is recommended to use `payload` instead.
-  public let rawPayload: Payload
+  let rawPayload: Payload
 
   /// Message payload
   public var payload: Payload {
@@ -49,8 +49,8 @@ public class Message {
   /// ```swift
   /// message.payload["status"]
   /// ```
-  public var status: String? {
-    rawPayload["status"] as? String
+  public var status: PushStatus? {
+    (rawPayload["status"] as? String).flatMap(PushStatus.init(rawValue:))
   }
 
   init(
@@ -73,8 +73,8 @@ public class Message {
     ref = json[1] as? String ?? ""
 
     if let topic = json[2] as? String,
-      let event = json[3] as? String,
-      let payload = json[4] as? Payload
+       let event = json[3] as? String,
+       let payload = json[4] as? Payload
     {
       self.topic = topic
       self.event = event

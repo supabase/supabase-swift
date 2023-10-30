@@ -172,8 +172,8 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
     let endpoint = url.absoluteString
     let wsEndpoint =
       endpoint
-      .replacingOccurrences(of: "http://", with: "ws://")
-      .replacingOccurrences(of: "https://", with: "wss://")
+        .replacingOccurrences(of: "http://", with: "ws://")
+        .replacingOccurrences(of: "https://", with: "wss://")
 
     // Force unwrapping should be safe here since a valid URL came in and we just
     // replaced the protocol.

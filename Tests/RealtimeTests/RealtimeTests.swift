@@ -50,7 +50,7 @@ final class RealtimeTests: XCTestCase {
     socket.connect()
 
     waitForExpectations(timeout: 3000) { error in
-      if let error = error {
+      if let error {
         XCTFail("\(self.name)) failed: \(error.localizedDescription)")
       }
     }
@@ -90,7 +90,8 @@ final class RealtimeTests: XCTestCase {
     allUsersUpdateChanges.off(.update)
 
     let allUserId99Changes = client.channel(
-      .column("id", value: "99", table: "users", schema: "public"))
+      .column("id", value: "99", table: "users", schema: "public")
+    )
     allUserId99Changes.on(.all) { message in
       print(message)
     }
@@ -120,7 +121,7 @@ final class RealtimeTests: XCTestCase {
     client.connect()
 
     waitForExpectations(timeout: 3000) { error in
-      if let error = error {
+      if let error {
         XCTFail("\(self.name)) failed: \(error.localizedDescription)")
       }
     }

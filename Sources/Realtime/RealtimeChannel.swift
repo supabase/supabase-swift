@@ -68,30 +68,47 @@ public enum RealtimeListenTypes: String {
   case presence
 }
 
+/// Represents the broadcast and presence options for a channel.
 public struct RealtimeChannelOptions {
-  public var ack: Bool
-  public var this: Bool
-  public var key: String
+  /// Used to track presence payload across clients. Must be unique per client. If `nil`, the server
+  /// will generate one.
+  var presenceKey: String?
+  /// Enables the client to receive their own`broadcast` messages
+  var broadcastSelf: Bool
+  /// Instructs the server to acknowledge the client's `broadcast` messages
+  var broadcastAcknowledge: Bool
 
-  public init(ack: Bool = false, this: Bool = false, key: String = "") {
-    self.ack = ack
-    self.this = this
-    self.key = key
+  public init(
+    presenceKey: String? = nil,
+    broadcastSelf: Bool = false,
+    broadcastAcknowledge: Bool = false
+  ) {
+    self.presenceKey = presenceKey
+    self.broadcastSelf = broadcastSelf
+    self.broadcastAcknowledge = broadcastAcknowledge
   }
 
-  var asDictionary: [String: Any] {
+  /// Parameters used to configure the channel
+  var params: [String: [String: Any]] {
     [
       "config": [
-        "broadcast": [
-          "ack": ack,
-          "self": this,
-        ],
         "presence": [
-          "key": key
+          "key": presenceKey ?? "",
         ],
-      ]
+        "broadcast": [
+          "ack": broadcastAcknowledge,
+          "self": broadcastSelf,
+        ],
+      ],
     ]
   }
+}
+
+/// Represents the different status of a push
+public enum PushStatus: String {
+  case ok
+  case error
+  case timeout
 }
 
 public enum RealtimeSubscribeStates {
@@ -218,7 +235,7 @@ public class RealtimeChannel {
     )
 
     /// Handle when a response is received after join()
-    joinPush.delegateReceive("ok", to: self) { (self, _) in
+    joinPush.delegateReceive(.ok, to: self) { (self, _) in
       // Mark the RealtimeChannel as joined
       self.state = ChannelState.joined
 
@@ -231,13 +248,13 @@ public class RealtimeChannel {
     }
 
     // Perform if RealtimeChannel errors while attempting to joi
-    joinPush.delegateReceive("error", to: self) { (self, _) in
+    joinPush.delegateReceive(.error, to: self) { (self, _) in
       self.state = .errored
       if self.socket?.isConnected == true { self.rejoinTimer.scheduleTimeout() }
     }
 
     // Handle when the join push times out when sending after join()
-    joinPush.delegateReceive("timeout", to: self) { (self, _) in
+    joinPush.delegateReceive(.timeout, to: self) { (self, _) in
       // log that the channel timed out
       self.socket?.logItems(
         "channel", "timeout \(self.topic) \(self.joinRef ?? "") after \(self.timeout)s"
@@ -357,7 +374,7 @@ public class RealtimeChannel {
 
     var accessTokenPayload: Payload = [:]
     var config: Payload = [
-      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? []
+      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? [],
     ]
 
     config["broadcast"] = broadcast
@@ -373,7 +390,7 @@ public class RealtimeChannel {
     rejoin()
 
     joinPush
-      .delegateReceive("ok", to: self) { (self, message) in
+      .delegateReceive(.ok, to: self) { (self, message) in
         if self.socket?.accessToken != nil {
           self.socket?.setAuth(self.socket?.accessToken)
         }
@@ -388,7 +405,7 @@ public class RealtimeChannel {
         let bindingsCount = clientPostgresBindings.count
         var newPostgresBindings: [Binding] = []
 
-        for i in 0..<bindingsCount {
+        for i in 0 ..< bindingsCount {
           let clientPostgresBinding = clientPostgresBindings[i]
 
           let event = clientPostgresBinding.filter["event"]
@@ -399,9 +416,9 @@ public class RealtimeChannel {
           let serverPostgresFilter = serverPostgresFilters[i]
 
           if serverPostgresFilter["event", as: String.self] == event,
-            serverPostgresFilter["schema", as: String.self] == schema,
-            serverPostgresFilter["table", as: String.self] == table,
-            serverPostgresFilter["filter", as: String.self] == filter
+             serverPostgresFilter["schema", as: String.self] == schema,
+             serverPostgresFilter["table", as: String.self] == table,
+             serverPostgresFilter["filter", as: String.self] == filter
           {
             newPostgresBindings.append(
               Binding(
@@ -426,12 +443,12 @@ public class RealtimeChannel {
         }
         callback?(.subscribed, nil)
       }
-      .delegateReceive("error", to: self) { _, message in
+      .delegateReceive(.error, to: self) { _, message in
         let values = message.payload.values.map { "\($0) " }
         let error = RealtimeError(values.isEmpty ? "error" : values.joined(separator: ", "))
         callback?(.channelError, error)
       }
-      .delegateReceive("timeout", to: self) { _, _ in
+      .delegateReceive(.timeout, to: self) { _, _ in
         callback?(.timedOut, nil)
       }
 
@@ -646,7 +663,7 @@ public class RealtimeChannel {
   /// "event" and nothing is printed if the channel receives "other_event".
   ///
   /// - parameter event: Event to unsubscribe from
-  /// - paramter ref: Ref counter returned when subscribing. Can be omitted
+  /// - parameter ref: Ref counter returned when subscribing. Can be omitted
   public func off(_ type: String, filter: [String: String] = [:]) {
     bindings.withValue {
       $0[type.lowercased()] = $0[type.lowercased(), default: []].filter { bind in
@@ -716,7 +733,7 @@ public class RealtimeChannel {
           "topic": subTopic,
           "payload": payload,
           "event": event as Any,
-        ]
+        ],
       ]
 
       do {
@@ -731,7 +748,7 @@ public class RealtimeChannel {
         guard let httpResponse = response as? HTTPURLResponse else {
           return .error
         }
-        if 200..<300 ~= httpResponse.statusCode {
+        if 200 ..< 300 ~= httpResponse.statusCode {
           return .ok
         }
 
@@ -747,8 +764,8 @@ public class RealtimeChannel {
         )
 
         if let type = payload["type"] as? String, type == "broadcast",
-          let config = self.params["config"] as? [String: Any],
-          let broadcast = config["broadcast"] as? [String: Any]
+           let config = self.params["config"] as? [String: Any],
+           let broadcast = config["broadcast"] as? [String: Any]
         {
           let ack = broadcast["ack"] as? Bool
           if ack == nil || ack == false {
@@ -758,10 +775,10 @@ public class RealtimeChannel {
         }
 
         push
-          .receive("ok") { _ in
+          .receive(.ok) { _ in
             continuation.resume(returning: .ok)
           }
-          .receive("timeout") { _ in
+          .receive(.timeout) { _ in
             continuation.resume(returning: .timedOut)
           }
       }
@@ -811,12 +828,14 @@ public class RealtimeChannel {
     // Perform the same behavior if successfully left the channel
     // or if sending the event timed out
     leavePush
-      .receive("ok", delegated: onCloseDelegate)
-      .receive("timeout", delegated: onCloseDelegate)
+      .receive(.ok, delegated: onCloseDelegate)
+      .receive(.timeout, delegated: onCloseDelegate)
     leavePush.send()
 
     // If the RealtimeChannel cannot send push events, trigger a success locally
-    if !canPush { leavePush.trigger("ok", payload: [:]) }
+    if !canPush {
+      leavePush.trigger(.ok, payload: [:])
+    }
 
     // Return the push so it can be bound to
     return leavePush
@@ -908,10 +927,12 @@ public class RealtimeChannel {
           if let bindId = bind.id.flatMap(Int.init) {
             let ids = message.payload["ids", as: [Int].self] ?? []
             return ids.contains(bindId)
-              && (bindEvent == "*"
-                || bindEvent
+              && (
+                bindEvent == "*"
+                  || bindEvent
                   == message.payload["data", as: [String: Any].self]?["type", as: String.self]?
-                  .lowercased())
+                  .lowercased()
+              )
           }
 
           return bindEvent == "*"

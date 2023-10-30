@@ -57,7 +57,7 @@ public enum Defaults {
   public static let decode: (Data) -> Any? = { data in
     guard
       let json =
-        try? JSONSerialization
+      try? JSONSerialization
         .jsonObject(
           with: data,
           options: JSONSerialization.ReadingOptions()

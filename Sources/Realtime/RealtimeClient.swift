@@ -149,7 +149,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   var sendBuffer: [(ref: String?, callback: () throws -> Void)] = []
 
   /// Ref counter for messages
-  var ref: UInt64 = .min  // 0 (max: 18,446,744,073,709,551,615)
+  var ref: UInt64 = .min // 0 (max: 18,446,744,073,709,551,615)
 
   /// Timer that triggers sending new Heartbeat messages
   var heartbeatTimer: HeartbeatTimer?
@@ -632,7 +632,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     params: RealtimeChannelOptions = .init()
   ) -> RealtimeChannel {
     let channel = RealtimeChannel(
-      topic: "realtime:\(topic)", params: params.asDictionary, socket: self
+      topic: "realtime:\(topic)", params: params.params, socket: self
     )
     channels.append(channel)
 
