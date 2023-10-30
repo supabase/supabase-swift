@@ -32,7 +32,7 @@ public struct Delegated<Input, Output> {
     with callback: @escaping (Target, Input) -> Output
   ) {
     self.callback = { [weak target] input in
-      guard let target = target else {
+      guard let target else {
         return nil
       }
       return callback(target, input)
@@ -40,11 +40,11 @@ public struct Delegated<Input, Output> {
   }
 
   public func call(_ input: Input) -> Output? {
-    return callback?(input)
+    callback?(input)
   }
 
   public var isDelegateSet: Bool {
-    return callback != nil
+    callback != nil
   }
 }
 
@@ -85,7 +85,7 @@ extension Delegated where Input == Void {
 
 extension Delegated where Input == Void {
   public func call() -> Output? {
-    return call(())
+    call(())
   }
 }
 

@@ -28,7 +28,8 @@ public enum Defaults {
   /// Default interval to send heartbeats on
   public static let heartbeatInterval: TimeInterval = 30.0
 
-  /// Default maximum amount of time which the system may delay heartbeat events in order to minimize power usage
+  /// Default maximum amount of time which the system may delay heartbeat events in order to
+  /// minimize power usage
   public static let heartbeatLeeway: DispatchTimeInterval = .milliseconds(10)
 
   /// Default reconnect algorithm for the socket
@@ -43,28 +44,20 @@ public enum Defaults {
 
   public static let vsn = "2.0.0"
 
-  /// Default encoder
-  public static let encoder: JSONEncoder = JSONEncoder()
-
   /// Default encode function, utilizing JSONSerialization.data
   public static let encode: (Any) -> Data = { json in
-    assert(JSONSerialization.isValidJSONObject(json), "Invalid JSON object")
-    return
-      try! JSONSerialization
+    try! JSONSerialization
       .data(
         withJSONObject: json,
         options: JSONSerialization.WritingOptions()
       )
   }
 
-  /// Default decoder
-  public static let decoder: JSONDecoder = JSONDecoder()
-
   /// Default decode function, utilizing JSONSerialization.jsonObject
   public static let decode: (Data) -> Any? = { data in
     guard
       let json =
-        try? JSONSerialization
+      try? JSONSerialization
         .jsonObject(
           with: data,
           options: JSONSerialization.ReadingOptions()
@@ -74,7 +67,8 @@ public enum Defaults {
   }
 
   public static let heartbeatQueue: DispatchQueue = .init(
-    label: "com.phoenix.socket.heartbeat")
+    label: "com.phoenix.socket.heartbeat"
+  )
 }
 
 /// Represents the multiple states that a Channel can be in
@@ -88,174 +82,23 @@ public enum ChannelState: String {
 }
 
 /// Represents the different events that can be sent through
-/// a channel regarding a Channel's lifecycle or
-/// that can be registered to be notified of.
-public enum ChannelEvent: RawRepresentable {
-  public enum Presence: String {
-    case state
-    case diff
-  }
+/// a channel regarding a Channel's lifecycle.
+public enum ChannelEvent {
+  public static let heartbeat = "heartbeat"
+  public static let join = "phx_join"
+  public static let leave = "phx_leave"
+  public static let reply = "phx_reply"
+  public static let error = "phx_error"
+  public static let close = "phx_close"
+  public static let accessToken = "access_token"
+  public static let postgresChanges = "postgres_changes"
+  public static let broadcast = "broadcast"
+  public static let presence = "presence"
 
-  case heartbeat
-  case join
-  case leave
-  case reply
-  case error
-  case close
-
-  case all
-  case insert
-  case update
-  case delete
-
-  case channelReply(String)
-
-  case broadcast
-
-  case presence
-  case presenceState
-  case presenceDiff
-
-  public var rawValue: String {
-    switch self {
-    case .heartbeat: return "heartbeat"
-    case .join: return "phx_join"
-    case .leave: return "phx_leave"
-    case .reply: return "phx_reply"
-    case .error: return "phx_error"
-    case .close: return "phx_close"
-
-    case .all: return "*"
-    case .insert: return "insert"
-    case .update: return "update"
-    case .delete: return "delete"
-
-    case let .channelReply(reference): return "chan_reply_\(reference)"
-
-    case .broadcast: return "broadcast"
-
-    case .presence: return "presence"
-    case .presenceState: return "presence_state"
-    case .presenceDiff: return "presence_diff"
-    }
-  }
-
-  public init?(rawValue: String) {
-    switch rawValue.lowercased() {
-    case "heartbeat": self = .heartbeat
-    case "phx_join": self = .join
-    case "phx_leave": self = .leave
-    case "phx_reply": self = .reply
-    case "phx_error": self = .error
-    case "phx_close": self = .close
-    case "*": self = .all
-    case "insert": self = .insert
-    case "update": self = .update
-    case "delete": self = .delete
-    case "broadcast": self = .broadcast
-    case "presence": self = .presence
-    case "presence_state": self = .presenceState
-    case "presence_diff": self = .presenceDiff
-    default: return nil
-    }
-  }
-
-  var isLifecyleEvent: Bool {
-    switch self {
-    case .join, .leave, .reply, .error, .close: return true
+  static func isLifecyleEvent(_ event: String) -> Bool {
+    switch event {
+    case join, leave, reply, error, close: return true
     default: return false
     }
   }
-}
-
-/// Represents the different topic a channel can subscribe to.
-public enum ChannelTopic: RawRepresentable, Equatable {
-  case all
-  case schema(_ schema: String)
-  case table(_ table: String, schema: String)
-  case column(_ column: String, value: String, table: String, schema: String)
-
-  case heartbeat
-
-  public var rawValue: String {
-    switch self {
-    case .all: return "realtime:*"
-    case let .schema(name): return "realtime:\(name)"
-    case let .table(tableName, schema): return "realtime:\(schema):\(tableName)"
-    case let .column(columnName, value, table, schema):
-      return "realtime:\(schema):\(table):\(columnName)=eq.\(value)"
-    case .heartbeat: return "phoenix"
-    }
-  }
-
-  public init?(rawValue: String) {
-    if rawValue == "realtime:*" || rawValue == "*" {
-      self = .all
-    } else if rawValue == "phoenix" {
-      self = .heartbeat
-    } else {
-      let parts = rawValue.replacingOccurrences(of: "realtime:", with: "").split(separator: ":")
-      switch parts.count {
-      case 1:
-        self = .schema(String(parts[0]))
-      case 2:
-        self = .table(String(parts[1]), schema: String(parts[0]))
-      case 3:
-        let condition = parts[2].split(separator: "=")
-        if condition.count == 2,
-          condition[1].hasPrefix("eq.")
-        {
-          self = .column(
-            String(condition[0]), value: String(condition[1].dropFirst(3)), table: String(parts[1]),
-            schema: String(parts[0])
-          )
-        } else {
-          return nil
-        }
-      default:
-        return nil
-      }
-    }
-  }
-}
-
-/// Represents the broadcast and presence options for a channel.
-public struct ChannelOptions {
-  /// Used to track presence payload across clients. Must be unique per client. If `nil`, the server will generate one.
-  var presenceKey: String?
-  /// Enables the client to receieve their own`broadcast` messages
-  var broadcastSelf: Bool
-  /// Instructs the server to acknoledge the client's `broadcast` messages
-  var broadcastAcknowledge: Bool
-
-  public init(
-    presenceKey: String? = nil, broadcastSelf: Bool = false, broadcastAcknowledge: Bool = false
-  ) {
-    self.presenceKey = presenceKey
-    self.broadcastSelf = broadcastSelf
-    self.broadcastAcknowledge = broadcastAcknowledge
-  }
-
-  /// Parameters used to configure the channel
-  var params: [String: [String: Any]] {
-    [
-      "config": [
-        "presence": [
-          "key": presenceKey ?? ""
-        ],
-        "broadcast": [
-          "ack": broadcastAcknowledge,
-          "self": broadcastSelf,
-        ],
-      ]
-    ]
-  }
-
-}
-
-/// Represents the different status of a push
-public enum PushStatus: String {
-  case ok
-  case error
-  case timeout
 }

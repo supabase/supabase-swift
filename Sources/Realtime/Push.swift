@@ -23,10 +23,10 @@ import Foundation
 /// Represnts pushing data to a `Channel` through the `Socket`
 public class Push {
   /// The channel sending the Push
-  public weak var channel: Channel?
+  public weak var channel: RealtimeChannel?
 
-  /// The event, for example `ChannelEvent.join`
-  public let event: ChannelEvent
+  /// The event, for example `phx_join`
+  public let event: String
 
   /// The payload, for example ["user_id": "abc123"]
   public var payload: Payload
@@ -53,7 +53,7 @@ public class Push {
   var ref: String?
 
   /// The event that is associated with the reference ID of the Push
-  var refEvent: ChannelEvent?
+  var refEvent: String?
 
   /// Initializes a Push
   ///
@@ -62,8 +62,8 @@ public class Push {
   /// - parameter payload: Optional. The Payload to send, e.g. ["user_id": "abc123"]
   /// - parameter timeout: Optional. The push timeout. Default is 10.0s
   init(
-    channel: Channel,
-    event: ChannelEvent,
+    channel: RealtimeChannel,
+    event: String,
     payload: Payload = [:],
     timeout: TimeInterval = Defaults.timeoutInterval
   ) {
@@ -94,7 +94,7 @@ public class Push {
     startTimeout()
     sent = true
     channel?.socket?.push(
-      topic: channel?.topic ?? .all,
+      topic: channel?.topic ?? "",
       event: event,
       payload: payload,
       ref: ref,
@@ -158,9 +158,9 @@ public class Push {
 
   /// Shared behavior between `receive` calls
   @discardableResult
-  internal func receive(_ status: PushStatus, delegated: Delegated<Message, Void>) -> Push {
+  func receive(_ status: PushStatus, delegated: Delegated<Message, Void>) -> Push {
     // If the message has already been received, pass it to the callback immediately
-    if hasReceived(status: status), let receivedMessage = receivedMessage {
+    if hasReceived(status: status), let receivedMessage {
       delegated.call(receivedMessage)
     }
 
@@ -176,7 +176,7 @@ public class Push {
   }
 
   /// Resets the Push as it was after it was first tnitialized.
-  internal func reset() {
+  func reset() {
     cancelRefEvent()
     ref = nil
     refEvent = nil
@@ -194,38 +194,38 @@ public class Push {
 
   /// Reverses the result on channel.on(ChannelEvent, callback) that spawned the Push
   private func cancelRefEvent() {
-    guard let refEvent = refEvent else { return }
+    guard let refEvent else { return }
     channel?.off(refEvent)
   }
 
   /// Cancel any ongoing Timeout Timer
-  internal func cancelTimeout() {
+  func cancelTimeout() {
     timeoutWorkItem?.cancel()
     timeoutWorkItem = nil
   }
 
   /// Starts the Timer which will trigger a timeout after a specific _timeout_
   /// time, in milliseconds, is reached.
-  internal func startTimeout() {
+  func startTimeout() {
     // Cancel any existing timeout before starting a new one
     if let safeWorkItem = timeoutWorkItem, !safeWorkItem.isCancelled {
       cancelTimeout()
     }
 
     guard
-      let channel = channel,
+      let channel,
       let socket = channel.socket
     else { return }
 
     let ref = socket.makeRef()
-    let refEvent = ChannelEvent.channelReply(ref)
+    let refEvent = channel.replyEventName(ref)
 
     self.ref = ref
     self.refEvent = refEvent
 
     /// If a response is received  before the Timer triggers, cancel timer
-    /// and match the recevied event to it's corresponding hook
-    channel.delegateOn(refEvent, to: self) { (self, message) in
+    /// and match the received event to it's corresponding hook
+    channel.delegateOn(refEvent, filter: ChannelFilter(), to: self) { (self, message) in
       self.cancelRefEvent()
       self.cancelTimeout()
       self.receivedMessage = message
@@ -248,17 +248,17 @@ public class Push {
   ///
   /// - parameter status: Status to check
   /// - return: True if given status has been received by the Push.
-  internal func hasReceived(status: PushStatus) -> Bool {
-    return receivedMessage?.status == status
+  func hasReceived(status: PushStatus) -> Bool {
+    receivedMessage?.status == status
   }
 
   /// Triggers an event to be sent though the Channel
-  internal func trigger(_ status: PushStatus, payload: Payload) {
+  func trigger(_ status: PushStatus, payload: Payload) {
     /// If there is no ref event, then there is nothing to trigger on the channel
-    guard let refEvent = refEvent else { return }
+    guard let refEvent else { return }
 
     var mutPayload = payload
-    mutPayload["status"] = status
+    mutPayload["status"] = status.rawValue
 
     channel?.trigger(event: refEvent, payload: mutPayload)
   }

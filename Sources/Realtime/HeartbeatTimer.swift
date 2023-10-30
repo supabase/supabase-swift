@@ -20,10 +20,13 @@
 
 import Foundation
 
-/// Heartbeat Timer class which manages the lifecycle of the underlying
-/// timer which triggers when a heartbeat should be fired. This heartbeat
-/// runs on it's own Queue so that it does not interfere with the main
-/// queue but guarantees thread safety.
+/**
+ Heartbeat Timer class which manages the lifecycle of the underlying
+ timer which triggers when a heartbeat should be fired. This heartbeat
+ runs on it's own Queue so that it does not interfere with the main
+ queue but guarantees thread safety.
+ */
+
 class HeartbeatTimer {
   // ----------------------------------------------------------------------
 
@@ -53,13 +56,13 @@ class HeartbeatTimer {
   private var temporaryEventHandler: (() -> Void)?
 
   /**
-     Create a new HeartbeatTimer
+   Create a new HeartbeatTimer
 
-     - Parameters:
-       - timeInterval: Interval to fire the timer. Repeats
-       - queue: Queue to schedule the timer on
-       - leeway: The maximum amount of time which the system may delay the delivery of the timer events
-     */
+   - Parameters:
+     - timeInterval: Interval to fire the timer. Repeats
+     - queue: Queue to schedule the timer on
+     - leeway: The maximum amount of time which the system may delay the delivery of the timer events
+   */
   init(
     timeInterval: TimeInterval, queue: DispatchQueue = Defaults.heartbeatQueue,
     leeway: DispatchTimeInterval = Defaults.heartbeatLeeway
@@ -70,10 +73,10 @@ class HeartbeatTimer {
   }
 
   /**
-     Create a new HeartbeatTimer
+   Create a new HeartbeatTimer
 
-     - Parameter timeInterval: Interval to fire the timer. Repeats
-     */
+   - Parameter timeInterval: Interval to fire the timer. Repeats
+   */
   convenience init(timeInterval: TimeInterval) {
     self.init(timeInterval: timeInterval, queue: Defaults.heartbeatQueue)
   }
@@ -109,17 +112,17 @@ class HeartbeatTimer {
   }
 
   /**
-     True if the Timer exists and has not been cancelled. False otherwise
-     */
+   True if the Timer exists and has not been cancelled. False otherwise
+   */
   var isValid: Bool {
     guard let timer = temporaryTimer else { return false }
     return !timer.isCancelled
   }
 
   /**
-     Calls the Timer's event handler immediately. This method
-     is primarily used in tests (not ideal)
-     */
+   Calls the Timer's event handler immediately. This method
+   is primarily used in tests (not ideal)
+   */
   func fire() {
     guard isValid else { return }
     temporaryEventHandler?()
@@ -128,6 +131,6 @@ class HeartbeatTimer {
 
 extension HeartbeatTimer: Equatable {
   static func == (lhs: HeartbeatTimer, rhs: HeartbeatTimer) -> Bool {
-    return lhs.uuid == rhs.uuid
+    lhs.uuid == rhs.uuid
   }
 }

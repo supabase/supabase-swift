@@ -86,7 +86,8 @@ struct AuthView: View {
         try await supabase.auth.signIn(email: email, password: password)
       case .signUp:
         try await supabase.auth.signUp(
-          email: email, password: password, redirectTo: URL(string: "com.supabase.Examples://")!)
+          email: email, password: password, redirectTo: URL(string: "com.supabase.Examples://")!
+        )
       }
     } catch {
       withAnimation {

@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 27/10/23.
 //
 
-import SVGView
 import Supabase
+import SVGView
 import SwiftUI
 
 enum MFAStatus {
@@ -104,7 +104,8 @@ struct MFAEnrollView: View {
     Task {
       do {
         try await supabase.auth.mfa.challengeAndVerify(
-          params: MFAChallengeAndVerifyParams(factorId: enrollResponse!.id, code: verificationCode))
+          params: MFAChallengeAndVerifyParams(factorId: enrollResponse!.id, code: verificationCode)
+        )
       } catch {
         self.error = error
       }
@@ -158,7 +159,8 @@ struct MFAVerifyView: View {
         }
 
         try await supabase.auth.mfa.challengeAndVerify(
-          params: MFAChallengeAndVerifyParams(factorId: totpFactor.id, code: verificationCode))
+          params: MFAChallengeAndVerifyParams(factorId: totpFactor.id, code: verificationCode)
+        )
       } catch {
         self.error = error
       }
@@ -190,9 +192,7 @@ struct MFAVerifiedView: View {
             for factor in factorsToRemove {
               try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factor.id))
             }
-          } catch {
-
-          }
+          } catch {}
         }
       }
     }

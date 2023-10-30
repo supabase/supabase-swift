@@ -21,7 +21,8 @@ let package = Package(
     .library(name: "Storage", targets: ["Storage"]),
     .library(
       name: "Supabase",
-      targets: ["Supabase", "Functions", "PostgREST", "GoTrue", "Realtime", "Storage"]),
+      targets: ["Supabase", "Functions", "PostgREST", "GoTrue", "Realtime", "Storage"]
+    ),
   ],
   dependencies: [
     .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
@@ -59,7 +60,7 @@ let package = Package(
       exclude: ["__Snapshots__"]
     ),
     .testTarget(name: "PostgRESTIntegrationTests", dependencies: ["PostgREST"]),
-    .target(name: "Realtime"),
+    .target(name: "Realtime", dependencies: ["_Helpers"]),
     .testTarget(name: "RealtimeTests", dependencies: ["Realtime"]),
     .target(name: "Storage", dependencies: ["_Helpers"]),
     .testTarget(name: "StorageTests", dependencies: ["Storage"]),
@@ -79,6 +80,6 @@ let package = Package(
 
 for target in package.targets where !target.isTest {
   target.swiftSettings = [
-    .enableUpcomingFeature("StrictConcurrency=complete")
+    .enableUpcomingFeature("StrictConcurrency=complete"),
   ]
 }

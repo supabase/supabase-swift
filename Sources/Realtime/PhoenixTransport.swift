@@ -25,34 +25,39 @@ import Foundation
 // MARK: - Transport Protocol
 
 // ----------------------------------------------------------------------
-/// Defines a `Socket`'s Transport layer.
+/**
+ Defines a `Socket`'s Transport layer.
+ */
 // sourcery: AutoMockable
-public protocol Transport {
+public protocol PhoenixTransport {
   /// The current `ReadyState` of the `Transport` layer
-  var readyState: TransportReadyState { get }
+  var readyState: PhoenixTransportReadyState { get }
 
   /// Delegate for the `Transport` layer
-  var delegate: TransportDelegate? { get set }
+  var delegate: PhoenixTransportDelegate? { get set }
 
   /**
-     Connect to the server
-     */
-  func connect()
+   Connect to the server
+
+   - Parameters:
+   - headers: Headers to include in the URLRequests when opening the Websocket connection. Can be empty [:]
+   */
+  func connect(with headers: [String: Any])
 
   /**
-     Disconnect from the server.
+   Disconnect from the server.
 
-     - Parameters:
-     - code: Status code as defined by <ahref="http://tools.ietf.org/html/rfc6455#section-7.4">Section 7.4 of RFC 6455</a>.
-     - reason: Reason why the connection is closing. Optional.
-     */
+   - Parameters:
+   - code: Status code as defined by <ahref="http://tools.ietf.org/html/rfc6455#section-7.4">Section 7.4 of RFC 6455</a>.
+   - reason: Reason why the connection is closing. Optional.
+   */
   func disconnect(code: Int, reason: String?)
 
   /**
-     Sends a message to the server.
+   Sends a message to the server.
 
-     - Parameter data: Data to send.
-     */
+   - Parameter data: Data to send.
+   */
   func send(data: Data)
 }
 
@@ -62,36 +67,36 @@ public protocol Transport {
 
 // ----------------------------------------------------------------------
 /// Delegate to receive notifications of events that occur in the `Transport` layer
-public protocol TransportDelegate {
+public protocol PhoenixTransportDelegate {
   /**
-     Notified when the `Transport` opens.
+   Notified when the `Transport` opens.
 
-     - Parameter response: Response from the server indicating that the WebSocket handshake was successful and the connection has been upgraded to webSockets
-     */
+   - Parameter response: Response from the server indicating that the WebSocket handshake was successful and the connection has been upgraded to webSockets
+   */
   func onOpen(response: URLResponse?)
 
   /**
-     Notified when the `Transport` receives an error.
+   Notified when the `Transport` receives an error.
 
-     - Parameter error: Client-side error from the underlying `Transport` implementation
-     - Parameter response: Response from the server, if any, that occurred with the Error
+   - Parameter error: Client-side error from the underlying `Transport` implementation
+   - Parameter response: Response from the server, if any, that occurred with the Error
 
-     */
+   */
   func onError(error: Error, response: URLResponse?)
 
   /**
-     Notified when the `Transport` receives a message from the server.
+   Notified when the `Transport` receives a message from the server.
 
-     - Parameter message: Message received from the server
-     */
+   - Parameter message: Message received from the server
+   */
   func onMessage(message: String)
 
   /**
-     Notified when the `Transport` closes.
+   Notified when the `Transport` closes.
 
-     - Parameter code: Code that was sent when the `Transport` closed
-     - Parameter reason: A concise human-readable prose explanation for the closure
-     */
+   - Parameter code: Code that was sent when the `Transport` closed
+   - Parameter reason: A concise human-readable prose explanation for the closure
+   */
   func onClose(code: Int, reason: String?)
 }
 
@@ -101,7 +106,7 @@ public protocol TransportDelegate {
 
 // ----------------------------------------------------------------------
 /// Available `ReadyState`s of a `Transport` layer.
-public enum TransportReadyState {
+public enum PhoenixTransportReadyState {
   /// The `Transport` is opening a connection to the server.
   case connecting
 
@@ -128,12 +133,12 @@ public enum TransportReadyState {
 /// `Transport` implementations. Or you can create your own implementation using
 /// your own WebSocket library or implementation.
 @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
-open class URLSessionTransport: NSObject, Transport, URLSessionWebSocketDelegate {
+open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketDelegate {
   /// The URL to connect to
-  internal let url: URL
+  let url: URL
 
   /// The URLSession configuration
-  internal let configuration: URLSessionConfiguration
+  let configuration: URLSessionConfiguration
 
   /// The underling URLSession. Assigned during `connect()`
   private var session: URLSession? = nil
@@ -142,33 +147,33 @@ open class URLSessionTransport: NSObject, Transport, URLSessionWebSocketDelegate
   private var task: URLSessionWebSocketTask? = nil
 
   /**
-     Initializes a `Transport` layer built using URLSession's WebSocket
+   Initializes a `Transport` layer built using URLSession's WebSocket
 
-     Example:
+   Example:
 
-     ```swift
-     let url = URL("wss://example.com/socket")
-     let transport: Transport = URLSessionTransport(url: url)
-     ```
+   ```swift
+   let url = URL("wss://example.com/socket")
+   let transport: Transport = URLSessionTransport(url: url)
+   ```
 
-     Using a custom `URLSessionConfiguration`
+   Using a custom `URLSessionConfiguration`
 
-     ```swift
-     let url = URL("wss://example.com/socket")
-     let configuration = URLSessionConfiguration.default
-     let transport: Transport = URLSessionTransport(url: url, configuration: configuration)
-     ```
+   ```swift
+   let url = URL("wss://example.com/socket")
+   let configuration = URLSessionConfiguration.default
+   let transport: Transport = URLSessionTransport(url: url, configuration: configuration)
+   ```
 
-     - parameter url: URL to connect to
-     - parameter configuration: Provide your own URLSessionConfiguration. Uses `.default` if none provided
-     */
+   - parameter url: URL to connect to
+   - parameter configuration: Provide your own URLSessionConfiguration. Uses `.default` if none provided
+   */
   public init(url: URL, configuration: URLSessionConfiguration = .default) {
     // URLSession requires that the endpoint be "wss" instead of "https".
     let endpoint = url.absoluteString
     let wsEndpoint =
       endpoint
-      .replacingOccurrences(of: "http://", with: "ws://")
-      .replacingOccurrences(of: "https://", with: "wss://")
+        .replacingOccurrences(of: "http://", with: "ws://")
+        .replacingOccurrences(of: "https://", with: "wss://")
 
     // Force unwrapping should be safe here since a valid URL came in and we just
     // replaced the protocol.
@@ -180,16 +185,23 @@ open class URLSessionTransport: NSObject, Transport, URLSessionWebSocketDelegate
 
   // MARK: - Transport
 
-  public var readyState: TransportReadyState = .closed
-  public var delegate: TransportDelegate? = nil
+  public var readyState: PhoenixTransportReadyState = .closed
+  public var delegate: PhoenixTransportDelegate? = nil
 
-  open func connect() {
+  public func connect(with headers: [String: Any]) {
     // Set the transport state as connecting
     readyState = .connecting
 
     // Create the session and websocket task
     session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-    task = session?.webSocketTask(with: url)
+    var request = URLRequest(url: url)
+
+    headers.forEach { (key: String, value: Any) in
+      guard let value = value as? String else { return }
+      request.addValue(value, forHTTPHeaderField: key)
+    }
+
+    task = session?.webSocketTask(with: request)
 
     // Start the task
     task?.resume()
@@ -197,11 +209,11 @@ open class URLSessionTransport: NSObject, Transport, URLSessionWebSocketDelegate
 
   open func disconnect(code: Int, reason: String?) {
     /*
-         TODO:
-         1. Provide a "strict" mode that fails if an invalid close code is given
-         2. If strict mode is disabled, default to CloseCode.invalid
-         3. Provide default .normalClosure function
-         */
+     TODO:
+     1. Provide a "strict" mode that fails if an invalid close code is given
+     2. If strict mode is disabled, default to CloseCode.invalid
+     3. Provide default .normalClosure function
+     */
     guard let closeCode = URLSessionWebSocketTask.CloseCode(rawValue: code) else {
       fatalError("Could not create a CloseCode with invalid code: [\(code)].")
     }

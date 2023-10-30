@@ -103,16 +103,16 @@ public final class Presence {
   ///     let options = Options(events: [.state: "my_state", .diff: "my_diff"])
   ///     let presence = Presence(channel, opts: options)
   public struct Options {
-    let events: [Events: ChannelEvent]
+    let events: [Events: String]
 
     /// Default set of Options used when creating Presence. Uses the
     /// phoenix events "presence_state" and "presence_diff"
     public static let defaults = Options(events: [
-      .state: .presenceState,
-      .diff: .presenceDiff,
+      .state: "presence_state",
+      .diff: "presence_diff",
     ])
 
-    public init(events: [Events: ChannelEvent]) {
+    public init(events: [Events: String]) {
       self.events = events
     }
   }
@@ -163,7 +163,7 @@ public final class Presence {
 
   // ----------------------------------------------------------------------
   /// The channel the Presence belongs to
-  weak var channel: Channel?
+  weak var channel: RealtimeChannel?
 
   /// Caller to callback hooks
   var caller: Caller
@@ -184,7 +184,7 @@ public final class Presence {
 
   /// Callback to be informed of joins
   public var onJoin: OnJoin {
-    get { return caller.onJoin }
+    get { caller.onJoin }
     set { caller.onJoin = newValue }
   }
 
@@ -195,7 +195,7 @@ public final class Presence {
 
   /// Callback to be informed of leaves
   public var onLeave: OnLeave {
-    get { return caller.onLeave }
+    get { caller.onLeave }
     set { caller.onLeave = newValue }
   }
 
@@ -206,7 +206,7 @@ public final class Presence {
 
   /// Callback to be informed of synces
   public var onSync: OnSync {
-    get { return caller.onSync }
+    get { caller.onSync }
     set { caller.onSync = newValue }
   }
 
@@ -215,19 +215,19 @@ public final class Presence {
     onSync = callback
   }
 
-  public init(channel: Channel, opts: Options = Options.defaults) {
+  public init(channel: RealtimeChannel, opts: Options = Options.defaults) {
     state = [:]
     pendingDiffs = []
     self.channel = channel
     joinRef = nil
     caller = Caller()
 
-    guard  // Do not subscribe to events if they were not provided
+    guard // Do not subscribe to events if they were not provided
       let stateEvent = opts.events[.state],
       let diffEvent = opts.events[.diff]
     else { return }
 
-    self.channel?.delegateOn(stateEvent, to: self) { (self, message) in
+    self.channel?.delegateOn(stateEvent, filter: ChannelFilter(), to: self) { (self, message) in
       guard let newState = message.rawPayload as? State else { return }
 
       self.joinRef = self.channel?.joinRef
@@ -251,7 +251,7 @@ public final class Presence {
       self.caller.onSync()
     }
 
-    self.channel?.delegateOn(diffEvent, to: self) { (self, message) in
+    self.channel?.delegateOn(diffEvent, filter: ChannelFilter(), to: self) { (self, message) in
       guard let diff = message.rawPayload as? Diff else { return }
       if self.isPendingSyncState {
         self.pendingDiffs.append(diff)
@@ -269,17 +269,17 @@ public final class Presence {
 
   /// Returns the array of presences, with deault selected metadata.
   public func list() -> [Map] {
-    return list(by: { _, pres in pres })
+    list(by: { _, pres in pres })
   }
 
   /// Returns the array of presences, with selected metadata
   public func list<T>(by transformer: (String, Map) -> T) -> [T] {
-    return Presence.listBy(state, transformer: transformer)
+    Presence.listBy(state, transformer: transformer)
   }
 
   /// Filter the Presence state with a given function
   public func filter(by filter: ((String, Map) -> Bool)?) -> State {
-    return Presence.filter(state, by: filter)
+    Presence.filter(state, by: filter)
   }
 
   // ----------------------------------------------------------------------
@@ -406,38 +406,6 @@ public final class Presence {
     _ presences: State,
     transformer: (String, Map) -> T
   ) -> [T] {
-    return presences.map(transformer)
+    presences.map(transformer)
   }
-}
-
-extension Presence.Map {
-
-  /// Decodes the presence metadata to an array of the specified type.
-  /// - parameter type: The type to decode to.
-  /// - parameter decoder: The decoder to use.
-  /// - returns: The decoded values.
-  /// - throws: Any error that occurs during decoding.
-  public func decode<T: Decodable>(
-    to type: T.Type = T.self, decoder: JSONDecoder = Defaults.decoder
-  ) throws -> [T] {
-    let metas: [Presence.Meta] = self["metas"]!
-    let data = try JSONSerialization.data(withJSONObject: metas)
-    return try decoder.decode([T].self, from: data)
-  }
-
-}
-
-extension Presence.State {
-
-  /// Decodes the presence metadata to a dictionary of arrays of the specified type.
-  /// - parameter type: The type to decode to.
-  /// - parameter decoder: The decoder to use.
-  /// - returns: The dictionary of decoded values.
-  /// - throws: Any error that occurs during decoding.
-  public func decode<T: Decodable>(
-    to type: T.Type = T.self, decoder: JSONDecoder = Defaults.decoder
-  ) throws -> [String: [T]] {
-    return try mapValues { try $0.decode(decoder: decoder) }
-  }
-
 }

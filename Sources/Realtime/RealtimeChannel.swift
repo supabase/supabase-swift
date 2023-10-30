@@ -20,23 +20,108 @@
 
 import Foundation
 import Swift
+@_spi(Internal) import _Helpers
 
 /// Container class of bindings to the channel
 struct Binding {
-  // The event that the Binding is bound to
-  let event: ChannelEvent
-
-  // The reference number of the Binding
-  let ref: Int
+  let type: String
+  let filter: [String: String]
 
   // The callback to be triggered
   let callback: Delegated<Message, Void>
+
+  let id: String?
+}
+
+public struct ChannelFilter {
+  public let event: String?
+  public let schema: String?
+  public let table: String?
+  public let filter: String?
+
+  public init(
+    event: String? = nil, schema: String? = nil, table: String? = nil, filter: String? = nil
+  ) {
+    self.event = event
+    self.schema = schema
+    self.table = table
+    self.filter = filter
+  }
+
+  var asDictionary: [String: String] {
+    [
+      "event": event,
+      "schema": schema,
+      "table": table,
+      "filter": filter,
+    ].compactMapValues { $0 }
+  }
+}
+
+public enum ChannelResponse {
+  case ok, timedOut, error
+}
+
+public enum RealtimeListenTypes: String {
+  case postgresChanges = "postgres_changes"
+  case broadcast
+  case presence
+}
+
+/// Represents the broadcast and presence options for a channel.
+public struct RealtimeChannelOptions {
+  /// Used to track presence payload across clients. Must be unique per client. If `nil`, the server
+  /// will generate one.
+  var presenceKey: String?
+  /// Enables the client to receive their own`broadcast` messages
+  var broadcastSelf: Bool
+  /// Instructs the server to acknowledge the client's `broadcast` messages
+  var broadcastAcknowledge: Bool
+
+  public init(
+    presenceKey: String? = nil,
+    broadcastSelf: Bool = false,
+    broadcastAcknowledge: Bool = false
+  ) {
+    self.presenceKey = presenceKey
+    self.broadcastSelf = broadcastSelf
+    self.broadcastAcknowledge = broadcastAcknowledge
+  }
+
+  /// Parameters used to configure the channel
+  var params: [String: [String: Any]] {
+    [
+      "config": [
+        "presence": [
+          "key": presenceKey ?? "",
+        ],
+        "broadcast": [
+          "ack": broadcastAcknowledge,
+          "self": broadcastSelf,
+        ],
+      ],
+    ]
+  }
+}
+
+/// Represents the different status of a push
+public enum PushStatus: String {
+  case ok
+  case error
+  case timeout
+}
+
+public enum RealtimeSubscribeStates {
+  case subscribed
+  case timedOut
+  case closed
+  case channelError
 }
 
 ///
-/// Represents a Channel which is bound to a topic
+/// Represents a RealtimeChannel which is bound to a topic
 ///
-/// A Channel can bind to multiple events on a given topic and
+/// A RealtimeChannel can bind to multiple events on a given topic and
 /// be informed when those events occur within a topic.
 ///
 /// ### Example:
@@ -49,33 +134,34 @@ struct Binding {
 ///         .receive("timeout") { payload in print("Networking issue...", payload) }
 ///
 ///     channel.join()
-///         .receive("ok") { payload in print("Channel Joined", payload) }
+///         .receive("ok") { payload in print("RealtimeChannel Joined", payload) }
 ///         .receive("error") { payload in print("Failed ot join", payload) }
 ///         .receive("timeout") { payload in print("Networking issue...", payload) }
 ///
 
-public class Channel {
-  /// The topic of the Channel. e.g. "rooms:friends"
-  public let topic: ChannelTopic
+public class RealtimeChannel {
+  /// The topic of the RealtimeChannel. e.g. "rooms:friends"
+  public let topic: String
 
   /// The params sent when joining the channel
   public var params: Payload {
-    didSet { self.joinPush.payload = params }
+    didSet { joinPush.payload = params }
   }
+
+  public private(set) lazy var presence = Presence(channel: self)
 
   /// The Socket that the channel belongs to
   weak var socket: RealtimeClient?
 
-  /// Current state of the Channel
+  var subTopic: String
+
+  /// Current state of the RealtimeChannel
   var state: ChannelState
 
   /// Collection of event bindings
-  var syncBindingsDel: SynchronizedArray<Binding>
+  let bindings: LockIsolated<[String: [Binding]]>
 
-  /// Tracks event binding ref counters
-  var bindingRef: Int
-
-  /// Timout when attempting to join a Channel
+  /// Timeout when attempting to join a RealtimeChannel
   var timeout: TimeInterval
 
   /// Set to true once the channel calls .join()
@@ -84,7 +170,7 @@ public class Channel {
   /// Push to send when the channel calls .join()
   var joinPush: Push!
 
-  /// Buffer of Pushes that will be sent once the Channel's socket connects
+  /// Buffer of Pushes that will be sent once the RealtimeChannel's socket connects
   var pushBuffer: [Push]
 
   /// Timer to attempt to rejoin
@@ -93,26 +179,18 @@ public class Channel {
   /// Refs of stateChange hooks
   var stateChangeRefs: [String]
 
-  /// Initialize a Channel
-  /// - parameter topic: Topic of the Channel
-  /// - parameter options: Optional. Options to configure channel broadcast and presence. Leave nil for postgres channel.
-  /// - parameter socket: Socket that the channel is a part of
-  convenience init(topic: ChannelTopic, options: ChannelOptions? = nil, socket: RealtimeClient) {
-    self.init(topic: topic, params: options?.params ?? [:], socket: socket)
-  }
-
-  /// Initialize a Channel
+  /// Initialize a RealtimeChannel
   ///
-  /// - parameter topic: Topic of the Channel
+  /// - parameter topic: Topic of the RealtimeChannel
   /// - parameter params: Optional. Parameters to send when joining.
   /// - parameter socket: Socket that the channel is a part of
-  init(topic: ChannelTopic, params: [String: Any], socket: RealtimeClient) {
+  init(topic: String, params: [String: Any] = [:], socket: RealtimeClient) {
     state = ChannelState.closed
     self.topic = topic
+    subTopic = topic.replacingOccurrences(of: "realtime:", with: "")
     self.params = params
     self.socket = socket
-    syncBindingsDel = SynchronizedArray()
-    bindingRef = 0
+    bindings = LockIsolated([:])
     timeout = socket.timeout
     joinedOnce = false
     pushBuffer = []
@@ -158,7 +236,7 @@ public class Channel {
 
     /// Handle when a response is received after join()
     joinPush.delegateReceive(.ok, to: self) { (self, _) in
-      // Mark the Channel as joined
+      // Mark the RealtimeChannel as joined
       self.state = ChannelState.joined
 
       // Reset the timer, preventing it from attempting to join again
@@ -169,7 +247,7 @@ public class Channel {
       self.pushBuffer = []
     }
 
-    // Perform if Channel errors while attempting to joi
+    // Perform if RealtimeChannel errors while attempting to joi
     joinPush.delegateReceive(.error, to: self) { (self, _) in
       self.state = .errored
       if self.socket?.isConnected == true { self.rejoinTimer.scheduleTimeout() }
@@ -190,14 +268,14 @@ public class Channel {
       )
       leavePush.send()
 
-      // Mark the Channel as in an error and attempt to rejoin if socket is connected
+      // Mark the RealtimeChannel as in an error and attempt to rejoin if socket is connected
       self.state = ChannelState.errored
       self.joinPush.reset()
 
       if self.socket?.isConnected == true { self.rejoinTimer.scheduleTimeout() }
     }
 
-    /// Perfom when the Channel has been closed
+    /// Perfom when the RealtimeChannel has been closed
     delegateOnClose(to: self) { (self, _) in
       // Reset any timer that may be on-going
       self.rejoinTimer.reset()
@@ -212,7 +290,7 @@ public class Channel {
       self.socket?.remove(self)
     }
 
-    /// Perfom when the Channel errors
+    /// Perfom when the RealtimeChannel errors
     delegateOnError(to: self) { (self, message) in
       // Log that the channel received an error
       self.socket?.logItems(
@@ -237,10 +315,10 @@ public class Channel {
     }
 
     // Perform when the join reply is received
-    delegateOn(ChannelEvent.reply, to: self) { (self, message) in
+    delegateOn(ChannelEvent.reply, filter: ChannelFilter(), to: self) { (self, message) in
       // Trigger bindings
       self.trigger(
-        event: ChannelEvent.channelReply(message.ref),
+        event: self.replyEventName(message.ref),
         payload: message.rawPayload,
         ref: message.ref,
         joinRef: message.joinRef
@@ -263,63 +341,185 @@ public class Channel {
 
   /// Joins the channel
   ///
-  /// - parameter timeout: Optional. Defaults to Channel's timeout
+  /// - parameter timeout: Optional. Defaults to RealtimeChannel's timeout
   /// - return: Push event
   @discardableResult
-  public func join(timeout: TimeInterval? = nil) -> Push {
+  public func subscribe(
+    callback: ((RealtimeSubscribeStates, Error?) -> Void)? = nil,
+    timeout: TimeInterval? = nil
+  ) -> RealtimeChannel {
     guard !joinedOnce else {
       fatalError(
         "tried to join multiple times. 'join' "
-          + "can only be called a single time per channel instance")
+          + "can only be called a single time per channel instance"
+      )
     }
 
-    // Join the Channel
-    if let safeTimeout = timeout { self.timeout = safeTimeout }
+    onError { message in
+      let values = message.payload.values.map { "\($0) " }
+      let error = RealtimeError(values.isEmpty ? "error" : values.joined(separator: ", "))
+      callback?(.channelError, error)
+    }
+
+    onClose { _ in
+      callback?(.closed, nil)
+    }
+
+    // Join the RealtimeChannel
+    if let safeTimeout = timeout {
+      self.timeout = safeTimeout
+    }
+
+    let broadcast = params["config", as: [String: Any].self]?["broadcast"]
+    let presence = params["config", as: [String: Any].self]?["presence"]
+
+    var accessTokenPayload: Payload = [:]
+    var config: Payload = [
+      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? [],
+    ]
+
+    config["broadcast"] = broadcast
+    config["presence"] = presence
+
+    if let accessToken = socket?.accessToken {
+      accessTokenPayload["access_token"] = accessToken
+    }
+
+    params["config"] = config
 
     joinedOnce = true
     rejoin()
-    return joinPush
+
+    joinPush
+      .delegateReceive(.ok, to: self) { (self, message) in
+        if self.socket?.accessToken != nil {
+          self.socket?.setAuth(self.socket?.accessToken)
+        }
+
+        guard let serverPostgresFilters = message.payload["postgres_changes"] as? [[String: Any]]
+        else {
+          callback?(.subscribed, nil)
+          return
+        }
+
+        let clientPostgresBindings = self.bindings.value["postgres_changes"] ?? []
+        let bindingsCount = clientPostgresBindings.count
+        var newPostgresBindings: [Binding] = []
+
+        for i in 0 ..< bindingsCount {
+          let clientPostgresBinding = clientPostgresBindings[i]
+
+          let event = clientPostgresBinding.filter["event"]
+          let schema = clientPostgresBinding.filter["schema"]
+          let table = clientPostgresBinding.filter["table"]
+          let filter = clientPostgresBinding.filter["filter"]
+
+          let serverPostgresFilter = serverPostgresFilters[i]
+
+          if serverPostgresFilter["event", as: String.self] == event,
+             serverPostgresFilter["schema", as: String.self] == schema,
+             serverPostgresFilter["table", as: String.self] == table,
+             serverPostgresFilter["filter", as: String.self] == filter
+          {
+            newPostgresBindings.append(
+              Binding(
+                type: clientPostgresBinding.type,
+                filter: clientPostgresBinding.filter,
+                callback: clientPostgresBinding.callback,
+                id: serverPostgresFilter["id", as: Int.self].flatMap(String.init)
+              )
+            )
+          } else {
+            self.unsubscribe()
+            callback?(
+              .channelError,
+              RealtimeError("Mismatch between client and server bindings for postgres changes.")
+            )
+            return
+          }
+        }
+
+        self.bindings.withValue {
+          $0["postgres_changes"] = newPostgresBindings
+        }
+        callback?(.subscribed, nil)
+      }
+      .delegateReceive(.error, to: self) { _, message in
+        let values = message.payload.values.map { "\($0) " }
+        let error = RealtimeError(values.isEmpty ? "error" : values.joined(separator: ", "))
+        callback?(.channelError, error)
+      }
+      .delegateReceive(.timeout, to: self) { _, _ in
+        callback?(.timedOut, nil)
+      }
+
+    return self
   }
 
-  /// Hook into when the Channel is closed. Does not handle retain cycles.
+  public func presenceState() -> Presence.State {
+    presence.state
+  }
+
+  public func track(payload: Payload, opts: Payload = [:]) async -> ChannelResponse {
+    await send(
+      type: .presence,
+      payload: [
+        "event": "track",
+        "payload": payload,
+      ],
+      opts: opts
+    )
+  }
+
+  public func untrack(opts: Payload = [:]) async -> ChannelResponse {
+    await send(
+      type: .presence,
+      payload: ["event": "untrack"],
+      opts: opts
+    )
+  }
+
+  /// Hook into when the RealtimeChannel is closed. Does not handle retain cycles.
   /// Use `delegateOnClose(to:)` for automatic handling of retain cycles.
   ///
   /// Example:
   ///
   ///     let channel = socket.channel("topic")
   ///     channel.onClose() { [weak self] message in
-  ///         self?.print("Channel \(message.topic) has closed"
+  ///         self?.print("RealtimeChannel \(message.topic) has closed"
   ///     }
   ///
-  /// - parameter callback: Called when the Channel closes
+  /// - parameter callback: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onClose(_ callback: @escaping ((Message) -> Void)) -> Int {
-    return on(ChannelEvent.close, callback: callback)
+  public func onClose(_ callback: @escaping ((Message) -> Void)) -> RealtimeChannel {
+    on(ChannelEvent.close, filter: ChannelFilter(), callback: callback)
   }
 
-  /// Hook into when the Channel is closed. Automatically handles retain
+  /// Hook into when the RealtimeChannel is closed. Automatically handles retain
   /// cycles. Use `onClose()` to handle yourself.
   ///
   /// Example:
   ///
   ///     let channel = socket.channel("topic")
   ///     channel.delegateOnClose(to: self) { (self, message) in
-  ///         self.print("Channel \(message.topic) has closed"
+  ///         self.print("RealtimeChannel \(message.topic) has closed"
   ///     }
   ///
   /// - parameter owner: Class registering the callback. Usually `self`
-  /// - parameter callback: Called when the Channel closes
+  /// - parameter callback: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
   public func delegateOnClose<Target: AnyObject>(
     to owner: Target,
     callback: @escaping ((Target, Message) -> Void)
-  ) -> Int {
-    return delegateOn(ChannelEvent.close, to: owner, callback: callback)
+  ) -> RealtimeChannel {
+    delegateOn(
+      ChannelEvent.close, filter: ChannelFilter(), to: owner, callback: callback
+    )
   }
 
-  /// Hook into when the Channel receives an Error. Does not handle retain
+  /// Hook into when the RealtimeChannel receives an Error. Does not handle retain
   /// cycles. Use `delegateOnError(to:)` for automatic handling of retain
   /// cycles.
   ///
@@ -327,35 +527,37 @@ public class Channel {
   ///
   ///     let channel = socket.channel("topic")
   ///     channel.onError() { [weak self] (message) in
-  ///         self?.print("Channel \(message.topic) has errored"
+  ///         self?.print("RealtimeChannel \(message.topic) has errored"
   ///     }
   ///
-  /// - parameter callback: Called when the Channel closes
+  /// - parameter callback: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onError(_ callback: @escaping ((_ message: Message) -> Void)) -> Int {
-    return on(ChannelEvent.error, callback: callback)
+  public func onError(_ callback: @escaping ((_ message: Message) -> Void)) -> RealtimeChannel {
+    on(ChannelEvent.error, filter: ChannelFilter(), callback: callback)
   }
 
-  /// Hook into when the Channel receives an Error. Automatically handles
+  /// Hook into when the RealtimeChannel receives an Error. Automatically handles
   /// retain cycles. Use `onError()` to handle yourself.
   ///
   /// Example:
   ///
   ///     let channel = socket.channel("topic")
   ///     channel.delegateOnError(to: self) { (self, message) in
-  ///         self.print("Channel \(message.topic) has closed"
+  ///         self.print("RealtimeChannel \(message.topic) has closed"
   ///     }
   ///
   /// - parameter owner: Class registering the callback. Usually `self`
-  /// - parameter callback: Called when the Channel closes
+  /// - parameter callback: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
   public func delegateOnError<Target: AnyObject>(
     to owner: Target,
     callback: @escaping ((Target, Message) -> Void)
-  ) -> Int {
-    return delegateOn(ChannelEvent.error, to: owner, callback: callback)
+  ) -> RealtimeChannel {
+    delegateOn(
+      ChannelEvent.error, filter: ChannelFilter(), to: owner, callback: callback
+    )
   }
 
   /// Subscribes on channel events. Does not handle retain cycles. Use
@@ -382,11 +584,15 @@ public class Channel {
   /// - parameter callback: Called with the event's message
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func on(_ event: ChannelEvent, callback: @escaping ((Message) -> Void)) -> Int {
+  public func on(
+    _ event: String,
+    filter: ChannelFilter,
+    callback: @escaping ((Message) -> Void)
+  ) -> RealtimeChannel {
     var delegated = Delegated<Message, Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return on(event, delegated: delegated)
+    return on(event, filter: filter, delegated: delegated)
   }
 
   /// Subscribes on channel events. Automatically handles retain cycles. Use
@@ -415,24 +621,29 @@ public class Channel {
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
   public func delegateOn<Target: AnyObject>(
-    _ event: ChannelEvent,
+    _ event: String,
+    filter: ChannelFilter,
     to owner: Target,
     callback: @escaping ((Target, Message) -> Void)
-  ) -> Int {
+  ) -> RealtimeChannel {
     var delegated = Delegated<Message, Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return on(event, delegated: delegated)
+    return on(event, filter: filter, delegated: delegated)
   }
 
   /// Shared method between `on` and `manualOn`
   @discardableResult
-  private func on(_ event: ChannelEvent, delegated: Delegated<Message, Void>) -> Int {
-    let ref = bindingRef
-    bindingRef = ref + 1
+  private func on(
+    _ type: String, filter: ChannelFilter, delegated: Delegated<Message, Void>
+  ) -> RealtimeChannel {
+    bindings.withValue {
+      $0[type.lowercased(), default: []].append(
+        Binding(type: type.lowercased(), filter: filter.asDictionary, callback: delegated, id: nil)
+      )
+    }
 
-    syncBindingsDel.append(Binding(event: event, ref: ref, callback: delegated))
-    return ref
+    return self
   }
 
   /// Unsubscribes from a channel event. If a `ref` is given, only the exact
@@ -453,14 +664,16 @@ public class Channel {
   /// "event" and nothing is printed if the channel receives "other_event".
   ///
   /// - parameter event: Event to unsubscribe from
-  /// - paramter ref: Ref counter returned when subscribing. Can be omitted
-  public func off(_ event: ChannelEvent, ref: Int? = nil) {
-    syncBindingsDel.removeAll { bind -> Bool in
-      bind.event == event && (ref == nil || ref == bind.ref)
+  /// - parameter ref: Ref counter returned when subscribing. Can be omitted
+  public func off(_ type: String, filter: [String: String] = [:]) {
+    bindings.withValue {
+      $0[type.lowercased()] = $0[type.lowercased(), default: []].filter { bind in
+        !(bind.type.lowercased() == type.lowercased() && bind.filter == filter)
+      }
     }
   }
 
-  /// Push a payload to the Channel
+  /// Push a payload to the RealtimeChannel
   ///
   /// Example:
   ///
@@ -473,7 +686,7 @@ public class Channel {
   /// - parameter timeout: Optional timeout
   @discardableResult
   public func push(
-    _ event: ChannelEvent,
+    _ event: String,
     payload: Payload,
     timeout: TimeInterval = Defaults.timeoutInterval
   ) -> Push {
@@ -499,6 +712,80 @@ public class Channel {
     return pushEvent
   }
 
+  public func send(
+    type: RealtimeListenTypes,
+    event: String? = nil,
+    payload: Payload,
+    opts: Payload = [:]
+  ) async -> ChannelResponse {
+    var payload = payload
+    payload["type"] = type.rawValue
+    if let event {
+      payload["event"] = event
+    }
+
+    if !canPush, type == .broadcast {
+      var headers = socket?.headers ?? [:]
+      headers["Content-Type"] = "application/json"
+      headers["apikey"] = socket?.accessToken
+
+      let body = [
+        "messages": [
+          "topic": subTopic,
+          "payload": payload,
+          "event": event as Any,
+        ],
+      ]
+
+      do {
+        let request = try Request(
+          path: "",
+          method: "POST",
+          headers: headers.mapValues { "\($0)" },
+          body: JSONSerialization.data(withJSONObject: body)
+        )
+        let urlRequest = try request.urlRequest(withBaseURL: broadcastEndpointURL)
+        let (_, response) = try await URLSession.shared.data(for: urlRequest)
+        guard let httpResponse = response as? HTTPURLResponse else {
+          return .error
+        }
+        if 200 ..< 300 ~= httpResponse.statusCode {
+          return .ok
+        }
+
+        return .error
+      } catch {
+        return .error
+      }
+    } else {
+      return await withCheckedContinuation { continuation in
+        let push = self.push(
+          type.rawValue, payload: payload,
+          timeout: (opts["timeout"] as? TimeInterval) ?? self.timeout
+        )
+
+        if let type = payload["type"] as? String, type == "broadcast",
+           let config = self.params["config"] as? [String: Any],
+           let broadcast = config["broadcast"] as? [String: Any]
+        {
+          let ack = broadcast["ack"] as? Bool
+          if ack == nil || ack == false {
+            continuation.resume(returning: .ok)
+            return
+          }
+        }
+
+        push
+          .receive(.ok) { _ in
+            continuation.resume(returning: .ok)
+          }
+          .receive(.timeout) { _ in
+            continuation.resume(returning: .timedOut)
+          }
+      }
+    }
+  }
+
   /// Leaves the channel
   ///
   /// Unsubscribes from server events, and instructs channel to terminate on
@@ -516,7 +803,7 @@ public class Channel {
   /// - parameter timeout: Optional timeout
   /// - return: Push that can add receive hooks
   @discardableResult
-  public func leave(timeout: TimeInterval = Defaults.timeoutInterval) -> Push {
+  public func unsubscribe(timeout: TimeInterval = Defaults.timeoutInterval) -> Push {
     // If attempting a rejoin during a leave, then reset, cancelling the rejoin
     rejoinTimer.reset()
 
@@ -546,8 +833,10 @@ public class Channel {
       .receive(.timeout, delegated: onCloseDelegate)
     leavePush.send()
 
-    // If the Channel cannot send push events, trigger a success locally
-    if !canPush { leavePush.trigger(.ok, payload: [:]) }
+    // If the RealtimeChannel cannot send push events, trigger a success locally
+    if !canPush {
+      leavePush.trigger(.ok, payload: [:])
+    }
 
     // Return the push so it can be bound to
     return leavePush
@@ -569,15 +858,15 @@ public class Channel {
   // MARK: - Internal
 
   // ----------------------------------------------------------------------
-  /// Checks if an event received by the Socket belongs to this Channel
+  /// Checks if an event received by the Socket belongs to this RealtimeChannel
   func isMember(_ message: Message) -> Bool {
-    // Return false if the message's topic does not match the Channel's topic
+    // Return false if the message's topic does not match the RealtimeChannel's topic
     guard message.topic == topic else { return false }
 
     guard
       let safeJoinRef = message.joinRef,
       safeJoinRef != joinRef,
-      message.event.isLifecyleEvent
+      ChannelEvent.isLifecyleEvent(message.event)
     else { return true }
 
     socket?.logItems(
@@ -587,7 +876,7 @@ public class Channel {
     return false
   }
 
-  /// Sends the payload to join the Channel
+  /// Sends the payload to join the RealtimeChannel
   func sendJoin(_ timeout: TimeInterval) {
     state = ChannelState.joining
     joinPush.resend(timeout)
@@ -610,11 +899,52 @@ public class Channel {
   ///
   /// - parameter message: Message to pass to the event bindings
   func trigger(_ message: Message) {
+    let typeLower = message.event.lowercased()
+
+    let events = Set([
+      ChannelEvent.close,
+      ChannelEvent.error,
+      ChannelEvent.leave,
+      ChannelEvent.join,
+    ])
+
+    if message.ref != message.joinRef, events.contains(typeLower) {
+      return
+    }
+
     let handledMessage = onMessage(message)
 
-    syncBindingsDel
-      .filter { $0.event == message.event }
-      .forEach { $0.callback.call(handledMessage) }
+    let bindings: [Binding]
+
+    if ["insert", "update", "delete"].contains(typeLower) {
+      bindings = self.bindings.value["postgres_changes", default: []].filter { bind in
+        bind.filter["event"] == "*" || bind.filter["event"] == typeLower
+      }
+    } else {
+      bindings = self.bindings.value[typeLower, default: []].filter { bind in
+        if ["broadcast", "presence", "postgres_changes"].contains(typeLower) {
+          let bindEvent = bind.filter["event"]?.lowercased()
+
+          if let bindId = bind.id.flatMap(Int.init) {
+            let ids = message.payload["ids", as: [Int].self] ?? []
+            return ids.contains(bindId)
+              && (
+                bindEvent == "*"
+                  || bindEvent
+                  == message.payload["data", as: [String: Any].self]?["type", as: String.self]?
+                  .lowercased()
+              )
+          }
+
+          return bindEvent == "*"
+            || bindEvent == message.payload["event", as: String.self]?.lowercased()
+        }
+
+        return bind.type.lowercased() == typeLower
+      }
+    }
+
+    bindings.forEach { $0.callback.call(handledMessage) }
   }
 
   /// Triggers an event to the correct event bindings created by
@@ -625,7 +955,7 @@ public class Channel {
   /// - parameter ref: Ref of the event. Defaults to empty
   /// - parameter joinRef: Ref of the join event. Defaults to nil
   func trigger(
-    event: ChannelEvent,
+    event: String,
     payload: Payload = [:],
     ref: String = "",
     joinRef: String? = nil
@@ -640,15 +970,33 @@ public class Channel {
     trigger(message)
   }
 
-  /// The Ref send during the join message.
-  var joinRef: String? {
-    return joinPush.ref
+  /// - parameter ref: The ref of the event push
+  /// - return: The event name of the reply
+  func replyEventName(_ ref: String) -> String {
+    "chan_reply_\(ref)"
   }
 
-  /// - return: True if the Channel can push messages, meaning the socket
+  /// The Ref send during the join message.
+  var joinRef: String? {
+    joinPush.ref
+  }
+
+  /// - return: True if the RealtimeChannel can push messages, meaning the socket
   ///           is connected and the channel is joined
   var canPush: Bool {
-    return socket?.isConnected == true && isJoined
+    socket?.isConnected == true && isJoined
+  }
+
+  var broadcastEndpointURL: URL {
+    var url = socket?.endPoint ?? ""
+    url = url.replacingOccurrences(of: "^ws", with: "http", options: .regularExpression, range: nil)
+    url = url.replacingOccurrences(
+      of: "(/socket/websocket|/socket|/websocket)/?$", with: "", options: .regularExpression,
+      range: nil
+    )
+    url =
+      "\(url.replacingOccurrences(of: "/+$", with: "", options: .regularExpression, range: nil))/api/broadcast"
+    return URL(string: url)!
   }
 }
 
@@ -657,166 +1005,35 @@ public class Channel {
 // MARK: - Public API
 
 // ----------------------------------------------------------------------
-extension Channel {
-  /// - return: True if the Channel has been closed
+extension RealtimeChannel {
+  /// - return: True if the RealtimeChannel has been closed
   public var isClosed: Bool {
-    return state == .closed
+    state == .closed
   }
 
-  /// - return: True if the Channel experienced an error
+  /// - return: True if the RealtimeChannel experienced an error
   public var isErrored: Bool {
-    return state == .errored
+    state == .errored
   }
 
   /// - return: True if the channel has joined
   public var isJoined: Bool {
-    return state == .joined
+    state == .joined
   }
 
   /// - return: True if the channel has requested to join
   public var isJoining: Bool {
-    return state == .joining
+    state == .joining
   }
 
   /// - return: True if the channel has requested to leave
   public var isLeaving: Bool {
-    return state == .leaving
+    state == .leaving
   }
 }
-// ----------------------------------------------------------------------
 
-// MARK: - Codable Payload
-
-// ----------------------------------------------------------------------
-
-extension Payload {
-
-  /// Initializes a payload from a given value
-  /// - parameter value: The value to encode
-  /// - parameter encoder: The encoder to use to encode the payload
-  /// - throws: Throws an error if the payload cannot be encoded
-  init<T: Encodable>(_ value: T, encoder: JSONEncoder = Defaults.encoder) throws {
-    let data = try encoder.encode(value)
-    self = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as! Payload
-  }
-
-  /// Decodes the payload to a given type
-  /// - parameter type: The type to decode to
-  /// - parameter decoder: The decoder to use to decode the payload
-  /// - returns: The decoded payload
-  /// - throws: Throws an error if the payload cannot be decoded
-  public func decode<T: Decodable>(
-    to type: T.Type = T.self, decoder: JSONDecoder = Defaults.decoder
-  ) throws -> T {
-    let data = try JSONSerialization.data(withJSONObject: self)
-    return try decoder.decode(type, from: data)
-  }
-
-}
-
-// ----------------------------------------------------------------------
-
-// MARK: - Broadcast API
-
-// ----------------------------------------------------------------------
-
-/// Represents the payload of a broadcast message
-public struct BroadcastPayload {
-  public let type: String
-  public let event: String
-  public let payload: Payload
-}
-
-extension Channel {
-  /// Broadcasts the payload to all other members of the channel
-  /// - parameter event: The event to broadcast
-  /// - parameter payload: The payload to broadcast
-  @discardableResult
-  public func broadcast(event: String, payload: Payload) -> Push {
-    self.push(
-      .broadcast,
-      payload: [
-        "type": "broadcast",
-        "event": event,
-        "payload": payload,
-      ])
-  }
-
-  /// Broadcasts the encodable payload to all other members of the channel
-  /// - parameter event: The event to broadcast
-  /// - parameter payload: The payload to broadcast
-  /// - parameter encoder: The encoder to use to encode the payload
-  /// - throws: Throws an error if the payload cannot be encoded
-  @discardableResult
-  public func broadcast(event: String, payload: Encodable, encoder: JSONEncoder = Defaults.encoder)
-    throws -> Push
-  {
-    self.broadcast(event: event, payload: try Payload(payload))
-  }
-
-  /// Subscribes to broadcast events. Does not handle retain cycles.
-  ///
-  /// Example:
-  ///
-  ///     let ref = channel.onBroadcast { [weak self] (message,broadcast) in
-  ///         print(broadcast.event, broadcast.payload)
-  ///     }
-  ///     channel.off(.broadcast, ref1)
-  ///
-  /// Subscription returns a ref counter, which can be used later to
-  /// unsubscribe the exact event listener
-  /// - parameter callback: Called with the broadcast payload
-  /// - returns: Ref counter of the subscription. See `func off()`
-  @discardableResult
-  public func onBroadcast(callback: @escaping (Message, BroadcastPayload) -> Void) -> Int {
-    self.on(
-      .broadcast,
-      callback: { message in
-        let payload = BroadcastPayload(
-          type: message.payload["type"] as! String, event: message.payload["event"] as! String,
-          payload: message.payload["payload"] as! Payload)
-        callback(message, payload)
-      })
-  }
-
-}
-// ----------------------------------------------------------------------
-
-// MARK: - Presence API
-
-// ----------------------------------------------------------------------
-
-extension Channel {
-  /// Share presence state, available to all channel members via sync
-  /// - parameter payload: The payload to broadcast
-  @discardableResult
-  public func track(payload: Payload) -> Push {
-    self.push(
-      .presence,
-      payload: [
-        "type": "presence",
-        "event": "track",
-        "payload": payload,
-      ])
-  }
-
-  /// Share presence state, available to all channel members via sync
-  /// - parameter payload: The payload to broadcast
-  /// - parameter encoder: The encoder to use to encode the payload
-  /// - throws: Throws an error if the payload cannot be encoded
-  @discardableResult
-  public func track(payload: Encodable, encoder: JSONEncoder = Defaults.encoder) throws -> Push {
-    self.track(payload: try Payload(payload))
-  }
-
-  /// Remove presence state for given channel
-  @discardableResult
-  public func untrack() -> Push {
-    self.push(
-      .presence,
-      payload: [
-        "type": "presence",
-        "event": "untrack",
-      ])
+extension [String: Any] {
+  subscript<T>(_ key: Key, as _: T.Type) -> T? {
+    self[key] as? T
   }
 }
