@@ -83,6 +83,7 @@ public class StorageFileApi: StorageApi {
   /// already exist before attempting to upload.
   ///   - file: The file object to be stored in the bucket.
   ///   - fileOptions: HTTP headers. For example `cacheControl`
+  @discardableResult
   public func update(path: String, file: File, fileOptions: FileOptions = FileOptions())
     async throws -> String
   {
@@ -94,8 +95,7 @@ public class StorageFileApi: StorageApi {
   ///   - from: The original file path, including the current file name. For example
   /// `folder/image.png`.
   ///   - to: The new file path, including the new file name. For example `folder/image-copy.png`.
-  @discardableResult
-  public func move(from source: String, to destination: String) async throws -> String {
+  public func move(from source: String, to destination: String) async throws {
     try await execute(
       Request(
         path: "/object/move",
@@ -109,8 +109,6 @@ public class StorageFileApi: StorageApi {
         )
       )
     )
-    .decoded(as: MoveResponse.self, decoder: configuration.decoder)
-    .message
   }
 
   /// Copies an existing file to a new path in the same bucket.
@@ -157,31 +155,40 @@ public class StorageFileApi: StorageApi {
     }
 
     struct Response: Decodable {
-      var signedURL: String
+      var signedURL: URL
     }
+
+    let encoder = JSONEncoder()
 
     let response = try await execute(
       Request(
         path: "/object/sign/\(bucketId)/\(path)",
         method: "POST",
-        body: configuration.encoder.encode(
+        body: encoder.encode(
           Body(expiresIn: expiresIn, transform: transform)
         )
       )
     )
     .decoded(as: Response.self, decoder: configuration.decoder)
 
-    guard var components = URLComponents(
-      url: configuration.url.appendingPathComponent(response.signedURL),
-      resolvingAgainstBaseURL: false
-    ) else {
+    guard
+      let signedURLComponents = URLComponents(
+        url: response.signedURL,
+        resolvingAgainstBaseURL: false
+      ),
+      var baseURLComponents = URLComponents(url: configuration.url, resolvingAgainstBaseURL: false)
+    else {
       throw URLError(.badURL)
     }
 
-    components.queryItems = components.queryItems ?? []
-    components.queryItems!.append(URLQueryItem(name: "download", value: download))
+    baseURLComponents.path += signedURLComponents.path
+    baseURLComponents.queryItems = signedURLComponents.queryItems ?? []
 
-    guard let signedURL = components.url else {
+    if let download {
+      baseURLComponents.queryItems!.append(URLQueryItem(name: "download", value: download))
+    }
+
+    guard let signedURL = baseURLComponents.url else {
       throw URLError(.badURL)
     }
 

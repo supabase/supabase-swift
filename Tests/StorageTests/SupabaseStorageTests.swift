@@ -16,7 +16,7 @@ final class SupabaseStorageTests: XCTestCase {
     "http://localhost:54321/storage/v1"
   }
 
-  let bucket = "public"
+  let bucketId = "tests"
 
   let storage = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
@@ -42,28 +42,50 @@ final class SupabaseStorageTests: XCTestCase {
       "INTEGRATION_TESTS not defined."
     )
 
-    _ = try? await storage.emptyBucket(id: bucket)
-    _ = try? await storage.deleteBucket(id: bucket)
+    try? await storage.emptyBucket(id: bucketId)
+    try? await storage.deleteBucket(id: bucketId)
 
-    _ = try await storage.createBucket(id: bucket, options: BucketOptions(public: true))
+    try await storage.createBucket(id: bucketId, options: BucketOptions(public: true))
+  }
+
+  func testUpdateBucket() async throws {
+    var bucket = try await storage.getBucket(id: bucketId)
+    XCTAssertTrue(bucket.isPublic)
+
+    try await storage.updateBucket(id: bucketId, options: BucketOptions(public: false))
+    bucket = try await storage.getBucket(id: bucketId)
+    XCTAssertFalse(bucket.isPublic)
   }
 
   func testListBuckets() async throws {
     let buckets = try await storage.listBuckets()
-    XCTAssertEqual(buckets.map(\.name), [bucket])
+    XCTAssertTrue(buckets.contains { $0.id == bucketId })
   }
 
   func testFileIntegration() async throws {
+    var files = try await storage.from(id: bucketId).list()
+    XCTAssertTrue(files.isEmpty)
+
     try await uploadTestData()
 
-    let files = try await storage.from(id: bucket).list()
+    files = try await storage.from(id: bucketId).list()
     XCTAssertEqual(files.map(\.name), ["README.md"])
 
-    let downloadedData = try await storage.from(id: bucket).download(path: "README.md")
+    let downloadedData = try await storage.from(id: bucketId).download(path: "README.md")
     XCTAssertEqual(downloadedData, uploadData)
 
-    let removedFiles = try await storage.from(id: bucket).remove(paths: ["README.md"])
-    XCTAssertEqual(removedFiles.map(\.name), ["README.md"])
+    try await storage.from(id: bucketId).move(from: "README.md", to: "README_2.md")
+
+    var searchedFiles = try await storage.from(id: bucketId)
+      .list(options: .init(search: "README.md"))
+    XCTAssertTrue(searchedFiles.isEmpty)
+
+    try await storage.from(id: bucketId).copy(from: "README_2.md", to: "README.md")
+    searchedFiles = try await storage.from(id: bucketId).list(options: .init(search: "README.md"))
+    XCTAssertEqual(searchedFiles.map(\.name), ["README.md"])
+
+    let removedFiles = try await storage.from(id: bucketId).remove(paths: ["README_2.md"])
+    XCTAssertEqual(removedFiles.map(\.name), ["README_2.md"])
   }
 
   func testGetPublicURL() async throws {
@@ -71,30 +93,65 @@ final class SupabaseStorageTests: XCTestCase {
 
     let path = "README.md"
 
-    let baseUrl = try storage.from(id: bucket).getPublicURL(path: path)
-    XCTAssertEqual(baseUrl.absoluteString, "\(Self.supabaseURL)/object/public/\(bucket)/\(path)")
+    let baseUrl = try storage.from(id: bucketId).getPublicURL(path: path)
+    XCTAssertEqual(baseUrl.absoluteString, "\(Self.supabaseURL)/object/public/\(bucketId)/\(path)")
 
-    let baseUrlWithDownload = try storage.from(id: bucket).getPublicURL(path: path, download: true)
+    let baseUrlWithDownload = try storage.from(id: bucketId).getPublicURL(
+      path: path,
+      download: true
+    )
     XCTAssertEqual(
       baseUrlWithDownload.absoluteString,
-      "\(Self.supabaseURL)/object/public/\(bucket)/\(path)?download="
+      "\(Self.supabaseURL)/object/public/\(bucketId)/\(path)?download="
     )
 
-    let baseUrlWithDownloadAndFileName = try storage.from(id: bucket).getPublicURL(
+    let baseUrlWithDownloadAndFileName = try storage.from(id: bucketId).getPublicURL(
       path: path, download: true, fileName: "test"
     )
     XCTAssertEqual(
       baseUrlWithDownloadAndFileName.absoluteString,
-      "\(Self.supabaseURL)/object/public/\(bucket)/\(path)?download=test"
+      "\(Self.supabaseURL)/object/public/\(bucketId)/\(path)?download=test"
     )
 
-    let baseUrlWithAllOptions = try storage.from(id: bucket).getPublicURL(
+    let baseUrlWithAllOptions = try storage.from(id: bucketId).getPublicURL(
       path: path, download: true, fileName: "test",
       options: TransformOptions(width: 300, height: 300)
     )
     XCTAssertEqual(
       baseUrlWithAllOptions.absoluteString,
-      "\(Self.supabaseURL)/render/image/public/\(bucket)/\(path)?download=test&width=300&height=300&resize=cover&quality=80&format=origin"
+      "\(Self.supabaseURL)/render/image/public/\(bucketId)/\(path)?download=test&width=300&height=300&resize=cover&quality=80&format=origin"
+    )
+  }
+
+  func testCreateSignedURL() async throws {
+    try await uploadTestData()
+
+    let path = "README.md"
+
+    let url = try await storage.from(id: bucketId).createSignedURL(
+      path: path,
+      expiresIn: 60,
+      download: "README_local.md"
+    )
+    let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: true))
+
+    let downloadQuery = components.queryItems?.first(where: { $0.name == "download" })
+    XCTAssertEqual(downloadQuery?.value, "README_local.md")
+    XCTAssertEqual(components.path, "/storage/v1/object/sign/\(bucketId)/\(path)")
+  }
+
+  func testUpdate() async throws {
+    try await uploadTestData()
+
+    let dataToUpdate = try? Data(
+      contentsOf: URL(
+        string: "https://raw.githubusercontent.com/supabase-community/supabase-swift/master/README.md"
+      )!
+    )
+
+    try await storage.from(id: bucketId).update(
+      path: "README.md",
+      file: File(name: "README.md", data: dataToUpdate ?? Data(), fileName: nil, contentType: nil)
     )
   }
 
@@ -102,7 +159,7 @@ final class SupabaseStorageTests: XCTestCase {
     let file = File(
       name: "README.md", data: uploadData ?? Data(), fileName: "README.md", contentType: "text/html"
     )
-    _ = try await storage.from(id: bucket).upload(
+    _ = try await storage.from(id: bucketId).upload(
       path: "README.md", file: file, fileOptions: FileOptions(cacheControl: "3600")
     )
   }
