@@ -10,26 +10,12 @@ import SwiftUI
 
 @main
 struct ExamplesApp: App {
-  @State var supabaseInitialized = false
   @StateObject var auth = AuthController()
 
   var body: some Scene {
     WindowGroup {
-      main
-    }
-  }
-
-  @ViewBuilder
-  var main: some View {
-    if supabaseInitialized {
       RootView()
         .environmentObject(auth)
-    } else {
-      ProgressView()
-        .task {
-          await supabase.auth.initialize()
-          supabaseInitialized = true
-        }
     }
   }
 }

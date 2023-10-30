@@ -1,0 +1,30 @@
+{
+  "id": "859f402d-b3de-4105-a1b9-932836d9193b",
+  "aud": "authenticated",
+  "role": "authenticated",
+  "email": "guilherme@grds.dev",
+  "phone": "",
+  "confirmation_sent_at": "2022-04-09T11:57:01.710600634Z",
+  "app_metadata": {
+    "provider": "email",
+    "providers": [
+      "email"
+    ]
+  },
+  "user_metadata": {},
+  "identities": [
+    {
+      "id": "859f402d-b3de-4105-a1b9-932836d9193b",
+      "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
+      "identity_data": {
+        "sub": "859f402d-b3de-4105-a1b9-932836d9193b"
+      },
+      "provider": "email",
+      "last_sign_in_at": "2022-04-09T11:23:45.899902Z",
+      "created_at": "2022-04-09T11:23:45.899924Z",
+      "updated_at": "2022-04-09T11:23:45.899926Z"
+    }
+  ],
+  "created_at": "2022-04-09T11:23:45.874827Z",
+  "updated_at": "2022-04-09T11:57:01.720803Z"
+}

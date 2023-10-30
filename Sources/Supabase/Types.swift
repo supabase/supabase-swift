@@ -20,18 +20,23 @@ public struct SupabaseClientOptions {
     /// A storage provider. Used to store the logged-in session.
     public let storage: GoTrueLocalStorage?
 
-    public init(storage: GoTrueLocalStorage? = nil) {
+    /// OAuth flow to use - defaults to PKCE flow. PKCE is recommended for mobile and server-side
+    /// applications.
+    public let flowType: AuthFlowType
+
+    public init(storage: GoTrueLocalStorage? = nil, flowType: AuthFlowType = .pkce) {
       self.storage = storage
+      self.flowType = flowType
     }
   }
 
   public struct GlobalOptions {
     public let headers: [String: String]
-    public let httpClient: SupabaseClient.HTTPClient
+    public let session: URLSession
 
-    public init(headers: [String: String] = [:], httpClient: SupabaseClient.HTTPClient = .init()) {
+    public init(headers: [String: String] = [:], session: URLSession = .shared) {
       self.headers = headers
-      self.httpClient = httpClient
+      self.session = session
     }
   }
 
