@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  RequestsTests.swift
 //
 //
 //  Created by Guilherme Souza on 07/10/23.
@@ -147,7 +147,7 @@ final class RequestsTests: XCTestCase {
       url,
       URL(
         string:
-          "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read,write&redirect_to=https://dummy-url.com/redirect&extra_key=extra_value"
+        "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read,write&redirect_to=https://dummy-url.com/redirect&extra_key=extra_value"
       )!
     )
   }
@@ -174,7 +174,7 @@ final class RequestsTests: XCTestCase {
     } operation: {
       let url = URL(
         string:
-          "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
+        "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
       )!
 
       let session = try await sut.session(from: url)
@@ -197,7 +197,7 @@ final class RequestsTests: XCTestCase {
     } operation: {
       let url = URL(
         string:
-          "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
+        "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
       )!
 
       do {
@@ -344,7 +344,8 @@ final class RequestsTests: XCTestCase {
       fetch: { request in
         DispatchQueue.main.sync {
           assertSnapshot(
-            of: request, as: .curl, record: record, file: file, testName: testName, line: line)
+            of: request, as: .curl, record: record, file: file, testName: testName, line: line
+          )
         }
 
         if let fetch {

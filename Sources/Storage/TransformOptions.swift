@@ -24,23 +24,23 @@ public struct TransformOptions {
   var queryItems: [URLQueryItem] {
     var items = [URLQueryItem]()
 
-    if let width = width {
+    if let width {
       items.append(URLQueryItem(name: "width", value: String(width)))
     }
 
-    if let height = height {
+    if let height {
       items.append(URLQueryItem(name: "height", value: String(height)))
     }
 
-    if let resize = resize {
+    if let resize {
       items.append(URLQueryItem(name: "resize", value: resize))
     }
 
-    if let quality = quality {
+    if let quality {
       items.append(URLQueryItem(name: "quality", value: String(quality)))
     }
 
-    if let format = format {
+    if let format {
       items.append(URLQueryItem(name: "format", value: format))
     }
 

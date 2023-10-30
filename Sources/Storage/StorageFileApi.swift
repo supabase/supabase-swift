@@ -36,7 +36,7 @@ public class StorageFileApi: StorageApi {
   ) async throws -> String {
     let contentType = fileOptions.contentType
     var headers = [
-      "x-upsert": "\(fileOptions.upsert)"
+      "x-upsert": "\(fileOptions.upsert)",
     ]
 
     headers["duplex"] = fileOptions.duplex
@@ -146,14 +146,15 @@ public class StorageFileApi: StorageApi {
   ///   - path: The folder path.
   ///   - options: Search options, including `limit`, `offset`, and `sortBy`.
   public func list(
-    path: String? = nil,
+    path _: String? = nil,
     options: SearchOptions? = nil
   ) async throws -> [FileObject] {
     try await execute(
       Request(
         path: "/object/list/\(bucketId)",
         method: "POST",
-        body: configuration.encoder.encode(options ?? DEFAULT_SEARCH_OPTIONS))
+        body: configuration.encoder.encode(options ?? DEFAULT_SEARCH_OPTIONS)
+      )
     )
     .decoded(decoder: configuration.decoder)
   }

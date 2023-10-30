@@ -34,7 +34,7 @@ final class ProductListViewModel: ObservableObject {
     do {
       products = try await getProductsUseCase.execute().value
       logger.info("Products loaded.")
-      self.error = nil
+      error = nil
     } catch {
       logger.error("Error loading products: \(error)")
       self.error = error
@@ -49,11 +49,11 @@ final class ProductListViewModel: ObservableObject {
   }
 
   private func removeItem(product: Product) async {
-    self.products.removeAll { $0.id == product.id }
+    products.removeAll { $0.id == product.id }
 
     do {
       try await deleteProductUseCase.execute(input: product.id).value
-      self.error = nil
+      error = nil
     } catch {
       logger.error("Failed to remove product: \(product.id) error: \(error)")
       self.error = error

@@ -29,7 +29,7 @@ final class ProductDetailsViewModel: ObservableObject {
 
     var productImage: ProductImage {
       switch self {
-      case .remote(let image), .local(let image): image
+      case let .remote(image), let .local(image): image
       }
     }
   }
@@ -87,16 +87,17 @@ final class ProductDetailsViewModel: ObservableObject {
     defer { isSavingProduct = false }
 
     let imageUploadParams =
-      if case let .local(image) = imageSource {
-        ImageUploadParams(
-          fileName: UUID().uuidString,
-          fileExtension: imageSelection?.supportedContentTypes.first?.preferredFilenameExtension,
-          mimeType: imageSelection?.supportedContentTypes.first?.preferredMIMEType,
-          data: image.data
-        )
-      } else {
-        ImageUploadParams?.none
-      }
+      if case let .local(image) = imageSource
+    {
+      ImageUploadParams(
+        fileName: UUID().uuidString,
+        fileExtension: imageSelection?.supportedContentTypes.first?.preferredFilenameExtension,
+        mimeType: imageSelection?.supportedContentTypes.first?.preferredMIMEType,
+        data: image.data
+      )
+    } else {
+      ImageUploadParams?.none
+    }
 
     do {
       if let productId {
@@ -133,7 +134,7 @@ final class ProductDetailsViewModel: ObservableObject {
 
   private func loadTransferable(from imageSelection: PhotosPickerItem) async {
     if let image = try? await imageSelection.loadTransferable(type: ProductImage.self) {
-      self.imageSource = .local(image)
+      imageSource = .local(image)
     }
   }
 }

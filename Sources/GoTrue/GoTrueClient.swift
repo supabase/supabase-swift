@@ -39,10 +39,10 @@ public actor GoTrueClient {
       self.flowType = flowType
       self.localStorage =
         localStorage
-        ?? KeychainLocalStorage(
-          service: "supabase.gotrue.swift",
-          accessGroup: nil
-        )
+          ?? KeychainLocalStorage(
+            service: "supabase.gotrue.swift",
+            accessGroup: nil
+          )
       self.encoder = encoder
       self.decoder = decoder
       self.fetch = fetch
@@ -123,7 +123,7 @@ public actor GoTrueClient {
     eventEmitter: EventEmitter,
     sessionStorage: SessionStorage
   ) {
-    self.mfa = GoTrueMFA()
+    mfa = GoTrueMFA()
 
     Dependencies.current.setValue(
       Dependencies(
@@ -174,7 +174,7 @@ public actor GoTrueClient {
         path: "/signup",
         method: "POST",
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) }
+          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           SignUpRequest(
@@ -339,7 +339,7 @@ public actor GoTrueClient {
         path: "/otp",
         method: "POST",
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) }
+          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           OTPParams(
@@ -433,7 +433,7 @@ public actor GoTrueClient {
     }
 
     var queryItems: [URLQueryItem] = [
-      URLQueryItem(name: "provider", value: provider.rawValue)
+      URLQueryItem(name: "provider", value: provider.rawValue),
     ]
 
     if let scopes {
@@ -600,7 +600,7 @@ public actor GoTrueClient {
         path: "/verify",
         method: "POST",
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) }
+          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           VerifyOTPParams(
@@ -686,7 +686,7 @@ public actor GoTrueClient {
         path: "/recover",
         method: "POST",
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) }
+          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           RecoverParams(
@@ -711,7 +711,7 @@ public actor GoTrueClient {
 
     if session.user.phoneConfirmedAt != nil || session.user.emailConfirmedAt != nil
       || session
-        .user.confirmedAt != nil
+      .user.confirmedAt != nil
     {
       try await sessionManager.update(session)
       await eventEmitter.emit(.signedIn)
@@ -724,7 +724,7 @@ public actor GoTrueClient {
     _debug("start")
     defer { _debug("end") }
 
-    let session = try? await self.session
+    let session = try? await session
     await eventEmitter.emit(session != nil ? .signedIn : .signedOut, id)
   }
 
@@ -752,5 +752,6 @@ public actor GoTrueClient {
 
 extension GoTrueClient {
   public static let didChangeAuthStateNotification = Notification.Name(
-    "DID_CHANGE_AUTH_STATE_NOTIFICATION")
+    "DID_CHANGE_AUTH_STATE_NOTIFICATION"
+  )
 }

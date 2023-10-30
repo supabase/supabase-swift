@@ -15,7 +15,7 @@ struct CreateProductUseCaseImpl: CreateProductUseCase {
   let productImageStorageRepository: ProductImageStorageRepository
   let authenticationRepository: AuthenticationRepository
 
-  func execute(input: CreateProductParams) -> Task<(), Error> {
+  func execute(input: CreateProductParams) -> Task<Void, Error> {
     Task {
       let ownerID = try await authenticationRepository.currentUserID
 
@@ -27,7 +27,8 @@ struct CreateProductUseCaseImpl: CreateProductUseCase {
 
       try await productRepository.createProduct(
         InsertProductDto(
-          name: input.name, price: input.price, image: imageFilePath, ownerID: ownerID)
+          name: input.name, price: input.price, image: imageFilePath, ownerID: ownerID
+        )
       )
     }
   }

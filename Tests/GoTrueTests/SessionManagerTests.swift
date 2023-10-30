@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  SessionManagerTests.swift
 //
 //
 //  Created by Guilherme Souza on 23/10/23.
@@ -65,7 +65,7 @@ final class SessionManagerTests: XCTestCase {
           $0 += 1
         }
       }
-      $0.sessionRefresher.refreshSession = { refreshToken in
+      $0.sessionRefresher.refreshSession = { _ in
         refreshSessionCallCount.withValue { $0 += 1 }
         return await refreshSessionStream.first { _ in true } ?? .empty
       }
@@ -73,7 +73,7 @@ final class SessionManagerTests: XCTestCase {
       let sut = SessionManager.live
 
       // Fire N tasks and call sut.session()
-      let tasks = (0..<10).map { _ in
+      let tasks = (0 ..< 10).map { _ in
         Task.detached {
           try await sut.session()
         }
@@ -94,7 +94,7 @@ final class SessionManagerTests: XCTestCase {
       // Verify that refresher and storage was called only once.
       XCTAssertEqual(refreshSessionCallCount.value, 1)
       XCTAssertEqual(storeSessionCallCount.value, 1)
-      XCTAssertEqual(try result.map { try $0.get() }, (0..<10).map { _ in validSession })
+      XCTAssertEqual(try result.map { try $0.get() }, (0 ..< 10).map { _ in validSession })
     }
   }
 }

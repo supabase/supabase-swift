@@ -10,7 +10,8 @@ class PostgrestResponseTests: XCTestCase {
       url: URL(string: "http://example.com")!,
       statusCode: 200,
       httpVersion: nil,
-      headerFields: ["Content-Range": "bytes 0-100/200"])!
+      headerFields: ["Content-Range": "bytes 0-100/200"]
+    )!
     let value = "Test Value"
 
     // Create the PostgrestResponse instance
@@ -31,7 +32,8 @@ class PostgrestResponseTests: XCTestCase {
       url: URL(string: "http://example.com")!,
       statusCode: 200,
       httpVersion: nil,
-      headerFields: ["Content-Range": "*"])!
+      headerFields: ["Content-Range": "*"]
+    )!
     let value = "Test Value"
 
     // Create the PostgrestResponse instance

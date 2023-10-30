@@ -36,7 +36,7 @@ public class StorageBucketApi: StorageApi {
       enum CodingKeys: String, CodingKey {
         case id
         case name
-        case `public` = "public"
+        case `public`
         case fileSizeLimit = "file_size_limit"
         case allowedMimeTypes = "allowed_mime_types"
       }

@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  AsyncStream.swift
 //
 //
 //  Created by Guilherme Souza on 26/10/23.

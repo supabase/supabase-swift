@@ -39,7 +39,7 @@ final class IntegrationTests: XCTestCase {
     url: URL(string: "http://localhost:54321/rest/v1")!,
     headers: [
       "apikey":
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
     ]
   )
 
@@ -128,7 +128,7 @@ final class IntegrationTests: XCTestCase {
       .ilike(column: "email", value: "johndoe+test%").execute().value
     XCTAssertEqual(
       fetchedUsers[...],
-      users[1...2]
+      users[1 ... 2]
     )
   }
 }

@@ -56,7 +56,7 @@ final class FunctionsClientTests: XCTestCase {
     let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
 
     let sut = FunctionsClient(url: self.url, headers: ["apikey": apiKey]) { _ in
-      return (
+      (
         "error".data(using: .utf8)!,
         HTTPURLResponse(url: url, statusCode: 300, httpVersion: nil, headerFields: nil)!
       )
@@ -77,10 +77,11 @@ final class FunctionsClientTests: XCTestCase {
     let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
 
     let sut = FunctionsClient(url: self.url, headers: ["apikey": apiKey]) { _ in
-      return (
+      (
         Data(),
         HTTPURLResponse(
-          url: url, statusCode: 200, httpVersion: nil, headerFields: ["x-relay-error": "true"])!
+          url: url, statusCode: 200, httpVersion: nil, headerFields: ["x-relay-error": "true"]
+        )!
       )
     }
 

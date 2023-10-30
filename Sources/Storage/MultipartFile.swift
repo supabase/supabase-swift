@@ -27,7 +27,7 @@ public class FormData {
   }
 
   public var contentType: String {
-    return "multipart/form-data; boundary=\(boundary)"
+    "multipart/form-data; boundary=\(boundary)"
   }
 
   public var data: Data {

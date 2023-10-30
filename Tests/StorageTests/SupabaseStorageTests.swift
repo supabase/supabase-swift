@@ -77,17 +77,21 @@ final class SupabaseStorageTests: XCTestCase {
     let baseUrlWithDownload = try storage.from(id: bucket).getPublicURL(path: path, download: true)
     XCTAssertEqual(
       baseUrlWithDownload.absoluteString,
-      "\(Self.supabaseURL)/object/public/\(bucket)/\(path)?download=")
+      "\(Self.supabaseURL)/object/public/\(bucket)/\(path)?download="
+    )
 
     let baseUrlWithDownloadAndFileName = try storage.from(id: bucket).getPublicURL(
-      path: path, download: true, fileName: "test")
+      path: path, download: true, fileName: "test"
+    )
     XCTAssertEqual(
       baseUrlWithDownloadAndFileName.absoluteString,
-      "\(Self.supabaseURL)/object/public/\(bucket)/\(path)?download=test")
+      "\(Self.supabaseURL)/object/public/\(bucket)/\(path)?download=test"
+    )
 
     let baseUrlWithAllOptions = try storage.from(id: bucket).getPublicURL(
       path: path, download: true, fileName: "test",
-      options: TransformOptions(width: 300, height: 300))
+      options: TransformOptions(width: 300, height: 300)
+    )
     XCTAssertEqual(
       baseUrlWithAllOptions.absoluteString,
       "\(Self.supabaseURL)/render/image/public/\(bucket)/\(path)?download=test&width=300&height=300&resize=cover&quality=80&format=origin"

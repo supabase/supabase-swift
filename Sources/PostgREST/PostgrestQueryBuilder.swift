@@ -26,7 +26,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     }
     .joined(separator: "")
     appendSearchParams(name: "select", value: cleanedColumns)
-    if let count = count {
+    if let count {
       headers["Prefer"] = "count=\(count.rawValue)"
     }
     if head {
@@ -42,18 +42,18 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   ///   - count: Count algorithm to use to count rows in a table.
   /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
   /// - Throws: An error if the insert fails.
-  public func insert<U: Encodable>(
-    values: U,
+  public func insert(
+    values: some Encodable,
     returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     method = "POST"
     var prefersHeaders: [String] = []
-    if let returning = returning {
+    if let returning {
       prefersHeaders.append("return=\(returning.rawValue)")
     }
     body = try configuration.encoder.encode(values)
-    if let count = count {
+    if let count {
       prefersHeaders.append("count=\(count.rawValue)")
     }
     if let prefer = headers["Prefer"] {
@@ -84,8 +84,8 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   ///   - ignoreDuplicates: Specifies if duplicate rows should be ignored and not inserted.
   /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
   /// - Throws: An error if the upsert fails.
-  public func upsert<U: Encodable>(
-    values: U,
+  public func upsert(
+    values: some Encodable,
     onConflict: String? = nil,
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil,
@@ -96,11 +96,11 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
       "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates",
       "return=\(returning.rawValue)",
     ]
-    if let onConflict = onConflict {
+    if let onConflict {
       appendSearchParams(name: "on_conflict", value: onConflict)
     }
     body = try configuration.encoder.encode(values)
-    if let count = count {
+    if let count {
       prefersHeaders.append("count=\(count.rawValue)")
     }
     if let prefer = headers["Prefer"] {
@@ -119,15 +119,15 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   ///   - count: Count algorithm to use to count rows in a table.
   /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
   /// - Throws: An error if the update fails.
-  public func update<U: Encodable>(
-    values: U,
+  public func update(
+    values: some Encodable,
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     method = "PATCH"
     var preferHeaders = ["return=\(returning.rawValue)"]
     body = try configuration.encoder.encode(values)
-    if let count = count {
+    if let count {
       preferHeaders.append("count=\(count.rawValue)")
     }
     if let prefer = headers["Prefer"] {
@@ -150,7 +150,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   ) -> PostgrestFilterBuilder {
     method = "DELETE"
     var preferHeaders = ["return=\(returning.rawValue)"]
-    if let count = count {
+    if let count {
       preferHeaders.append("count=\(count.rawValue)")
     }
     if let prefer = headers["Prefer"] {

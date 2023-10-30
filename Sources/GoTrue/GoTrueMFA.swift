@@ -19,11 +19,14 @@ public actor GoTrueMFA {
     Dependencies.current.value!.eventEmitter
   }
 
-  /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method creates a new `unverified` factor.
-  /// To verify a factor, present the QR code or secret to the user and ask them to add it to their authenticator app.
+  /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
+  /// creates a new `unverified` factor.
+  /// To verify a factor, present the QR code or secret to the user and ask them to add it to their
+  /// authenticator app.
   /// The user has to enter the code from their authenticator app to verify it.
   ///
-  /// Upon verifying a factor, all other sessions are logged out and the current session's authenticator level is promoted to `aal2`.
+  /// Upon verifying a factor, all other sessions are logged out and the current session's
+  /// authenticator level is promoted to `aal2`.
   ///
   /// - Parameter params: The parameters for enrolling a new MFA factor.
   /// - Returns: An authentication response after enrolling the factor.
@@ -81,7 +84,8 @@ public actor GoTrueMFA {
     .decoded(decoder: configuration.decoder)
   }
 
-  /// Helper method which creates a challenge and immediately uses the given code to verify against it thereafter. The verification code is
+  /// Helper method which creates a challenge and immediately uses the given code to verify against
+  /// it thereafter. The verification code is
   /// provided by the user by entering a code seen in their authenticator app.
   ///
   /// - Parameter params: The parameters for creating and verifying a challenge.
@@ -93,7 +97,9 @@ public actor GoTrueMFA {
     let response = try await challenge(params: MFAChallengeParams(factorId: params.factorId))
     return try await verify(
       params: MFAVerifyParams(
-        factorId: params.factorId, challengeId: response.id, code: params.code))
+        factorId: params.factorId, challengeId: response.id, code: params.code
+      )
+    )
   }
 
   /// Returns the list of MFA factors enabled for this user.
@@ -126,7 +132,7 @@ public actor GoTrueMFA {
 
       var nextLevel = currentLevel
 
-      let verifiedFactors = session.user.factors?.filter({ $0.status == .verified }) ?? []
+      let verifiedFactors = session.user.factors?.filter { $0.status == .verified } ?? []
       if !verifiedFactors.isEmpty {
         nextLevel = "aal2"
       }

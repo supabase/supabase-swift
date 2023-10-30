@@ -57,7 +57,7 @@ public class PostgrestBuilder {
   public func execute(
     options: FetchOptions = FetchOptions()
   ) async throws -> PostgrestResponse<Void> {
-    self.fetchOptions = options
+    fetchOptions = options
     return try await execute { _ in () }
   }
 
@@ -69,7 +69,7 @@ public class PostgrestBuilder {
   public func execute<T: Decodable>(
     options: FetchOptions = FetchOptions()
   ) async throws -> PostgrestResponse<T> {
-    self.fetchOptions = options
+    fetchOptions = options
     return try await execute { [configuration] data in
       try configuration.decoder.decode(T.self, from: data)
     }
@@ -112,7 +112,7 @@ public class PostgrestBuilder {
       throw URLError(.badServerResponse)
     }
 
-    guard 200..<300 ~= httpResponse.statusCode else {
+    guard 200 ..< 300 ~= httpResponse.statusCode else {
       let error = try configuration.decoder.decode(PostgrestError.self, from: data)
       throw error
     }
@@ -128,7 +128,7 @@ public class PostgrestBuilder {
 
     if !queryParams.isEmpty {
       let percentEncodedQuery =
-        (components.percentEncodedQuery.map { $0 + "&" } ?? "") + self.query(queryParams)
+        (components.percentEncodedQuery.map { $0 + "&" } ?? "") + query(queryParams)
       components.percentEncodedQuery = percentEncodedQuery
     }
 
@@ -162,7 +162,7 @@ public class PostgrestBuilder {
       }
       return nil
     }
-    .map { (key, value) -> String in
+    .map { key, value -> String in
       let escapedKey = escape(key)
       let escapedValue = escape(value)
       return "\(escapedKey)=\(escapedValue)"
@@ -186,7 +186,7 @@ extension CharacterSet {
   /// should be percent-escaped in the query string.
   static let postgrestURLQueryAllowed: CharacterSet = {
     let generalDelimitersToEncode =
-      ":#[]@"  // does not include "?" or "/" due to RFC 3986 - Section 3.4
+      ":#[]@" // does not include "?" or "/" due to RFC 3986 - Section 3.4
     let subDelimitersToEncode = "!$&'()*+,;="
     let encodableDelimiters =
       CharacterSet(charactersIn: "\(generalDelimitersToEncode)\(subDelimitersToEncode)")

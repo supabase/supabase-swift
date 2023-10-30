@@ -6,13 +6,13 @@ public final class LockIsolated<Value>: @unchecked Sendable {
   private let lock = NSRecursiveLock()
 
   public init(_ value: @autoclosure @Sendable () throws -> Value) rethrows {
-    self._value = try value()
+    _value = try value()
   }
 
   public func withValue<T: Sendable>(
     _ operation: (inout Value) throws -> T
   ) rethrows -> T {
-    try self.lock.sync {
+    try lock.sync {
       var value = self._value
       defer { self._value = value }
       return try operation(&value)
@@ -20,7 +20,7 @@ public final class LockIsolated<Value>: @unchecked Sendable {
   }
 
   public func setValue(_ newValue: @autoclosure @Sendable () throws -> Value) rethrows {
-    try self.lock.sync {
+    try lock.sync {
       self._value = try newValue()
     }
   }
@@ -29,7 +29,7 @@ public final class LockIsolated<Value>: @unchecked Sendable {
 extension LockIsolated where Value: Sendable {
   /// The lock-isolated value.
   public var value: Value {
-    self.lock.sync {
+    lock.sync {
       self._value
     }
   }
@@ -43,14 +43,14 @@ extension LockIsolated: Equatable where Value: Equatable {
 
 extension LockIsolated: Hashable where Value: Hashable {
   public func hash(into hasher: inout Hasher) {
-    self.withValue { hasher.combine($0) }
+    withValue { hasher.combine($0) }
   }
 }
 
 extension NSRecursiveLock {
   @inlinable @discardableResult
   @_spi(Internal) public func sync<R>(work: () throws -> R) rethrows -> R {
-    self.lock()
+    lock()
     defer { self.unlock() }
     return try work()
   }

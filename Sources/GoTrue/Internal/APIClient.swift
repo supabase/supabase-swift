@@ -31,7 +31,7 @@ actor APIClient {
       throw URLError(.badServerResponse)
     }
 
-    guard (200..<300).contains(httpResponse.statusCode) else {
+    guard (200 ..< 300).contains(httpResponse.statusCode) else {
       let apiError = try configuration.decoder.decode(GoTrueError.APIError.self, from: data)
       throw GoTrueError.api(apiError)
     }

@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  ActorIsolated.swift
 //
 //
 //  Created by Guilherme Souza on 07/10/23.
@@ -17,12 +17,12 @@ public final class ActorIsolated<Value> {
 
   @discardableResult
   public func withValue<T>(_ block: @Sendable (inout Value) throws -> T) rethrows -> T {
-    var value = self.value
+    var value = value
     defer { self.value = value }
     return try block(&value)
   }
 
   public func setValue(_ newValue: @autoclosure @Sendable () throws -> Value) rethrows {
-    self.value = try newValue()
+    value = try newValue()
   }
 }

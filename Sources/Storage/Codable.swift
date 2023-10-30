@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  Codable.swift
 //
 //
 //  Created by Guilherme Souza on 18/10/23.
@@ -8,9 +8,7 @@
 import Foundation
 
 extension JSONEncoder {
-  public static let defaultStorageEncoder: JSONEncoder = {
-    JSONEncoder()
-  }()
+  public static let defaultStorageEncoder: JSONEncoder = .init()
 }
 
 extension JSONDecoder {
@@ -28,7 +26,8 @@ extension JSONDecoder {
       }
 
       throw DecodingError.dataCorruptedError(
-        in: container, debugDescription: "Invalid date format: \(string)")
+        in: container, debugDescription: "Invalid date format: \(string)"
+      )
     }
 
     return decoder

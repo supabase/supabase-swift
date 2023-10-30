@@ -20,13 +20,13 @@ final class BuildURLRequestTests: XCTestCase {
   }
 
   func testBuildRequest() async throws {
-    let runningTestCase = ActorIsolated(Optional<TestCase>.none)
+    let runningTestCase = ActorIsolated(TestCase?.none)
 
     let client = PostgrestClient(
       url: url, schema: nil,
       fetch: { @MainActor request in
         runningTestCase.withValue { runningTestCase in
-          guard let runningTestCase = runningTestCase else {
+          guard let runningTestCase else {
             XCTFail("execute called without a runningTestCase set.")
             return (Data(), URLResponse())
           }
@@ -41,7 +41,8 @@ final class BuildURLRequestTests: XCTestCase {
 
           return (Data(), URLResponse())
         }
-      })
+      }
+    )
 
     let testCases: [TestCase] = [
       TestCase(name: "select all users where email ends with '@supabase.co'") { client in

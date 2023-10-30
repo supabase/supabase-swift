@@ -15,7 +15,8 @@ enum Config {
     guard
       let configURL = Bundle.main.url(forResource: "Config", withExtension: "plist"),
       let config = try? PropertyListSerialization.propertyList(
-        from: Data(contentsOf: configURL), format: nil) as? [String: Any]
+        from: Data(contentsOf: configURL), format: nil
+      ) as? [String: Any]
     else {
       return nil
     }

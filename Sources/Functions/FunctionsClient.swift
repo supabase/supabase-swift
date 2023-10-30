@@ -47,7 +47,8 @@ public actor FunctionsClient {
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - invokeOptions: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
-  ///   - decode: A closure to decode the response data and HTTPURLResponse into a `Response` object.
+  ///   - decode: A closure to decode the response data and HTTPURLResponse into a `Response`
+  /// object.
   /// - Returns: The decoded `Response` object.
   public func invoke<Response>(
     functionName: String,
@@ -55,7 +56,8 @@ public actor FunctionsClient {
     decode: (Data, HTTPURLResponse) throws -> Response
   ) async throws -> Response {
     let (data, response) = try await rawInvoke(
-      functionName: functionName, invokeOptions: invokeOptions)
+      functionName: functionName, invokeOptions: invokeOptions
+    )
     return try decode(data, response)
   }
 
@@ -92,7 +94,7 @@ public actor FunctionsClient {
     functionName: String,
     invokeOptions: FunctionInvokeOptions
   ) async throws -> (Data, HTTPURLResponse) {
-    let url = self.url.appendingPathComponent(functionName)
+    let url = url.appendingPathComponent(functionName)
     var urlRequest = URLRequest(url: url)
     urlRequest.allHTTPHeaderFields = invokeOptions.headers.merging(headers) { invoke, _ in invoke }
     urlRequest.httpMethod = (invokeOptions.method ?? .post).rawValue
@@ -104,7 +106,7 @@ public actor FunctionsClient {
       throw URLError(.badServerResponse)
     }
 
-    guard 200..<300 ~= httpResponse.statusCode else {
+    guard 200 ..< 300 ~= httpResponse.statusCode else {
       throw FunctionsError.httpError(code: httpResponse.statusCode, data: data)
     }
 

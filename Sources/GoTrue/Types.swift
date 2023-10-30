@@ -405,13 +405,17 @@ public struct AuthMFAEnrollResponse: Decodable, Hashable, Sendable {
   public var totp: TOTP?
 
   public struct TOTP: Decodable, Hashable, Sendable {
-    /// Contains a QR code encoding the authenticator URI. You can convert it to a URL by prepending `data:image/svg+xml;utf-8,` to the value. Avoid logging this value to the console.
+    /// Contains a QR code encoding the authenticator URI. You can convert it to a URL by prepending
+    /// `data:image/svg+xml;utf-8,` to the value. Avoid logging this value to the console.
     public var qrCode: String
 
-    /// The TOTP secret (also encoded in the QR code). Show this secret in a password-style field to the user, in case they are unable to scan the QR code. Avoid logging this value to the console.
+    /// The TOTP secret (also encoded in the QR code). Show this secret in a password-style field to
+    /// the user, in case they are unable to scan the QR code. Avoid logging this value to the
+    /// console.
     public let secret: String
 
-    /// The authenticator URI encoded within the QR code, should you need to use it. Avoid logging this value to the console.
+    /// The authenticator URI encoded within the QR code, should you need to use it. Avoid logging
+    /// this value to the console.
     public let uri: String
   }
 }
@@ -495,8 +499,8 @@ public struct AMREntry: Decodable, Hashable, Sendable {
 extension AMREntry {
   init?(value: Any) {
     guard let dict = value as? [String: Any],
-      let method = dict["method"] as? Method,
-      let timestamp = dict["timestamp"] as? TimeInterval
+          let method = dict["method"] as? Method,
+          let timestamp = dict["timestamp"] as? TimeInterval
     else {
       return nil
     }
@@ -510,10 +514,12 @@ public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable
   /// Current AAL level of the session.
   public let currentLevel: AuthenticatorAssuranceLevels?
 
-  /// Next possible AAL level for the session. If the next level is higher than the current one, the user should go through MFA.
+  /// Next possible AAL level for the session. If the next level is higher than the current one, the
+  /// user should go through MFA.
   public let nextLevel: AuthenticatorAssuranceLevels?
 
-  /// A list of all authentication methods attached to this session. Use the information here to detect the last time a user verified a factor, for example if implementing a step-up scenario.
+  /// A list of all authentication methods attached to this session. Use the information here to
+  /// detect the last time a user verified a factor, for example if implementing a step-up scenario.
   public let currentAuthenticationMethods: [AMREntry]
 }
 

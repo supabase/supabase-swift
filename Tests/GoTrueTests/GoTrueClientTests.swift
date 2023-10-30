@@ -11,7 +11,6 @@ import XCTest
 @testable import GoTrue
 
 final class GoTrueClientTests: XCTestCase {
-
   fileprivate var api: APIClient!
 
   func testOnAuthStateChange() async throws {
@@ -19,7 +18,7 @@ final class GoTrueClientTests: XCTestCase {
     let sut = makeSUT()
 
     let events = ActorIsolated([AuthChangeEvent]())
-    let expectation = self.expectation(description: "onAuthStateChangeEnd")
+    let expectation = expectation(description: "onAuthStateChangeEnd")
 
     await withDependencies {
       $0.eventEmitter = .live

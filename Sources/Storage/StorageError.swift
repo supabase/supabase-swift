@@ -14,6 +14,6 @@ public struct StorageError: Error, Decodable {
 
 extension StorageError: LocalizedError {
   public var errorDescription: String? {
-    return message
+    message
   }
 }

@@ -12,7 +12,7 @@ protocol SignInUseCase: UseCase<Credentials, Task<Void, Error>> {}
 struct SignInUseCaseImpl: SignInUseCase {
   let repository: AuthenticationRepository
 
-  func execute(input: Credentials) -> Task<(), Error> {
+  func execute(input: Credentials) -> Task<Void, Error> {
     Task {
       try await repository.signIn(email: input.email, password: input.password)
     }

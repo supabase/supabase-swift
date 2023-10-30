@@ -36,10 +36,11 @@ final class AppViewModel: ObservableObject {
         }
 
         self.authState =
-          switch state {
-          case .signedIn: .authenticated(.init())
-          case .signedOut: .notAuthenticated(.init())
-          }
+          switch state
+        {
+        case .signedIn: .authenticated(.init())
+        case .signedOut: .notAuthenticated(.init())
+        }
       }
     }
   }
@@ -49,7 +50,7 @@ final class AppViewModel: ObservableObject {
   }
 
   func productDetailViewModel(with productId: String?) -> ProductDetailsViewModel {
-    ProductDetailsViewModel(productId: productId) { [weak self] updated in
+    ProductDetailsViewModel(productId: productId) { [weak self] _ in
       Task {
         if case let .authenticated(model) = self?.authState {
           await model.loadProducts()
@@ -68,9 +69,9 @@ struct AppView: View {
 
   var body: some View {
     switch model.authState {
-    case .authenticated(let model):
+    case let .authenticated(model):
       authenticatedView(model: model)
-    case .notAuthenticated(let model):
+    case let .notAuthenticated(model):
       notAuthenticatedView(model: model)
     case .none:
       ProgressView()

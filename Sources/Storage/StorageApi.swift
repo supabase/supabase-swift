@@ -23,7 +23,7 @@ public class StorageApi {
       throw URLError(.badServerResponse)
     }
 
-    guard (200..<300).contains(httpResponse.statusCode) else {
+    guard (200 ..< 300).contains(httpResponse.statusCode) else {
       let error = try configuration.decoder.decode(StorageError.self, from: data)
       throw error
     }

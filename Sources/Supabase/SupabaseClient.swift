@@ -121,7 +121,7 @@ public class SupabaseClient {
     }
   }
 
-  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) {
+  private func handleTokenChanged(event: AuthChangeEvent, session _: Session?) {
     let supportedEvents: [AuthChangeEvent] = [.signedIn, .tokenRefreshed]
     guard supportedEvents.contains(event) else { return }
 

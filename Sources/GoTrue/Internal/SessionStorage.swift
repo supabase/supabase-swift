@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  SessionStorage.swift
 //
 //
 //  Created by Guilherme Souza on 24/10/23.

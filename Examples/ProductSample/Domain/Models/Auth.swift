@@ -1,5 +1,5 @@
 //
-//  Credentials.swift
+//  Auth.swift
 //  ProductSample
 //
 //  Created by Guilherme Souza on 21/10/23.

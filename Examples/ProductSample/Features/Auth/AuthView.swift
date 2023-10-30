@@ -44,7 +44,7 @@ struct AuthView: View {
 
       if let status = model.status {
         switch status {
-        case .error(let error):
+        case let .error(error):
           Text(error.localizedDescription).font(.callout).foregroundStyle(.red)
         case .requiresConfirmation:
           Text(

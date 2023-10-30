@@ -12,7 +12,7 @@ protocol DeleteProductUseCase: UseCase<Product.ID, Task<Void, Error>> {}
 struct DeleteProductUseCaseImpl: DeleteProductUseCase {
   let repository: ProductRepository
 
-  func execute(input: Product.ID) -> Task<(), Error> {
+  func execute(input: Product.ID) -> Task<Void, Error> {
     Task {
       try await repository.deleteProduct(id: input)
     }

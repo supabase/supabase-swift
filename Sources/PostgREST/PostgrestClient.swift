@@ -113,9 +113,9 @@ public actor PostgrestClient {
   ///             Only applicable for set-returning functions.
   /// - Returns: A PostgrestTransformBuilder instance.
   /// - Throws: An error if the function call fails.
-  public func rpc<U: Encodable>(
+  public func rpc(
     fn: String,
-    params: U,
+    params: some Encodable,
     count: CountOption? = nil
   ) throws -> PostgrestTransformBuilder {
     try PostgrestRpcBuilder(

@@ -14,7 +14,7 @@ struct UpdateProductUseCaseImpl: UpdateProductUseCase {
   let productRepository: ProductRepository
   let productImageStorageRepository: any ProductImageStorageRepository
 
-  func execute(input: UpdateProductParams) -> Task<(), Error> {
+  func execute(input: UpdateProductParams) -> Task<Void, Error> {
     Task {
       var imageFilePath: String?
 
@@ -23,7 +23,8 @@ struct UpdateProductUseCaseImpl: UpdateProductUseCase {
       }
 
       try await productRepository.updateProduct(
-        id: input.id, name: input.name, price: input.price, image: imageFilePath)
+        id: input.id, name: input.name, price: input.price, image: imageFilePath
+      )
     }
   }
 }

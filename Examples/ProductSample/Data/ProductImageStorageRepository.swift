@@ -23,7 +23,8 @@ struct ProductImageStorageRepositoryImpl: ProductImageStorageRepository {
       .upload(
         path: fileName,
         file: File(
-          name: fileName, data: params.data, fileName: fileName, contentType: contentType),
+          name: fileName, data: params.data, fileName: fileName, contentType: contentType
+        ),
         fileOptions: FileOptions(contentType: contentType, upsert: true)
       )
     return imagePath
