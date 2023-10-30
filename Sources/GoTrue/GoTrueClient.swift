@@ -547,7 +547,7 @@ public actor GoTrueClient {
     let now = Date()
     var expiresAt = now
     var hasExpired = true
-    var session: Session?
+    var session: Session
 
     let jwt = try decode(jwt: accessToken)
     if let exp = jwt["exp"] as? TimeInterval {
@@ -560,8 +560,7 @@ public actor GoTrueClient {
     if hasExpired {
       session = try await refreshSession(refreshToken: refreshToken)
     } else {
-      let user = try await api.authorizedExecute(.init(path: "/user", method: "GET"))
-        .decoded(as: User.self, decoder: configuration.decoder)
+      let user = try await user(jwt: accessToken)
       session = Session(
         accessToken: accessToken,
         tokenType: "bearer",
@@ -571,12 +570,8 @@ public actor GoTrueClient {
       )
     }
 
-    guard let session else {
-      throw GoTrueError.sessionNotFound
-    }
-
     try await sessionManager.update(session)
-    await eventEmitter.emit(.tokenRefreshed)
+    await eventEmitter.emit(.signedIn)
     return session
   }
 
