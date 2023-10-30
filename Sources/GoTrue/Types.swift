@@ -349,6 +349,8 @@ public struct UserAttributes: Codable, Hashable, Sendable {
 struct RecoverParams: Codable, Hashable, Sendable {
   var email: String
   var gotrueMetaSecurity: GoTrueMetaSecurity?
+  var codeChallenge: String?
+  var codeChallengeMethod: String?
 }
 
 public enum AuthFlowType: Sendable {

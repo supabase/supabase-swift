@@ -70,6 +70,8 @@ public actor GoTrueClient {
   }
 
   /// Returns the session, refreshing it if necessary.
+  ///
+  /// If no session can be found, a ``GoTrueError.sessionNotFound`` error is thrown.
   public var session: Session {
     get async throws {
       try await sessionManager.session()
@@ -620,7 +622,8 @@ public actor GoTrueClient {
             gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
           )
         )
-      )
+      ),
+      shouldRemoveSession: type != .emailChange && type != .phoneChange
     )
   }
 
@@ -644,12 +647,18 @@ public actor GoTrueClient {
             gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
           )
         )
-      )
+      ),
+      shouldRemoveSession: type != .emailChange && type != .phoneChange
     )
   }
 
-  private func _verifyOTP(request: Request) async throws -> AuthResponse {
-    await sessionManager.remove()
+  private func _verifyOTP(
+    request: Request,
+    shouldRemoveSession: Bool
+  ) async throws -> AuthResponse {
+    if shouldRemoveSession {
+      await sessionManager.remove()
+    }
 
     let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
@@ -662,6 +671,23 @@ public actor GoTrueClient {
     }
 
     return response
+  }
+
+  /// Gets the current user details if there is an existing session.
+  /// - Parameter jwt: Takes in an optional access token jwt. If no jwt is provided, user() will
+  /// attempt to get the jwt from the current session.
+  ///
+  /// Should be used only when you require the most current user data. For faster results,
+  /// session.user is recommended.
+  public func user(jwt: String? = nil) async throws -> User {
+    var request = Request(path: "/user", method: "GET")
+
+    if let jwt {
+      request.headers["Authorization"] = "Bearer \(jwt)"
+      return try await api.execute(request).decoded(decoder: configuration.decoder)
+    }
+
+    return try await api.authorizedExecute(request).decoded(decoder: configuration.decoder)
   }
 
   /// Updates user data, if there is a logged in user.
@@ -691,6 +717,8 @@ public actor GoTrueClient {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
+    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+
     try await api.execute(
       .init(
         path: "/recover",
@@ -701,7 +729,9 @@ public actor GoTrueClient {
         body: configuration.encoder.encode(
           RecoverParams(
             email: email,
-            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
+            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:)),
+            codeChallenge: codeChallenge,
+            codeChallengeMethod: codeChallengeMethod
           )
         )
       )
@@ -724,10 +754,17 @@ public actor GoTrueClient {
       .user.confirmedAt != nil
     {
       try await sessionManager.update(session)
-      await eventEmitter.emit(.signedIn)
+      await eventEmitter.emit(.tokenRefreshed)
     }
 
     return session
+  }
+
+  /// Refresh and return a new session, regardless of expiry status.
+  @discardableResult
+  public func refreshSession() async throws -> Session {
+    let refreshToken = try await session.refreshToken
+    return try await refreshSession(refreshToken: refreshToken)
   }
 
   private func emitInitialSession(forStreamWithID id: UUID) async {
