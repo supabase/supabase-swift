@@ -121,11 +121,10 @@ public class SupabaseClient {
     }
   }
 
-  private func handleTokenChanged(event: AuthChangeEvent, session _: Session?) {
+  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) {
     let supportedEvents: [AuthChangeEvent] = [.signedIn, .tokenRefreshed]
     guard supportedEvents.contains(event) else { return }
 
-    // TODO: Set auth on realtime client
-    //    realtime.setAuth(session?.accessToken)
+    realtime.setAuth(session?.accessToken)
   }
 }
