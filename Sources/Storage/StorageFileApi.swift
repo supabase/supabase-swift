@@ -28,6 +28,10 @@ public class StorageFileApi: StorageApi {
     let Key: String
   }
 
+  struct MoveResponse: Decodable {
+    let message: String
+  }
+
   func uploadOrUpdate(
     method: String,
     path: String,
@@ -87,11 +91,11 @@ public class StorageFileApi: StorageApi {
 
   /// Moves an existing file, optionally renaming it at the same time.
   /// - Parameters:
-  ///   - fromPath: The original file path, including the current file name. For example
+  ///   - from: The original file path, including the current file name. For example
   /// `folder/image.png`.
-  ///   - toPath: The new file path, including the new file name. For example
-  /// `folder/image-copy.png`.
-  public func move(fromPath: String, toPath: String) async throws -> [String: AnyJSON] {
+  ///   - to: The new file path, including the new file name. For example `folder/image-copy.png`.
+  @discardableResult
+  public func move(from source: String, to destination: String) async throws -> String {
     try await execute(
       Request(
         path: "/object/move",
@@ -99,13 +103,38 @@ public class StorageFileApi: StorageApi {
         body: configuration.encoder.encode(
           [
             "bucketId": bucketId,
-            "sourceKey": fromPath,
-            "destinationKey": toPath,
+            "sourceKey": source,
+            "destinationKey": destination,
           ]
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(as: MoveResponse.self, decoder: configuration.decoder)
+    .message
+  }
+
+  /// Copies an existing file to a new path in the same bucket.
+  /// - Parameters:
+  ///   - from: The original file path, including the current file name. For example
+  /// `folder/image.png`.
+  ///   - to: The new file path, including the new file name. For example `folder/image-copy.png`.
+  @discardableResult
+  public func copy(from source: String, to destination: String) async throws -> String {
+    try await execute(
+      Request(
+        path: "/object/copy",
+        method: "POST",
+        body: configuration.encoder.encode(
+          [
+            "bucketId": bucketId,
+            "sourceKey": source,
+            "destinationKey": destination,
+          ]
+        )
+      )
+    )
+    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
+    .Key
   }
 
   /// Create signed url to download file without requiring permissions. This URL can be valid for a
@@ -115,15 +144,48 @@ public class StorageFileApi: StorageApi {
   /// `folder/image.png`.
   ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL
   /// which is valid for one minute.
-  public func createSignedURL(path: String, expiresIn: Int) async throws -> SignedURL {
-    try await execute(
+  ///   - transform: Transform the asset before serving it to the client.
+  public func createSignedURL(
+    path: String,
+    expiresIn: Int,
+    download: String? = nil,
+    transform: TransformOptions? = nil
+  ) async throws -> URL {
+    struct Body: Encodable {
+      let expiresIn: Int
+      let transform: TransformOptions?
+    }
+
+    struct Response: Decodable {
+      var signedURL: String
+    }
+
+    let response = try await execute(
       Request(
         path: "/object/sign/\(bucketId)/\(path)",
         method: "POST",
-        body: configuration.encoder.encode(["expiresIn": expiresIn])
+        body: configuration.encoder.encode(
+          Body(expiresIn: expiresIn, transform: transform)
+        )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(as: Response.self, decoder: configuration.decoder)
+
+    guard var components = URLComponents(
+      url: configuration.url.appendingPathComponent(response.signedURL),
+      resolvingAgainstBaseURL: false
+    ) else {
+      throw URLError(.badURL)
+    }
+
+    components.queryItems = components.queryItems ?? []
+    components.queryItems!.append(URLQueryItem(name: "download", value: download))
+
+    guard let signedURL = components.url else {
+      throw URLError(.badURL)
+    }
+
+    return signedURL
   }
 
   /// Deletes files within the same bucket
@@ -146,28 +208,36 @@ public class StorageFileApi: StorageApi {
   ///   - path: The folder path.
   ///   - options: Search options, including `limit`, `offset`, and `sortBy`.
   public func list(
-    path _: String? = nil,
+    path: String? = nil,
     options: SearchOptions? = nil
   ) async throws -> [FileObject] {
-    try await execute(
+    var options = options ?? DEFAULT_SEARCH_OPTIONS
+    options.prefix = path ?? ""
+
+    return try await execute(
       Request(
         path: "/object/list/\(bucketId)",
         method: "POST",
-        body: configuration.encoder.encode(options ?? DEFAULT_SEARCH_OPTIONS)
+        body: configuration.encoder.encode(options)
       )
     )
     .decoded(decoder: configuration.decoder)
   }
 
-  /// Downloads a file.
+  /// Downloads a file from a private bucket. For public buckets, make a request to the URL returned
+  /// from ``getPublicURL`` instead.
   /// - Parameters:
   ///   - path: The file path to be downloaded, including the path and file name. For example
   /// `folder/image.png`.
+  ///   - options: Transform the asset before serving it to the client.
   @discardableResult
-  public func download(path: String) async throws -> Data {
-    // TODO: implement missing functionality from https://github.com/supabase/storage-js/blob/main/src/packages/StorageFileApi.ts#L466
-    try await execute(
-      Request(path: "/object/\(bucketId)/\(path)", method: "GET")
+  public func download(path: String, options: TransformOptions? = nil) async throws -> Data {
+    let queryItems = options?.queryItems ?? []
+
+    let renderPath = options != nil ? "render/image/authenticated" : "object"
+
+    return try await execute(
+      Request(path: "/\(renderPath)/\(bucketId)/\(path)", method: "GET", query: queryItems)
     )
     .data
   }

@@ -1,5 +1,5 @@
 public struct SearchOptions: Encodable {
-  public let prefix: String
+  var prefix: String
 
   /// The number of files you want to be returned.
   public var limit: Int?
@@ -14,10 +14,12 @@ public struct SearchOptions: Encodable {
   public var search: String?
 
   public init(
-    prefix: String = "", limit: Int? = nil, offset: Int? = nil, sortBy: SortBy? = nil,
+    limit: Int? = nil,
+    offset: Int? = nil,
+    sortBy: SortBy? = nil,
     search: String? = nil
   ) {
-    self.prefix = prefix
+    prefix = ""
     self.limit = limit
     self.offset = offset
     self.sortBy = sortBy
