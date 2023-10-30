@@ -15,8 +15,6 @@
 		79018AE42AE3F185006EA669 /* Routes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018AE32AE3F185006EA669 /* Routes.swift */; };
 		79018AE62AE3F1E4006EA669 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018AE52AE3F1E4006EA669 /* Auth.swift */; };
 		79018AE82AE3F1F3006EA669 /* SignUpUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79018AE72AE3F1F3006EA669 /* SignUpUseCase.swift */; };
-		790308DE2AED4F81003C4A98 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790308DD2AED4F81003C4A98 /* Logger.swift */; };
-		790308E12AED51FA003C4A98 /* AsyncButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790308E02AED51FA003C4A98 /* AsyncButton.swift */; };
 		790308E92AEE7B4D003C4A98 /* RealtimeSampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790308E82AEE7B4D003C4A98 /* RealtimeSampleApp.swift */; };
 		790308EB2AEE7B4D003C4A98 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790308EA2AEE7B4D003C4A98 /* ContentView.swift */; };
 		790308ED2AEE7B4E003C4A98 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 790308EC2AEE7B4E003C4A98 /* Assets.xcassets */; };
@@ -73,8 +71,6 @@
 		79018AE32AE3F185006EA669 /* Routes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Routes.swift; sourceTree = "<group>"; };
 		79018AE52AE3F1E4006EA669 /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
 		79018AE72AE3F1F3006EA669 /* SignUpUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignUpUseCase.swift; sourceTree = "<group>"; };
-		790308DD2AED4F81003C4A98 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
-		790308E02AED51FA003C4A98 /* AsyncButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncButton.swift; sourceTree = "<group>"; };
 		790308E62AEE7B4D003C4A98 /* RealtimeSample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RealtimeSample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		790308E82AEE7B4D003C4A98 /* RealtimeSampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeSampleApp.swift; sourceTree = "<group>"; };
 		790308EA2AEE7B4D003C4A98 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -237,14 +233,6 @@
 			path = Routes;
 			sourceTree = "<group>";
 		};
-		790308DF2AED51F3003C4A98 /* Components */ = {
-			isa = PBXGroup;
-			children = (
-				790308E02AED51FA003C4A98 /* AsyncButton.swift */,
-			);
-			path = Components;
-			sourceTree = "<group>";
-		};
 		790308E72AEE7B4D003C4A98 /* RealtimeSample */ = {
 			isa = PBXGroup;
 			children = (
@@ -289,7 +277,6 @@
 		793895C82954ABFF0044F2B8 /* Examples */ = {
 			isa = PBXGroup;
 			children = (
-				790308DF2AED51F3003C4A98 /* Components */,
 				7962989A2AEBBD9F000AA957 /* Info.plist */,
 				793895CD2954AC000044F2B8 /* Assets.xcassets */,
 				7956405F2954AE140088A06F /* AuthView.swift */,
@@ -305,7 +292,6 @@
 				794EF1212955F26A008C9526 /* AddTodoListView.swift */,
 				794EF1232955F3DE008C9526 /* TodoListRow.swift */,
 				796298982AEBBA77000AA957 /* MFAFlow.swift */,
-				790308DD2AED4F81003C4A98 /* Logger.swift */,
 			);
 			path = Examples;
 			sourceTree = "<group>";
@@ -545,12 +531,10 @@
 				794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */,
 				7956405E2954ADE00088A06F /* Secrets.swift in Sources */,
 				795640682955AEB30088A06F /* Models.swift in Sources */,
-				790308DE2AED4F81003C4A98 /* Logger.swift in Sources */,
 				795640662955AE9C0088A06F /* TodoListView.swift in Sources */,
 				795640602954AE140088A06F /* AuthView.swift in Sources */,
 				795640622955AD2B0088A06F /* HomeView.swift in Sources */,
 				793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */,
-				790308E12AED51FA003C4A98 /* AsyncButton.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

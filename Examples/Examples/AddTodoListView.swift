@@ -42,7 +42,8 @@ struct AddTodoListView_Previews: PreviewProvider {
           description: "",
           isComplete: false,
           ownerID: UUID()
-        ))
+        )
+      )
     ) { _ in
     }
   }
