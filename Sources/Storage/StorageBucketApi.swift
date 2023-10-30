@@ -21,35 +21,50 @@ public class StorageBucketApi: StorageApi {
       .decoded(decoder: configuration.decoder)
   }
 
-  /// Creates a new Storage bucket
+  struct BucketParameters: Encodable {
+    var id: String
+    var name: String
+    var `public`: Bool
+    var fileSizeLimit: Int?
+    var allowedMimeTypes: [String]?
+  }
+
+  /// Creates a new Storage bucket.
   /// - Parameters:
   ///   - id: A unique identifier for the bucket you are creating.
-  ///   - completion: newly created bucket id
   public func createBucket(id: String, options: BucketOptions = .init()) async throws {
-    struct Parameters: Encodable {
-      var id: String
-      var name: String
-      var `public`: Bool
-      var fileSizeLimit: Int?
-      var allowedMimeTypes: [String]?
-
-      enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case `public`
-        case fileSizeLimit = "file_size_limit"
-        case allowedMimeTypes = "allowed_mime_types"
-      }
-    }
-
     try await execute(
       Request(
         path: "/bucket",
         method: "POST",
         body: configuration.encoder.encode(
-          Parameters(
-            id: id, name: id, public: options.public,
-            fileSizeLimit: options.fileSizeLimit, allowedMimeTypes: options.allowedMimeTypes
+          BucketParameters(
+            id: id,
+            name: id,
+            public: options.public,
+            fileSizeLimit: options.fileSizeLimit,
+            allowedMimeTypes: options.allowedMimeTypes
+          )
+        )
+      )
+    )
+  }
+
+  /// Updates a Storage bucket
+  /// - Parameters:
+  ///   - id: A unique identifier for the bucket you are updating.
+  public func updateBucket(id: String, options: BucketOptions) async throws {
+    try await execute(
+      Request(
+        path: "/bucket/\(id)",
+        method: "PUT",
+        body: configuration.encoder.encode(
+          BucketParameters(
+            id: id,
+            name: id,
+            public: options.public,
+            fileSizeLimit: options.fileSizeLimit,
+            allowedMimeTypes: options.allowedMimeTypes
           )
         )
       )

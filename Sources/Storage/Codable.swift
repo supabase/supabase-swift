@@ -8,7 +8,11 @@
 import Foundation
 
 extension JSONEncoder {
-  public static let defaultStorageEncoder: JSONEncoder = .init()
+  public static let defaultStorageEncoder: JSONEncoder = {
+    let encoder = JSONEncoder()
+    encoder.keyEncodingStrategy = .convertToSnakeCase
+    return encoder
+  }()
 }
 
 extension JSONDecoder {
