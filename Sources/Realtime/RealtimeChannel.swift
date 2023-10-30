@@ -59,7 +59,7 @@ public struct ChannelFilter {
 }
 
 public enum ChannelResponse {
-  case ok, timedOut, rateLimited, error
+  case ok, timedOut, error
 }
 
 public enum RealtimeListenTypes: String {
@@ -137,6 +137,8 @@ public class RealtimeChannel {
   /// The Socket that the channel belongs to
   weak var socket: RealtimeClient?
 
+  var subTopic: String
+
   /// Current state of the RealtimeChannel
   var state: ChannelState
 
@@ -169,6 +171,7 @@ public class RealtimeChannel {
   init(topic: String, params: [String: Any] = [:], socket: RealtimeClient) {
     self.state = ChannelState.closed
     self.topic = topic
+    self.subTopic = topic.replacingOccurrences(of: "realtime:", with: "")
     self.params = params
     self.socket = socket
     self.bindings = LockIsolated([:])
@@ -402,11 +405,11 @@ public class RealtimeChannel {
               )
             )
           } else {
-            self.leave()
-
-            // TODO: define error object
-            callback?(.channelError, nil)
-
+            self.unsubscribe()
+            callback?(
+              .channelError,
+              RealtimeError("Mismatch between client and server bindings for postgres changes.")
+            )
             return
           }
         }
@@ -417,8 +420,9 @@ public class RealtimeChannel {
         callback?(.subscribed, nil)
       }
       .delegateReceive("error", to: self) { (_, message) in
-        // TODO: build error object
-        callback?(.channelError, nil)
+        let values = message.payload.values.map { "\($0) " }
+        let error = RealtimeError(values.isEmpty ? "error" : values.joined(separator: ", "))
+        callback?(.channelError, error)
       }
       .delegateReceive("timeout", to: self) { (_, message) in
         callback?(.timedOut, nil)
@@ -685,25 +689,51 @@ public class RealtimeChannel {
     payload: Payload,
     opts: Payload = [:]
   ) async -> ChannelResponse {
-    await withCheckedContinuation { continuation in
-      var payload = payload
-      payload["type"] = type.rawValue
-      if let event {
-        payload["event"] = event
-      }
+    var payload = payload
+    payload["type"] = type.rawValue
+    if let event {
+      payload["event"] = event
+    }
 
-      if !canPush, type == .broadcast {
-        // TODO: make HTTP request
-      } else {
+    if !canPush, type == .broadcast {
+      var headers = socket?.headers ?? [:]
+      headers["Content-Type"] = "application/json"
+      headers["apikey"] = socket?.accessToken
+
+      let body = [
+        "messages": [
+          "topic": subTopic,
+          "payload": payload,
+          "event": event as Any,
+        ]
+      ]
+
+      do {
+        let request = Request(
+          path: "",
+          method: "POST",
+          headers: headers.mapValues { "\($0)" },
+          body: try JSONSerialization.data(withJSONObject: body)
+        )
+        let urlRequest = try request.urlRequest(withBaseURL: broadcastEndpointURL)
+        let (_, response) = try await URLSession.shared.data(for: urlRequest)
+        guard let httpResponse = response as? HTTPURLResponse else {
+          return .error
+        }
+        if 200..<300 ~= httpResponse.statusCode {
+          return .ok
+        }
+
+        return .error
+      } catch {
+        return .error
+      }
+    } else {
+
+      return await withCheckedContinuation { continuation in
         let push = self.push(
           type.rawValue, payload: payload,
           timeout: (opts["timeout"] as? TimeInterval) ?? self.timeout)
-
-        // TODO: Check if following code is possible to implement.
-        //        if push.rateLimited {
-        //          continuation.resume(returning: .rateLimited)
-        //          return
-        //        }
 
         if let type = payload["type"] as? String, type == "broadcast",
           let config = self.params["config"] as? [String: Any],
@@ -744,7 +774,7 @@ public class RealtimeChannel {
   /// - parameter timeout: Optional timeout
   /// - return: Push that can add receive hooks
   @discardableResult
-  public func leave(timeout: TimeInterval = Defaults.timeoutInterval) -> Push {
+  public func unsubscribe(timeout: TimeInterval = Defaults.timeoutInterval) -> Push {
     // If attempting a rejoin during a leave, then reset, cancelling the rejoin
     self.rejoinTimer.reset()
 
@@ -917,6 +947,17 @@ public class RealtimeChannel {
   ///           is connected and the channel is joined
   var canPush: Bool {
     return self.socket?.isConnected == true && self.isJoined
+  }
+
+  var broadcastEndpointURL: URL {
+    var url = socket?.endPoint ?? ""
+    url = url.replacingOccurrences(of: "^ws", with: "http", options: .regularExpression, range: nil)
+    url = url.replacingOccurrences(
+      of: "(/socket/websocket|/socket|/websocket)/?$", with: "", options: .regularExpression,
+      range: nil)
+    url =
+      "\(url.replacingOccurrences(of: "/+$", with: "", options: .regularExpression, range: nil))/api/broadcast"
+    return URL(string: url)!
   }
 }
 

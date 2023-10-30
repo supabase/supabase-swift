@@ -205,6 +205,12 @@ public class RealtimeClient: PhoenixTransportDelegate {
     self.paramsClosure = paramsClosure
     self.endPoint = endPoint
     self.vsn = vsn
+    let params = paramsClosure?()
+    if let jwt = (params?["Authorization"] as? String)?.split(separator: " ").last {
+      self.accessToken = String(jwt)
+    } else {
+      self.accessToken = params?["apikey"] as? String
+    }
     self.endPointUrl = RealtimeClient.buildEndpointUrl(
       endpoint: endPoint,
       paramsClosure: paramsClosure,
@@ -249,9 +255,20 @@ public class RealtimeClient: PhoenixTransportDelegate {
     return self.connection?.readyState ?? .closed
   }
 
+  /// Sets the JWT access token used for channel subscription authorization and Realtime RLS.
+  /// - Parameter token: A JWT string.
   public func setAuth(_ token: String?) {
     self.accessToken = token
-    // TODO: set token on channels
+
+    for channel in channels {
+      if token != nil {
+        channel.params["user_token"] = token
+      }
+
+      if channel.joinedOnce, channel.isJoined {
+        channel.push(ChannelEvent.accessToken, payload: ["access_token": token as Any])
+      }
+    }
   }
 
   /// Connects the Socket. The params passed to the Socket on initialization
@@ -846,7 +863,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     else { return }
 
     self.logItems("transport", "leaving duplicate topic: [\(topic)]")
-    dupe.leave()
+    dupe.unsubscribe()
   }
 
   //----------------------------------------------------------------------

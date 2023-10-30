@@ -98,7 +98,7 @@ struct ContentView: View {
 
   func toggleSubscription() {
     if publicSchema?.isJoined == true {
-      publicSchema?.leave()
+      publicSchema?.unsubscribe()
     } else {
       createSubscription()
     }
