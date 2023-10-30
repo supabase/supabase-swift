@@ -109,7 +109,8 @@ extension Message {
   func stringfiedPayload() -> String {
     do {
       let data = try JSONSerialization.data(
-        withJSONObject: rawPayload, options: [.prettyPrinted, .sortedKeys])
+        withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]
+      )
       return String(data: data, encoding: .utf8) ?? ""
     } catch {
       return ""
