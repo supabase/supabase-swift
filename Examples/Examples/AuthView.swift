@@ -9,69 +9,69 @@ import GoTrue
 import SwiftUI
 
 @MainActor
-final class AuthViewModel: ObservableObject {
-  enum Mode {
-    case signIn, signUp
-  }
+final class AuthController: ObservableObject {
+  @Published var session: Session?
 
-  @Published var email = ""
-  @Published var password = ""
-  @Published var mode: Mode = .signIn
-  @Published var authError: Error?
-
-  func signInButtonTapped() async {
-    do {
-      authError = nil
-      try await supabase.auth.signIn(email: email, password: password)
-    } catch {
-      logger.error("signIn: \(error.localizedDescription)")
-      self.authError = error
+  var currentUserID: UUID {
+    guard let id = session?.user.id else {
+      preconditionFailure("Required session.")
     }
+
+    return id
   }
 
-  func signUpButtonTapped() async {
-    do {
-      authError = nil
-      try await supabase.auth.signUp(
-        email: email, password: password, redirectTo: URL(string: "com.supabase.Examples://")!)
-    } catch {
-      logger.error("signUp: \(error.localizedDescription)")
-      self.authError = error
+  func observeAuth() async {
+    for await event in await supabase.auth.onAuthStateChange() {
+      guard event == .signedIn || event == .signedOut else {
+        return
+      }
+
+      session = try? await supabase.auth.session
     }
   }
 }
 
 struct AuthView: View {
-  @ObservedObject var model: AuthViewModel
+  enum Mode {
+    case signIn, signUp
+  }
+
+  @EnvironmentObject var auth: AuthController
+
+  @State var email = ""
+  @State var password = ""
+  @State var mode: Mode = .signIn
+  @State var error: Error?
 
   var body: some View {
     Form {
       Section {
-        TextField("Email", text: $model.email)
+        TextField("Email", text: $email)
           .keyboardType(.emailAddress)
           .textContentType(.emailAddress)
           .autocorrectionDisabled()
           .textInputAutocapitalization(.never)
-        SecureField("Password", text: $model.password)
+        SecureField("Password", text: $password)
           .textContentType(.password)
           .autocorrectionDisabled()
           .textInputAutocapitalization(.never)
-        AsyncButton(model.mode == .signIn ? "Sign in" : "Sign up") {
-          await primaryActionButtonTapped()
+        Button(mode == .signIn ? "Sign in" : "Sign up") {
+          Task {
+            await primaryActionButtonTapped()
+          }
         }
 
-        if let error = model.authError {
+        if let error {
           ErrorText(error)
         }
       }
 
       Section {
         Button(
-          model.mode == .signIn
-            ? "Don't have an account? Sign up." : "Already have an account? Sign in."
+          mode == .signIn ? "Don't have an account? Sign up." : "Already have an account? Sign in."
         ) {
           withAnimation {
-            model.mode = model.mode == .signIn ? .signUp : .signIn
+            mode = mode == .signIn ? .signUp : .signIn
           }
         }
       }
@@ -79,11 +79,25 @@ struct AuthView: View {
   }
 
   func primaryActionButtonTapped() async {
-    switch model.mode {
-    case .signIn:
-      await model.signInButtonTapped()
-    case .signUp:
-      await model.signUpButtonTapped()
+    do {
+      error = nil
+      switch mode {
+      case .signIn:
+        try await supabase.auth.signIn(email: email, password: password)
+      case .signUp:
+        try await supabase.auth.signUp(
+          email: email, password: password, redirectTo: URL(string: "com.supabase.Examples://")!)
+      }
+    } catch {
+      withAnimation {
+        self.error = error
+      }
     }
+  }
+}
+
+struct AuthView_Previews: PreviewProvider {
+  static var previews: some View {
+    AuthView()
   }
 }

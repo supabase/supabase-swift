@@ -13,7 +13,7 @@ struct TodoListRow: View {
 
   var body: some View {
     HStack {
-      Text(todo.task)
+      Text(todo.description)
       Spacer()
       Button {
         completeTapped()
@@ -29,10 +29,10 @@ struct TodoListRow_Previews: PreviewProvider {
   static var previews: some View {
     TodoListRow(
       todo: .init(
-        id: 1,
-        task: "",
+        id: UUID(),
+        description: "",
         isComplete: false,
-        insertedAt: .now
+        createdAt: .now
       )
     ) {}
   }

@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct HomeView: View {
+  @EnvironmentObject var auth: AuthController
+
   @State private var mfaStatus: MFAStatus?
 
   var body: some View {

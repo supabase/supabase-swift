@@ -6,11 +6,12 @@
 //
 
 import IdentifiedCollections
-import Supabase
 import SwiftUI
 import SwiftUINavigation
 
 struct TodoListView: View {
+  @EnvironmentObject var auth: AuthController
+
   @State var todos: IdentifiedArrayOf<Todo> = []
   @State var error: Error?
 
@@ -59,9 +60,9 @@ struct TodoListView: View {
           Button {
             withAnimation {
               createTodoRequest = .init(
-                task: "",
+                description: "",
                 isComplete: false,
-                userId: UUID()
+                ownerID: auth.currentUserID
               )
             }
           } label: {
@@ -89,14 +90,6 @@ struct TodoListView: View {
         self.error = error
       }
     }
-    .task {
-      supabase.realtime.connect()
-
-      supabase.realtime.channel("realtime:public")
-        .on("INSERT") { message in dump(["INSERT", message]) }
-        .on("UPDATE") { message in dump(["UPDATE", message]) }
-        .on("DELETE") { message in dump(["DELETE", message]) }
-    }
   }
 
   func toggleCompletion(of todo: Todo) async {
@@ -109,7 +102,7 @@ struct TodoListView: View {
 
       let updateRequest = UpdateTodoRequest(
         isComplete: updatedTodo.isComplete,
-        userId: Session.current!.user.id
+        ownerID: auth.currentUserID
       )
       updatedTodo = try await supabase.database.from("todos")
         .update(values: updateRequest, returning: .representation)

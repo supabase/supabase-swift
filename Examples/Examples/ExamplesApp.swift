@@ -10,9 +10,12 @@ import SwiftUI
 
 @main
 struct ExamplesApp: App {
+  @StateObject var auth = AuthController()
+
   var body: some Scene {
     WindowGroup {
-      RootView(model: RootViewModel())
+      RootView()
+        .environmentObject(auth)
     }
   }
 }
