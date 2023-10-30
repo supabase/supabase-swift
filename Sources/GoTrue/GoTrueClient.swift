@@ -444,6 +444,16 @@ public actor GoTrueClient {
       queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
     }
 
+    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+
+    if let codeChallenge {
+      queryItems.append(URLQueryItem(name: "code_challenge", value: codeChallenge))
+    }
+
+    if let codeChallengeMethod {
+      queryItems.append(URLQueryItem(name: "code_challenge_method", value: codeChallengeMethod))
+    }
+
     queryItems.append(contentsOf: queryParams.map(URLQueryItem.init))
 
     components.queryItems = queryItems
