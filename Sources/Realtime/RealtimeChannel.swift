@@ -363,20 +363,18 @@ public class RealtimeChannel {
     self.rejoin()
 
     joinPush
-      .receive("ok") { [weak self] message in
-        guard let self else { return }
-
-        if socket?.accessToken != nil {
-          socket?.setAuth(socket?.accessToken)
+      .delegateReceive("ok", to: self) { (self, message) in
+        if self.socket?.accessToken != nil {
+          self.socket?.setAuth(self.socket?.accessToken)
         }
 
-        guard let serverPostgresFilters = message.payload["postgres_changes"] as? [[String: String]]
+        guard let serverPostgresFilters = message.payload["postgres_changes"] as? [[String: Any]]
         else {
           callback?(.subscribed, nil)
           return
         }
 
-        let clientPostgresBindings = bindings.value["postgres_changes"] ?? []
+        let clientPostgresBindings = self.bindings.value["postgres_changes"] ?? []
         let bindingsCount = clientPostgresBindings.count
         var newPostgresBindings: [Binding] = []
 
@@ -390,17 +388,17 @@ public class RealtimeChannel {
 
           let serverPostgresFilter = serverPostgresFilters[i]
 
-          if serverPostgresFilter["event"] == event,
-            serverPostgresFilter["schema"] == schema,
-            serverPostgresFilter["table"] == table,
-            serverPostgresFilter["filter"] == filter
+          if serverPostgresFilter["event", as: String.self] == event,
+            serverPostgresFilter["schema", as: String.self] == schema,
+            serverPostgresFilter["table", as: String.self] == table,
+            serverPostgresFilter["filter", as: String.self] == filter
           {
             newPostgresBindings.append(
               Binding(
                 type: clientPostgresBinding.type,
                 filter: clientPostgresBinding.filter,
                 callback: clientPostgresBinding.callback,
-                id: serverPostgresFilter["id"]
+                id: serverPostgresFilter["id", as: Int.self].flatMap(String.init)
               )
             )
           } else {
@@ -418,11 +416,11 @@ public class RealtimeChannel {
         }
         callback?(.subscribed, nil)
       }
-      .receive("error") { message in
+      .delegateReceive("error", to: self) { (_, message) in
         // TODO: build error object
         callback?(.channelError, nil)
       }
-      .receive("timeout") { _ in
+      .delegateReceive("timeout", to: self) { (_, message) in
         callback?(.timedOut, nil)
       }
 
