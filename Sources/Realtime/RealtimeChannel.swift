@@ -355,9 +355,10 @@ public class RealtimeChannel {
       )
     }
 
-    onError { _ in
-      // TODO: build error object
-      callback?(.channelError, nil)
+    onError { message in
+      let values = message.payload.values.map { "\($0) " }
+      let error = RealtimeError(values.isEmpty ? "error" : values.joined(separator: ", "))
+      callback?(.channelError, error)
     }
 
     onClose { _ in
