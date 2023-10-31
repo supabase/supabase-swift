@@ -1,5 +1,5 @@
 PLATFORM ?= iOS Simulator,name=iPhone 15 Pro
-EXAMPLE ?= ProductSample
+EXAMPLE ?= Examples
 
 test-library:
 	xcodebuild test \
