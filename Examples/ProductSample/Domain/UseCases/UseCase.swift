@@ -8,9 +8,9 @@
 import Foundation
 import Storage
 
-protocol UseCase<Input, Output> {
-  associatedtype Input
-  associatedtype Output
+protocol UseCase<Input, Output>: Sendable {
+  associatedtype Input: Sendable
+  associatedtype Output: Sendable
 
   func execute(input: Input) -> Output
 }

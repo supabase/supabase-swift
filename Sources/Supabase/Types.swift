@@ -1,12 +1,12 @@
 import Foundation
 import GoTrue
 
-public struct SupabaseClientOptions {
+public struct SupabaseClientOptions: Sendable {
   public let db: DatabaseOptions
   public let auth: AuthOptions
   public let global: GlobalOptions
 
-  public struct DatabaseOptions {
+  public struct DatabaseOptions: Sendable {
     /// The Postgres schema which your tables belong to. Must be on the list of exposed schemas in
     /// Supabase. Defaults to `public`.
     public let schema: String
@@ -16,7 +16,7 @@ public struct SupabaseClientOptions {
     }
   }
 
-  public struct AuthOptions {
+  public struct AuthOptions: Sendable {
     /// A storage provider. Used to store the logged-in session.
     public let storage: GoTrueLocalStorage?
 
@@ -30,7 +30,7 @@ public struct SupabaseClientOptions {
     }
   }
 
-  public struct GlobalOptions {
+  public struct GlobalOptions: Sendable {
     public let headers: [String: String]
     public let session: URLSession
 

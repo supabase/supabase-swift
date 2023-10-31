@@ -8,7 +8,7 @@
 import Foundation
 import Supabase
 
-protocol AuthenticationRepository {
+protocol AuthenticationRepository: Sendable {
   var currentUserID: UUID { get async throws }
 
   func authStateListener() async -> AsyncStream<AuthenticationState>

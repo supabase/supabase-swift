@@ -8,7 +8,7 @@
 import Foundation
 import Storage
 
-protocol ProductImageStorageRepository {
+protocol ProductImageStorageRepository: Sendable {
   func uploadImage(_ params: ImageUploadParams) async throws -> String
   func downloadImage(_ key: ImageKey) async throws -> Data
 }

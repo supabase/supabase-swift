@@ -22,7 +22,7 @@ struct InsertProductDto: Encodable {
   }
 }
 
-protocol ProductRepository {
+protocol ProductRepository: Sendable {
   func createProduct(_ product: InsertProductDto) async throws
   func getProducts() async throws -> [Product]
   func getProduct(id: Product.ID) async throws -> Product

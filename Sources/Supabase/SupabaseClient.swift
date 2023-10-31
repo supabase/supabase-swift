@@ -9,7 +9,7 @@ import Foundation
 let version = _Helpers.version
 
 /// Supabase Client.
-public class SupabaseClient {
+public final class SupabaseClient {
   let options: SupabaseClientOptions
   let supabaseURL: URL
   let supabaseKey: String
