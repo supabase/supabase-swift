@@ -37,7 +37,7 @@ extension EventEmitter {
 
   static let noop = Self(
     attachListener: { (UUID(), AsyncStream.makeStream().stream) },
-    emit: { _, _ in }
+    emit: { _, _, _ in }
   )
 }
 

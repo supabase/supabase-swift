@@ -27,7 +27,7 @@ final class GoTrueClientTests: XCTestCase {
       let authStateStream = await sut.onAuthStateChange()
 
       let streamTask = Task {
-        for await event in authStateStream {
+        for await (event, _) in authStateStream {
           events.withValue {
             $0.append(event)
           }
@@ -38,7 +38,7 @@ final class GoTrueClientTests: XCTestCase {
 
       await fulfillment(of: [expectation])
 
-      XCTAssertEqual(events.value, [.signedIn])
+      XCTAssertEqual(events.value, [.initialSession])
 
       streamTask.cancel()
     }
