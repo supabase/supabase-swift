@@ -31,7 +31,10 @@ public struct SupabaseClientOptions: Sendable {
   }
 
   public struct GlobalOptions: Sendable {
+    /// Optional headers for initializing the client, it will be passed down to all sub-clients.
     public let headers: [String: String]
+
+    /// A session to use for making requests, defaults to `URLSession.shared`.
     public let session: URLSession
 
     public init(headers: [String: String] = [:], session: URLSession = .shared) {

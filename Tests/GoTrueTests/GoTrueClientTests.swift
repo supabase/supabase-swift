@@ -22,7 +22,7 @@ final class GoTrueClientTests: XCTestCase {
 
     await withDependencies {
       $0.eventEmitter = .live
-      $0.sessionManager.session = { session }
+      $0.sessionManager.session = { @Sendable _ in session }
     } operation: {
       let authStateStream = await sut.onAuthStateChange()
 

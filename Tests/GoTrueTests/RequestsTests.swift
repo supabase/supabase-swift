@@ -214,7 +214,7 @@ final class RequestsTests: XCTestCase {
     let sut = makeSUT()
 
     await withDependencies {
-      $0.sessionManager.session = {
+      $0.sessionManager.session = { @Sendable _ in
         .validSession
       }
     } operation: {
@@ -241,7 +241,7 @@ final class RequestsTests: XCTestCase {
   func testSignOut() async {
     let sut = makeSUT()
     await withDependencies {
-      $0.sessionManager.session = { .validSession }
+      $0.sessionManager.session = { @Sendable _ in .validSession }
       $0.eventEmitter = .noop
     } operation: {
       await assert {
@@ -289,7 +289,7 @@ final class RequestsTests: XCTestCase {
     let sut = makeSUT()
 
     await withDependencies {
-      $0.sessionManager.session = {
+      $0.sessionManager.session = { @Sendable _ in
         .validSession
       }
     } operation: {

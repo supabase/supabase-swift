@@ -28,8 +28,9 @@ struct AuthenticationRepositoryImpl: AuthenticationRepository {
   }
 
   func authStateListener() async -> AsyncStream<AuthenticationState> {
-    await client.onAuthStateChange().compactMap { event in
+    await client.onAuthStateChange().compactMap { event, session in
       switch event {
+      case .initialSession: session != nil ? AuthenticationState.signedIn : .signedOut
       case .signedIn: AuthenticationState.signedIn
       case .signedOut: AuthenticationState.signedOut
       case .passwordRecovery, .tokenRefreshed, .userUpdated, .userDeleted, .mfaChallengeVerified:

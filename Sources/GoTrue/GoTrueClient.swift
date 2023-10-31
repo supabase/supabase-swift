@@ -8,9 +8,11 @@ public typealias AnyJSON = _Helpers.AnyJSON
 #endif
 
 public actor GoTrueClient {
+  /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler =
     @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
 
+  /// Configuration struct represents the client configuration.
   public struct Configuration: Sendable {
     public let url: URL
     public var headers: [String: String]
@@ -20,6 +22,17 @@ public actor GoTrueClient {
     public let decoder: JSONDecoder
     public let fetch: FetchHandler
 
+    /// Initializes a GoTrueClient Configuration with optional parameters.
+    ///
+    /// - Parameters:
+    ///   - url: The base URL of the GoTrue server.
+    ///   - headers: (Optional) Custom headers to be included in requests.
+    ///   - flowType: (Optional) The authentication flow type. Default is `.implicit`.
+    ///   - localStorage: (Optional) The storage mechanism for local data. Default is a
+    /// KeychainLocalStorage.
+    ///   - encoder: (Optional) The JSON encoder to use for encoding requests.
+    ///   - decoder: (Optional) The JSON decoder to use for decoding responses.
+    ///   - fetch: (Optional) The asynchronous fetch handler for network requests.
     public init(
       url: URL,
       headers: [String: String] = [:],
@@ -81,6 +94,17 @@ public actor GoTrueClient {
   /// Namespace for accessing multi-factor authentication API.
   public let mfa: GoTrueMFA
 
+  /// Initializes a GoTrueClient with optional parameters.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the GoTrue server.
+  ///   - headers: (Optional) Custom headers to be included in requests.
+  ///   - flowType: (Optional) The authentication flow type. Default is `.implicit`.
+  ///   - localStorage: (Optional) The storage mechanism for local data. Default is a
+  /// KeychainLocalStorage.
+  ///   - encoder: (Optional) The JSON encoder to use for encoding requests.
+  ///   - decoder: (Optional) The JSON decoder to use for decoding responses.
+  ///   - fetch: (Optional) The asynchronous fetch handler for network requests.
   public init(
     url: URL,
     headers: [String: String] = [:],
@@ -103,6 +127,10 @@ public actor GoTrueClient {
     )
   }
 
+  /// Initializes a GoTrueClient with a specific configuration.
+  ///
+  /// - Parameters:
+  ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
     let api = APIClient()
 
@@ -144,12 +172,13 @@ public actor GoTrueClient {
     )
   }
 
-  public func onAuthStateChange() async -> AsyncStream<AuthChangeEvent> {
+  /// Listen for auth state changes.
+  ///
+  /// An `.initialSession` is always emitted when this method is called.
+  public func onAuthStateChange() async -> AsyncStream<(event: AuthChangeEvent, session: Session?)> {
     let (id, stream) = await eventEmitter.attachListener()
 
     Task { [id] in
-      _debug("emitInitialSessionTask start")
-      defer { _debug("emitInitialSessionTask end") }
       await emitInitialSession(forStreamWithID: id)
     }
 
@@ -192,25 +221,6 @@ public actor GoTrueClient {
     )
   }
 
-  private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {
-    if configuration.flowType == .pkce {
-      let codeVerifier = PKCE.generateCodeVerifier()
-
-      do {
-        try codeVerifierStorage.storeCodeVerifier(codeVerifier)
-      } catch {
-        _debug("Error storing code verifier: \(error)")
-      }
-
-      let codeChallenge = PKCE.generateCodeChallenge(from: codeVerifier)
-      let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
-
-      return (codeChallenge, codeChallengeMethod)
-    }
-
-    return (nil, nil)
-  }
-
   /// Creates a new user.
   /// - Parameters:
   ///   - phone: User's phone number with international prefix.
@@ -248,7 +258,7 @@ public actor GoTrueClient {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      await eventEmitter.emit(.signedIn)
+      await eventEmitter.emit(.signedIn, session: session)
     }
 
     return response
@@ -308,7 +318,7 @@ public actor GoTrueClient {
 
     if session.user.emailConfirmedAt != nil || session.user.confirmedAt != nil {
       try await sessionManager.update(session)
-      await eventEmitter.emit(.signedIn)
+      await eventEmitter.emit(.signedIn, session: session)
     }
 
     return session
@@ -411,7 +421,7 @@ public actor GoTrueClient {
       try codeVerifierStorage.deleteCodeVerifier()
 
       try await sessionManager.update(session)
-      await eventEmitter.emit(.signedIn)
+      await eventEmitter.emit(.signedIn, session: session)
 
       return session
     } catch {
@@ -524,10 +534,10 @@ public actor GoTrueClient {
     )
 
     try await sessionManager.update(session)
-    await eventEmitter.emit(.signedIn)
+    await eventEmitter.emit(.signedIn, session: session)
 
     if let type = params.first(where: { $0.name == "type" })?.value, type == "recovery" {
-      await eventEmitter.emit(.passwordRecovery)
+      await eventEmitter.emit(.passwordRecovery, session: session)
     }
 
     return session
@@ -571,7 +581,7 @@ public actor GoTrueClient {
     }
 
     try await sessionManager.update(session)
-    await eventEmitter.emit(.signedIn)
+    await eventEmitter.emit(.signedIn, session: session)
     return session
   }
 
@@ -586,9 +596,9 @@ public actor GoTrueClient {
         )
       )
       await sessionManager.remove()
-      await eventEmitter.emit(.signedOut)
+      await eventEmitter.emit(.signedOut, session: nil)
     } catch {
-      await eventEmitter.emit(.signedOut)
+      await eventEmitter.emit(.signedOut, session: nil)
       throw error
     }
   }
@@ -662,7 +672,7 @@ public actor GoTrueClient {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      await eventEmitter.emit(.signedIn)
+      await eventEmitter.emit(.signedIn, session: session)
     }
 
     return response
@@ -702,7 +712,7 @@ public actor GoTrueClient {
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
     try await sessionManager.update(session)
-    await eventEmitter.emit(.userUpdated)
+    await eventEmitter.emit(.userUpdated, session: session)
     return updatedUser
   }
 
@@ -733,14 +743,24 @@ public actor GoTrueClient {
     )
   }
 
+  /// Refresh and return a new session, regardless of expiry status.
+  /// - Parameter refreshToken: The optional refresh token to use for refreshing the session. If
+  /// none is provided then this method tries to load the refresh token from the current session.
+  /// - Returns: A new session.
   @discardableResult
-  public func refreshSession(refreshToken: String) async throws -> Session {
+  public func refreshSession(refreshToken: String? = nil) async throws -> Session {
+    var credentials = UserCredentials(refreshToken: refreshToken)
+    if credentials.refreshToken == nil {
+      credentials.refreshToken = try await sessionManager.session(shouldValidateExpiration: false)
+        .refreshToken
+    }
+
     let session = try await api.execute(
       .init(
         path: "/token",
         method: "POST",
         query: [URLQueryItem(name: "grant_type", value: "refresh_token")],
-        body: configuration.encoder.encode(UserCredentials(refreshToken: refreshToken))
+        body: configuration.encoder.encode(credentials)
       )
     ).decoded(as: Session.self, decoder: configuration.decoder)
 
@@ -749,33 +769,41 @@ public actor GoTrueClient {
       .user.confirmedAt != nil
     {
       try await sessionManager.update(session)
-      await eventEmitter.emit(.tokenRefreshed)
+      await eventEmitter.emit(.tokenRefreshed, session: session)
     }
 
     return session
   }
 
-  /// Refresh and return a new session, regardless of expiry status.
-  @discardableResult
-  public func refreshSession() async throws -> Session {
-    let refreshToken = try await session.refreshToken
-    return try await refreshSession(refreshToken: refreshToken)
-  }
-
   private func emitInitialSession(forStreamWithID id: UUID) async {
-    _debug("start")
-    defer { _debug("end") }
-
     let session = try? await session
-    await eventEmitter.emit(session != nil ? .signedIn : .signedOut, id)
+    await eventEmitter.emit(.initialSession, session, id)
   }
 
-  private func _debug(
-    _ message: String,
-    function: StaticString = #function,
-    line: UInt = #line
-  ) {
-    debugPrint("[GoTrueClient] \(function):\(line) \(message)")
+  private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {
+    if configuration.flowType == .pkce {
+      let codeVerifier = PKCE.generateCodeVerifier()
+
+      do {
+        try codeVerifierStorage.storeCodeVerifier(codeVerifier)
+      } catch {
+        assertionFailure(
+          """
+          An error occurred while storing the code verifier,
+          PKCE flow may not work as expected.
+
+          Error: \(error.localizedDescription)
+          """
+        )
+      }
+
+      let codeChallenge = PKCE.generateCodeChallenge(from: codeVerifier)
+      let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
+
+      return (codeChallenge, codeChallengeMethod)
+    }
+
+    return (nil, nil)
   }
 
   private func isImplicitGrantFlow(url: URL) -> Bool {
@@ -793,6 +821,7 @@ public actor GoTrueClient {
 }
 
 extension GoTrueClient {
+  /// Notification posted when an auth state event is triggered.
   public static let didChangeAuthStateNotification = Notification.Name(
     "DID_CHANGE_AUTH_STATE_NOTIFICATION"
   )

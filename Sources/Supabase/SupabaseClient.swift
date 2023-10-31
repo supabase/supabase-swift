@@ -61,6 +61,12 @@ public final class SupabaseClient {
   }
 
   /// Create a new client.
+  /// - Parameters:
+  ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
+  /// your project dashboard.
+  ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
+  /// your project dashboard.
+  ///   - options: Custom options to configure client's behavior.
   public init(
     supabaseURL: URL,
     supabaseKey: String,
@@ -85,7 +91,11 @@ public final class SupabaseClient {
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       headers: defaultHeaders,
       flowType: options.auth.flowType,
-      localStorage: options.auth.storage
+      localStorage: options.auth.storage,
+      fetch: {
+        // DON'T use `fetchWithAuth` method within the GoTrueClient as it may cause a deadlock.
+        try await options.global.session.data(for: $0)
+      }
     )
 
     listenForAuthEvents()
@@ -118,8 +128,7 @@ public final class SupabaseClient {
 
   private func listenForAuthEvents() {
     listenForAuthEventsTask = Task {
-      for await event in await auth.onAuthStateChange() {
-        let session = try? await auth.session
+      for await (event, session) in await auth.onAuthStateChange() {
         handleTokenChanged(event: event, session: session)
       }
     }

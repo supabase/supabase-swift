@@ -66,7 +66,7 @@ public actor GoTrueMFA {
 
     try await sessionManager.update(response)
 
-    await eventEmitter.emit(.mfaChallengeVerified)
+    await eventEmitter.emit(.mfaChallengeVerified, session: response)
 
     return response
   }
