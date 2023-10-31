@@ -2,25 +2,25 @@ import Foundation
 @_spi(Internal) import _Helpers
 
 struct EventEmitter: Sendable {
-  var attachListener: @Sendable () async -> (id: UUID, stream: AsyncStream<AuthChangeEvent>)
-  var emit: @Sendable (_ event: AuthChangeEvent, _ id: UUID?) async -> Void
+  var attachListener: @Sendable () async -> (id: UUID, stream: AsyncStream<(event: AuthChangeEvent, session: Session?)>)
+  var emit: @Sendable (_ event: AuthChangeEvent, _ session: Session?, _ id: UUID?) async -> Void
 }
 
 extension EventEmitter {
-  func emit(_ event: AuthChangeEvent) async {
-    await emit(event, nil)
+  func emit(_ event: AuthChangeEvent, session: Session?) async {
+    await emit(event, session, nil)
   }
 }
 
 extension EventEmitter {
   static var live: Self = {
-    let continuations = ActorIsolated([UUID: AsyncStream<AuthChangeEvent>.Continuation]())
+    let continuations = ActorIsolated([UUID: AsyncStream<(event: AuthChangeEvent, session: Session?)>.Continuation]())
 
     return Self(
       attachListener: {
         let id = UUID()
 
-        let (stream, continuation) = AsyncStream<AuthChangeEvent>.makeStream()
+        let (stream, continuation) = AsyncStream<(event: AuthChangeEvent, session: Session?)>.makeStream()
 
         continuation.onTermination = { [id] _ in
           continuations.withValue {
@@ -34,12 +34,16 @@ extension EventEmitter {
 
         return (id, stream)
       },
-      emit: { event, id in
+      emit: { event, session, id in
+        NotificationCenter.default.post(
+          name: GoTrueClient.didChangeAuthStateNotification,
+          object: nil
+        )
         if let id {
-          continuations.value[id]?.yield(event)
+          continuations.value[id]?.yield((event, session))
         } else {
           for continuation in continuations.value.values {
-            continuation.yield(event)
+            continuation.yield((event, session))
           }
         }
       }
