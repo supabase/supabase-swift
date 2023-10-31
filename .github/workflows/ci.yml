@@ -39,7 +39,6 @@ jobs:
   #         - iOS Simulator,name=iPhone 14 Pro
   #       example:
   #         - Examples
-  #         - ProductSample
   #   runs-on: macos-13
   #   name: Build Example
   #   steps:
