@@ -42,7 +42,7 @@ public protocol PhoenixTransport {
    - Parameters:
    - headers: Headers to include in the URLRequests when opening the Websocket connection. Can be empty [:]
    */
-  func connect(with headers: [String: Any])
+  func connect(with headers: [String: String])
 
   /**
    Disconnect from the server.
@@ -188,7 +188,7 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   public var readyState: PhoenixTransportReadyState = .closed
   public var delegate: PhoenixTransportDelegate? = nil
 
-  public func connect(with headers: [String: Any]) {
+  public func connect(with headers: [String: String]) {
     // Set the transport state as connecting
     readyState = .connecting
 

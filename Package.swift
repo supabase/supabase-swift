@@ -31,7 +31,7 @@ let package = Package(
   ],
   targets: [
     .target(name: "_Helpers"),
-    .target(name: "Functions"),
+    .target(name: "Functions", dependencies: ["_Helpers"]),
     .testTarget(name: "FunctionsTests", dependencies: ["Functions"]),
     .target(
       name: "GoTrue",
@@ -49,7 +49,7 @@ let package = Package(
       ],
       resources: [.process("Resources")]
     ),
-    .target(name: "PostgREST"),
+    .target(name: "PostgREST", dependencies: ["_Helpers"]),
     .testTarget(
       name: "PostgRESTTests",
       dependencies: [

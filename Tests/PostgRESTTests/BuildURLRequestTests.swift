@@ -23,7 +23,9 @@ final class BuildURLRequestTests: XCTestCase {
     let runningTestCase = ActorIsolated(TestCase?.none)
 
     let client = PostgrestClient(
-      url: url, schema: nil,
+      url: url,
+      schema: nil,
+      headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
       fetch: { @MainActor request in
         runningTestCase.withValue { runningTestCase in
           guard let runningTestCase else {

@@ -96,7 +96,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public var timeout: TimeInterval = Defaults.timeoutInterval
 
   /// Custom headers to be added to the socket connection request
-  public var headers: [String: Any] = [:]
+  public var headers: [String: String] = [:]
 
   /// Interval between sending a heartbeat
   public var heartbeatInterval: TimeInterval = Defaults.heartbeatInterval
@@ -176,11 +176,13 @@ public class RealtimeClient: PhoenixTransportDelegate {
   @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
   public convenience init(
     _ endPoint: String,
+    headers: [String: String] = [:],
     params: Payload? = nil,
     vsn: String = Defaults.vsn
   ) {
     self.init(
       endPoint: endPoint,
+      headers: headers,
       transport: { url in URLSessionTransport(url: url) },
       paramsClosure: { params },
       vsn: vsn
@@ -190,11 +192,13 @@ public class RealtimeClient: PhoenixTransportDelegate {
   @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
   public convenience init(
     _ endPoint: String,
+    headers: [String: String] = [:],
     paramsClosure: PayloadClosure?,
     vsn: String = Defaults.vsn
   ) {
     self.init(
       endPoint: endPoint,
+      headers: headers,
       transport: { url in URLSessionTransport(url: url) },
       paramsClosure: paramsClosure,
       vsn: vsn
@@ -203,6 +207,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   public init(
     endPoint: String,
+    headers: [String: String] = [:],
     transport: @escaping ((URL) -> PhoenixTransport),
     paramsClosure: PayloadClosure? = nil,
     vsn: String = Defaults.vsn
@@ -211,6 +216,13 @@ public class RealtimeClient: PhoenixTransportDelegate {
     self.paramsClosure = paramsClosure
     self.endPoint = endPoint
     self.vsn = vsn
+
+    var headers = headers
+    if headers["X-Client-Info"] == nil {
+      headers["X-Client-Info"] = "realtime-swift/\(version)"
+    }
+    self.headers = headers
+
     let params = paramsClosure?()
     if let jwt = (params?["Authorization"] as? String)?.split(separator: " ").last {
       accessToken = String(jwt)

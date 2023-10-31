@@ -1,9 +1,12 @@
 import Foundation
+@_spi(Internal) import _Helpers
 @_exported import Functions
 @_exported import GoTrue
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
+
+let version = _Helpers.version
 
 /// Supabase Client.
 public class SupabaseClient {
@@ -39,6 +42,7 @@ public class SupabaseClient {
   /// Realtime client for Supabase
   public private(set) lazy var realtime = RealtimeClient(
     realtimeURL.absoluteString,
+    headers: defaultHeaders,
     params: defaultHeaders
   )
 

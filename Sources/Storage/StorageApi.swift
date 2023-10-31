@@ -9,6 +9,10 @@ public class StorageApi {
   public let configuration: StorageClientConfiguration
 
   public init(configuration: StorageClientConfiguration) {
+    var configuration = configuration
+    if configuration.headers["X-Client-Info"] == nil {
+      configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
+    }
     self.configuration = configuration
   }
 

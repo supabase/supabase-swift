@@ -1,4 +1,7 @@
 import Foundation
+@_spi(Internal) import _Helpers
+
+let version = _Helpers.version
 
 /// PostgREST client.
 public actor PostgrestClient {
@@ -46,7 +49,9 @@ public actor PostgrestClient {
   /// - Parameter configuration: The configuration for the client.
   public init(configuration: Configuration) {
     var configuration = configuration
-    configuration.headers["X-Client-Info"] = "postgrest-swift/\(version)"
+    if configuration.headers["X-Client-Info"] == nil {
+      configuration.headers["X-Client-Info"] = "postgrest-swift/\(version)"
+    }
     self.configuration = configuration
   }
 

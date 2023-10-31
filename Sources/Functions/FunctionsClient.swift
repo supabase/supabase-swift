@@ -1,4 +1,7 @@
 import Foundation
+@_spi(Internal) import _Helpers
+
+let version = _Helpers.version
 
 /// An actor representing a client for invoking functions.
 public actor FunctionsClient {
@@ -27,7 +30,9 @@ public actor FunctionsClient {
   ) {
     self.url = url
     self.headers = headers
-    self.headers["X-Client-Info"] = "functions-swift/\(version)"
+    if headers["X-Client-Info"] == nil {
+      self.headers["X-Client-Info"] = "functions-swift/\(version)"
+    }
     self.fetch = fetch
   }
 

@@ -339,7 +339,7 @@ final class RequestsTests: XCTestCase {
 
     let configuration = GoTrueClient.Configuration(
       url: clientURL,
-      headers: ["apikey": "dummy.api.key"],
+      headers: ["apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       encoder: encoder,
       fetch: { request in
         DispatchQueue.main.sync {
