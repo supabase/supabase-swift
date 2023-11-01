@@ -232,7 +232,7 @@ public class StorageFileApi: StorageApi {
   }
 
   /// Downloads a file from a private bucket. For public buckets, make a request to the URL returned
-  /// from ``getPublicURL`` instead.
+  /// from ``StorageFileApi/getPublicURL(path:download:fileName:options:)`` instead.
   /// - Parameters:
   ///   - path: The file path to be downloaded, including the path and file name. For example
   /// `folder/image.png`.

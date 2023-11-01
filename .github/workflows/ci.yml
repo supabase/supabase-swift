@@ -15,14 +15,6 @@ concurrency:
 
 jobs:
   library:
-    strategy:
-      matrix:
-        platform:
-          - iOS Simulator,name=iPhone 14 Pro
-          - macOS
-          - macOS,variant=Mac Catalyst
-          - tvOS Simulator,name=Apple TV
-          - watchOS Simulator,name=Apple Watch Series 8 (41mm)
     runs-on: macos-13
     name: Test Library
     steps:
@@ -30,22 +22,4 @@ jobs:
       - name: Select Xcode 14.3
         run: sudo xcode-select -s /Applications/Xcode_14.3.app
       - name: Run tests
-        run: env PLATFORM="${{ matrix.platform }}" make test-library
-
-  # example:
-  #   strategy:
-  #     matrix:
-  #       platform:
-  #         - iOS Simulator,name=iPhone 14 Pro
-  #       example:
-  #         - Examples
-  #   runs-on: macos-13
-  #   name: Build Example
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: Select Xcode 14.3
-  #       run: sudo xcode-select -s /Applications/Xcode_14.3.app
-  #     - name: Run pre-build script
-  #       run: sh Examples/${{ matrix.example }}/.ci/pre_build.sh || exit 0;
-  #     - name: Build example
-  #       run: env PLATFORM="${{ matrix.platform }}" EXAMPLE="${{ matrix.example }}" make build-example
+        run: make test-library

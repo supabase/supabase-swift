@@ -1,4 +1,7 @@
 import Foundation
+@_spi(Internal) import _Helpers
+
+public typealias AnyJSON = _Helpers.AnyJSON
 
 public enum AuthChangeEvent: String, Sendable {
   case initialSession = "INITIAL_SESSION"
@@ -424,12 +427,12 @@ public struct AuthMFAEnrollResponse: Decodable, Hashable, Sendable {
 }
 
 public struct MFAChallengeParams: Encodable, Hashable {
-  /// ID of the factor to be challenged. Returned in ``GoTrueMFA.enroll(params:)``.
+  /// ID of the factor to be challenged. Returned in ``GoTrueMFA/enroll(params:)``.
   public let factorId: String
 }
 
 public struct MFAVerifyParams: Encodable, Hashable {
-  /// ID of the factor being verified. Returned in ``GoTrueMFA.enroll(params:)``.
+  /// ID of the factor being verified. Returned in ``GoTrueMFA/enroll(params:)``.
   public let factorId: String
 
   /// ID of the challenge being verified. Returned in challenge().
@@ -440,7 +443,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
 }
 
 public struct MFAUnenrollParams: Encodable, Hashable, Sendable {
-  /// ID of the factor to unenroll. Returned in ``GoTrueMFA.enroll(params:)``.
+  /// ID of the factor to unenroll. Returned in ``GoTrueMFA/enroll(params:)``.
   public let factorId: String
 
   public init(factorId: String) {
@@ -449,7 +452,7 @@ public struct MFAUnenrollParams: Encodable, Hashable, Sendable {
 }
 
 public struct MFAChallengeAndVerifyParams: Encodable, Hashable, Sendable {
-  /// ID of the factor to be challenged. Returned in ``GoTrueMFA.enroll(params:)``.
+  /// ID of the factor to be challenged. Returned in ``GoTrueMFA/enroll(params:)``.
   public let factorId: String
 
   /// Verification code provided by the user.
