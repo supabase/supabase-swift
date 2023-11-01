@@ -9,7 +9,7 @@ test-library:
 	for platform in "$(PLATFORM_IOS)" "$(PLATFORM_MACOS)" "$(PLATFORM_MAC_CATALYST)" "$(PLATFORM_TVOS)" "$(PLATFORM_WATCHOS)"; do \
 		xcodebuild test \
 			-workspace supabase-swift.xcworkspace \
-			-scheme Supabase-Package \
+			-scheme Supabase \
 			-destination platform="$$platform" || exit 1; \
 	done;
 

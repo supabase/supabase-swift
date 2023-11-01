@@ -7,7 +7,4 @@
    <FileRef
       location = "container:Examples/Examples.xcodeproj">
    </FileRef>
-   <FileRef
-      location = "group:Supabase.xctestplan">
-   </FileRef>
 </Workspace>
