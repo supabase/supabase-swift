@@ -82,7 +82,7 @@ public actor GoTrueClient {
 
   /// Returns the session, refreshing it if necessary.
   ///
-  /// If no session can be found, a ``GoTrueError.sessionNotFound`` error is thrown.
+  /// If no session can be found, a ``GoTrueError/sessionNotFound`` error is thrown.
   public var session: Session {
     get async throws {
       try await sessionManager.session()

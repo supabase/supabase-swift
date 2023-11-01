@@ -13,6 +13,27 @@ test-library:
 			-destination platform="$$platform" || exit 1; \
 	done;
 
+build-for-library-evolution:
+	swift build \
+		-c release \
+		--target Supabase \
+		-Xswiftc -emit-module-interface \
+		-Xswiftc -enable-library-evolution
+
+
+DOC_WARNINGS = $(shell xcodebuild clean docbuild \
+	-scheme Supabase \
+	-destination platform="$(PLATFORM_MACOS)" \
+	-quiet \
+	2>&1 \
+	| grep "couldn't be resolved to known documentation" \
+	| sed 's|$(PWD)|.|g' \
+	| tr '\n' '\1')
+test-docs:
+	@test "$(DOC_WARNINGS)" = "" \
+		|| (echo "xcodebuild docbuild failed:\n\n$(DOC_WARNINGS)" | tr '\1' '\n' \
+		&& exit 1)
+
 build-example:
 	xcodebuild build \
 		-workspace supabase-swift.xcworkspace \
