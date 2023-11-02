@@ -1,7 +1,7 @@
 import Foundation
 
 @_spi(Internal)
-public struct HTTPClient {
+public struct HTTPClient: Sendable {
   public typealias FetchHandler = @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
   let fetchHandler: FetchHandler
@@ -23,14 +23,14 @@ public struct HTTPClient {
 }
 
 @_spi(Internal)
-public struct Request {
+public struct Request: Sendable {
   public var path: String
   public var method: Method
   public var query: [URLQueryItem]
   public var headers: [String: String]
   public var body: Data?
 
-  public enum Method: String {
+  public enum Method: String, Sendable {
     case get = "GET"
     case post = "POST"
     case put = "PUT"
@@ -129,7 +129,7 @@ extension CharacterSet {
 }
 
 @_spi(Internal)
-public struct Response {
+public struct Response: Sendable {
   public let data: Data
   public let response: HTTPURLResponse
 
