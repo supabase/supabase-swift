@@ -102,11 +102,7 @@ public actor PostgrestClient {
   public func from(_ table: String) -> PostgrestQueryBuilder {
     PostgrestQueryBuilder(
       configuration: configuration,
-      url: configuration.url.appendingPathComponent(table),
-      queryParams: [],
-      headers: configuration.headers,
-      method: "GET",
-      body: nil
+      request: .init(path: table, method: .get, headers: configuration.headers)
     )
   }
 
@@ -125,11 +121,7 @@ public actor PostgrestClient {
   ) throws -> PostgrestTransformBuilder {
     try PostgrestRpcBuilder(
       configuration: configuration,
-      url: configuration.url.appendingPathComponent("rpc").appendingPathComponent(fn),
-      queryParams: [],
-      headers: configuration.headers,
-      method: "POST",
-      body: nil
+      request: Request(path: "/rpc/\(fn)", method: .post, headers: configuration.headers)
     ).rpc(params: params, count: count)
   }
 

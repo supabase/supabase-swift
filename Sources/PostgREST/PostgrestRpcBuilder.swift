@@ -1,4 +1,5 @@
 import Foundation
+@_spi(Internal) import _Helpers
 
 struct NoParams: Encodable {}
 
@@ -20,18 +21,20 @@ public final class PostgrestRpcBuilder: PostgrestBuilder {
     // https://github.com/supabase/postgrest-js/blob/master/src/lib/PostgrestRpcBuilder.ts#L38
     assert(head == false, "HEAD is not currently supported yet.")
 
-    method = "POST"
-    if params is NoParams {
-      // noop
-    } else {
-      body = try configuration.encoder.encode(params)
-    }
-
-    if let count {
-      if let prefer = headers["Prefer"] {
-        headers["Prefer"] = "\(prefer),count=\(count.rawValue)"
+    try mutableState.withValue {
+      $0.request.method = .post
+      if params is NoParams {
+        // noop
       } else {
-        headers["Prefer"] = "count=\(count.rawValue)"
+        $0.request.body = try configuration.encoder.encode(params)
+      }
+
+      if let count {
+        if let prefer = $0.request.headers["Prefer"] {
+          $0.request.headers["Prefer"] = "\(prefer),count=\(count.rawValue)"
+        } else {
+          $0.request.headers["Prefer"] = "count=\(count.rawValue)"
+        }
       }
     }
 

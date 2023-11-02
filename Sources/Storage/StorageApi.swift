@@ -5,8 +5,10 @@ import Foundation
   import FoundationNetworking
 #endif
 
-public class StorageApi {
+public class StorageApi: @unchecked Sendable {
   public let configuration: StorageClientConfiguration
+
+  private let http: HTTPClient
 
   public init(configuration: StorageClientConfiguration) {
     var configuration = configuration
@@ -14,31 +16,28 @@ public class StorageApi {
       configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
     }
     self.configuration = configuration
+    http = HTTPClient(fetchHandler: configuration.session.fetch)
   }
 
   @discardableResult
   func execute(_ request: Request) async throws -> Response {
     var request = request
     request.headers.merge(configuration.headers) { request, _ in request }
-    let urlRequest = try request.urlRequest(withBaseURL: configuration.url)
 
-    let (data, response) = try await configuration.session.fetch(urlRequest)
-    guard let httpResponse = response as? HTTPURLResponse else {
-      throw URLError(.badServerResponse)
-    }
+    let response = try await http.fetch(request, baseURL: configuration.url)
 
-    guard (200 ..< 300).contains(httpResponse.statusCode) else {
-      let error = try configuration.decoder.decode(StorageError.self, from: data)
+    guard (200 ..< 300).contains(response.statusCode) else {
+      let error = try configuration.decoder.decode(StorageError.self, from: response.data)
       throw error
     }
 
-    return Response(data: data, response: httpResponse)
+    return response
   }
 }
 
 extension Request {
   init(
-    path: String, method: String, formData: FormData, options: FileOptions,
+    path: String, method: Method, formData: FormData, options: FileOptions,
     headers: [String: String] = [:]
   ) {
     var headers = headers

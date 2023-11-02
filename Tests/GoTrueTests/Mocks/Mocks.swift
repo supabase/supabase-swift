@@ -57,7 +57,7 @@ extension Dependencies {
   static let mock = Dependencies(
     configuration: GoTrueClient.Configuration(url: clientURL),
     sessionManager: .mock,
-    api: APIClient(),
+    api: APIClient(http: HTTPClient(fetchHandler: unimplemented("HTTPClient.fetch"))),
     eventEmitter: .mock,
     sessionStorage: .mock,
     sessionRefresher: .mock,

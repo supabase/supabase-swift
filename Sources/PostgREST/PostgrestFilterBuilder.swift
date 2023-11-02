@@ -1,4 +1,5 @@
 import Foundation
+@_spi(Internal) import _Helpers
 
 public class PostgrestFilterBuilder: PostgrestTransformBuilder {
   public enum Operator: String, CaseIterable {
@@ -11,156 +12,236 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
   public func not(column: String, operator op: Operator, value: URLQueryRepresentable)
     -> PostgrestFilterBuilder
   {
-    appendSearchParams(name: column, value: "not.\(op.rawValue).\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(
+        name: column,
+        value: "not.\(op.rawValue).\(value.queryValue)"
+      ))
+    }
+
     return self
   }
 
   public func or(filters: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: "or", value: "(\(filters.queryValue.queryValue))")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: "or", value: "(\(filters.queryValue.queryValue))"))
+    }
     return self
   }
 
   public func eq(column: String, value: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "eq.\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "eq.\(value.queryValue)"))
+    }
     return self
   }
 
   public func neq(column: String, value: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "neq.\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "neq.\(value.queryValue)"))
+    }
     return self
   }
 
   public func gt(column: String, value: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "gt.\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "gt.\(value.queryValue)"))
+    }
     return self
   }
 
   public func gte(column: String, value: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "gte.\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "gte.\(value.queryValue)"))
+    }
     return self
   }
 
   public func lt(column: String, value: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "lt.\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "lt.\(value.queryValue)"))
+    }
     return self
   }
 
   public func lte(column: String, value: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "lte.\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "lte.\(value.queryValue)"))
+    }
     return self
   }
 
   public func like(column: String, value: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "like.\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "like.\(value.queryValue)"))
+    }
     return self
   }
 
   public func ilike(column: String, value: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "ilike.\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "ilike.\(value.queryValue)"))
+    }
     return self
   }
 
   public func `is`(column: String, value: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "is.\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "is.\(value.queryValue)"))
+    }
     return self
   }
 
   public func `in`(column: String, value: [URLQueryRepresentable]) -> PostgrestFilterBuilder {
-    appendSearchParams(
-      name: column,
-      value: "in.(\(value.map(\.queryValue).joined(separator: ",")))"
-    )
+    mutableState.withValue {
+      $0.request.query.append(
+        URLQueryItem(
+          name: column,
+          value: "in.(\(value.map(\.queryValue).joined(separator: ",")))"
+        )
+      )
+    }
     return self
   }
 
   public func contains(column: String, value: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "cs.\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "cs.\(value.queryValue)"))
+    }
     return self
   }
 
   public func rangeLt(column: String, range: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "sl.\(range.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "sl.\(range.queryValue)"))
+    }
     return self
   }
 
   public func rangeGt(column: String, range: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "sr.\(range.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "sr.\(range.queryValue)"))
+    }
     return self
   }
 
   public func rangeGte(column: String, range: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "nxl.\(range.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "nxl.\(range.queryValue)"))
+    }
     return self
   }
 
   public func rangeLte(column: String, range: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "nxr.\(range.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "nxr.\(range.queryValue)"))
+    }
     return self
   }
 
   public func rangeAdjacent(column: String, range: URLQueryRepresentable) -> PostgrestFilterBuilder
   {
-    appendSearchParams(name: column, value: "adj.\(range.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "adj.\(range.queryValue)"))
+    }
     return self
   }
 
   public func overlaps(column: String, value: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "ov.\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "ov.\(value.queryValue)"))
+    }
     return self
   }
 
   public func textSearch(column: String, range: URLQueryRepresentable) -> PostgrestFilterBuilder {
-    appendSearchParams(name: column, value: "adj.\(range.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "adj.\(range.queryValue)"))
+    }
     return self
   }
 
   public func textSearch(
     column: String, query: URLQueryRepresentable, config: String? = nil, type: TextSearchType? = nil
   ) -> PostgrestFilterBuilder {
-    appendSearchParams(
-      name: column, value: "\(type?.rawValue ?? "")fts\(config ?? "").\(query.queryValue)"
-    )
+    mutableState.withValue {
+      $0.request.query.append(
+        URLQueryItem(
+          name: column, value: "\(type?.rawValue ?? "")fts\(config ?? "").\(query.queryValue)"
+        )
+      )
+    }
     return self
   }
 
   public func fts(column: String, query: URLQueryRepresentable, config: String? = nil)
     -> PostgrestFilterBuilder
   {
-    appendSearchParams(name: column, value: "fts\(config ?? "").\(query.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(
+        name: column,
+        value: "fts\(config ?? "").\(query.queryValue)"
+      ))
+    }
     return self
   }
 
   public func plfts(column: String, query: URLQueryRepresentable, config: String? = nil)
     -> PostgrestFilterBuilder
   {
-    appendSearchParams(name: column, value: "plfts\(config ?? "").\(query.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(
+        name: column,
+        value: "plfts\(config ?? "").\(query.queryValue)"
+      ))
+    }
     return self
   }
 
   public func phfts(column: String, query: URLQueryRepresentable, config: String? = nil)
     -> PostgrestFilterBuilder
   {
-    appendSearchParams(name: column, value: "phfts\(config ?? "").\(query.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(
+        name: column,
+        value: "phfts\(config ?? "").\(query.queryValue)"
+      ))
+    }
     return self
   }
 
   public func wfts(column: String, query: URLQueryRepresentable, config: String? = nil)
     -> PostgrestFilterBuilder
   {
-    appendSearchParams(name: column, value: "wfts\(config ?? "").\(query.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(
+        name: column,
+        value: "wfts\(config ?? "").\(query.queryValue)"
+      ))
+    }
     return self
   }
 
   public func filter(column: String, operator: Operator, value: URLQueryRepresentable)
     -> PostgrestFilterBuilder
   {
-    appendSearchParams(name: column, value: "\(`operator`.rawValue).\(value.queryValue)")
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(
+        name: column,
+        value: "\(`operator`.rawValue).\(value.queryValue)"
+      ))
+    }
     return self
   }
 
   public func match(query: [String: URLQueryRepresentable]) -> PostgrestFilterBuilder {
-    query.forEach { key, value in
-      appendSearchParams(name: key, value: "eq.\(value.queryValue)")
+    mutableState.withValue { mutableState in
+      query.forEach { key, value in
+        mutableState.request.query.append(URLQueryItem(
+          name: key,
+          value: "eq.\(value.queryValue)"
+        ))
+      }
     }
     return self
   }

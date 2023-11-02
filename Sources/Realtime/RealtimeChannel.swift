@@ -740,20 +740,16 @@ public class RealtimeChannel {
       do {
         let request = try Request(
           path: "",
-          method: "POST",
+          method: .post,
           headers: headers.mapValues { "\($0)" },
           body: JSONSerialization.data(withJSONObject: body)
         )
-        let urlRequest = try request.urlRequest(withBaseURL: broadcastEndpointURL)
-        let (_, response) = try await URLSession.shared.data(for: urlRequest)
-        guard let httpResponse = response as? HTTPURLResponse else {
+
+        let response = try await socket?.http.fetch(request, baseURL: broadcastEndpointURL)
+        guard let response, 200 ..< 300 ~= response.statusCode else {
           return .error
         }
-        if 200 ..< 300 ~= httpResponse.statusCode {
-          return .ok
-        }
-
-        return .error
+        return .ok
       } catch {
         return .error
       }

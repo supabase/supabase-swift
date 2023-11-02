@@ -356,8 +356,7 @@ final class RequestsTests: XCTestCase {
       }
     )
 
-    // TODO: Inject a mocked APIClient
-    let api = APIClient()
+    let api = APIClient(http: HTTPClient(fetchHandler: configuration.fetch))
 
     return GoTrueClient(
       configuration: configuration,

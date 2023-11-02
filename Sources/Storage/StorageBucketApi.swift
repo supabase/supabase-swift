@@ -9,7 +9,7 @@ import Foundation
 public class StorageBucketApi: StorageApi {
   /// Retrieves the details of all Storage buckets within an existing product.
   public func listBuckets() async throws -> [Bucket] {
-    try await execute(Request(path: "/bucket", method: "GET"))
+    try await execute(Request(path: "/bucket", method: .get))
       .decoded(decoder: configuration.decoder)
   }
 
@@ -17,7 +17,7 @@ public class StorageBucketApi: StorageApi {
   /// - Parameters:
   ///   - id: The unique identifier of the bucket you would like to retrieve.
   public func getBucket(id: String) async throws -> Bucket {
-    try await execute(Request(path: "/bucket/\(id)", method: "GET"))
+    try await execute(Request(path: "/bucket/\(id)", method: .get))
       .decoded(decoder: configuration.decoder)
   }
 
@@ -36,7 +36,7 @@ public class StorageBucketApi: StorageApi {
     try await execute(
       Request(
         path: "/bucket",
-        method: "POST",
+        method: .post,
         body: configuration.encoder.encode(
           BucketParameters(
             id: id,
@@ -57,7 +57,7 @@ public class StorageBucketApi: StorageApi {
     try await execute(
       Request(
         path: "/bucket/\(id)",
-        method: "PUT",
+        method: .put,
         body: configuration.encoder.encode(
           BucketParameters(
             id: id,
@@ -75,7 +75,7 @@ public class StorageBucketApi: StorageApi {
   /// - Parameters:
   ///   - id: The unique identifier of the bucket you would like to empty.
   public func emptyBucket(id: String) async throws {
-    try await execute(Request(path: "/bucket/\(id)/empty", method: "POST"))
+    try await execute(Request(path: "/bucket/\(id)/empty", method: .post))
   }
 
   /// Deletes an existing bucket. A bucket can't be deleted with existing objects inside it.
@@ -83,6 +83,6 @@ public class StorageBucketApi: StorageApi {
   /// - Parameters:
   ///   - id: The unique identifier of the bucket you would like to delete.
   public func deleteBucket(id: String) async throws {
-    try await execute(Request(path: "/bucket/\(id)", method: "DELETE"))
+    try await execute(Request(path: "/bucket/\(id)", method: .delete))
   }
 }
