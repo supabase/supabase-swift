@@ -740,7 +740,7 @@ public class RealtimeChannel {
       do {
         let request = try Request(
           path: "",
-          method: "POST",
+          method: .post,
           headers: headers.mapValues { "\($0)" },
           body: JSONSerialization.data(withJSONObject: body)
         )
