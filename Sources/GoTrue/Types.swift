@@ -273,22 +273,47 @@ struct OTPParams: Codable, Hashable, Sendable {
   var codeChallengeMethod: String?
 }
 
-struct VerifyOTPParams: Codable, Hashable, Sendable {
-  var email: String?
-  var phone: String?
+enum VerifyOTPParams: Encodable {
+  case email(VerifyEmailOTPParams)
+  case mobile(VerifyMobileOTPParams)
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.singleValueContainer()
+    switch self {
+    case let .email(value):
+      try container.encode(value)
+    case let .mobile(value):
+      try container.encode(value)
+    }
+  }
+}
+
+struct VerifyEmailOTPParams: Encodable, Hashable, Sendable {
+  var email: String
   var token: String
-  var type: OTPType
+  var type: EmailOTPType
   var gotrueMetaSecurity: GoTrueMetaSecurity?
 }
 
-public enum OTPType: String, Codable, CaseIterable, Sendable {
+struct VerifyMobileOTPParams: Encodable, Hashable {
+  var phone: String
+  var token: String
+  var type: MobileOTPType
+  var gotrueMetaSecurity: GoTrueMetaSecurity?
+}
+
+public enum MobileOTPType: String, Encodable, Sendable {
   case sms
   case phoneChange = "phone_change"
+}
+
+public enum EmailOTPType: String, Encodable, CaseIterable, Sendable {
   case signup
   case invite
   case magiclink
   case recovery
   case emailChange = "email_change"
+  case email
 }
 
 public enum AuthResponse: Codable, Hashable, Sendable {
