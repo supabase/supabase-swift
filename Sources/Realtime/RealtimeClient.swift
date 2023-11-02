@@ -166,6 +166,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// The connection to the server
   var connection: PhoenixTransport? = nil
 
+  /// The HTTPClient to perform HTTP requests.
+  let http: HTTPClient
+
   var accessToken: String?
 
   // ----------------------------------------------------------------------
@@ -222,6 +225,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       headers["X-Client-Info"] = "realtime-swift/\(version)"
     }
     self.headers = headers
+    http = HTTPClient(fetchHandler: { try await URLSession.shared.data(for: $0) })
 
     let params = paramsClosure?()
     if let jwt = (params?["Authorization"] as? String)?.split(separator: " ").last {

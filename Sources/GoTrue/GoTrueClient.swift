@@ -130,7 +130,7 @@ public actor GoTrueClient {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    let api = APIClient()
+    let api = APIClient(http: HTTPClient(fetchHandler: configuration.fetch))
 
     self.init(
       configuration: configuration,

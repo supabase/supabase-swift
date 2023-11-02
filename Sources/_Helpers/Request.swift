@@ -1,5 +1,27 @@
 import Foundation
 
+public struct HTTPClient {
+  public typealias FetchHandler = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+
+  let fetchHandler: FetchHandler
+
+  public init(fetchHandler: @escaping FetchHandler) {
+    self.fetchHandler = fetchHandler
+  }
+
+  @_spi(Internal)
+  public func fetch(_ request: Request, baseURL: URL) async throws -> Response {
+    let urlRequest = try request.urlRequest(withBaseURL: baseURL)
+    let (data, response) = try await fetchHandler(urlRequest)
+
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw URLError(.badServerResponse)
+    }
+
+    return Response(data: data, response: httpResponse)
+  }
+}
+
 @_spi(Internal)
 public struct Request {
   public var path: String
@@ -110,6 +132,10 @@ extension CharacterSet {
 public struct Response {
   public let data: Data
   public let response: HTTPURLResponse
+
+  public var statusCode: Int {
+    response.statusCode
+  }
 
   public init(data: Data, response: HTTPURLResponse) {
     self.data = data

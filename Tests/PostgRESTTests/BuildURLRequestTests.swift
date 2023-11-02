@@ -26,13 +26,13 @@ final class BuildURLRequestTests: XCTestCase {
       url: url,
       schema: nil,
       headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
-      fetch: { @MainActor request in
-        runningTestCase.withValue { runningTestCase in
-          guard let runningTestCase else {
-            XCTFail("execute called without a runningTestCase set.")
-            return (Data(), URLResponse())
-          }
+      fetch: { request in
+        guard let runningTestCase = runningTestCase.value else {
+          XCTFail("execute called without a runningTestCase set.")
+          return (Data(), URLResponse())
+        }
 
+        await MainActor.run { [runningTestCase] in
           assertSnapshot(
             matching: request,
             as: .curl,
@@ -40,9 +40,9 @@ final class BuildURLRequestTests: XCTestCase {
             record: runningTestCase.record,
             testName: "testBuildRequest()"
           )
-
-          return (Data(), URLResponse())
         }
+
+        return (Data(), URLResponse())
       }
     )
 

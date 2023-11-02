@@ -57,7 +57,7 @@ final class GoTrueClientTests: XCTestCase {
       }
     )
 
-    api = APIClient()
+    api = APIClient(http: HTTPClient(fetchHandler: configuration.fetch))
 
     let sut = GoTrueClient(
       configuration: configuration,

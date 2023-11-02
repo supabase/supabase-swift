@@ -10,6 +10,12 @@ actor APIClient {
     Dependencies.current.value!.sessionManager
   }
 
+  let http: HTTPClient
+
+  init(http: HTTPClient) {
+    self.http = http
+  }
+
   @discardableResult
   func authorizedExecute(_ request: Request) async throws -> Response {
     let session = try await sessionManager.session()
@@ -24,18 +30,17 @@ actor APIClient {
   func execute(_ request: Request) async throws -> Response {
     var request = request
     request.headers.merge(configuration.headers) { r, _ in r }
-    let urlRequest = try request.urlRequest(withBaseURL: configuration.url)
 
-    let (data, response) = try await configuration.fetch(urlRequest)
-    guard let httpResponse = response as? HTTPURLResponse else {
-      throw URLError(.badServerResponse)
-    }
+    let response = try await http.fetch(request, baseURL: configuration.url)
 
-    guard (200 ..< 300).contains(httpResponse.statusCode) else {
-      let apiError = try configuration.decoder.decode(GoTrueError.APIError.self, from: data)
+    guard (200 ..< 300).contains(response.statusCode) else {
+      let apiError = try configuration.decoder.decode(
+        GoTrueError.APIError.self,
+        from: response.data
+      )
       throw GoTrueError.api(apiError)
     }
 
-    return Response(data: data, response: httpResponse)
+    return response
   }
 }

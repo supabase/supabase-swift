@@ -9,6 +9,7 @@ import Foundation
 public class PostgrestBuilder: @unchecked Sendable {
   /// The configuration for the PostgREST client.
   let configuration: PostgrestClient.Configuration
+  let http: HTTPClient
 
   struct MutableState {
     var request: Request
@@ -24,6 +25,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     request: Request
   ) {
     self.configuration = configuration
+    http = HTTPClient(fetchHandler: configuration.fetch)
 
     mutableState = ActorIsolated(
       MutableState(
@@ -73,7 +75,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   }
 
   private func execute<T>(decode: (Data) throws -> T) async throws -> PostgrestResponse<T> {
-    let urlRequest = try mutableState.withValue {
+    mutableState.withValue {
       if $0.fetchOptions.head {
         $0.request.method = .head
       }
@@ -98,21 +100,16 @@ public class PostgrestBuilder: @unchecked Sendable {
           $0.request.headers["Content-Profile"] = schema
         }
       }
-
-      return try $0.request.urlRequest(withBaseURL: configuration.url)
     }
 
-    let (data, response) = try await configuration.fetch(urlRequest)
-    guard let httpResponse = response as? HTTPURLResponse else {
-      throw URLError(.badServerResponse)
-    }
+    let response = try await http.fetch(mutableState.value.request, baseURL: configuration.url)
 
-    guard 200 ..< 300 ~= httpResponse.statusCode else {
-      let error = try configuration.decoder.decode(PostgrestError.self, from: data)
+    guard 200 ..< 300 ~= response.statusCode else {
+      let error = try configuration.decoder.decode(PostgrestError.self, from: response.data)
       throw error
     }
 
-    let value = try decode(data)
-    return PostgrestResponse(data: data, response: httpResponse, value: value)
+    let value = try decode(response.data)
+    return PostgrestResponse(data: response.data, response: response.response, value: value)
   }
 }
