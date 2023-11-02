@@ -5,7 +5,7 @@ import Foundation
   import FoundationNetworking
 #endif
 
-public class StorageApi {
+public class StorageApi: @unchecked Sendable {
   public let configuration: StorageClientConfiguration
 
   private let http: HTTPClient
