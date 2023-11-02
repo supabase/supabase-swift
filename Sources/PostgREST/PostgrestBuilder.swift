@@ -1,51 +1,42 @@
 import Foundation
+@_spi(Internal) import _Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
 /// The builder class for creating and executing requests to a PostgREST server.
-public class PostgrestBuilder {
+public class PostgrestBuilder: @unchecked Sendable {
   /// The configuration for the PostgREST client.
   let configuration: PostgrestClient.Configuration
-  /// The URL for the request.
-  let url: URL
-  /// The query parameters for the request.
-  var queryParams: [(name: String, value: String?)]
-  /// The headers for the request.
-  var headers: [String: String]
-  /// The HTTP method for the request.
-  var method: String
-  /// The body data for the request.
-  var body: Data?
 
-  /// The options for fetching data from the PostgREST server.
-  var fetchOptions = FetchOptions()
+  struct MutableState {
+    var request: Request
+
+    /// The options for fetching data from the PostgREST server.
+    var fetchOptions: FetchOptions
+  }
+
+  let mutableState: ActorIsolated<MutableState>
 
   init(
     configuration: PostgrestClient.Configuration,
-    url: URL,
-    queryParams: [(name: String, value: String?)],
-    headers: [String: String],
-    method: String,
-    body: Data?
+    request: Request
   ) {
     self.configuration = configuration
-    self.url = url
-    self.queryParams = queryParams
-    self.headers = headers
-    self.method = method
-    self.body = body
+
+    mutableState = ActorIsolated(
+      MutableState(
+        request: request,
+        fetchOptions: FetchOptions()
+      )
+    )
   }
 
   convenience init(_ other: PostgrestBuilder) {
     self.init(
       configuration: other.configuration,
-      url: other.url,
-      queryParams: other.queryParams,
-      headers: other.headers,
-      method: other.method,
-      body: other.body
+      request: other.mutableState.value.request
     )
   }
 
@@ -57,7 +48,10 @@ public class PostgrestBuilder {
   public func execute(
     options: FetchOptions = FetchOptions()
   ) async throws -> PostgrestResponse<Void> {
-    fetchOptions = options
+    mutableState.withValue {
+      $0.fetchOptions = options
+    }
+
     return try await execute { _ in () }
   }
 
@@ -69,39 +63,40 @@ public class PostgrestBuilder {
   public func execute<T: Decodable>(
     options: FetchOptions = FetchOptions()
   ) async throws -> PostgrestResponse<T> {
-    fetchOptions = options
+    mutableState.withValue {
+      $0.fetchOptions = options
+    }
+
     return try await execute { [configuration] data in
       try configuration.decoder.decode(T.self, from: data)
     }
   }
 
-  func appendSearchParams(name: String, value: String) {
-    queryParams.append((name, value))
-  }
-
   private func execute<T>(decode: (Data) throws -> T) async throws -> PostgrestResponse<T> {
-    if fetchOptions.head {
-      method = "HEAD"
-    }
-
-    if let count = fetchOptions.count {
-      if let prefer = headers["Prefer"] {
-        headers["Prefer"] = "\(prefer),count=\(count.rawValue)"
-      } else {
-        headers["Prefer"] = "count=\(count.rawValue)"
+    mutableState.withValue {
+      if $0.fetchOptions.head {
+        $0.request.method = "HEAD"
       }
-    }
 
-    if headers["Accept"] == nil {
-      headers["Accept"] = "application/json"
-    }
-    headers["Content-Type"] = "application/json"
+      if let count = $0.fetchOptions.count {
+        if let prefer = $0.request.headers["Prefer"] {
+          $0.request.headers["Prefer"] = "\(prefer),count=\(count.rawValue)"
+        } else {
+          $0.request.headers["Prefer"] = "count=\(count.rawValue)"
+        }
+      }
 
-    if let schema = configuration.schema {
-      if method == "GET" || method == "HEAD" {
-        headers["Accept-Profile"] = schema
-      } else {
-        headers["Content-Profile"] = schema
+      if $0.request.headers["Accept"] == nil {
+        $0.request.headers["Accept"] = "application/json"
+      }
+      $0.request.headers["Content-Type"] = "application/json"
+
+      if let schema = configuration.schema {
+        if $0.request.method == "GET" || $0.request.method == "HEAD" {
+          $0.request.headers["Accept-Profile"] = schema
+        } else {
+          $0.request.headers["Content-Profile"] = schema
+        }
       }
     }
 
@@ -122,13 +117,18 @@ public class PostgrestBuilder {
   }
 
   private func makeURLRequest() throws -> URLRequest {
-    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+    let request = mutableState.value.request
+
+    guard var components = URLComponents(
+      url: configuration.url.appendingPathComponent(request.path),
+      resolvingAgainstBaseURL: false
+    ) else {
       throw URLError(.badURL)
     }
 
-    if !queryParams.isEmpty {
+    if !request.query.isEmpty {
       let percentEncodedQuery =
-        (components.percentEncodedQuery.map { $0 + "&" } ?? "") + query(queryParams)
+        (components.percentEncodedQuery.map { $0 + "&" } ?? "") + query(request.query)
       components.percentEncodedQuery = percentEncodedQuery
     }
 
@@ -138,13 +138,13 @@ public class PostgrestBuilder {
 
     var urlRequest = URLRequest(url: url)
 
-    for (key, value) in headers {
+    for (key, value) in request.headers {
       urlRequest.setValue(value, forHTTPHeaderField: key)
     }
 
-    urlRequest.httpMethod = method
+    urlRequest.httpMethod = request.method
 
-    if let body {
+    if let body = request.body {
       urlRequest.httpBody = body
     }
 
@@ -155,17 +155,17 @@ public class PostgrestBuilder {
     string.addingPercentEncoding(withAllowedCharacters: .postgrestURLQueryAllowed) ?? string
   }
 
-  private func query(_ parameters: [(String, String?)]) -> String {
-    parameters.compactMap { key, value in
-      if let value {
-        return (key, value)
+  private func query(_ parameters: [URLQueryItem]) -> String {
+    parameters.compactMap { query in
+      if let value = query.value {
+        return (query.name, value)
       }
       return nil
     }
-    .map { key, value -> String in
-      let escapedKey = escape(key)
+    .map { name, value -> String in
+      let escapedName = escape(name)
       let escapedValue = escape(value)
-      return "\(escapedKey)=\(escapedValue)"
+      return "\(escapedName)=\(escapedValue)"
     }
     .joined(separator: "&")
   }

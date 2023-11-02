@@ -2,7 +2,10 @@ import Foundation
 @_spi(Internal) import _Helpers
 
 struct EventEmitter: Sendable {
-  var attachListener: @Sendable () async -> (id: UUID, stream: AsyncStream<(event: AuthChangeEvent, session: Session?)>)
+  var attachListener: @Sendable () async -> (
+    id: UUID,
+    stream: AsyncStream<(event: AuthChangeEvent, session: Session?)>
+  )
   var emit: @Sendable (_ event: AuthChangeEvent, _ session: Session?, _ id: UUID?) async -> Void
 }
 
@@ -14,13 +17,15 @@ extension EventEmitter {
 
 extension EventEmitter {
   static var live: Self = {
-    let continuations = ActorIsolated([UUID: AsyncStream<(event: AuthChangeEvent, session: Session?)>.Continuation]())
+    let continuations =
+      ActorIsolated([UUID: AsyncStream<(event: AuthChangeEvent, session: Session?)>.Continuation]())
 
     return Self(
       attachListener: {
         let id = UUID()
 
-        let (stream, continuation) = AsyncStream<(event: AuthChangeEvent, session: Session?)>.makeStream()
+        let (stream, continuation) = AsyncStream<(event: AuthChangeEvent, session: Session?)>
+          .makeStream()
 
         continuation.onTermination = { [id] _ in
           continuations.withValue {

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct PostgrestError: Error, Codable {
+public struct PostgrestError: Error, Codable, Sendable {
   public let details: String?
   public let hint: String?
   public let code: String?
@@ -20,7 +20,7 @@ extension PostgrestError: LocalizedError {
   }
 }
 
-public struct PostgrestResponse<T> {
+public struct PostgrestResponse<T: Sendable>: Sendable {
   public let data: Data
   public let response: HTTPURLResponse
   public let count: Int?
@@ -51,7 +51,7 @@ public struct PostgrestResponse<T> {
 }
 
 /// Returns count as part of the response when specified.
-public enum CountOption: String {
+public enum CountOption: String, Sendable {
   case exact
   case planned
   case estimated
@@ -60,7 +60,7 @@ public enum CountOption: String {
 /// Enum of options representing the ways PostgREST can return values from the server.
 ///
 /// https://postgrest.org/en/v9.0/api.html?highlight=PREFER#insertions-updates
-public enum PostgrestReturningOptions: String {
+public enum PostgrestReturningOptions: String, Sendable {
   /// Returns nothing from the server
   case minimal
   /// Returns a copy of the updated data.
@@ -68,7 +68,7 @@ public enum PostgrestReturningOptions: String {
 }
 
 /// The type of tsquery conversion to use on query.
-public enum TextSearchType: String {
+public enum TextSearchType: String, Sendable {
   /// Uses PostgreSQL's plainto_tsquery function.
   case plain = "pl"
   /// Uses PostgreSQL's phraseto_tsquery function.
@@ -80,7 +80,7 @@ public enum TextSearchType: String {
 }
 
 /// Options for querying Supabase.
-public struct FetchOptions {
+public struct FetchOptions: Sendable {
   /// Set head to true if you only want the count value and not the underlying data.
   public let head: Bool
 

@@ -173,7 +173,10 @@ public actor GoTrueClient {
   /// Listen for auth state changes.
   ///
   /// An `.initialSession` is always emitted when this method is called.
-  public func onAuthStateChange() async -> AsyncStream<(event: AuthChangeEvent, session: Session?)> {
+  public func onAuthStateChange() async -> AsyncStream<(
+    event: AuthChangeEvent,
+    session: Session?
+  )> {
     let (id, stream) = await eventEmitter.attachListener()
 
     Task { [id] in

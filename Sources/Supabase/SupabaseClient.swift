@@ -9,7 +9,7 @@ import Foundation
 let version = _Helpers.version
 
 /// Supabase Client.
-public final class SupabaseClient {
+public final class SupabaseClient: @unchecked Sendable {
   let options: SupabaseClientOptions
   let supabaseURL: URL
   let supabaseKey: String
@@ -53,8 +53,8 @@ public final class SupabaseClient {
     fetch: fetchWithAuth
   )
 
-  private(set) var defaultHeaders: [String: String]
-  private var listenForAuthEventsTask: Task<Void, Never>?
+  let defaultHeaders: [String: String]
+  private let listenForAuthEventsTask = LockIsolated(Task<Void, Never>?.none)
 
   private var session: URLSession {
     options.global.session
@@ -102,7 +102,7 @@ public final class SupabaseClient {
   }
 
   deinit {
-    listenForAuthEventsTask?.cancel()
+    listenForAuthEventsTask.value?.cancel()
   }
 
   @Sendable
@@ -127,11 +127,13 @@ public final class SupabaseClient {
   }
 
   private func listenForAuthEvents() {
-    listenForAuthEventsTask = Task {
-      for await (event, session) in await auth.onAuthStateChange() {
-        handleTokenChanged(event: event, session: session)
+    listenForAuthEventsTask.setValue(
+      Task {
+        for await (event, session) in await auth.onAuthStateChange() {
+          handleTokenChanged(event: event, session: session)
+        }
       }
-    }
+    )
   }
 
   private func handleTokenChanged(event: AuthChangeEvent, session: Session?) {

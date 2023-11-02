@@ -21,12 +21,12 @@ final class AuthController: ObservableObject {
   }
 
   func observeAuth() async {
-    for await event in await supabase.auth.onAuthStateChange() {
+    for await (event, session) in await supabase.auth.onAuthStateChange() {
       guard event == .signedIn || event == .signedOut else {
         return
       }
 
-      session = try? await supabase.auth.session
+      self.session = session
     }
   }
 }
