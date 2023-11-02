@@ -1,5 +1,6 @@
 import Foundation
 
+@_spi(Internal)
 public struct HTTPClient {
   public typealias FetchHandler = @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
@@ -9,7 +10,6 @@ public struct HTTPClient {
     self.fetchHandler = fetchHandler
   }
 
-  @_spi(Internal)
   public func fetch(_ request: Request, baseURL: URL) async throws -> Response {
     let urlRequest = try request.urlRequest(withBaseURL: baseURL)
     let (data, response) = try await fetchHandler(urlRequest)
