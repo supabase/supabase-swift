@@ -609,7 +609,7 @@ public actor GoTrueClient {
   public func verifyOTP(
     email: String,
     token: String,
-    type: OTPType,
+    type: EmailOTPType,
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
@@ -621,15 +621,17 @@ public actor GoTrueClient {
           redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
-          VerifyOTPParams(
-            email: email,
-            token: token,
-            type: type,
-            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
+          VerifyOTPParams.email(
+            VerifyEmailOTPParams(
+              email: email,
+              token: token,
+              type: type,
+              gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
+            )
           )
         )
       ),
-      shouldRemoveSession: type != .emailChange && type != .phoneChange
+      shouldRemoveSession: type != .emailChange
     )
   }
 
@@ -638,7 +640,7 @@ public actor GoTrueClient {
   public func verifyOTP(
     phone: String,
     token: String,
-    type: OTPType,
+    type: MobileOTPType,
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
     try await _verifyOTP(
@@ -646,15 +648,17 @@ public actor GoTrueClient {
         path: "/verify",
         method: .post,
         body: configuration.encoder.encode(
-          VerifyOTPParams(
-            phone: phone,
-            token: token,
-            type: type,
-            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
+          VerifyOTPParams.mobile(
+            VerifyMobileOTPParams(
+              phone: phone,
+              token: token,
+              type: type,
+              gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
+            )
           )
         )
       ),
-      shouldRemoveSession: type != .emailChange && type != .phoneChange
+      shouldRemoveSession: type != .phoneChange
     )
   }
 
