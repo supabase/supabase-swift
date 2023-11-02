@@ -73,9 +73,9 @@ public class PostgrestBuilder: @unchecked Sendable {
   }
 
   private func execute<T>(decode: (Data) throws -> T) async throws -> PostgrestResponse<T> {
-    mutableState.withValue {
+    let urlRequest = try mutableState.withValue {
       if $0.fetchOptions.head {
-        $0.request.method = "HEAD"
+        $0.request.method = .head
       }
 
       if let count = $0.fetchOptions.count {
@@ -92,15 +92,15 @@ public class PostgrestBuilder: @unchecked Sendable {
       $0.request.headers["Content-Type"] = "application/json"
 
       if let schema = configuration.schema {
-        if $0.request.method == "GET" || $0.request.method == "HEAD" {
+        if $0.request.method == .get || $0.request.method == .head {
           $0.request.headers["Accept-Profile"] = schema
         } else {
           $0.request.headers["Content-Profile"] = schema
         }
       }
-    }
 
-    let urlRequest = try makeURLRequest()
+      return try $0.request.urlRequest(withBaseURL: configuration.url)
+    }
 
     let (data, response) = try await configuration.fetch(urlRequest)
     guard let httpResponse = response as? HTTPURLResponse else {
@@ -115,82 +115,4 @@ public class PostgrestBuilder: @unchecked Sendable {
     let value = try decode(data)
     return PostgrestResponse(data: data, response: httpResponse, value: value)
   }
-
-  private func makeURLRequest() throws -> URLRequest {
-    let request = mutableState.value.request
-
-    guard var components = URLComponents(
-      url: configuration.url.appendingPathComponent(request.path),
-      resolvingAgainstBaseURL: false
-    ) else {
-      throw URLError(.badURL)
-    }
-
-    if !request.query.isEmpty {
-      let percentEncodedQuery =
-        (components.percentEncodedQuery.map { $0 + "&" } ?? "") + query(request.query)
-      components.percentEncodedQuery = percentEncodedQuery
-    }
-
-    guard let url = components.url else {
-      throw URLError(.badURL)
-    }
-
-    var urlRequest = URLRequest(url: url)
-
-    for (key, value) in request.headers {
-      urlRequest.setValue(value, forHTTPHeaderField: key)
-    }
-
-    urlRequest.httpMethod = request.method
-
-    if let body = request.body {
-      urlRequest.httpBody = body
-    }
-
-    return urlRequest
-  }
-
-  private func escape(_ string: String) -> String {
-    string.addingPercentEncoding(withAllowedCharacters: .postgrestURLQueryAllowed) ?? string
-  }
-
-  private func query(_ parameters: [URLQueryItem]) -> String {
-    parameters.compactMap { query in
-      if let value = query.value {
-        return (query.name, value)
-      }
-      return nil
-    }
-    .map { name, value -> String in
-      let escapedName = escape(name)
-      let escapedValue = escape(value)
-      return "\(escapedName)=\(escapedValue)"
-    }
-    .joined(separator: "&")
-  }
-}
-
-extension CharacterSet {
-  /// Creates a CharacterSet from RFC 3986 allowed characters.
-  ///
-  /// RFC 3986 states that the following characters are "reserved" characters.
-  ///
-  /// - General Delimiters: ":", "#", "[", "]", "@", "?", "/"
-  /// - Sub-Delimiters: "!", "$", "&", "'", "(", ")", "*", "+", ",", ";", "="
-  ///
-  /// In RFC 3986 - Section 3.4, it states that the "?" and "/" characters should not be escaped to
-  /// allow
-  /// query strings to include a URL. Therefore, all "reserved" characters with the exception of "?"
-  /// and "/"
-  /// should be percent-escaped in the query string.
-  static let postgrestURLQueryAllowed: CharacterSet = {
-    let generalDelimitersToEncode =
-      ":#[]@" // does not include "?" or "/" due to RFC 3986 - Section 3.4
-    let subDelimitersToEncode = "!$&'()*+,;="
-    let encodableDelimiters =
-      CharacterSet(charactersIn: "\(generalDelimitersToEncode)\(subDelimitersToEncode)")
-
-    return CharacterSet.urlQueryAllowed.subtracting(encodableDelimiters)
-  }()
 }

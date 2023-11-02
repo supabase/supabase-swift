@@ -33,7 +33,7 @@ public class StorageFileApi: StorageApi {
   }
 
   func uploadOrUpdate(
-    method: String,
+    method: Request.Method,
     path: String,
     file: Data,
     fileOptions: FileOptions
@@ -74,7 +74,7 @@ public class StorageFileApi: StorageApi {
   public func upload(path: String, file: File, fileOptions: FileOptions = FileOptions())
     async throws -> String
   {
-    try await uploadOrUpdate(method: "POST", path: path, file: file.data, fileOptions: fileOptions)
+    try await uploadOrUpdate(method: .post, path: path, file: file.data, fileOptions: fileOptions)
   }
 
   /// Replaces an existing file at the specified path with a new one.
@@ -87,7 +87,7 @@ public class StorageFileApi: StorageApi {
   public func update(path: String, file: File, fileOptions: FileOptions = FileOptions())
     async throws -> String
   {
-    try await uploadOrUpdate(method: "PUT", path: path, file: file.data, fileOptions: fileOptions)
+    try await uploadOrUpdate(method: .put, path: path, file: file.data, fileOptions: fileOptions)
   }
 
   /// Moves an existing file, optionally renaming it at the same time.
@@ -99,7 +99,7 @@ public class StorageFileApi: StorageApi {
     try await execute(
       Request(
         path: "/object/move",
-        method: "POST",
+        method: .post,
         body: configuration.encoder.encode(
           [
             "bucketId": bucketId,
@@ -121,7 +121,7 @@ public class StorageFileApi: StorageApi {
     try await execute(
       Request(
         path: "/object/copy",
-        method: "POST",
+        method: .post,
         body: configuration.encoder.encode(
           [
             "bucketId": bucketId,
@@ -163,7 +163,7 @@ public class StorageFileApi: StorageApi {
     let response = try await execute(
       Request(
         path: "/object/sign/\(bucketId)/\(path)",
-        method: "POST",
+        method: .post,
         body: encoder.encode(
           Body(expiresIn: expiresIn, transform: transform)
         )
@@ -203,7 +203,7 @@ public class StorageFileApi: StorageApi {
     try await execute(
       Request(
         path: "/object/\(bucketId)",
-        method: "DELETE",
+        method: .delete,
         body: configuration.encoder.encode(["prefixes": paths])
       )
     )
@@ -224,7 +224,7 @@ public class StorageFileApi: StorageApi {
     return try await execute(
       Request(
         path: "/object/list/\(bucketId)",
-        method: "POST",
+        method: .post,
         body: configuration.encoder.encode(options)
       )
     )
@@ -244,7 +244,7 @@ public class StorageFileApi: StorageApi {
     let renderPath = options != nil ? "render/image/authenticated" : "object"
 
     return try await execute(
-      Request(path: "/\(renderPath)/\(bucketId)/\(path)", method: "GET", query: queryItems)
+      Request(path: "/\(renderPath)/\(bucketId)/\(path)", method: .get, query: queryItems)
     )
     .data
   }

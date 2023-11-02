@@ -33,7 +33,7 @@ public actor GoTrueMFA {
   public func enroll(params: MFAEnrollParams) async throws -> AuthMFAEnrollResponse {
     try await api.authorizedExecute(
       Request(
-        path: "/factors", method: "POST",
+        path: "/factors", method: .post,
         body: configuration.encoder.encode(params)
       )
     )
@@ -46,7 +46,7 @@ public actor GoTrueMFA {
   /// - Returns: An authentication response with the challenge information.
   public func challenge(params: MFAChallengeParams) async throws -> AuthMFAChallengeResponse {
     try await api.authorizedExecute(
-      Request(path: "/factors/\(params.factorId)/challenge", method: "POST")
+      Request(path: "/factors/\(params.factorId)/challenge", method: .post)
     )
     .decoded(decoder: configuration.decoder)
   }
@@ -59,7 +59,7 @@ public actor GoTrueMFA {
   public func verify(params: MFAVerifyParams) async throws -> AuthMFAVerifyResponse {
     let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
       Request(
-        path: "/factors/\(params.factorId)/verify", method: "POST",
+        path: "/factors/\(params.factorId)/verify", method: .post,
         body: configuration.encoder.encode(params)
       )
     ).decoded(decoder: configuration.decoder)
@@ -79,7 +79,7 @@ public actor GoTrueMFA {
   @discardableResult
   public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
     try await api.authorizedExecute(
-      Request(path: "/factors/\(params.factorId)", method: "DELETE")
+      Request(path: "/factors/\(params.factorId)", method: .delete)
     )
     .decoded(decoder: configuration.decoder)
   }

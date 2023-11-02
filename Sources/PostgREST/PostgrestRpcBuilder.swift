@@ -22,7 +22,7 @@ public final class PostgrestRpcBuilder: PostgrestBuilder {
     assert(head == false, "HEAD is not currently supported yet.")
 
     try mutableState.withValue {
-      $0.request.method = "POST"
+      $0.request.method = .post
       if params is NoParams {
         // noop
       } else {

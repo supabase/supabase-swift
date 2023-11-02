@@ -14,7 +14,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
     mutableState.withValue {
-      $0.request.method = "GET"
+      $0.request.method = .get
       // remove whitespaces except when quoted.
       var quoted = false
       let cleanedColumns = columns.compactMap { char -> String? in
@@ -34,7 +34,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
         $0.request.headers["Prefer"] = "count=\(count.rawValue)"
       }
       if head {
-        $0.request.method = "HEAD"
+        $0.request.method = .head
       }
     }
 
@@ -54,7 +54,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     try mutableState.withValue {
-      $0.request.method = "POST"
+      $0.request.method = .post
       var prefersHeaders: [String] = []
       if let returning {
         prefersHeaders.append("return=\(returning.rawValue)")
@@ -100,7 +100,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     ignoreDuplicates: Bool = false
   ) throws -> PostgrestFilterBuilder {
     try mutableState.withValue {
-      $0.request.method = "POST"
+      $0.request.method = .post
       var prefersHeaders = [
         "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates",
         "return=\(returning.rawValue)",
@@ -135,7 +135,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     try mutableState.withValue {
-      $0.request.method = "PATCH"
+      $0.request.method = .patch
       var preferHeaders = ["return=\(returning.rawValue)"]
       $0.request.body = try configuration.encoder.encode(values)
       if let count {
@@ -161,7 +161,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
     mutableState.withValue {
-      $0.request.method = "DELETE"
+      $0.request.method = .delete
       var preferHeaders = ["return=\(returning.rawValue)"]
       if let count {
         preferHeaders.append("count=\(count.rawValue)")

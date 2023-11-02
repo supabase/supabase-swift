@@ -38,7 +38,7 @@ public class StorageApi {
 
 extension Request {
   init(
-    path: String, method: String, formData: FormData, options: FileOptions,
+    path: String, method: Method, formData: FormData, options: FileOptions,
     headers: [String: String] = [:]
   ) {
     var headers = headers

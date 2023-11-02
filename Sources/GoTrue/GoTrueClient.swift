@@ -204,7 +204,7 @@ public actor GoTrueClient {
     return try await _signUp(
       request: .init(
         path: "/signup",
-        method: "POST",
+        method: .post,
         query: [
           redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
         ].compactMap { $0 },
@@ -237,7 +237,7 @@ public actor GoTrueClient {
     try await _signUp(
       request: .init(
         path: "/signup",
-        method: "POST",
+        method: .post,
         body: configuration.encoder.encode(
           SignUpRequest(
             password: password,
@@ -271,7 +271,7 @@ public actor GoTrueClient {
     try await _signIn(
       request: .init(
         path: "/token",
-        method: "POST",
+        method: .post,
         query: [URLQueryItem(name: "grant_type", value: "password")],
         body: configuration.encoder.encode(
           UserCredentials(email: email, password: password)
@@ -286,7 +286,7 @@ public actor GoTrueClient {
     try await _signIn(
       request: .init(
         path: "/token",
-        method: "POST",
+        method: .post,
         query: [URLQueryItem(name: "grant_type", value: "password")],
         body: configuration.encoder.encode(
           UserCredentials(password: password, phone: phone)
@@ -302,7 +302,7 @@ public actor GoTrueClient {
     try await _signIn(
       request: .init(
         path: "/token",
-        method: "POST",
+        method: .post,
         query: [URLQueryItem(name: "grant_type", value: "id_token")],
         body: configuration.encoder.encode(credentials)
       )
@@ -350,7 +350,7 @@ public actor GoTrueClient {
     try await api.execute(
       .init(
         path: "/otp",
-        method: "POST",
+        method: .post,
         query: [
           redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
         ].compactMap { $0 },
@@ -385,7 +385,7 @@ public actor GoTrueClient {
     try await api.execute(
       .init(
         path: "/otp",
-        method: "POST",
+        method: .post,
         body: configuration.encoder.encode(
           OTPParams(
             phone: phone,
@@ -407,7 +407,7 @@ public actor GoTrueClient {
       let session: Session = try await api.execute(
         .init(
           path: "/token",
-          method: "POST",
+          method: .post,
           query: [URLQueryItem(name: "grant_type", value: "pkce")],
           body: configuration.encoder.encode(
             [
@@ -519,7 +519,7 @@ public actor GoTrueClient {
     let user = try await api.execute(
       .init(
         path: "/user",
-        method: "GET",
+        method: .get,
         headers: ["Authorization": "\(tokenType) \(accessToken)"]
       )
     ).decoded(as: User.self, decoder: configuration.decoder)
@@ -593,7 +593,7 @@ public actor GoTrueClient {
       try await api.authorizedExecute(
         .init(
           path: "/logout",
-          method: "POST"
+          method: .post
         )
       )
       await sessionManager.remove()
@@ -616,7 +616,7 @@ public actor GoTrueClient {
     try await _verifyOTP(
       request: .init(
         path: "/verify",
-        method: "POST",
+        method: .post,
         query: [
           redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
         ].compactMap { $0 },
@@ -644,7 +644,7 @@ public actor GoTrueClient {
     try await _verifyOTP(
       request: .init(
         path: "/verify",
-        method: "POST",
+        method: .post,
         body: configuration.encoder.encode(
           VerifyOTPParams(
             phone: phone,
@@ -686,7 +686,7 @@ public actor GoTrueClient {
   /// Should be used only when you require the most current user data. For faster results,
   /// session.user is recommended.
   public func user(jwt: String? = nil) async throws -> User {
-    var request = Request(path: "/user", method: "GET")
+    var request = Request(path: "/user", method: .get)
 
     if let jwt {
       request.headers["Authorization"] = "Bearer \(jwt)"
@@ -709,7 +709,7 @@ public actor GoTrueClient {
 
     var session = try await sessionManager.session()
     let updatedUser = try await api.authorizedExecute(
-      .init(path: "/user", method: "PUT", body: configuration.encoder.encode(user))
+      .init(path: "/user", method: .put, body: configuration.encoder.encode(user))
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
     try await sessionManager.update(session)
@@ -728,7 +728,7 @@ public actor GoTrueClient {
     try await api.execute(
       .init(
         path: "/recover",
-        method: "POST",
+        method: .post,
         query: [
           redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
         ].compactMap { $0 },
@@ -759,7 +759,7 @@ public actor GoTrueClient {
     let session = try await api.execute(
       .init(
         path: "/token",
-        method: "POST",
+        method: .post,
         query: [URLQueryItem(name: "grant_type", value: "refresh_token")],
         body: configuration.encoder.encode(credentials)
       )
