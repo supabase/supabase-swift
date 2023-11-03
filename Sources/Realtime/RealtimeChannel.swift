@@ -345,8 +345,8 @@ public class RealtimeChannel {
   /// - return: Push event
   @discardableResult
   public func subscribe(
-    callback: ((RealtimeSubscribeStates, Error?) -> Void)? = nil,
-    timeout: TimeInterval? = nil
+    timeout: TimeInterval? = nil,
+    callback: ((RealtimeSubscribeStates, Error?) -> Void)? = nil
   ) -> RealtimeChannel {
     guard !joinedOnce else {
       fatalError(
@@ -460,7 +460,7 @@ public class RealtimeChannel {
     presence.state
   }
 
-  public func track(payload: Payload, opts: Payload = [:]) async -> ChannelResponse {
+  public func track(_ payload: Payload, opts: Payload = [:]) async -> ChannelResponse {
     await send(
       type: .presence,
       payload: [
@@ -489,11 +489,11 @@ public class RealtimeChannel {
   ///         self?.print("RealtimeChannel \(message.topic) has closed"
   ///     }
   ///
-  /// - parameter callback: Called when the RealtimeChannel closes
+  /// - parameter handler: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onClose(_ callback: @escaping ((Message) -> Void)) -> RealtimeChannel {
-    on(ChannelEvent.close, filter: ChannelFilter(), callback: callback)
+  public func onClose(_ handler: @escaping ((Message) -> Void)) -> RealtimeChannel {
+    on(ChannelEvent.close, filter: ChannelFilter(), handler: handler)
   }
 
   /// Hook into when the RealtimeChannel is closed. Automatically handles retain
@@ -530,11 +530,11 @@ public class RealtimeChannel {
   ///         self?.print("RealtimeChannel \(message.topic) has errored"
   ///     }
   ///
-  /// - parameter callback: Called when the RealtimeChannel closes
+  /// - parameter handler: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onError(_ callback: @escaping ((_ message: Message) -> Void)) -> RealtimeChannel {
-    on(ChannelEvent.error, filter: ChannelFilter(), callback: callback)
+  public func onError(_ handler: @escaping ((_ message: Message) -> Void)) -> RealtimeChannel {
+    on(ChannelEvent.error, filter: ChannelFilter(), handler: handler)
   }
 
   /// Hook into when the RealtimeChannel receives an Error. Automatically handles
@@ -581,16 +581,16 @@ public class RealtimeChannel {
   /// stuff" will keep on printing on the "event"
   ///
   /// - parameter event: Event to receive
-  /// - parameter callback: Called with the event's message
+  /// - parameter handler: Called with the event's message
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
   public func on(
     _ event: String,
     filter: ChannelFilter,
-    callback: @escaping ((Message) -> Void)
+    handler: @escaping ((Message) -> Void)
   ) -> RealtimeChannel {
     var delegated = Delegated<Message, Void>()
-    delegated.manuallyDelegate(with: callback)
+    delegated.manuallyDelegate(with: handler)
 
     return on(event, filter: filter, delegated: delegated)
   }

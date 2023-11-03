@@ -655,19 +655,22 @@ public class RealtimeClient: PhoenixTransportDelegate {
     return channel
   }
 
-  /// Removes the Channel from the socket. This does not cause the channel to
-  /// inform the server that it is leaving. You should call channel.leave()
-  /// prior to removing the Channel.
-  ///
-  /// Example:
-  ///
-  ///     channel.leave()
-  ///     socket.remove(channel)
-  ///
-  /// - parameter channel: Channel to remove
+  /// Unsubscribes and removes a single channel
   public func remove(_ channel: RealtimeChannel) {
+    channel.unsubscribe()
     off(channel.stateChangeRefs)
     channels.removeAll(where: { $0.joinRef == channel.joinRef })
+
+    if channels.isEmpty {
+      disconnect()
+    }
+  }
+
+  /// Unsubscribes and removes all channels
+  public func removeAllChannels() {
+    for channel in channels {
+      remove(channel)
+    }
   }
 
   /// Removes `onOpen`, `onClose`, `onError,` and `onMessage` registrations.
