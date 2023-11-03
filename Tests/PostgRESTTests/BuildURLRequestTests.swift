@@ -50,57 +50,57 @@ final class BuildURLRequestTests: XCTestCase {
       TestCase(name: "select all users where email ends with '@supabase.co'") { client in
         await client.from("users")
           .select()
-          .like(column: "email", value: "%@supabase.co")
+          .like("email", value: "%@supabase.co")
       },
       TestCase(name: "insert new user") { client in
         try await client.from("users")
-          .insert(values: ["email": "johndoe@supabase.io"])
+          .insert(["email": "johndoe@supabase.io"])
       },
       TestCase(name: "call rpc") { client in
-        try await client.rpc(fn: "test_fcn", params: ["KEY": "VALUE"])
+        try await client.rpc("test_fcn", params: ["KEY": "VALUE"])
       },
       TestCase(name: "call rpc without parameter") { client in
-        try await client.rpc(fn: "test_fcn")
+        try await client.rpc("test_fcn")
       },
       TestCase(name: "test all filters and count") { client in
         var query = await client.from("todos").select()
 
         for op in PostgrestFilterBuilder.Operator.allCases {
-          query = query.filter(column: "column", operator: op, value: "Some value")
+          query = query.filter("column", operator: op, value: "Some value")
         }
 
         return query
       },
       TestCase(name: "test in filter") { client in
-        await client.from("todos").select().in(column: "id", value: [1, 2, 3])
+        await client.from("todos").select().in("id", value: [1, 2, 3])
       },
       TestCase(name: "test contains filter with dictionary") { client in
-        await client.from("users").select(columns: "name")
-          .contains(column: "address", value: ["postcode": 90210])
+        await client.from("users").select("name")
+          .contains("address", value: ["postcode": 90210])
       },
       TestCase(name: "test contains filter with array") { client in
         await client.from("users")
           .select()
-          .contains(column: "name", value: ["is:online", "faction:red"])
+          .contains("name", value: ["is:online", "faction:red"])
       },
       TestCase(name: "test upsert not ignoring duplicates") { client in
         try await client.from("users")
-          .upsert(values: ["email": "johndoe@supabase.io"])
+          .upsert(["email": "johndoe@supabase.io"])
       },
       TestCase(name: "test upsert ignoring duplicates") { client in
         try await client.from("users")
-          .upsert(values: ["email": "johndoe@supabase.io"], ignoreDuplicates: true)
+          .upsert(["email": "johndoe@supabase.io"], ignoreDuplicates: true)
       },
       TestCase(name: "query with + character") { client in
         await client.from("users")
           .select()
-          .eq(column: "id", value: "Cigányka-ér (0+400 cskm) vízrajzi állomás")
+          .eq("id", value: "Cigányka-ér (0+400 cskm) vízrajzi állomás")
       },
       TestCase(name: "query with timestampz") { client in
         await client.from("tasks")
           .select()
-          .gt(column: "received_at", value: "2023-03-23T15:50:30.511743+00:00")
-          .order(column: "received_at")
+          .gt("received_at", value: "2023-03-23T15:50:30.511743+00:00")
+          .order("received_at")
       },
     ]
 

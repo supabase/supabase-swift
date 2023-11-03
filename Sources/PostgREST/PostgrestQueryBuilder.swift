@@ -9,7 +9,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   ///   - count: Count algorithm to use to count rows in a table.
   /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
   public func select(
-    columns: String = "*",
+    _ columns: String = "*",
     head: Bool = false,
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
@@ -49,7 +49,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
   /// - Throws: An error if the insert fails.
   public func insert(
-    values: some Encodable,
+    _ values: some Encodable,
     returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
@@ -93,7 +93,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
   /// - Throws: An error if the upsert fails.
   public func upsert(
-    values: some Encodable,
+    _ values: some Encodable,
     onConflict: String? = nil,
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil,
@@ -130,7 +130,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
   /// - Throws: An error if the update fails.
   public func update(
-    values: some Encodable,
+    _ values: some Encodable,
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {

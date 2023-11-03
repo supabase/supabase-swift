@@ -115,7 +115,7 @@ public actor PostgrestClient {
   /// - Returns: A PostgrestTransformBuilder instance.
   /// - Throws: An error if the function call fails.
   public func rpc(
-    fn: String,
+    _ fn: String,
     params: some Encodable,
     count: CountOption? = nil
   ) throws -> PostgrestTransformBuilder {
@@ -133,10 +133,10 @@ public actor PostgrestClient {
   /// - Returns: A PostgrestTransformBuilder instance.
   /// - Throws: An error if the function call fails.
   public func rpc(
-    fn: String,
+    _ fn: String,
     count: CountOption? = nil
   ) throws -> PostgrestTransformBuilder {
-    try rpc(fn: fn, params: NoParams(), count: count)
+    try rpc(fn, params: NoParams(), count: count)
   }
 }
 
