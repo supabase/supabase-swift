@@ -51,17 +51,17 @@ public actor FunctionsClient {
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - invokeOptions: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
   ///   - decode: A closure to decode the response data and HTTPURLResponse into a `Response`
   /// object.
   /// - Returns: The decoded `Response` object.
   public func invoke<Response>(
-    functionName: String,
-    invokeOptions: FunctionInvokeOptions = .init(),
+    _ functionName: String,
+    options: FunctionInvokeOptions = .init(),
     decode: (Data, HTTPURLResponse) throws -> Response
   ) async throws -> Response {
     let (data, response) = try await rawInvoke(
-      functionName: functionName, invokeOptions: invokeOptions
+      functionName: functionName, invokeOptions: options
     )
     return try decode(data, response)
   }
@@ -70,15 +70,15 @@ public actor FunctionsClient {
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - invokeOptions: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
   ///   - decoder: The JSON decoder to use for decoding the response. (Default: `JSONDecoder()`)
   /// - Returns: The decoded object of type `T`.
   public func invoke<T: Decodable>(
-    functionName: String,
-    invokeOptions: FunctionInvokeOptions = .init(),
+    _ functionName: String,
+    options: FunctionInvokeOptions = .init(),
     decoder: JSONDecoder = JSONDecoder()
   ) async throws -> T {
-    try await invoke(functionName: functionName, invokeOptions: invokeOptions) { data, _ in
+    try await invoke(functionName, options: options) { data, _ in
       try decoder.decode(T.self, from: data)
     }
   }
@@ -87,12 +87,12 @@ public actor FunctionsClient {
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - invokeOptions: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
   public func invoke(
-    functionName: String,
-    invokeOptions: FunctionInvokeOptions = .init()
+    _ functionName: String,
+    options: FunctionInvokeOptions = .init()
   ) async throws {
-    try await invoke(functionName: functionName, invokeOptions: invokeOptions) { _, _ in () }
+    try await invoke(functionName, options: options) { _, _ in () }
   }
 
   private func rawInvoke(
