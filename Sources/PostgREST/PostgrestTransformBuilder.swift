@@ -5,7 +5,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   /// Performs a vertical filtering with SELECT.
   /// - Parameters:
   ///   - columns: The columns to retrieve, separated by commas.
-  public func select(columns: String = "*") -> PostgrestTransformBuilder {
+  public func select(_ columns: String = "*") -> PostgrestTransformBuilder {
     // remove whitespaces except when quoted.
     var quoted = false
     let cleanedColumns = columns.compactMap { char -> String? in
@@ -31,7 +31,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   ///   - nullsFirst: If `true`, `null`s appear first.
   ///   - foreignTable: The foreign table to use (if `column` is a foreign column).
   public func order(
-    column: String,
+    _ column: String,
     ascending: Bool = true,
     nullsFirst: Bool = false,
     foreignTable: String? = nil
@@ -61,7 +61,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   /// - Parameters:
   ///   - count: The maximum no. of rows to limit to.
   ///   - foreignTable: The foreign table to use (for foreign columns).
-  public func limit(count: Int, foreignTable: String? = nil) -> PostgrestTransformBuilder {
+  public func limit(_ count: Int, foreignTable: String? = nil) -> PostgrestTransformBuilder {
     mutableState.withValue {
       let key = foreignTable.map { "\($0).limit" } ?? "limit"
       if let index = $0.request.query.firstIndex(where: { $0.name == key }) {

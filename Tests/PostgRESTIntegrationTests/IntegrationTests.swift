@@ -53,8 +53,8 @@ final class IntegrationTests: XCTestCase {
 
     // Run fresh test by deleting all data. Delete without a where clause isn't supported, so have
     // to do this `neq` trick to delete all data.
-    try await client.from("todos").delete().neq(column: "id", value: UUID().uuidString).execute()
-    try await client.from("users").delete().neq(column: "id", value: UUID().uuidString).execute()
+    try await client.from("todos").delete().neq("id", value: UUID().uuidString).execute()
+    try await client.from("users").delete().neq("id", value: UUID().uuidString).execute()
   }
 
   func testIntegration() async throws {
@@ -63,7 +63,7 @@ final class IntegrationTests: XCTestCase {
 
     let insertedTodo: Todo = try await client.from("todos")
       .insert(
-        values: NewTodo(
+        NewTodo(
           description: "Implement integration tests for postgrest-swift",
           tags: ["tag 01", "tag 02"]
         ),
@@ -78,7 +78,7 @@ final class IntegrationTests: XCTestCase {
 
     let insertedTodos: [Todo] = try await client.from("todos")
       .insert(
-        values: [
+        [
           NewTodo(description: "Make supabase swift libraries production ready", tags: ["tag 01"]),
           NewTodo(description: "Drink some coffee", tags: ["tag 02"]),
         ],
@@ -92,8 +92,8 @@ final class IntegrationTests: XCTestCase {
 
     let drinkCoffeeTodo = insertedTodos[1]
     let updatedTodo: Todo = try await client.from("todos")
-      .update(values: ["is_complete": true])
-      .eq(column: "id", value: drinkCoffeeTodo.id.uuidString)
+      .update(["is_complete": true])
+      .eq("id", value: drinkCoffeeTodo.id.uuidString)
       .single()
       .execute()
       .value
@@ -101,17 +101,17 @@ final class IntegrationTests: XCTestCase {
 
     let completedTodos: [Todo] = try await client.from("todos")
       .select()
-      .eq(column: "is_complete", value: true)
+      .eq("is_complete", value: true)
       .execute()
       .value
     XCTAssertEqual(completedTodos, [updatedTodo])
 
-    try await client.from("todos").delete().eq(column: "is_complete", value: true).execute()
+    try await client.from("todos").delete().eq("is_complete", value: true).execute()
     todos = try await client.from("todos").select().execute().value
     XCTAssertTrue(completedTodos.allSatisfy { todo in !todos.contains(todo) })
 
     let todosWithSpecificTag: [Todo] = try await client.from("todos").select()
-      .contains(column: "tags", value: ["tag 01"]).execute().value
+      .contains("tags", value: ["tag 01"]).execute().value
     XCTAssertEqual(todosWithSpecificTag, [insertedTodo, insertedTodos[0]])
   }
 
@@ -122,10 +122,10 @@ final class IntegrationTests: XCTestCase {
       User(email: "johndoe+test2@mail.com"),
     ]
 
-    try await client.from("users").insert(values: users).execute()
+    try await client.from("users").insert(users).execute()
 
     let fetchedUsers: [User] = try await client.from("users").select()
-      .ilike(column: "email", value: "johndoe+test%").execute().value
+      .ilike("email", value: "johndoe+test%").execute().value
     XCTAssertEqual(
       fetchedUsers[...],
       users[1 ... 2]
