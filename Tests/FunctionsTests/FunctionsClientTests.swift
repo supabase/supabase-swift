@@ -22,8 +22,8 @@ final class FunctionsClientTests: XCTestCase {
     let body = ["name": "Supabase"]
 
     try await sut.invoke(
-      functionName: "hello_world",
-      invokeOptions: .init(headers: ["X-Custom-Key": "value"], body: body)
+      "hello_world",
+      options: .init(headers: ["X-Custom-Key": "value"], body: body)
     )
 
     let request = await _request.value
@@ -44,7 +44,7 @@ final class FunctionsClientTests: XCTestCase {
     }
 
     do {
-      try await sut.invoke(functionName: "hello_world")
+      try await sut.invoke("hello_world")
     } catch let urlError as URLError {
       XCTAssertEqual(urlError.code, .badServerResponse)
     } catch {
@@ -63,7 +63,7 @@ final class FunctionsClientTests: XCTestCase {
     }
 
     do {
-      try await sut.invoke(functionName: "hello_world")
+      try await sut.invoke("hello_world")
       XCTFail("Invoke should fail.")
     } catch let FunctionsError.httpError(code, data) {
       XCTAssertEqual(code, 300)
@@ -86,7 +86,7 @@ final class FunctionsClientTests: XCTestCase {
     }
 
     do {
-      try await sut.invoke(functionName: "hello_world")
+      try await sut.invoke("hello_world")
       XCTFail("Invoke should fail.")
     } catch FunctionsError.relayError {
     } catch {

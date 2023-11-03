@@ -22,7 +22,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
     return self
   }
 
-  public func or(filters: URLQueryRepresentable) -> PostgrestFilterBuilder {
+  public func or(_ filters: URLQueryRepresentable) -> PostgrestFilterBuilder {
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: "or", value: "(\(filters.queryValue.queryValue))"))
     }
@@ -139,8 +139,10 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
     return self
   }
 
-  public func rangeAdjacent(_ column: String, range: URLQueryRepresentable) -> PostgrestFilterBuilder
-  {
+  public func rangeAdjacent(
+    _ column: String,
+    range: URLQueryRepresentable
+  ) -> PostgrestFilterBuilder {
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "adj.\(range.queryValue)"))
     }
@@ -162,7 +164,8 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
   }
 
   public func textSearch(
-    _ column: String, query: URLQueryRepresentable, config: String? = nil, type: TextSearchType? = nil
+    _ column: String, query: URLQueryRepresentable, config: String? = nil,
+    type: TextSearchType? = nil
   ) -> PostgrestFilterBuilder {
     mutableState.withValue {
       $0.request.query.append(
@@ -234,7 +237,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
     return self
   }
 
-  public func match(query: [String: URLQueryRepresentable]) -> PostgrestFilterBuilder {
+  public func match(_ query: [String: URLQueryRepresentable]) -> PostgrestFilterBuilder {
     mutableState.withValue { mutableState in
       query.forEach { key, value in
         mutableState.request.query.append(URLQueryItem(
