@@ -142,6 +142,7 @@ public class StorageFileApi: StorageApi {
   /// `folder/image.png`.
   ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL
   /// which is valid for one minute.
+  ///   - download: Trigger a download with the specified file name.
   ///   - transform: Transform the asset before serving it to the client.
   public func createSignedURL(
     path: String,
@@ -193,6 +194,29 @@ public class StorageFileApi: StorageApi {
     }
 
     return signedURL
+  }
+
+  /// Create signed url to download file without requiring permissions. This URL can be valid for a
+  /// set number of seconds.
+  /// - Parameters:
+  ///   - path: The file path to be downloaded, including the current file name. For example
+  /// `folder/image.png`.
+  ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL
+  /// which is valid for one minute.
+  ///   - download: Trigger a download with the default file name.
+  ///   - transform: Transform the asset before serving it to the client.
+  public func createSignedURL(
+    path: String,
+    expiresIn: Int,
+    download: Bool,
+    transform: TransformOptions? = nil
+  ) async throws -> URL {
+    try await self.createSignedURL(
+      path: path,
+      expiresIn: expiresIn,
+      download: download ? "" : nil,
+      transform: transform
+    )
   }
 
   /// Deletes files within the same bucket
@@ -252,13 +276,11 @@ public class StorageFileApi: StorageApi {
   /// Returns a public url for an asset.
   /// - Parameters:
   ///  - path: The file path to the asset. For example `folder/image.png`.
-  ///  - download: Whether the asset should be downloaded.
-  ///  - fileName: If specified, the file name for the asset that is downloaded.
+  ///  - download: Trigger a download with the specified file name.
   ///  - options: Transform the asset before retrieving it on the client.
   public func getPublicURL(
     path: String,
-    download: Bool = false,
-    fileName: String = "",
+    download: String? = nil,
     options: TransformOptions? = nil
   ) throws -> URL {
     var queryItems: [URLQueryItem] = []
@@ -268,8 +290,8 @@ public class StorageFileApi: StorageApi {
       throw URLError(.badURL)
     }
 
-    if download {
-      queryItems.append(URLQueryItem(name: "download", value: fileName))
+    if let download {
+      queryItems.append(URLQueryItem(name: "download", value: download))
     }
 
     if let optionsQueryItems = options?.queryItems {
@@ -286,6 +308,19 @@ public class StorageFileApi: StorageApi {
     }
 
     return generatedUrl
+  }
+
+  /// Returns a public url for an asset.
+  /// - Parameters:
+  ///  - path: The file path to the asset. For example `folder/image.png`.
+  ///  - download: Trigger a download with the default file name.
+  ///  - options: Transform the asset before retrieving it on the client.
+  public func getPublicURL(
+    path: String,
+    download: Bool,
+    options: TransformOptions? = nil
+  ) throws -> URL {
+    try getPublicURL(path: path, download: download ? "" : nil, options: options)
   }
 }
 

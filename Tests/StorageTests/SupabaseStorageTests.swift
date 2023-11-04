@@ -42,18 +42,18 @@ final class SupabaseStorageTests: XCTestCase {
       "INTEGRATION_TESTS not defined."
     )
 
-    try? await storage.emptyBucket(id: bucketId)
-    try? await storage.deleteBucket(id: bucketId)
+    try? await storage.emptyBucket(bucketId)
+    try? await storage.deleteBucket(bucketId)
 
-    try await storage.createBucket(id: bucketId, options: BucketOptions(public: true))
+    try await storage.createBucket(bucketId, options: BucketOptions(public: true))
   }
 
   func testUpdateBucket() async throws {
-    var bucket = try await storage.getBucket(id: bucketId)
+    var bucket = try await storage.getBucket(bucketId)
     XCTAssertTrue(bucket.isPublic)
 
-    try await storage.updateBucket(id: bucketId, options: BucketOptions(public: false))
-    bucket = try await storage.getBucket(id: bucketId)
+    try await storage.updateBucket(bucketId, options: BucketOptions(public: false))
+    bucket = try await storage.getBucket(bucketId)
     XCTAssertFalse(bucket.isPublic)
   }
 
@@ -63,28 +63,28 @@ final class SupabaseStorageTests: XCTestCase {
   }
 
   func testFileIntegration() async throws {
-    var files = try await storage.from(id: bucketId).list()
+    var files = try await storage.from(bucketId).list()
     XCTAssertTrue(files.isEmpty)
 
     try await uploadTestData()
 
-    files = try await storage.from(id: bucketId).list()
+    files = try await storage.from(bucketId).list()
     XCTAssertEqual(files.map(\.name), ["README.md"])
 
-    let downloadedData = try await storage.from(id: bucketId).download(path: "README.md")
+    let downloadedData = try await storage.from(bucketId).download(path: "README.md")
     XCTAssertEqual(downloadedData, uploadData)
 
-    try await storage.from(id: bucketId).move(from: "README.md", to: "README_2.md")
+    try await storage.from(bucketId).move(from: "README.md", to: "README_2.md")
 
-    var searchedFiles = try await storage.from(id: bucketId)
+    var searchedFiles = try await storage.from(bucketId)
       .list(options: .init(search: "README.md"))
     XCTAssertTrue(searchedFiles.isEmpty)
 
-    try await storage.from(id: bucketId).copy(from: "README_2.md", to: "README.md")
-    searchedFiles = try await storage.from(id: bucketId).list(options: .init(search: "README.md"))
+    try await storage.from(bucketId).copy(from: "README_2.md", to: "README.md")
+    searchedFiles = try await storage.from(bucketId).list(options: .init(search: "README.md"))
     XCTAssertEqual(searchedFiles.map(\.name), ["README.md"])
 
-    let removedFiles = try await storage.from(id: bucketId).remove(paths: ["README_2.md"])
+    let removedFiles = try await storage.from(bucketId).remove(paths: ["README_2.md"])
     XCTAssertEqual(removedFiles.map(\.name), ["README_2.md"])
   }
 
@@ -93,10 +93,10 @@ final class SupabaseStorageTests: XCTestCase {
 
     let path = "README.md"
 
-    let baseUrl = try storage.from(id: bucketId).getPublicURL(path: path)
+    let baseUrl = try storage.from(bucketId).getPublicURL(path: path)
     XCTAssertEqual(baseUrl.absoluteString, "\(Self.supabaseURL)/object/public/\(bucketId)/\(path)")
 
-    let baseUrlWithDownload = try storage.from(id: bucketId).getPublicURL(
+    let baseUrlWithDownload = try storage.from(bucketId).getPublicURL(
       path: path,
       download: true
     )
@@ -105,16 +105,16 @@ final class SupabaseStorageTests: XCTestCase {
       "\(Self.supabaseURL)/object/public/\(bucketId)/\(path)?download="
     )
 
-    let baseUrlWithDownloadAndFileName = try storage.from(id: bucketId).getPublicURL(
-      path: path, download: true, fileName: "test"
+    let baseUrlWithDownloadAndFileName = try storage.from(bucketId).getPublicURL(
+      path: path, download: "test"
     )
     XCTAssertEqual(
       baseUrlWithDownloadAndFileName.absoluteString,
       "\(Self.supabaseURL)/object/public/\(bucketId)/\(path)?download=test"
     )
 
-    let baseUrlWithAllOptions = try storage.from(id: bucketId).getPublicURL(
-      path: path, download: true, fileName: "test",
+    let baseUrlWithAllOptions = try storage.from(bucketId).getPublicURL(
+      path: path, download: "test",
       options: TransformOptions(width: 300, height: 300)
     )
     XCTAssertEqual(
@@ -128,7 +128,7 @@ final class SupabaseStorageTests: XCTestCase {
 
     let path = "README.md"
 
-    let url = try await storage.from(id: bucketId).createSignedURL(
+    let url = try await storage.from(bucketId).createSignedURL(
       path: path,
       expiresIn: 60,
       download: "README_local.md"
@@ -149,7 +149,7 @@ final class SupabaseStorageTests: XCTestCase {
       )!
     )
 
-    try await storage.from(id: bucketId).update(
+    try await storage.from(bucketId).update(
       path: "README.md",
       file: File(name: "README.md", data: dataToUpdate ?? Data(), fileName: nil, contentType: nil)
     )
@@ -159,7 +159,7 @@ final class SupabaseStorageTests: XCTestCase {
     let file = File(
       name: "README.md", data: uploadData ?? Data(), fileName: "README.md", contentType: "text/html"
     )
-    _ = try await storage.from(id: bucketId).upload(
+    _ = try await storage.from(bucketId).upload(
       path: "README.md", file: file, fileOptions: FileOptions(cacheControl: "3600")
     )
   }
