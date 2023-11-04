@@ -26,7 +26,7 @@ public class SupabaseStorageClient: StorageBucketApi {
   /// Perform file operation in a bucket.
   /// - Parameter id: The bucket id to operate on.
   /// - Returns: StorageFileApi object
-  public func from(id: String) -> StorageFileApi {
+  public func from(_ id: String) -> StorageFileApi {
     StorageFileApi(bucketId: id, configuration: configuration)
   }
 }

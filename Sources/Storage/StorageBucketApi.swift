@@ -16,7 +16,7 @@ public class StorageBucketApi: StorageApi {
   /// Retrieves the details of an existing Storage bucket.
   /// - Parameters:
   ///   - id: The unique identifier of the bucket you would like to retrieve.
-  public func getBucket(id: String) async throws -> Bucket {
+  public func getBucket(_ id: String) async throws -> Bucket {
     try await execute(Request(path: "/bucket/\(id)", method: .get))
       .decoded(decoder: configuration.decoder)
   }
@@ -32,7 +32,7 @@ public class StorageBucketApi: StorageApi {
   /// Creates a new Storage bucket.
   /// - Parameters:
   ///   - id: A unique identifier for the bucket you are creating.
-  public func createBucket(id: String, options: BucketOptions = .init()) async throws {
+  public func createBucket(_ id: String, options: BucketOptions = .init()) async throws {
     try await execute(
       Request(
         path: "/bucket",
@@ -53,7 +53,7 @@ public class StorageBucketApi: StorageApi {
   /// Updates a Storage bucket
   /// - Parameters:
   ///   - id: A unique identifier for the bucket you are updating.
-  public func updateBucket(id: String, options: BucketOptions) async throws {
+  public func updateBucket(_ id: String, options: BucketOptions) async throws {
     try await execute(
       Request(
         path: "/bucket/\(id)",
@@ -74,7 +74,7 @@ public class StorageBucketApi: StorageApi {
   /// Removes all objects inside a single bucket.
   /// - Parameters:
   ///   - id: The unique identifier of the bucket you would like to empty.
-  public func emptyBucket(id: String) async throws {
+  public func emptyBucket(_ id: String) async throws {
     try await execute(Request(path: "/bucket/\(id)/empty", method: .post))
   }
 
@@ -82,7 +82,7 @@ public class StorageBucketApi: StorageApi {
   /// You must first `empty()` the bucket.
   /// - Parameters:
   ///   - id: The unique identifier of the bucket you would like to delete.
-  public func deleteBucket(id: String) async throws {
+  public func deleteBucket(_ id: String) async throws {
     try await execute(Request(path: "/bucket/\(id)", method: .delete))
   }
 }
