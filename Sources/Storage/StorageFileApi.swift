@@ -211,7 +211,7 @@ public class StorageFileApi: StorageApi {
     download: Bool,
     transform: TransformOptions? = nil
   ) async throws -> URL {
-    try await self.createSignedURL(
+    try await createSignedURL(
       path: path,
       expiresIn: expiresIn,
       download: download ? "" : nil,
