@@ -454,6 +454,10 @@ public struct AuthMFAEnrollResponse: Decodable, Hashable, Sendable {
 public struct MFAChallengeParams: Encodable, Hashable {
   /// ID of the factor to be challenged. Returned in ``GoTrueMFA/enroll(params:)``.
   public let factorId: String
+
+  public init(factorId: String) {
+    self.factorId = factorId
+  }
 }
 
 public struct MFAVerifyParams: Encodable, Hashable {
@@ -465,6 +469,12 @@ public struct MFAVerifyParams: Encodable, Hashable {
 
   /// Verification code provided by the user.
   public let code: String
+
+  public init(factorId: String, challengeId: String, code: String) {
+    self.factorId = factorId
+    self.challengeId = challengeId
+    self.code = code
+  }
 }
 
 public struct MFAUnenrollParams: Encodable, Hashable, Sendable {

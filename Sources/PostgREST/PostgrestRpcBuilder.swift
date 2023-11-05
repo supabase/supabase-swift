@@ -16,7 +16,7 @@ public final class PostgrestRpcBuilder: PostgrestBuilder {
     params: some Encodable,
     head: Bool = false,
     count: CountOption? = nil
-  ) throws -> PostgrestTransformBuilder {
+  ) throws -> PostgrestFilterBuilder {
     // TODO: Support `HEAD` method
     // https://github.com/supabase/postgrest-js/blob/master/src/lib/PostgrestRpcBuilder.ts#L38
     assert(head == false, "HEAD is not currently supported yet.")
@@ -38,6 +38,6 @@ public final class PostgrestRpcBuilder: PostgrestBuilder {
       }
     }
 
-    return PostgrestTransformBuilder(self)
+    return PostgrestFilterBuilder(self)
   }
 }

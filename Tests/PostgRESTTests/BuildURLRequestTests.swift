@@ -62,6 +62,9 @@ final class BuildURLRequestTests: XCTestCase {
       TestCase(name: "call rpc without parameter") { client in
         try await client.rpc("test_fcn")
       },
+      TestCase(name: "call rpc with filter") { client in
+        try await client.rpc("test_fcn").eq("id", value: 1)
+      },
       TestCase(name: "test all filters and count") { client in
         var query = await client.from("todos").select()
 
