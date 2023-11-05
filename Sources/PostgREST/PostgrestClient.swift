@@ -112,13 +112,13 @@ public actor PostgrestClient {
   ///   - params: The parameters to pass to the function call.
   ///   - count: Count algorithm to use to count rows returned by the function.
   ///             Only applicable for set-returning functions.
-  /// - Returns: A PostgrestTransformBuilder instance.
+  /// - Returns: A PostgrestFilterBuilder instance.
   /// - Throws: An error if the function call fails.
   public func rpc(
     _ fn: String,
     params: some Encodable,
     count: CountOption? = nil
-  ) throws -> PostgrestTransformBuilder {
+  ) throws -> PostgrestFilterBuilder {
     try PostgrestRpcBuilder(
       configuration: configuration,
       request: Request(path: "/rpc/\(fn)", method: .post, headers: configuration.headers)
@@ -130,12 +130,12 @@ public actor PostgrestClient {
   ///   - fn: The function name to call.
   ///   - count: Count algorithm to use to count rows returned by the function.
   ///            Only applicable for set-returning functions.
-  /// - Returns: A PostgrestTransformBuilder instance.
+  /// - Returns: A PostgrestFilterBuilder instance.
   /// - Throws: An error if the function call fails.
   public func rpc(
     _ fn: String,
     count: CountOption? = nil
-  ) throws -> PostgrestTransformBuilder {
+  ) throws -> PostgrestFilterBuilder {
     try rpc(fn, params: NoParams(), count: count)
   }
 }
