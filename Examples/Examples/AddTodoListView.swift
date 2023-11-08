@@ -23,7 +23,7 @@ struct AddTodoListView: View {
   func saveButtonTapped() async {
     do {
       let createdTodo: Todo = try await supabase.database.from("todos")
-        .insert(values: request, returning: .representation)
+        .insert(request, returning: .representation)
         .single()
         .execute()
         .value

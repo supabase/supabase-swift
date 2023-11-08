@@ -105,8 +105,8 @@ struct TodoListView: View {
         ownerID: auth.currentUserID
       )
       updatedTodo = try await supabase.database.from("todos")
-        .update(values: updateRequest, returning: .representation)
-        .eq(column: "id", value: updatedTodo.id)
+        .update(updateRequest, returning: .representation)
+        .eq("id", value: updatedTodo.id)
         .single()
         .execute()
         .value
@@ -130,7 +130,7 @@ struct TodoListView: View {
 
       try await supabase.database.from("todos")
         .delete()
-        .in(column: "id", value: todosToDelete.map(\.id))
+        .in("id", value: todosToDelete.map(\.id))
         .execute()
     } catch {
       self.error = error
