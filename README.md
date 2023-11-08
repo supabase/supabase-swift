@@ -16,7 +16,7 @@ let package = Package(
     ...
     dependencies: [
         ...
-        .package(name: "Supabase", url: "https://github.com/supabase/supabase-swift.git", from: "1.0.0"), // Add the package
+        .package(name: "Supabase", url: "https://github.com/supabase-community/supabase-swift.git", from: "1.0.0"), // Add the package
     ],
     targets: [
         .target(
@@ -27,7 +27,7 @@ let package = Package(
 )
 ```
 
-If you're using Xcode, [use this guide](https://developer.apple.com/documentation/swift_packages/adding_package_dependencies_to_your_app) to add `supabase-swift` to your project. Use `https://github.com/supabase/supabase-swift.git` for the url when Xcode asks.
+If you're using Xcode, [use this guide](https://developer.apple.com/documentation/swift_packages/adding_package_dependencies_to_your_app) to add `supabase-swift` to your project. Use `https://github.com/supabase-community/supabase-swift.git` for the url when Xcode asks.
 
 If you don't want the full Supabase environment, you can also add individual packages, such as `Functions`, `GoTrue`, `Realtime`, `Storage`, or `PostgREST`.
 
