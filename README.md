@@ -6,6 +6,9 @@ Supabase client for swift. Mirrors the design of [supabase-js](https://github.co
 
 * Documentation: [https://supabase.com/docs/reference/swift/introduction](https://supabase.com/docs/reference/swift/introduction)
 
+> [!WARNING]  
+> This library is a work in progress, you can choose to use the last available version 0.3.0, or use the `main` branch that contains the next 1.0 release.
+> 1.0 will have several breacking changes, so I don't recommend you start a project using 0.3, just use the `main` branch from now, as the API is pretty much stable at this stage.
 
 ## Usage
 
@@ -16,7 +19,7 @@ let package = Package(
     ...
     dependencies: [
         ...
-        .package(name: "Supabase", url: "https://github.com/supabase-community/supabase-swift.git", from: "1.0.0"), // Add the package
+        .package(name: "Supabase", url: "https://github.com/supabase-community/supabase-swift.git", branch: "main"), // Add the package
     ],
     targets: [
         .target(
