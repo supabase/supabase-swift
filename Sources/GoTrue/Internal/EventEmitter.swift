@@ -2,23 +2,24 @@ import Foundation
 @_spi(Internal) import _Helpers
 
 struct EventEmitter: Sendable {
-  var attachListener: @Sendable () async -> (
+  var attachListener: @Sendable () -> (
     id: UUID,
     stream: AsyncStream<(event: AuthChangeEvent, session: Session?)>
   )
-  var emit: @Sendable (_ event: AuthChangeEvent, _ session: Session?, _ id: UUID?) async -> Void
+  var emit: @Sendable (_ event: AuthChangeEvent, _ session: Session?, _ id: UUID?) -> Void
 }
 
 extension EventEmitter {
-  func emit(_ event: AuthChangeEvent, session: Session?) async {
-    await emit(event, session, nil)
+  func emit(_ event: AuthChangeEvent, session: Session?) {
+    emit(event, session, nil)
   }
 }
 
 extension EventEmitter {
   static var live: Self = {
-    let continuations =
-      ActorIsolated([UUID: AsyncStream<(event: AuthChangeEvent, session: Session?)>.Continuation]())
+    let continuations = LockIsolated(
+      [UUID: AsyncStream<(event: AuthChangeEvent, session: Session?)>.Continuation]()
+    )
 
     return Self(
       attachListener: {
