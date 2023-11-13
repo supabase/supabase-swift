@@ -1,5 +1,5 @@
+import ConcurrencyExtras
 import Foundation
-@_spi(Internal) import _Helpers
 
 struct EventEmitter: Sendable {
   var attachListener: @Sendable () -> (

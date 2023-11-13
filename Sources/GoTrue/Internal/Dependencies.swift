@@ -1,5 +1,5 @@
+import ConcurrencyExtras
 import Foundation
-@_spi(Internal) import _Helpers
 
 struct Dependencies: Sendable {
   static let current = LockIsolated(Dependencies?.none)

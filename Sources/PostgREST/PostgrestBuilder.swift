@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
 
@@ -18,7 +19,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     var fetchOptions: FetchOptions
   }
 
-  let mutableState: ActorIsolated<MutableState>
+  let mutableState: LockIsolated<MutableState>
 
   init(
     configuration: PostgrestClient.Configuration,
@@ -27,7 +28,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     self.configuration = configuration
     http = HTTPClient(fetchHandler: configuration.fetch)
 
-    mutableState = ActorIsolated(
+    mutableState = LockIsolated(
       MutableState(
         request: request,
         fetchOptions: FetchOptions()

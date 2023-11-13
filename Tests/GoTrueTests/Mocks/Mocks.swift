@@ -72,7 +72,7 @@ func withDependencies(
   let current = Dependencies.current.value ?? .mock
   var copy = current
   mutation(&copy)
-  Dependencies.current.withValue { $0 = copy }
+  Dependencies.current.withValue { [copy] in $0 = copy }
   defer { Dependencies.current.setValue(current) }
   try await operation()
 }

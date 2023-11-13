@@ -1,5 +1,5 @@
 import XCTest
-
+import ConcurrencyExtras
 @_spi(Internal) import _Helpers
 @testable import Functions
 
@@ -14,7 +14,7 @@ final class FunctionsClientTests: XCTestCase {
     let _request = ActorIsolated(URLRequest?.none)
 
     let sut = FunctionsClient(url: self.url, headers: ["apikey": apiKey]) { request in
-      _request.setValue(request)
+      await _request.setValue(request)
       return (
         Data(), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
       )
@@ -27,7 +27,7 @@ final class FunctionsClientTests: XCTestCase {
       options: .init(headers: ["X-Custom-Key": "value"], body: body)
     )
 
-    let request = _request.value
+    let request = await _request.value
 
     XCTAssertEqual(request?.url, url)
     XCTAssertEqual(request?.httpMethod, "POST")
