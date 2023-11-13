@@ -1,5 +1,6 @@
 import XCTest
 
+@_spi(Internal) import _Helpers
 @testable import Functions
 
 final class FunctionsClientTests: XCTestCase {
@@ -13,7 +14,7 @@ final class FunctionsClientTests: XCTestCase {
     let _request = ActorIsolated(URLRequest?.none)
 
     let sut = FunctionsClient(url: self.url, headers: ["apikey": apiKey]) { request in
-      await _request.setValue(request)
+      _request.setValue(request)
       return (
         Data(), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
       )
@@ -26,7 +27,7 @@ final class FunctionsClientTests: XCTestCase {
       options: .init(headers: ["X-Custom-Key": "value"], body: body)
     )
 
-    let request = await _request.value
+    let request = _request.value
 
     XCTAssertEqual(request?.url, url)
     XCTAssertEqual(request?.httpMethod, "POST")
@@ -98,17 +99,5 @@ final class FunctionsClientTests: XCTestCase {
     await sut.setAuth(token: "access.token")
     let headers = await sut.headers
     XCTAssertEqual(headers["Authorization"], "Bearer access.token")
-  }
-}
-
-actor ActorIsolated<Value: Sendable> {
-  var value: Value
-
-  init(_ value: Value) {
-    self.value = value
-  }
-
-  func setValue(_ value: Value) {
-    self.value = value
   }
 }
