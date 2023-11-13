@@ -8,6 +8,7 @@
 import XCTest
 import XCTestDynamicOverlay
 @_spi(Internal) import _Helpers
+import ConcurrencyExtras
 
 @testable import GoTrue
 
@@ -51,7 +52,7 @@ final class SessionManagerTests: XCTestCase {
     let currentSession = Session.expiredSession
     let validSession = Session.validSession
 
-    let storeSessionCallCount = ActorIsolated(0)
+    let storeSessionCallCount = LockIsolated(0)
     let refreshSessionCallCount = ActorIsolated(0)
 
     let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
@@ -66,7 +67,7 @@ final class SessionManagerTests: XCTestCase {
         }
       }
       $0.sessionRefresher.refreshSession = { _ in
-        refreshSessionCallCount.withValue { $0 += 1 }
+        await refreshSessionCallCount.withValue { $0 += 1 }
         return await refreshSessionStream.first { _ in true } ?? .empty
       }
     } operation: {
@@ -92,7 +93,8 @@ final class SessionManagerTests: XCTestCase {
       }
 
       // Verify that refresher and storage was called only once.
-      XCTAssertEqual(refreshSessionCallCount.value, 1)
+      let refreshSessionCallCount = await refreshSessionCallCount.value
+      XCTAssertEqual(refreshSessionCallCount, 1)
       XCTAssertEqual(storeSessionCallCount.value, 1)
       XCTAssertEqual(try result.map { try $0.get() }, (0 ..< 10).map { _ in validSession })
     }

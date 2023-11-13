@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 import Foundation
 import SnapshotTesting
 import XCTest
@@ -27,7 +28,7 @@ final class BuildURLRequestTests: XCTestCase {
       schema: nil,
       headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
       fetch: { request in
-        guard let runningTestCase = runningTestCase.value else {
+        guard let runningTestCase = await runningTestCase.value else {
           XCTFail("execute called without a runningTestCase set.")
           return (Data(), URLResponse())
         }
@@ -108,7 +109,7 @@ final class BuildURLRequestTests: XCTestCase {
     ]
 
     for testCase in testCases {
-      runningTestCase.withValue { $0 = testCase }
+      await runningTestCase.withValue { $0 = testCase }
       let builder = try await testCase.build(client)
       _ = try? await builder.execute()
     }

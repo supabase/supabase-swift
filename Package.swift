@@ -28,15 +28,23 @@ let package = Package(
     .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
+    .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.0.0"),
   ],
   targets: [
     .target(name: "_Helpers"),
     .target(name: "Functions", dependencies: ["_Helpers"]),
-    .testTarget(name: "FunctionsTests", dependencies: ["Functions"]),
+    .testTarget(
+      name: "FunctionsTests",
+      dependencies: [
+        "Functions",
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+      ]
+    ),
     .target(
       name: "GoTrue",
       dependencies: [
         "_Helpers",
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "KeychainAccess", package: "KeychainAccess"),
       ]
     ),
@@ -49,7 +57,13 @@ let package = Package(
       ],
       resources: [.process("Resources")]
     ),
-    .target(name: "PostgREST", dependencies: ["_Helpers"]),
+    .target(
+      name: "PostgREST",
+      dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        "_Helpers",
+      ]
+    ),
     .testTarget(
       name: "PostgRESTTests",
       dependencies: [
@@ -60,13 +74,20 @@ let package = Package(
       exclude: ["__Snapshots__"]
     ),
     .testTarget(name: "PostgRESTIntegrationTests", dependencies: ["PostgREST"]),
-    .target(name: "Realtime", dependencies: ["_Helpers"]),
+    .target(
+      name: "Realtime",
+      dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        "_Helpers",
+      ]
+    ),
     .testTarget(name: "RealtimeTests", dependencies: ["Realtime"]),
     .target(name: "Storage", dependencies: ["_Helpers"]),
     .testTarget(name: "StorageTests", dependencies: ["Storage"]),
     .target(
       name: "Supabase",
       dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         "GoTrue",
         "Storage",
         "Realtime",

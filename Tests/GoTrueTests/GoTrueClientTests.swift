@@ -7,6 +7,7 @@
 
 import XCTest
 @_spi(Internal) import _Helpers
+import ConcurrencyExtras
 
 @testable import GoTrue
 
@@ -28,7 +29,7 @@ final class GoTrueClientTests: XCTestCase {
 
       let streamTask = Task {
         for await (event, _) in authStateStream {
-          events.withValue {
+          await events.withValue {
             $0.append(event)
           }
 
@@ -38,7 +39,8 @@ final class GoTrueClientTests: XCTestCase {
 
       await fulfillment(of: [expectation])
 
-      XCTAssertEqual(events.value, [.initialSession])
+      let events = await events.value
+      XCTAssertEqual(events, [.initialSession])
 
       streamTask.cancel()
     }

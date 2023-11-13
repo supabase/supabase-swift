@@ -20,6 +20,7 @@
 
 import Foundation
 @_spi(Internal) import _Helpers
+import ConcurrencyExtras
 
 public enum SocketError: Error {
   case abnormalClosureError
@@ -396,7 +397,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<URLResponse?, Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return stateChangeCallbacks.open.withValue {
+    return stateChangeCallbacks.open.withValue { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -439,7 +440,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<URLResponse?, Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return stateChangeCallbacks.open.withValue {
+    return stateChangeCallbacks.open.withValue { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -474,7 +475,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Int, String?), Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return stateChangeCallbacks.close.withValue {
+    return stateChangeCallbacks.close.withValue { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -517,7 +518,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Int, String?), Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return stateChangeCallbacks.close.withValue {
+    return stateChangeCallbacks.close.withValue { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -537,7 +538,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Error, URLResponse?), Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return stateChangeCallbacks.error.withValue {
+    return stateChangeCallbacks.error.withValue { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -561,7 +562,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Error, URLResponse?), Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return stateChangeCallbacks.error.withValue {
+    return stateChangeCallbacks.error.withValue { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -582,7 +583,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<Message, Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return stateChangeCallbacks.message.withValue {
+    return stateChangeCallbacks.message.withValue { [delegated] in
       append(callback: delegated, to: &$0)
     }
   }
@@ -606,7 +607,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<Message, Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return stateChangeCallbacks.message.withValue {
+    return stateChangeCallbacks.message.withValue { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
