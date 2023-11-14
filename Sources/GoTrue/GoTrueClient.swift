@@ -177,7 +177,7 @@ public actor GoTrueClient {
     event: AuthChangeEvent,
     session: Session?
   )> {
-    let (id, stream) = await eventEmitter.attachListener()
+    let (id, stream) = eventEmitter.attachListener()
 
     Task { [id] in
       await emitInitialSession(forStreamWithID: id)
@@ -259,7 +259,7 @@ public actor GoTrueClient {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      await eventEmitter.emit(.signedIn, session: session)
+      eventEmitter.emit(.signedIn, session: session)
     }
 
     return response
@@ -319,7 +319,7 @@ public actor GoTrueClient {
 
     if session.user.emailConfirmedAt != nil || session.user.confirmedAt != nil {
       try await sessionManager.update(session)
-      await eventEmitter.emit(.signedIn, session: session)
+      eventEmitter.emit(.signedIn, session: session)
     }
 
     return session
@@ -422,7 +422,7 @@ public actor GoTrueClient {
       try codeVerifierStorage.deleteCodeVerifier()
 
       try await sessionManager.update(session)
-      await eventEmitter.emit(.signedIn, session: session)
+      eventEmitter.emit(.signedIn, session: session)
 
       return session
     } catch {
@@ -535,10 +535,10 @@ public actor GoTrueClient {
     )
 
     try await sessionManager.update(session)
-    await eventEmitter.emit(.signedIn, session: session)
+    eventEmitter.emit(.signedIn, session: session)
 
     if let type = params.first(where: { $0.name == "type" })?.value, type == "recovery" {
-      await eventEmitter.emit(.passwordRecovery, session: session)
+      eventEmitter.emit(.passwordRecovery, session: session)
     }
 
     return session
@@ -582,7 +582,7 @@ public actor GoTrueClient {
     }
 
     try await sessionManager.update(session)
-    await eventEmitter.emit(.signedIn, session: session)
+    eventEmitter.emit(.signedIn, session: session)
     return session
   }
 
@@ -597,9 +597,9 @@ public actor GoTrueClient {
         )
       )
       await sessionManager.remove()
-      await eventEmitter.emit(.signedOut, session: nil)
+      eventEmitter.emit(.signedOut, session: nil)
     } catch {
-      await eventEmitter.emit(.signedOut, session: nil)
+      eventEmitter.emit(.signedOut, session: nil)
       throw error
     }
   }
@@ -677,7 +677,7 @@ public actor GoTrueClient {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      await eventEmitter.emit(.signedIn, session: session)
+      eventEmitter.emit(.signedIn, session: session)
     }
 
     return response
@@ -717,7 +717,7 @@ public actor GoTrueClient {
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
     try await sessionManager.update(session)
-    await eventEmitter.emit(.userUpdated, session: session)
+    eventEmitter.emit(.userUpdated, session: session)
     return updatedUser
   }
 
@@ -774,7 +774,7 @@ public actor GoTrueClient {
       .user.confirmedAt != nil
     {
       try await sessionManager.update(session)
-      await eventEmitter.emit(.tokenRefreshed, session: session)
+      eventEmitter.emit(.tokenRefreshed, session: session)
     }
 
     return session
@@ -782,7 +782,7 @@ public actor GoTrueClient {
 
   private func emitInitialSession(forStreamWithID id: UUID) async {
     let session = try? await session
-    await eventEmitter.emit(.initialSession, session, id)
+    eventEmitter.emit(.initialSession, session, id)
   }
 
   private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {
