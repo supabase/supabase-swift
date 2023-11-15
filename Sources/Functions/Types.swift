@@ -34,23 +34,23 @@ public struct FunctionInvokeOptions {
   ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
   ///   - body: The body data to be sent with the function invocation. (Default: nil)
   public init(method: Method? = nil, headers: [String: String] = [:], body: some Encodable) {
-    var headers = headers
+    var defaultHeaders = headers
 
     switch body {
     case let string as String:
-      headers["Content-Type"] = "text/plain"
+      defaultHeaders["Content-Type"] = "text/plain"
       self.body = string.data(using: .utf8)
     case let data as Data:
-      headers["Content-Type"] = "application/octet-stream"
+      defaultHeaders["Content-Type"] = "application/octet-stream"
       self.body = data
     default:
       // default, assume this is JSON
-      headers["Content-Type"] = "application/json"
+      defaultHeaders["Content-Type"] = "application/json"
       self.body = try? JSONEncoder().encode(body)
     }
 
     self.method = method
-    self.headers = headers
+    self.headers = defaultHeaders.merging(headers) { _, new in new }
   }
 
   /// Initializes the `FunctionInvokeOptions` structure.
