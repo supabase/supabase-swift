@@ -36,14 +36,14 @@ public class StorageFileApi: StorageApi {
     method: Request.Method,
     path: String,
     file: Data,
-    fileOptions: FileOptions
+    options: FileOptions
   ) async throws -> String {
-    let contentType = fileOptions.contentType
+    let contentType = options.contentType
     var headers = [
-      "x-upsert": "\(fileOptions.upsert)",
+      "x-upsert": "\(options.upsert)",
     ]
 
-    headers["duplex"] = fileOptions.duplex
+    headers["duplex"] = options.duplex
 
     let fileName = fileName(fromPath: path)
 
@@ -57,7 +57,7 @@ public class StorageFileApi: StorageApi {
         path: "/object/\(bucketId)/\(path)",
         method: method,
         formData: form,
-        options: fileOptions,
+        options: options,
         headers: headers
       )
     )
@@ -68,26 +68,26 @@ public class StorageFileApi: StorageApi {
   /// - Parameters:
   ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`. The
   /// bucket must already exist before attempting to upload.
-  ///   - file: The File object to be stored in the bucket.
-  ///   - fileOptions: HTTP headers. For example `cacheControl`
+  ///   - file: The Data to be stored in the bucket.
+  ///   - options: HTTP headers. For example `cacheControl`
   @discardableResult
-  public func upload(path: String, file: File, fileOptions: FileOptions = FileOptions())
+  public func upload(path: String, file: Data, options: FileOptions = FileOptions())
     async throws -> String
   {
-    try await uploadOrUpdate(method: .post, path: path, file: file.data, fileOptions: fileOptions)
+    try await uploadOrUpdate(method: .post, path: path, file: file, options: options)
   }
 
   /// Replaces an existing file at the specified path with a new one.
   /// - Parameters:
   ///   - path: The relative file path. Should be of the format `folder/subfolder`. The bucket
   /// already exist before attempting to upload.
-  ///   - file: The file object to be stored in the bucket.
-  ///   - fileOptions: HTTP headers. For example `cacheControl`
+  ///   - file: The Data to be stored in the bucket.
+  ///   - options: HTTP headers. For example `cacheControl`
   @discardableResult
-  public func update(path: String, file: File, fileOptions: FileOptions = FileOptions())
+  public func update(path: String, file: Data, options: FileOptions = FileOptions())
     async throws -> String
   {
-    try await uploadOrUpdate(method: .put, path: path, file: file.data, fileOptions: fileOptions)
+    try await uploadOrUpdate(method: .put, path: path, file: file, options: options)
   }
 
   /// Moves an existing file, optionally renaming it at the same time.

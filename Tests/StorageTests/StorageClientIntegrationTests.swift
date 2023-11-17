@@ -144,16 +144,13 @@ final class StorageClientIntegrationTests: XCTestCase {
 
     try await storage.from(bucketId).update(
       path: "README.md",
-      file: File(name: "README.md", data: dataToUpdate ?? Data(), fileName: nil, contentType: nil)
+      file: dataToUpdate ?? Data()
     )
   }
 
   private func uploadTestData() async throws {
-    let file = File(
-      name: "README.md", data: uploadData ?? Data(), fileName: "README.md", contentType: "text/html"
-    )
     _ = try await storage.from(bucketId).upload(
-      path: "README.md", file: file, fileOptions: FileOptions(cacheControl: "3600")
+      path: "README.md", file: uploadData ?? Data(), options: FileOptions(cacheControl: "3600")
     )
   }
 }
