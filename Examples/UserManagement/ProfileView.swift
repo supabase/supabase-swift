@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 17/11/23.
 //
 
+import PhotosUI
 import SwiftUI
 
 struct ProfileView: View {
@@ -14,9 +15,42 @@ struct ProfileView: View {
 
   @State var isLoading = false
 
+  @State var imageSelection: PhotosPickerItem? {
+    didSet {
+      if let imageSelection {
+        loadTransferable(from: imageSelection)
+      }
+    }
+  }
+
+  @State var avatarImage: Image?
+
   var body: some View {
     NavigationStack {
       Form {
+        Section {
+          HStack {
+            Group {
+              if let avatarImage {
+                avatarImage.resizable()
+              } else {
+                Color.clear
+              }
+            }
+            .scaledToFit()
+            .frame(width: 80, height: 80)
+
+            Spacer()
+
+            PhotosPicker(selection: $imageSelection, matching: .images) {
+              Image(systemName: "pencil.circle.fill")
+                .symbolRenderingMode(.multicolor)
+                .font(.system(size: 30))
+                .foregroundColor(.accentColor)
+            }
+          }
+        }
+
         Section {
           TextField("Username", text: $username)
             .textContentType(.username)
@@ -99,6 +133,16 @@ struct ProfileView: View {
           )
           .eq("id", value: currentUser.id)
           .execute()
+      } catch {
+        debugPrint(error)
+      }
+    }
+  }
+
+  private func loadTransferable(from imageSelection: PhotosPickerItem) {
+    Task {
+      do {
+        avatarImage = try await imageSelection.loadTransferable(type: AvatarImage.self)?.image
       } catch {
         debugPrint(error)
       }

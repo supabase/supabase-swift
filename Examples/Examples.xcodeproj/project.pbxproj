@@ -39,6 +39,7 @@
 		79FEFFC32B078CD800D36347 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFC22B078CD800D36347 /* ProfileView.swift */; };
 		79FEFFC52B078D7900D36347 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFC42B078D7900D36347 /* Models.swift */; };
 		79FEFFC72B078FB000D36347 /* SwiftUIHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFC62B078FB000D36347 /* SwiftUIHelpers.swift */; };
+		79FEFFC92B0797F600D36347 /* AvatarImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFC82B0797F600D36347 /* AvatarImage.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -76,6 +77,7 @@
 		79FEFFC22B078CD800D36347 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		79FEFFC42B078D7900D36347 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		79FEFFC62B078FB000D36347 /* SwiftUIHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftUIHelpers.swift; sourceTree = "<group>"; };
+		79FEFFC82B0797F600D36347 /* AvatarImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarImage.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -201,6 +203,7 @@
 				79FEFFC22B078CD800D36347 /* ProfileView.swift */,
 				79FEFFC42B078D7900D36347 /* Models.swift */,
 				79FEFFC62B078FB000D36347 /* SwiftUIHelpers.swift */,
+				79FEFFC82B0797F600D36347 /* AvatarImage.swift */,
 			);
 			path = UserManagement;
 			sourceTree = "<group>";
@@ -393,6 +396,7 @@
 				79FEFFC52B078D7900D36347 /* Models.swift in Sources */,
 				79FEFFC72B078FB000D36347 /* SwiftUIHelpers.swift in Sources */,
 				79FEFFC02B07895900D36347 /* AuthView.swift in Sources */,
+				79FEFFC92B0797F600D36347 /* AvatarImage.swift in Sources */,
 				79FEFFAF2B07873600D36347 /* UserManagementApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
