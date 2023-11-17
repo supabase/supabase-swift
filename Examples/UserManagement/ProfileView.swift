@@ -6,6 +6,7 @@
 //
 
 import PhotosUI
+import Supabase
 import SwiftUI
 
 struct ProfileView: View {
@@ -15,15 +16,9 @@ struct ProfileView: View {
 
   @State var isLoading = false
 
-  @State var imageSelection: PhotosPickerItem? {
-    didSet {
-      if let imageSelection {
-        loadTransferable(from: imageSelection)
-      }
-    }
-  }
+  @State var imageSelection: PhotosPickerItem?
 
-  @State var avatarImage: Image?
+  @State var avatarImage: AvatarImage?
 
   var body: some View {
     NavigationStack {
@@ -32,7 +27,7 @@ struct ProfileView: View {
           HStack {
             Group {
               if let avatarImage {
-                avatarImage.resizable()
+                avatarImage.image.resizable()
               } else {
                 Color.clear
               }
@@ -88,6 +83,10 @@ struct ProfileView: View {
           }
         }
       })
+      .onChange(of: imageSelection) { _, newValue in
+        guard let newValue else { return }
+        loadTransferable(from: newValue)
+      }
     }
     .task {
       await getInitialProfile()
@@ -110,6 +109,10 @@ struct ProfileView: View {
       fullName = profile.fullName ?? ""
       website = profile.website ?? ""
 
+      if let avatarURL = profile.avatarURL, !avatarURL.isEmpty {
+        try await downloadImage(path: avatarURL)
+      }
+
     } catch {
       debugPrint(error)
     }
@@ -120,17 +123,20 @@ struct ProfileView: View {
       isLoading = true
       defer { isLoading = false }
       do {
+        let imageURL = try await uploadImage()
+
         let currentUser = try await supabase.auth.session.user
+
+        let updatedProfile = Profile(
+          username: username,
+          fullName: fullName,
+          website: website,
+          avatarURL: imageURL
+        )
 
         try await supabase.database
           .from("profiles")
-          .update(
-            UpdateProfileParams(
-              username: username,
-              fullName: fullName,
-              website: website
-            )
-          )
+          .update(updatedProfile)
           .eq("id", value: currentUser.id)
           .execute()
       } catch {
@@ -142,11 +148,37 @@ struct ProfileView: View {
   private func loadTransferable(from imageSelection: PhotosPickerItem) {
     Task {
       do {
-        avatarImage = try await imageSelection.loadTransferable(type: AvatarImage.self)?.image
+        avatarImage = try await imageSelection.loadTransferable(type: AvatarImage.self)
       } catch {
         debugPrint(error)
       }
     }
+  }
+
+  private func downloadImage(path: String) async throws {
+    let data = try await supabase.storage.from("avatars").download(path: path)
+    avatarImage = AvatarImage(data: data)
+  }
+
+  private func uploadImage() async throws -> String? {
+    guard let data = avatarImage?.data else { return nil }
+
+    let currentUserId = try await supabase.auth.session.user.id.uuidString
+    let filePath = "\(currentUserId).jpeg"
+
+    try await supabase.storage
+      .from("avatars")
+      .upload(
+        path: filePath,
+        file: File(
+          name: currentUserId,
+          data: data,
+          fileName: currentUserId,
+          contentType: "image/jpeg"
+        )
+      )
+
+    return filePath
   }
 }
 
