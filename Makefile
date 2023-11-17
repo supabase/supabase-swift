@@ -1,8 +1,8 @@
-PLATFORM_IOS = iOS Simulator,name=iPhone 14 Pro
+PLATFORM_IOS = iOS Simulator,name=iPhone 15 Pro
 PLATFORM_MACOS = macOS
 PLATFORM_MAC_CATALYST = macOS,variant=Mac Catalyst
 PLATFORM_TVOS = tvOS Simulator,name=Apple TV
-PLATFORM_WATCHOS = watchOS Simulator,name=Apple Watch Series 8 (41mm)
+PLATFORM_WATCHOS = watchOS Simulator,name=Apple Watch Series 9 (41mm)
 EXAMPLE = Examples
 
 test-library:
