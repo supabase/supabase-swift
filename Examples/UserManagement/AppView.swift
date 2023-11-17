@@ -28,6 +28,8 @@ struct AppView: View {
   }
 }
 
-#Preview {
-  AppView()
-}
+#if swift(>=5.9)
+  #Preview {
+    AppView()
+  }
+#endif

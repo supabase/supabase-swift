@@ -73,6 +73,8 @@ struct AuthView: View {
   }
 }
 
-#Preview {
-  AuthView()
-}
+#if swift(>=5.9)
+  #Preview {
+    AuthView()
+  }
+#endif
