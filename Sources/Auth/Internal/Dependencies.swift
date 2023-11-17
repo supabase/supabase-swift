@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import _Helpers
 
 struct Dependencies: Sendable {
   static let current = LockIsolated(Dependencies?.none)
@@ -12,4 +13,5 @@ struct Dependencies: Sendable {
   var sessionRefresher: SessionRefresher
   var codeVerifierStorage: CodeVerifierStorage
   var currentDate: @Sendable () -> Date = { Date() }
+  var logger: SupabaseLogger
 }

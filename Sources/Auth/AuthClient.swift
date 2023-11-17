@@ -75,6 +75,10 @@ public actor AuthClient {
     Dependencies.current.value!.currentDate
   }
 
+  private var logger: SupabaseLogger {
+    Dependencies.current.value!.logger
+  }
+
   /// Returns the session, refreshing it if necessary.
   ///
   /// If no session can be found, a ``AuthError/sessionNotFound`` error is thrown.
@@ -159,7 +163,8 @@ public actor AuthClient {
             try await self?.refreshSession(refreshToken: $0) ?? .empty
           }
         ),
-        codeVerifierStorage: codeVerifierStorage
+        codeVerifierStorage: codeVerifierStorage,
+        logger: SupabaseLogger(system: "GoTrue")
       )
     )
   }
@@ -172,9 +177,11 @@ public actor AuthClient {
     session: Session?
   )> {
     let (id, stream) = eventEmitter.attachListener()
+    logger.log(.debug, message: "auth state change listener with id '\(id.uuidString)' attached.")
 
     Task { [id] in
       await emitInitialSession(forStreamWithID: id)
+      logger.log(.debug, message: "initial session for listener with id '\(id.uuidString)' emitted.")
     }
 
     return stream
@@ -866,6 +873,7 @@ public actor AuthClient {
 
   private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {
     if configuration.flowType == .pkce {
+
       let codeVerifier = PKCE.generateCodeVerifier()
 
       do {
