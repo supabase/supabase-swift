@@ -1,5 +1,5 @@
-import XCTest
 import ConcurrencyExtras
+import XCTest
 @_spi(Internal) import _Helpers
 @testable import Functions
 

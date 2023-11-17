@@ -34,11 +34,13 @@ test-docs:
 		|| (echo "xcodebuild docbuild failed:\n\n$(DOC_WARNINGS)" | tr '\1' '\n' \
 		&& exit 1)
 
-build-example:
-	xcodebuild build \
-		-workspace supabase-swift.xcworkspace \
-		-scheme "$(EXAMPLE)" \
-		-destination platform="$(PLATFORM_IOS)" || exit 1;
+build-examples:
+	for scheme in UserManagement; do \
+		xcodebuild build \
+			-workspace supabase-swift.xcworkspace \
+			-scheme "$$scheme" \
+			-destination platform="$(PLATFORM_IOS)" || exit 1; \
+	done
 
 format:
 	@swiftformat .

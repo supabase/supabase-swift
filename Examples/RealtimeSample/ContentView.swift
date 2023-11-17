@@ -118,6 +118,8 @@ extension Message {
   }
 }
 
-#Preview {
-  ContentView()
-}
+#if swift(>=5.9)
+  #Preview {
+    ContentView()
+  }
+#endif
