@@ -17,7 +17,6 @@ struct ProfileView: View {
   @State var isLoading = false
 
   @State var imageSelection: PhotosPickerItem?
-
   @State var avatarImage: AvatarImage?
 
   var body: some View {
