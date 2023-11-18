@@ -173,7 +173,7 @@ public actor GoTrueClient {
   /// Listen for auth state changes.
   ///
   /// An `.initialSession` is always emitted when this method is called.
-  public func onAuthStateChange() async -> AsyncStream<(
+  public var authStateChanges: AsyncStream<(
     event: AuthChangeEvent,
     session: Session?
   )> {
@@ -828,6 +828,14 @@ public actor GoTrueClient {
 extension GoTrueClient {
   /// Notification posted when an auth state event is triggered.
   public static let didChangeAuthStateNotification = Notification.Name(
-    "DID_CHANGE_AUTH_STATE_NOTIFICATION"
+    "GoTrueClient.didChangeAuthStateNotification"
   )
+
+  /// A user info key to retrieve the ``AuthChangeEvent`` value for a
+  /// ``GoTrueClient/didChangeAuthStateNotification`` notification.
+  public static let authChangeEventInfoKey = "GoTrueClient.authChangeEvent"
+
+  /// A user info key to retrieve the ``Session`` value for a
+  /// ``GoTrueClient/didChangeAuthStateNotification`` notification.
+  public static let authChangeSessionInfoKey = "GoTrueClient.authChangeSession"
 }

@@ -43,7 +43,11 @@ extension EventEmitter {
       emit: { event, session, id in
         NotificationCenter.default.post(
           name: GoTrueClient.didChangeAuthStateNotification,
-          object: nil
+          object: nil,
+          userInfo: [
+            GoTrueClient.authChangeEventInfoKey: event,
+            GoTrueClient.authChangeSessionInfoKey: session as Any,
+          ]
         )
         if let id {
           continuations.value[id]?.yield((event, session))
