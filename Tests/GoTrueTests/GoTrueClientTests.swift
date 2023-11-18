@@ -14,7 +14,7 @@ import ConcurrencyExtras
 final class GoTrueClientTests: XCTestCase {
   fileprivate var api: APIClient!
 
-  func testOnAuthStateChange() async throws {
+  func testAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
 
@@ -25,7 +25,7 @@ final class GoTrueClientTests: XCTestCase {
       $0.eventEmitter = .live
       $0.sessionManager.session = { @Sendable _ in session }
     } operation: {
-      let authStateStream = await sut.onAuthStateChange()
+      let authStateStream = await sut.authStateChanges
 
       let streamTask = Task {
         for await (event, _) in authStateStream {

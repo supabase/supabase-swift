@@ -130,7 +130,7 @@ public final class SupabaseClient: @unchecked Sendable {
   private func listenForAuthEvents() {
     listenForAuthEventsTask.setValue(
       Task {
-        for await (event, session) in await auth.onAuthStateChange() {
+        for await (event, session) in await auth.authStateChanges {
           handleTokenChanged(event: event, session: session)
         }
       }

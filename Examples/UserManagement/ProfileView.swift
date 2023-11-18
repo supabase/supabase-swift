@@ -82,7 +82,7 @@ struct ProfileView: View {
           }
         }
       })
-      .onChange(of: imageSelection) { _, newValue in
+      .onChange(of: imageSelection) { newValue in
         guard let newValue else { return }
         loadTransferable(from: newValue)
       }
