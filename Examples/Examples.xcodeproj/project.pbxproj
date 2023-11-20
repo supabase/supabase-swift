@@ -7,11 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		790132E02B0C29080051B356 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 790132DF2B0C29080051B356 /* Supabase */; };
 		790308E92AEE7B4D003C4A98 /* RealtimeSampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790308E82AEE7B4D003C4A98 /* RealtimeSampleApp.swift */; };
 		790308EB2AEE7B4D003C4A98 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790308EA2AEE7B4D003C4A98 /* ContentView.swift */; };
 		790308ED2AEE7B4E003C4A98 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 790308EC2AEE7B4E003C4A98 /* Assets.xcassets */; };
 		790308F02AEE7B4E003C4A98 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 790308EF2AEE7B4E003C4A98 /* Preview Assets.xcassets */; };
-		790308F62AEE7B5B003C4A98 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = 790308F52AEE7B5B003C4A98 /* Realtime */; };
 		793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895C92954ABFF0044F2B8 /* ExamplesApp.swift */; };
 		793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895CB2954ABFF0044F2B8 /* RootView.swift */; };
 		793895CE2954AC000044F2B8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 793895CD2954AC000044F2B8 /* Assets.xcassets */; };
@@ -85,7 +85,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				790308F62AEE7B5B003C4A98 /* Realtime in Frameworks */,
+				790132E02B0C29080051B356 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -233,7 +233,7 @@
 			);
 			name = RealtimeSample;
 			packageProductDependencies = (
-				790308F52AEE7B5B003C4A98 /* Realtime */,
+				790132DF2B0C29080051B356 /* Supabase */,
 			);
 			productName = RealtimeSample;
 			productReference = 790308E62AEE7B4D003C4A98 /* RealtimeSample.app */;
@@ -800,9 +800,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		790308F52AEE7B5B003C4A98 /* Realtime */ = {
+		790132DF2B0C29080051B356 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = Realtime;
+			productName = Supabase;
 		};
 		7956406C2955B3500088A06F /* SwiftUINavigation */ = {
 			isa = XCSwiftPackageProductDependency;

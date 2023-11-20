@@ -16,7 +16,6 @@ public final class SupabaseClient: @unchecked Sendable {
   let supabaseKey: String
   let storageURL: URL
   let databaseURL: URL
-  let realtimeURL: URL
   let functionsURL: URL
 
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured
@@ -41,11 +40,7 @@ public final class SupabaseClient: @unchecked Sendable {
   )
 
   /// Realtime client for Supabase
-  public private(set) lazy var realtime = RealtimeClient(
-    realtimeURL.absoluteString,
-    headers: defaultHeaders,
-    params: defaultHeaders
-  )
+  public let realtime: RealtimeClient
 
   /// Supabase Functions allows you to deploy and invoke edge functions.
   public private(set) lazy var functions = FunctionsClient(
@@ -69,17 +64,20 @@ public final class SupabaseClient: @unchecked Sendable {
   /// your project dashboard.
   ///   - options: Custom options to configure client's behavior.
   public init(
-    supabaseURL: URL,
+    supabaseURL: String,
     supabaseKey: String,
     options: SupabaseClientOptions = .init()
   ) {
+    guard let supabaseURL = URL(string: supabaseURL) else {
+      fatalError("Invalid supabaseURL: \(supabaseURL)")
+    }
+
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options
 
     storageURL = supabaseURL.appendingPathComponent("/storage/v1")
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
-    realtimeURL = supabaseURL.appendingPathComponent("/realtime/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
     defaultHeaders = [
@@ -97,6 +95,12 @@ public final class SupabaseClient: @unchecked Sendable {
         // DON'T use `fetchWithAuth` method within the GoTrueClient as it may cause a deadlock.
         try await options.global.session.data(for: $0)
       }
+    )
+
+    realtime = RealtimeClient(
+      supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
+      headers: defaultHeaders,
+      params: defaultHeaders
     )
 
     listenForAuthEvents()
