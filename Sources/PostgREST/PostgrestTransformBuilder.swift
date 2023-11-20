@@ -29,15 +29,15 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   ///   - column: The column to order on.
   ///   - ascending: If `true`, the result will be in ascending order.
   ///   - nullsFirst: If `true`, `null`s appear first.
-  ///   - foreignTable: The foreign table to use (if `column` is a foreign column).
+  ///   - referencedTable: The foreign table to use (if `column` is a foreign column).
   public func order(
     _ column: String,
     ascending: Bool = true,
     nullsFirst: Bool = false,
-    foreignTable: String? = nil
+    referencedTable: String? = nil
   ) -> PostgrestTransformBuilder {
     mutableState.withValue {
-      let key = foreignTable.map { "\($0).order" } ?? "order"
+      let key = referencedTable.map { "\($0).order" } ?? "order"
       let existingOrderIndex = $0.request.query.firstIndex { $0.name == key }
       let value =
         "\(column).\(ascending ? "asc" : "desc").\(nullsFirst ? "nullsfirst" : "nullslast")"
@@ -60,10 +60,10 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   /// Limits the result with the specified `count`.
   /// - Parameters:
   ///   - count: The maximum no. of rows to limit to.
-  ///   - foreignTable: The foreign table to use (for foreign columns).
-  public func limit(_ count: Int, foreignTable: String? = nil) -> PostgrestTransformBuilder {
+  ///   - referencedTable: The foreign table to use (for foreign columns).
+  public func limit(_ count: Int, referencedTable: String? = nil) -> PostgrestTransformBuilder {
     mutableState.withValue {
-      let key = foreignTable.map { "\($0).limit" } ?? "limit"
+      let key = referencedTable.map { "\($0).limit" } ?? "limit"
       if let index = $0.request.query.firstIndex(where: { $0.name == key }) {
         $0.request.query[index] = URLQueryItem(name: key, value: "\(count)")
       } else {
@@ -77,14 +77,14 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   /// - Parameters:
   ///   - lowerBounds: The starting index from which to limit the result, inclusive.
   ///   - upperBounds: The last index to which to limit the result, inclusive.
-  ///   - foreignTable: The foreign table to use (for foreign columns).
+  ///   - referencedTable: The foreign table to use (for foreign columns).
   public func range(
     from lowerBounds: Int,
     to upperBounds: Int,
-    foreignTable: String? = nil
+    referencedTable: String? = nil
   ) -> PostgrestTransformBuilder {
-    let keyOffset = foreignTable.map { "\($0).offset" } ?? "offset"
-    let keyLimit = foreignTable.map { "\($0).limit" } ?? "limit"
+    let keyOffset = referencedTable.map { "\($0).offset" } ?? "offset"
+    let keyLimit = referencedTable.map { "\($0).limit" } ?? "limit"
 
     mutableState.withValue {
       if let index = $0.request.query.firstIndex(where: { $0.name == keyOffset }) {
