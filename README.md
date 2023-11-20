@@ -15,7 +15,7 @@ let package = Package(
     ...
     dependencies: [
         ...
-        .package(name: "Supabase", url: "https://github.com/supabase-community/supabase-swift.git", branch: "main"), // Add the package
+        .package(name: "Supabase", url: "https://github.com/supabase-community/supabase-swift.git", from: "1.0.0"), // Add the package
     ],
     targets: [
         .target(
