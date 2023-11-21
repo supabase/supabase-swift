@@ -20,7 +20,7 @@ final class SupabaseClientTests: XCTestCase {
     let customHeaders = ["header_field": "header_value"]
 
     let client = SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseURL: "https://project-ref.supabase.co",
       supabaseKey: "ANON_KEY",
       options: SupabaseClientOptions(
         db: SupabaseClientOptions.DatabaseOptions(schema: customSchema),
@@ -34,10 +34,8 @@ final class SupabaseClientTests: XCTestCase {
 
     XCTAssertEqual(client.supabaseURL.absoluteString, "https://project-ref.supabase.co")
     XCTAssertEqual(client.supabaseKey, "ANON_KEY")
-    //    XCTAssertEqual(client.authURL.absoluteString, "https://project-ref.supabase.co/auth/v1")
     XCTAssertEqual(client.storageURL.absoluteString, "https://project-ref.supabase.co/storage/v1")
     XCTAssertEqual(client.databaseURL.absoluteString, "https://project-ref.supabase.co/rest/v1")
-    XCTAssertEqual(client.realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")
     XCTAssertEqual(
       client.functionsURL.absoluteString,
       "https://project-ref.supabase.co/functions/v1"

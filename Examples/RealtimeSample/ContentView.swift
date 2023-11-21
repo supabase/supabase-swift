@@ -53,22 +53,13 @@ struct ContentView: View {
     }
     .onAppear {
       createSubscription()
-
-      socket.connect()
-      socket.onOpen {
-        socketStatus = "OPEN"
-      }
-      socket.onClose {
-        socketStatus = "CLOSE"
-      }
-      socket.onError { error, _ in
-        socketStatus = "ERROR: \(error.localizedDescription)"
-      }
     }
   }
 
   func createSubscription() {
-    publicSchema = socket.channel("public")
+    supabase.realtime.connect()
+
+    publicSchema = supabase.realtime.channel("public")
       .on("postgres_changes", filter: ChannelFilter(event: "INSERT", schema: "public")) {
         inserts.append($0)
       }
@@ -94,6 +85,17 @@ struct ContentView: View {
           channelStatus = "ERROR"
         }
       }
+
+    supabase.realtime.connect()
+    supabase.realtime.onOpen {
+      socketStatus = "OPEN"
+    }
+    supabase.realtime.onClose {
+      socketStatus = "CLOSE"
+    }
+    supabase.realtime.onError { error, _ in
+      socketStatus = "ERROR: \(error.localizedDescription)"
+    }
   }
 
   func toggleSubscription() {
