@@ -64,14 +64,10 @@ public final class SupabaseClient: @unchecked Sendable {
   /// your project dashboard.
   ///   - options: Custom options to configure client's behavior.
   public init(
-    supabaseURL: String,
+    supabaseURL: URL,
     supabaseKey: String,
     options: SupabaseClientOptions = .init()
   ) {
-    guard let supabaseURL = URL(string: supabaseURL) else {
-      fatalError("Invalid supabaseURL: \(supabaseURL)")
-    }
-
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options
@@ -104,6 +100,25 @@ public final class SupabaseClient: @unchecked Sendable {
     )
 
     listenForAuthEvents()
+  }
+
+  /// Create a new client.
+  /// - Parameters:
+  ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
+  /// your project dashboard.
+  ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
+  /// your project dashboard.
+  ///   - options: Custom options to configure client's behavior.
+  public convenience init(
+    supabaseURL: String,
+    supabaseKey: String,
+    options: SupabaseClientOptions = .init()
+  ) {
+    guard let supabaseURL = URL(string: supabaseURL) else {
+      fatalError("Invalid supabaseURL: \(supabaseURL)")
+    }
+
+    self.init(supabaseURL: supabaseURL, supabaseKey: supabaseKey, options: options)
   }
 
   deinit {
