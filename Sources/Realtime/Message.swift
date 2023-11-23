@@ -21,7 +21,7 @@
 import Foundation
 
 /// Data that is received from the Server.
-public struct Message {
+public struct Message: Sendable {
   /// Reference number. Empty if missing
   public let ref: String
 

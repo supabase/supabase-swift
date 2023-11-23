@@ -42,18 +42,17 @@
 
 import Foundation
 
-// sourcery: AutoMockable
 class TimeoutTimer {
   /// Callback to be informed when the underlying Timer fires
-  var callback = Delegated<Void, Void>()
+  var callback: @Sendable () -> Void = {}
 
   /// Provides TimeInterval to use when scheduling the timer
-  var timerCalculation = Delegated<Int, TimeInterval>()
+  var timerCalculation: @Sendable (Int) -> TimeInterval = { _ in 0 }
 
   /// The work to be done when the queue fires
   var workItem: DispatchWorkItem?
 
-  /// The number of times the underlyingTimer hass been set off.
+  /// The number of times the underlyingTimer has been set off.
   var tries: Int = 0
 
   /// The Queue to execute on. In testing, this is overridden
@@ -73,11 +72,11 @@ class TimeoutTimer {
 
     // Get the next calculated interval, in milliseconds. Do not
     // start the timer if the interval is returned as nil.
-    guard let timeInterval = timerCalculation.call(tries + 1) else { return }
+    let timeInterval = timerCalculation(tries + 1)
 
     let workItem = DispatchWorkItem {
       self.tries += 1
-      self.callback.call()
+      self.callback()
     }
 
     self.workItem = workItem

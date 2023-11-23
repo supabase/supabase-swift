@@ -227,8 +227,11 @@ public final class Presence {
       let diffEvent = opts.events[.diff]
     else { return }
 
-    self.channel?.delegateOn(stateEvent, filter: ChannelFilter(), to: self) { (self, message) in
-      guard let newState = message.rawPayload as? State else { return }
+    self.channel?.on(stateEvent, filter: ChannelFilter()) { [weak self] message in
+      guard
+        let self,
+        let newState = message.rawPayload as? State
+      else { return }
 
       self.joinRef = self.channel?.joinRef
       self.state = Presence.syncState(
@@ -251,8 +254,12 @@ public final class Presence {
       self.caller.onSync()
     }
 
-    self.channel?.delegateOn(diffEvent, filter: ChannelFilter(), to: self) { (self, message) in
-      guard let diff = message.rawPayload as? Diff else { return }
+    self.channel?.on(diffEvent, filter: ChannelFilter()) { [weak self] message in
+      guard
+        let self,
+        let diff = message.rawPayload as? Diff
+      else { return }
+
       if self.isPendingSyncState {
         self.pendingDiffs.append(diff)
       } else {

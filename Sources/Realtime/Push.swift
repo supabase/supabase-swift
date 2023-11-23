@@ -20,7 +20,7 @@
 
 import Foundation
 
-/// Represnts pushing data to a `Channel` through the `Socket`
+/// Represents pushing data to a `Channel` through the `Socket`
 public class Push {
   /// The channel sending the Push
   public weak var channel: RealtimeChannel?
@@ -44,7 +44,7 @@ public class Push {
   var timeoutWorkItem: DispatchWorkItem?
 
   /// Hooks into a Push. Where .receive("ok", callback(Payload)) are stored
-  var receiveHooks: [PushStatus: [Delegated<Message, Void>]]
+  var receiveHooks: [PushStatus: [@Sendable (Message) -> Void]]
 
   /// True if the Push has been sent
   var sent: Bool
@@ -121,61 +121,25 @@ public class Push {
   @discardableResult
   public func receive(
     _ status: PushStatus,
-    callback: @escaping ((Message) -> Void)
+    callback: @escaping @Sendable (Message) -> Void
   ) -> Push {
-    var delegated = Delegated<Message, Void>()
-    delegated.manuallyDelegate(with: callback)
-
-    return receive(status, delegated: delegated)
-  }
-
-  /// Receive a specific event when sending an Outbound message. Automatically
-  /// prevents retain cycles. See `manualReceive(status:, callback:)` if you
-  /// want to handle this yourself.
-  ///
-  /// Example:
-  ///
-  ///     channel
-  ///         .send(event:"custom", payload: ["body": "example"])
-  ///         .delegateReceive("error", to: self) { payload in
-  ///             print("Error: ", payload)
-  ///         }
-  ///
-  /// - parameter status: Status to receive
-  /// - parameter owner: The class that is calling .receive. Usually `self`
-  /// - parameter callback: Callback to fire when the status is recevied
-  @discardableResult
-  public func delegateReceive<Target: AnyObject>(
-    _ status: PushStatus,
-    to owner: Target,
-    callback: @escaping ((Target, Message) -> Void)
-  ) -> Push {
-    var delegated = Delegated<Message, Void>()
-    delegated.delegate(to: owner, with: callback)
-
-    return receive(status, delegated: delegated)
-  }
-
-  /// Shared behavior between `receive` calls
-  @discardableResult
-  func receive(_ status: PushStatus, delegated: Delegated<Message, Void>) -> Push {
     // If the message has already been received, pass it to the callback immediately
     if hasReceived(status: status), let receivedMessage {
-      delegated.call(receivedMessage)
+      callback(receivedMessage)
     }
 
     if receiveHooks[status] == nil {
       /// Create a new array of hooks if no previous hook is associated with status
-      receiveHooks[status] = [delegated]
+      receiveHooks[status] = [callback]
     } else {
       /// A previous hook for this status already exists. Just append the new hook
-      receiveHooks[status]?.append(delegated)
+      receiveHooks[status]?.append(callback)
     }
 
     return self
   }
 
-  /// Resets the Push as it was after it was first tnitialized.
+  /// Resets the Push as it was after it was first initialised.
   func reset() {
     cancelRefEvent()
     ref = nil
@@ -189,7 +153,7 @@ public class Push {
   /// - parameter status: Status which was received, e.g. "ok", "error", "timeout"
   /// - parameter response: Response that was received
   private func matchReceive(_ status: PushStatus, message: Message) {
-    receiveHooks[status]?.forEach { $0.call(message) }
+    receiveHooks[status]?.forEach { $0(message) }
   }
 
   /// Reverses the result on channel.on(ChannelEvent, callback) that spawned the Push
@@ -225,14 +189,14 @@ public class Push {
 
     /// If a response is received  before the Timer triggers, cancel timer
     /// and match the received event to it's corresponding hook
-    channel.delegateOn(refEvent, filter: ChannelFilter(), to: self) { (self, message) in
-      self.cancelRefEvent()
-      self.cancelTimeout()
-      self.receivedMessage = message
+    channel.on(refEvent, filter: ChannelFilter()) { [weak self] message in
+      self?.cancelRefEvent()
+      self?.cancelTimeout()
+      self?.receivedMessage = message
 
       /// Check if there is event a status available
       guard let status = message.status else { return }
-      self.matchReceive(status, message: message)
+      self?.matchReceive(status, message: message)
     }
 
     /// Setup and start the Timeout timer.
