@@ -21,7 +21,7 @@
 import Foundation
 
 /// Data that is received from the Server.
-public struct Message: Sendable {
+public struct Message: Sendable, Hashable {
   /// Reference number. Empty if missing
   public let ref: String
 
@@ -40,9 +40,7 @@ public struct Message: Sendable {
 
   /// Message payload
   public var payload: Payload {
-    guard let response = rawPayload["response"] as? Payload
-    else { return rawPayload }
-    return response
+    rawPayload["response"]?.objectValue ?? rawPayload
   }
 
   /// Convenience accessor. Equivalent to getting the status as such:
@@ -50,7 +48,7 @@ public struct Message: Sendable {
   /// message.payload["status"]
   /// ```
   public var status: PushStatus? {
-    (rawPayload["status"] as? String).flatMap(PushStatus.init(rawValue:))
+    rawPayload["status"]?.stringValue.flatMap(PushStatus.init(rawValue:))
   }
 
   init(
@@ -66,21 +64,40 @@ public struct Message: Sendable {
     rawPayload = payload
     self.joinRef = joinRef
   }
+}
 
-  init?(json: [Any?]) {
-    guard json.count > 4 else { return nil }
-    joinRef = json[0] as? String
-    ref = json[1] as? String ?? ""
+extension Message: Decodable {
+  public init(from decoder: Decoder) throws {
+    var container = try decoder.unkeyedContainer()
 
-    if let topic = json[2] as? String,
-       let event = json[3] as? String,
-       let payload = json[4] as? Payload
-    {
-      self.topic = topic
-      self.event = event
-      rawPayload = payload
+    let joinRef = try container.decodeIfPresent(String.self)
+    let ref = try container.decodeIfPresent(String.self)
+    let topic = try container.decode(String.self)
+    let event = try container.decode(String.self)
+    let payload = try container.decode(Payload.self)
+    self.init(
+      ref: ref ?? "",
+      topic: topic,
+      event: event,
+      payload: payload,
+      joinRef: joinRef
+    )
+  }
+}
+
+extension Message: Encodable {
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.unkeyedContainer()
+
+    if let joinRef {
+      try container.encode(joinRef)
     } else {
-      return nil
+      try container.encodeNil()
     }
+
+    try container.encode(ref)
+    try container.encode(topic)
+    try container.encode(event)
+    try container.encode(payload)
   }
 }

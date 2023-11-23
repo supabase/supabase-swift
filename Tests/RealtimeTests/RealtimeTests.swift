@@ -3,127 +3,75 @@ import XCTest
 @testable import Realtime
 
 final class RealtimeTests: XCTestCase {
-//  var supabaseUrl: String {
-//    guard let url = ProcessInfo.processInfo.environment["supabaseUrl"] else {
-//      XCTFail("supabaseUrl not defined in environment.")
-//      return ""
-//    }
-//
-//    return url
-//  }
-//
-//  var supabaseKey: String {
-//    guard let key = ProcessInfo.processInfo.environment["supabaseKey"] else {
-//      XCTFail("supabaseKey not defined in environment.")
-//      return ""
-//    }
-//    return key
-//  }
-//
-//  func testConnection() throws {
-//    try XCTSkipIf(
-//      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] == nil,
-//      "INTEGRATION_TESTS not defined"
-//    )
-//
-//    let socket = RealtimeClient(
-//      "\(supabaseUrl)/realtime/v1", params: ["apikey": supabaseKey]
-//    )
-//
-//    let e = expectation(description: "testConnection")
-//    socket.onOpen {
-//      XCTAssertEqual(socket.isConnected, true)
-//      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-//        socket.disconnect()
-//      }
-//    }
-//
-//    socket.onError { error, _ in
-//      XCTFail(error.localizedDescription)
-//    }
-//
-//    socket.onClose {
-//      XCTAssertEqual(socket.isConnected, false)
-//      e.fulfill()
-//    }
-//
-//    socket.connect()
-//
-//    waitForExpectations(timeout: 3000) { error in
-//      if let error {
-//        XCTFail("\(self.name)) failed: \(error.localizedDescription)")
-//      }
-//    }
-//  }
-//
-//  func testChannelCreation() throws {
-//    try XCTSkipIf(
-//      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] == nil,
-//      "INTEGRATION_TESTS not defined"
-//    )
-//
-//    let client = RealtimeClient(
-//      "\(supabaseUrl)/realtime/v1", params: ["apikey": supabaseKey]
-//    )
-//    let allChanges = client.channel(.all)
-//    allChanges.on(.all) { message in
-//      print(message)
-//    }
-//    allChanges.join()
-//    allChanges.leave()
-//    allChanges.off(.all)
-//
-//    let allPublicInsertChanges = client.channel(.schema("public"))
-//    allPublicInsertChanges.on(.insert) { message in
-//      print(message)
-//    }
-//    allPublicInsertChanges.join()
-//    allPublicInsertChanges.leave()
-//    allPublicInsertChanges.off(.insert)
-//
-//    let allUsersUpdateChanges = client.channel(.table("users", schema: "public"))
-//    allUsersUpdateChanges.on(.update) { message in
-//      print(message)
-//    }
-//    allUsersUpdateChanges.join()
-//    allUsersUpdateChanges.leave()
-//    allUsersUpdateChanges.off(.update)
-//
-//    let allUserId99Changes = client.channel(
-//      .column("id", value: "99", table: "users", schema: "public")
-//    )
-//    allUserId99Changes.on(.all) { message in
-//      print(message)
-//    }
-//    allUserId99Changes.join()
-//    allUserId99Changes.leave()
-//    allUserId99Changes.off(.all)
-//
-//    XCTAssertEqual(client.isConnected, false)
-//
-//    let e = expectation(description: name)
-//    client.onOpen {
-//      XCTAssertEqual(client.isConnected, true)
-//      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-//        client.disconnect()
-//      }
-//    }
-//
-//    client.onError { error, _ in
-//      XCTFail(error.localizedDescription)
-//    }
-//
-//    client.onClose {
-//      XCTAssertEqual(client.isConnected, false)
-//      e.fulfill()
-//    }
-//
-//    client.connect()
-//
-//    waitForExpectations(timeout: 3000) { error in
-//      if let error {
-//        XCTFail("\(self.name)) failed: \(error.localizedDescription)")
-//      }
-//    }
-//  }
+  private func makeSUT(file: StaticString = #file, line: UInt = #line) -> RealtimeClient {
+    let sut = RealtimeClient(
+      "https://nixfbjgqturwbakhnwym.supabase.co/realtime/v1",
+      params: [
+        "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peGZiamdxdHVyd2Jha2hud3ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NzAzMDE2MzksImV4cCI6MTk4NTg3NzYzOX0.Ct6W75RPlDM37TxrBQurZpZap3kBy0cNkUimxF50HSo",
+      ]
+    )
+    addTeardownBlock { [weak sut] in
+      XCTAssertNil(sut, "RealtimeClient leaked.", file: file, line: line)
+    }
+    return sut
+  }
+
+  func testConnection() async {
+    let sut = makeSUT()
+
+    let onOpenExpectation = expectation(description: "onOpen")
+    sut.onOpen { [weak sut] in
+      onOpenExpectation.fulfill()
+      sut?.disconnect()
+    }
+
+    sut.onError { error, _ in
+      XCTFail("connection failed with: \(error)")
+    }
+
+    let onCloseExpectation = expectation(description: "onClose")
+    onCloseExpectation.assertForOverFulfill = false
+    sut.onClose {
+      onCloseExpectation.fulfill()
+    }
+
+    sut.connect()
+
+    await fulfillment(of: [onOpenExpectation, onCloseExpectation])
+  }
+
+  func testOnChannelEvent() async {
+    let sut = makeSUT()
+
+    sut.connect()
+    defer { sut.disconnect() }
+
+    let expectation = expectation(description: "subscribe")
+    expectation.expectedFulfillmentCount = 2
+
+    var channel: RealtimeChannel?
+    addTeardownBlock { [weak channel] in
+      XCTAssertNil(channel)
+    }
+
+    var states: [RealtimeSubscribeStates] = []
+    channel = sut
+      .channel("public")
+      .subscribe { state, error in
+        states.append(state)
+
+        if let error {
+          XCTFail("Error subscribing to channel: \(error)")
+        }
+
+        expectation.fulfill()
+
+        if state == .subscribed {
+          channel?.unsubscribe()
+        }
+      }
+
+    await fulfillment(of: [expectation])
+    XCTAssertEqual(states, [.subscribed, .closed])
+  }
 }

@@ -90,15 +90,15 @@ public struct RealtimeChannelOptions {
   }
 
   /// Parameters used to configure the channel
-  var params: [String: [String: Any]] {
+  var params: [String: AnyJSON] {
     [
       "config": [
         "presence": [
-          "key": presenceKey ?? "",
+          "key": .string(presenceKey ?? ""),
         ],
         "broadcast": [
-          "ack": broadcastAcknowledge,
-          "self": broadcastSelf,
+          "ack": .bool(broadcastAcknowledge),
+          "self": .bool(broadcastSelf),
         ],
       ],
     ]
@@ -185,7 +185,7 @@ public class RealtimeChannel {
   /// - parameter topic: Topic of the RealtimeChannel
   /// - parameter params: Optional. Parameters to send when joining.
   /// - parameter socket: Socket that the channel is a part of
-  init(topic: String, params: [String: Any] = [:], socket: RealtimeClient) {
+  init(topic: String, params: [String: AnyJSON] = [:], socket: RealtimeClient) {
     state = ChannelState.closed
     self.topic = topic
     subTopic = topic.replacingOccurrences(of: "realtime:", with: "")
@@ -381,22 +381,27 @@ public class RealtimeChannel {
       self.timeout = safeTimeout
     }
 
-    let broadcast = (params["config"] as? [String: any Sendable])?["broadcast"]
-    let presence = (params["config"] as? [String: any Sendable])?["presence"]
+    let broadcast = params["config"]?.objectValue?["broadcast"]
+    let presence = params["config"]?.objectValue?["presence"]
 
     var accessTokenPayload: Payload = [:]
+
     var config: Payload = [
-      "postgres_changes": bindings["postgres_changes"]?.map(\.filter) ?? [],
+      "postgres_changes": .array(
+        (bindings["postgres_changes"]?.map(\.filter) ?? []).map { filter in
+          AnyJSON.object(filter.mapValues(AnyJSON.string))
+        }
+      ),
     ]
 
     config["broadcast"] = broadcast
     config["presence"] = presence
 
     if let accessToken = socket?.accessToken {
-      accessTokenPayload["access_token"] = accessToken
+      accessTokenPayload["access_token"] = .string(accessToken)
     }
 
-    params["config"] = config
+    params["config"] = .object(config)
 
     joinedOnce = true
     rejoin()
@@ -411,8 +416,8 @@ public class RealtimeChannel {
           self.socket?.setAuth(self.socket?.accessToken)
         }
 
-        guard let serverPostgresFilters = message
-          .payload["postgres_changes"] as? [[String: any Sendable]]
+        guard let serverPostgresFilters = message.payload["postgres_changes"]?.arrayValue?
+          .compactMap(\.objectValue)
         else {
           callback?(.subscribed, nil)
           return
@@ -432,17 +437,17 @@ public class RealtimeChannel {
 
           let serverPostgresFilter = serverPostgresFilters[i]
 
-          if serverPostgresFilter["event"] as? String == event,
-             serverPostgresFilter["schema"] as? String == schema,
-             serverPostgresFilter["table"] as? String == table,
-             serverPostgresFilter["filter"] as? String == filter
+          if serverPostgresFilter["event"]?.stringValue == event,
+             serverPostgresFilter["schema"]?.stringValue == schema,
+             serverPostgresFilter["table"]?.stringValue == table,
+             serverPostgresFilter["filter"]?.stringValue == filter
           {
             newPostgresBindings.append(
               Binding(
                 type: clientPostgresBinding.type,
                 filter: clientPostgresBinding.filter,
                 callback: clientPostgresBinding.callback,
-                id: (serverPostgresFilter["id"] as? Int).flatMap(String.init)
+                id: serverPostgresFilter["id"]?.numberValue.map { Int($0) }.flatMap(String.init)
               )
             )
           } else {
@@ -481,7 +486,7 @@ public class RealtimeChannel {
       type: .presence,
       payload: [
         "event": "track",
-        "payload": payload,
+        "payload": .object(payload),
       ],
       opts: opts
     )
@@ -643,9 +648,9 @@ public class RealtimeChannel {
     opts: Payload = [:]
   ) async -> ChannelResponse {
     var payload = payload
-    payload["type"] = type.rawValue
+    payload["type"] = .string(type.rawValue)
     if let event {
-      payload["event"] = event
+      payload["event"] = .string(event)
     }
 
     if !canPush, type == .broadcast {
@@ -681,14 +686,14 @@ public class RealtimeChannel {
       return await withCheckedContinuation { continuation in
         let push = self.push(
           type.rawValue, payload: payload,
-          timeout: (opts["timeout"] as? TimeInterval) ?? self.timeout
+          timeout: opts["timeout"]?.numberValue ?? self.timeout
         )
 
-        if let type = payload["type"] as? String, type == "broadcast",
-           let config = self.params["config"] as? [String: any Sendable],
-           let broadcast = config["broadcast"] as? [String: any Sendable]
+        if let type = payload["type"]?.stringValue, type == "broadcast",
+           let config = self.params["config"]?.objectValue,
+           let broadcast = config["broadcast"]?.objectValue
         {
-          let ack = broadcast["ack"] as? Bool
+          let ack = broadcast["ack"]?.boolValue
           if ack == nil || ack == false {
             continuation.resume(returning: .ok)
             return
@@ -848,13 +853,14 @@ public class RealtimeChannel {
           let bindEvent = bind.filter["event"]?.lowercased()
 
           if let bindId = bind.id.flatMap(Int.init) {
-            let ids = message.payload["ids"] as? [Int] ?? []
-            let data = message.payload["data"] as? [String: any Sendable] ?? [:]
-            let type = data["type"] as? String
+            let ids = (message.payload["ids"]?.arrayValue ?? []).compactMap(\.numberValue)
+              .map(Int.init)
+            let data = message.payload["data"]?.objectValue ?? [:]
+            let type = data["type"]?.stringValue
             return ids.contains(bindId) && (bindEvent == "*" || bindEvent == type?.lowercased())
           }
 
-          let messageEvent = message.payload["event"] as? String
+          let messageEvent = message.payload["event"]?.stringValue
           return bindEvent == "*" || bindEvent == messageEvent?.lowercased()
         }
 

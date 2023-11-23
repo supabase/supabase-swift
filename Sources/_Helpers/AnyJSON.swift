@@ -64,6 +64,43 @@ public enum AnyJSON: Sendable, Codable, Hashable {
   }
 }
 
+extension AnyJSON {
+  public var objectValue: [String: AnyJSON]? {
+    if case let .object(object) = self {
+      return object
+    }
+    return nil
+  }
+
+  public var arrayValue: [AnyJSON]? {
+    if case let .array(array) = self {
+      return array
+    }
+    return nil
+  }
+
+  public var stringValue: String? {
+    if case let .string(string) = self {
+      return string
+    }
+    return nil
+  }
+
+  public var numberValue: Double? {
+    if case let .number(number) = self {
+      return number
+    }
+    return nil
+  }
+
+  public var boolValue: Bool? {
+    if case let .bool(bool) = self {
+      return bool
+    }
+    return nil
+  }
+}
+
 extension AnyJSON: ExpressibleByNilLiteral {
   public init(nilLiteral _: ()) {
     self = .null

@@ -27,10 +27,10 @@ public enum SocketError: Error {
 }
 
 /// Alias for a JSON dictionary [String: Any]
-public typealias Payload = [String: any Sendable]
+public typealias Payload = [String: AnyJSON]
 
 /// Alias for a function returning an optional JSON dictionary (`Payload?`)
-public typealias PayloadClosure = () -> Payload?
+public typealias PayloadClosure = () -> [String: Any]?
 
 /// Struct that gathers callbacks assigned to the Socket
 struct StateChangeCallbacks {
@@ -73,7 +73,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// Resolves to return the `paramsClosure` result at the time of calling.
   /// If the `Socket` was created with static params, then those will be
   /// returned every time.
-  public var params: Payload? {
+  public var params: [String: Any]? {
     paramsClosure?()
   }
 
@@ -82,7 +82,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public let paramsClosure: PayloadClosure?
 
   /// The WebSocket transport. Default behavior is to provide a
-  /// URLSessionWebsocketTask. See README for alternatives.
+  /// URLSessionWebSocketTask. See README for alternatives.
   private let transport: (URL) -> PhoenixTransport
 
   /// Phoenix serializer version, defaults to "2.0.0"
@@ -182,7 +182,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public convenience init(
     _ endPoint: String,
     headers: [String: String] = [:],
-    params: Payload? = nil,
+    params: [String: Any]? = nil,
     vsn: String = Defaults.vsn
   ) {
     self.init(
@@ -244,7 +244,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
     reconnectTimer = TimeoutTimer()
     reconnectTimer.callback = { [weak self] in
       self?.logItems("Socket attempting to reconnect")
-      self?.teardown(reason: "reconnection") { self?.connect() }
+      self?.teardown(reason: "reconnection")
+      self?.connect()
     }
     reconnectTimer.timerCalculation = { [weak self] tries in
       let interval = self?.reconnectAfter(tries) ?? 5.0
@@ -287,12 +288,13 @@ public class RealtimeClient: PhoenixTransportDelegate {
     accessToken = token
 
     for channel in channels {
-      if token != nil {
-        channel.params["user_token"] = token
-      }
+      channel.params["user_token"] = token.map(AnyJSON.string) ?? .null
 
       if channel.joinedOnce, channel.isJoined {
-        channel.push(ChannelEvent.accessToken, payload: ["access_token": token as Any])
+        channel.push(
+          ChannelEvent.accessToken,
+          payload: ["access_token": token.map(AnyJSON.string) ?? .null]
+        )
       }
     }
   }
@@ -334,19 +336,19 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// - parameter callback: Optional. Called when disconnected
   public func disconnect(
     code: CloseCode = CloseCode.normal,
-    reason: String? = nil,
-    callback: (() -> Void)? = nil
+    reason: String? = nil
   ) {
     // The socket was closed cleanly by the User
     closeStatus = CloseStatus(closeCode: code.rawValue)
 
     // Reset any reconnects and teardown the socket connection
     reconnectTimer.reset()
-    teardown(code: code, reason: reason, callback: callback)
+    teardown(code: code, reason: reason)
   }
 
   func teardown(
-    code: CloseCode = CloseCode.normal, reason: String? = nil, callback: (() -> Void)? = nil
+    code: CloseCode = CloseCode.normal,
+    reason: String? = nil
   ) {
     connection?.delegate = nil
     connection?.disconnect(code: code.rawValue, reason: reason)
@@ -358,7 +360,6 @@ public class RealtimeClient: PhoenixTransportDelegate {
     // Since the connection's delegate was nil'd out, inform all state
     // callbacks that the connection has closed
     stateChangeCallbacks.close.value.forEach { $0.callback(code.rawValue, reason) }
-    callback?()
   }
 
   // ----------------------------------------------------------------------
@@ -569,20 +570,17 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// - parameter payload:
   /// - parameter ref: Optional. Defaults to nil
   /// - parameter joinRef: Optional. Defaults to nil
-  func push(
-    topic: String,
-    event: String,
-    payload: Payload,
-    ref: String? = nil,
-    joinRef: String? = nil
-  ) {
+  func push(message: Message) {
     let callback: (() throws -> Void) = { [weak self] in
       guard let self else { return }
-      let body: [Any?] = [joinRef, ref, topic, event, payload]
-      let data = self.encode(body)
+      do {
+        let data = try JSONEncoder().encode(message)
 
-      self.logItems("push", "Sending \(String(data: data, encoding: String.Encoding.utf8) ?? "")")
-      self.connection?.send(data: data)
+        self.logItems("push", "Sending \(String(data: data, encoding: String.Encoding.utf8) ?? "")")
+        self.connection?.send(data: data)
+      } catch {
+        // TODO: handle error
+      }
     }
 
     /// If the socket is connected, then execute the callback immediately.
@@ -591,7 +589,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     } else {
       /// If the socket is not connected, add the push to a buffer which will
       /// be sent immediately upon connection.
-      sendBuffer.append((ref: ref, callback: callback))
+      sendBuffer.append((ref: message.ref, callback: callback))
     }
   }
 
@@ -662,32 +660,32 @@ public class RealtimeClient: PhoenixTransportDelegate {
     stateChangeCallbacks.error.value.forEach { $0.callback(error, response) }
   }
 
-  func onConnectionMessage(_ rawMessage: String) {
+  func onConnectionMessage(_ message: Data) {
+    let rawMessage = String(data: message, encoding: .utf8) ?? ""
     logItems("receive ", rawMessage)
 
-    guard
-      let data = rawMessage.data(using: String.Encoding.utf8),
-      let json = decode(data) as? [Any?],
-      let message = Message(json: json)
-    else {
-      logItems("receive: Unable to parse JSON: \(rawMessage)")
+    do {
+      let message = try JSONDecoder().decode(Message.self, from: message)
+
+      // Clear heartbeat ref, preventing a heartbeat timeout disconnect
+      if message.ref == pendingHeartbeatRef { pendingHeartbeatRef = nil }
+
+      if message.event == "phx_close" {
+        print("Close Event Received")
+      }
+
+      // Dispatch the message to all channels that belong to the topic
+      channels
+        .filter { $0.isMember(message) }
+        .forEach { $0.trigger(message) }
+
+      // Inform all onMessage callbacks of the message
+      stateChangeCallbacks.message.value.forEach { $0.callback(message) }
+
+    } catch {
+      logItems("receive: Unable to parse JSON: \(rawMessage) error: \(error)")
       return
     }
-
-    // Clear heartbeat ref, preventing a heartbeat timeout disconnect
-    if message.ref == pendingHeartbeatRef { pendingHeartbeatRef = nil }
-
-    if message.event == "phx_close" {
-      print("Close Event Received")
-    }
-
-    // Dispatch the message to all channels that belong to the topic
-    channels
-      .filter { $0.isMember(message) }
-      .forEach { $0.trigger(message) }
-
-    // Inform all onMessage callbacks of the message
-    stateChangeCallbacks.message.value.forEach { $0.callback(message) }
   }
 
   /// Triggers an error event to all of the connected Channels
@@ -802,10 +800,12 @@ public class RealtimeClient: PhoenixTransportDelegate {
     // The last heartbeat was acknowledged by the server. Send another one
     pendingHeartbeatRef = makeRef()
     push(
-      topic: "phoenix",
-      event: ChannelEvent.heartbeat,
-      payload: [:],
-      ref: pendingHeartbeatRef
+      message: Message(
+        ref: pendingHeartbeatRef ?? "",
+        topic: "phoenix",
+        event: ChannelEvent.heartbeat,
+        payload: [:]
+      )
     )
   }
 
@@ -836,7 +836,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     onConnectionError(error, response: response)
   }
 
-  public func onMessage(message: String) {
+  public func onMessage(message: Data) {
     onConnectionMessage(message)
   }
 

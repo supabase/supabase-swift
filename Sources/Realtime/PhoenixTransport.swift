@@ -89,7 +89,7 @@ public protocol PhoenixTransportDelegate {
 
    - Parameter message: Message received from the server
    */
-  func onMessage(message: String)
+  func onMessage(message: Data)
 
   /**
    Notified when the `Transport` closes.
@@ -276,10 +276,11 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
       switch result {
       case let .success(message):
         switch message {
-        case .data:
-          print("Data received. This method is unsupported by the Client")
+        case let .data(data):
+          self?.delegate?.onMessage(message: data)
         case let .string(text):
-          self?.delegate?.onMessage(message: text)
+          let data = Data(text.utf8)
+          self?.delegate?.onMessage(message: data)
         default:
           fatalError("Unknown result was received. [\(result)]")
         }

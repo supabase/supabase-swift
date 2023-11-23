@@ -94,11 +94,13 @@ public class Push {
     startTimeout()
     sent = true
     channel?.socket?.push(
-      topic: channel?.topic ?? "",
-      event: event,
-      payload: payload,
-      ref: ref,
-      joinRef: channel?.joinRef
+      message: Message(
+        ref: ref ?? "",
+        topic: channel?.topic ?? "",
+        event: event,
+        payload: payload,
+        joinRef: channel?.joinRef
+      )
     )
   }
 
@@ -222,7 +224,7 @@ public class Push {
     guard let refEvent else { return }
 
     var mutPayload = payload
-    mutPayload["status"] = status.rawValue
+    mutPayload["status"] = .string(status.rawValue)
 
     channel?.trigger(event: refEvent, payload: mutPayload)
   }
