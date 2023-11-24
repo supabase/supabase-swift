@@ -912,7 +912,8 @@ public class RealtimeChannel {
   }
 
   var broadcastEndpointURL: URL {
-    var url = socket?.endPoint ?? ""
+    var url = socket?.url.absoluteString ?? ""
+
     url = url.replacingOccurrences(of: "^ws", with: "http", options: .regularExpression, range: nil)
     url = url.replacingOccurrences(
       of: "(/socket/websocket|/socket|/websocket)/?$", with: "", options: .regularExpression,

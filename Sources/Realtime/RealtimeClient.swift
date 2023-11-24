@@ -65,21 +65,15 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// `"wss://example.com"`, etc.) That was passed to the Socket during
   /// initialization. The URL endpoint will be modified by the Socket to
   /// include `"/websocket"` if missing.
-  public let endPoint: String
+  public let url: URL
 
   /// The fully qualified socket URL
-  public private(set) var endPointUrl: URL
+  public private(set) var endpointUrl: URL
 
   /// Resolves to return the `paramsClosure` result at the time of calling.
   /// If the `Socket` was created with static params, then those will be
   /// returned every time.
-  public var params: [String: Any]? {
-    paramsClosure?()
-  }
-
-  /// The optional params closure used to get params when connecting. Must
-  /// be set when initializing the Socket.
-  public let paramsClosure: PayloadClosure?
+  public var params: [String: Any] = [:]
 
   /// The WebSocket transport. Default behavior is to provide a
   /// URLSessionWebSocketTask. See README for alternatives.
@@ -173,53 +167,31 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   var accessToken: String?
 
-  // ----------------------------------------------------------------------
-
-  // MARK: - Initialization
-
-  // ----------------------------------------------------------------------
-  @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
   public convenience init(
-    _ endPoint: String,
+    url: URL,
     headers: [String: String] = [:],
-    params: [String: Any]? = nil,
+    params: [String: Any] = [:],
     vsn: String = Defaults.vsn
   ) {
     self.init(
-      endPoint: endPoint,
+      url: url,
       headers: headers,
       transport: { url in URLSessionTransport(url: url) },
-      paramsClosure: { params },
-      vsn: vsn
-    )
-  }
-
-  @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
-  public convenience init(
-    _ endPoint: String,
-    headers: [String: String] = [:],
-    paramsClosure: PayloadClosure?,
-    vsn: String = Defaults.vsn
-  ) {
-    self.init(
-      endPoint: endPoint,
-      headers: headers,
-      transport: { url in URLSessionTransport(url: url) },
-      paramsClosure: paramsClosure,
+      params: params,
       vsn: vsn
     )
   }
 
   public init(
-    endPoint: String,
+    url: URL,
     headers: [String: String] = [:],
     transport: @escaping ((URL) -> PhoenixTransport),
-    paramsClosure: PayloadClosure? = nil,
+    params: [String: Any] = [:],
     vsn: String = Defaults.vsn
   ) {
     self.transport = transport
-    self.paramsClosure = paramsClosure
-    self.endPoint = endPoint
+    self.params = params
+    self.url = url
     self.vsn = vsn
 
     var headers = headers
@@ -229,15 +201,14 @@ public class RealtimeClient: PhoenixTransportDelegate {
     self.headers = headers
     http = HTTPClient(fetchHandler: { try await URLSession.shared.data(for: $0) })
 
-    let params = paramsClosure?()
-    if let jwt = (params?["Authorization"] as? String)?.split(separator: " ").last {
+    if let jwt = (params["Authorization"] as? String)?.split(separator: " ").last {
       accessToken = String(jwt)
     } else {
-      accessToken = params?["apikey"] as? String
+      accessToken = params["apikey"] as? String
     }
-    endPointUrl = RealtimeClient.buildEndpointUrl(
-      endpoint: endPoint,
-      paramsClosure: paramsClosure,
+    endpointUrl = RealtimeClient.buildEndpointUrl(
+      url: url,
+      params: params,
       vsn: vsn
     )
 
@@ -265,10 +236,10 @@ public class RealtimeClient: PhoenixTransportDelegate {
   // ----------------------------------------------------------------------
   /// - return: The socket protocol, wss or ws
   public var websocketProtocol: String {
-    switch endPointUrl.scheme {
+    switch endpointUrl.scheme {
     case "https": return "wss"
     case "http": return "ws"
-    default: return endPointUrl.scheme ?? ""
+    default: return endpointUrl.scheme ?? ""
     }
   }
 
@@ -311,13 +282,13 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
     // We need to build this right before attempting to connect as the
     // parameters could be built upon demand and change over time
-    endPointUrl = RealtimeClient.buildEndpointUrl(
-      endpoint: endPoint,
-      paramsClosure: paramsClosure,
+    endpointUrl = RealtimeClient.buildEndpointUrl(
+      url: url,
+      params: params,
       vsn: vsn
     )
 
-    connection = transport(endPointUrl)
+    connection = transport(endpointUrl)
     connection?.delegate = self
     //    self.connection?.disableSSLCertValidation = disableSSLCertValidation
     //
@@ -614,7 +585,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   // ----------------------------------------------------------------------
   /// Called when the underlying Websocket connects to it's host
   func onConnectionOpen(response: URLResponse?) {
-    logItems("transport", "Connected to \(endPoint)")
+    logItems("transport", "Connected to \(url)")
 
     // Reset the close status now that the socket has been connected
     closeStatus = .unknown
@@ -712,12 +683,12 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   /// Builds a fully qualified socket `URL` from `endPoint` and `params`.
   static func buildEndpointUrl(
-    endpoint: String, paramsClosure params: PayloadClosure?, vsn: String
+    url: URL,
+    params: [String: Any],
+    vsn: String
   ) -> URL {
-    guard
-      let url = URL(string: endpoint),
-      var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    else { fatalError("Malformed URL: \(endpoint)") }
+    guard var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    else { fatalError("Malformed URL: \(url)") }
 
     // Ensure that the URL ends with "/websocket
     if !urlComponents.path.contains("/websocket") {
@@ -733,7 +704,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     urlComponents.queryItems = [URLQueryItem(name: "vsn", value: vsn)]
 
     // If there are parameters, append them to the URL
-    if let params = params?() {
+    if !params.isEmpty {
       urlComponents.queryItems?.append(
         contentsOf: params.map {
           URLQueryItem(name: $0.key, value: String(describing: $0.value))

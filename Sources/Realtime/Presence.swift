@@ -142,13 +142,13 @@ public final class Presence {
   public typealias Diff = [String: State]
 
   /// Closure signature of OnJoin callbacks
-  public typealias OnJoin = (_ key: String, _ current: Map?, _ new: Map) -> Void
+  public typealias OnJoin = @Sendable (_ key: String, _ current: Map?, _ new: Map) -> Void
 
   /// Closure signature for OnLeave callbacks
-  public typealias OnLeave = (_ key: String, _ current: Map, _ left: Map) -> Void
+  public typealias OnLeave = @Sendable (_ key: String, _ current: Map, _ left: Map) -> Void
 
   //// Closure signature for OnSync callbacks
-  public typealias OnSync = () -> Void
+  public typealias OnSync = @Sendable () -> Void
 
   /// Collection of callbacks with default values
   struct Caller {
