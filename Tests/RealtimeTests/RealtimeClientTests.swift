@@ -3,57 +3,60 @@ import XCTest
 @testable import Realtime
 
 final class RealtimeClientTests: XCTestCase {
-  func testInitializerWithDefaults() {
+  private func makeSUT(
+    headers: [String: String] = [:],
+    params: [String: AnyJSON] = [:],
+    vsn: String = Defaults.vsn
+  ) -> (URL, RealtimeClient, PhoenixTransportMock) {
     let url = URL(string: "https://example.com")!
-    let transport: (URL) -> PhoenixTransport = { _ in PhoenixTransportMock() }
-
-    let realtimeClient = RealtimeClient(url: url, transport: transport)
-
-    XCTAssertEqual(realtimeClient.url, url)
-    XCTAssertEqual(
-      realtimeClient.headers,
-      ["X-Client-Info": "realtime-swift/\(_Helpers.version)"]
-    )
-
-    let transportInstance = realtimeClient.transport(url)
-    XCTAssertTrue(transportInstance is PhoenixTransportMock)
-    XCTAssertEqual(realtimeClient.params, [:])
-    XCTAssertEqual(realtimeClient.vsn, Defaults.vsn)
-  }
-
-  func testInitializerWithCustomValues() {
-    let url = URL(string: "https://example.com")!
-    let headers = ["Custom-Header": "Value"]
-    let transport: (URL) -> PhoenixTransport = { _ in PhoenixTransportMock() }
-    let params = ["param1": AnyJSON.string("value1")]
-    let vsn = "2.0"
-
-    let realtimeClient = RealtimeClient(
+    let transport = PhoenixTransportMock()
+    let sut = RealtimeClient(
       url: url,
       headers: headers,
-      transport: transport,
+      transport: { _ in transport },
       params: params,
       vsn: vsn
     )
+    return (url, sut, transport)
+  }
 
-    XCTAssertEqual(realtimeClient.url, url)
-    XCTAssertEqual(realtimeClient.headers["Custom-Header"], "Value")
+  func testInitializerWithDefaults() {
+    let (url, sut, transport) = makeSUT()
 
-    let transportInstance = realtimeClient.transport(url)
-    XCTAssertTrue(transportInstance is PhoenixTransportMock)
+    XCTAssertEqual(sut.url, url)
+    XCTAssertEqual(
+      sut.headers,
+      ["X-Client-Info": "realtime-swift/\(_Helpers.version)"]
+    )
 
-    XCTAssertEqual(realtimeClient.params, params)
-    XCTAssertEqual(realtimeClient.vsn, vsn)
+    XCTAssertIdentical(sut.transport(url) as AnyObject, transport)
+    XCTAssertEqual(sut.params, [:])
+    XCTAssertEqual(sut.vsn, Defaults.vsn)
+  }
+
+  func testInitializerWithCustomValues() {
+    let headers = ["Custom-Header": "Value"]
+    let params = ["param1": AnyJSON.string("value1")]
+    let vsn = "2.0"
+
+    let (url, sut, transport) = makeSUT(headers: headers, params: params, vsn: vsn)
+
+    XCTAssertEqual(sut.url, url)
+    XCTAssertEqual(sut.headers["Custom-Header"], "Value")
+
+    XCTAssertIdentical(sut.transport(url) as AnyObject, transport)
+
+    XCTAssertEqual(sut.params, params)
+    XCTAssertEqual(sut.vsn, vsn)
   }
 
   func testInitializerWithAuthorizationJWT() {
-    let url = URL(string: "https://example.com")!
     let jwt = "your_jwt_token"
     let params = ["Authorization": AnyJSON.string("Bearer \(jwt)")]
 
-    let realtimeClient = RealtimeClient(url: url, params: params)
+    let (_, sut, _) = makeSUT(params: params)
 
-    XCTAssertEqual(realtimeClient.accessToken, jwt)
+    XCTAssertEqual(sut.accessToken, jwt)
   }
 
   func testInitializerWithAPIKey() {
@@ -67,12 +70,9 @@ final class RealtimeClientTests: XCTestCase {
   }
 
   func testInitializerWithoutAccessToken() {
-    let url = URL(string: "https://example.com")!
     let params: [String: AnyJSON] = [:]
-
-    let realtimeClient = RealtimeClient(url: url, params: params)
-
-    XCTAssertNil(realtimeClient.accessToken)
+    let (_, sut, _) = makeSUT(params: params)
+    XCTAssertNil(sut.accessToken)
   }
 
   func testBuildEndpointUrl() {
