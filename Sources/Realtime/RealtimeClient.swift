@@ -145,13 +145,13 @@ public class RealtimeClient: PhoenixTransportDelegate {
   var ref: UInt64 = .min // 0 (max: 18,446,744,073,709,551,615)
 
   /// Timer that triggers sending new Heartbeat messages
-  var heartbeatTimer: HeartbeatTimer?
+  var heartbeatTimer: HeartbeatTimerProtocol?
 
   /// Ref counter for the last heartbeat that was sent
   var pendingHeartbeatRef: String?
 
   /// Timer to use when attempting to reconnect
-  var reconnectTimer: TimeoutTimer
+  var reconnectTimer: TimeoutTimerProtocol
 
   /// Close status
   var closeStatus: CloseStatus = .unknown
@@ -209,7 +209,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       vsn: vsn
     )
 
-    reconnectTimer = TimeoutTimer()
+    reconnectTimer = Dependencies.timeoutTimer()
     reconnectTimer.callback = { [weak self] in
       self?.logItems("Socket attempting to reconnect")
       self?.teardown(reason: "reconnection")
@@ -276,14 +276,6 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
     // Reset the close status when attempting to connect
     closeStatus = .unknown
-
-    // We need to build this right before attempting to connect as the
-    // parameters could be built upon demand and change over time
-    endpointUrl = RealtimeClient.buildEndpointUrl(
-      url: url,
-      params: params,
-      vsn: vsn
-    )
 
     connection = transport(endpointUrl)
     connection?.delegate = self
@@ -737,7 +729,11 @@ public class RealtimeClient: PhoenixTransportDelegate {
     // Do not start up the heartbeat timer if skipHeartbeat is true
     guard !skipHeartbeat else { return }
 
-    heartbeatTimer = HeartbeatTimer(timeInterval: heartbeatInterval, leeway: heartbeatLeeway)
+    heartbeatTimer = Dependencies.heartbeatTimer(
+      heartbeatInterval,
+      Defaults.heartbeatQueue,
+      heartbeatLeeway
+    )
     heartbeatTimer?.start(eventHandler: { [weak self] in
       self?.sendHeartbeat()
     })

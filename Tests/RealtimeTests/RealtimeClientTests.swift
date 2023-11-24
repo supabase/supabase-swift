@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 import XCTest
 @_spi(Internal) import _Helpers
 @testable import Realtime
@@ -104,16 +105,141 @@ final class RealtimeClientTests: XCTestCase {
 
     XCTAssertEqual(resultUrl.query, "vsn=1.0")
   }
+
+  func testConnect() throws {
+    let (_, sut, _) = makeSUT()
+
+    XCTAssertNil(sut.connection, "connection should be nil before calling connect method.")
+
+    sut.connect()
+    XCTAssertEqual(sut.closeStatus, .unknown)
+
+    let connection = try XCTUnwrap(sut.connection as? PhoenixTransportMock)
+    XCTAssertIdentical(connection.delegate, sut)
+
+    XCTAssertEqual(connection.connectHeaders, sut.headers)
+
+    // Given readyState = .open
+    connection.readyState = .open
+
+    // When calling connect
+    sut.connect()
+
+    // Verify that transport's connect was called only once (first connect call).
+    XCTAssertEqual(connection.connectCallCount, 1)
+  }
+
+  func testDisconnect() async throws {
+    let timeoutTimer = TimeoutTimerMock()
+    Dependencies.timeoutTimer = { timeoutTimer }
+
+    let heartbeatTimer = HeartbeatTimerMock()
+    Dependencies.heartbeatTimer = { _, _, _ in
+      heartbeatTimer
+    }
+
+    let (_, sut, transport) = makeSUT()
+
+    let expectation = expectation(description: "onClose")
+    let onCloseReceivedParams = LockIsolated<(Int, String?)?>(nil)
+    sut.onClose { code, reason in
+      onCloseReceivedParams.setValue((code, reason))
+      expectation.fulfill()
+    }
+
+    sut.connect()
+
+    XCTAssertEqual(sut.closeStatus, .unknown)
+    sut.disconnect(code: .normal, reason: "test")
+
+    XCTAssertEqual(sut.closeStatus, .clean)
+
+    XCTAssertEqual(timeoutTimer.resetCallCount, 2)
+
+    XCTAssertNil(sut.connection)
+    XCTAssertNil(transport.delegate)
+    XCTAssertEqual(transport.disconnectCallCount, 1)
+    XCTAssertEqual(transport.disconnectCode, 1000)
+    XCTAssertEqual(transport.disconnectReason, "test")
+
+    await fulfillment(of: [expectation])
+
+    let (code, reason) = try XCTUnwrap(onCloseReceivedParams.value)
+    XCTAssertEqual(code, 1000)
+    XCTAssertEqual(reason, "test")
+
+    XCTAssertEqual(heartbeatTimer.stopCallCount, 1)
+  }
 }
 
-final class PhoenixTransportMock: PhoenixTransport {
-  var readyState: Realtime.PhoenixTransportReadyState = .closed
+class PhoenixTransportMock: PhoenixTransport {
+  var readyState: PhoenixTransportReadyState = .closed
+  var delegate: PhoenixTransportDelegate?
 
-  var delegate: Realtime.PhoenixTransportDelegate?
+  private(set) var connectCallCount = 0
+  private(set) var disconnectCallCount = 0
+  private(set) var sendCallCount = 0
 
-  func connect(with _: [String: String]) {}
+  private(set) var connectHeaders: [String: String]?
+  private(set) var disconnectCode: Int?
+  private(set) var disconnectReason: String?
+  private(set) var sendData: Data?
 
-  func disconnect(code _: Int, reason _: String?) {}
+  func connect(with headers: [String: String]) {
+    connectCallCount += 1
+    connectHeaders = headers
 
-  func send(data _: Data) {}
+    delegate?.onOpen(response: nil)
+  }
+
+  func disconnect(code: Int, reason: String?) {
+    disconnectCallCount += 1
+    disconnectCode = code
+    disconnectReason = reason
+
+    delegate?.onClose(code: code, reason: reason)
+  }
+
+  func send(data: Data) {
+    sendCallCount += 1
+    sendData = data
+
+    delegate?.onMessage(message: data)
+  }
+}
+
+class TimeoutTimerMock: TimeoutTimerProtocol {
+  var callback: @Sendable () -> Void = {}
+  var timerCalculation: @Sendable (Int) -> TimeInterval = { _ in 0.0 }
+
+  private(set) var resetCallCount = 0
+  private(set) var scheduleTimeoutCallCount = 0
+
+  func reset() {
+    resetCallCount += 1
+  }
+
+  func scheduleTimeout() {
+    scheduleTimeoutCallCount += 1
+  }
+}
+
+class HeartbeatTimerMock: HeartbeatTimerProtocol {
+  private(set) var startCallCount = 0
+  private(set) var stopCallCount = 0
+  private var eventHandler: (() -> Void)?
+
+  func start(eventHandler: @escaping () -> Void) {
+    startCallCount += 1
+    self.eventHandler = eventHandler
+  }
+
+  func stop() {
+    stopCallCount += 1
+  }
+
+  /// Helper method to simulate the timer firing an event
+  func simulateTimerEvent() {
+    eventHandler?()
+  }
 }

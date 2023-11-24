@@ -28,7 +28,6 @@ import Foundation
 /**
  Defines a `Socket`'s Transport layer.
  */
-// sourcery: AutoMockable
 public protocol PhoenixTransport {
   /// The current `ReadyState` of the `Transport` layer
   var readyState: PhoenixTransportReadyState { get }
@@ -67,7 +66,7 @@ public protocol PhoenixTransport {
 
 // ----------------------------------------------------------------------
 /// Delegate to receive notifications of events that occur in the `Transport` layer
-public protocol PhoenixTransportDelegate {
+public protocol PhoenixTransportDelegate: AnyObject {
   /**
    Notified when the `Transport` opens.
 

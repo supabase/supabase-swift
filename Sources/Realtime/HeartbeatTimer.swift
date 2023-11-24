@@ -27,7 +27,12 @@ import Foundation
  queue but guarantees thread safety.
  */
 
-class HeartbeatTimer {
+protocol HeartbeatTimerProtocol {
+  func start(eventHandler: @escaping () -> Void)
+  func stop()
+}
+
+class HeartbeatTimer: HeartbeatTimerProtocol {
   // ----------------------------------------------------------------------
 
   // MARK: - Dependencies

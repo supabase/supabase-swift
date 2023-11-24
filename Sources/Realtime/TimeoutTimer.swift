@@ -42,7 +42,15 @@
 
 import Foundation
 
-class TimeoutTimer {
+protocol TimeoutTimerProtocol {
+  var callback: @Sendable () -> Void { get set }
+  var timerCalculation: @Sendable (Int) -> TimeInterval { get set }
+
+  func reset()
+  func scheduleTimeout()
+}
+
+class TimeoutTimer: TimeoutTimerProtocol {
   /// Callback to be informed when the underlying Timer fires
   var callback: @Sendable () -> Void = {}
 
@@ -93,7 +101,7 @@ class TimeoutTimer {
 /// Wrapper class around a DispatchQueue. Allows for providing a fake clock
 /// during tests.
 class TimerQueue {
-  // Can be overriden in tests
+  // Can be overridden in tests
   static var main = TimerQueue()
 
   func queue(timeInterval: TimeInterval, execute: DispatchWorkItem) {
