@@ -29,9 +29,6 @@ public enum SocketError: Error {
 /// Alias for a JSON dictionary [String: Any]
 public typealias Payload = [String: AnyJSON]
 
-/// Alias for a function returning an optional JSON dictionary (`Payload?`)
-public typealias PayloadClosure = () -> [String: Any]?
-
 /// Struct that gathers callbacks assigned to the Socket
 struct StateChangeCallbacks {
   let open: LockIsolated < [(ref: String, callback: @Sendable (URLResponse?) -> Void)] > = .init([])
@@ -73,11 +70,11 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// Resolves to return the `paramsClosure` result at the time of calling.
   /// If the `Socket` was created with static params, then those will be
   /// returned every time.
-  public var params: [String: Any] = [:]
+  public var params: Payload = [:]
 
   /// The WebSocket transport. Default behavior is to provide a
   /// URLSessionWebSocketTask. See README for alternatives.
-  private let transport: (URL) -> PhoenixTransport
+  let transport: (URL) -> PhoenixTransport
 
   /// Phoenix serializer version, defaults to "2.0.0"
   public let vsn: String
@@ -170,7 +167,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
-    params: [String: Any] = [:],
+    params: Payload = [:],
     vsn: String = Defaults.vsn
   ) {
     self.init(
@@ -186,7 +183,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     url: URL,
     headers: [String: String] = [:],
     transport: @escaping ((URL) -> PhoenixTransport),
-    params: [String: Any] = [:],
+    params: Payload = [:],
     vsn: String = Defaults.vsn
   ) {
     self.transport = transport
@@ -201,10 +198,10 @@ public class RealtimeClient: PhoenixTransportDelegate {
     self.headers = headers
     http = HTTPClient(fetchHandler: { try await URLSession.shared.data(for: $0) })
 
-    if let jwt = (params["Authorization"] as? String)?.split(separator: " ").last {
+    if let jwt = params["Authorization"]?.stringValue?.split(separator: " ").last {
       accessToken = String(jwt)
     } else {
-      accessToken = params["apikey"] as? String
+      accessToken = params["apikey"]?.stringValue
     }
     endpointUrl = RealtimeClient.buildEndpointUrl(
       url: url,

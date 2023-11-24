@@ -64,6 +64,25 @@ public enum AnyJSON: Sendable, Codable, Hashable {
   }
 }
 
+extension AnyJSON: CustomStringConvertible {
+  public var description: String {
+    switch self {
+    case .null:
+      return "null"
+    case let .bool(bool):
+      return bool.description
+    case let .number(double):
+      return double.description
+    case let .string(string):
+      return string.description
+    case let .object(dictionary):
+      return dictionary.description
+    case let .array(array):
+      return array.description
+    }
+  }
+}
+
 extension AnyJSON {
   public var objectValue: [String: AnyJSON]? {
     if case let .object(object) = self {

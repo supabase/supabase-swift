@@ -96,7 +96,7 @@ public final class SupabaseClient: @unchecked Sendable {
     realtime = RealtimeClient(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
       headers: defaultHeaders,
-      params: defaultHeaders
+      params: defaultHeaders.mapValues(AnyJSON.string)
     )
 
     listenForAuthEvents()

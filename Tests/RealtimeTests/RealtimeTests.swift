@@ -5,7 +5,7 @@ import XCTest
 final class RealtimeTests: XCTestCase {
   private func makeSUT(file: StaticString = #file, line: UInt = #line) -> RealtimeClient {
     let sut = RealtimeClient(
-      "https://nixfbjgqturwbakhnwym.supabase.co/realtime/v1",
+      url: URL(string: "https://nixfbjgqturwbakhnwym.supabase.co/realtime/v1")!,
       params: [
         "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peGZiamdxdHVyd2Jha2hud3ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NzAzMDE2MzksImV4cCI6MTk4NTg3NzYzOX0.Ct6W75RPlDM37TxrBQurZpZap3kBy0cNkUimxF50HSo",
       ]
