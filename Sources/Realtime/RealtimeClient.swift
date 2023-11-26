@@ -209,6 +209,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
     reconnectTimer = Dependencies.makeTimeoutTimer()
 
+    // TODO: should store Task?
     Task {
       await reconnectTimer.setHandler { [weak self] in
         self?.logItems("Socket attempting to reconnect")
@@ -221,12 +222,6 @@ public class RealtimeClient: PhoenixTransportDelegate {
         self?.logItems("Socket reconnecting in \(interval)s")
         return interval
       }
-    }
-  }
-
-  deinit {
-    Task {
-      await reconnectTimer.reset()
     }
   }
 
@@ -617,7 +612,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     // Only attempt to reconnect if the socket did not close normally,
     // or if it was closed abnormally but on client side (e.g. due to heartbeat timeout)
     if closeStatus.shouldReconnect {
-      Task { await reconnectTimer.scheduleTimeout() }
+      await reconnectTimer.scheduleTimeout()
     }
 
     for (_, callback) in stateChangeCallbacks.close.value {

@@ -131,7 +131,7 @@ final class RealtimeClientTests: XCTestCase {
 
   func testDisconnect() async throws {
     let timeoutTimer = TimeoutTimerMock()
-    Dependencies.timeoutTimer = { timeoutTimer }
+    Dependencies.makeTimeoutTimer = { timeoutTimer }
 
     let heartbeatTimer = HeartbeatTimerMock()
     Dependencies.heartbeatTimer = { _ in
@@ -150,7 +150,7 @@ final class RealtimeClientTests: XCTestCase {
     sut.connect()
 
     XCTAssertEqual(sut.closeStatus, .unknown)
-    sut.disconnect(code: .normal, reason: "test")
+    await sut.disconnect(code: .normal, reason: "test")
 
     XCTAssertEqual(sut.closeStatus, .clean)
 
@@ -189,7 +189,9 @@ class PhoenixTransportMock: PhoenixTransport {
     connectCallCount += 1
     connectHeaders = headers
 
-    delegate?.onOpen(response: nil)
+    Task {
+      await delegate?.onOpen(response: nil)
+    }
   }
 
   func disconnect(code: Int, reason: String?) {
@@ -197,20 +199,33 @@ class PhoenixTransportMock: PhoenixTransport {
     disconnectCode = code
     disconnectReason = reason
 
-    delegate?.onClose(code: code, reason: reason)
+    Task {
+      await delegate?.onClose(code: code, reason: reason)
+    }
   }
 
-  func send(data: Data) {
+  func send(data: Data) async {
     sendCallCount += 1
     sendData = data
 
-    delegate?.onMessage(message: data)
+    await delegate?.onMessage(message: data)
   }
 }
 
 class TimeoutTimerMock: TimeoutTimerProtocol {
-  var callback: @Sendable () -> Void = {}
-  var timerCalculation: @Sendable (Int) -> TimeInterval = { _ in 0.0 }
+  func setHandler(_ handler: @escaping @Sendable () async -> Void) async {
+    callback = handler
+  }
+
+  func setTimerCalculation(
+    _ timerCalculation: @escaping @Sendable (Int) async
+      -> TimeInterval
+  ) async {
+    self.timerCalculation = timerCalculation
+  }
+
+  private var callback: @Sendable () async -> Void = {}
+  private var timerCalculation: @Sendable (Int) async -> TimeInterval = { _ in 0.0 }
 
   private(set) var resetCallCount = 0
   private(set) var scheduleTimeoutCallCount = 0
@@ -227,11 +242,11 @@ class TimeoutTimerMock: TimeoutTimerProtocol {
 class HeartbeatTimerMock: HeartbeatTimerProtocol {
   private(set) var startCallCount = 0
   private(set) var stopCallCount = 0
-  private var eventHandler: (() -> Void)?
+  private var eventHandler: (() async -> Void)?
 
-  func start(eventHandler: @escaping () -> Void) {
+  func start(_ handler: @escaping () async -> Void) {
     startCallCount += 1
-    self.eventHandler = eventHandler
+    eventHandler = handler
   }
 
   func stop() {
@@ -239,7 +254,7 @@ class HeartbeatTimerMock: HeartbeatTimerProtocol {
   }
 
   /// Helper method to simulate the timer firing an event
-  func simulateTimerEvent() {
-    eventHandler?()
+  func simulateTimerEvent() async {
+    await eventHandler?()
   }
 }

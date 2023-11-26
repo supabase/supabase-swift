@@ -22,7 +22,7 @@ final class RealtimeTests: XCTestCase {
     let onOpenExpectation = expectation(description: "onOpen")
     sut.onOpen { [weak sut] in
       onOpenExpectation.fulfill()
-      sut?.disconnect()
+      await sut?.disconnect()
     }
 
     sut.onError { error, _ in
@@ -44,7 +44,6 @@ final class RealtimeTests: XCTestCase {
     let sut = makeSUT()
 
     sut.connect()
-    defer { sut.disconnect() }
 
     let expectation = expectation(description: "subscribe")
     expectation.expectedFulfillmentCount = 2
@@ -55,7 +54,7 @@ final class RealtimeTests: XCTestCase {
     }
 
     var states: [RealtimeSubscribeStates] = []
-    channel = sut
+    channel = await sut
       .channel("public")
       .subscribe { state, error in
         states.append(state)
@@ -67,11 +66,13 @@ final class RealtimeTests: XCTestCase {
         expectation.fulfill()
 
         if state == .subscribed {
-          channel?.unsubscribe()
+          await channel?.unsubscribe()
         }
       }
 
     await fulfillment(of: [expectation])
     XCTAssertEqual(states, [.subscribed, .closed])
+
+    await sut.disconnect()
   }
 }

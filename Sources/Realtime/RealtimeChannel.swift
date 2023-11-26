@@ -362,12 +362,6 @@ public actor RealtimeChannel {
     }
   }
 
-  deinit {
-    Task {
-      await rejoinTimer.reset()
-    }
-  }
-
   private func setState(_ state: ChannelState) {
     self.state = state
   }
@@ -396,7 +390,7 @@ public actor RealtimeChannel {
   @discardableResult
   public func subscribe(
     timeout: TimeInterval? = nil,
-    callback: ((RealtimeSubscribeStates, Error?) -> Void)? = nil
+    callback: ((RealtimeSubscribeStates, Error?) async -> Void)? = nil
   ) async -> RealtimeChannel {
     guard !joinedOnce else {
       fatalError(
@@ -408,11 +402,11 @@ public actor RealtimeChannel {
     onError { message in
       let values = message.payload.values.map { "\($0) " }
       let error = RealtimeError(values.isEmpty ? "error" : values.joined(separator: ", "))
-      callback?(.channelError, error)
+      await callback?(.channelError, error)
     }
 
     onClose { _ in
-      callback?(.closed, nil)
+      await callback?(.closed, nil)
     }
 
     // Join the RealtimeChannel
@@ -460,7 +454,7 @@ public actor RealtimeChannel {
         guard let serverPostgresFilters = message.payload["postgres_changes"]?.arrayValue?
           .compactMap(\.objectValue)
         else {
-          callback?(.subscribed, nil)
+          await callback?(.subscribed, nil)
           return
         }
 
@@ -493,7 +487,7 @@ public actor RealtimeChannel {
             )
           } else {
             await self.unsubscribe()
-            callback?(
+            await callback?(
               .channelError,
               RealtimeError("Mismatch between client and server bindings for postgres changes.")
             )
@@ -502,15 +496,15 @@ public actor RealtimeChannel {
         }
 
         await self.setPostgresBindings(newPostgresBindings)
-        callback?(.subscribed, nil)
+        await callback?(.subscribed, nil)
       }
       .receive(.error) { message in
         let values = message.payload.values.map { "\($0) " }
         let error = RealtimeError(values.isEmpty ? "error" : values.joined(separator: ", "))
-        callback?(.channelError, error)
+        await callback?(.channelError, error)
       }
       .receive(.timeout) { _ in
-        callback?(.timedOut, nil)
+        await callback?(.timedOut, nil)
       }
 
     return self
