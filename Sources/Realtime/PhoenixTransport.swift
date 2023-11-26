@@ -57,7 +57,7 @@ public protocol PhoenixTransport {
 
    - Parameter data: Data to send.
    */
-  func send(data: Data)
+  func send(data: Data) async
 }
 
 // ----------------------------------------------------------------------
@@ -72,7 +72,7 @@ public protocol PhoenixTransportDelegate: AnyObject {
 
    - Parameter response: Response from the server indicating that the WebSocket handshake was successful and the connection has been upgraded to webSockets
    */
-  func onOpen(response: URLResponse?)
+  func onOpen(response: URLResponse?) async
 
   /**
    Notified when the `Transport` receives an error.
@@ -81,14 +81,14 @@ public protocol PhoenixTransportDelegate: AnyObject {
    - Parameter response: Response from the server, if any, that occurred with the Error
 
    */
-  func onError(error: Error, response: URLResponse?)
+  func onError(error: Error, response: URLResponse?) async
 
   /**
    Notified when the `Transport` receives a message from the server.
 
    - Parameter message: Message received from the server
    */
-  func onMessage(message: Data)
+  func onMessage(message: Data) async
 
   /**
    Notified when the `Transport` closes.
@@ -96,7 +96,7 @@ public protocol PhoenixTransportDelegate: AnyObject {
    - Parameter code: Code that was sent when the `Transport` closed
    - Parameter reason: A concise human-readable prose explanation for the closure
    */
-  func onClose(code: Int, reason: String?)
+  func onClose(code: Int, reason: String?) async
 }
 
 // ----------------------------------------------------------------------
@@ -140,10 +140,10 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   let configuration: URLSessionConfiguration
 
   /// The underling URLSession. Assigned during `connect()`
-  private var session: URLSession? = nil
+  private var session: URLSession?
 
   /// The ongoing task. Assigned during `connect()`
-  private var task: URLSessionWebSocketTask? = nil
+  private var stream: SocketStream?
 
   /**
    Initializes a `Transport` layer built using URLSession's WebSocket
@@ -200,10 +200,8 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
       request.addValue(value, forHTTPHeaderField: key)
     }
 
-    task = session?.webSocketTask(with: request)
-
-    // Start the task
-    task?.resume()
+    let task = session!.webSocketTask(with: request)
+    stream = SocketStream(task: task)
   }
 
   open func disconnect(code: Int, reason: String?) {
@@ -218,14 +216,12 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
     }
 
     readyState = .closing
-    task?.cancel(with: closeCode, reason: reason?.data(using: .utf8))
+    stream?.cancel(with: closeCode, reason: reason?.data(using: .utf8))
     session?.finishTasksAndInvalidate()
   }
 
-  open func send(data: Data) {
-    task?.send(.string(String(data: data, encoding: .utf8)!)) { _ in
-      // TODO: What is the behavior when an error occurs?
-    }
+  open func send(data: Data) async {
+    try? await stream?.task.send(.string(String(data: data, encoding: .utf8)!))
   }
 
   // MARK: - URLSessionWebSocketDelegate
@@ -237,10 +233,11 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   ) {
     // The Websocket is connected. Set Transport state to open and inform delegate
     readyState = .open
-    delegate?.onOpen(response: webSocketTask.response)
 
-    // Start receiving messages
-    receive()
+    Task {
+      await delegate?.onOpen(response: webSocketTask.response)
+      await receive()
+    }
   }
 
   open func urlSession(
@@ -251,9 +248,11 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   ) {
     // A close frame was received from the server.
     readyState = .closed
-    delegate?.onClose(
-      code: closeCode.rawValue, reason: reason.flatMap { String(data: $0, encoding: .utf8) }
-    )
+    Task {
+      await delegate?.onClose(
+        code: closeCode.rawValue, reason: reason.flatMap { String(data: $0, encoding: .utf8) }
+      )
+    }
   }
 
   open func urlSession(
@@ -263,50 +262,104 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   ) {
     // The task has terminated. Inform the delegate that the transport has closed abnormally
     // if this was caused by an error.
-    guard let err = error else { return }
+    guard let error else { return }
 
-    abnormalErrorReceived(err, response: task.response)
+    Task {
+      await abnormalErrorReceived(error, response: task.response)
+    }
   }
 
   // MARK: - Private
 
-  private func receive() {
-    task?.receive { [weak self] result in
-      switch result {
-      case let .success(message):
+  private func receive() async {
+    guard let stream else {
+      return
+    }
+
+    do {
+      for try await message in stream {
         switch message {
         case let .data(data):
-          self?.delegate?.onMessage(message: data)
+          await delegate?.onMessage(message: data)
         case let .string(text):
           let data = Data(text.utf8)
-          self?.delegate?.onMessage(message: data)
-        default:
-          fatalError("Unknown result was received. [\(result)]")
+          await delegate?.onMessage(message: data)
+        @unknown default:
+          print("unkown message received")
         }
-
-        // Since `.receive()` is only good for a single message, it must
-        // be called again after a message is received in order to
-        // received the next message.
-        self?.receive()
-      case let .failure(error):
-        print("Error when receiving \(error)")
-        self?.abnormalErrorReceived(error, response: nil)
       }
+    } catch {
+      print("Error when receiving \(error)")
+      await abnormalErrorReceived(error, response: nil)
     }
   }
 
-  private func abnormalErrorReceived(_ error: Error, response: URLResponse?) {
+  private func abnormalErrorReceived(_ error: Error, response: URLResponse?) async {
     // Set the state of the Transport to closed
     readyState = .closed
 
     // Inform the Transport's delegate that an error occurred.
-    delegate?.onError(error: error, response: response)
+    await delegate?.onError(error: error, response: response)
 
     // An abnormal error is results in an abnormal closure, such as internet getting dropped
     // so inform the delegate that the Transport has closed abnormally. This will kick off
     // the reconnect logic.
-    delegate?.onClose(
+    await delegate?.onClose(
       code: RealtimeClient.CloseCode.abnormal.rawValue, reason: error.localizedDescription
     )
+  }
+}
+
+typealias WebSocketStream = AsyncThrowingStream<URLSessionWebSocketTask.Message, Error>
+
+final class SocketStream: AsyncSequence {
+  typealias AsyncIterator = WebSocketStream.Iterator
+  typealias Element = URLSessionWebSocketTask.Message
+
+  private var continuation: WebSocketStream.Continuation?
+  let task: URLSessionWebSocketTask
+
+  private lazy var stream = WebSocketStream { continuation in
+    self.continuation = continuation
+    waitForNextValue()
+  }
+
+  private func waitForNextValue() {
+    guard task.closeCode == .invalid else {
+      continuation?.finish()
+      return
+    }
+
+    task.receive { [weak self] result in
+      guard let continuation = self?.continuation else {
+        return
+      }
+
+      do {
+        let message = try result.get()
+        continuation.yield(message)
+        self?.waitForNextValue()
+      } catch {
+        continuation.finish(throwing: error)
+      }
+    }
+  }
+
+  init(task: URLSessionWebSocketTask) {
+    self.task = task
+    task.resume()
+  }
+
+  deinit {
+    continuation?.finish()
+  }
+
+  func makeAsyncIterator() -> WebSocketStream.Iterator {
+    stream.makeAsyncIterator()
+  }
+
+  func cancel(with code: URLSessionWebSocketTask.CloseCode, reason _: Data?) {
+    task.cancel(with: code, reason: nil)
+    continuation?.finish()
   }
 }

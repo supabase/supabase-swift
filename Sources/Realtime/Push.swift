@@ -38,13 +38,10 @@ public class Push {
   var receivedMessage: Message?
 
   /// Timer which triggers a timeout event
-  var timeoutTimer: TimerQueue
-
-  /// WorkItem to be performed when the timeout timer fires
-  var timeoutWorkItem: DispatchWorkItem?
+  var timeoutTask: Task<Void, Never>?
 
   /// Hooks into a Push. Where .receive("ok", callback(Payload)) are stored
-  var receiveHooks: [PushStatus: [@Sendable (Message) -> Void]]
+  var receiveHooks: [PushStatus: [@Sendable (Message) async -> Void]]
 
   /// True if the Push has been sent
   var sent: Bool
@@ -72,7 +69,6 @@ public class Push {
     self.payload = payload
     self.timeout = timeout
     receivedMessage = nil
-    timeoutTimer = TimerQueue.main
     receiveHooks = [:]
     sent = false
     ref = nil
@@ -80,20 +76,20 @@ public class Push {
 
   /// Resets and sends the Push
   /// - parameter timeout: Optional. The push timeout. Default is 10.0s
-  public func resend(_ timeout: TimeInterval = Defaults.timeoutInterval) {
+  public func resend(_ timeout: TimeInterval = Defaults.timeoutInterval) async {
     self.timeout = timeout
     reset()
-    send()
+    await send()
   }
 
   /// Sends the Push. If it has already timed out, then the call will
   /// be ignored and return early. Use `resend` in this case.
-  public func send() {
+  public func send() async {
     guard !hasReceived(status: .timeout) else { return }
 
     startTimeout()
     sent = true
-    channel?.socket?.push(
+    await channel?.socket?.push(
       message: Message(
         ref: ref ?? "",
         topic: channel?.topic ?? "",
@@ -123,11 +119,11 @@ public class Push {
   @discardableResult
   public func receive(
     _ status: PushStatus,
-    callback: @escaping @Sendable (Message) -> Void
-  ) -> Push {
+    callback: @escaping @Sendable (Message) async -> Void
+  ) async -> Push {
     // If the message has already been received, pass it to the callback immediately
     if hasReceived(status: status), let receivedMessage {
-      callback(receivedMessage)
+      await callback(receivedMessage)
     }
 
     if receiveHooks[status] == nil {
@@ -154,8 +150,10 @@ public class Push {
   ///
   /// - parameter status: Status which was received, e.g. "ok", "error", "timeout"
   /// - parameter response: Response that was received
-  private func matchReceive(_ status: PushStatus, message: Message) {
-    receiveHooks[status]?.forEach { $0(message) }
+  private func matchReceive(_ status: PushStatus, message: Message) async {
+    for hook in receiveHooks[status] ?? [] {
+      await hook(message)
+    }
   }
 
   /// Reverses the result on channel.on(ChannelEvent, callback) that spawned the Push
@@ -166,17 +164,15 @@ public class Push {
 
   /// Cancel any ongoing Timeout Timer
   func cancelTimeout() {
-    timeoutWorkItem?.cancel()
-    timeoutWorkItem = nil
+    timeoutTask?.cancel()
+    timeoutTask = nil
   }
 
   /// Starts the Timer which will trigger a timeout after a specific _timeout_
   /// time, in milliseconds, is reached.
   func startTimeout() {
     // Cancel any existing timeout before starting a new one
-    if let safeWorkItem = timeoutWorkItem, !safeWorkItem.isCancelled {
-      cancelTimeout()
-    }
+    timeoutTask?.cancel()
 
     guard
       let channel,
@@ -198,16 +194,13 @@ public class Push {
 
       /// Check if there is event a status available
       guard let status = message.status else { return }
-      self?.matchReceive(status, message: message)
+      await self?.matchReceive(status, message: message)
     }
 
-    /// Setup and start the Timeout timer.
-    let workItem = DispatchWorkItem {
-      self.trigger(.timeout, payload: [:])
+    timeoutTask = Task {
+      try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeout))
+      await self.trigger(.timeout, payload: [:])
     }
-
-    timeoutWorkItem = workItem
-    timeoutTimer.queue(timeInterval: timeout, execute: workItem)
   }
 
   /// Checks if a status has already been received by the Push.
@@ -219,13 +212,13 @@ public class Push {
   }
 
   /// Triggers an event to be sent though the Channel
-  func trigger(_ status: PushStatus, payload: Payload) {
+  func trigger(_ status: PushStatus, payload: Payload) async {
     /// If there is no ref event, then there is nothing to trigger on the channel
     guard let refEvent else { return }
 
     var mutPayload = payload
     mutPayload["status"] = .string(status.rawValue)
 
-    channel?.trigger(event: refEvent, payload: mutPayload)
+    await channel?.trigger(event: refEvent, payload: mutPayload)
   }
 }

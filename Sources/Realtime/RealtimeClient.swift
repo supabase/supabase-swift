@@ -31,12 +31,14 @@ public typealias Payload = [String: AnyJSON]
 
 /// Struct that gathers callbacks assigned to the Socket
 struct StateChangeCallbacks {
-  let open: LockIsolated < [(ref: String, callback: @Sendable (URLResponse?) -> Void)] > = .init([])
+  let open: LockIsolated <
+    [(ref: String, callback: @Sendable (URLResponse?) async -> Void)] > = .init([])
   let close: LockIsolated <
-    [(ref: String, callback: @Sendable (Int, String?) -> Void)] > = .init([])
+    [(ref: String, callback: @Sendable (Int, String?) async -> Void)] > = .init([])
   let error: LockIsolated <
-    [(ref: String, callback: @Sendable (Error, URLResponse?) -> Void)] > = .init([])
-  let message: LockIsolated < [(ref: String, callback: @Sendable (Message) -> Void)] > = .init([])
+    [(ref: String, callback: @Sendable (Error, URLResponse?) async -> Void)] > = .init([])
+  let message: LockIsolated <
+    [(ref: String, callback: @Sendable (Message) async -> Void)] > = .init([])
 }
 
 /// ## Socket Connection
@@ -94,10 +96,6 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// Interval between sending a heartbeat
   public var heartbeatInterval: TimeInterval = Defaults.heartbeatInterval
 
-  /// The maximum amount of time which the system may delay heartbeats in order to optimize power
-  /// usage
-  public var heartbeatLeeway: DispatchTimeInterval = Defaults.heartbeatLeeway
-
   /// Interval between socket reconnect attempts, in seconds
   public var reconnectAfter: (Int) -> TimeInterval = Defaults.reconnectSteppedBackOff
 
@@ -139,7 +137,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   /// Buffers messages that need to be sent once the socket has connected. It is an array
   /// of tuples, with the ref of the message to send and the callback that will send the message.
-  var sendBuffer: [(ref: String?, callback: () throws -> Void)] = []
+  var sendBuffer: [(ref: String?, callback: () async throws -> Void)] = []
 
   /// Ref counter for messages
   var ref: UInt64 = .min // 0 (max: 18,446,744,073,709,551,615)
@@ -209,21 +207,27 @@ public class RealtimeClient: PhoenixTransportDelegate {
       vsn: vsn
     )
 
-    reconnectTimer = Dependencies.timeoutTimer()
-    reconnectTimer.callback = { [weak self] in
-      self?.logItems("Socket attempting to reconnect")
-      self?.teardown(reason: "reconnection")
-      self?.connect()
-    }
-    reconnectTimer.timerCalculation = { [weak self] tries in
-      let interval = self?.reconnectAfter(tries) ?? 5.0
-      self?.logItems("Socket reconnecting in \(interval)s")
-      return interval
+    reconnectTimer = Dependencies.makeTimeoutTimer()
+
+    Task {
+      await reconnectTimer.setHandler { [weak self] in
+        self?.logItems("Socket attempting to reconnect")
+        await self?.teardown(reason: "reconnection")
+        self?.connect()
+      }
+
+      await reconnectTimer.setTimerCalculation { [weak self] tries in
+        let interval = self?.reconnectAfter(tries) ?? 5.0
+        self?.logItems("Socket reconnecting in \(interval)s")
+        return interval
+      }
     }
   }
 
   deinit {
-    reconnectTimer.reset()
+    Task {
+      await reconnectTimer.reset()
+    }
   }
 
   // ----------------------------------------------------------------------
@@ -252,14 +256,14 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   /// Sets the JWT access token used for channel subscription authorization and Realtime RLS.
   /// - Parameter token: A JWT string.
-  public func setAuth(_ token: String?) {
+  public func setAuth(_ token: String?) async {
     accessToken = token
 
     for channel in channels {
       channel.params["user_token"] = token.map(AnyJSON.string) ?? .null
 
       if channel.joinedOnce, channel.isJoined {
-        channel.push(
+        await channel.push(
           ChannelEvent.accessToken,
           payload: ["access_token": token.map(AnyJSON.string) ?? .null]
         )
@@ -297,19 +301,19 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public func disconnect(
     code: CloseCode = CloseCode.normal,
     reason: String? = nil
-  ) {
+  ) async {
     // The socket was closed cleanly by the User
     closeStatus = CloseStatus(closeCode: code.rawValue)
 
     // Reset any reconnects and teardown the socket connection
-    reconnectTimer.reset()
-    teardown(code: code, reason: reason)
+    await reconnectTimer.reset()
+    await teardown(code: code, reason: reason)
   }
 
   func teardown(
     code: CloseCode = CloseCode.normal,
     reason: String? = nil
-  ) {
+  ) async {
     connection?.delegate = nil
     connection?.disconnect(code: code.rawValue, reason: reason)
     connection = nil
@@ -319,7 +323,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
     // Since the connection's delegate was nil'd out, inform all state
     // callbacks that the connection has closed
-    stateChangeCallbacks.close.value.forEach { $0.callback(code.rawValue, reason) }
+    for (_, callback) in stateChangeCallbacks.close.value {
+      await callback(code.rawValue, reason)
+    }
   }
 
   // ----------------------------------------------------------------------
@@ -339,8 +345,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - parameter callback: Called when the Socket is opened
   @discardableResult
-  public func onOpen(callback: @escaping () -> Void) -> String {
-    onOpen { _ in callback() }
+  public func onOpen(callback: @escaping () async -> Void) -> String {
+    onOpen { _ in await callback() }
   }
 
   /// Registers callbacks for connection open events. Does not handle retain
@@ -354,7 +360,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - parameter callback: Called when the Socket is opened
   @discardableResult
-  public func onOpen(callback: @escaping @Sendable (URLResponse?) -> Void) -> String {
+  public func onOpen(callback: @escaping @Sendable (URLResponse?) async -> Void) -> String {
     stateChangeCallbacks.open.withValue {
       append(callback: callback, to: &$0)
     }
@@ -403,7 +409,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - parameter callback: Called when the Socket errors
   @discardableResult
-  public func onError(callback: @escaping @Sendable (Error, URLResponse?) -> Void) -> String {
+  public func onError(callback: @escaping @Sendable (Error, URLResponse?) async -> Void) -> String {
     stateChangeCallbacks.error.withValue {
       append(callback: callback, to: &$0)
     }
@@ -462,8 +468,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public func channel(
     _ topic: String,
     params: RealtimeChannelOptions = .init()
-  ) -> RealtimeChannel {
-    let channel = RealtimeChannel(
+  ) async -> RealtimeChannel {
+    let channel = await RealtimeChannel(
       topic: "realtime:\(topic)", params: params.params, socket: self
     )
     channels.append(channel)
@@ -472,20 +478,20 @@ public class RealtimeClient: PhoenixTransportDelegate {
   }
 
   /// Unsubscribes and removes a single channel
-  public func remove(_ channel: RealtimeChannel) {
-    channel.unsubscribe()
+  public func remove(_ channel: RealtimeChannel) async {
+    await channel.unsubscribe()
     off(channel.stateChangeRefs)
     channels.removeAll(where: { $0.joinRef == channel.joinRef })
 
     if channels.isEmpty {
-      disconnect()
+      await disconnect()
     }
   }
 
   /// Unsubscribes and removes all channels
-  public func removeAllChannels() {
+  public func removeAllChannels() async {
     for channel in channels {
-      remove(channel)
+      await remove(channel)
     }
   }
 
@@ -530,14 +536,14 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// - parameter payload:
   /// - parameter ref: Optional. Defaults to nil
   /// - parameter joinRef: Optional. Defaults to nil
-  func push(message: Message) {
-    let callback: (() throws -> Void) = { [weak self] in
+  func push(message: Message) async {
+    let callback: (() async throws -> Void) = { [weak self] in
       guard let self else { return }
       do {
         let data = try JSONEncoder().encode(message)
 
         self.logItems("push", "Sending \(String(data: data, encoding: String.Encoding.utf8) ?? "")")
-        self.connection?.send(data: data)
+        await self.connection?.send(data: data)
       } catch {
         // TODO: handle error
       }
@@ -545,7 +551,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
     /// If the socket is connected, then execute the callback immediately.
     if isConnected {
-      try? callback()
+      try? await callback()
     } else {
       /// If the socket is not connected, add the push to a buffer which will
       /// be sent immediately upon connection.
@@ -573,30 +579,32 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   // ----------------------------------------------------------------------
   /// Called when the underlying Websocket connects to it's host
-  func onConnectionOpen(response: URLResponse?) {
+  func onConnectionOpen(response: URLResponse?) async {
     logItems("transport", "Connected to \(url)")
 
     // Reset the close status now that the socket has been connected
     closeStatus = .unknown
 
     // Send any messages that were waiting for a connection
-    flushSendBuffer()
+    await flushSendBuffer()
 
     // Reset how the socket tried to reconnect
-    reconnectTimer.reset()
+    await reconnectTimer.reset()
 
     // Restart the heartbeat timer
     resetHeartbeat()
 
     // Inform all onOpen callbacks that the Socket has opened
-    stateChangeCallbacks.open.value.forEach { $0.callback(response) }
+    for (_, callback) in stateChangeCallbacks.open.value {
+      await callback(response)
+    }
   }
 
-  func onConnectionClosed(code: Int, reason: String?) {
+  func onConnectionClosed(code: Int, reason: String?) async {
     logItems("transport", "close")
 
     // Send an error to all channels
-    triggerChannelError()
+    await triggerChannelError()
 
     // Prevent the heartbeat from triggering if the
     heartbeatTimer?.stop()
@@ -604,23 +612,27 @@ public class RealtimeClient: PhoenixTransportDelegate {
     // Only attempt to reconnect if the socket did not close normally,
     // or if it was closed abnormally but on client side (e.g. due to heartbeat timeout)
     if closeStatus.shouldReconnect {
-      reconnectTimer.scheduleTimeout()
+      Task { await reconnectTimer.scheduleTimeout() }
     }
 
-    stateChangeCallbacks.close.value.forEach { $0.callback(code, reason) }
+    for (_, callback) in stateChangeCallbacks.close.value {
+      await callback(code, reason)
+    }
   }
 
-  func onConnectionError(_ error: Error, response: URLResponse?) {
+  func onConnectionError(_ error: Error, response: URLResponse?) async {
     logItems("transport", error, response ?? "")
 
     // Send an error to all channels
-    triggerChannelError()
+    await triggerChannelError()
 
     // Inform any state callbacks of the error
-    stateChangeCallbacks.error.value.forEach { $0.callback(error, response) }
+    for (_, callback) in stateChangeCallbacks.error.value {
+      await callback(error, response)
+    }
   }
 
-  func onConnectionMessage(_ message: Data) {
+  func onConnectionMessage(_ message: Data) async {
     let rawMessage = String(data: message, encoding: .utf8) ?? ""
     logItems("receive ", rawMessage)
 
@@ -635,13 +647,14 @@ public class RealtimeClient: PhoenixTransportDelegate {
       }
 
       // Dispatch the message to all channels that belong to the topic
-      channels
-        .filter { $0.isMember(message) }
-        .forEach { $0.trigger(message) }
+      for channel in channels.filter({ $0.isMember(message) }) {
+        await channel.trigger(message)
+      }
 
       // Inform all onMessage callbacks of the message
-      stateChangeCallbacks.message.value.forEach { $0.callback(message) }
-
+      for (_, callback) in stateChangeCallbacks.message.value {
+        await callback(message)
+      }
     } catch {
       logItems("receive: Unable to parse JSON: \(rawMessage) error: \(error)")
       return
@@ -649,19 +662,21 @@ public class RealtimeClient: PhoenixTransportDelegate {
   }
 
   /// Triggers an error event to all of the connected Channels
-  func triggerChannelError() {
-    channels.forEach { channel in
+  func triggerChannelError() async {
+    for channel in channels {
       // Only trigger a channel error if it is in an "opened" state
       if !(channel.isErrored || channel.isLeaving || channel.isClosed) {
-        channel.trigger(event: ChannelEvent.error)
+        await channel.trigger(event: ChannelEvent.error)
       }
     }
   }
 
   /// Send all messages that were buffered before the socket opened
-  func flushSendBuffer() {
+  func flushSendBuffer() async {
     guard isConnected, sendBuffer.count > 0 else { return }
-    sendBuffer.forEach { try? $0.callback() }
+    for (_, callback) in sendBuffer {
+      try? await callback()
+    }
     sendBuffer = []
   }
 
@@ -707,13 +722,13 @@ public class RealtimeClient: PhoenixTransportDelegate {
   }
 
   // Leaves any channel that is open that has a duplicate topic
-  func leaveOpenTopic(topic: String) {
+  func leaveOpenTopic(topic: String) async {
     guard
       let dupe = channels.first(where: { $0.topic == topic && ($0.isJoined || $0.isJoining) })
     else { return }
 
     logItems("transport", "leaving duplicate topic: [\(topic)]")
-    dupe.unsubscribe()
+    await dupe.unsubscribe()
   }
 
   // ----------------------------------------------------------------------
@@ -729,18 +744,14 @@ public class RealtimeClient: PhoenixTransportDelegate {
     // Do not start up the heartbeat timer if skipHeartbeat is true
     guard !skipHeartbeat else { return }
 
-    heartbeatTimer = Dependencies.heartbeatTimer(
-      heartbeatInterval,
-      Defaults.heartbeatQueue,
-      heartbeatLeeway
-    )
-    heartbeatTimer?.start(eventHandler: { [weak self] in
-      self?.sendHeartbeat()
-    })
+    heartbeatTimer = Dependencies.heartbeatTimer(heartbeatInterval)
+    heartbeatTimer?.start { [weak self] in
+      await self?.sendHeartbeat()
+    }
   }
 
   /// Sends a heartbeat payload to the phoenix servers
-  @objc func sendHeartbeat() {
+  func sendHeartbeat() async {
     // Do not send if the connection is closed
     guard isConnected else { return }
 
@@ -763,7 +774,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
     // The last heartbeat was acknowledged by the server. Send another one
     pendingHeartbeatRef = makeRef()
-    push(
+    await push(
       message: Message(
         ref: pendingHeartbeatRef ?? "",
         topic: "phoenix",
@@ -792,21 +803,21 @@ public class RealtimeClient: PhoenixTransportDelegate {
   // MARK: - TransportDelegate
 
   // ----------------------------------------------------------------------
-  public func onOpen(response: URLResponse?) {
-    onConnectionOpen(response: response)
+  public func onOpen(response: URLResponse?) async {
+    await onConnectionOpen(response: response)
   }
 
-  public func onError(error: Error, response: URLResponse?) {
-    onConnectionError(error, response: response)
+  public func onError(error: Error, response: URLResponse?) async {
+    await onConnectionError(error, response: response)
   }
 
-  public func onMessage(message: Data) {
-    onConnectionMessage(message)
+  public func onMessage(message: Data) async {
+    await onConnectionMessage(message)
   }
 
-  public func onClose(code: Int, reason: String? = nil) {
+  public func onClose(code: Int, reason: String? = nil) async {
     closeStatus.update(transportCloseCode: code)
-    onConnectionClosed(code: code, reason: reason)
+    await onConnectionClosed(code: code, reason: reason)
   }
 }
 

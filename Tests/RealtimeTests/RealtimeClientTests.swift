@@ -134,7 +134,7 @@ final class RealtimeClientTests: XCTestCase {
     Dependencies.timeoutTimer = { timeoutTimer }
 
     let heartbeatTimer = HeartbeatTimerMock()
-    Dependencies.heartbeatTimer = { _, _, _ in
+    Dependencies.heartbeatTimer = { _ in
       heartbeatTimer
     }
 

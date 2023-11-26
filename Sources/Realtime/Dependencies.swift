@@ -8,15 +8,11 @@
 import Foundation
 
 enum Dependencies {
-  static var timeoutTimer: () -> TimeoutTimerProtocol = {
+  static var makeTimeoutTimer: () -> TimeoutTimerProtocol = {
     TimeoutTimer()
   }
 
-  static var heartbeatTimer: (
-    _ timeInterval: TimeInterval,
-    _ queue: DispatchQueue,
-    _ leeway: DispatchTimeInterval
-  ) -> HeartbeatTimerProtocol = {
-    HeartbeatTimer(timeInterval: $0, queue: $1, leeway: $2)
+  static var heartbeatTimer: (_ timeInterval: TimeInterval) -> HeartbeatTimerProtocol = {
+    HeartbeatTimer(timeInterval: $0)
   }
 }

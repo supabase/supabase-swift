@@ -42,29 +42,34 @@
 
 import Foundation
 
-protocol TimeoutTimerProtocol {
-  var callback: @Sendable () -> Void { get set }
-  var timerCalculation: @Sendable (Int) -> TimeInterval { get set }
+protocol TimeoutTimerProtocol: Sendable {
+  func setHandler(_ handler: @Sendable @escaping () async -> Void) async
+  func setTimerCalculation(_ timerCalculation: @Sendable @escaping (Int) -> TimeInterval) async
 
-  func reset()
-  func scheduleTimeout()
+  func reset() async
+  func scheduleTimeout() async
 }
 
-class TimeoutTimer: TimeoutTimerProtocol {
-  /// Callback to be informed when the underlying Timer fires
-  var callback: @Sendable () -> Void = {}
+actor TimeoutTimer: TimeoutTimerProtocol {
+  /// Handler to be informed when the underlying Timer fires
+  private var handler: @Sendable () async -> Void = {}
 
   /// Provides TimeInterval to use when scheduling the timer
-  var timerCalculation: @Sendable (Int) -> TimeInterval = { _ in 0 }
+  private var timerCalculation: @Sendable (Int) -> TimeInterval = { _ in 0 }
+
+  func setHandler(_ handler: @escaping @Sendable () async -> Void) {
+    self.handler = handler
+  }
+
+  func setTimerCalculation(_ timerCalculation: @escaping @Sendable (Int) -> TimeInterval) {
+    self.timerCalculation = timerCalculation
+  }
 
   /// The work to be done when the queue fires
-  var workItem: DispatchWorkItem?
+  private var task: Task<Void, Never>?
 
   /// The number of times the underlyingTimer has been set off.
-  var tries: Int = 0
-
-  /// The Queue to execute on. In testing, this is overridden
-  var queue: TimerQueue = .main
+  private var tries: Int = 0
 
   /// Resets the Timer, clearing the number of tries and stops
   /// any scheduled timeout.
@@ -78,38 +83,18 @@ class TimeoutTimer: TimeoutTimerProtocol {
     // Clear any ongoing timer, not resetting the number of tries
     clearTimer()
 
-    // Get the next calculated interval, in milliseconds. Do not
-    // start the timer if the interval is returned as nil.
     let timeInterval = timerCalculation(tries + 1)
 
-    let workItem = DispatchWorkItem {
-      self.tries += 1
-      self.callback()
+    task = Task {
+      try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeInterval))
+      tries += 1
+      await handler()
     }
-
-    self.workItem = workItem
-    queue.queue(timeInterval: timeInterval, execute: workItem)
   }
 
   /// Invalidates any ongoing Timer. Will not clear how many tries have been made
   private func clearTimer() {
-    workItem?.cancel()
-    workItem = nil
-  }
-}
-
-/// Wrapper class around a DispatchQueue. Allows for providing a fake clock
-/// during tests.
-class TimerQueue {
-  // Can be overridden in tests
-  static var main = TimerQueue()
-
-  func queue(timeInterval: TimeInterval, execute: DispatchWorkItem) {
-    // TimeInterval is always in seconds. Multiply it by 1000 to convert
-    // to milliseconds and round to the nearest millisecond.
-    let dispatchInterval = Int(round(timeInterval * 1000))
-
-    let dispatchTime = DispatchTime.now() + .milliseconds(dispatchInterval)
-    DispatchQueue.main.asyncAfter(deadline: dispatchTime, execute: execute)
+    task?.cancel()
+    task = nil
   }
 }
