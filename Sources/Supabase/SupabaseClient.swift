@@ -150,16 +150,16 @@ public final class SupabaseClient: @unchecked Sendable {
     listenForAuthEventsTask.setValue(
       Task {
         for await (event, session) in await auth.authStateChanges {
-          handleTokenChanged(event: event, session: session)
+          await handleTokenChanged(event: event, session: session)
         }
       }
     )
   }
 
-  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) {
+  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
     let supportedEvents: [AuthChangeEvent] = [.initialSession, .signedIn, .tokenRefreshed]
     guard supportedEvents.contains(event) else { return }
 
-    realtime.setAuth(session?.accessToken)
+    await realtime.setAuth(session?.accessToken)
   }
 }

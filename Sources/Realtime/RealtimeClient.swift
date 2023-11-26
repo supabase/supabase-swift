@@ -260,9 +260,11 @@ public class RealtimeClient: PhoenixTransportDelegate {
     accessToken = token
 
     for channel in channels {
-      channel.params["user_token"] = token.map(AnyJSON.string) ?? .null
+      var params = await channel.params
+      params["user_token"] = token.map(AnyJSON.string) ?? .null
+      await channel.setParams(params)
 
-      if channel.joinedOnce, channel.isJoined {
+      if await channel.joinedOnce, await channel.isJoined {
         await channel.push(
           ChannelEvent.accessToken,
           payload: ["access_token": token.map(AnyJSON.string) ?? .null]
@@ -480,8 +482,11 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// Unsubscribes and removes a single channel
   public func remove(_ channel: RealtimeChannel) async {
     await channel.unsubscribe()
-    off(channel.stateChangeRefs)
-    channels.removeAll(where: { $0.joinRef == channel.joinRef })
+    await off(channel.stateChangeRefs)
+
+    await channels.removeAll(where: {
+      await $0.joinRef == channel.joinRef
+    })
 
     if channels.isEmpty {
       await disconnect()
@@ -647,7 +652,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       }
 
       // Dispatch the message to all channels that belong to the topic
-      for channel in channels.filter({ $0.isMember(message) }) {
+      for channel in await channels.filter({ await $0.isMember(message) }) {
         await channel.trigger(message)
       }
 
@@ -665,7 +670,11 @@ public class RealtimeClient: PhoenixTransportDelegate {
   func triggerChannelError() async {
     for channel in channels {
       // Only trigger a channel error if it is in an "opened" state
-      if !(channel.isErrored || channel.isLeaving || channel.isClosed) {
+      let isErrored = await channel.isErrored
+      let isLeaving = await channel.isLeaving
+      let isClosed = await channel.isClosed
+
+      if !(isErrored || isLeaving || isClosed) {
         await channel.trigger(event: ChannelEvent.error)
       }
     }
@@ -724,7 +733,12 @@ public class RealtimeClient: PhoenixTransportDelegate {
   // Leaves any channel that is open that has a duplicate topic
   func leaveOpenTopic(topic: String) async {
     guard
-      let dupe = channels.first(where: { $0.topic == topic && ($0.isJoined || $0.isJoining) })
+      let dupe = await channels.first(where: {
+        let isJoined = await $0.isJoined
+        let isJoining = await $0.isJoining
+
+        return $0.topic == topic && (isJoined || isJoining)
+      })
     else { return }
 
     logItems("transport", "leaving duplicate topic: [\(topic)]")
@@ -888,5 +902,40 @@ extension RealtimeClient {
         return false
       }
     }
+  }
+}
+
+extension Array {
+  @inlinable mutating func removeAll(
+    where shouldBeRemoved: (Element) async throws
+      -> Bool
+  ) async rethrows {
+    for (index, element) in zip(indices, self) {
+      if try await shouldBeRemoved(element) {
+        remove(at: index)
+      }
+    }
+  }
+
+  @_disfavoredOverload
+  @inlinable func filter(_ isIncluded: (Element) async throws -> Bool) async rethrows -> [Element] {
+    var result: [Element] = []
+    for element in self {
+      if try await isIncluded(element) {
+        result.append(element)
+      }
+    }
+    return result
+  }
+
+  @inlinable func first(where predicate: (Element) async throws -> Bool) async rethrows
+    -> Element?
+  {
+    for element in self {
+      if try await predicate(element) {
+        return element
+      }
+    }
+    return nil
   }
 }

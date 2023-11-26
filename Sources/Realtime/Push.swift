@@ -21,7 +21,7 @@
 import Foundation
 
 /// Represents pushing data to a `Channel` through the `Socket`
-public class Push {
+public actor Push {
   /// The channel sending the Push
   public weak var channel: RealtimeChannel?
 
@@ -30,6 +30,9 @@ public class Push {
 
   /// The payload, for example ["user_id": "abc123"]
   public var payload: Payload
+  func setPayload(_ payload: Payload) {
+    self.payload = payload
+  }
 
   /// The push timeout. Default is 10.0 seconds
   public var timeout: TimeInterval
@@ -78,7 +81,7 @@ public class Push {
   /// - parameter timeout: Optional. The push timeout. Default is 10.0s
   public func resend(_ timeout: TimeInterval = Defaults.timeoutInterval) async {
     self.timeout = timeout
-    reset()
+    await reset()
     await send()
   }
 
@@ -87,7 +90,7 @@ public class Push {
   public func send() async {
     guard !hasReceived(status: .timeout) else { return }
 
-    startTimeout()
+    await startTimeout()
     sent = true
     await channel?.socket?.push(
       message: Message(
@@ -137,9 +140,9 @@ public class Push {
     return self
   }
 
-  /// Resets the Push as it was after it was first initialised.
-  func reset() {
-    cancelRefEvent()
+  /// Resets the Push as it was after it was first initialized.
+  func reset() async {
+    await cancelRefEvent()
     ref = nil
     refEvent = nil
     receivedMessage = nil
@@ -157,9 +160,9 @@ public class Push {
   }
 
   /// Reverses the result on channel.on(ChannelEvent, callback) that spawned the Push
-  private func cancelRefEvent() {
+  private func cancelRefEvent() async {
     guard let refEvent else { return }
-    channel?.off(refEvent)
+    await channel?.off(refEvent)
   }
 
   /// Cancel any ongoing Timeout Timer
@@ -170,27 +173,27 @@ public class Push {
 
   /// Starts the Timer which will trigger a timeout after a specific _timeout_
   /// time, in milliseconds, is reached.
-  func startTimeout() {
+  func startTimeout() async {
     // Cancel any existing timeout before starting a new one
     timeoutTask?.cancel()
 
     guard
       let channel,
-      let socket = channel.socket
+      let socket = await channel.socket
     else { return }
 
     let ref = socket.makeRef()
-    let refEvent = channel.replyEventName(ref)
+    let refEvent = await channel.replyEventName(ref)
 
     self.ref = ref
     self.refEvent = refEvent
 
     /// If a response is received  before the Timer triggers, cancel timer
     /// and match the received event to it's corresponding hook
-    channel.on(refEvent, filter: ChannelFilter()) { [weak self] message in
-      self?.cancelRefEvent()
-      self?.cancelTimeout()
-      self?.receivedMessage = message
+    await channel.on(refEvent, filter: ChannelFilter()) { [weak self] message in
+      await self?.cancelRefEvent()
+      await self?.cancelTimeout()
+      await self?.setReceivedMessage(message)
 
       /// Check if there is event a status available
       guard let status = message.status else { return }
@@ -201,6 +204,10 @@ public class Push {
       try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeout))
       await self.trigger(.timeout, payload: [:])
     }
+  }
+
+  private func setReceivedMessage(_ message: Message) {
+    receivedMessage = message
   }
 
   /// Checks if a status has already been received by the Push.

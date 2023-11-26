@@ -44,7 +44,10 @@ import Foundation
 
 protocol TimeoutTimerProtocol: Sendable {
   func setHandler(_ handler: @Sendable @escaping () async -> Void) async
-  func setTimerCalculation(_ timerCalculation: @Sendable @escaping (Int) -> TimeInterval) async
+  func setTimerCalculation(
+    _ timerCalculation: @Sendable @escaping (Int) async
+      -> TimeInterval
+  ) async
 
   func reset() async
   func scheduleTimeout() async
@@ -55,13 +58,13 @@ actor TimeoutTimer: TimeoutTimerProtocol {
   private var handler: @Sendable () async -> Void = {}
 
   /// Provides TimeInterval to use when scheduling the timer
-  private var timerCalculation: @Sendable (Int) -> TimeInterval = { _ in 0 }
+  private var timerCalculation: @Sendable (Int) async -> TimeInterval = { _ in 0 }
 
   func setHandler(_ handler: @escaping @Sendable () async -> Void) {
     self.handler = handler
   }
 
-  func setTimerCalculation(_ timerCalculation: @escaping @Sendable (Int) -> TimeInterval) {
+  func setTimerCalculation(_ timerCalculation: @escaping @Sendable (Int) async -> TimeInterval) {
     self.timerCalculation = timerCalculation
   }
 
@@ -79,11 +82,11 @@ actor TimeoutTimer: TimeoutTimerProtocol {
   }
 
   /// Schedules a timeout callback to fire after a calculated timeout duration.
-  func scheduleTimeout() {
+  func scheduleTimeout() async {
     // Clear any ongoing timer, not resetting the number of tries
     clearTimer()
 
-    let timeInterval = timerCalculation(tries + 1)
+    let timeInterval = await timerCalculation(tries + 1)
 
     task = Task {
       try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeInterval))

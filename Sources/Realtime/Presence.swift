@@ -90,7 +90,7 @@ import Foundation
 ///     }
 ///
 ///     presence.onSync { renderUsers(presence.list()) }
-public final class Presence {
+public actor Presence {
   // ----------------------------------------------------------------------
 
   // MARK: - Enums and Structs
@@ -178,8 +178,11 @@ public final class Presence {
   public private(set) var joinRef: String?
 
   public var isPendingSyncState: Bool {
-    guard let safeJoinRef = joinRef else { return true }
-    return safeJoinRef != channel?.joinRef
+    get async {
+      guard let safeJoinRef = joinRef else { return true }
+      let channelJoinRef = await channel?.joinRef
+      return safeJoinRef != channelJoinRef
+    }
   }
 
   /// Callback to be informed of joins
@@ -215,7 +218,7 @@ public final class Presence {
     onSync = callback
   }
 
-  public init(channel: RealtimeChannel, opts: Options = Options.defaults) {
+  public init(channel: RealtimeChannel, opts: Options = Options.defaults) async {
     state = [:]
     pendingDiffs = []
     self.channel = channel
@@ -227,50 +230,58 @@ public final class Presence {
       let diffEvent = opts.events[.diff]
     else { return }
 
-    self.channel?.on(stateEvent, filter: ChannelFilter()) { [weak self] message in
+    await self.channel?.on(stateEvent, filter: ChannelFilter()) { [weak self] message in
       guard
         let self,
         let newState = message.rawPayload as? State
       else { return }
 
-      self.joinRef = self.channel?.joinRef
-      self.state = Presence.syncState(
-        self.state,
-        newState: newState,
-        onJoin: self.caller.onJoin,
-        onLeave: self.caller.onLeave
-      )
-
-      self.pendingDiffs.forEach { diff in
-        self.state = Presence.syncDiff(
-          self.state,
-          diff: diff,
-          onJoin: self.caller.onJoin,
-          onLeave: self.caller.onLeave
-        )
-      }
-
-      self.pendingDiffs = []
-      self.caller.onSync()
+      await onStateEvent(newState)
     }
 
-    self.channel?.on(diffEvent, filter: ChannelFilter()) { [weak self] message in
+    await self.channel?.on(diffEvent, filter: ChannelFilter()) { [weak self] message in
       guard
         let self,
         let diff = message.rawPayload as? Diff
       else { return }
 
-      if self.isPendingSyncState {
-        self.pendingDiffs.append(diff)
-      } else {
-        self.state = Presence.syncDiff(
-          self.state,
-          diff: diff,
-          onJoin: self.caller.onJoin,
-          onLeave: self.caller.onLeave
-        )
-        self.caller.onSync()
-      }
+      await onDiffEvent(diff)
+    }
+  }
+
+  private func onStateEvent(_ newState: State) async {
+    joinRef = await channel?.joinRef
+    state = Presence.syncState(
+      state,
+      newState: newState,
+      onJoin: caller.onJoin,
+      onLeave: caller.onLeave
+    )
+
+    pendingDiffs.forEach { diff in
+      self.state = Presence.syncDiff(
+        self.state,
+        diff: diff,
+        onJoin: self.caller.onJoin,
+        onLeave: self.caller.onLeave
+      )
+    }
+
+    pendingDiffs = []
+    caller.onSync()
+  }
+
+  private func onDiffEvent(_ diff: Diff) async {
+    if await isPendingSyncState {
+      pendingDiffs.append(diff)
+    } else {
+      state = Presence.syncDiff(
+        state,
+        diff: diff,
+        onJoin: caller.onJoin,
+        onLeave: caller.onLeave
+      )
+      caller.onSync()
     }
   }
 
