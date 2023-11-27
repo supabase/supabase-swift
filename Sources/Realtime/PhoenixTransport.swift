@@ -185,7 +185,7 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   // MARK: - Transport
 
   public var readyState: PhoenixTransportReadyState = .closed
-  public var delegate: PhoenixTransportDelegate? = nil
+  public weak var delegate: PhoenixTransportDelegate? = nil
 
   public func connect(with headers: [String: String]) {
     // Set the transport state as connecting

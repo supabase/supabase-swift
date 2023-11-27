@@ -210,14 +210,14 @@ public class RealtimeClient: PhoenixTransportDelegate {
     reconnectTimer = Dependencies.makeTimeoutTimer()
 
     // TODO: should store Task?
-    Task {
-      await reconnectTimer.setHandler { [weak self] in
+    Task { [weak self] in
+      await self?.reconnectTimer.setHandler { [weak self] in
         self?.logItems("Socket attempting to reconnect")
         await self?.teardown(reason: "reconnection")
         self?.connect()
       }
 
-      await reconnectTimer.setTimerCalculation { [weak self] tries in
+      await self?.reconnectTimer.setTimerCalculation { [weak self] tries in
         let interval = self?.reconnectAfter(tries) ?? 5.0
         self?.logItems("Socket reconnecting in \(interval)s")
         return interval

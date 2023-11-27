@@ -2,7 +2,7 @@ import XCTest
 
 @testable import Realtime
 
-final class RealtimeTests: XCTestCase {
+final class RealtimeIntegrationTests: XCTestCase {
   private func makeSUT(file: StaticString = #file, line: UInt = #line) -> RealtimeClient {
     let sut = RealtimeClient(
       url: URL(string: "https://nixfbjgqturwbakhnwym.supabase.co/realtime/v1")!,

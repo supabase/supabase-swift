@@ -209,7 +209,10 @@ public actor RealtimeChannel {
     pushBuffer = []
     stateChangeRefs = []
     rejoinTimer = Dependencies.makeTimeoutTimer()
+    await setupChannelObservations(initialParams: params)
+  }
 
+  private func setupChannelObservations(initialParams: [String: AnyJSON]) async {
     // Setup Timer delegation
     await rejoinTimer.setHandler { [weak self] in
       if await self?.socket?.isConnected == true {
@@ -222,7 +225,7 @@ public actor RealtimeChannel {
     }
 
     // Respond to socket events
-    let onErrorRef = self.socket?.onError { [weak self] _, _ in
+    let onErrorRef = socket?.onError { [weak self] _, _ in
       await self?.rejoinTimer.reset()
     }
 
@@ -230,7 +233,7 @@ public actor RealtimeChannel {
       stateChangeRefs.append(ref)
     }
 
-    let onOpenRef = self.socket?.onOpen { [weak self] in
+    let onOpenRef = socket?.onOpen { [weak self] in
       await self?.rejoinTimer.reset()
 
       if await self?.isErrored == true {
@@ -244,7 +247,7 @@ public actor RealtimeChannel {
     joinPush = Push(
       channel: self,
       event: ChannelEvent.join,
-      payload: params,
+      payload: initialParams,
       timeout: timeout
     )
 
@@ -272,7 +275,7 @@ public actor RealtimeChannel {
 
       await setState(.errored)
 
-      if socket.isConnected {
+      if await self.socket?.isConnected == true {
         await rejoinTimer.scheduleTimeout()
       }
     }
@@ -298,7 +301,7 @@ public actor RealtimeChannel {
       await setState(.errored)
       await joinPush.reset()
 
-      if socket.isConnected {
+      if await self.socket?.isConnected == true {
         await rejoinTimer.scheduleTimeout()
       }
     }
@@ -311,13 +314,13 @@ public actor RealtimeChannel {
       await rejoinTimer.reset()
 
       // Log that the channel was left
-      await socket.logItems(
+      await self.socket?.logItems(
         "channel", "close topic: \(self.topic) joinRef: \(self.joinRef ?? "nil")"
       )
 
       // Mark the channel as closed and remove it from the socket
       await setState(.closed)
-      await socket.remove(self)
+      await self.socket?.remove(self)
     }
 
     /// Perform when the RealtimeChannel errors

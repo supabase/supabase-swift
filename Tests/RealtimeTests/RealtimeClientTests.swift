@@ -130,45 +130,54 @@ final class RealtimeClientTests: XCTestCase {
   }
 
   func testDisconnect() async throws {
-    let timeoutTimer = TimeoutTimerMock()
-    Dependencies.makeTimeoutTimer = { timeoutTimer }
+    try await withMainSerialExecutor {
+      let timeoutTimer = TimeoutTimerMock()
+      Dependencies.makeTimeoutTimer = { timeoutTimer }
 
-    let heartbeatTimer = HeartbeatTimerMock()
-    Dependencies.heartbeatTimer = { _ in
-      heartbeatTimer
+      let heartbeatTimer = HeartbeatTimerMock()
+      Dependencies.heartbeatTimer = { _ in
+        heartbeatTimer
+      }
+
+      let (_, sut, transport) = makeSUT()
+
+      let onCloseExpectation = expectation(description: "onClose")
+      let onCloseReceivedParams = LockIsolated<(Int, String?)?>(nil)
+      sut.onClose { code, reason in
+        onCloseReceivedParams.setValue((code, reason))
+        onCloseExpectation.fulfill()
+      }
+
+      let onOpenExpectation = expectation(description: "onOpen")
+      sut.onOpen {
+        onOpenExpectation.fulfill()
+      }
+
+      sut.connect()
+      XCTAssertEqual(sut.closeStatus, .unknown)
+
+      await fulfillment(of: [onOpenExpectation])
+
+      await sut.disconnect(code: .normal, reason: "test")
+
+      XCTAssertEqual(sut.closeStatus, .clean)
+
+      XCTAssertEqual(timeoutTimer.resetCallCount, 2)
+
+      XCTAssertNil(sut.connection)
+      XCTAssertNil(transport.delegate)
+      XCTAssertEqual(transport.disconnectCallCount, 1)
+      XCTAssertEqual(transport.disconnectCode, 1000)
+      XCTAssertEqual(transport.disconnectReason, "test")
+
+      await fulfillment(of: [onCloseExpectation])
+
+      let (code, reason) = try XCTUnwrap(onCloseReceivedParams.value)
+      XCTAssertEqual(code, 1000)
+      XCTAssertEqual(reason, "test")
+
+      XCTAssertEqual(heartbeatTimer.stopCallCount, 1)
     }
-
-    let (_, sut, transport) = makeSUT()
-
-    let expectation = expectation(description: "onClose")
-    let onCloseReceivedParams = LockIsolated<(Int, String?)?>(nil)
-    sut.onClose { code, reason in
-      onCloseReceivedParams.setValue((code, reason))
-      expectation.fulfill()
-    }
-
-    sut.connect()
-
-    XCTAssertEqual(sut.closeStatus, .unknown)
-    await sut.disconnect(code: .normal, reason: "test")
-
-    XCTAssertEqual(sut.closeStatus, .clean)
-
-    XCTAssertEqual(timeoutTimer.resetCallCount, 2)
-
-    XCTAssertNil(sut.connection)
-    XCTAssertNil(transport.delegate)
-    XCTAssertEqual(transport.disconnectCallCount, 1)
-    XCTAssertEqual(transport.disconnectCode, 1000)
-    XCTAssertEqual(transport.disconnectReason, "test")
-
-    await fulfillment(of: [expectation])
-
-    let (code, reason) = try XCTUnwrap(onCloseReceivedParams.value)
-    XCTAssertEqual(code, 1000)
-    XCTAssertEqual(reason, "test")
-
-    XCTAssertEqual(heartbeatTimer.stopCallCount, 1)
   }
 }
 
