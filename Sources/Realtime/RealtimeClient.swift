@@ -316,7 +316,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     connection = nil
 
     // The socket connection has been turndown, heartbeats are not needed
-    heartbeatTimer?.stop()
+    await heartbeatTimer?.stop()
 
     // Since the connection's delegate was nil'd out, inform all state
     // callbacks that the connection has closed
@@ -592,7 +592,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     await reconnectTimer.reset()
 
     // Restart the heartbeat timer
-    resetHeartbeat()
+    await resetHeartbeat()
 
     // Inform all onOpen callbacks that the Socket has opened
     for (_, callback) in stateChangeCallbacks.open.value {
@@ -607,7 +607,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     await triggerChannelError()
 
     // Prevent the heartbeat from triggering if the
-    heartbeatTimer?.stop()
+    await heartbeatTimer?.stop()
 
     // Only attempt to reconnect if the socket did not close normally,
     // or if it was closed abnormally but on client side (e.g. due to heartbeat timeout)
@@ -745,16 +745,16 @@ public class RealtimeClient: PhoenixTransportDelegate {
   // MARK: - Heartbeat
 
   // ----------------------------------------------------------------------
-  func resetHeartbeat() {
+  func resetHeartbeat() async {
     // Clear anything related to the heartbeat
     pendingHeartbeatRef = nil
-    heartbeatTimer?.stop()
+    await heartbeatTimer?.stop()
 
     // Do not start up the heartbeat timer if skipHeartbeat is true
     guard !skipHeartbeat else { return }
 
     heartbeatTimer = Dependencies.heartbeatTimer(heartbeatInterval)
-    heartbeatTimer?.start { [weak self] in
+    await heartbeatTimer?.start { [weak self] in
       await self?.sendHeartbeat()
     }
   }

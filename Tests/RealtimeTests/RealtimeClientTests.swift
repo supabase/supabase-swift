@@ -162,7 +162,8 @@ final class RealtimeClientTests: XCTestCase {
 
       XCTAssertEqual(sut.closeStatus, .clean)
 
-      XCTAssertEqual(timeoutTimer.resetCallCount, 2)
+      let resetCallCount = await timeoutTimer.resetCallCount
+      XCTAssertEqual(resetCallCount, 2)
 
       XCTAssertNil(sut.connection)
       XCTAssertNil(transport.delegate)
@@ -176,7 +177,8 @@ final class RealtimeClientTests: XCTestCase {
       XCTAssertEqual(code, 1000)
       XCTAssertEqual(reason, "test")
 
-      XCTAssertEqual(heartbeatTimer.stopCallCount, 1)
+      let stopCallCount = await heartbeatTimer.stopCallCount
+      XCTAssertEqual(stopCallCount, 1)
     }
   }
 }
@@ -221,20 +223,13 @@ class PhoenixTransportMock: PhoenixTransport {
   }
 }
 
-class TimeoutTimerMock: TimeoutTimerProtocol {
-  func setHandler(_ handler: @escaping @Sendable () async -> Void) async {
-    callback = handler
-  }
+actor TimeoutTimerMock: TimeoutTimerProtocol {
+  func setHandler(_: @escaping @Sendable () async -> Void) async {}
 
   func setTimerCalculation(
-    _ timerCalculation: @escaping @Sendable (Int) async
+    _: @escaping @Sendable (Int) async
       -> TimeInterval
-  ) async {
-    self.timerCalculation = timerCalculation
-  }
-
-  private var callback: @Sendable () async -> Void = {}
-  private var timerCalculation: @Sendable (Int) async -> TimeInterval = { _ in 0.0 }
+  ) async {}
 
   private(set) var resetCallCount = 0
   private(set) var scheduleTimeoutCallCount = 0
@@ -248,17 +243,17 @@ class TimeoutTimerMock: TimeoutTimerProtocol {
   }
 }
 
-class HeartbeatTimerMock: HeartbeatTimerProtocol {
+actor HeartbeatTimerMock: HeartbeatTimerProtocol {
   private(set) var startCallCount = 0
   private(set) var stopCallCount = 0
-  private var eventHandler: (() async -> Void)?
+  private var eventHandler: (@Sendable () async -> Void)?
 
-  func start(_ handler: @escaping () async -> Void) {
+  func start(_ handler: @escaping @Sendable () async -> Void) async {
     startCallCount += 1
     eventHandler = handler
   }
 
-  func stop() {
+  func stop() async {
     stopCallCount += 1
   }
 
