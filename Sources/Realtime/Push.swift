@@ -182,7 +182,7 @@ public actor Push {
       let socket = await channel.socket
     else { return }
 
-    let ref = socket.makeRef()
+    let ref = await socket.makeRef()
     let refEvent = await channel.replyEventName(ref)
 
     self.ref = ref

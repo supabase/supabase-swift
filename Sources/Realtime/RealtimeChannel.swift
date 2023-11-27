@@ -204,7 +204,7 @@ public actor RealtimeChannel {
     subTopic = topic.replacingOccurrences(of: "realtime:", with: "")
     self.socket = socket
     bindings = [:]
-    timeout = socket.timeout
+    timeout = await socket.timeout
     joinedOnce = false
     pushBuffer = []
     stateChangeRefs = []
@@ -225,7 +225,7 @@ public actor RealtimeChannel {
     }
 
     // Respond to socket events
-    let onErrorRef = socket?.onError { [weak self] _, _ in
+    let onErrorRef = await socket?.onError { [weak self] _, _ in
       await self?.rejoinTimer.reset()
     }
 
@@ -233,7 +233,7 @@ public actor RealtimeChannel {
       stateChangeRefs.append(ref)
     }
 
-    let onOpenRef = socket?.onOpen { [weak self] in
+    let onOpenRef = await socket?.onOpen { [weak self] in
       await self?.rejoinTimer.reset()
 
       if await self?.isErrored == true {
@@ -433,7 +433,7 @@ public actor RealtimeChannel {
     config["broadcast"] = broadcast
     config["presence"] = presence
 
-    if let accessToken = socket?.accessToken {
+    if let accessToken = await socket?.accessToken {
       accessTokenPayload["access_token"] = .string(accessToken)
     }
 
@@ -663,7 +663,7 @@ public actor RealtimeChannel {
       payload: payload,
       timeout: timeout
     )
-    if canPush {
+    if await canPush {
       await pushEvent.send()
     } else {
       await pushEvent.startTimeout()
@@ -685,10 +685,10 @@ public actor RealtimeChannel {
       payload["event"] = .string(event)
     }
 
-    if !canPush, type == .broadcast {
+    if await !canPush, type == .broadcast {
       var headers = socket?.headers ?? [:]
       headers["Content-Type"] = "application/json"
-      headers["apikey"] = socket?.accessToken
+      headers["apikey"] = await socket?.accessToken
 
       let body = [
         "messages": [
@@ -801,7 +801,7 @@ public actor RealtimeChannel {
     await leavePush.send()
 
     // If the RealtimeChannel cannot send push events, trigger a success locally
-    if !canPush {
+    if await !canPush {
       await leavePush.trigger(.ok, payload: [:])
     }
 
@@ -838,7 +838,7 @@ public actor RealtimeChannel {
       ChannelEvent.isLifecyleEvent(message.event)
     else { return true }
 
-    socket?.logItems(
+    await socket?.logItems(
       "channel", "dropping outdated message", message.topic, message.event, message.rawPayload,
       safeJoinRef
     )
@@ -955,7 +955,9 @@ public actor RealtimeChannel {
   /// - return: True if the RealtimeChannel can push messages, meaning the socket
   ///           is connected and the channel is joined
   var canPush: Bool {
-    socket?.isConnected == true && isJoined
+    get async {
+      await socket?.isConnected == true && isJoined
+    }
   }
 
   var broadcastEndpointURL: URL {

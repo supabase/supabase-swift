@@ -21,7 +21,7 @@ final class RealtimeClientTests: XCTestCase {
     return (url, sut, transport)
   }
 
-  func testInitializerWithDefaults() {
+  func testInitializerWithDefaults() async {
     let (url, sut, transport) = makeSUT()
 
     XCTAssertEqual(sut.url, url)
@@ -31,11 +31,12 @@ final class RealtimeClientTests: XCTestCase {
     )
 
     XCTAssertIdentical(sut.transport(url) as AnyObject, transport)
-    XCTAssertEqual(sut.params, [:])
+    let params = await sut.params
+    XCTAssertEqual(params, [:])
     XCTAssertEqual(sut.vsn, Defaults.vsn)
   }
 
-  func testInitializerWithCustomValues() {
+  func testInitializerWithCustomValues() async {
     let headers = ["Custom-Header": "Value"]
     let params = ["param1": AnyJSON.string("value1")]
     let vsn = "2.0"
@@ -47,33 +48,38 @@ final class RealtimeClientTests: XCTestCase {
 
     XCTAssertIdentical(sut.transport(url) as AnyObject, transport)
 
-    XCTAssertEqual(sut.params, params)
+    let clientParam = await sut.params
+    XCTAssertEqual(clientParam, params)
     XCTAssertEqual(sut.vsn, vsn)
   }
 
-  func testInitializerWithAuthorizationJWT() {
+  func testInitializerWithAuthorizationJWT() async {
     let jwt = "your_jwt_token"
     let params = ["Authorization": AnyJSON.string("Bearer \(jwt)")]
 
     let (_, sut, _) = makeSUT(params: params)
 
-    XCTAssertEqual(sut.accessToken, jwt)
+    let accessToken = await sut.accessToken
+    XCTAssertEqual(accessToken, jwt)
   }
 
-  func testInitializerWithAPIKey() {
+  func testInitializerWithAPIKey() async {
     let url = URL(string: "https://example.com")!
     let apiKey = "your_api_key"
     let params = ["apikey": AnyJSON.string(apiKey)]
 
     let realtimeClient = RealtimeClient(url: url, params: params)
 
-    XCTAssertEqual(realtimeClient.accessToken, apiKey)
+    let accessToken = await realtimeClient.accessToken
+    XCTAssertEqual(accessToken, apiKey)
   }
 
-  func testInitializerWithoutAccessToken() {
+  func testInitializerWithoutAccessToken() async {
     let params: [String: AnyJSON] = [:]
     let (_, sut, _) = makeSUT(params: params)
-    XCTAssertNil(sut.accessToken)
+
+    let accessToken = await sut.accessToken
+    XCTAssertNil(accessToken)
   }
 
   func testBuildEndpointUrl() {
@@ -106,15 +112,23 @@ final class RealtimeClientTests: XCTestCase {
     XCTAssertEqual(resultUrl.query, "vsn=1.0")
   }
 
-  func testConnect() throws {
+  func testConnect() async throws {
     let (_, sut, _) = makeSUT()
 
-    XCTAssertNil(sut.connection, "connection should be nil before calling connect method.")
+    await {
+      let connection = await sut.connection
+      XCTAssertNil(connection, "connection should be nil before calling connect method.")
+    }()
 
-    sut.connect()
-    XCTAssertEqual(sut.closeStatus, .unknown)
+    await sut.connect()
+    let closeStatus = await sut.closeStatus
+    XCTAssertEqual(closeStatus, .unknown)
 
-    let connection = try XCTUnwrap(sut.connection as? PhoenixTransportMock)
+    guard let connection = await sut.connection as? PhoenixTransportMock else {
+      XCTFail("Expected a connection.")
+      return
+    }
+
     XCTAssertIdentical(connection.delegate, sut)
 
     XCTAssertEqual(connection.connectHeaders, sut.headers)
@@ -123,14 +137,14 @@ final class RealtimeClientTests: XCTestCase {
     connection.readyState = .open
 
     // When calling connect
-    sut.connect()
+    await sut.connect()
 
     // Verify that transport's connect was called only once (first connect call).
     XCTAssertEqual(connection.connectCallCount, 1)
   }
 
-  func testDisconnect() async throws {
-    try await withMainSerialExecutor {
+  func testDisconnect() async {
+    await withMainSerialExecutor {
       let timeoutTimer = TimeoutTimerMock()
       Dependencies.makeTimeoutTimer = { timeoutTimer }
 
@@ -142,30 +156,33 @@ final class RealtimeClientTests: XCTestCase {
       let (_, sut, transport) = makeSUT()
 
       let onCloseExpectation = expectation(description: "onClose")
-      let onCloseReceivedParams = LockIsolated<(Int, String?)?>(nil)
-      sut.onClose { code, reason in
-        onCloseReceivedParams.setValue((code, reason))
+      let onCloseReceivedParams = ActorIsolated<(Int, String?)?>(nil)
+      await sut.onClose { code, reason in
+        await onCloseReceivedParams.setValue((code, reason))
         onCloseExpectation.fulfill()
       }
 
       let onOpenExpectation = expectation(description: "onOpen")
-      sut.onOpen {
+      await sut.onOpen {
         onOpenExpectation.fulfill()
       }
 
-      sut.connect()
-      XCTAssertEqual(sut.closeStatus, .unknown)
+      await sut.connect()
+      var closeStatus = await sut.closeStatus
+      XCTAssertEqual(closeStatus, .unknown)
 
       await fulfillment(of: [onOpenExpectation])
 
       await sut.disconnect(code: .normal, reason: "test")
 
-      XCTAssertEqual(sut.closeStatus, .clean)
+      closeStatus = await sut.closeStatus
+      XCTAssertEqual(closeStatus, .clean)
 
       let resetCallCount = await timeoutTimer.resetCallCount
       XCTAssertEqual(resetCallCount, 2)
 
-      XCTAssertNil(sut.connection)
+      let connection = await sut.connection
+      XCTAssertNil(connection)
       XCTAssertNil(transport.delegate)
       XCTAssertEqual(transport.disconnectCallCount, 1)
       XCTAssertEqual(transport.disconnectCode, 1000)
@@ -173,7 +190,11 @@ final class RealtimeClientTests: XCTestCase {
 
       await fulfillment(of: [onCloseExpectation])
 
-      let (code, reason) = try XCTUnwrap(onCloseReceivedParams.value)
+      guard let (code, reason) = await onCloseReceivedParams.value else {
+        XCTFail("Expected onCloseReceivedParams")
+        return
+      }
+
       XCTAssertEqual(code, 1000)
       XCTAssertEqual(reason, "test")
 

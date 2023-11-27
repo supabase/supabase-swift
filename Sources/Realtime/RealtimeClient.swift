@@ -31,14 +31,10 @@ public typealias Payload = [String: AnyJSON]
 
 /// Struct that gathers callbacks assigned to the Socket
 struct StateChangeCallbacks {
-  let open: LockIsolated <
-    [(ref: String, callback: @Sendable (URLResponse?) async -> Void)] > = .init([])
-  let close: LockIsolated <
-    [(ref: String, callback: @Sendable (Int, String?) async -> Void)] > = .init([])
-  let error: LockIsolated <
-    [(ref: String, callback: @Sendable (Error, URLResponse?) async -> Void)] > = .init([])
-  let message: LockIsolated <
-    [(ref: String, callback: @Sendable (Message) async -> Void)] > = .init([])
+  var open: [(ref: String, callback: @Sendable (URLResponse?) async -> Void)] = []
+  var close: [(ref: String, callback: @Sendable (Int, String?) async -> Void)] = []
+  var error: [(ref: String, callback: @Sendable (Error, URLResponse?) async -> Void)] = []
+  var message: [(ref: String, callback: @Sendable (Message) async -> Void)] = []
 }
 
 /// ## Socket Connection
@@ -54,7 +50,7 @@ struct StateChangeCallbacks {
 /// The `RealtimeClient` constructor takes the mount point of the socket,
 /// the authentication params, as well as options that can be found in
 /// the Socket docs, such as configuring the heartbeat.
-public class RealtimeClient: PhoenixTransportDelegate {
+public actor RealtimeClient: PhoenixTransportDelegate {
   // ----------------------------------------------------------------------
 
   // MARK: - Public Attributes
@@ -64,7 +60,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// `"wss://example.com"`, etc.) That was passed to the Socket during
   /// initialization. The URL endpoint will be modified by the Socket to
   /// include `"/websocket"` if missing.
-  public let url: URL
+  public nonisolated let url: URL
 
   /// The fully qualified socket URL
   public private(set) var endpointUrl: URL
@@ -76,10 +72,10 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   /// The WebSocket transport. Default behavior is to provide a
   /// URLSessionWebSocketTask. See README for alternatives.
-  let transport: (URL) -> PhoenixTransport
+  nonisolated let transport: @Sendable (URL) -> PhoenixTransport
 
   /// Phoenix serializer version, defaults to "2.0.0"
-  public let vsn: String
+  public nonisolated let vsn: String
 
   /// Override to provide custom encoding of data before writing to the socket
   public var encode: (Any) -> Data = Defaults.encode
@@ -91,7 +87,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public var timeout: TimeInterval = Defaults.timeoutInterval
 
   /// Custom headers to be added to the socket connection request
-  public var headers: [String: String] = [:]
+  public nonisolated let headers: [String: String]
 
   /// Interval between sending a heartbeat
   public var heartbeatInterval: TimeInterval = Defaults.heartbeatInterval
@@ -162,7 +158,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   var accessToken: String?
 
-  public convenience init(
+  public init(
     url: URL,
     headers: [String: String] = [:],
     params: Payload = [:],
@@ -180,7 +176,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public init(
     url: URL,
     headers: [String: String] = [:],
-    transport: @escaping ((URL) -> PhoenixTransport),
+    transport: @escaping @Sendable (URL) -> PhoenixTransport,
     params: Payload = [:],
     vsn: String = Defaults.vsn
   ) {
@@ -212,14 +208,14 @@ public class RealtimeClient: PhoenixTransportDelegate {
     // TODO: should store Task?
     Task { [weak self] in
       await self?.reconnectTimer.setHandler { [weak self] in
-        self?.logItems("Socket attempting to reconnect")
+        await self?.logItems("Socket attempting to reconnect")
         await self?.teardown(reason: "reconnection")
-        self?.connect()
+        await self?.connect()
       }
 
       await self?.reconnectTimer.setTimerCalculation { [weak self] tries in
-        let interval = self?.reconnectAfter(tries) ?? 5.0
-        self?.logItems("Socket reconnecting in \(interval)s")
+        let interval = await self?.reconnectAfter(tries) ?? 5.0
+        await self?.logItems("Socket reconnecting in \(interval)s")
         return interval
       }
     }
@@ -320,7 +316,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
     // Since the connection's delegate was nil'd out, inform all state
     // callbacks that the connection has closed
-    for (_, callback) in stateChangeCallbacks.close.value {
+    for (_, callback) in stateChangeCallbacks.close {
       await callback(code.rawValue, reason)
     }
   }
@@ -358,9 +354,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// - parameter callback: Called when the Socket is opened
   @discardableResult
   public func onOpen(callback: @escaping @Sendable (URLResponse?) async -> Void) -> String {
-    stateChangeCallbacks.open.withValue {
-      append(callback: callback, to: &$0)
-    }
+    append(callback: callback, to: &stateChangeCallbacks.open)
   }
 
   /// Registers callbacks for connection close events. Does not handle retain
@@ -389,10 +383,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - parameter callback: Called when the Socket is closed
   @discardableResult
-  public func onClose(callback: @escaping @Sendable (Int, String?) -> Void) -> String {
-    stateChangeCallbacks.close.withValue {
-      append(callback: callback, to: &$0)
-    }
+  public func onClose(callback: @escaping @Sendable (Int, String?) async -> Void) -> String {
+    append(callback: callback, to: &stateChangeCallbacks.close)
   }
 
   /// Registers callbacks for connection error events. Does not handle retain
@@ -407,9 +399,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// - parameter callback: Called when the Socket errors
   @discardableResult
   public func onError(callback: @escaping @Sendable (Error, URLResponse?) async -> Void) -> String {
-    stateChangeCallbacks.error.withValue {
-      append(callback: callback, to: &$0)
-    }
+    append(callback: callback, to: &stateChangeCallbacks.error)
   }
 
   /// Registers callbacks for connection message events. Does not handle
@@ -425,9 +415,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// - parameter callback: Called when the Socket receives a message event
   @discardableResult
   public func onMessage(callback: @escaping @Sendable (Message) -> Void) -> String {
-    stateChangeCallbacks.message.withValue {
-      append(callback: callback, to: &$0)
-    }
+    append(callback: callback, to: &stateChangeCallbacks.message)
   }
 
   private func append<T>(callback: T, to array: inout [(ref: String, callback: T)])
@@ -442,10 +430,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// call this method when you are finished when the Socket in order to release
   /// any references held by the socket.
   public func releaseCallbacks() {
-    stateChangeCallbacks.open.setValue([])
-    stateChangeCallbacks.close.setValue([])
-    stateChangeCallbacks.error.setValue([])
-    stateChangeCallbacks.message.setValue([])
+    stateChangeCallbacks = .init()
   }
 
   // ----------------------------------------------------------------------
@@ -479,9 +464,11 @@ public class RealtimeClient: PhoenixTransportDelegate {
     await channel.unsubscribe()
     await off(channel.stateChangeRefs)
 
-    await channels.removeAll(where: {
-      await $0.joinRef == channel.joinRef
-    })
+    for (index, c) in zip(channels.indices, channels) {
+      if await c.joinRef == channel.joinRef {
+        channels.remove(at: index)
+      }
+    }
 
     if channels.isEmpty {
       await disconnect()
@@ -500,25 +487,20 @@ public class RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - Parameter refs: List of refs returned by calls to `onOpen`, `onClose`, etc
   public func off(_ refs: [String]) {
-    stateChangeCallbacks.open.withValue {
-      $0 = $0.filter {
-        !refs.contains($0.ref)
-      }
+    stateChangeCallbacks.open = stateChangeCallbacks.open.filter {
+      !refs.contains($0.ref)
     }
-    stateChangeCallbacks.close.withValue {
-      $0 = $0.filter {
-        !refs.contains($0.ref)
-      }
+
+    stateChangeCallbacks.close = stateChangeCallbacks.close.filter {
+      !refs.contains($0.ref)
     }
-    stateChangeCallbacks.error.withValue {
-      $0 = $0.filter {
-        !refs.contains($0.ref)
-      }
+
+    stateChangeCallbacks.error = stateChangeCallbacks.error.filter {
+      !refs.contains($0.ref)
     }
-    stateChangeCallbacks.message.withValue {
-      $0 = $0.filter {
-        !refs.contains($0.ref)
-      }
+
+    stateChangeCallbacks.message = stateChangeCallbacks.message.filter {
+      !refs.contains($0.ref)
     }
   }
 
@@ -542,7 +524,10 @@ public class RealtimeClient: PhoenixTransportDelegate {
       do {
         let data = try JSONEncoder().encode(message)
 
-        self.logItems("push", "Sending \(String(data: data, encoding: String.Encoding.utf8) ?? "")")
+        await self.logItems(
+          "push",
+          "Sending \(String(data: data, encoding: String.Encoding.utf8) ?? "")"
+        )
         await self.connection?.send(data: data)
       } catch {
         // TODO: handle error
@@ -595,7 +580,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     await resetHeartbeat()
 
     // Inform all onOpen callbacks that the Socket has opened
-    for (_, callback) in stateChangeCallbacks.open.value {
+    for (_, callback) in stateChangeCallbacks.open {
       await callback(response)
     }
   }
@@ -615,7 +600,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       await reconnectTimer.scheduleTimeout()
     }
 
-    for (_, callback) in stateChangeCallbacks.close.value {
+    for (_, callback) in stateChangeCallbacks.close {
       await callback(code, reason)
     }
   }
@@ -627,7 +612,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     await triggerChannelError()
 
     // Inform any state callbacks of the error
-    for (_, callback) in stateChangeCallbacks.error.value {
+    for (_, callback) in stateChangeCallbacks.error {
       await callback(error, response)
     }
   }
@@ -652,7 +637,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       }
 
       // Inform all onMessage callbacks of the message
-      for (_, callback) in stateChangeCallbacks.message.value {
+      for (_, callback) in stateChangeCallbacks.message {
         await callback(message)
       }
     } catch {

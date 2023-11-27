@@ -20,22 +20,22 @@ final class RealtimeIntegrationTests: XCTestCase {
     let sut = makeSUT()
 
     let onOpenExpectation = expectation(description: "onOpen")
-    sut.onOpen { [weak sut] in
+    await sut.onOpen { [weak sut] in
       onOpenExpectation.fulfill()
       await sut?.disconnect()
     }
 
-    sut.onError { error, _ in
+    await sut.onError { error, _ in
       XCTFail("connection failed with: \(error)")
     }
 
     let onCloseExpectation = expectation(description: "onClose")
     onCloseExpectation.assertForOverFulfill = false
-    sut.onClose {
+    await sut.onClose {
       onCloseExpectation.fulfill()
     }
 
-    sut.connect()
+    await sut.connect()
 
     await fulfillment(of: [onOpenExpectation, onCloseExpectation])
   }
@@ -43,7 +43,7 @@ final class RealtimeIntegrationTests: XCTestCase {
   func testOnChannelEvent() async {
     let sut = makeSUT()
 
-    sut.connect()
+    await sut.connect()
 
     let expectation = expectation(description: "subscribe")
     expectation.expectedFulfillmentCount = 2
