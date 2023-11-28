@@ -45,6 +45,12 @@ public final class Push: @unchecked Sendable {
 
     /// The event that is associated with the reference ID of the Push
     var refEvent: String?
+
+    /// Reverses the result on channel.on(ChannelEvent, callback) that spawned the Push
+    mutating func cancelRefEvent() {
+      guard let refEvent else { return }
+      channel?.off(refEvent)
+    }
   }
 
   private let mutableState = LockIsolated(MutableState())
@@ -85,17 +91,17 @@ public final class Push: @unchecked Sendable {
 
   /// Resets and sends the Push
   /// - parameter timeout: Optional. The push timeout. Default is 10.0s
-  public func resend(_ timeout: TimeInterval = Defaults.timeoutInterval) async {
+  public func resend(_ timeout: TimeInterval = Defaults.timeoutInterval) {
     mutableState.withValue {
       $0.timeout = timeout
     }
-    await reset()
-    await send()
+    reset()
+    send()
   }
 
   /// Sends the Push. If it has already timed out, then the call will
   /// be ignored and return early. Use `resend` in this case.
-  public func send() async {
+  public func send() {
     guard !hasReceived(status: .timeout) else { return }
 
     startTimeout()
@@ -105,7 +111,7 @@ public final class Push: @unchecked Sendable {
 
     let channel = mutableState.channel
 
-    await channel?.socket?.push(
+    channel?.socket?.push(
       message: Message(
         ref: mutableState.ref ?? "",
         topic: channel?.topic ?? "",
@@ -156,11 +162,9 @@ public final class Push: @unchecked Sendable {
   }
 
   /// Resets the Push as it was after it was first initialized.
-  func reset() async {
-    // TODO: move cancelRefEvent to MutableState
-    cancelRefEvent()
-
+  func reset() {
     mutableState.withValue {
+      $0.cancelRefEvent()
       $0.refEvent = nil
       $0.ref = nil
       $0.receivedMessage = nil
@@ -176,12 +180,6 @@ public final class Push: @unchecked Sendable {
     for hook in mutableState.receiveHooks[status] ?? [] {
       await hook(message)
     }
-  }
-
-  /// Reverses the result on channel.on(ChannelEvent, callback) that spawned the Push
-  private func cancelRefEvent() {
-    guard let refEvent = mutableState.refEvent else { return }
-    mutableState.channel?.off(refEvent)
   }
 
   /// Cancel any ongoing Timeout Timer
@@ -214,9 +212,9 @@ public final class Push: @unchecked Sendable {
     /// If a response is received  before the Timer triggers, cancel timer
     /// and match the received event to it's corresponding hook
     channel.on(refEvent, filter: ChannelFilter()) { [weak self] message in
-      self?.cancelRefEvent()
       self?.cancelTimeout()
       self?.mutableState.withValue {
+        $0.cancelRefEvent()
         $0.receivedMessage = message
       }
 

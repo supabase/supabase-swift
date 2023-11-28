@@ -70,7 +70,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
 
     /// Buffers messages that need to be sent once the socket has connected. It is an array
     /// of tuples, with the ref of the message to send and the callback that will send the message.
-    var sendBuffer: [(ref: String?, callback: () async throws -> Void)] = []
+    var sendBuffer: [(ref: String?, callback: () -> Void)] = []
 
     /// Timer that triggers sending new Heartbeat messages
     var heartbeatTimer: HeartbeatTimerProtocol?
@@ -313,7 +313,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
 
   /// Sets the JWT access token used for channel subscription authorization and Realtime RLS.
   /// - Parameter token: A JWT string.
-  public func setAuth(_ token: String?) async {
+  public func setAuth(_ token: String?) {
     mutableState.withValue {
       $0.accessToken = token
     }
@@ -322,7 +322,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
       channel.params["user_token"] = token.map(AnyJSON.string) ?? .null
 
       if channel.joinedOnce, channel.isJoined {
-        await channel.push(
+        channel.push(
           ChannelEvent.accessToken,
           payload: ["access_token": token.map(AnyJSON.string) ?? .null]
         )
@@ -571,8 +571,8 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   /// - parameter payload:
   /// - parameter ref: Optional. Defaults to nil
   /// - parameter joinRef: Optional. Defaults to nil
-  func push(message: Message) async {
-    let callback: (() async throws -> Void) = { [weak self] in
+  func push(message: Message) {
+    let callback: (() -> Void) = { [weak self] in
       guard let self else { return }
       do {
         let data = try JSONEncoder().encode(message)
@@ -581,7 +581,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
           "push",
           "Sending \(String(data: data, encoding: String.Encoding.utf8) ?? "")"
         )
-        await self.mutableState.connection?.send(data: data)
+        self.mutableState.connection?.send(data: data)
       } catch {
         // TODO: handle error
       }
@@ -589,7 +589,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
 
     /// If the socket is connected, then execute the callback immediately.
     if isConnected {
-      try? await callback()
+      callback()
     } else {
       /// If the socket is not connected, add the push to a buffer which will
       /// be sent immediately upon connection.
@@ -622,7 +622,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     }
 
     // Send any messages that were waiting for a connection
-    await flushSendBuffer()
+    flushSendBuffer()
 
     // Reset how the socket tried to reconnect
     await reconnectTimer.reset()
@@ -712,15 +712,10 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   }
 
   /// Send all messages that were buffered before the socket opened
-  func flushSendBuffer() async {
-    let sendBuffer = mutableState.sendBuffer
-
-    guard isConnected, sendBuffer.count > 0 else { return }
-    for (_, callback) in sendBuffer {
-      try? await callback()
-    }
-
+  func flushSendBuffer() {
     mutableState.withValue {
+      guard isConnected, $0.sendBuffer.count > 0 else { return }
+      $0.sendBuffer.forEach { $0.callback() }
       $0.sendBuffer = []
     }
   }
@@ -799,12 +794,12 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     mutableState.withValue { $0.heartbeatTimer = heartbeatTimer }
 
     await heartbeatTimer.start { [weak self] in
-      await self?.sendHeartbeat()
+      self?.sendHeartbeat()
     }
   }
 
   /// Sends a heartbeat payload to the phoenix servers
-  func sendHeartbeat() async {
+  func sendHeartbeat() {
     // Do not send if the connection is closed
     guard isConnected else { return }
 
@@ -833,7 +828,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     }
 
     if let pendingHeartbeatRef {
-      await push(
+      push(
         message: Message(
           ref: pendingHeartbeatRef,
           topic: "phoenix",

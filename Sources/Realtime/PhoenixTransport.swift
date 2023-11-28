@@ -57,7 +57,7 @@ public protocol PhoenixTransport {
 
    - Parameter data: Data to send.
    */
-  func send(data: Data) async
+  func send(data: Data)
 }
 
 // ----------------------------------------------------------------------
@@ -220,8 +220,8 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
     session?.finishTasksAndInvalidate()
   }
 
-  open func send(data: Data) async {
-    try? await stream?.task.send(.string(String(data: data, encoding: .utf8)!))
+  open func send(data: Data) {
+    stream?.task.send(.string(String(data: data, encoding: .utf8)!)) { _ in }
   }
 
   // MARK: - URLSessionWebSocketDelegate

@@ -301,7 +301,7 @@ public final class RealtimeChannel: @unchecked Sendable {
 
       // Send and buffered messages and clear the buffer
       for push in pushBuffer {
-        await push.send()
+        push.send()
       }
 
       mutableState.withValue {
@@ -337,13 +337,13 @@ public final class RealtimeChannel: @unchecked Sendable {
         event: ChannelEvent.leave,
         timeout: mutableState.timeout
       )
-      await leavePush.send()
+      leavePush.send()
 
       // Mark the RealtimeChannel as in an error and attempt to rejoin if socket is connected
       mutableState.withValue {
         $0.state = .errored
       }
-      await joinPush.reset()
+      joinPush.reset()
 
       if self.socket?.isConnected == true {
         await rejoinTimer.scheduleTimeout()
@@ -387,7 +387,7 @@ public final class RealtimeChannel: @unchecked Sendable {
         }
 
         // Reset the push to be used again later
-        await self.joinPush.reset()
+        self.joinPush.reset()
       }
 
       // Mark the channel as errored and attempt to rejoin if socket is currently connected
@@ -489,7 +489,7 @@ public final class RealtimeChannel: @unchecked Sendable {
         }
 
         if self.socket?.accessToken != nil {
-          await self.socket?.setAuth(self.socket?.accessToken)
+          self.socket?.setAuth(self.socket?.accessToken)
         }
 
         guard let serverPostgresFilters = message.payload["postgres_changes"]?.arrayValue?
@@ -694,7 +694,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     _ event: String,
     payload: Payload,
     timeout: TimeInterval = Defaults.timeoutInterval
-  ) async -> Push {
+  ) -> Push {
     guard joinedOnce else {
       fatalError(
         "Tried to push \(event) to \(topic) before joining. Use channel.join() before pushing events"
@@ -708,7 +708,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       timeout: timeout
     )
     if canPush {
-      await pushEvent.send()
+      pushEvent.send()
     } else {
       pushEvent.startTimeout()
       mutableState.withValue {
@@ -763,7 +763,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     } else {
       let continuation = LockIsolated(CheckedContinuation<ChannelResponse, Never>?.none)
 
-      let push = await push(
+      let push = push(
         type.rawValue, payload: payload,
         timeout: opts["timeout"]?.numberValue ?? mutableState.timeout
       )
@@ -846,7 +846,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     await leavePush
       .receive(.ok, callback: onCloseCallback)
       .receive(.timeout, callback: onCloseCallback)
-    await leavePush.send()
+    leavePush.send()
 
     // If the RealtimeChannel cannot send push events, trigger a success locally
     if !canPush {
@@ -892,11 +892,11 @@ public final class RealtimeChannel: @unchecked Sendable {
   }
 
   /// Sends the payload to join the RealtimeChannel
-  func sendJoin(_ timeout: TimeInterval) async {
+  func sendJoin(_ timeout: TimeInterval) {
     mutableState.withValue {
       $0.state = .joining
     }
-    await joinPush.resend(timeout)
+    joinPush.resend(timeout)
   }
 
   /// Rejoins the channel
@@ -908,7 +908,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     await socket?.leaveOpenTopic(topic: topic)
 
     // Send the joinPush
-    await sendJoin(timeout ?? mutableState.timeout)
+    sendJoin(timeout ?? mutableState.timeout)
   }
 
   /// Triggers an event to the correct event bindings created by
