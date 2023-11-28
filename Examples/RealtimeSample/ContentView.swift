@@ -8,32 +8,107 @@
 import Realtime
 import SwiftUI
 
+@MainActor
+final class ViewModel: ObservableObject {
+  @Published var inserts: [Message] = []
+  @Published var updates: [Message] = []
+  @Published var deletes: [Message] = []
+
+  @Published var socketStatus: String?
+  @Published var channelStatus: String?
+
+  @Published var publicSchema: RealtimeChannel?
+  @Published var isJoined: Bool = false
+
+  func createSubscription() async {
+    await supabase.realtime.connect()
+
+    publicSchema = await supabase.realtime.channel("public")
+      .on(
+        "postgres_changes",
+        filter: ChannelFilter(event: "INSERT", schema: "public")
+      ) { [weak self] message in
+        await MainActor.run { [weak self] in
+          self?.inserts.append(message)
+        }
+      }
+      .on(
+        "postgres_changes",
+        filter: ChannelFilter(event: "UPDATE", schema: "public")
+      ) { [weak self] message in
+        await MainActor.run { [weak self] in
+          self?.updates.append(message)
+        }
+      }
+      .on(
+        "postgres_changes",
+        filter: ChannelFilter(event: "DELETE", schema: "public")
+      ) { [weak self] message in
+        await MainActor.run { [weak self] in
+          self?.deletes.append(message)
+        }
+      }
+
+    await publicSchema?.onError { @MainActor [weak self] _ in self?.channelStatus = "ERROR" }
+    await publicSchema?
+      .onClose { @MainActor [weak self] _ in self?.channelStatus = "Closed gracefully" }
+    await publicSchema?
+      .subscribe { @MainActor [weak self] state, _ in
+        self?.isJoined = await self?.publicSchema?.isJoined == true
+        switch state {
+        case .subscribed:
+          self?.channelStatus = "OK"
+        case .closed:
+          self?.channelStatus = "CLOSED"
+        case .timedOut:
+          self?.channelStatus = "Timed out"
+        case .channelError:
+          self?.channelStatus = "ERROR"
+        }
+      }
+
+    await supabase.realtime.connect()
+    await supabase.realtime.onOpen { @MainActor [weak self] in
+      self?.socketStatus = "OPEN"
+    }
+    await supabase.realtime.onClose { [weak self] _, _ in
+      await MainActor.run { [weak self] in
+        self?.socketStatus = "CLOSE"
+      }
+    }
+    await supabase.realtime.onError { @MainActor [weak self] error, _ in
+      self?.socketStatus = "ERROR: \(error.localizedDescription)"
+    }
+  }
+
+  func toggleSubscription() async {
+    if await publicSchema?.isJoined == true {
+      await publicSchema?.unsubscribe()
+    } else {
+      await createSubscription()
+    }
+  }
+}
+
 struct ContentView: View {
-  @State var inserts: [Message] = []
-  @State var updates: [Message] = []
-  @State var deletes: [Message] = []
-
-  @State var socketStatus: String?
-  @State var channelStatus: String?
-
-  @State var publicSchema: RealtimeChannel?
+  @StateObject var model = ViewModel()
 
   var body: some View {
     List {
       Section("INSERTS") {
-        ForEach(Array(zip(inserts.indices, inserts)), id: \.0) { _, message in
+        ForEach(Array(zip(model.inserts.indices, model.inserts)), id: \.0) { _, message in
           Text(message.stringfiedPayload())
         }
       }
 
       Section("UPDATES") {
-        ForEach(Array(zip(updates.indices, updates)), id: \.0) { _, message in
+        ForEach(Array(zip(model.updates.indices, model.updates)), id: \.0) { _, message in
           Text(message.stringfiedPayload())
         }
       }
 
       Section("DELETES") {
-        ForEach(Array(zip(deletes.indices, deletes)), id: \.0) { _, message in
+        ForEach(Array(zip(model.deletes.indices, model.deletes)), id: \.0) { _, message in
           Text(message.stringfiedPayload())
         }
       }
@@ -42,67 +117,24 @@ struct ContentView: View {
       VStack(alignment: .leading) {
         Toggle(
           "Toggle Subscription",
-          isOn: Binding(get: { publicSchema?.isJoined == true }, set: { _ in toggleSubscription() })
+          isOn: Binding(
+            get: { model.isJoined },
+            set: { _ in
+              Task {
+                await model.toggleSubscription()
+              }
+            }
+          )
         )
-        Text("Socket: \(socketStatus ?? "")")
-        Text("Channel: \(channelStatus ?? "")")
+        Text("Socket: \(model.socketStatus ?? "")")
+        Text("Channel: \(model.channelStatus ?? "")")
       }
       .padding()
       .background(.regularMaterial)
       .padding()
     }
-    .onAppear {
-      createSubscription()
-    }
-  }
-
-  func createSubscription() {
-    supabase.realtime.connect()
-
-    publicSchema = supabase.realtime.channel("public")
-      .on("postgres_changes", filter: ChannelFilter(event: "INSERT", schema: "public")) {
-        inserts.append($0)
-      }
-      .on("postgres_changes", filter: ChannelFilter(event: "UPDATE", schema: "public")) {
-        updates.append($0)
-      }
-      .on("postgres_changes", filter: ChannelFilter(event: "DELETE", schema: "public")) {
-        deletes.append($0)
-      }
-
-    publicSchema?.onError { _ in channelStatus = "ERROR" }
-    publicSchema?.onClose { _ in channelStatus = "Closed gracefully" }
-    publicSchema?
-      .subscribe { state, _ in
-        switch state {
-        case .subscribed:
-          channelStatus = "OK"
-        case .closed:
-          channelStatus = "CLOSED"
-        case .timedOut:
-          channelStatus = "Timed out"
-        case .channelError:
-          channelStatus = "ERROR"
-        }
-      }
-
-    supabase.realtime.connect()
-    supabase.realtime.onOpen {
-      socketStatus = "OPEN"
-    }
-    supabase.realtime.onClose {
-      socketStatus = "CLOSE"
-    }
-    supabase.realtime.onError { error, _ in
-      socketStatus = "ERROR: \(error.localizedDescription)"
-    }
-  }
-
-  func toggleSubscription() {
-    if publicSchema?.isJoined == true {
-      publicSchema?.unsubscribe()
-    } else {
-      createSubscription()
+    .task {
+      await model.createSubscription()
     }
   }
 }
@@ -110,9 +142,9 @@ struct ContentView: View {
 extension Message {
   func stringfiedPayload() -> String {
     do {
-      let data = try JSONSerialization.data(
-        withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]
-      )
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+      let data = try encoder.encode(payload)
       return String(data: data, encoding: .utf8) ?? ""
     } catch {
       return ""

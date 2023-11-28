@@ -338,7 +338,7 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - parameter callback: Called when the Socket is opened
   @discardableResult
-  public func onOpen(callback: @escaping () async -> Void) -> String {
+  public func onOpen(callback: @escaping @Sendable () async -> Void) -> String {
     onOpen { _ in await callback() }
   }
 
@@ -882,40 +882,5 @@ extension RealtimeClient {
         return false
       }
     }
-  }
-}
-
-extension Array {
-  @inlinable mutating func removeAll(
-    where shouldBeRemoved: (Element) async throws
-      -> Bool
-  ) async rethrows {
-    for (index, element) in zip(indices, self) {
-      if try await shouldBeRemoved(element) {
-        remove(at: index)
-      }
-    }
-  }
-
-  @_disfavoredOverload
-  @inlinable func filter(_ isIncluded: (Element) async throws -> Bool) async rethrows -> [Element] {
-    var result: [Element] = []
-    for element in self {
-      if try await isIncluded(element) {
-        result.append(element)
-      }
-    }
-    return result
-  }
-
-  @inlinable func first(where predicate: (Element) async throws -> Bool) async rethrows
-    -> Element?
-  {
-    for element in self {
-      if try await predicate(element) {
-        return element
-      }
-    }
-    return nil
   }
 }

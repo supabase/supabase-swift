@@ -34,7 +34,7 @@ struct Binding: Sendable {
   let id: String?
 }
 
-public struct ChannelFilter {
+public struct ChannelFilter: Sendable {
   public let event: String?
   public let schema: String?
   public let table: String?
@@ -70,7 +70,7 @@ public enum RealtimeListenTypes: String {
 }
 
 /// Represents the broadcast and presence options for a channel.
-public struct RealtimeChannelOptions {
+public struct RealtimeChannelOptions: Sendable {
   /// Used to track presence payload across clients. Must be unique per client. If `nil`, the server
   /// will generate one.
   var presenceKey: String?
@@ -393,7 +393,7 @@ public actor RealtimeChannel {
   @discardableResult
   public func subscribe(
     timeout: TimeInterval? = nil,
-    callback: ((RealtimeSubscribeStates, Error?) async -> Void)? = nil
+    callback: (@Sendable (RealtimeSubscribeStates, Error?) async -> Void)? = nil
   ) async -> RealtimeChannel {
     guard !joinedOnce else {
       fatalError(
