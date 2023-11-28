@@ -18,42 +18,50 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+import ConcurrencyExtras
 import Foundation
 
 /// Represents pushing data to a `Channel` through the `Socket`
-public actor Push {
-  /// The channel sending the Push
-  public weak var channel: RealtimeChannel?
+public final class Push: @unchecked Sendable {
+  struct MutableState {
+    var channel: RealtimeChannel?
+    var payload: Payload = [:]
+    var timeout: TimeInterval = Defaults.timeoutInterval
+
+    /// The server's response to the Push
+    var receivedMessage: Message?
+
+    /// Timer which triggers a timeout event
+    var timeoutTask: Task<Void, Never>?
+
+    /// Hooks into a Push. Where .receive("ok", callback(Payload)) are stored
+    var receiveHooks: [PushStatus: [@Sendable (Message) async -> Void]] = [:]
+
+    /// True if the Push has been sent
+    var sent: Bool = false
+
+    /// The reference ID of the Push
+    var ref: String?
+
+    /// The event that is associated with the reference ID of the Push
+    var refEvent: String?
+  }
+
+  private let mutableState = LockIsolated(MutableState())
 
   /// The event, for example `phx_join`
   public let event: String
 
   /// The payload, for example ["user_id": "abc123"]
-  public var payload: Payload
-  func setPayload(_ payload: Payload) {
-    self.payload = payload
+  public var payload: Payload {
+    get { mutableState.payload }
+    set { mutableState.withValue { $0.payload = newValue } }
   }
 
-  /// The push timeout. Default is 10.0 seconds
-  public var timeout: TimeInterval
-
-  /// The server's response to the Push
-  var receivedMessage: Message?
-
-  /// Timer which triggers a timeout event
-  var timeoutTask: Task<Void, Never>?
-
-  /// Hooks into a Push. Where .receive("ok", callback(Payload)) are stored
-  var receiveHooks: [PushStatus: [@Sendable (Message) async -> Void]]
-
-  /// True if the Push has been sent
-  var sent: Bool
-
   /// The reference ID of the Push
-  var ref: String?
-
-  /// The event that is associated with the reference ID of the Push
-  var refEvent: String?
+  var ref: String? {
+    mutableState.ref
+  }
 
   /// Initializes a Push
   ///
@@ -67,20 +75,20 @@ public actor Push {
     payload: Payload = [:],
     timeout: TimeInterval = Defaults.timeoutInterval
   ) {
-    self.channel = channel
+    mutableState.withValue {
+      $0.channel = channel
+      $0.payload = payload
+      $0.timeout = timeout
+    }
     self.event = event
-    self.payload = payload
-    self.timeout = timeout
-    receivedMessage = nil
-    receiveHooks = [:]
-    sent = false
-    ref = nil
   }
 
   /// Resets and sends the Push
   /// - parameter timeout: Optional. The push timeout. Default is 10.0s
   public func resend(_ timeout: TimeInterval = Defaults.timeoutInterval) async {
-    self.timeout = timeout
+    mutableState.withValue {
+      $0.timeout = timeout
+    }
     await reset()
     await send()
   }
@@ -90,11 +98,16 @@ public actor Push {
   public func send() async {
     guard !hasReceived(status: .timeout) else { return }
 
-    await startTimeout()
-    sent = true
+    startTimeout()
+    mutableState.withValue {
+      $0.sent = true
+    }
+
+    let channel = mutableState.channel
+
     await channel?.socket?.push(
       message: Message(
-        ref: ref ?? "",
+        ref: mutableState.ref ?? "",
         topic: channel?.topic ?? "",
         event: event,
         payload: payload,
@@ -125,16 +138,18 @@ public actor Push {
     callback: @escaping @Sendable (Message) async -> Void
   ) async -> Push {
     // If the message has already been received, pass it to the callback immediately
-    if hasReceived(status: status), let receivedMessage {
+    if hasReceived(status: status), let receivedMessage = mutableState.receivedMessage {
       await callback(receivedMessage)
     }
 
-    if receiveHooks[status] == nil {
-      /// Create a new array of hooks if no previous hook is associated with status
-      receiveHooks[status] = [callback]
-    } else {
-      /// A previous hook for this status already exists. Just append the new hook
-      receiveHooks[status]?.append(callback)
+    mutableState.withValue {
+      if $0.receiveHooks[status] == nil {
+        /// Create a new array of hooks if no previous hook is associated with status
+        $0.receiveHooks[status] = [callback]
+      } else {
+        /// A previous hook for this status already exists. Just append the new hook
+        $0.receiveHooks[status]?.append(callback)
+      }
     }
 
     return self
@@ -142,11 +157,15 @@ public actor Push {
 
   /// Resets the Push as it was after it was first initialized.
   func reset() async {
-    await cancelRefEvent()
-    ref = nil
-    refEvent = nil
-    receivedMessage = nil
-    sent = false
+    // TODO: move cancelRefEvent to MutableState
+    cancelRefEvent()
+
+    mutableState.withValue {
+      $0.refEvent = nil
+      $0.ref = nil
+      $0.receivedMessage = nil
+      $0.sent = false
+    }
   }
 
   /// Finds the receiveHook which needs to be informed of a status response
@@ -154,60 +173,68 @@ public actor Push {
   /// - parameter status: Status which was received, e.g. "ok", "error", "timeout"
   /// - parameter response: Response that was received
   private func matchReceive(_ status: PushStatus, message: Message) async {
-    for hook in receiveHooks[status] ?? [] {
+    for hook in mutableState.receiveHooks[status] ?? [] {
       await hook(message)
     }
   }
 
   /// Reverses the result on channel.on(ChannelEvent, callback) that spawned the Push
-  private func cancelRefEvent() async {
-    guard let refEvent else { return }
-    await channel?.off(refEvent)
+  private func cancelRefEvent() {
+    guard let refEvent = mutableState.refEvent else { return }
+    mutableState.channel?.off(refEvent)
   }
 
   /// Cancel any ongoing Timeout Timer
   func cancelTimeout() {
-    timeoutTask?.cancel()
-    timeoutTask = nil
+    mutableState.withValue {
+      $0.timeoutTask?.cancel()
+      $0.timeoutTask = nil
+    }
   }
 
   /// Starts the Timer which will trigger a timeout after a specific _timeout_
   /// time, in milliseconds, is reached.
-  func startTimeout() async {
+  func startTimeout() {
     // Cancel any existing timeout before starting a new one
-    timeoutTask?.cancel()
+    mutableState.timeoutTask?.cancel()
 
     guard
-      let channel,
-      let socket = await channel.socket
+      let channel = mutableState.channel,
+      let socket = channel.socket
     else { return }
 
-    let ref = await socket.makeRef()
-    let refEvent = await channel.replyEventName(ref)
+    let ref = socket.makeRef()
+    let refEvent = channel.replyEventName(ref)
 
-    self.ref = ref
-    self.refEvent = refEvent
+    mutableState.withValue {
+      $0.ref = ref
+      $0.refEvent = refEvent
+    }
 
     /// If a response is received  before the Timer triggers, cancel timer
     /// and match the received event to it's corresponding hook
-    await channel.on(refEvent, filter: ChannelFilter()) { [weak self] message in
-      await self?.cancelRefEvent()
-      await self?.cancelTimeout()
-      await self?.setReceivedMessage(message)
+    channel.on(refEvent, filter: ChannelFilter()) { [weak self] message in
+      self?.cancelRefEvent()
+      self?.cancelTimeout()
+      self?.mutableState.withValue {
+        $0.receivedMessage = message
+      }
 
       /// Check if there is event a status available
       guard let status = message.status else { return }
       await self?.matchReceive(status, message: message)
     }
 
-    timeoutTask = Task {
+    let timeout = mutableState.timeout
+
+    let timeoutTask = Task {
       try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeout))
       await self.trigger(.timeout, payload: [:])
     }
-  }
 
-  private func setReceivedMessage(_ message: Message) {
-    receivedMessage = message
+    mutableState.withValue {
+      $0.timeoutTask = timeoutTask
+    }
   }
 
   /// Checks if a status has already been received by the Push.
@@ -215,17 +242,17 @@ public actor Push {
   /// - parameter status: Status to check
   /// - return: True if given status has been received by the Push.
   func hasReceived(status: PushStatus) -> Bool {
-    receivedMessage?.status == status
+    mutableState.receivedMessage?.status == status
   }
 
   /// Triggers an event to be sent though the Channel
   func trigger(_ status: PushStatus, payload: Payload) async {
     /// If there is no ref event, then there is nothing to trigger on the channel
-    guard let refEvent else { return }
+    guard let refEvent = mutableState.refEvent else { return }
 
     var mutPayload = payload
     mutPayload["status"] = .string(status.rawValue)
 
-    await channel?.trigger(event: refEvent, payload: mutPayload)
+    await mutableState.channel?.trigger(event: refEvent, payload: mutPayload)
   }
 }

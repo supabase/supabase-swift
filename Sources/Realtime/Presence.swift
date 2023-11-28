@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+import ConcurrencyExtras
 import Foundation
 
 /// The Presence object provides features for syncing presence information from
@@ -90,7 +91,7 @@ import Foundation
 ///     }
 ///
 ///     presence.onSync { renderUsers(presence.list()) }
-public actor Presence {
+public final class Presence: @unchecked Sendable {
   // ----------------------------------------------------------------------
 
   // MARK: - Enums and Structs
@@ -117,11 +118,27 @@ public actor Presence {
     }
   }
 
-  /// Presense Events
+  /// Presence Events
   public enum Events: String {
     case state
     case diff
   }
+
+  struct MutableState {
+    var channel: RealtimeChannel?
+    var caller = Caller()
+    var state: State = [:]
+    var pendingDiffs: [Diff] = []
+    var joinRef: String?
+
+    var isPendingSyncState: Bool {
+      guard let safeJoinRef = joinRef else { return true }
+      let channelJoinRef = channel?.joinRef
+      return safeJoinRef != channelJoinRef
+    }
+  }
+
+  let mutableState = LockIsolated(MutableState())
 
   // ----------------------------------------------------------------------
 
@@ -162,75 +179,65 @@ public actor Presence {
   // MARK: - Properties
 
   // ----------------------------------------------------------------------
-  /// The channel the Presence belongs to
-  weak var channel: RealtimeChannel?
-
-  /// Caller to callback hooks
-  var caller: Caller
 
   /// The state of the Presence
-  public private(set) var state: State
+  public var state: State {
+    mutableState.state
+  }
 
   /// Pending `join` and `leave` diffs that need to be synced
-  public private(set) var pendingDiffs: [Diff]
+  public var pendingDiffs: [Diff] {
+    mutableState.pendingDiffs
+  }
 
   /// The channel's joinRef, set when state events occur
-  public private(set) var joinRef: String?
+  public var joinRef: String? {
+    mutableState.joinRef
+  }
 
   public var isPendingSyncState: Bool {
-    get async {
-      guard let safeJoinRef = joinRef else { return true }
-      let channelJoinRef = await channel?.joinRef
-      return safeJoinRef != channelJoinRef
-    }
+    mutableState.isPendingSyncState
   }
 
   /// Callback to be informed of joins
   public var onJoin: OnJoin {
-    get { caller.onJoin }
-    set { caller.onJoin = newValue }
+    mutableState.caller.onJoin
   }
 
   /// Set the OnJoin callback
   public func onJoin(_ callback: @escaping OnJoin) {
-    onJoin = callback
+    mutableState.withValue { $0.caller.onJoin = callback }
   }
 
   /// Callback to be informed of leaves
   public var onLeave: OnLeave {
-    get { caller.onLeave }
-    set { caller.onLeave = newValue }
+    mutableState.caller.onLeave
   }
 
   /// Set the OnLeave callback
   public func onLeave(_ callback: @escaping OnLeave) {
-    onLeave = callback
+    mutableState.withValue { $0.caller.onLeave = callback }
   }
 
-  /// Callback to be informed of synces
+  /// Callback to be informed of syncs
   public var onSync: OnSync {
-    get { caller.onSync }
-    set { caller.onSync = newValue }
+    mutableState.caller.onSync
   }
 
   /// Set the OnSync callback
   public func onSync(_ callback: @escaping OnSync) {
-    onSync = callback
+    mutableState.withValue { $0.caller.onSync = callback }
   }
 
-  public init(channel: RealtimeChannel, opts: Options = Options.defaults) async {
-    state = [:]
-    pendingDiffs = []
-    self.channel = channel
-    joinRef = nil
-    caller = Caller()
+  public init(channel: RealtimeChannel, opts: Options = Options.defaults) {
+    mutableState.withValue { $0.channel = channel }
 
     guard // Do not subscribe to events if they were not provided
       let stateEvent = opts.events[.state],
       let diffEvent = opts.events[.diff]
     else { return }
 
-    await self.channel?.on(stateEvent, filter: ChannelFilter()) { [weak self] message in
+    channel.on(stateEvent, filter: ChannelFilter()) { [weak self] message in
       guard
         let self,
         let newState = message.rawPayload as? State
@@ -239,53 +246,60 @@ public actor Presence {
       await onStateEvent(newState)
     }
 
-    await self.channel?.on(diffEvent, filter: ChannelFilter()) { [weak self] message in
+    channel.on(diffEvent, filter: ChannelFilter()) { [weak self] message in
       guard
         let self,
         let diff = message.rawPayload as? Diff
       else { return }
 
-      await onDiffEvent(diff)
+      onDiffEvent(diff)
     }
   }
 
   private func onStateEvent(_ newState: State) async {
-    joinRef = await channel?.joinRef
-    state = Presence.syncState(
-      state,
-      newState: newState,
-      onJoin: caller.onJoin,
-      onLeave: caller.onLeave
-    )
+    mutableState.withValue { mutableState in
+      mutableState.joinRef = mutableState.channel?.joinRef
 
-    pendingDiffs.forEach { diff in
-      self.state = Presence.syncDiff(
-        self.state,
-        diff: diff,
-        onJoin: self.caller.onJoin,
-        onLeave: self.caller.onLeave
-      )
-    }
-
-    pendingDiffs = []
-    caller.onSync()
-  }
-
-  private func onDiffEvent(_ diff: Diff) async {
-    if await isPendingSyncState {
-      pendingDiffs.append(diff)
-    } else {
-      state = Presence.syncDiff(
-        state,
-        diff: diff,
+      let caller = mutableState.caller
+      mutableState.state = Presence.syncState(
+        mutableState.state,
+        newState: newState,
         onJoin: caller.onJoin,
         onLeave: caller.onLeave
       )
+
+      mutableState.pendingDiffs.forEach { diff in
+        mutableState.state = Presence.syncDiff(
+          mutableState.state,
+          diff: diff,
+          onJoin: caller.onJoin,
+          onLeave: caller.onLeave
+        )
+      }
+
+      mutableState.pendingDiffs = []
       caller.onSync()
     }
   }
 
-  /// Returns the array of presences, with deault selected metadata.
+  private func onDiffEvent(_ diff: Diff) {
+    mutableState.withValue { mutableState in
+      if mutableState.isPendingSyncState {
+        mutableState.pendingDiffs.append(diff)
+      } else {
+        let caller = mutableState.caller
+        mutableState.state = Presence.syncDiff(
+          mutableState.state,
+          diff: diff,
+          onJoin: caller.onJoin,
+          onLeave: caller.onLeave
+        )
+        caller.onSync()
+      }
+    }
+  }
+
+  /// Returns the array of presences, with default selected metadata.
   public func list() -> [Map] {
     list(by: { _, pres in pres })
   }

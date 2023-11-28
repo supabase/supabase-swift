@@ -50,7 +50,87 @@ struct StateChangeCallbacks {
 /// The `RealtimeClient` constructor takes the mount point of the socket,
 /// the authentication params, as well as options that can be found in
 /// the Socket docs, such as configuring the heartbeat.
-public actor RealtimeClient: PhoenixTransportDelegate {
+public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate {
+  struct MutableState {
+    /// The fully qualified socket URL
+    var endpointURL: URL
+    var params: Payload
+
+    /// Disables heartbeats from being sent. Default is false.
+    var skipHeartbeat: Bool = false
+
+    /// Callbacks for socket state changes
+    var stateChangeCallbacks: StateChangeCallbacks = .init()
+
+    /// Ref counter for messages
+    var ref: UInt64 = .min // 0 (max: 18,446,744,073,709,551,615)
+
+    /// Collection on channels created for the Socket
+    var channels: [RealtimeChannel] = []
+
+    /// Buffers messages that need to be sent once the socket has connected. It is an array
+    /// of tuples, with the ref of the message to send and the callback that will send the message.
+    var sendBuffer: [(ref: String?, callback: () async throws -> Void)] = []
+
+    /// Timer that triggers sending new Heartbeat messages
+    var heartbeatTimer: HeartbeatTimerProtocol?
+
+    /// Ref counter for the last heartbeat that was sent
+    var pendingHeartbeatRef: String?
+
+    /// Close status
+    var closeStatus: CloseStatus = .unknown
+
+    /// The connection to the server
+    var connection: PhoenixTransport? = nil
+
+    var accessToken: String?
+
+    mutating func append<T>(
+      callback: T,
+      to array: WritableKeyPath<MutableState, [(ref: String, callback: T)]>
+    ) -> String {
+      let ref = makeRef()
+      self[keyPath: array].append((ref, callback))
+      return ref
+    }
+
+    /// - return: the next message ref, accounting for overflows
+    mutating func makeRef() -> String {
+      ref = (ref == UInt64.max) ? 0 : ref + 1
+      return String(ref)
+    }
+
+    mutating func releaseCallbacks() {
+      stateChangeCallbacks = .init()
+    }
+
+    mutating func releaseCallbacks(referencedBy refs: [String]) {
+      stateChangeCallbacks.open = stateChangeCallbacks.open.filter {
+        !refs.contains($0.ref)
+      }
+
+      stateChangeCallbacks.close = stateChangeCallbacks.close.filter {
+        !refs.contains($0.ref)
+      }
+
+      stateChangeCallbacks.error = stateChangeCallbacks.error.filter {
+        !refs.contains($0.ref)
+      }
+
+      stateChangeCallbacks.message = stateChangeCallbacks.message.filter {
+        !refs.contains($0.ref)
+      }
+    }
+
+    /// Removes an item from the sendBuffer with the matching ref
+    mutating func removeFromSendBuffer(ref: String) {
+      sendBuffer = sendBuffer.filter { $0.ref != ref }
+    }
+  }
+
+  private let mutableState: LockIsolated<MutableState>
+
   // ----------------------------------------------------------------------
 
   // MARK: - Public Attributes
@@ -60,105 +140,82 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   /// `"wss://example.com"`, etc.) That was passed to the Socket during
   /// initialization. The URL endpoint will be modified by the Socket to
   /// include `"/websocket"` if missing.
-  public nonisolated let url: URL
+  public let url: URL
 
   /// The fully qualified socket URL
-  public private(set) var endpointUrl: URL
+  public var endpointURL: URL {
+    mutableState.endpointURL
+  }
 
-  /// Resolves to return the `paramsClosure` result at the time of calling.
-  /// If the `Socket` was created with static params, then those will be
-  /// returned every time.
-  public var params: Payload = [:]
+  public var params: Payload {
+    get { mutableState.params }
+    set { mutableState.withValue { $0.params = newValue } }
+  }
 
   /// The WebSocket transport. Default behavior is to provide a
   /// URLSessionWebSocketTask. See README for alternatives.
-  nonisolated let transport: @Sendable (URL) -> PhoenixTransport
+  let transport: @Sendable (URL) -> PhoenixTransport
 
   /// Phoenix serializer version, defaults to "2.0.0"
-  public nonisolated let vsn: String
+  public let vsn: String
 
   /// Override to provide custom encoding of data before writing to the socket
-  public var encode: (Any) -> Data = Defaults.encode
+  public let encode: (Any) -> Data = Defaults.encode
 
   /// Override to provide custom decoding of data read from the socket
-  public var decode: (Data) -> Any? = Defaults.decode
+  public let decode: (Data) -> Any? = Defaults.decode
 
   /// Timeout to use when opening connections
   public var timeout: TimeInterval = Defaults.timeoutInterval
 
   /// Custom headers to be added to the socket connection request
-  public nonisolated let headers: [String: String]
+  public let headers: [String: String]
 
   /// Interval between sending a heartbeat
-  public var heartbeatInterval: TimeInterval = Defaults.heartbeatInterval
+  public let heartbeatInterval: TimeInterval = Defaults.heartbeatInterval
 
   /// Interval between socket reconnect attempts, in seconds
-  public var reconnectAfter: (Int) -> TimeInterval = Defaults.reconnectSteppedBackOff
+  public let reconnectAfter: (Int) -> TimeInterval = Defaults.reconnectSteppedBackOff
 
   /// Interval between channel rejoin attempts, in seconds
-  public var rejoinAfter: (Int) -> TimeInterval = Defaults.rejoinSteppedBackOff
+  public let rejoinAfter: (Int) -> TimeInterval = Defaults.rejoinSteppedBackOff
 
   /// The optional function to receive logs
+  // TODO: move logger to MutableState
   public var logger: ((String) -> Void)?
 
   /// Disables heartbeats from being sent. Default is false.
-  public var skipHeartbeat: Bool = false
-
-  /// Enable/Disable SSL certificate validation. Default is false. This
-  /// must be set before calling `socket.connect()` in order to be applied
-  public var disableSSLCertValidation: Bool = false
-
-  #if os(Linux)
-  #else
-    /// Configure custom SSL validation logic, eg. SSL pinning. This
-    /// must be set before calling `socket.connect()` in order to apply.
-    //  public var security: SSLTrustValidator?
-
-    /// Configure the encryption used by your client by setting the
-    /// allowed cipher suites supported by your server. This must be
-    /// set before calling `socket.connect()` in order to apply.
-    public var enabledSSLCipherSuites: [SSLCipherSuite]?
-  #endif
+  public var skipHeartbeat: Bool {
+    get { mutableState.skipHeartbeat }
+    set { mutableState.withValue { $0.skipHeartbeat = newValue } }
+  }
 
   // ----------------------------------------------------------------------
 
   // MARK: - Private Attributes
 
   // ----------------------------------------------------------------------
-  /// Callbacks for socket state changes
-  var stateChangeCallbacks: StateChangeCallbacks = .init()
 
   /// Collection on channels created for the Socket
-  public internal(set) var channels: [RealtimeChannel] = []
+  public var channels: [RealtimeChannel] {
+    mutableState.channels
+  }
 
   /// Buffers messages that need to be sent once the socket has connected. It is an array
   /// of tuples, with the ref of the message to send and the callback that will send the message.
-  var sendBuffer: [(ref: String?, callback: () async throws -> Void)] = []
-
-  /// Ref counter for messages
-  var ref: UInt64 = .min // 0 (max: 18,446,744,073,709,551,615)
-
-  /// Timer that triggers sending new Heartbeat messages
-  var heartbeatTimer: HeartbeatTimerProtocol?
-
-  /// Ref counter for the last heartbeat that was sent
-  var pendingHeartbeatRef: String?
+//  var sendBuffer: [(ref: String?, callback: () async throws -> Void)] = []
 
   /// Timer to use when attempting to reconnect
-  var reconnectTimer: TimeoutTimerProtocol
-
-  /// Close status
-  var closeStatus: CloseStatus = .unknown
-
-  /// The connection to the server
-  var connection: PhoenixTransport? = nil
+  let reconnectTimer: TimeoutTimerProtocol
 
   /// The HTTPClient to perform HTTP requests.
   let http: HTTPClient
 
-  var accessToken: String?
+  var accessToken: String? {
+    mutableState.accessToken
+  }
 
-  public init(
+  public convenience init(
     url: URL,
     headers: [String: String] = [:],
     params: Payload = [:],
@@ -181,7 +238,6 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     vsn: String = Defaults.vsn
   ) {
     self.transport = transport
-    self.params = params
     self.url = url
     self.vsn = vsn
 
@@ -192,15 +248,25 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     self.headers = headers
     http = HTTPClient(fetchHandler: { try await URLSession.shared.data(for: $0) })
 
+    let accessToken: String?
+
     if let jwt = params["Authorization"]?.stringValue?.split(separator: " ").last {
       accessToken = String(jwt)
     } else {
       accessToken = params["apikey"]?.stringValue
     }
-    endpointUrl = RealtimeClient.buildEndpointUrl(
+    let endpointURL = RealtimeClient.buildEndpointUrl(
       url: url,
       params: params,
       vsn: vsn
+    )
+
+    mutableState = LockIsolated(
+      MutableState(
+        endpointURL: endpointURL,
+        params: params,
+        accessToken: accessToken
+      )
     )
 
     reconnectTimer = Dependencies.makeTimeoutTimer()
@@ -208,14 +274,14 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     // TODO: should store Task?
     Task { [weak self] in
       await self?.reconnectTimer.setHandler { [weak self] in
-        await self?.logItems("Socket attempting to reconnect")
+        self?.logItems("Socket attempting to reconnect")
         await self?.teardown(reason: "reconnection")
-        await self?.connect()
+        self?.connect()
       }
 
       await self?.reconnectTimer.setTimerCalculation { [weak self] tries in
-        let interval = await self?.reconnectAfter(tries) ?? 5.0
-        await self?.logItems("Socket reconnecting in \(interval)s")
+        let interval = self?.reconnectAfter(tries) ?? 5.0
+        self?.logItems("Socket reconnecting in \(interval)s")
         return interval
       }
     }
@@ -228,10 +294,10 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   // ----------------------------------------------------------------------
   /// - return: The socket protocol, wss or ws
   public var websocketProtocol: String {
-    switch endpointUrl.scheme {
+    switch endpointURL.scheme {
     case "https": return "wss"
     case "http": return "ws"
-    default: return endpointUrl.scheme ?? ""
+    default: return endpointURL.scheme ?? ""
     }
   }
 
@@ -242,20 +308,20 @@ public actor RealtimeClient: PhoenixTransportDelegate {
 
   /// - return: The state of the connect. [.connecting, .open, .closing, .closed]
   public var connectionState: PhoenixTransportReadyState {
-    connection?.readyState ?? .closed
+    mutableState.connection?.readyState ?? .closed
   }
 
   /// Sets the JWT access token used for channel subscription authorization and Realtime RLS.
   /// - Parameter token: A JWT string.
   public func setAuth(_ token: String?) async {
-    accessToken = token
+    mutableState.withValue {
+      $0.accessToken = token
+    }
 
     for channel in channels {
-      var params = await channel.params
-      params["user_token"] = token.map(AnyJSON.string) ?? .null
-      await channel.setParams(params)
+      channel.params["user_token"] = token.map(AnyJSON.string) ?? .null
 
-      if await channel.joinedOnce, await channel.isJoined {
+      if channel.joinedOnce, channel.isJoined {
         await channel.push(
           ChannelEvent.accessToken,
           payload: ["access_token": token.map(AnyJSON.string) ?? .null]
@@ -272,19 +338,13 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     guard !isConnected else { return }
 
     // Reset the close status when attempting to connect
-    closeStatus = .unknown
+    mutableState.withValue {
+      $0.closeStatus = .unknown
+      $0.connection = transport(endpointURL)
+      $0.connection?.delegate = self
 
-    connection = transport(endpointUrl)
-    connection?.delegate = self
-    //    self.connection?.disableSSLCertValidation = disableSSLCertValidation
-    //
-    //    #if os(Linux)
-    //    #else
-    //    self.connection?.security = security
-    //    self.connection?.enabledSSLCipherSuites = enabledSSLCipherSuites
-    //    #endif
-
-    connection?.connect(with: headers)
+      $0.connection?.connect(with: headers)
+    }
   }
 
   /// Disconnects the socket
@@ -296,7 +356,9 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     reason: String? = nil
   ) async {
     // The socket was closed cleanly by the User
-    closeStatus = CloseStatus(closeCode: code.rawValue)
+    mutableState.withValue {
+      $0.closeStatus = CloseStatus(closeCode: code.rawValue)
+    }
 
     // Reset any reconnects and teardown the socket connection
     await reconnectTimer.reset()
@@ -307,16 +369,18 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     code: CloseCode = CloseCode.normal,
     reason: String? = nil
   ) async {
-    connection?.delegate = nil
-    connection?.disconnect(code: code.rawValue, reason: reason)
-    connection = nil
+    mutableState.withValue {
+      $0.connection?.delegate = nil
+      $0.connection?.disconnect(code: code.rawValue, reason: reason)
+      $0.connection = nil
+    }
 
     // The socket connection has been turndown, heartbeats are not needed
-    await heartbeatTimer?.stop()
+    await mutableState.heartbeatTimer?.stop()
 
     // Since the connection's delegate was nil'd out, inform all state
     // callbacks that the connection has closed
-    for (_, callback) in stateChangeCallbacks.close {
+    for (_, callback) in mutableState.stateChangeCallbacks.close {
       await callback(code.rawValue, reason)
     }
   }
@@ -354,7 +418,9 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   /// - parameter callback: Called when the Socket is opened
   @discardableResult
   public func onOpen(callback: @escaping @Sendable (URLResponse?) async -> Void) -> String {
-    append(callback: callback, to: &stateChangeCallbacks.open)
+    mutableState.withValue {
+      $0.append(callback: callback, to: \.stateChangeCallbacks.open)
+    }
   }
 
   /// Registers callbacks for connection close events. Does not handle retain
@@ -384,7 +450,9 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   /// - parameter callback: Called when the Socket is closed
   @discardableResult
   public func onClose(callback: @escaping @Sendable (Int, String?) async -> Void) -> String {
-    append(callback: callback, to: &stateChangeCallbacks.close)
+    mutableState.withValue {
+      $0.append(callback: callback, to: \.stateChangeCallbacks.close)
+    }
   }
 
   /// Registers callbacks for connection error events. Does not handle retain
@@ -399,7 +467,9 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   /// - parameter callback: Called when the Socket errors
   @discardableResult
   public func onError(callback: @escaping @Sendable (Error, URLResponse?) async -> Void) -> String {
-    append(callback: callback, to: &stateChangeCallbacks.error)
+    mutableState.withValue {
+      $0.append(callback: callback, to: \.stateChangeCallbacks.error)
+    }
   }
 
   /// Registers callbacks for connection message events. Does not handle
@@ -415,22 +485,16 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   /// - parameter callback: Called when the Socket receives a message event
   @discardableResult
   public func onMessage(callback: @escaping @Sendable (Message) -> Void) -> String {
-    append(callback: callback, to: &stateChangeCallbacks.message)
-  }
-
-  private func append<T>(callback: T, to array: inout [(ref: String, callback: T)])
-    -> String
-  {
-    let ref = makeRef()
-    array.append((ref, callback))
-    return ref
+    mutableState.withValue {
+      $0.append(callback: callback, to: \.stateChangeCallbacks.message)
+    }
   }
 
   /// Releases all stored callback hooks (onError, onOpen, onClose, etc.) You should
   /// call this method when you are finished when the Socket in order to release
   /// any references held by the socket.
   public func releaseCallbacks() {
-    stateChangeCallbacks = .init()
+    mutableState.withValue { $0.releaseCallbacks() }
   }
 
   // ----------------------------------------------------------------------
@@ -454,7 +518,10 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     let channel = await RealtimeChannel(
       topic: "realtime:\(topic)", params: params.params, socket: self
     )
-    channels.append(channel)
+
+    mutableState.withValue {
+      $0.channels.append(channel)
+    }
 
     return channel
   }
@@ -462,12 +529,10 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   /// Unsubscribes and removes a single channel
   public func remove(_ channel: RealtimeChannel) async {
     await channel.unsubscribe()
-    await off(channel.stateChangeRefs)
+    off(channel.stateChangeRefs)
 
-    for (index, c) in zip(channels.indices, channels) {
-      if await c.joinRef == channel.joinRef {
-        channels.remove(at: index)
-      }
+    mutableState.withValue {
+      $0.channels.removeAll(where: { $0.joinRef == channel.joinRef })
     }
 
     if channels.isEmpty {
@@ -487,20 +552,8 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - Parameter refs: List of refs returned by calls to `onOpen`, `onClose`, etc
   public func off(_ refs: [String]) {
-    stateChangeCallbacks.open = stateChangeCallbacks.open.filter {
-      !refs.contains($0.ref)
-    }
-
-    stateChangeCallbacks.close = stateChangeCallbacks.close.filter {
-      !refs.contains($0.ref)
-    }
-
-    stateChangeCallbacks.error = stateChangeCallbacks.error.filter {
-      !refs.contains($0.ref)
-    }
-
-    stateChangeCallbacks.message = stateChangeCallbacks.message.filter {
-      !refs.contains($0.ref)
+    mutableState.withValue {
+      $0.releaseCallbacks(referencedBy: refs)
     }
   }
 
@@ -524,11 +577,11 @@ public actor RealtimeClient: PhoenixTransportDelegate {
       do {
         let data = try JSONEncoder().encode(message)
 
-        await self.logItems(
+        self.logItems(
           "push",
           "Sending \(String(data: data, encoding: String.Encoding.utf8) ?? "")"
         )
-        await self.connection?.send(data: data)
+        await self.mutableState.connection?.send(data: data)
       } catch {
         // TODO: handle error
       }
@@ -540,14 +593,10 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     } else {
       /// If the socket is not connected, add the push to a buffer which will
       /// be sent immediately upon connection.
-      sendBuffer.append((ref: message.ref, callback: callback))
+      mutableState.withValue {
+        $0.sendBuffer.append((ref: message.ref, callback: callback))
+      }
     }
-  }
-
-  /// - return: the next message ref, accounting for overflows
-  public func makeRef() -> String {
-    ref = (ref == UInt64.max) ? 0 : ref + 1
-    return String(ref)
   }
 
   /// Logs the message. Override Socket.logger for specialized logging. noops by default
@@ -568,7 +617,9 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     logItems("transport", "Connected to \(url)")
 
     // Reset the close status now that the socket has been connected
-    closeStatus = .unknown
+    mutableState.withValue {
+      $0.closeStatus = .unknown
+    }
 
     // Send any messages that were waiting for a connection
     await flushSendBuffer()
@@ -580,7 +631,7 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     await resetHeartbeat()
 
     // Inform all onOpen callbacks that the Socket has opened
-    for (_, callback) in stateChangeCallbacks.open {
+    for (_, callback) in mutableState.stateChangeCallbacks.open {
       await callback(response)
     }
   }
@@ -592,15 +643,15 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     await triggerChannelError()
 
     // Prevent the heartbeat from triggering if the
-    await heartbeatTimer?.stop()
+    await mutableState.heartbeatTimer?.stop()
 
     // Only attempt to reconnect if the socket did not close normally,
     // or if it was closed abnormally but on client side (e.g. due to heartbeat timeout)
-    if closeStatus.shouldReconnect {
+    if mutableState.closeStatus.shouldReconnect {
       await reconnectTimer.scheduleTimeout()
     }
 
-    for (_, callback) in stateChangeCallbacks.close {
+    for (_, callback) in mutableState.stateChangeCallbacks.close {
       await callback(code, reason)
     }
   }
@@ -612,7 +663,7 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     await triggerChannelError()
 
     // Inform any state callbacks of the error
-    for (_, callback) in stateChangeCallbacks.error {
+    for (_, callback) in mutableState.stateChangeCallbacks.error {
       await callback(error, response)
     }
   }
@@ -625,7 +676,11 @@ public actor RealtimeClient: PhoenixTransportDelegate {
       let message = try JSONDecoder().decode(Message.self, from: message)
 
       // Clear heartbeat ref, preventing a heartbeat timeout disconnect
-      if message.ref == pendingHeartbeatRef { pendingHeartbeatRef = nil }
+      mutableState.withValue {
+        if message.ref == $0.pendingHeartbeatRef {
+          $0.pendingHeartbeatRef = nil
+        }
+      }
 
       if message.event == "phx_close" {
         print("Close Event Received")
@@ -637,7 +692,7 @@ public actor RealtimeClient: PhoenixTransportDelegate {
       }
 
       // Inform all onMessage callbacks of the message
-      for (_, callback) in stateChangeCallbacks.message {
+      for (_, callback) in mutableState.stateChangeCallbacks.message {
         await callback(message)
       }
     } catch {
@@ -650,11 +705,7 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   func triggerChannelError() async {
     for channel in channels {
       // Only trigger a channel error if it is in an "opened" state
-      let isErrored = await channel.isErrored
-      let isLeaving = await channel.isLeaving
-      let isClosed = await channel.isClosed
-
-      if !(isErrored || isLeaving || isClosed) {
+      if !(channel.isErrored || channel.isLeaving || channel.isClosed) {
         await channel.trigger(event: ChannelEvent.error)
       }
     }
@@ -662,16 +713,24 @@ public actor RealtimeClient: PhoenixTransportDelegate {
 
   /// Send all messages that were buffered before the socket opened
   func flushSendBuffer() async {
+    let sendBuffer = mutableState.sendBuffer
+
     guard isConnected, sendBuffer.count > 0 else { return }
     for (_, callback) in sendBuffer {
       try? await callback()
     }
-    sendBuffer = []
+
+    mutableState.withValue {
+      $0.sendBuffer = []
+    }
   }
 
-  /// Removes an item from the sendBuffer with the matching ref
+  func makeRef() -> String {
+    mutableState.withValue { $0.makeRef() }
+  }
+
   func removeFromSendBuffer(ref: String) {
-    sendBuffer = sendBuffer.filter { $0.ref != ref }
+    mutableState.withValue { $0.removeFromSendBuffer(ref: ref) }
   }
 
   /// Builds a fully qualified socket `URL` from `endPoint` and `params`.
@@ -713,12 +772,7 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   // Leaves any channel that is open that has a duplicate topic
   func leaveOpenTopic(topic: String) async {
     guard
-      let dupe = await channels.first(where: {
-        let isJoined = await $0.isJoined
-        let isJoining = await $0.isJoining
-
-        return $0.topic == topic && (isJoined || isJoining)
-      })
+      let dupe = await channels.first(where: { $0.topic == topic && ($0.isJoined || $0.isJoining) })
     else { return }
 
     logItems("transport", "leaving duplicate topic: [\(topic)]")
@@ -732,14 +786,19 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   // ----------------------------------------------------------------------
   func resetHeartbeat() async {
     // Clear anything related to the heartbeat
-    pendingHeartbeatRef = nil
-    await heartbeatTimer?.stop()
+    mutableState.withValue {
+      $0.pendingHeartbeatRef = nil
+    }
+
+    await mutableState.heartbeatTimer?.stop()
 
     // Do not start up the heartbeat timer if skipHeartbeat is true
     guard !skipHeartbeat else { return }
 
-    heartbeatTimer = Dependencies.heartbeatTimer(heartbeatInterval)
-    await heartbeatTimer?.start { [weak self] in
+    let heartbeatTimer = Dependencies.heartbeatTimer(heartbeatInterval)
+    mutableState.withValue { $0.heartbeatTimer = heartbeatTimer }
+
+    await heartbeatTimer.start { [weak self] in
       await self?.sendHeartbeat()
     }
   }
@@ -752,44 +811,53 @@ public actor RealtimeClient: PhoenixTransportDelegate {
     // If there is a pending heartbeat ref, then the last heartbeat was
     // never acknowledged by the server. Close the connection and attempt
     // to reconnect.
-    if let _ = pendingHeartbeatRef {
-      pendingHeartbeatRef = nil
-      logItems(
-        "transport",
-        "heartbeat timeout. Attempting to re-establish connection"
-      )
 
-      // Close the socket manually, flagging the closure as abnormal. Do not use
-      // `teardown` or `disconnect` as they will nil out the websocket delegate.
-      abnormalClose("heartbeat timeout")
+    let pendingHeartbeatRef: String? = mutableState.withValue {
+      if $0.pendingHeartbeatRef != nil {
+        $0.pendingHeartbeatRef = nil
 
-      return
+        logItems(
+          "transport",
+          "heartbeat timeout. Attempting to re-establish connection"
+        )
+
+        // Close the socket manually, flagging the closure as abnormal. Do not use
+        // `teardown` or `disconnect` as they will nil out the websocket delegate.
+        abnormalClose("heartbeat timeout")
+        return nil
+      } else {
+        // The last heartbeat was acknowledged by the server. Send another one
+        $0.pendingHeartbeatRef = $0.makeRef()
+        return $0.pendingHeartbeatRef
+      }
     }
 
-    // The last heartbeat was acknowledged by the server. Send another one
-    pendingHeartbeatRef = makeRef()
-    await push(
-      message: Message(
-        ref: pendingHeartbeatRef ?? "",
-        topic: "phoenix",
-        event: ChannelEvent.heartbeat,
-        payload: [:]
+    if let pendingHeartbeatRef {
+      await push(
+        message: Message(
+          ref: pendingHeartbeatRef,
+          topic: "phoenix",
+          event: ChannelEvent.heartbeat,
+          payload: [:]
+        )
       )
-    )
+    }
   }
 
   func abnormalClose(_ reason: String) {
-    closeStatus = .abnormal
+    mutableState.withValue {
+      $0.closeStatus = .abnormal
 
-    /*
-     We use NORMAL here since the client is the one determining to close the
-     connection. However, we set to close status to abnormal so that
-     the client knows that it should attempt to reconnect.
+      /*
+       We use NORMAL here since the client is the one determining to close the
+       connection. However, we set to close status to abnormal so that
+       the client knows that it should attempt to reconnect.
 
-     If the server subsequently acknowledges with code 1000 (normal close),
-     the socket will keep the `.abnormal` close status and trigger a reconnection.
-     */
-    connection?.disconnect(code: CloseCode.normal.rawValue, reason: reason)
+       If the server subsequently acknowledges with code 1000 (normal close),
+       the socket will keep the `.abnormal` close status and trigger a reconnection.
+       */
+      $0.connection?.disconnect(code: CloseCode.normal.rawValue, reason: reason)
+    }
   }
 
   // ----------------------------------------------------------------------
@@ -810,7 +878,9 @@ public actor RealtimeClient: PhoenixTransportDelegate {
   }
 
   public func onClose(code: Int, reason: String? = nil) async {
-    closeStatus.update(transportCloseCode: code)
+    mutableState.withValue {
+      $0.closeStatus.update(transportCloseCode: code)
+    }
     await onConnectionClosed(code: code, reason: reason)
   }
 }
