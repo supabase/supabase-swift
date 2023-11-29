@@ -201,10 +201,6 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     mutableState.channels
   }
 
-  /// Buffers messages that need to be sent once the socket has connected. It is an array
-  /// of tuples, with the ref of the message to send and the callback that will send the message.
-//  var sendBuffer: [(ref: String?, callback: () async throws -> Void)] = []
-
   /// Timer to use when attempting to reconnect
   let reconnectTimer: TimeoutTimerProtocol
 

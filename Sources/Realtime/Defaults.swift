@@ -65,7 +65,7 @@ public enum Defaults {
 
 /// Represents the multiple states that a Channel can be in
 /// throughout it's lifecycle.
-public enum ChannelState: String {
+public enum ChannelState: String, Sendable {
   case closed
   case errored
   case joined

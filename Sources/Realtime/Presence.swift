@@ -125,7 +125,7 @@ public final class Presence: @unchecked Sendable {
   }
 
   struct MutableState {
-    var channel: RealtimeChannel?
+    let channel = WeakBox<RealtimeChannel>()
     var caller = Caller()
     var state: State = [:]
     var pendingDiffs: [Diff] = []
@@ -133,7 +133,7 @@ public final class Presence: @unchecked Sendable {
 
     var isPendingSyncState: Bool {
       guard let safeJoinRef = joinRef else { return true }
-      let channelJoinRef = channel?.joinRef
+      let channelJoinRef = channel.value?.joinRef
       return safeJoinRef != channelJoinRef
     }
   }
@@ -230,7 +230,7 @@ public final class Presence: @unchecked Sendable {
   }
 
   public init(channel: RealtimeChannel, opts: Options = Options.defaults) {
-    mutableState.withValue { $0.channel = channel }
+    mutableState.withValue { $0.channel.setValue(channel) }
 
     guard // Do not subscribe to events if they were not provided
       let stateEvent = opts.events[.state],
@@ -258,7 +258,7 @@ public final class Presence: @unchecked Sendable {
 
   private func onStateEvent(_ newState: State) {
     mutableState.withValue { mutableState in
-      mutableState.joinRef = mutableState.channel?.joinRef
+      mutableState.joinRef = mutableState.channel.value?.joinRef
 
       let caller = mutableState.caller
       mutableState.state = Presence.syncState(

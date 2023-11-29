@@ -49,8 +49,8 @@ final class RealtimeIntegrationTests: XCTestCase {
     expectation.expectedFulfillmentCount = 2
 
     let channel = LockIsolated(RealtimeChannel?.none)
-    addTeardownBlock { [weak channel] in
-      XCTAssertNil(channel)
+    addTeardownBlock { [weak channel = channel.value] in
+      XCTAssertNil(channel, "RealtimeChannel leaked.")
     }
 
     let states = LockIsolated<[RealtimeSubscribeStates]>([])

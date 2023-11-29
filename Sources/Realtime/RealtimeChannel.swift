@@ -139,13 +139,12 @@ public enum RealtimeSubscribeStates: Sendable {
 ///         .receive("error") { payload in print("Failed ot join", payload) }
 ///         .receive("timeout") { payload in print("Networking issue...", payload) }
 ///
-
 public final class RealtimeChannel: @unchecked Sendable {
-  struct MutableState {
+  struct MutableState: Sendable {
     var presence: Presence?
 
     /// The Socket that the channel belongs to
-    var socket: RealtimeClient?
+    let socket = WeakBox<RealtimeClient>()
 
     var subTopic: String = ""
 
@@ -197,7 +196,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   }
 
   var socket: RealtimeClient? {
-    mutableState.socket
+    mutableState.socket.value
   }
 
   /// Set to true once the channel calls .join()
@@ -230,7 +229,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   /// - parameter socket: Socket that the channel is a part of
   init(topic: String, params: [String: AnyJSON] = [:], socket: RealtimeClient) {
     mutableState.withValue {
-      $0.socket = socket
+      $0.socket.setValue(socket)
       $0.subTopic = topic.replacingOccurrences(of: "realtime:", with: "")
       $0.timeout = socket.timeout
     }
