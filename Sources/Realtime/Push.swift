@@ -111,7 +111,7 @@ public final class Push: @unchecked Sendable {
 
     let channel = mutableState.channel
 
-    channel?.socket?.push(
+    channel?.socket.value?.push(
       message: Message(
         ref: mutableState.ref ?? "",
         topic: channel?.topic ?? "",
@@ -202,7 +202,7 @@ public final class Push: @unchecked Sendable {
 
     guard
       let channel = mutableState.channel,
-      let socket = channel.socket
+      let socket = channel.socket.value
     else { return }
 
     let ref = socket.makeRef()

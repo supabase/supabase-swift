@@ -125,19 +125,13 @@ public final class Presence: @unchecked Sendable {
   }
 
   struct MutableState {
-    let channel = WeakBox<RealtimeChannel>()
     var caller = Caller()
     var state: State = [:]
     var pendingDiffs: [Diff] = []
     var joinRef: String?
-
-    var isPendingSyncState: Bool {
-      guard let safeJoinRef = joinRef else { return true }
-      let channelJoinRef = channel.value?.joinRef
-      return safeJoinRef != channelJoinRef
-    }
   }
 
+  let channel = WeakBox<RealtimeChannel>()
   let mutableState = LockIsolated(MutableState())
 
   // ----------------------------------------------------------------------
@@ -196,7 +190,9 @@ public final class Presence: @unchecked Sendable {
   }
 
   public var isPendingSyncState: Bool {
-    mutableState.isPendingSyncState
+    guard let safeJoinRef = joinRef else { return true }
+    let channelJoinRef = channel.value?.joinRef
+    return safeJoinRef != channelJoinRef
   }
 
   /// Callback to be informed of joins
@@ -230,7 +226,7 @@ public final class Presence: @unchecked Sendable {
   }
 
   public init(channel: RealtimeChannel, opts: Options = Options.defaults) {
-    mutableState.withValue { $0.channel.setValue(channel) }
+    self.channel.setValue(channel)
 
     guard // Do not subscribe to events if they were not provided
       let stateEvent = opts.events[.state],
@@ -258,7 +254,7 @@ public final class Presence: @unchecked Sendable {
 
   private func onStateEvent(_ newState: State) {
     mutableState.withValue { mutableState in
-      mutableState.joinRef = mutableState.channel.value?.joinRef
+      mutableState.joinRef = channel.value?.joinRef
 
       let caller = mutableState.caller
       mutableState.state = Presence.syncState(
@@ -284,7 +280,7 @@ public final class Presence: @unchecked Sendable {
 
   private func onDiffEvent(_ diff: Diff) {
     mutableState.withValue { mutableState in
-      if mutableState.isPendingSyncState {
+      if isPendingSyncState {
         mutableState.pendingDiffs.append(diff)
       } else {
         let caller = mutableState.caller

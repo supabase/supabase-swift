@@ -143,9 +143,6 @@ public final class RealtimeChannel: @unchecked Sendable {
   struct MutableState: Sendable {
     var presence: Presence?
 
-    /// The Socket that the channel belongs to
-    let socket = WeakBox<RealtimeClient>()
-
     var subTopic: String = ""
 
     /// Current state of the RealtimeChannel
@@ -174,6 +171,8 @@ public final class RealtimeChannel: @unchecked Sendable {
     }
   }
 
+  /// The Socket that the channel belongs to
+  let socket = WeakBox<RealtimeClient>()
   private let mutableState = LockIsolated(MutableState())
 
   /// The topic of the RealtimeChannel. e.g. "rooms:friends"
@@ -193,10 +192,6 @@ public final class RealtimeChannel: @unchecked Sendable {
       $0.presence = Presence(channel: self)
       return $0.presence!
     }
-  }
-
-  var socket: RealtimeClient? {
-    mutableState.socket.value
   }
 
   /// Set to true once the channel calls .join()
@@ -228,8 +223,8 @@ public final class RealtimeChannel: @unchecked Sendable {
   /// - parameter params: Optional. Parameters to send when joining.
   /// - parameter socket: Socket that the channel is a part of
   init(topic: String, params: [String: AnyJSON] = [:], socket: RealtimeClient) {
+    self.socket.setValue(socket)
     mutableState.withValue {
-      $0.socket.setValue(socket)
       $0.subTopic = topic.replacingOccurrences(of: "realtime:", with: "")
       $0.timeout = socket.timeout
     }
@@ -242,17 +237,17 @@ public final class RealtimeChannel: @unchecked Sendable {
   private func setupChannelObservations(initialParams: [String: AnyJSON]) {
     // Setup Timer delegation
     rejoinTimer.handler { [weak self] in
-      if self?.socket?.isConnected == true {
+      if self?.socket.value?.isConnected == true {
         self?.rejoin()
       }
     }
 
     rejoinTimer.timerCalculation { [weak self] tries in
-      self?.socket?.rejoinAfter(tries) ?? 5.0
+      self?.socket.value?.rejoinAfter(tries) ?? 5.0
     }
 
     // Respond to socket events
-    let onErrorRef = socket?.onError { [weak self] _, _ in
+    let onErrorRef = socket.value?.onError { [weak self] _, _ in
       self?.rejoinTimer.reset()
     }
 
@@ -262,7 +257,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       }
     }
 
-    let onOpenRef = socket?.onOpen { [weak self] in
+    let onOpenRef = socket.value?.onOpen { [weak self] in
       self?.rejoinTimer.reset()
 
       if self?.isErrored == true {
@@ -316,7 +311,7 @@ public final class RealtimeChannel: @unchecked Sendable {
         $0.state = .errored
       }
 
-      if self.socket?.isConnected == true {
+      if self.socket.value?.isConnected == true {
         self.rejoinTimer.scheduleTimeout()
       }
     }
@@ -326,7 +321,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       guard let self else { return }
 
       // log that the channel timed out
-      self.socket?.logItems(
+      self.socket.value?.logItems(
         "channel", "timeout \(self.topic) \(self.joinRef ?? "") after \(mutableState.timeout)s"
       )
 
@@ -344,7 +339,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       }
       joinPush.reset()
 
-      if self.socket?.isConnected == true {
+      if self.socket.value?.isConnected == true {
         self.rejoinTimer.scheduleTimeout()
       }
     }
@@ -357,7 +352,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       self.rejoinTimer.reset()
 
       // Log that the channel was left
-      self.socket?.logItems(
+      self.socket.value?.logItems(
         "channel", "close topic: \(self.topic) joinRef: \(self.joinRef ?? "nil")"
       )
 
@@ -366,7 +361,7 @@ public final class RealtimeChannel: @unchecked Sendable {
         $0.state = .closed
       }
 
-      self.socket?.remove(self)
+      self.socket.value?.remove(self)
     }
 
     /// Perform when the RealtimeChannel errors
@@ -374,7 +369,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       guard let self else { return }
 
       // Log that the channel received an error
-      self.socket?.logItems(
+      self.socket.value?.logItems(
         "channel", "error topic: \(self.topic) joinRef: \(self.joinRef ?? "nil") mesage: \(message)"
       )
 
@@ -383,7 +378,7 @@ public final class RealtimeChannel: @unchecked Sendable {
         // Make sure that the "phx_join" isn't buffered to send once the socket
         // reconnects. The channel will send a new join event when the socket connects.
         if let safeJoinRef = self.joinRef {
-          self.socket?.removeFromSendBuffer(ref: safeJoinRef)
+          self.socket.value?.removeFromSendBuffer(ref: safeJoinRef)
         }
 
         // Reset the push to be used again later
@@ -394,7 +389,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       mutableState.withValue {
         $0.state = .errored
       }
-      if self.socket?.isConnected == true {
+      if self.socket.value?.isConnected == true {
         self.rejoinTimer.scheduleTimeout()
       }
     }
@@ -471,7 +466,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     config["broadcast"] = broadcast
     config["presence"] = presence
 
-    if let accessToken = socket?.accessToken {
+    if let accessToken = socket.value?.accessToken {
       accessTokenPayload["access_token"] = .string(accessToken)
     }
 
@@ -489,8 +484,8 @@ public final class RealtimeChannel: @unchecked Sendable {
           return
         }
 
-        if self.socket?.accessToken != nil {
-          self.socket?.setAuth(self.socket?.accessToken)
+        if self.socket.value?.accessToken != nil {
+          self.socket.value?.setAuth(self.socket.value?.accessToken)
         }
 
         guard let serverPostgresFilters = message.payload["postgres_changes"]?.arrayValue?
@@ -735,9 +730,9 @@ public final class RealtimeChannel: @unchecked Sendable {
     }
 
     if !canPush, type == .broadcast {
-      var headers = socket?.headers ?? [:]
+      var headers = socket.value?.headers ?? [:]
       headers["Content-Type"] = "application/json"
-      headers["apikey"] = socket?.accessToken
+      headers["apikey"] = socket.value?.accessToken
 
       let body = [
         "messages": [
@@ -755,7 +750,7 @@ public final class RealtimeChannel: @unchecked Sendable {
           body: JSONSerialization.data(withJSONObject: body)
         )
 
-        let response = try await socket?.http.fetch(request, baseURL: broadcastEndpointURL)
+        let response = try await socket.value?.http.fetch(request, baseURL: broadcastEndpointURL)
         guard let response, 200 ..< 300 ~= response.statusCode else {
           return .error
         }
@@ -831,7 +826,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     let onCloseCallback: @Sendable (Message) -> Void = { [weak self] _ in
       guard let self else { return }
 
-      self.socket?.logItems("channel", "leave \(self.topic)")
+      self.socket.value?.logItems("channel", "leave \(self.topic)")
 
       // Triggers onClose() hooks
       self.trigger(event: ChannelEvent.close, payload: ["reason": "leave"])
@@ -887,7 +882,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       ChannelEvent.isLifecyleEvent(message.event)
     else { return true }
 
-    socket?.logItems(
+    socket.value?.logItems(
       "channel", "dropping outdated message", message.topic, message.event, message.rawPayload,
       safeJoinRef
     )
@@ -908,7 +903,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     guard !isLeaving else { return }
 
     // Leave potentially duplicate channels
-    socket?.leaveOpenTopic(topic: topic)
+    socket.value?.leaveOpenTopic(topic: topic)
 
     // Send the joinPush
     sendJoin(timeout ?? mutableState.timeout)
@@ -1005,11 +1000,11 @@ public final class RealtimeChannel: @unchecked Sendable {
   /// - return: True if the RealtimeChannel can push messages, meaning the socket
   ///           is connected and the channel is joined
   var canPush: Bool {
-    socket?.isConnected == true && isJoined
+    socket.value?.isConnected == true && isJoined
   }
 
   var broadcastEndpointURL: URL {
-    var url = socket?.url.absoluteString ?? ""
+    var url = socket.value?.url.absoluteString ?? ""
 
     url = url.replacingOccurrences(of: "^ws", with: "http", options: .regularExpression, range: nil)
     url = url.replacingOccurrences(
