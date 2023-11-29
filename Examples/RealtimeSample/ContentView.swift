@@ -18,17 +18,16 @@ final class ViewModel: ObservableObject {
   @Published var channelStatus: String?
 
   @Published var publicSchema: RealtimeChannel?
-  @Published var isJoined: Bool = false
 
-  func createSubscription() async {
-    await supabase.realtime.connect()
+  func createSubscription() {
+    supabase.realtime.connect()
 
-    publicSchema = await supabase.realtime.channel("public")
+    publicSchema = supabase.realtime.channel("public")
       .on(
         "postgres_changes",
         filter: ChannelFilter(event: "INSERT", schema: "public")
       ) { [weak self] message in
-        await MainActor.run { [weak self] in
+        Task { @MainActor [weak self] in
           self?.inserts.append(message)
         }
       }
@@ -36,7 +35,7 @@ final class ViewModel: ObservableObject {
         "postgres_changes",
         filter: ChannelFilter(event: "UPDATE", schema: "public")
       ) { [weak self] message in
-        await MainActor.run { [weak self] in
+        Task { @MainActor [weak self] in
           self?.updates.append(message)
         }
       }
@@ -44,48 +43,60 @@ final class ViewModel: ObservableObject {
         "postgres_changes",
         filter: ChannelFilter(event: "DELETE", schema: "public")
       ) { [weak self] message in
-        await MainActor.run { [weak self] in
+        Task { @MainActor [weak self] in
           self?.deletes.append(message)
         }
       }
 
-    await publicSchema?.onError { @MainActor [weak self] _ in self?.channelStatus = "ERROR" }
-    await publicSchema?
-      .onClose { @MainActor [weak self] _ in self?.channelStatus = "Closed gracefully" }
-    await publicSchema?
-      .subscribe { @MainActor [weak self] state, _ in
-        self?.isJoined = await self?.publicSchema?.isJoined == true
-        switch state {
-        case .subscribed:
-          self?.channelStatus = "OK"
-        case .closed:
-          self?.channelStatus = "CLOSED"
-        case .timedOut:
-          self?.channelStatus = "Timed out"
-        case .channelError:
-          self?.channelStatus = "ERROR"
+    publicSchema?.onError { [weak self] _ in
+      Task { @MainActor [weak self] in
+        self?.channelStatus = "ERROR"
+      }
+    }
+    publicSchema?.onClose { [weak self] _ in
+      Task { @MainActor [weak self] in
+        self?.channelStatus = "Closed gracefully"
+      }
+    }
+    publicSchema?
+      .subscribe { [weak self] state, _ in
+        Task { @MainActor [weak self] in
+          switch state {
+          case .subscribed:
+            self?.channelStatus = "OK"
+          case .closed:
+            self?.channelStatus = "CLOSED"
+          case .timedOut:
+            self?.channelStatus = "Timed out"
+          case .channelError:
+            self?.channelStatus = "ERROR"
+          }
         }
       }
 
-    await supabase.realtime.connect()
-    await supabase.realtime.onOpen { @MainActor [weak self] in
-      self?.socketStatus = "OPEN"
+    supabase.realtime.connect()
+    supabase.realtime.onOpen { [weak self] in
+      Task { @MainActor [weak self] in
+        self?.socketStatus = "OPEN"
+      }
     }
-    await supabase.realtime.onClose { [weak self] _, _ in
-      await MainActor.run { [weak self] in
+    supabase.realtime.onClose { [weak self] _, _ in
+      Task { @MainActor [weak self] in
         self?.socketStatus = "CLOSE"
       }
     }
-    await supabase.realtime.onError { @MainActor [weak self] error, _ in
-      self?.socketStatus = "ERROR: \(error.localizedDescription)"
+    supabase.realtime.onError { [weak self] error, _ in
+      Task { @MainActor [weak self] in
+        self?.socketStatus = "ERROR: \(error.localizedDescription)"
+      }
     }
   }
 
-  func toggleSubscription() async {
-    if await publicSchema?.isJoined == true {
-      await publicSchema?.unsubscribe()
+  func toggleSubscription() {
+    if publicSchema?.isJoined == true {
+      publicSchema?.unsubscribe()
     } else {
-      await createSubscription()
+      createSubscription()
     }
   }
 }
@@ -118,11 +129,9 @@ struct ContentView: View {
         Toggle(
           "Toggle Subscription",
           isOn: Binding(
-            get: { model.isJoined },
+            get: { model.publicSchema?.isJoined == true },
             set: { _ in
-              Task {
-                await model.toggleSubscription()
-              }
+              model.toggleSubscription()
             }
           )
         )
@@ -133,8 +142,8 @@ struct ContentView: View {
       .background(.regularMaterial)
       .padding()
     }
-    .task {
-      await model.createSubscription()
+    .onAppear {
+      model.createSubscription()
     }
   }
 }

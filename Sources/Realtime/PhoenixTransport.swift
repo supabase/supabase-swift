@@ -72,7 +72,7 @@ public protocol PhoenixTransportDelegate: AnyObject {
 
    - Parameter response: Response from the server indicating that the WebSocket handshake was successful and the connection has been upgraded to webSockets
    */
-  func onOpen(response: URLResponse?) async
+  func onOpen(response: URLResponse?)
 
   /**
    Notified when the `Transport` receives an error.
@@ -81,14 +81,14 @@ public protocol PhoenixTransportDelegate: AnyObject {
    - Parameter response: Response from the server, if any, that occurred with the Error
 
    */
-  func onError(error: Error, response: URLResponse?) async
+  func onError(error: Error, response: URLResponse?)
 
   /**
    Notified when the `Transport` receives a message from the server.
 
    - Parameter message: Message received from the server
    */
-  func onMessage(message: Data) async
+  func onMessage(message: Data)
 
   /**
    Notified when the `Transport` closes.
@@ -96,7 +96,7 @@ public protocol PhoenixTransportDelegate: AnyObject {
    - Parameter code: Code that was sent when the `Transport` closed
    - Parameter reason: A concise human-readable prose explanation for the closure
    */
-  func onClose(code: Int, reason: String?) async
+  func onClose(code: Int, reason: String?)
 }
 
 // ----------------------------------------------------------------------
@@ -233,9 +233,9 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   ) {
     // The Websocket is connected. Set Transport state to open and inform delegate
     readyState = .open
+    delegate?.onOpen(response: webSocketTask.response)
 
     Task {
-      await delegate?.onOpen(response: webSocketTask.response)
       await receive()
     }
   }
@@ -248,11 +248,9 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   ) {
     // A close frame was received from the server.
     readyState = .closed
-    Task {
-      await delegate?.onClose(
-        code: closeCode.rawValue, reason: reason.flatMap { String(data: $0, encoding: .utf8) }
-      )
-    }
+    delegate?.onClose(
+      code: closeCode.rawValue, reason: reason.flatMap { String(data: $0, encoding: .utf8) }
+    )
   }
 
   open func urlSession(
@@ -264,9 +262,7 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
     // if this was caused by an error.
     guard let error else { return }
 
-    Task {
-      await abnormalErrorReceived(error, response: task.response)
-    }
+    abnormalErrorReceived(error, response: task.response)
   }
 
   // MARK: - Private
@@ -280,31 +276,31 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
       for try await message in stream {
         switch message {
         case let .data(data):
-          await delegate?.onMessage(message: data)
+          delegate?.onMessage(message: data)
         case let .string(text):
           let data = Data(text.utf8)
-          await delegate?.onMessage(message: data)
+          delegate?.onMessage(message: data)
         @unknown default:
           print("unkown message received")
         }
       }
     } catch {
       print("Error when receiving \(error)")
-      await abnormalErrorReceived(error, response: nil)
+      abnormalErrorReceived(error, response: nil)
     }
   }
 
-  private func abnormalErrorReceived(_ error: Error, response: URLResponse?) async {
+  private func abnormalErrorReceived(_ error: Error, response: URLResponse?) {
     // Set the state of the Transport to closed
     readyState = .closed
 
     // Inform the Transport's delegate that an error occurred.
-    await delegate?.onError(error: error, response: response)
+    delegate?.onError(error: error, response: response)
 
     // An abnormal error is results in an abnormal closure, such as internet getting dropped
     // so inform the delegate that the Transport has closed abnormally. This will kick off
     // the reconnect logic.
-    await delegate?.onClose(
+    delegate?.onClose(
       code: RealtimeClient.CloseCode.abnormal.rawValue, reason: error.localizedDescription
     )
   }

@@ -31,10 +31,10 @@ public typealias Payload = [String: AnyJSON]
 
 /// Struct that gathers callbacks assigned to the Socket
 struct StateChangeCallbacks {
-  var open: [(ref: String, callback: @Sendable (URLResponse?) async -> Void)] = []
-  var close: [(ref: String, callback: @Sendable (Int, String?) async -> Void)] = []
-  var error: [(ref: String, callback: @Sendable (Error, URLResponse?) async -> Void)] = []
-  var message: [(ref: String, callback: @Sendable (Message) async -> Void)] = []
+  var open: [(ref: String, callback: @Sendable (URLResponse?) -> Void)] = []
+  var close: [(ref: String, callback: @Sendable (Int, String?) -> Void)] = []
+  var error: [(ref: String, callback: @Sendable (Error, URLResponse?) -> Void)] = []
+  var message: [(ref: String, callback: @Sendable (Message) -> Void)] = []
 }
 
 /// ## Socket Connection
@@ -215,6 +215,14 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     mutableState.accessToken
   }
 
+  var closeStatus: CloseStatus {
+    mutableState.closeStatus
+  }
+
+  var connection: PhoenixTransport? {
+    mutableState.connection
+  }
+
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
@@ -275,7 +283,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     Task { [weak self] in
       await self?.reconnectTimer.setHandler { [weak self] in
         self?.logItems("Socket attempting to reconnect")
-        await self?.teardown(reason: "reconnection")
+        self?.teardown(reason: "reconnection")
         self?.connect()
       }
 
@@ -354,21 +362,23 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   public func disconnect(
     code: CloseCode = CloseCode.normal,
     reason: String? = nil
-  ) async {
+  ) {
     // The socket was closed cleanly by the User
     mutableState.withValue {
       $0.closeStatus = CloseStatus(closeCode: code.rawValue)
     }
 
     // Reset any reconnects and teardown the socket connection
-    await reconnectTimer.reset()
-    await teardown(code: code, reason: reason)
+    Task {
+      await reconnectTimer.reset()
+    }
+    teardown(code: code, reason: reason)
   }
 
   func teardown(
     code: CloseCode = CloseCode.normal,
     reason: String? = nil
-  ) async {
+  ) {
     mutableState.withValue {
       $0.connection?.delegate = nil
       $0.connection?.disconnect(code: code.rawValue, reason: reason)
@@ -376,12 +386,14 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     }
 
     // The socket connection has been turndown, heartbeats are not needed
-    await mutableState.heartbeatTimer?.stop()
+    Task {
+      await mutableState.heartbeatTimer?.stop()
+    }
 
     // Since the connection's delegate was nil'd out, inform all state
     // callbacks that the connection has closed
     for (_, callback) in mutableState.stateChangeCallbacks.close {
-      await callback(code.rawValue, reason)
+      callback(code.rawValue, reason)
     }
   }
 
@@ -402,8 +414,8 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   ///
   /// - parameter callback: Called when the Socket is opened
   @discardableResult
-  public func onOpen(callback: @escaping @Sendable () async -> Void) -> String {
-    onOpen { _ in await callback() }
+  public func onOpen(callback: @escaping @Sendable () -> Void) -> String {
+    onOpen { _ in callback() }
   }
 
   /// Registers callbacks for connection open events. Does not handle retain
@@ -417,7 +429,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   ///
   /// - parameter callback: Called when the Socket is opened
   @discardableResult
-  public func onOpen(callback: @escaping @Sendable (URLResponse?) async -> Void) -> String {
+  public func onOpen(callback: @escaping @Sendable (URLResponse?) -> Void) -> String {
     mutableState.withValue {
       $0.append(callback: callback, to: \.stateChangeCallbacks.open)
     }
@@ -449,7 +461,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   ///
   /// - parameter callback: Called when the Socket is closed
   @discardableResult
-  public func onClose(callback: @escaping @Sendable (Int, String?) async -> Void) -> String {
+  public func onClose(callback: @escaping @Sendable (Int, String?) -> Void) -> String {
     mutableState.withValue {
       $0.append(callback: callback, to: \.stateChangeCallbacks.close)
     }
@@ -466,7 +478,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   ///
   /// - parameter callback: Called when the Socket errors
   @discardableResult
-  public func onError(callback: @escaping @Sendable (Error, URLResponse?) async -> Void) -> String {
+  public func onError(callback: @escaping @Sendable (Error, URLResponse?) -> Void) -> String {
     mutableState.withValue {
       $0.append(callback: callback, to: \.stateChangeCallbacks.error)
     }
@@ -514,8 +526,8 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   public func channel(
     _ topic: String,
     params: RealtimeChannelOptions = .init()
-  ) async -> RealtimeChannel {
-    let channel = await RealtimeChannel(
+  ) -> RealtimeChannel {
+    let channel = RealtimeChannel(
       topic: "realtime:\(topic)", params: params.params, socket: self
     )
 
@@ -527,8 +539,8 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   }
 
   /// Unsubscribes and removes a single channel
-  public func remove(_ channel: RealtimeChannel) async {
-    await channel.unsubscribe()
+  public func remove(_ channel: RealtimeChannel) {
+    channel.unsubscribe()
     off(channel.stateChangeRefs)
 
     mutableState.withValue {
@@ -536,14 +548,14 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     }
 
     if channels.isEmpty {
-      await disconnect()
+      disconnect()
     }
   }
 
   /// Unsubscribes and removes all channels
   public func removeAllChannels() async {
     for channel in channels {
-      await remove(channel)
+      remove(channel)
     }
   }
 
@@ -613,7 +625,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
 
   // ----------------------------------------------------------------------
   /// Called when the underlying Websocket connects to it's host
-  func onConnectionOpen(response: URLResponse?) async {
+  func onConnectionOpen(response: URLResponse?) {
     logItems("transport", "Connected to \(url)")
 
     // Reset the close status now that the socket has been connected
@@ -624,51 +636,55 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     // Send any messages that were waiting for a connection
     flushSendBuffer()
 
-    // Reset how the socket tried to reconnect
-    await reconnectTimer.reset()
+    Task {
+      // Reset how the socket tried to reconnect
+      await reconnectTimer.reset()
 
-    // Restart the heartbeat timer
-    await resetHeartbeat()
+      // Restart the heartbeat timer
+      await resetHeartbeat()
+    }
 
     // Inform all onOpen callbacks that the Socket has opened
     for (_, callback) in mutableState.stateChangeCallbacks.open {
-      await callback(response)
+      callback(response)
     }
   }
 
-  func onConnectionClosed(code: Int, reason: String?) async {
+  func onConnectionClosed(code: Int, reason: String?) {
     logItems("transport", "close")
 
     // Send an error to all channels
-    await triggerChannelError()
+    triggerChannelError()
 
-    // Prevent the heartbeat from triggering if the
-    await mutableState.heartbeatTimer?.stop()
+    Task {
+      // Prevent the heartbeat from triggering if the
+      await mutableState.heartbeatTimer?.stop()
 
-    // Only attempt to reconnect if the socket did not close normally,
-    // or if it was closed abnormally but on client side (e.g. due to heartbeat timeout)
-    if mutableState.closeStatus.shouldReconnect {
-      await reconnectTimer.scheduleTimeout()
+      // Only attempt to reconnect if the socket did not close normally,
+      // or if it was closed abnormally but on client side (e.g. due to heartbeat timeout)
+      if mutableState.closeStatus.shouldReconnect {
+        await reconnectTimer.scheduleTimeout()
+      }
     }
 
     for (_, callback) in mutableState.stateChangeCallbacks.close {
-      await callback(code, reason)
+      callback(code, reason)
     }
   }
 
-  func onConnectionError(_ error: Error, response: URLResponse?) async {
+  func onConnectionError(_ error: Error, response: URLResponse?) {
     logItems("transport", error, response ?? "")
 
     // Send an error to all channels
-    await triggerChannelError()
+    triggerChannelError()
 
     // Inform any state callbacks of the error
     for (_, callback) in mutableState.stateChangeCallbacks.error {
-      await callback(error, response)
+      callback(error, response)
     }
   }
 
-  func onConnectionMessage(_ message: Data) async {
+  func onConnectionMessage(_ message: Data) {
     let rawMessage = String(data: message, encoding: .utf8) ?? ""
     logItems("receive ", rawMessage)
 
@@ -687,13 +703,13 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
       }
 
       // Dispatch the message to all channels that belong to the topic
-      for channel in await channels.filter({ await $0.isMember(message) }) {
-        await channel.trigger(message)
+      for channel in channels.filter({ $0.isMember(message) }) {
+        channel.trigger(message)
       }
 
       // Inform all onMessage callbacks of the message
       for (_, callback) in mutableState.stateChangeCallbacks.message {
-        await callback(message)
+        callback(message)
       }
     } catch {
       logItems("receive: Unable to parse JSON: \(rawMessage) error: \(error)")
@@ -702,11 +718,11 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   }
 
   /// Triggers an error event to all of the connected Channels
-  func triggerChannelError() async {
+  func triggerChannelError() {
     for channel in channels {
       // Only trigger a channel error if it is in an "opened" state
       if !(channel.isErrored || channel.isLeaving || channel.isClosed) {
-        await channel.trigger(event: ChannelEvent.error)
+        channel.trigger(event: ChannelEvent.error)
       }
     }
   }
@@ -765,13 +781,13 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   }
 
   // Leaves any channel that is open that has a duplicate topic
-  func leaveOpenTopic(topic: String) async {
+  func leaveOpenTopic(topic: String) {
     guard
-      let dupe = await channels.first(where: { $0.topic == topic && ($0.isJoined || $0.isJoining) })
+      let dupe = channels.first(where: { $0.topic == topic && ($0.isJoined || $0.isJoining) })
     else { return }
 
     logItems("transport", "leaving duplicate topic: [\(topic)]")
-    await dupe.unsubscribe()
+    dupe.unsubscribe()
   }
 
   // ----------------------------------------------------------------------
@@ -860,23 +876,23 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   // MARK: - TransportDelegate
 
   // ----------------------------------------------------------------------
-  public func onOpen(response: URLResponse?) async {
-    await onConnectionOpen(response: response)
+  public func onOpen(response: URLResponse?) {
+    onConnectionOpen(response: response)
   }
 
-  public func onError(error: Error, response: URLResponse?) async {
-    await onConnectionError(error, response: response)
+  public func onError(error: Error, response: URLResponse?) {
+    onConnectionError(error, response: response)
   }
 
-  public func onMessage(message: Data) async {
-    await onConnectionMessage(message)
+  public func onMessage(message: Data) {
+    onConnectionMessage(message)
   }
 
-  public func onClose(code: Int, reason: String? = nil) async {
+  public func onClose(code: Int, reason: String? = nil) {
     mutableState.withValue {
       $0.closeStatus.update(transportCloseCode: code)
     }
-    await onConnectionClosed(code: code, reason: reason)
+    onConnectionClosed(code: code, reason: reason)
   }
 }
 
@@ -902,7 +918,7 @@ extension RealtimeClient {
 // ----------------------------------------------------------------------
 extension RealtimeClient {
   /// Indicates the different closure states a socket can be in.
-  enum CloseStatus {
+  enum CloseStatus: Equatable {
     /// Undetermined closure state
     case unknown
     /// A clean closure requested either by the client or the server

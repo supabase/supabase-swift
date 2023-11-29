@@ -29,7 +29,7 @@ struct Binding: Sendable {
   let filter: [String: String]
 
   // The callback to be triggered
-  let callback: @Sendable (Message) async -> Void
+  let callback: @Sendable (Message) -> Void
 
   let id: String?
 }
@@ -112,7 +112,7 @@ public enum PushStatus: String {
   case timeout
 }
 
-public enum RealtimeSubscribeStates {
+public enum RealtimeSubscribeStates: Sendable {
   case subscribed
   case timedOut
   case closed
@@ -228,7 +228,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   /// - parameter topic: Topic of the RealtimeChannel
   /// - parameter params: Optional. Parameters to send when joining.
   /// - parameter socket: Socket that the channel is a part of
-  init(topic: String, params: [String: AnyJSON] = [:], socket: RealtimeClient) async {
+  init(topic: String, params: [String: AnyJSON] = [:], socket: RealtimeClient) {
     mutableState.withValue {
       $0.socket = socket
       $0.subTopic = topic.replacingOccurrences(of: "realtime:", with: "")
@@ -237,24 +237,27 @@ public final class RealtimeChannel: @unchecked Sendable {
     self.topic = topic
 
     rejoinTimer = Dependencies.makeTimeoutTimer()
-    await setupChannelObservations(initialParams: params)
+    setupChannelObservations(initialParams: params)
   }
 
-  private func setupChannelObservations(initialParams: [String: AnyJSON]) async {
+  private func setupChannelObservations(initialParams: [String: AnyJSON]) {
     // Setup Timer delegation
-    await rejoinTimer.setHandler { [weak self] in
-      if self?.socket?.isConnected == true {
-        await self?.rejoin()
+    Task { [weak self] in
+      await self?.rejoinTimer.setHandler { [weak self] in
+        if self?.socket?.isConnected == true {
+          self?.rejoin()
+        }
+      }
+
+      await self?.rejoinTimer.setTimerCalculation { [weak self] tries in
+        self?.socket?.rejoinAfter(tries) ?? 5.0
       }
     }
-
-    await rejoinTimer.setTimerCalculation { [weak self] tries in
-      self?.socket?.rejoinAfter(tries) ?? 5.0
-    }
-
     // Respond to socket events
     let onErrorRef = socket?.onError { [weak self] _, _ in
-      await self?.rejoinTimer.reset()
+      Task { [weak self] in
+        await self?.rejoinTimer.reset()
+      }
     }
 
     if let ref = onErrorRef {
@@ -264,10 +267,12 @@ public final class RealtimeChannel: @unchecked Sendable {
     }
 
     let onOpenRef = socket?.onOpen { [weak self] in
-      await self?.rejoinTimer.reset()
+      Task { [weak self] in
+        await self?.rejoinTimer.reset()
+      }
 
       if self?.isErrored == true {
-        await self?.rejoin()
+        self?.rejoin()
       }
     }
 
@@ -288,7 +293,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     }
 
     /// Handle when a response is received after join()
-    await joinPush.receive(.ok) { [weak self] _ in
+    joinPush.receive(.ok) { [weak self] _ in
       guard let self else { return }
 
       // Mark the RealtimeChannel as joined
@@ -297,7 +302,9 @@ public final class RealtimeChannel: @unchecked Sendable {
       }
 
       // Reset the timer, preventing it from attempting to join again
-      await rejoinTimer.reset()
+      Task {
+        await self.rejoinTimer.reset()
+      }
 
       // Send and buffered messages and clear the buffer
       for push in pushBuffer {
@@ -309,8 +316,8 @@ public final class RealtimeChannel: @unchecked Sendable {
       }
     }
 
-    // Perform if RealtimeChannel errors while attempting to joi
-    await joinPush.receive(.error) { [weak self] _ in
+    // Perform if RealtimeChannel errors while attempting to join
+    joinPush.receive(.error) { [weak self] _ in
       guard let self else { return }
 
       mutableState.withValue {
@@ -318,12 +325,14 @@ public final class RealtimeChannel: @unchecked Sendable {
       }
 
       if self.socket?.isConnected == true {
-        await rejoinTimer.scheduleTimeout()
+        Task {
+          await self.rejoinTimer.scheduleTimeout()
+        }
       }
     }
 
     // Handle when the join push times out when sending after join()
-    await joinPush.receive(.timeout) { [weak self] _ in
+    joinPush.receive(.timeout) { [weak self] _ in
       guard let self else { return }
 
       // log that the channel timed out
@@ -346,7 +355,9 @@ public final class RealtimeChannel: @unchecked Sendable {
       joinPush.reset()
 
       if self.socket?.isConnected == true {
-        await rejoinTimer.scheduleTimeout()
+        Task {
+          await self.rejoinTimer.scheduleTimeout()
+        }
       }
     }
 
@@ -355,7 +366,9 @@ public final class RealtimeChannel: @unchecked Sendable {
       guard let self else { return }
 
       // Reset any timer that may be on-going
-      await rejoinTimer.reset()
+      Task {
+        await self.rejoinTimer.reset()
+      }
 
       // Log that the channel was left
       self.socket?.logItems(
@@ -366,7 +379,8 @@ public final class RealtimeChannel: @unchecked Sendable {
       mutableState.withValue {
         $0.state = .closed
       }
-      await self.socket?.remove(self)
+
+      self.socket?.remove(self)
     }
 
     /// Perform when the RealtimeChannel errors
@@ -395,7 +409,9 @@ public final class RealtimeChannel: @unchecked Sendable {
         $0.state = .errored
       }
       if self.socket?.isConnected == true {
-        await self.rejoinTimer.scheduleTimeout()
+        Task {
+          await self.rejoinTimer.scheduleTimeout()
+        }
       }
     }
 
@@ -404,7 +420,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       guard let self else { return }
 
       // Trigger bindings
-      await self.trigger(
+      self.trigger(
         event: self.replyEventName(message.ref),
         payload: message.rawPayload,
         ref: message.ref,
@@ -429,8 +445,8 @@ public final class RealtimeChannel: @unchecked Sendable {
   @discardableResult
   public func subscribe(
     timeout: TimeInterval? = nil,
-    callback: (@Sendable (RealtimeSubscribeStates, Error?) async -> Void)? = nil
-  ) async -> RealtimeChannel {
+    callback: (@Sendable (RealtimeSubscribeStates, Error?) -> Void)? = nil
+  ) -> RealtimeChannel {
     guard !joinedOnce else {
       fatalError(
         "tried to join multiple times. 'join' "
@@ -441,11 +457,11 @@ public final class RealtimeChannel: @unchecked Sendable {
     onError { message in
       let values = message.payload.values.map { "\($0) " }
       let error = RealtimeError(values.isEmpty ? "error" : values.joined(separator: ", "))
-      await callback?(.channelError, error)
+      callback?(.channelError, error)
     }
 
     onClose { _ in
-      await callback?(.closed, nil)
+      callback?(.closed, nil)
     }
 
     // Join the RealtimeChannel
@@ -480,9 +496,10 @@ public final class RealtimeChannel: @unchecked Sendable {
     mutableState.withValue {
       $0.joinedOnce = true
     }
-    await rejoin()
 
-    await joinPush
+    rejoin()
+
+    joinPush
       .receive(.ok) { [weak self] message in
         guard let self else {
           return
@@ -495,7 +512,7 @@ public final class RealtimeChannel: @unchecked Sendable {
         guard let serverPostgresFilters = message.payload["postgres_changes"]?.arrayValue?
           .compactMap(\.objectValue)
         else {
-          await callback?(.subscribed, nil)
+          callback?(.subscribed, nil)
           return
         }
 
@@ -527,8 +544,8 @@ public final class RealtimeChannel: @unchecked Sendable {
               )
             )
           } else {
-            await self.unsubscribe()
-            await callback?(
+            self.unsubscribe()
+            callback?(
               .channelError,
               RealtimeError("Mismatch between client and server bindings for postgres changes.")
             )
@@ -539,15 +556,15 @@ public final class RealtimeChannel: @unchecked Sendable {
         self.mutableState.withValue { [newPostgresBindings] in
           $0.bindings["postgres_changes"] = newPostgresBindings
         }
-        await callback?(.subscribed, nil)
+        callback?(.subscribed, nil)
       }
       .receive(.error) { message in
         let values = message.payload.values.map { "\($0) " }
         let error = RealtimeError(values.isEmpty ? "error" : values.joined(separator: ", "))
-        await callback?(.channelError, error)
+        callback?(.channelError, error)
       }
       .receive(.timeout) { _ in
-        await callback?(.timedOut, nil)
+        callback?(.timedOut, nil)
       }
 
     return self
@@ -589,7 +606,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   /// - parameter handler: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onClose(_ handler: @escaping @Sendable (Message) async -> Void) -> RealtimeChannel {
+  public func onClose(_ handler: @escaping @Sendable (Message) -> Void) -> RealtimeChannel {
     on(ChannelEvent.close, filter: ChannelFilter(), handler: handler)
   }
 
@@ -607,7 +624,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   /// - parameter handler: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onError(_ handler: @escaping @Sendable (_ message: Message) async -> Void)
+  public func onError(_ handler: @escaping @Sendable (_ message: Message) -> Void)
     -> RealtimeChannel
   {
     on(ChannelEvent.error, filter: ChannelFilter(), handler: handler)
@@ -640,7 +657,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   public func on(
     _ event: String,
     filter: ChannelFilter,
-    handler: @escaping @Sendable (Message) async -> Void
+    handler: @escaping @Sendable (Message) -> Void
   ) -> RealtimeChannel {
     mutableState.withValue {
       $0.bindings[event.lowercased(), default: []].append(
@@ -778,7 +795,7 @@ public final class RealtimeChannel: @unchecked Sendable {
         }
       }
 
-      await push
+      push
         .receive(.ok) { _ in
           continuation.withValue {
             $0?.resume(returning: .ok)
@@ -815,9 +832,11 @@ public final class RealtimeChannel: @unchecked Sendable {
   /// - parameter timeout: Optional timeout
   /// - return: Push that can add receive hooks
   @discardableResult
-  public func unsubscribe(timeout: TimeInterval = Defaults.timeoutInterval) async -> Push {
+  public func unsubscribe(timeout: TimeInterval = Defaults.timeoutInterval) -> Push {
     // If attempting a rejoin during a leave, then reset, cancelling the rejoin
-    await rejoinTimer.reset()
+    Task {
+      await rejoinTimer.reset()
+    }
 
     // Now set the state to leaving
     mutableState.withValue {
@@ -825,13 +844,13 @@ public final class RealtimeChannel: @unchecked Sendable {
     }
 
     /// onClose callback for a successful or a failed channel leave
-    let onCloseCallback: @Sendable (Message) async -> Void = { [weak self] _ in
+    let onCloseCallback: @Sendable (Message) -> Void = { [weak self] _ in
       guard let self else { return }
 
       self.socket?.logItems("channel", "leave \(self.topic)")
 
       // Triggers onClose() hooks
-      await self.trigger(event: ChannelEvent.close, payload: ["reason": "leave"])
+      self.trigger(event: ChannelEvent.close, payload: ["reason": "leave"])
     }
 
     // Push event to send to the server
@@ -843,14 +862,14 @@ public final class RealtimeChannel: @unchecked Sendable {
 
     // Perform the same behavior if successfully left the channel
     // or if sending the event timed out
-    await leavePush
+    leavePush
       .receive(.ok, callback: onCloseCallback)
       .receive(.timeout, callback: onCloseCallback)
     leavePush.send()
 
     // If the RealtimeChannel cannot send push events, trigger a success locally
     if !canPush {
-      await leavePush.trigger(.ok, payload: [:])
+      leavePush.trigger(.ok, payload: [:])
     }
 
     // Return the push so it can be bound to
@@ -874,7 +893,7 @@ public final class RealtimeChannel: @unchecked Sendable {
 
   // ----------------------------------------------------------------------
   /// Checks if an event received by the Socket belongs to this RealtimeChannel
-  func isMember(_ message: Message) async -> Bool {
+  func isMember(_ message: Message) -> Bool {
     // Return false if the message's topic does not match the RealtimeChannel's topic
     guard message.topic == topic else { return false }
 
@@ -900,12 +919,12 @@ public final class RealtimeChannel: @unchecked Sendable {
   }
 
   /// Rejoins the channel
-  func rejoin(_ timeout: TimeInterval? = nil) async {
+  func rejoin(_ timeout: TimeInterval? = nil) {
     // Do not attempt to rejoin if the channel is in the process of leaving
     guard !isLeaving else { return }
 
     // Leave potentially duplicate channels
-    await socket?.leaveOpenTopic(topic: topic)
+    socket?.leaveOpenTopic(topic: topic)
 
     // Send the joinPush
     sendJoin(timeout ?? mutableState.timeout)
@@ -915,7 +934,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   /// `channel.on("event")`.
   ///
   /// - parameter message: Message to pass to the event bindings
-  func trigger(_ message: Message) async {
+  func trigger(_ message: Message) {
     let typeLower = message.event.lowercased()
 
     let events = Set([
@@ -959,7 +978,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     }
 
     for binding in bindings {
-      await binding.callback(handledMessage)
+      binding.callback(handledMessage)
     }
   }
 
@@ -975,7 +994,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     payload: Payload = [:],
     ref: String = "",
     joinRef: String? = nil
-  ) async {
+  ) {
     let message = Message(
       ref: ref,
       topic: topic,
@@ -983,7 +1002,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       payload: payload,
       joinRef: joinRef ?? self.joinRef
     )
-    await trigger(message)
+    trigger(message)
   }
 
   /// - parameter ref: The ref of the event push

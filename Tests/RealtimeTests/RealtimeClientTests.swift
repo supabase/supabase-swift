@@ -31,8 +31,7 @@ final class RealtimeClientTests: XCTestCase {
     )
 
     XCTAssertIdentical(sut.transport(url) as AnyObject, transport)
-    let params = await sut.params
-    XCTAssertEqual(params, [:])
+    XCTAssertEqual(sut.params, [:])
     XCTAssertEqual(sut.vsn, Defaults.vsn)
   }
 
@@ -48,8 +47,7 @@ final class RealtimeClientTests: XCTestCase {
 
     XCTAssertIdentical(sut.transport(url) as AnyObject, transport)
 
-    let clientParam = await sut.params
-    XCTAssertEqual(clientParam, params)
+    XCTAssertEqual(sut.params, params)
     XCTAssertEqual(sut.vsn, vsn)
   }
 
@@ -59,8 +57,7 @@ final class RealtimeClientTests: XCTestCase {
 
     let (_, sut, _) = makeSUT(params: params)
 
-    let accessToken = await sut.accessToken
-    XCTAssertEqual(accessToken, jwt)
+    XCTAssertEqual(sut.accessToken, jwt)
   }
 
   func testInitializerWithAPIKey() async {
@@ -70,16 +67,14 @@ final class RealtimeClientTests: XCTestCase {
 
     let realtimeClient = RealtimeClient(url: url, params: params)
 
-    let accessToken = await realtimeClient.accessToken
-    XCTAssertEqual(accessToken, apiKey)
+    XCTAssertEqual(realtimeClient.accessToken, apiKey)
   }
 
   func testInitializerWithoutAccessToken() async {
     let params: [String: AnyJSON] = [:]
     let (_, sut, _) = makeSUT(params: params)
 
-    let accessToken = await sut.accessToken
-    XCTAssertNil(accessToken)
+    XCTAssertNil(sut.accessToken)
   }
 
   func testBuildEndpointUrl() {
@@ -112,22 +107,15 @@ final class RealtimeClientTests: XCTestCase {
     XCTAssertEqual(resultUrl.query, "vsn=1.0")
   }
 
-  func testConnect() async throws {
+  func testConnect() throws {
     let (_, sut, _) = makeSUT()
 
-    await {
-      let connection = await sut.connection
-      XCTAssertNil(connection, "connection should be nil before calling connect method.")
-    }()
+    XCTAssertNil(sut.connection, "connection should be nil before calling connect method.")
 
-    await sut.connect()
-    let closeStatus = await sut.closeStatus
-    XCTAssertEqual(closeStatus, .unknown)
+    sut.connect()
+    XCTAssertEqual(sut.closeStatus, .unknown)
 
-    guard let connection = await sut.connection as? PhoenixTransportMock else {
-      XCTFail("Expected a connection.")
-      return
-    }
+    let connection = try XCTUnwrap(sut.connection as? PhoenixTransportMock)
 
     XCTAssertIdentical(connection.delegate, sut)
 
@@ -137,7 +125,7 @@ final class RealtimeClientTests: XCTestCase {
     connection.readyState = .open
 
     // When calling connect
-    await sut.connect()
+    sut.connect()
 
     // Verify that transport's connect was called only once (first connect call).
     XCTAssertEqual(connection.connectCallCount, 1)
@@ -156,33 +144,30 @@ final class RealtimeClientTests: XCTestCase {
       let (_, sut, transport) = makeSUT()
 
       let onCloseExpectation = expectation(description: "onClose")
-      let onCloseReceivedParams = ActorIsolated<(Int, String?)?>(nil)
-      await sut.onClose { code, reason in
-        await onCloseReceivedParams.setValue((code, reason))
+      let onCloseReceivedParams = LockIsolated<(Int, String?)?>(nil)
+      sut.onClose { code, reason in
+        onCloseReceivedParams.setValue((code, reason))
         onCloseExpectation.fulfill()
       }
 
       let onOpenExpectation = expectation(description: "onOpen")
-      await sut.onOpen {
+      sut.onOpen {
         onOpenExpectation.fulfill()
       }
 
-      await sut.connect()
-      var closeStatus = await sut.closeStatus
-      XCTAssertEqual(closeStatus, .unknown)
+      sut.connect()
+      XCTAssertEqual(sut.closeStatus, .unknown)
 
       await fulfillment(of: [onOpenExpectation])
 
-      await sut.disconnect(code: .normal, reason: "test")
+      sut.disconnect(code: .normal, reason: "test")
 
-      closeStatus = await sut.closeStatus
-      XCTAssertEqual(closeStatus, .clean)
+      XCTAssertEqual(sut.closeStatus, .clean)
 
       let resetCallCount = await timeoutTimer.resetCallCount
       XCTAssertEqual(resetCallCount, 2)
 
-      let connection = await sut.connection
-      XCTAssertNil(connection)
+      XCTAssertNil(sut.connection)
       XCTAssertNil(transport.delegate)
       XCTAssertEqual(transport.disconnectCallCount, 1)
       XCTAssertEqual(transport.disconnectCode, 1000)
@@ -190,7 +175,7 @@ final class RealtimeClientTests: XCTestCase {
 
       await fulfillment(of: [onCloseExpectation])
 
-      guard let (code, reason) = await onCloseReceivedParams.value else {
+      guard let (code, reason) = onCloseReceivedParams.value else {
         XCTFail("Expected onCloseReceivedParams")
         return
       }
@@ -221,9 +206,7 @@ class PhoenixTransportMock: PhoenixTransport {
     connectCallCount += 1
     connectHeaders = headers
 
-    Task {
-      await delegate?.onOpen(response: nil)
-    }
+    delegate?.onOpen(response: nil)
   }
 
   func disconnect(code: Int, reason: String?) {
@@ -231,16 +214,14 @@ class PhoenixTransportMock: PhoenixTransport {
     disconnectCode = code
     disconnectReason = reason
 
-    Task {
-      await delegate?.onClose(code: code, reason: reason)
-    }
+    delegate?.onClose(code: code, reason: reason)
   }
 
-  func send(data: Data) async {
+  func send(data: Data) {
     sendCallCount += 1
     sendData = data
 
-    await delegate?.onMessage(message: data)
+    delegate?.onMessage(message: data)
   }
 }
 
@@ -267,9 +248,9 @@ actor TimeoutTimerMock: TimeoutTimerProtocol {
 actor HeartbeatTimerMock: HeartbeatTimerProtocol {
   private(set) var startCallCount = 0
   private(set) var stopCallCount = 0
-  private var eventHandler: (@Sendable () async -> Void)?
+  private var eventHandler: (@Sendable () -> Void)?
 
-  func start(_ handler: @escaping @Sendable () async -> Void) async {
+  func start(_ handler: @escaping @Sendable () -> Void) async {
     startCallCount += 1
     eventHandler = handler
   }
@@ -279,7 +260,7 @@ actor HeartbeatTimerMock: HeartbeatTimerProtocol {
   }
 
   /// Helper method to simulate the timer firing an event
-  func simulateTimerEvent() async {
-    await eventHandler?()
+  func simulateTimerEvent() {
+    eventHandler?()
   }
 }

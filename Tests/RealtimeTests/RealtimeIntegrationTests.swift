@@ -1,6 +1,6 @@
-import XCTest
-
+import ConcurrencyExtras
 @testable import Realtime
+import XCTest
 
 final class RealtimeIntegrationTests: XCTestCase {
   private func makeSUT(file: StaticString = #file, line: UInt = #line) -> RealtimeClient {
@@ -20,22 +20,22 @@ final class RealtimeIntegrationTests: XCTestCase {
     let sut = makeSUT()
 
     let onOpenExpectation = expectation(description: "onOpen")
-    await sut.onOpen { [weak sut] in
+    sut.onOpen { [weak sut] in
       onOpenExpectation.fulfill()
-      await sut?.disconnect()
+      sut?.disconnect()
     }
 
-    await sut.onError { error, _ in
+    sut.onError { error, _ in
       XCTFail("connection failed with: \(error)")
     }
 
     let onCloseExpectation = expectation(description: "onClose")
     onCloseExpectation.assertForOverFulfill = false
-    await sut.onClose {
+    sut.onClose {
       onCloseExpectation.fulfill()
     }
 
-    await sut.connect()
+    sut.connect()
 
     await fulfillment(of: [onOpenExpectation, onCloseExpectation])
   }
@@ -43,36 +43,38 @@ final class RealtimeIntegrationTests: XCTestCase {
   func testOnChannelEvent() async {
     let sut = makeSUT()
 
-    await sut.connect()
+    sut.connect()
 
     let expectation = expectation(description: "subscribe")
     expectation.expectedFulfillmentCount = 2
 
-    var channel: RealtimeChannel?
+    let channel = LockIsolated(RealtimeChannel?.none)
     addTeardownBlock { [weak channel] in
       XCTAssertNil(channel)
     }
 
-    var states: [RealtimeSubscribeStates] = []
-    channel = await sut
-      .channel("public")
-      .subscribe { state, error in
-        states.append(state)
+    let states = LockIsolated<[RealtimeSubscribeStates]>([])
+    channel.setValue(
+      sut
+        .channel("public")
+        .subscribe { state, error in
+          states.withValue { $0.append(state) }
 
-        if let error {
-          XCTFail("Error subscribing to channel: \(error)")
+          if let error {
+            XCTFail("Error subscribing to channel: \(error)")
+          }
+
+          expectation.fulfill()
+
+          if state == .subscribed {
+            channel.value?.unsubscribe()
+          }
         }
-
-        expectation.fulfill()
-
-        if state == .subscribed {
-          await channel?.unsubscribe()
-        }
-      }
+    )
 
     await fulfillment(of: [expectation])
-    XCTAssertEqual(states, [.subscribed, .closed])
+    XCTAssertEqual(states.value, [.subscribed, .closed])
 
-    await sut.disconnect()
+    sut.disconnect()
   }
 }

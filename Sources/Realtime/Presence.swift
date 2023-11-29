@@ -243,7 +243,7 @@ public final class Presence: @unchecked Sendable {
         let newState = message.rawPayload as? State
       else { return }
 
-      await onStateEvent(newState)
+      onStateEvent(newState)
     }
 
     channel.on(diffEvent, filter: ChannelFilter()) { [weak self] message in
@@ -256,7 +256,7 @@ public final class Presence: @unchecked Sendable {
     }
   }
 
-  private func onStateEvent(_ newState: State) async {
+  private func onStateEvent(_ newState: State) {
     mutableState.withValue { mutableState in
       mutableState.joinRef = mutableState.channel?.joinRef
 
