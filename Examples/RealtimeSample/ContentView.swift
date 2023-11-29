@@ -27,68 +27,50 @@ final class ViewModel: ObservableObject {
         "postgres_changes",
         filter: ChannelFilter(event: "INSERT", schema: "public")
       ) { [weak self] message in
-        Task { @MainActor [weak self] in
-          self?.inserts.append(message)
-        }
+        self?.inserts.append(message)
       }
       .on(
         "postgres_changes",
         filter: ChannelFilter(event: "UPDATE", schema: "public")
       ) { [weak self] message in
-        Task { @MainActor [weak self] in
-          self?.updates.append(message)
-        }
+        self?.updates.append(message)
       }
       .on(
         "postgres_changes",
         filter: ChannelFilter(event: "DELETE", schema: "public")
       ) { [weak self] message in
-        Task { @MainActor [weak self] in
-          self?.deletes.append(message)
-        }
+        self?.deletes.append(message)
       }
 
     publicSchema?.onError { [weak self] _ in
-      Task { @MainActor [weak self] in
-        self?.channelStatus = "ERROR"
-      }
+      self?.channelStatus = "ERROR"
     }
     publicSchema?.onClose { [weak self] _ in
-      Task { @MainActor [weak self] in
-        self?.channelStatus = "Closed gracefully"
-      }
+      self?.channelStatus = "Closed gracefully"
     }
     publicSchema?
       .subscribe { [weak self] state, _ in
-        Task { @MainActor [weak self] in
-          switch state {
-          case .subscribed:
-            self?.channelStatus = "OK"
-          case .closed:
-            self?.channelStatus = "CLOSED"
-          case .timedOut:
-            self?.channelStatus = "Timed out"
-          case .channelError:
-            self?.channelStatus = "ERROR"
-          }
+        switch state {
+        case .subscribed:
+          self?.channelStatus = "OK"
+        case .closed:
+          self?.channelStatus = "CLOSED"
+        case .timedOut:
+          self?.channelStatus = "Timed out"
+        case .channelError:
+          self?.channelStatus = "ERROR"
         }
       }
 
     supabase.realtime.connect()
     supabase.realtime.onOpen { [weak self] in
-      Task { @MainActor [weak self] in
-        self?.socketStatus = "OPEN"
-      }
+      self?.socketStatus = "OPEN"
     }
     supabase.realtime.onClose { [weak self] _, _ in
-      Task { @MainActor [weak self] in
-        self?.socketStatus = "CLOSE"
-      }
+      self?.socketStatus = "CLOSE"
     }
     supabase.realtime.onError { [weak self] error, _ in
-      Task { @MainActor [weak self] in
-        self?.socketStatus = "ERROR: \(error.localizedDescription)"
-      }
+      self?.socketStatus = "ERROR: \(error.localizedDescription)"
     }
   }
 

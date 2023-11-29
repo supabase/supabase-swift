@@ -29,7 +29,7 @@ struct Binding: Sendable {
   let filter: [String: String]
 
   // The callback to be triggered
-  let callback: @Sendable (Message) -> Void
+  let callback: @MainActor @Sendable (Message) -> Void
 
   let id: String?
 }
@@ -445,7 +445,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   @discardableResult
   public func subscribe(
     timeout: TimeInterval? = nil,
-    callback: (@Sendable (RealtimeSubscribeStates, Error?) -> Void)? = nil
+    callback: (@MainActor @Sendable (RealtimeSubscribeStates, Error?) -> Void)? = nil
   ) -> RealtimeChannel {
     guard !joinedOnce else {
       fatalError(
@@ -606,7 +606,9 @@ public final class RealtimeChannel: @unchecked Sendable {
   /// - parameter handler: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onClose(_ handler: @escaping @Sendable (Message) -> Void) -> RealtimeChannel {
+  public func onClose(_ handler: @MainActor @escaping @Sendable (Message) -> Void)
+    -> RealtimeChannel
+  {
     on(ChannelEvent.close, filter: ChannelFilter(), handler: handler)
   }
 
@@ -624,7 +626,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   /// - parameter handler: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onError(_ handler: @escaping @Sendable (_ message: Message) -> Void)
+  public func onError(_ handler: @MainActor @escaping @Sendable (_ message: Message) -> Void)
     -> RealtimeChannel
   {
     on(ChannelEvent.error, filter: ChannelFilter(), handler: handler)
@@ -657,7 +659,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   public func on(
     _ event: String,
     filter: ChannelFilter,
-    handler: @escaping @Sendable (Message) -> Void
+    handler: @MainActor @escaping @Sendable (Message) -> Void
   ) -> RealtimeChannel {
     mutableState.withValue {
       $0.bindings[event.lowercased(), default: []].append(
@@ -977,8 +979,10 @@ public final class RealtimeChannel: @unchecked Sendable {
       }
     }
 
-    for binding in bindings {
-      binding.callback(handledMessage)
+    Task {
+      for binding in bindings {
+        await binding.callback(handledMessage)
+      }
     }
   }
 

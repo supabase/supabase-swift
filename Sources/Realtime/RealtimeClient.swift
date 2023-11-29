@@ -31,10 +31,10 @@ public typealias Payload = [String: AnyJSON]
 
 /// Struct that gathers callbacks assigned to the Socket
 struct StateChangeCallbacks {
-  var open: [(ref: String, callback: @Sendable (URLResponse?) -> Void)] = []
-  var close: [(ref: String, callback: @Sendable (Int, String?) -> Void)] = []
-  var error: [(ref: String, callback: @Sendable (Error, URLResponse?) -> Void)] = []
-  var message: [(ref: String, callback: @Sendable (Message) -> Void)] = []
+  var open: [(ref: String, callback: @MainActor @Sendable (URLResponse?) -> Void)] = []
+  var close: [(ref: String, callback: @MainActor @Sendable (Int, String?) -> Void)] = []
+  var error: [(ref: String, callback: @MainActor @Sendable (Error, URLResponse?) -> Void)] = []
+  var message: [(ref: String, callback: @MainActor @Sendable (Message) -> Void)] = []
 }
 
 /// ## Socket Connection
@@ -392,8 +392,10 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
 
     // Since the connection's delegate was nil'd out, inform all state
     // callbacks that the connection has closed
-    for (_, callback) in mutableState.stateChangeCallbacks.close {
-      callback(code.rawValue, reason)
+    Task {
+      for (_, callback) in mutableState.stateChangeCallbacks.close {
+        await callback(code.rawValue, reason)
+      }
     }
   }
 
@@ -414,7 +416,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   ///
   /// - parameter callback: Called when the Socket is opened
   @discardableResult
-  public func onOpen(callback: @escaping @Sendable () -> Void) -> String {
+  public func onOpen(callback: @MainActor @escaping @Sendable () -> Void) -> String {
     onOpen { _ in callback() }
   }
 
@@ -429,7 +431,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   ///
   /// - parameter callback: Called when the Socket is opened
   @discardableResult
-  public func onOpen(callback: @escaping @Sendable (URLResponse?) -> Void) -> String {
+  public func onOpen(callback: @MainActor @escaping @Sendable (URLResponse?) -> Void) -> String {
     mutableState.withValue {
       $0.append(callback: callback, to: \.stateChangeCallbacks.open)
     }
@@ -446,7 +448,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   ///
   /// - parameter callback: Called when the Socket is closed
   @discardableResult
-  public func onClose(callback: @escaping @Sendable () -> Void) -> String {
+  public func onClose(callback: @MainActor @escaping @Sendable () -> Void) -> String {
     onClose { _, _ in callback() }
   }
 
@@ -461,7 +463,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   ///
   /// - parameter callback: Called when the Socket is closed
   @discardableResult
-  public func onClose(callback: @escaping @Sendable (Int, String?) -> Void) -> String {
+  public func onClose(callback: @MainActor @escaping @Sendable (Int, String?) -> Void) -> String {
     mutableState.withValue {
       $0.append(callback: callback, to: \.stateChangeCallbacks.close)
     }
@@ -478,7 +480,9 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   ///
   /// - parameter callback: Called when the Socket errors
   @discardableResult
-  public func onError(callback: @escaping @Sendable (Error, URLResponse?) -> Void) -> String {
+  public func onError(callback: @MainActor @escaping @Sendable (Error, URLResponse?) -> Void)
+    -> String
+  {
     mutableState.withValue {
       $0.append(callback: callback, to: \.stateChangeCallbacks.error)
     }
@@ -496,7 +500,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   ///
   /// - parameter callback: Called when the Socket receives a message event
   @discardableResult
-  public func onMessage(callback: @escaping @Sendable (Message) -> Void) -> String {
+  public func onMessage(callback: @MainActor @escaping @Sendable (Message) -> Void) -> String {
     mutableState.withValue {
       $0.append(callback: callback, to: \.stateChangeCallbacks.message)
     }
@@ -644,9 +648,11 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
       await resetHeartbeat()
     }
 
-    // Inform all onOpen callbacks that the Socket has opened
-    for (_, callback) in mutableState.stateChangeCallbacks.open {
-      callback(response)
+    Task {
+      // Inform all onOpen callbacks that the Socket has opened
+      for (_, callback) in mutableState.stateChangeCallbacks.open {
+        await callback(response)
+      }
     }
   }
 
@@ -667,8 +673,10 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
       }
     }
 
-    for (_, callback) in mutableState.stateChangeCallbacks.close {
-      callback(code, reason)
+    Task {
+      for (_, callback) in mutableState.stateChangeCallbacks.close {
+        await callback(code, reason)
+      }
     }
   }
 
@@ -678,9 +686,11 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     // Send an error to all channels
     triggerChannelError()
 
-    // Inform any state callbacks of the error
-    for (_, callback) in mutableState.stateChangeCallbacks.error {
-      callback(error, response)
+    Task {
+      // Inform any state callbacks of the error
+      for (_, callback) in mutableState.stateChangeCallbacks.error {
+        await callback(error, response)
+      }
     }
   }
 
@@ -707,9 +717,11 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
         channel.trigger(message)
       }
 
-      // Inform all onMessage callbacks of the message
-      for (_, callback) in mutableState.stateChangeCallbacks.message {
-        callback(message)
+      Task {
+        // Inform all onMessage callbacks of the message
+        for (_, callback) in mutableState.stateChangeCallbacks.message {
+          await callback(message)
+        }
       }
     } catch {
       logItems("receive: Unable to parse JSON: \(rawMessage) error: \(error)")

@@ -35,7 +35,7 @@ public final class Push: @unchecked Sendable {
     var timeoutTask: Task<Void, Never>?
 
     /// Hooks into a Push. Where .receive("ok", callback(Payload)) are stored
-    var receiveHooks: [PushStatus: [@Sendable (Message) -> Void]] = [:]
+    var receiveHooks: [PushStatus: [@MainActor @Sendable (Message) -> Void]] = [:]
 
     /// True if the Push has been sent
     var sent: Bool = false
@@ -141,11 +141,13 @@ public final class Push: @unchecked Sendable {
   @discardableResult
   public func receive(
     _ status: PushStatus,
-    callback: @escaping @Sendable (Message) -> Void
+    callback: @MainActor @escaping @Sendable (Message) -> Void
   ) -> Push {
     // If the message has already been received, pass it to the callback immediately
     if hasReceived(status: status), let receivedMessage = mutableState.receivedMessage {
-      callback(receivedMessage)
+      Task {
+        await callback(receivedMessage)
+      }
     }
 
     mutableState.withValue {
@@ -177,8 +179,10 @@ public final class Push: @unchecked Sendable {
   /// - parameter status: Status which was received, e.g. "ok", "error", "timeout"
   /// - parameter response: Response that was received
   private func matchReceive(_ status: PushStatus, message: Message) {
-    mutableState.receiveHooks[status, default: []].forEach {
-      $0(message)
+    Task {
+      for hook in mutableState.receiveHooks[status, default: []] {
+        await hook(message)
+      }
     }
   }
 
