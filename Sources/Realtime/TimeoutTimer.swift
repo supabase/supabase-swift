@@ -40,6 +40,7 @@
 ///     reconnectTimer.reset()
 ///     reconnectTimer.scheduleTimeout() // fires after 1000ms
 
+import ConcurrencyExtras
 import Foundation
 
 protocol TimeoutTimerProtocol: Sendable {
@@ -53,51 +54,59 @@ protocol TimeoutTimerProtocol: Sendable {
   func scheduleTimeout() async
 }
 
-actor TimeoutTimer: TimeoutTimerProtocol {
-  /// Handler to be informed when the underlying Timer fires
-  private var handler: @Sendable () async -> Void = {}
+struct TimeoutTimer: Sendable {
+  var handler: @Sendable (_ handler: @Sendable @escaping () -> Void) -> Void
+  var timerCalculation: @Sendable (_ timerCalculation: @Sendable @escaping (Int) -> TimeInterval)
+    -> Void
 
-  /// Provides TimeInterval to use when scheduling the timer
-  private var timerCalculation: @Sendable (Int) async -> TimeInterval = { _ in 0 }
+  var reset: @Sendable () -> Void
+  var scheduleTimeout: @Sendable () -> Void
+}
 
-  func setHandler(_ handler: @escaping @Sendable () async -> Void) {
-    self.handler = handler
-  }
-
-  func setTimerCalculation(_ timerCalculation: @escaping @Sendable (Int) async -> TimeInterval) {
-    self.timerCalculation = timerCalculation
-  }
-
-  /// The work to be done when the queue fires
-  private var task: Task<Void, Never>?
-
-  /// The number of times the underlyingTimer has been set off.
-  private var tries: Int = 0
-
-  /// Resets the Timer, clearing the number of tries and stops
-  /// any scheduled timeout.
-  func reset() {
-    tries = 0
-    clearTimer()
-  }
-
-  /// Schedules a timeout callback to fire after a calculated timeout duration.
-  func scheduleTimeout() async {
-    // Clear any ongoing timer, not resetting the number of tries
-    clearTimer()
-
-    let timeInterval = await timerCalculation(tries + 1)
-
-    task = Task {
-      try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeInterval))
-      tries += 1
-      await handler()
+extension TimeoutTimer {
+  static func `default`() -> Self {
+    struct State: Sendable {
+      var handler: @Sendable () -> Void = {}
+      var timerCalculation: @Sendable (Int) -> TimeInterval = { _ in 0.0 }
+      var task: Task<Void, Never>?
+      var tries: Int = 0
     }
-  }
 
-  /// Invalidates any ongoing Timer. Will not clear how many tries have been made
-  private func clearTimer() {
-    task?.cancel()
-    task = nil
+    let state = LockIsolated(State())
+
+    return Self(
+      handler: { handler in
+        state.withValue { $0.handler = handler }
+      },
+      timerCalculation: { timerCalculation in
+        state.withValue { $0.timerCalculation = timerCalculation }
+      },
+      reset: {
+        state.withValue {
+          $0.tries = 0
+          $0.task?.cancel()
+          $0.task = nil
+        }
+      },
+      scheduleTimeout: {
+        let timeInterval = state.withValue {
+          $0.task?.cancel()
+          $0.task = nil
+          return $0.timerCalculation($0.tries)
+        }
+
+        let task = Task {
+          try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeInterval))
+          state.withValue {
+            $0.tries += 1
+            $0.handler()
+          }
+        }
+
+        state.withValue {
+          $0.task = task
+        }
+      }
+    )
   }
 }

@@ -1,14 +1,21 @@
 import ConcurrencyExtras
 import XCTest
+import XCTestDynamicOverlay
 @_spi(Internal) import _Helpers
 @testable import Realtime
 
 final class RealtimeClientTests: XCTestCase {
+  var timeoutTimer: TimeoutTimer = .unimplemented
+  var heartbeatTimer = HeartbeatTimer.unimplemented
+
   private func makeSUT(
     headers: [String: String] = [:],
     params: [String: AnyJSON] = [:],
     vsn: String = Defaults.vsn
   ) -> (URL, RealtimeClient, PhoenixTransportMock) {
+    Dependencies.makeTimeoutTimer = { self.timeoutTimer }
+    Dependencies.heartbeatTimer = { _ in self.heartbeatTimer }
+
     let url = URL(string: "https://example.com")!
     let transport = PhoenixTransportMock()
     let sut = RealtimeClient(
@@ -22,6 +29,9 @@ final class RealtimeClientTests: XCTestCase {
   }
 
   func testInitializerWithDefaults() async {
+    timeoutTimer.handler = { _ in }
+    timeoutTimer.timerCalculation = { _ in }
+
     let (url, sut, transport) = makeSUT()
 
     XCTAssertEqual(sut.url, url)
@@ -36,6 +46,9 @@ final class RealtimeClientTests: XCTestCase {
   }
 
   func testInitializerWithCustomValues() async {
+    timeoutTimer.handler = { _ in }
+    timeoutTimer.timerCalculation = { _ in }
+
     let headers = ["Custom-Header": "Value"]
     let params = ["param1": AnyJSON.string("value1")]
     let vsn = "2.0"
@@ -52,6 +65,9 @@ final class RealtimeClientTests: XCTestCase {
   }
 
   func testInitializerWithAuthorizationJWT() async {
+    timeoutTimer.handler = { _ in }
+    timeoutTimer.timerCalculation = { _ in }
+
     let jwt = "your_jwt_token"
     let params = ["Authorization": AnyJSON.string("Bearer \(jwt)")]
 
@@ -61,6 +77,9 @@ final class RealtimeClientTests: XCTestCase {
   }
 
   func testInitializerWithAPIKey() async {
+    timeoutTimer.handler = { _ in }
+    timeoutTimer.timerCalculation = { _ in }
+
     let url = URL(string: "https://example.com")!
     let apiKey = "your_api_key"
     let params = ["apikey": AnyJSON.string(apiKey)]
@@ -71,6 +90,9 @@ final class RealtimeClientTests: XCTestCase {
   }
 
   func testInitializerWithoutAccessToken() async {
+    timeoutTimer.handler = { _ in }
+    timeoutTimer.timerCalculation = { _ in }
+
     let params: [String: AnyJSON] = [:]
     let (_, sut, _) = makeSUT(params: params)
 
@@ -108,6 +130,17 @@ final class RealtimeClientTests: XCTestCase {
   }
 
   func testConnect() throws {
+    timeoutTimer.handler = { _ in }
+    timeoutTimer.timerCalculation = { _ in }
+    timeoutTimer.reset = {}
+
+    let heartbeatStartCallCount = LockIsolated(0)
+    heartbeatTimer.start = { _ in
+      heartbeatStartCallCount.withValue {
+        $0 += 1
+      }
+    }
+
     let (_, sut, _) = makeSUT()
 
     XCTAssertNil(sut.connection, "connection should be nil before calling connect method.")
@@ -129,15 +162,27 @@ final class RealtimeClientTests: XCTestCase {
 
     // Verify that transport's connect was called only once (first connect call).
     XCTAssertEqual(connection.connectCallCount, 1)
+    XCTAssertEqual(heartbeatStartCallCount.value, 1)
   }
 
   func testDisconnect() async throws {
-    let timeoutTimer = TimeoutTimerMock()
-    Dependencies.makeTimeoutTimer = { timeoutTimer }
+    timeoutTimer.handler = { _ in }
+    timeoutTimer.timerCalculation = { _ in }
 
-    let heartbeatTimer = HeartbeatTimerMock()
-    Dependencies.heartbeatTimer = { _ in
-      heartbeatTimer
+    let timerResetCallCount = LockIsolated(0)
+
+    timeoutTimer.reset = {
+      timerResetCallCount.withValue { $0 += 1 }
+    }
+
+    let heartbeatStartCallCount = LockIsolated(0)
+    heartbeatTimer.start = { _ in
+      heartbeatStartCallCount.withValue { $0 += 1 }
+    }
+
+    let heartbeatStopCallCount = LockIsolated(0)
+    heartbeatTimer.stop = {
+      heartbeatStopCallCount.withValue { $0 += 1 }
     }
 
     let (_, sut, transport) = makeSUT()
@@ -163,8 +208,7 @@ final class RealtimeClientTests: XCTestCase {
 
     XCTAssertEqual(sut.closeStatus, .clean)
 
-    let resetCallCount = await timeoutTimer.resetCallCount
-    XCTAssertEqual(resetCallCount, 2)
+    XCTAssertEqual(timerResetCallCount.value, 2)
 
     XCTAssertNil(sut.connection)
     XCTAssertNil(transport.delegate)
@@ -179,9 +223,37 @@ final class RealtimeClientTests: XCTestCase {
     XCTAssertEqual(code, 1000)
     XCTAssertEqual(reason, "test")
 
-    let stopCallCount = await heartbeatTimer.stopCallCount
-    XCTAssertEqual(stopCallCount, 1)
+    XCTAssertEqual(heartbeatStartCallCount.value, 1)
+    XCTAssertEqual(heartbeatStopCallCount.value, 1)
   }
+}
+
+extension HeartbeatTimer {
+  static let unimplemented = Self(
+    start: XCTestDynamicOverlay.unimplemented("\(Self.self).start"),
+    stop: XCTestDynamicOverlay.unimplemented("\(Self.self).stop")
+  )
+
+  static let noop = Self(
+    start: { _ in },
+    stop: {}
+  )
+}
+
+extension TimeoutTimer {
+  static let unimplemented = Self(
+    handler: XCTestDynamicOverlay.unimplemented("\(Self.self).handler"),
+    timerCalculation: XCTestDynamicOverlay.unimplemented("\(Self.self).timerCalculation"),
+    reset: XCTestDynamicOverlay.unimplemented("\(Self.self).reset"),
+    scheduleTimeout: XCTestDynamicOverlay.unimplemented("\(Self.self).scheduleTimeout")
+  )
+
+  static let noop = Self(
+    handler: { _ in },
+    timerCalculation: { _ in },
+    reset: {},
+    scheduleTimeout: {}
+  )
 }
 
 class PhoenixTransportMock: PhoenixTransport {
@@ -217,45 +289,5 @@ class PhoenixTransportMock: PhoenixTransport {
     sendData = data
 
     delegate?.onMessage(message: data)
-  }
-}
-
-actor TimeoutTimerMock: TimeoutTimerProtocol {
-  func setHandler(_: @escaping @Sendable () async -> Void) async {}
-
-  func setTimerCalculation(
-    _: @escaping @Sendable (Int) async
-      -> TimeInterval
-  ) async {}
-
-  private(set) var resetCallCount = 0
-  private(set) var scheduleTimeoutCallCount = 0
-
-  func reset() {
-    resetCallCount += 1
-  }
-
-  func scheduleTimeout() {
-    scheduleTimeoutCallCount += 1
-  }
-}
-
-actor HeartbeatTimerMock: HeartbeatTimerProtocol {
-  private(set) var startCallCount = 0
-  private(set) var stopCallCount = 0
-  private var eventHandler: (@Sendable () -> Void)?
-
-  func start(_ handler: @escaping @Sendable () -> Void) async {
-    startCallCount += 1
-    eventHandler = handler
-  }
-
-  func stop() async {
-    stopCallCount += 1
-  }
-
-  /// Helper method to simulate the timer firing an event
-  func simulateTimerEvent() {
-    eventHandler?()
   }
 }

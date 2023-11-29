@@ -1,33 +1,34 @@
 import ConcurrencyExtras
 import Foundation
 
-protocol HeartbeatTimerProtocol: Sendable {
-  func start(_ handler: @escaping @Sendable () -> Void) async
-  func stop() async
+struct HeartbeatTimer: Sendable {
+  var start: @Sendable (_ handler: @escaping @Sendable () -> Void) -> Void
+  var stop: @Sendable () -> Void
 }
 
-actor HeartbeatTimer: HeartbeatTimerProtocol, @unchecked Sendable {
-  let timeInterval: TimeInterval
+extension HeartbeatTimer {
+  static func `default`(timeInterval: TimeInterval) -> Self {
+    let task = LockIsolated(Task<Void, Never>?.none)
 
-  init(timeInterval: TimeInterval) {
-    self.timeInterval = timeInterval
-  }
-
-  private var task: Task<Void, Never>?
-
-  func start(_ handler: @escaping @Sendable () -> Void) {
-    task?.cancel()
-    task = Task {
-      while !Task.isCancelled {
-        let seconds = UInt64(timeInterval)
-        try? await Task.sleep(nanoseconds: NSEC_PER_SEC * seconds)
-        handler()
+    return Self(
+      start: { handler in
+        task.withValue {
+          $0?.cancel()
+          $0 = Task {
+            while !Task.isCancelled {
+              let seconds = UInt64(timeInterval)
+              try? await Task.sleep(nanoseconds: NSEC_PER_SEC * seconds)
+              handler()
+            }
+          }
+        }
+      },
+      stop: {
+        task.withValue {
+          $0?.cancel()
+          $0 = nil
+        }
       }
-    }
-  }
-
-  func stop() {
-    task?.cancel()
-    task = nil
+    )
   }
 }

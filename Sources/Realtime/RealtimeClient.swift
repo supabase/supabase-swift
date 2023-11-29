@@ -73,7 +73,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     var sendBuffer: [(ref: String?, callback: () -> Void)] = []
 
     /// Timer that triggers sending new Heartbeat messages
-    var heartbeatTimer: HeartbeatTimerProtocol?
+    var heartbeatTimer: HeartbeatTimer?
 
     /// Ref counter for the last heartbeat that was sent
     var pendingHeartbeatRef: String?
@@ -202,7 +202,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   }
 
   /// Timer to use when attempting to reconnect
-  let reconnectTimer: TimeoutTimerProtocol
+  let reconnectTimer: TimeoutTimer
 
   /// The HTTPClient to perform HTTP requests.
   let http: HTTPClient
@@ -274,20 +274,16 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     )
 
     reconnectTimer = Dependencies.makeTimeoutTimer()
+    reconnectTimer.handler { [weak self] in
+      self?.logItems("Socket attempting to reconnect")
+      self?.teardown(reason: "reconnection")
+      self?.connect()
+    }
 
-    // TODO: should store Task?
-    Task { [weak self] in
-      await self?.reconnectTimer.setHandler { [weak self] in
-        self?.logItems("Socket attempting to reconnect")
-        self?.teardown(reason: "reconnection")
-        self?.connect()
-      }
-
-      await self?.reconnectTimer.setTimerCalculation { [weak self] tries in
-        let interval = self?.reconnectAfter(tries) ?? 5.0
-        self?.logItems("Socket reconnecting in \(interval)s")
-        return interval
-      }
+    reconnectTimer.timerCalculation { [weak self] tries in
+      let interval = self?.reconnectAfter(tries) ?? 5.0
+      self?.logItems("Socket reconnecting in \(interval)s")
+      return interval
     }
   }
 
@@ -365,9 +361,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     }
 
     // Reset any reconnects and teardown the socket connection
-    Task {
-      await reconnectTimer.reset()
-    }
+    reconnectTimer.reset()
     teardown(code: code, reason: reason)
   }
 
@@ -382,9 +376,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     }
 
     // The socket connection has been turndown, heartbeats are not needed
-    Task {
-      await mutableState.heartbeatTimer?.stop()
-    }
+    mutableState.heartbeatTimer?.stop()
 
     // Since the connection's delegate was nil'd out, inform all state
     // callbacks that the connection has closed
@@ -636,13 +628,11 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     // Send any messages that were waiting for a connection
     flushSendBuffer()
 
-    Task {
-      // Reset how the socket tried to reconnect
-      await reconnectTimer.reset()
+    // Reset how the socket tried to reconnect
+    reconnectTimer.reset()
 
-      // Restart the heartbeat timer
-      await resetHeartbeat()
-    }
+    // Restart the heartbeat timer
+    resetHeartbeat()
 
     Task {
       // Inform all onOpen callbacks that the Socket has opened
@@ -658,15 +648,13 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     // Send an error to all channels
     triggerChannelError()
 
-    Task {
-      // Prevent the heartbeat from triggering if the
-      await mutableState.heartbeatTimer?.stop()
+    // Prevent the heartbeat from triggering if the
+    mutableState.heartbeatTimer?.stop()
 
-      // Only attempt to reconnect if the socket did not close normally,
-      // or if it was closed abnormally but on client side (e.g. due to heartbeat timeout)
-      if mutableState.closeStatus.shouldReconnect {
-        await reconnectTimer.scheduleTimeout()
-      }
+    // Only attempt to reconnect if the socket did not close normally,
+    // or if it was closed abnormally but on client side (e.g. due to heartbeat timeout)
+    if mutableState.closeStatus.shouldReconnect {
+      reconnectTimer.scheduleTimeout()
     }
 
     Task {
@@ -803,13 +791,13 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   // MARK: - Heartbeat
 
   // ----------------------------------------------------------------------
-  func resetHeartbeat() async {
+  func resetHeartbeat() {
     // Clear anything related to the heartbeat
     mutableState.withValue {
       $0.pendingHeartbeatRef = nil
     }
 
-    await mutableState.heartbeatTimer?.stop()
+    mutableState.heartbeatTimer?.stop()
 
     // Do not start up the heartbeat timer if skipHeartbeat is true
     guard !skipHeartbeat else { return }
@@ -817,7 +805,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     let heartbeatTimer = Dependencies.heartbeatTimer(heartbeatInterval)
     mutableState.withValue { $0.heartbeatTimer = heartbeatTimer }
 
-    await heartbeatTimer.start { [weak self] in
+    heartbeatTimer.start { [weak self] in
       self?.sendHeartbeat()
     }
   }

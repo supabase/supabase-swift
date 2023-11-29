@@ -215,7 +215,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   }
 
   /// Timer to attempt to rejoin
-  private let rejoinTimer: TimeoutTimerProtocol
+  private let rejoinTimer: TimeoutTimer
 
   /// Refs of stateChange hooks
   var stateChangeRefs: [String] {
@@ -241,22 +241,19 @@ public final class RealtimeChannel: @unchecked Sendable {
 
   private func setupChannelObservations(initialParams: [String: AnyJSON]) {
     // Setup Timer delegation
-    Task { [weak self] in
-      await self?.rejoinTimer.setHandler { [weak self] in
-        if self?.socket?.isConnected == true {
-          self?.rejoin()
-        }
-      }
-
-      await self?.rejoinTimer.setTimerCalculation { [weak self] tries in
-        self?.socket?.rejoinAfter(tries) ?? 5.0
+    rejoinTimer.handler { [weak self] in
+      if self?.socket?.isConnected == true {
+        self?.rejoin()
       }
     }
+
+    rejoinTimer.timerCalculation { [weak self] tries in
+      self?.socket?.rejoinAfter(tries) ?? 5.0
+    }
+
     // Respond to socket events
     let onErrorRef = socket?.onError { [weak self] _, _ in
-      Task { [weak self] in
-        await self?.rejoinTimer.reset()
-      }
+      self?.rejoinTimer.reset()
     }
 
     if let ref = onErrorRef {
@@ -266,9 +263,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     }
 
     let onOpenRef = socket?.onOpen { [weak self] in
-      Task { [weak self] in
-        await self?.rejoinTimer.reset()
-      }
+      self?.rejoinTimer.reset()
 
       if self?.isErrored == true {
         self?.rejoin()
@@ -301,9 +296,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       }
 
       // Reset the timer, preventing it from attempting to join again
-      Task {
-        await self.rejoinTimer.reset()
-      }
+      self.rejoinTimer.reset()
 
       // Send and buffered messages and clear the buffer
       for push in pushBuffer {
@@ -324,9 +317,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       }
 
       if self.socket?.isConnected == true {
-        Task {
-          await self.rejoinTimer.scheduleTimeout()
-        }
+        self.rejoinTimer.scheduleTimeout()
       }
     }
 
@@ -354,9 +345,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       joinPush.reset()
 
       if self.socket?.isConnected == true {
-        Task {
-          await self.rejoinTimer.scheduleTimeout()
-        }
+        self.rejoinTimer.scheduleTimeout()
       }
     }
 
@@ -365,9 +354,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       guard let self else { return }
 
       // Reset any timer that may be on-going
-      Task {
-        await self.rejoinTimer.reset()
-      }
+      self.rejoinTimer.reset()
 
       // Log that the channel was left
       self.socket?.logItems(
@@ -408,9 +395,7 @@ public final class RealtimeChannel: @unchecked Sendable {
         $0.state = .errored
       }
       if self.socket?.isConnected == true {
-        Task {
-          await self.rejoinTimer.scheduleTimeout()
-        }
+        self.rejoinTimer.scheduleTimeout()
       }
     }
 
@@ -835,9 +820,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   @discardableResult
   public func unsubscribe(timeout: TimeInterval = Defaults.timeoutInterval) -> Push {
     // If attempting a rejoin during a leave, then reset, cancelling the rejoin
-    Task {
-      await rejoinTimer.reset()
-    }
+    rejoinTimer.reset()
 
     // Now set the state to leaving
     mutableState.withValue {

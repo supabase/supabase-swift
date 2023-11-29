@@ -81,7 +81,13 @@ let package = Package(
         "_Helpers",
       ]
     ),
-    .testTarget(name: "RealtimeTests", dependencies: ["Realtime"]),
+    .testTarget(
+      name: "RealtimeTests",
+      dependencies: [
+        "Realtime",
+        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+      ]
+    ),
     .target(name: "Storage", dependencies: ["_Helpers"]),
     .testTarget(name: "StorageTests", dependencies: ["Storage"]),
     .target(
