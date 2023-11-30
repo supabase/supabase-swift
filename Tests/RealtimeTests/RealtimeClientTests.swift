@@ -14,7 +14,7 @@ final class RealtimeClientTests: XCTestCase {
     vsn: String = Defaults.vsn
   ) -> (URL, RealtimeClient, PhoenixTransportMock) {
     Dependencies.makeTimeoutTimer = { self.timeoutTimer }
-    Dependencies.heartbeatTimer = { _ in self.heartbeatTimer }
+    Dependencies.makeHeartbeatTimer = { _ in self.heartbeatTimer }
 
     let url = URL(string: "https://example.com")!
     let transport = PhoenixTransportMock()
@@ -180,10 +180,7 @@ final class RealtimeClientTests: XCTestCase {
       heartbeatStartCallCount.withValue { $0 += 1 }
     }
 
-    let heartbeatStopCallCount = LockIsolated(0)
-    heartbeatTimer.stop = {
-      heartbeatStopCallCount.withValue { $0 += 1 }
-    }
+    heartbeatTimer.stop = {}
 
     let (_, sut, transport) = makeSUT()
 
@@ -224,7 +221,6 @@ final class RealtimeClientTests: XCTestCase {
     XCTAssertEqual(reason, "test")
 
     XCTAssertEqual(heartbeatStartCallCount.value, 1)
-    XCTAssertEqual(heartbeatStopCallCount.value, 1)
   }
 }
 

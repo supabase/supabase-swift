@@ -12,7 +12,7 @@ enum Dependencies {
     TimeoutTimer.default()
   }
 
-  static var heartbeatTimer: (_ timeInterval: TimeInterval) -> HeartbeatTimer = {
+  static var makeHeartbeatTimer: (_ timeInterval: TimeInterval) -> HeartbeatTimer = {
     HeartbeatTimer.default(timeInterval: $0)
   }
 }
