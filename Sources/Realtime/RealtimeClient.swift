@@ -802,7 +802,10 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     // Do not start up the heartbeat timer if skipHeartbeat is true
     guard !skipHeartbeat else { return }
 
-    let heartbeatTimer = Dependencies.makeHeartbeatTimer(heartbeatInterval)
+    let heartbeatTimer = Dependencies.makeHeartbeatTimer(
+      heartbeatInterval,
+      Defaults.heartbeatLeeway
+    )
     mutableState.withValue { $0.heartbeatTimer = heartbeatTimer }
 
     heartbeatTimer.start { [weak self] in

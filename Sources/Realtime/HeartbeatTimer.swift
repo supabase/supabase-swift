@@ -7,25 +7,22 @@ struct HeartbeatTimer: Sendable {
 }
 
 extension HeartbeatTimer {
-  static func `default`(timeInterval: TimeInterval) -> Self {
-    let task = LockIsolated(Task<Void, Never>?.none)
+  static func timer(timeInterval: TimeInterval, leeway: TimeInterval) -> Self {
+    let timer = LockIsolated(Timer?.none)
 
     return Self(
       start: { handler in
-        task.withValue {
-          $0?.cancel()
-          $0 = Task {
-            while !Task.isCancelled {
-              let seconds = UInt64(timeInterval)
-              try? await Task.sleep(nanoseconds: NSEC_PER_SEC * seconds)
-              handler()
-            }
+        timer.withValue {
+          $0?.invalidate()
+          $0 = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: true) { _ in
+            handler()
           }
+          $0?.tolerance = leeway
         }
       },
       stop: {
-        task.withValue {
-          $0?.cancel()
+        timer.withValue {
+          $0?.invalidate()
           $0 = nil
         }
       }

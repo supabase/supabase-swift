@@ -11,7 +11,7 @@ final class RealtimeIntegrationTests: XCTestCase {
       self.timeoutTimer
     }
 
-    Dependencies.makeHeartbeatTimer = { _ in
+    Dependencies.makeHeartbeatTimer = { _, _ in
       self.heartbeatTimer
     }
 

@@ -28,6 +28,10 @@ public enum Defaults {
   /// Default interval to send heartbeats on
   public static let heartbeatInterval: TimeInterval = 30.0
 
+  /// Default maximum amount of time which the system may delay heartbeat events in order to
+  /// minimize power usage
+  public static let heartbeatLeeway: TimeInterval = 10
+
   /// Default reconnect algorithm for the socket
   public static let reconnectSteppedBackOff: (Int) -> TimeInterval = { tries in
     tries > 9 ? 5.0 : [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0, 2.0][tries - 1]

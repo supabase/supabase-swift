@@ -14,7 +14,7 @@ final class RealtimeClientTests: XCTestCase {
     vsn: String = Defaults.vsn
   ) -> (URL, RealtimeClient, PhoenixTransportMock) {
     Dependencies.makeTimeoutTimer = { self.timeoutTimer }
-    Dependencies.makeHeartbeatTimer = { _ in self.heartbeatTimer }
+    Dependencies.makeHeartbeatTimer = { _, _ in self.heartbeatTimer }
 
     let url = URL(string: "https://example.com")!
     let transport = PhoenixTransportMock()
