@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+import ConcurrencyExtras
 import Foundation
 
 // ----------------------------------------------------------------------
@@ -28,7 +29,7 @@ import Foundation
 /**
  Defines a `Socket`'s Transport layer.
  */
-public protocol PhoenixTransport {
+public protocol PhoenixTransport: Sendable {
   /// The current `ReadyState` of the `Transport` layer
   var readyState: PhoenixTransportReadyState { get }
 
@@ -66,7 +67,7 @@ public protocol PhoenixTransport {
 
 // ----------------------------------------------------------------------
 /// Delegate to receive notifications of events that occur in the `Transport` layer
-public protocol PhoenixTransportDelegate: AnyObject {
+public protocol PhoenixTransportDelegate: AnyObject, Sendable {
   /**
    Notified when the `Transport` opens.
 
@@ -131,19 +132,25 @@ public enum PhoenixTransportReadyState {
 /// SwiftPhoenixClient supports earlier OS versions using one of the submodule
 /// `Transport` implementations. Or you can create your own implementation using
 /// your own WebSocket library or implementation.
-@available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
-open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketDelegate {
+open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketDelegate,
+  @unchecked Sendable
+{
+  struct MutableState {
+    /// The underling URLSession. Assigned during `connect()`
+    var session: URLSession?
+    /// The ongoing stream. Assigned during `connect()`
+    var stream: SocketStream?
+    var readyState: PhoenixTransportReadyState = .closed
+    weak var delegate: PhoenixTransportDelegate?
+  }
+
+  let mutableState = LockIsolated(MutableState())
+
   /// The URL to connect to
   let url: URL
 
   /// The URLSession configuration
   let configuration: URLSessionConfiguration
-
-  /// The underling URLSession. Assigned during `connect()`
-  private var session: URLSession?
-
-  /// The ongoing task. Assigned during `connect()`
-  private var stream: SocketStream?
 
   /**
    Initializes a `Transport` layer built using URLSession's WebSocket
@@ -184,24 +191,32 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
 
   // MARK: - Transport
 
-  public var readyState: PhoenixTransportReadyState = .closed
-  public weak var delegate: PhoenixTransportDelegate? = nil
+  public var readyState: PhoenixTransportReadyState {
+    mutableState.readyState
+  }
+
+  public var delegate: PhoenixTransportDelegate? {
+    get { mutableState.delegate }
+    set { mutableState.withValue { $0.delegate = newValue } }
+  }
 
   public func connect(with headers: [String: String]) {
-    // Set the transport state as connecting
-    readyState = .connecting
+    mutableState.withValue {
+      // Set the transport state as connecting
+      $0.readyState = .connecting
 
-    // Create the session and websocket task
-    session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-    var request = URLRequest(url: url)
+      // Create the session and web socket task
+      $0.session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+      var request = URLRequest(url: url)
 
-    headers.forEach { (key: String, value: Any) in
-      guard let value = value as? String else { return }
-      request.addValue(value, forHTTPHeaderField: key)
+      headers.forEach { (key: String, value: Any) in
+        guard let value = value as? String else { return }
+        request.addValue(value, forHTTPHeaderField: key)
+      }
+
+      let task = $0.session!.webSocketTask(with: request)
+      $0.stream = SocketStream(task: task)
     }
-
-    let task = session!.webSocketTask(with: request)
-    stream = SocketStream(task: task)
   }
 
   open func disconnect(code: Int, reason: String?) {
@@ -215,13 +230,15 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
       fatalError("Could not create a CloseCode with invalid code: [\(code)].")
     }
 
-    readyState = .closing
-    stream?.cancel(with: closeCode, reason: reason?.data(using: .utf8))
-    session?.finishTasksAndInvalidate()
+    mutableState.withValue {
+      $0.readyState = .closing
+      $0.stream?.cancel(with: closeCode, reason: reason?.data(using: .utf8))
+      $0.session?.finishTasksAndInvalidate()
+    }
   }
 
   open func send(data: Data) {
-    stream?.task.send(.string(String(data: data, encoding: .utf8)!)) { _ in }
+    mutableState.stream?.task.send(.string(String(data: data, encoding: .utf8)!)) { _ in }
   }
 
   // MARK: - URLSessionWebSocketDelegate
@@ -231,9 +248,11 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
     webSocketTask: URLSessionWebSocketTask,
     didOpenWithProtocol _: String?
   ) {
-    // The Websocket is connected. Set Transport state to open and inform delegate
-    readyState = .open
-    delegate?.onOpen(response: webSocketTask.response)
+    mutableState.withValue {
+      // The Websocket is connected. Set Transport state to open and inform delegate
+      $0.readyState = .open
+      $0.delegate?.onOpen(response: webSocketTask.response)
+    }
 
     Task {
       await receive()
@@ -246,11 +265,13 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
     didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
     reason: Data?
   ) {
-    // A close frame was received from the server.
-    readyState = .closed
-    delegate?.onClose(
-      code: closeCode.rawValue, reason: reason.flatMap { String(data: $0, encoding: .utf8) }
-    )
+    mutableState.withValue {
+      // A close frame was received from the server.
+      $0.readyState = .closed
+      $0.delegate?.onClose(
+        code: closeCode.rawValue, reason: reason.flatMap { String(data: $0, encoding: .utf8) }
+      )
+    }
   }
 
   open func urlSession(
@@ -268,7 +289,7 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   // MARK: - Private
 
   private func receive() async {
-    guard let stream else {
+    guard let stream = mutableState.stream else {
       return
     }
 
@@ -291,18 +312,20 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   }
 
   private func abnormalErrorReceived(_ error: Error, response: URLResponse?) {
-    // Set the state of the Transport to closed
-    readyState = .closed
+    mutableState.withValue {
+      // Set the state of the Transport to closed
+      $0.readyState = .closed
 
-    // Inform the Transport's delegate that an error occurred.
-    delegate?.onError(error: error, response: response)
+      // Inform the Transport's delegate that an error occurred.
+      $0.delegate?.onError(error: error, response: response)
 
-    // An abnormal error is results in an abnormal closure, such as internet getting dropped
-    // so inform the delegate that the Transport has closed abnormally. This will kick off
-    // the reconnect logic.
-    delegate?.onClose(
-      code: RealtimeClient.CloseCode.abnormal.rawValue, reason: error.localizedDescription
-    )
+      // An abnormal error is results in an abnormal closure, such as internet getting dropped
+      // so inform the delegate that the Transport has closed abnormally. This will kick off
+      // the reconnect logic.
+      $0.delegate?.onClose(
+        code: RealtimeClient.CloseCode.abnormal.rawValue, reason: error.localizedDescription
+      )
+    }
   }
 }
 

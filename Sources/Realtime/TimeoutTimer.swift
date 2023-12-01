@@ -44,69 +44,56 @@ import ConcurrencyExtras
 import Foundation
 
 protocol TimeoutTimerProtocol: Sendable {
-  func setHandler(_ handler: @Sendable @escaping () async -> Void) async
-  func setTimerCalculation(
-    _ timerCalculation: @Sendable @escaping (Int) async
-      -> TimeInterval
-  ) async
-
-  func reset() async
-  func scheduleTimeout() async
+  func setHandler(_ handler: @Sendable @escaping () -> Void)
+  func setTimerCalculation(_ timerCalculation: @Sendable @escaping (Int) -> TimeInterval)
+  func reset()
+  func scheduleTimeout()
 }
 
-struct TimeoutTimer: Sendable {
-  var handler: @Sendable (_ handler: @Sendable @escaping () -> Void) -> Void
-  var timerCalculation: @Sendable (_ timerCalculation: @Sendable @escaping (Int) -> TimeInterval)
-    -> Void
+final class TimeoutTimer: TimeoutTimerProtocol, @unchecked Sendable {
+  private let lock = NSRecursiveLock()
 
-  var reset: @Sendable () -> Void
-  var scheduleTimeout: @Sendable () -> Void
-}
+  private var handler: (@Sendable () -> Void)?
+  private var timerCalculation: (@Sendable (Int) -> TimeInterval)?
+  private var tries: Int = 0
+  private var task: Task<Void, Never>?
 
-extension TimeoutTimer {
-  static func `default`() -> Self {
-    struct State: Sendable {
-      var handler: @Sendable () -> Void = {}
-      var timerCalculation: @Sendable (Int) -> TimeInterval = { _ in 0.0 }
-      var task: Task<Void, Never>?
-      var tries: Int = 0
+  func setHandler(_ handler: @escaping @Sendable () -> Void) {
+    lock.withLock {
+      self.handler = handler
     }
+  }
 
-    let state = LockIsolated(State())
+  func setTimerCalculation(_ timerCalculation: @escaping @Sendable (Int) -> TimeInterval) {
+    lock.withLock {
+      self.timerCalculation = timerCalculation
+    }
+  }
 
-    return Self(
-      handler: { handler in
-        state.withValue { $0.handler = handler }
-      },
-      timerCalculation: { timerCalculation in
-        state.withValue { $0.timerCalculation = timerCalculation }
-      },
-      reset: {
-        state.withValue {
-          $0.tries = 0
-          $0.task?.cancel()
-          $0.task = nil
-        }
-      },
-      scheduleTimeout: {
-        let timeInterval = state.withValue {
-          $0.task?.cancel()
-          $0.task = nil
-          return $0.timerCalculation($0.tries)
-        }
+  func reset() {
+    lock.withLock {
+      tries = 0
+      task?.cancel()
+      task = nil
+    }
+  }
 
-        let task = Task {
-          try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeInterval))
-          state.withValue {
-            $0.tries += 1
-            $0.handler()
-          }
-        }
+  func scheduleTimeout() {
+    lock.lock()
+    defer { lock.unlock() }
 
-        state.withValue {
-          $0.task = task
-        }
+    task?.cancel()
+    task = nil
+
+    let timeInterval = timerCalculation?(tries + 1) ?? 5.0
+
+    task = Task {
+      try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeInterval))
+
+      lock.withLock {
+        self.tries += 1
+        self.handler?()
       }
-    )
+    }
   }
 }

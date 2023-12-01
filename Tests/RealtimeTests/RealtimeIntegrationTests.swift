@@ -3,18 +3,7 @@ import ConcurrencyExtras
 import XCTest
 
 final class RealtimeIntegrationTests: XCTestCase {
-  var timeoutTimer: TimeoutTimer = .unimplemented
-  var heartbeatTimer: HeartbeatTimer = .unimplemented
-
   private func makeSUT(file: StaticString = #file, line: UInt = #line) -> RealtimeClient {
-    Dependencies.makeTimeoutTimer = {
-      self.timeoutTimer
-    }
-
-    Dependencies.makeHeartbeatTimer = { _, _ in
-      self.heartbeatTimer
-    }
-
     let sut = RealtimeClient(
       url: URL(string: "https://nixfbjgqturwbakhnwym.supabase.co/realtime/v1")!,
       params: [
@@ -28,9 +17,6 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testConnection() async {
-    timeoutTimer = .noop
-    heartbeatTimer = .noop
-
     let sut = makeSUT()
 
     let onOpenExpectation = expectation(description: "onOpen")
@@ -55,8 +41,6 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testOnChannelEvent() async {
-    timeoutTimer = .noop
-    heartbeatTimer = .noop
     let sut = makeSUT()
 
     sut.connect()
@@ -88,7 +72,7 @@ final class RealtimeIntegrationTests: XCTestCase {
         }
     )
 
-    await fulfillment(of: [expectation])
+    await fulfillment(of: [expectation], timeout: 10)
     XCTAssertEqual(states.value, [.subscribed, .closed])
 
     sut.disconnect()

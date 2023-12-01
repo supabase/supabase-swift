@@ -210,7 +210,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   }
 
   /// Timer to attempt to rejoin
-  private let rejoinTimer: TimeoutTimer
+  private let rejoinTimer: TimeoutTimerProtocol
 
   /// Refs of stateChange hooks
   var stateChangeRefs: [String] {
@@ -236,13 +236,13 @@ public final class RealtimeChannel: @unchecked Sendable {
 
   private func setupChannelObservations(initialParams: [String: AnyJSON]) {
     // Setup Timer delegation
-    rejoinTimer.handler { [weak self] in
+    rejoinTimer.setHandler { [weak self] in
       if self?.socket.value?.isConnected == true {
         self?.rejoin()
       }
     }
 
-    rejoinTimer.timerCalculation { [weak self] tries in
+    rejoinTimer.setTimerCalculation { [weak self] tries in
       self?.socket.value?.rejoinAfter(tries) ?? 5.0
     }
 

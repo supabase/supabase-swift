@@ -73,7 +73,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     var sendBuffer: [(ref: String?, callback: () -> Void)] = []
 
     /// Timer that triggers sending new Heartbeat messages
-    var heartbeatTimer: HeartbeatTimer?
+    var heartbeatTimer: HeartbeatTimerProtocol?
 
     /// Ref counter for the last heartbeat that was sent
     var pendingHeartbeatRef: String?
@@ -202,7 +202,7 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
   }
 
   /// Timer to use when attempting to reconnect
-  let reconnectTimer: TimeoutTimer
+  let reconnectTimer: TimeoutTimerProtocol
 
   /// The HTTPClient to perform HTTP requests.
   let http: HTTPClient
@@ -274,13 +274,13 @@ public final class RealtimeClient: @unchecked Sendable, PhoenixTransportDelegate
     )
 
     reconnectTimer = Dependencies.makeTimeoutTimer()
-    reconnectTimer.handler { [weak self] in
+    reconnectTimer.setHandler { [weak self] in
       self?.logItems("Socket attempting to reconnect")
       self?.teardown(reason: "reconnection")
       self?.connect()
     }
 
-    reconnectTimer.timerCalculation { [weak self] tries in
+    reconnectTimer.setTimerCalculation { [weak self] tries in
       let interval = self?.reconnectAfter(tries) ?? 5.0
       self?.logItems("Socket reconnecting in \(interval)s")
       return interval
