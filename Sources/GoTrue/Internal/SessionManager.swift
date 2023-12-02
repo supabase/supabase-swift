@@ -2,6 +2,8 @@ import Foundation
 import KeychainAccess
 @_spi(Internal) import _Helpers
 
+import Logging
+
 struct SessionRefresher: Sendable {
   var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
 }
@@ -37,6 +39,8 @@ actor _LiveSessionManager {
   private var sessionRefresher: SessionRefresher {
     Dependencies.current.value!.sessionRefresher
   }
+    
+    let persistentLogger = Logging.Logger(label: Bundle.main.bundleIdentifier!)
 
   func session(shouldValidateExpiration: Bool) async throws -> Session {
     if let task {
@@ -46,6 +50,8 @@ actor _LiveSessionManager {
     guard let currentSession = try storage.getSession() else {
       throw GoTrueError.sessionNotFound
     }
+
+      // persistentLogger.info("\(currentSession.expirationDate)")
 
     if currentSession.isValid || !shouldValidateExpiration {
       return currentSession.session
@@ -63,6 +69,7 @@ actor _LiveSessionManager {
   }
 
   func update(_ session: Session) throws {
+      persistentLogger.info("Updating session")
     try storage.storeSession(StoredSession(session: session))
   }
 

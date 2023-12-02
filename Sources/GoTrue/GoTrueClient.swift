@@ -1,11 +1,15 @@
 import Foundation
 @_spi(Internal) import _Helpers
 
+import Logging
+
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
 public actor GoTrueClient {
+    let persistentLogger = Logging.Logger(label: Bundle.main.bundleIdentifier!)
+    
   /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler =
     @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
@@ -759,6 +763,8 @@ public actor GoTrueClient {
       credentials.refreshToken = try await sessionManager.session(shouldValidateExpiration: false)
         .refreshToken
     }
+      
+      persistentLogger.info("Refresh called with: \(String(describing: refreshToken))")
 
     let session = try await api.execute(
       .init(
@@ -769,6 +775,8 @@ public actor GoTrueClient {
       )
     ).decoded(as: Session.self, decoder: configuration.decoder)
 
+      persistentLogger.info("Session obtained, next refreshToken: \(session.refreshToken)")
+      
     if session.user.phoneConfirmedAt != nil || session.user.emailConfirmedAt != nil
       || session
       .user.confirmedAt != nil
@@ -781,8 +789,13 @@ public actor GoTrueClient {
   }
 
   private func emitInitialSession(forStreamWithID id: UUID) async {
-    let session = try? await session
-    eventEmitter.emit(.initialSession, session, id)
+      do {
+          let session = try await session
+          eventEmitter.emit(.initialSession, session, id)
+      } catch {
+          persistentLogger.error("No initial session found: \(error.localizedDescription)")
+          eventEmitter.emit(.initialSession, nil, id)
+      }
   }
 
   private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {
