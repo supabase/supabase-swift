@@ -35,7 +35,7 @@ final class AuthClientTests: XCTestCase {
         }
       }
 
-      await fulfillment(of: [expectation])
+      await fulfillment(of: [expectation], timeout: 2)
 
       let events = await events.value
       XCTAssertEqual(events, [.initialSession])

@@ -2,6 +2,10 @@ import Auth
 import Foundation
 import PostgREST
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 public struct SupabaseClientOptions: Sendable {
   public let db: DatabaseOptions
   public let auth: AuthOptions

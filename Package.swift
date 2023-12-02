@@ -4,6 +4,32 @@
 import Foundation
 import PackageDescription
 
+#if !os(Windows) && !os(Linux)
+var dependencies: [Package.Dependency] = [
+  .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
+  .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
+  .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
+  .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.0.0"),
+]
+var goTrueDependencies: [Target.Dependency] = [
+  "_Helpers",
+  .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+  .product(name: "KeychainAccess", package: "KeychainAccess"),
+]
+#else
+var dependencies: [Package.Dependency] = [
+  .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
+  .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
+  .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.0.0"),
+  .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "3.0.0"),
+]
+var goTrueDependencies: [Target.Dependency] = [
+  "_Helpers",
+  .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+  .product(name: "Crypto", package: "swift-crypto"),
+]
+#endif
+
 let package = Package(
   name: "Supabase",
   platforms: [
@@ -24,12 +50,7 @@ let package = Package(
       targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]
     ),
   ],
-  dependencies: [
-    .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
-    .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
-    .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
-    .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.0.0"),
-  ],
+  dependencies: dependencies,
   targets: [
     .target(
       name: "_Helpers",
@@ -47,11 +68,7 @@ let package = Package(
     ),
     .target(
       name: "Auth",
-      dependencies: [
-        "_Helpers",
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "KeychainAccess", package: "KeychainAccess"),
-      ]
+      dependencies: goTrueDependencies
     ),
     .testTarget(
       name: "AuthTests",

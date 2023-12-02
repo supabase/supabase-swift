@@ -54,7 +54,7 @@ final class BuildURLRequestTests: XCTestCase {
       fetch: { request in
         guard let runningTestCase = await runningTestCase.value else {
           XCTFail("execute called without a runningTestCase set.")
-          return (Data(), URLResponse())
+          return (Data(), URLResponse.empty())
         }
 
         await MainActor.run { [runningTestCase] in
@@ -69,7 +69,7 @@ final class BuildURLRequestTests: XCTestCase {
           )
         }
 
-        return (Data(), URLResponse())
+        return (Data(), URLResponse.empty())
       },
       encoder: encoder
     )
@@ -169,5 +169,11 @@ final class BuildURLRequestTests: XCTestCase {
     let client = PostgrestClient(url: url, schema: nil)
     let clientInfoHeader = await client.configuration.headers["X-Client-Info"]
     XCTAssertNotNil(clientInfoHeader)
+  }
+}
+
+extension URLResponse {
+  static func empty() -> URLResponse {
+    URLResponse(url: .init(string: "https://arc.net")!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
   }
 }

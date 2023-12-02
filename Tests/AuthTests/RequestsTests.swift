@@ -11,6 +11,10 @@ import XCTest
 
 @testable import Auth
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 struct UnimplementedError: Error {}
 
 final class RequestsTests: XCTestCase {
@@ -163,7 +167,7 @@ final class RequestsTests: XCTestCase {
     let sut = makeSUT(fetch: { request in
       let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
       XCTAssertEqual(authorizationHeader, "bearer accesstoken")
-      return (json(named: "user"), HTTPURLResponse())
+      return (json(named: "user"), HTTPURLResponse.empty())
     })
 
     let currentDate = Date()
@@ -424,5 +428,11 @@ final class RequestsTests: XCTestCase {
       eventEmitter: .mock,
       sessionStorage: .mock
     )
+  }
+}
+
+extension URLResponse {
+  static func empty() -> URLResponse {
+    URLResponse(url: .init(string: "https://arc.net")!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
   }
 }

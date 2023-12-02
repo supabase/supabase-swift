@@ -3,6 +3,10 @@ import XCTest
 @_spi(Internal) import _Helpers
 @testable import Functions
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 final class FunctionsClientTests: XCTestCase {
   let url = URL(string: "http://localhost:5432/functions/v1")!
   let apiKey = "supabase.anon.key"

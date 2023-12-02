@@ -7,6 +7,10 @@ import Foundation
 @_exported import Realtime
 @_exported import Storage
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 let version = _Helpers.version
 
 /// Supabase Client.

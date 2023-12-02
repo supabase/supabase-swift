@@ -1,11 +1,13 @@
 import Foundation
-@preconcurrency import KeychainAccess
 
 public protocol AuthLocalStorage: Sendable {
   func store(key: String, value: Data) throws
   func retrieve(key: String) throws -> Data?
   func remove(key: String) throws
 }
+
+#if !os(Windows) && !os(Linux)
+@preconcurrency import KeychainAccess
 
 struct KeychainLocalStorage: AuthLocalStorage {
   private let keychain: Keychain
@@ -30,3 +32,24 @@ struct KeychainLocalStorage: AuthLocalStorage {
     try keychain.remove(key)
   }
 }
+#else
+final class KeychainLocalStorage: AuthLocalStorage {
+  private var keychain = [String: Data]()
+
+  init(service: String, accessGroup: String?) {
+
+  }
+
+  func store(key: String, value: Data) throws {
+    keychain[key] = value
+  }
+
+  func retrieve(key: String) throws -> Data? {
+    keychain[key]
+  }
+
+  func remove(key: String) throws {
+    keychain.removeValue(forKey: key)
+  }
+}
+#endif

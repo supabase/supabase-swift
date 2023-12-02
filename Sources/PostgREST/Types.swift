@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 public struct PostgrestError: Error, Codable, Sendable {
   public let details: String?
   public let hint: String?
