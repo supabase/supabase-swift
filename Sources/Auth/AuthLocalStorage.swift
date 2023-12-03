@@ -33,8 +33,6 @@ struct KeychainLocalStorage: AuthLocalStorage {
   }
 }
 #else
-import WinSDK
-
 // There isn't a consistent secure storage mechanism across Linux & Windows
 // like there is for all Darwin platforms.
 //

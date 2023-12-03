@@ -47,7 +47,7 @@ jobs:
 
   library-windows:
       runs-on: windows-latest
-      name: Test Library (Linux)
+      name: Test Library (Windows)
       steps:
         # We use BCNY's repo since they have newer builds of Swift
         # which have fixed libcurl in Foundation.
