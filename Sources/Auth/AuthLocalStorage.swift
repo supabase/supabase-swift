@@ -33,23 +33,36 @@ struct KeychainLocalStorage: AuthLocalStorage {
   }
 }
 #else
+import WinSDK
+
+// There isn't a consistent secure storage mechanism across Linux & Windows
+// like there is for all Darwin platforms.
+//
+// What is likely needed here are specific implementations that use:
+// - keyctl on Linux (https://www.kernel.org/doc/html/v6.0/security/keys/core.html)
+// - DPAPI on Windows (https://learn.microsoft.com/en-us/windows/win32/api/dpapi/)
+// Perhaps this is a patch on KeychainAccess to make this easier for others
 final class KeychainLocalStorage: AuthLocalStorage {
-  private var keychain = [String: Data]()
+  private let defaults: UserDefaults
 
   init(service: String, accessGroup: String?) {
+    guard let defaults = UserDefaults(suiteName: service) else {
+      fatalError("Unable to create defautls for service: \(service)")
+    }
 
+    self.defaults = defaults
   }
 
   func store(key: String, value: Data) throws {
-    keychain[key] = value
+    defaults.set(value, forKey: key)
   }
 
   func retrieve(key: String) throws -> Data? {
-    keychain[key]
+    defaults.data(forKey: key)
   }
 
   func remove(key: String) throws {
-    keychain.removeValue(forKey: key)
+    defaults.removeObject(forKey: key)
   }
 }
 #endif
