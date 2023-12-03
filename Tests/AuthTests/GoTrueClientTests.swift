@@ -12,6 +12,10 @@ import ConcurrencyExtras
 @testable import Auth
 
 final class AuthClientTests: XCTestCase {
+  fileprivate var api: APIClient!
+
+  #if !os(Linux)
+  // `fullfillment` doesn't exist on Linux yet.
   func testAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
@@ -43,6 +47,7 @@ final class AuthClientTests: XCTestCase {
       streamTask.cancel()
     }
   }
+  #endif
 
   func testSignOut() async throws {
     let sut = makeSUT()

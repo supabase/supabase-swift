@@ -57,6 +57,7 @@ jobs:
             github-repo: "thebrowsercompany/swift-build"
             release-asset-name: installer-amd64.exe
             github-token: ${{ secrets.GITHUB_TOKEN }}
+        - uses: actions/checkout@v3
         - name: Run Tests
           run: swift test
 
