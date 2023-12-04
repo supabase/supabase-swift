@@ -405,7 +405,7 @@ final class RequestsTests: XCTestCase {
       encoder: encoder,
       fetch: { request in
         DispatchQueue.main.sync {
-          assertSnapshot(
+          platformSpecificAssertSnapshot(
             of: request, as: .curl, record: record, file: file, testName: testName, line: line
           )
         }
@@ -435,4 +435,46 @@ extension URLResponse {
   static func empty() -> URLResponse {
     URLResponse(url: .init(string: "https://arc.net")!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
   }
+}
+
+func platformSpecificAssertSnapshot<Value, Format>(
+  of value: @autoclosure () throws -> Value,
+  as snapshotting: Snapshotting<Value, Format>,
+  named name: String? = nil,
+  record recording: Bool = false,
+  timeout: TimeInterval = 5,
+  file: StaticString = #file,
+  testName: String = #function,
+  line: UInt = #line
+) {
+    let fileUrl = URL(fileURLWithPath: "\(file)", isDirectory: false)
+    let fileName = fileUrl.deletingPathExtension().lastPathComponent
+
+    #if os(Linux)
+    let platfromDirectory = "linux"
+    #elseif os(Windows)
+    let platformDirectory = "windows"
+    #else
+    let platformDirectory = "darwin"
+    #endif
+
+    let snapshotDirectoryUrl = fileUrl
+      .deletingLastPathComponent()
+      .appendingPathComponent("__Snapshots__")
+      .appendingPathComponent(fileName)
+      .appendingPathComponent(platformDirectory)
+
+    let failure = verifySnapshot(
+      of: try value(),
+      as: snapshotting,
+      named: name,
+      record: recording,
+      snapshotDirectory: snapshotDirectoryUrl.path,
+      timeout: timeout,
+      file: file,
+      testName: testName,
+      line: line
+    )
+    guard let message = failure else { return }
+    XCTFail(message, file: file, line: line)
 }
