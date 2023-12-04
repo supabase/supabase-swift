@@ -1,0 +1,5 @@
+curl \
+	--header "Accept: application/json" \
+	--header "Content-Type: application/json" \
+	--header "X-Client-Info: postgrest-swift/x.y.z" \
+	"https://example.supabase.co/users?email=like.%25@supabase.co&select=*"

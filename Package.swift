@@ -10,10 +10,12 @@ var dependencies: [Package.Dependency] = [
   .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
   .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
   .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.0.0"),
+  .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "3.0.0"),
 ]
 var goTrueDependencies: [Target.Dependency] = [
   "_Helpers",
   .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+  .product(name: "Crypto", package: "swift-crypto"),
   .product(name: "KeychainAccess", package: "KeychainAccess"),
 ]
 #else
@@ -56,6 +58,7 @@ let package = Package(
       name: "_Helpers",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
       ]
     ),
     .target(name: "Functions", dependencies: ["_Helpers"]),
@@ -74,6 +77,7 @@ let package = Package(
       name: "AuthTests",
       dependencies: [
         "Auth",
+        "_Helpers",
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
       ],
