@@ -42,7 +42,5 @@ jobs:
       - name: Select Xcode 15.0.1
         run: sudo xcode-select -s /Applications/Xcode_15.0.1.app
       - run: |
-          BASELINE_TREEISH=${{ github.base_ref }} \
-            BASELINE_REPO_URL=${{ github.server_url }}/${{ github.repository }} \
-            ./scripts/check-for-breaking-api-changes.sh
+          BASELINE_TREEISH=${{ github.base_ref }} BASELINE_REPO_URL=${{ github.server_url }}/${{ github.repository }} ./scripts/check-for-breaking-api-changes.sh
         
