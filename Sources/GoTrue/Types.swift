@@ -341,6 +341,18 @@ public enum AuthResponse: Codable, Hashable, Sendable {
     case let .user(value): try container.encode(value)
     }
   }
+
+  public var user: User {
+    switch self {
+    case let .session(session): return session.user
+    case let .user(user): return user
+    }
+  }
+
+  public var session: Session? {
+    if case let .session(session) = self { return session }
+    return nil
+  }
 }
 
 public struct UserAttributes: Codable, Hashable, Sendable {
