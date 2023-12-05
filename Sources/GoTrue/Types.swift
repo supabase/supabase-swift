@@ -576,6 +576,15 @@ public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable
   public let currentAuthenticationMethods: [AMREntry]
 }
 
+public enum SignOutScope: String {
+    /// All sessions by this account will be signed out.
+    case global
+    /// Only this session will be signed out.
+    case local
+    /// All other sessions except the current one will be signed out. When using `others`, there is no `AuthChangeEvent.signedOut` event fired on the current session.
+    case others
+}
+
 // MARK: - Encodable & Decodable
 
 private let dateFormatterWithFractionalSeconds = { () -> ISO8601DateFormatter in
