@@ -587,17 +587,22 @@ public actor GoTrueClient {
   }
 
   /// Signs out the current user, if there is a logged in user.
-  public func signOut() async throws {
+  /// If using `SignOutScope.others` scope, no `AuthChangeEvent.signedOut` event is fired.
+  /// - Parameter scope: Specifies which sessions should be logged out.
+    public func signOut(scope: SignOutScope = .global) async throws {
     do {
       _ = try await sessionManager.session()
       try await api.authorizedExecute(
         .init(
           path: "/logout",
-          method: .post
+          method: .post,
+          query: [URLQueryItem(name: "scope", value: scope.rawValue)]
         )
       )
-      await sessionManager.remove()
-      eventEmitter.emit(.signedOut, session: nil)
+      if scope != .others {
+        await sessionManager.remove()
+        eventEmitter.emit(.signedOut, session: nil)
+      }
     } catch {
       eventEmitter.emit(.signedOut, session: nil)
       throw error

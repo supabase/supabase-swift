@@ -249,6 +249,30 @@ final class RequestsTests: XCTestCase {
       }
     }
   }
+  
+  func testSignOutWithLocalScope() async {
+    let sut = makeSUT()
+    await withDependencies {
+      $0.sessionManager.session = { @Sendable _ in .validSession }
+      $0.eventEmitter = .noop
+    } operation: {
+      await assert {
+        try await sut.signOut(scope: .local)
+      }
+    }
+  }
+  
+  func testSignOutWithOthersScope() async {
+    let sut = makeSUT()
+    await withDependencies {
+      $0.sessionManager.session = { @Sendable _ in .validSession }
+      $0.eventEmitter = .noop
+    } operation: {
+      await assert {
+        try await sut.signOut(scope: .others)
+      }
+    }
+  }
 
   func testVerifyOTPUsingEmail() async {
     let sut = makeSUT()
