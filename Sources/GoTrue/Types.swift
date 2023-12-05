@@ -341,6 +341,18 @@ public enum AuthResponse: Codable, Hashable, Sendable {
     case let .user(value): try container.encode(value)
     }
   }
+
+  public var user: User {
+    switch self {
+    case let .session(session): return session.user
+    case let .user(user): return user
+    }
+  }
+
+  public var session: Session? {
+    if case let .session(session) = self { return session }
+    return nil
+  }
 }
 
 public struct UserAttributes: Codable, Hashable, Sendable {
@@ -562,6 +574,15 @@ public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable
   /// A list of all authentication methods attached to this session. Use the information here to
   /// detect the last time a user verified a factor, for example if implementing a step-up scenario.
   public let currentAuthenticationMethods: [AMREntry]
+}
+
+public enum SignOutScope: String {
+    /// All sessions by this account will be signed out.
+    case global
+    /// Only this session will be signed out.
+    case local
+    /// All other sessions except the current one will be signed out. When using `others`, there is no `AuthChangeEvent.signedOut` event fired on the current session.
+    case others
 }
 
 // MARK: - Encodable & Decodable
