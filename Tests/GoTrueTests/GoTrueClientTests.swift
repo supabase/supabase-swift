@@ -45,11 +45,12 @@ final class GoTrueClientTests: XCTestCase {
   }
 
   func testSignOut() async throws {
-    let sut = makeSUT(fetch: mockResponse(returning: ""))
+    let sut = makeSUT()
 
     let events = LockIsolated([AuthChangeEvent]())
 
     try await withDependencies {
+      $0.api.execute = { _ in .stub() }
       $0.eventEmitter = .mock
       $0.eventEmitter.emit = { @Sendable event, _, _ in
         events.withValue {
@@ -74,9 +75,10 @@ final class GoTrueClientTests: XCTestCase {
   }
 
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
-    let sut = makeSUT(fetch: mockResponse(returning: ""))
+    let sut = makeSUT()
 
     try await withDependencies {
+      $0.api.execute = { _ in .stub() }
       $0.sessionManager = .live
       $0.sessionStorage = .inMemory
       try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
@@ -89,9 +91,10 @@ final class GoTrueClientTests: XCTestCase {
   }
 
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
-    let sut = makeSUT(fetch: mockResponse(returning: #"{"code":404}"#, statusCode: 404))
+    let sut = makeSUT()
 
     try await withDependencies {
+      $0.api.execute = { _ in throw GoTrueError.api(GoTrueError.APIError(code: 404)) }
       $0.sessionManager = .live
       $0.sessionStorage = .inMemory
       try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
@@ -109,9 +112,10 @@ final class GoTrueClientTests: XCTestCase {
   }
 
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
-    let sut = makeSUT(fetch: mockResponse(returning: #"{"code":401}"#, statusCode: 401))
+    let sut = makeSUT()
 
     try await withDependencies {
+      $0.api.execute = { _ in throw GoTrueError.api(GoTrueError.APIError(code: 401)) }
       $0.sessionManager = .live
       $0.sessionStorage = .inMemory
       try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
@@ -128,26 +132,17 @@ final class GoTrueClientTests: XCTestCase {
     }
   }
 
-  private func makeSUT(fetch: GoTrueClient.FetchHandler? = nil) -> GoTrueClient {
+  private func makeSUT() -> GoTrueClient {
     let configuration = GoTrueClient.Configuration(
       url: clientURL,
-      headers: ["apikey": "dummy.api.key"],
-      fetch: { request in
-        if let fetch {
-          return try await fetch(request)
-        }
-
-        throw UnimplementedError()
-      }
+      headers: ["apikey": "dummy.api.key"]
     )
-
-    let api = APIClient(http: HTTPClient(fetchHandler: configuration.fetch))
 
     let sut = GoTrueClient(
       configuration: configuration,
       sessionManager: .mock,
       codeVerifierStorage: .mock,
-      api: api,
+      api: .mock,
       eventEmitter: .mock,
       sessionStorage: .mock
     )
@@ -158,22 +153,18 @@ final class GoTrueClientTests: XCTestCase {
 
     return sut
   }
+}
 
-  private func mockResponse(
-    returning json: String,
-    statusCode: Int = 200,
-    headerFields: [String: String]? = nil
-  ) -> GoTrueClient.FetchHandler {
-    { _ in
-      (
-        json.data(using: .utf8)!,
-        HTTPURLResponse(
-          url: clientURL,
-          statusCode: statusCode,
-          httpVersion: nil,
-          headerFields: headerFields
-        )!
-      )
-    }
+extension Response {
+  static func stub(_ body: String = "", code: Int = 200) -> Response {
+    Response(
+      data: body.data(using: .utf8)!,
+      response: HTTPURLResponse(
+        url: clientURL,
+        statusCode: code,
+        httpVersion: nil,
+        headerFields: nil
+      )!
+    )
   }
 }

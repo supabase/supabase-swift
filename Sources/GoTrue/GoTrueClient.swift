@@ -130,7 +130,7 @@ public actor GoTrueClient {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    let api = APIClient(http: HTTPClient(fetchHandler: configuration.fetch))
+    let api = APIClient.live(http: HTTPClient(fetchHandler: configuration.fetch))
 
     self.init(
       configuration: configuration,
@@ -347,7 +347,7 @@ public actor GoTrueClient {
 
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    try await api.execute(
+    _ = try await api.execute(
       .init(
         path: "/otp",
         method: .post,
@@ -382,7 +382,7 @@ public actor GoTrueClient {
     captchaToken: String? = nil
   ) async throws {
     await sessionManager.remove()
-    try await api.execute(
+    _ = try await api.execute(
       .init(
         path: "/otp",
         method: .post,
@@ -741,7 +741,7 @@ public actor GoTrueClient {
   ) async throws {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    try await api.execute(
+    _ = try await api.execute(
       .init(
         path: "/recover",
         method: .post,

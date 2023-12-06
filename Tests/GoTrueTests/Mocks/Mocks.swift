@@ -64,11 +64,15 @@ extension SessionRefresher {
   static let mock = Self(refreshSession: unimplemented("SessionRefresher.refreshSession"))
 }
 
+extension APIClient {
+  static let mock = APIClient(execute: unimplemented("APIClient.execute"))
+}
+
 extension Dependencies {
   static let mock = Dependencies(
     configuration: GoTrueClient.Configuration(url: clientURL),
     sessionManager: .mock,
-    api: APIClient(http: HTTPClient(fetchHandler: unimplemented("HTTPClient.fetch"))),
+    api: .mock,
     eventEmitter: .mock,
     sessionStorage: .mock,
     sessionRefresher: .mock,
