@@ -591,10 +591,10 @@ public actor GoTrueClient {
   /// If using ``SignOutScope/others`` scope, no ``AuthChangeEvent/signedOut`` event is fired.
   /// - Parameter scope: Specifies which sessions should be logged out.
   public func signOut(scope: SignOutScope = .global) async throws {
-    // Make sure we have a valid session.
-    _ = try await sessionManager.session()
-
     do {
+      // Make sure we have a valid session.
+      _ = try await sessionManager.session()
+
       try await api.authorizedExecute(
         .init(
           path: "/logout",
