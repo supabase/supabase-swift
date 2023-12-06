@@ -587,11 +587,14 @@ public actor GoTrueClient {
   }
 
   /// Signs out the current user, if there is a logged in user.
-  /// If using `SignOutScope.others` scope, no `AuthChangeEvent.signedOut` event is fired.
+  ///
+  /// If using ``SignOutScope/others`` scope, no ``AuthChangeEvent/signedOut`` event is fired.
   /// - Parameter scope: Specifies which sessions should be logged out.
-    public func signOut(scope: SignOutScope = .global) async throws {
+  public func signOut(scope: SignOutScope = .global) async throws {
+    // Make sure we have a valid session.
+    _ = try await sessionManager.session()
+
     do {
-      _ = try await sessionManager.session()
       try await api.authorizedExecute(
         .init(
           path: "/logout",
@@ -599,13 +602,17 @@ public actor GoTrueClient {
           query: [URLQueryItem(name: "scope", value: scope.rawValue)]
         )
       )
-      if scope != .others {
-        await sessionManager.remove()
-        eventEmitter.emit(.signedOut, session: nil)
-      }
     } catch {
+      // ignore 404s since user might not exist anymore
+      // ignore 401s since an invalid or expired JWT should sign out the current session
+      if case let GoTrueError.api(apiError) = error, apiError.code == 404 || apiError.code == 401 {
+        throw error
+      }
+    }
+
+    if scope != .others {
+      await sessionManager.remove()
       eventEmitter.emit(.signedOut, session: nil)
-      throw error
     }
   }
 

@@ -12,8 +12,6 @@ import ConcurrencyExtras
 @testable import GoTrue
 
 final class GoTrueClientTests: XCTestCase {
-  fileprivate var api: APIClient!
-
   func testAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
@@ -46,6 +44,90 @@ final class GoTrueClientTests: XCTestCase {
     }
   }
 
+  func testSignOut() async throws {
+    let sut = makeSUT(fetch: mockResponse(returning: ""))
+
+    let events = LockIsolated([AuthChangeEvent]())
+
+    try await withDependencies {
+      $0.eventEmitter = .mock
+      $0.eventEmitter.emit = { @Sendable event, _, _ in
+        events.withValue {
+          $0.append(event)
+        }
+      }
+      $0.sessionManager = .live
+      $0.sessionStorage = .inMemory
+      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
+    } operation: {
+      try await sut.signOut()
+
+      do {
+        _ = try await sut.session
+      } catch GoTrueError.sessionNotFound {
+      } catch {
+        XCTFail("Unexpected error.")
+      }
+
+      XCTAssertEqual(events.value, [.signedOut])
+    }
+  }
+
+  func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
+    let sut = makeSUT(fetch: mockResponse(returning: ""))
+
+    try await withDependencies {
+      $0.sessionManager = .live
+      $0.sessionStorage = .inMemory
+      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
+    } operation: {
+      try await sut.signOut(scope: .others)
+
+      // Session should still be valid.
+      _ = try await sut.session
+    }
+  }
+
+  func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
+    let sut = makeSUT(fetch: mockResponse(returning: #"{"code":404}"#, statusCode: 404))
+
+    try await withDependencies {
+      $0.sessionManager = .live
+      $0.sessionStorage = .inMemory
+      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
+    } operation: {
+      do {
+        try await sut.signOut()
+      } catch GoTrueError.api {
+      } catch {
+        XCTFail("Unexpected error: \(error)")
+      }
+
+      // should still have a session
+      _ = try await sut.session
+    }
+  }
+
+  func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
+    let sut = makeSUT(fetch: mockResponse(returning: #"{"code":401}"#, statusCode: 401))
+
+    try await withDependencies {
+      $0.sessionManager = .live
+      $0.sessionStorage = .inMemory
+      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
+    } operation: {
+      do {
+        try await sut.signOut()
+      } catch GoTrueError.api {
+      } catch {
+        XCTFail("Unexpected error: \(error)")
+      }
+
+      // should still have a session
+      _ = try await sut.session
+    }
+  }
+
   private func makeSUT(fetch: GoTrueClient.FetchHandler? = nil) -> GoTrueClient {
     let configuration = GoTrueClient.Configuration(
       url: clientURL,
@@ -59,7 +141,7 @@ final class GoTrueClientTests: XCTestCase {
       }
     )
 
-    api = APIClient(http: HTTPClient(fetchHandler: configuration.fetch))
+    let api = APIClient(http: HTTPClient(fetchHandler: configuration.fetch))
 
     let sut = GoTrueClient(
       configuration: configuration,
@@ -75,5 +157,23 @@ final class GoTrueClientTests: XCTestCase {
     }
 
     return sut
+  }
+
+  private func mockResponse(
+    returning json: String,
+    statusCode: Int = 200,
+    headerFields: [String: String]? = nil
+  ) -> GoTrueClient.FetchHandler {
+    { _ in
+      (
+        json.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: clientURL,
+          statusCode: statusCode,
+          httpVersion: nil,
+          headerFields: headerFields
+        )!
+      )
+    }
   }
 }

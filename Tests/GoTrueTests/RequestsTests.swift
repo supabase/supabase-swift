@@ -249,7 +249,7 @@ final class RequestsTests: XCTestCase {
       }
     }
   }
-  
+
   func testSignOutWithLocalScope() async {
     let sut = makeSUT()
     await withDependencies {
@@ -261,7 +261,7 @@ final class RequestsTests: XCTestCase {
       }
     }
   }
-  
+
   func testSignOutWithOthersScope() async {
     let sut = makeSUT()
     await withDependencies {
