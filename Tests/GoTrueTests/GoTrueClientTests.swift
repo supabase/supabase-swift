@@ -93,10 +93,15 @@ final class GoTrueClientTests: XCTestCase {
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
     let sut = makeSUT()
 
+    let emitReceivedParams = LockIsolated((AuthChangeEvent, Session?)?.none)
+
     try await withDependencies {
       $0.api.execute = { _ in throw GoTrueError.api(GoTrueError.APIError(code: 404)) }
       $0.sessionManager = .live
       $0.sessionStorage = .inMemory
+      $0.eventEmitter.emit = { @Sendable event, session, _ in
+        emitReceivedParams.setValue((event, session))
+      }
       try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
     } operation: {
       do {
@@ -106,18 +111,25 @@ final class GoTrueClientTests: XCTestCase {
         XCTFail("Unexpected error: \(error)")
       }
 
-      // should still have a session
-      _ = try await sut.session
+      let (event, session) = try XCTUnwrap(emitReceivedParams.value)
+      XCTAssertEqual(event, .signedOut)
+      XCTAssertNil(session)
+      XCTAssertNil(try Dependencies.current.value!.sessionStorage.getSession())
     }
   }
 
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
     let sut = makeSUT()
 
+    let emitReceivedParams = LockIsolated((AuthChangeEvent, Session?)?.none)
+
     try await withDependencies {
       $0.api.execute = { _ in throw GoTrueError.api(GoTrueError.APIError(code: 401)) }
       $0.sessionManager = .live
       $0.sessionStorage = .inMemory
+      $0.eventEmitter.emit = { @Sendable event, session, _ in
+        emitReceivedParams.setValue((event, session))
+      }
       try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
     } operation: {
       do {
@@ -127,8 +139,10 @@ final class GoTrueClientTests: XCTestCase {
         XCTFail("Unexpected error: \(error)")
       }
 
-      // should still have a session
-      _ = try await sut.session
+      let (event, session) = try XCTUnwrap(emitReceivedParams.value)
+      XCTAssertEqual(event, .signedOut)
+      XCTAssertNil(session)
+      XCTAssertNil(try Dependencies.current.value!.sessionStorage.getSession())
     }
   }
 
