@@ -605,7 +605,11 @@ public actor GoTrueClient {
     } catch {
       // ignore 404s since user might not exist anymore
       // ignore 401s since an invalid or expired JWT should sign out the current session
-      if case let GoTrueError.api(apiError) = error, apiError.code == 404 || apiError.code == 401 {
+      let ignoredCodes = Set([404, 401])
+
+      if case let GoTrueError.api(apiError) = error, let code = apiError.code,
+         !ignoredCodes.contains(code)
+      {
         throw error
       }
     }
