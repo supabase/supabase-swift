@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 27/10/23.
 //
 
+import ConcurrencyExtras
 import Foundation
 import XCTestDynamicOverlay
 @_spi(Internal) import _Helpers
@@ -15,24 +16,24 @@ let clientURL = URL(string: "http://localhost:54321/auth/v1")!
 
 extension CodeVerifierStorage {
   static let mock = Self(
-    getCodeVerifier: unimplemented("getCodeVerifier"),
-    storeCodeVerifier: unimplemented("storeCodeVerifier"),
-    deleteCodeVerifier: unimplemented("deleteCodeVerifier")
+    getCodeVerifier: unimplemented("CodeVerifierStorage.getCodeVerifier"),
+    storeCodeVerifier: unimplemented("CodeVerifierStorage.storeCodeVerifier"),
+    deleteCodeVerifier: unimplemented("CodeVerifierStorage.deleteCodeVerifier")
   )
 }
 
 extension SessionManager {
   static let mock = Self(
-    session: unimplemented("session"),
-    update: unimplemented("update"),
-    remove: unimplemented("remove")
+    session: unimplemented("SessionManager.session"),
+    update: unimplemented("SessionManager.update"),
+    remove: unimplemented("SessionManager.remove")
   )
 }
 
 extension EventEmitter {
   static let mock = Self(
-    attachListener: unimplemented("attachListener"),
-    emit: unimplemented("emit")
+    attachListener: unimplemented("EventEmitter.attachListener"),
+    emit: unimplemented("EventEmitter.emit")
   )
 
   static let noop = Self(
@@ -43,21 +44,35 @@ extension EventEmitter {
 
 extension SessionStorage {
   static let mock = Self(
-    getSession: unimplemented("getSession"),
-    storeSession: unimplemented("storeSession"),
-    deleteSession: unimplemented("deleteSession")
+    getSession: unimplemented("SessionStorage.getSession"),
+    storeSession: unimplemented("SessionStorage.storeSession"),
+    deleteSession: unimplemented("SessionStorage.deleteSession")
   )
+
+  static var inMemory: Self {
+    let session = LockIsolated(StoredSession?.none)
+
+    return Self(
+      getSession: { session.value },
+      storeSession: { session.setValue($0) },
+      deleteSession: { session.setValue(nil) }
+    )
+  }
 }
 
 extension SessionRefresher {
-  static let mock = Self(refreshSession: unimplemented("refreshSession"))
+  static let mock = Self(refreshSession: unimplemented("SessionRefresher.refreshSession"))
+}
+
+extension APIClient {
+  static let mock = APIClient(execute: unimplemented("APIClient.execute"))
 }
 
 extension Dependencies {
   static let mock = Dependencies(
     configuration: GoTrueClient.Configuration(url: clientURL),
     sessionManager: .mock,
-    api: APIClient(http: HTTPClient(fetchHandler: unimplemented("HTTPClient.fetch"))),
+    api: .mock,
     eventEmitter: .mock,
     sessionStorage: .mock,
     sessionRefresher: .mock,
@@ -66,12 +81,12 @@ extension Dependencies {
 }
 
 func withDependencies(
-  _ mutation: (inout Dependencies) -> Void,
+  _ mutation: (inout Dependencies) throws -> Void,
   operation: () async throws -> Void
 ) async rethrows {
   let current = Dependencies.current.value ?? .mock
   var copy = current
-  mutation(&copy)
+  try mutation(&copy)
   Dependencies.current.withValue { [copy] in $0 = copy }
   defer { Dependencies.current.setValue(current) }
   try await operation()

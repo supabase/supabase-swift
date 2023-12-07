@@ -242,6 +242,7 @@ final class RequestsTests: XCTestCase {
     let sut = makeSUT()
     await withDependencies {
       $0.sessionManager.session = { @Sendable _ in .validSession }
+      $0.sessionManager.remove = {}
       $0.eventEmitter = .noop
     } operation: {
       await assert {
@@ -249,11 +250,12 @@ final class RequestsTests: XCTestCase {
       }
     }
   }
-  
+
   func testSignOutWithLocalScope() async {
     let sut = makeSUT()
     await withDependencies {
       $0.sessionManager.session = { @Sendable _ in .validSession }
+      $0.sessionManager.remove = {}
       $0.eventEmitter = .noop
     } operation: {
       await assert {
@@ -261,7 +263,7 @@ final class RequestsTests: XCTestCase {
       }
     }
   }
-  
+
   func testSignOutWithOthersScope() async {
     let sut = makeSUT()
     await withDependencies {
@@ -380,7 +382,7 @@ final class RequestsTests: XCTestCase {
       }
     )
 
-    let api = APIClient(http: HTTPClient(fetchHandler: configuration.fetch))
+    let api = APIClient.live(http: HTTPClient(fetchHandler: configuration.fetch))
 
     return GoTrueClient(
       configuration: configuration,

@@ -130,7 +130,7 @@ public actor GoTrueClient {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    let api = APIClient(http: HTTPClient(fetchHandler: configuration.fetch))
+    let api = APIClient.live(http: HTTPClient(fetchHandler: configuration.fetch))
 
     self.init(
       configuration: configuration,
@@ -347,7 +347,7 @@ public actor GoTrueClient {
 
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    try await api.execute(
+    _ = try await api.execute(
       .init(
         path: "/otp",
         method: .post,
@@ -382,7 +382,7 @@ public actor GoTrueClient {
     captchaToken: String? = nil
   ) async throws {
     await sessionManager.remove()
-    try await api.execute(
+    _ = try await api.execute(
       .init(
         path: "/otp",
         method: .post,
@@ -587,11 +587,14 @@ public actor GoTrueClient {
   }
 
   /// Signs out the current user, if there is a logged in user.
-  /// If using `SignOutScope.others` scope, no `AuthChangeEvent.signedOut` event is fired.
+  ///
+  /// If using ``SignOutScope/others`` scope, no ``AuthChangeEvent/signedOut`` event is fired.
   /// - Parameter scope: Specifies which sessions should be logged out.
-    public func signOut(scope: SignOutScope = .global) async throws {
+  public func signOut(scope: SignOutScope = .global) async throws {
     do {
+      // Make sure we have a valid session.
       _ = try await sessionManager.session()
+
       try await api.authorizedExecute(
         .init(
           path: "/logout",
@@ -599,13 +602,21 @@ public actor GoTrueClient {
           query: [URLQueryItem(name: "scope", value: scope.rawValue)]
         )
       )
-      if scope != .others {
-        await sessionManager.remove()
-        eventEmitter.emit(.signedOut, session: nil)
-      }
     } catch {
+      // ignore 404s since user might not exist anymore
+      // ignore 401s since an invalid or expired JWT should sign out the current session
+      let ignoredCodes = Set([404, 401])
+
+      if case let GoTrueError.api(apiError) = error, let code = apiError.code,
+         !ignoredCodes.contains(code)
+      {
+        throw error
+      }
+    }
+
+    if scope != .others {
+      await sessionManager.remove()
       eventEmitter.emit(.signedOut, session: nil)
-      throw error
     }
   }
 
@@ -734,7 +745,7 @@ public actor GoTrueClient {
   ) async throws {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    try await api.execute(
+    _ = try await api.execute(
       .init(
         path: "/recover",
         method: .post,
