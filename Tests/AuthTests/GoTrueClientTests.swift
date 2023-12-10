@@ -11,6 +11,10 @@ import ConcurrencyExtras
 
 @testable import Auth
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 final class AuthClientTests: XCTestCase {
   fileprivate var api: APIClient!
 

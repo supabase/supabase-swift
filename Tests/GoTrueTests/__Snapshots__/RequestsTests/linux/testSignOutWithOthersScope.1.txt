@@ -1,0 +1,6 @@
+curl \
+	--request POST \
+	--header "Apikey: dummy.api.key" \
+	--header "Authorization: Bearer accesstoken" \
+	--header "X-Client-Info: gotrue-swift/x.y.z" \
+	"http://localhost:54321/auth/v1/logout?scope=others"
