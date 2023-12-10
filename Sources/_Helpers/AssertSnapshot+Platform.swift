@@ -20,10 +20,8 @@ public func platformSpecificAssertSnapshot<Value, Format>(
     let fileUrl = URL(fileURLWithPath: "\(file)", isDirectory: false)
     let fileName = fileUrl.deletingPathExtension().lastPathComponent
 
-    #if os(Linux)
-    let platformDirectory = "linux"
-    #elseif os(Windows)
-    let platformDirectory = "windows"
+    #if os(Linux) || os(Windows)
+    let platformDirectory = "not-darwin"
     #else
     let platformDirectory = "darwin"
     #endif
