@@ -40,7 +40,7 @@ jobs:
     steps:
       - uses: swift-actions/setup-swift@v1
         with:
-          swift-version: "5.9.1"
+          swift-version: "5.9"
       - uses: actions/checkout@v3
       - name: Run Tests
         run: swift test
