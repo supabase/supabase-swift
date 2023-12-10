@@ -33,8 +33,10 @@ struct KeychainLocalStorage: AuthLocalStorage {
   }
 }
 #else
-// There isn't a consistent secure storage mechanism across Linux & Windows
-// like there is for all Darwin platforms.
+// Secure storage in Linux seems to be quite different than say macOS and Windows
+// The keyctl API set exists, but it doesn't persist across reboots like the
+// keychain on macOS and the password vault (wincred.h) on Windows does. So this
+// provides a bit of a challenge of how to implement this on Linux.
 //
 // What is likely needed here are specific implementations that use:
 // - keyctl on Linux (https://www.kernel.org/doc/html/v6.0/security/keys/core.html)
@@ -52,14 +54,17 @@ final class KeychainLocalStorage: AuthLocalStorage {
   }
 
   func store(key: String, value: Data) throws {
+    print("[WARN] YOU ARE YOU WRITING TO INSECURE LOCAL STORAGE")
     defaults.set(value, forKey: key)
   }
 
   func retrieve(key: String) throws -> Data? {
-    defaults.data(forKey: key)
+    print("[WARN] YOU ARE READING FROM INSECURE LOCAL STORAGE")
+    return defaults.data(forKey: key)
   }
 
   func remove(key: String) throws {
+    print("[WARN] YOU ARE REMOVING A KEY FROM INSECURE LOCAL STORAGE")
     defaults.removeObject(forKey: key)
   }
 }
