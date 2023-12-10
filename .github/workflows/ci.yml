@@ -57,6 +57,12 @@ jobs:
             github-repo: "thebrowsercompany/swift-build"
             release-asset-name: installer-amd64.exe
             github-token: ${{ secrets.GITHUB_TOKEN }}
+        # Disable line ending conversion since the Windows
+        # tests will end up generating crlf endings on the
+        # text snapshot files.
+        - name: Disable line ending conversion
+          run: |
+            git config --global core.autocrlf false
         - uses: actions/checkout@v3
         - name: Run Tests
           run: swift test
