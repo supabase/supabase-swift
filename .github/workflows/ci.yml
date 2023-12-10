@@ -40,7 +40,7 @@ jobs:
     steps:
       - uses: swift-actions/setup-swift@v1
         with:
-          swift-version: "5.8"
+          swift-version: "5.9.1"
       - uses: actions/checkout@v3
       - name: Run Tests
         run: swift test
@@ -53,7 +53,7 @@ jobs:
         # which have fixed libcurl in Foundation.
         - uses: compnerd/gha-setup-swift@main
           with:
-            release-tag-name: "20231116.2"
+            release-tag-name: "20231203.0"
             github-repo: "thebrowsercompany/swift-build"
             release-asset-name: installer-amd64.exe
             github-token: ${{ secrets.GITHUB_TOKEN }}
