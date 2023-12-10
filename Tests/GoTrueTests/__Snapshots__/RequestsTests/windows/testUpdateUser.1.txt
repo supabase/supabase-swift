@@ -1,0 +1,8 @@
+curl \
+	--request PUT \
+	--header "Apikey: dummy.api.key" \
+	--header "Authorization: Bearer accesstoken" \
+	--header "Content-Type: application/json" \
+	--header "X-Client-Info: gotrue-swift/x.y.z" \
+	--data "{\"data\":{\"custom_key\":\"custom_value\"},\"email\":\"example@mail.com\",\"email_change_token\":\"123456\",\"password\":\"another.pass\",\"phone\":\"+1 202-918-2132\"}" \
+	"http://localhost:54321/auth/v1/user"
