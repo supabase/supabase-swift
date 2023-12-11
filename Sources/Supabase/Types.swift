@@ -13,7 +13,11 @@ public struct SupabaseClientOptions: Sendable {
     public let encoder: JSONEncoder
     public let decoder: JSONDecoder
 
-    public init(schema: String = "public", encoder: JSONEncoder = .postgrest, decoder: JSONDecoder = .postgrest) {
+    public init(
+      schema: String = "public",
+      encoder: JSONEncoder = .postgrest,
+      decoder: JSONDecoder = .postgrest
+    ) {
       self.schema = schema
       self.encoder = encoder
       self.decoder = decoder

@@ -71,7 +71,12 @@ public class PostgrestBuilder: @unchecked Sendable {
     }
 
     return try await execute { [configuration] data in
-      try configuration.decoder.decode(T.self, from: data)
+      do {
+        return try configuration.decoder.decode(T.self, from: data)
+      } catch {
+        debug("Fail to decode type '\(T.self) with error: \(error)")
+        throw error
+      }
     }
   }
 
