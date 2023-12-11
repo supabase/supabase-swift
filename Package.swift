@@ -31,7 +31,12 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.0.0"),
   ],
   targets: [
-    .target(name: "_Helpers"),
+    .target(
+      name: "_Helpers",
+      dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+      ]
+    ),
     .target(name: "Functions", dependencies: ["_Helpers"]),
     .testTarget(
       name: "FunctionsTests",
