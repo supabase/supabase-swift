@@ -10,9 +10,13 @@ public struct SupabaseClientOptions: Sendable {
     /// The Postgres schema which your tables belong to. Must be on the list of exposed schemas in
     /// Supabase. Defaults to `public`.
     public let schema: String
+    public let encoder: JSONEncoder
+    public let decoder: JSONDecoder
 
-    public init(schema: String = "public") {
+    public init(schema: String = "public", encoder: JSONEncoder = .postgrest, decoder: JSONDecoder = .postgrest) {
       self.schema = schema
+      self.encoder = encoder
+      self.decoder = decoder
     }
   }
 
