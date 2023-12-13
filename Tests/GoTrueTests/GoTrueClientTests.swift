@@ -12,8 +12,6 @@ import ConcurrencyExtras
 @testable import GoTrue
 
 final class GoTrueClientTests: XCTestCase {
-  fileprivate var api: APIClient!
-
   func testAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
@@ -46,26 +44,119 @@ final class GoTrueClientTests: XCTestCase {
     }
   }
 
-  private func makeSUT(fetch: GoTrueClient.FetchHandler? = nil) -> GoTrueClient {
+  func testSignOut() async throws {
+    let sut = makeSUT()
+
+    let events = LockIsolated([AuthChangeEvent]())
+
+    try await withDependencies {
+      $0.api.execute = { _ in .stub() }
+      $0.eventEmitter = .mock
+      $0.eventEmitter.emit = { @Sendable event, _, _ in
+        events.withValue {
+          $0.append(event)
+        }
+      }
+      $0.sessionManager = .live
+      $0.sessionStorage = .inMemory
+      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
+    } operation: {
+      try await sut.signOut()
+
+      do {
+        _ = try await sut.session
+      } catch GoTrueError.sessionNotFound {
+      } catch {
+        XCTFail("Unexpected error.")
+      }
+
+      XCTAssertEqual(events.value, [.signedOut])
+    }
+  }
+
+  func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
+    let sut = makeSUT()
+
+    try await withDependencies {
+      $0.api.execute = { _ in .stub() }
+      $0.sessionManager = .live
+      $0.sessionStorage = .inMemory
+      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
+    } operation: {
+      try await sut.signOut(scope: .others)
+
+      // Session should still be valid.
+      _ = try await sut.session
+    }
+  }
+
+  func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
+    let sut = makeSUT()
+
+    let emitReceivedParams = LockIsolated((AuthChangeEvent, Session?)?.none)
+
+    try await withDependencies {
+      $0.api.execute = { _ in throw GoTrueError.api(GoTrueError.APIError(code: 404)) }
+      $0.sessionManager = .live
+      $0.sessionStorage = .inMemory
+      $0.eventEmitter.emit = { @Sendable event, session, _ in
+        emitReceivedParams.setValue((event, session))
+      }
+      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
+    } operation: {
+      do {
+        try await sut.signOut()
+      } catch GoTrueError.api {
+      } catch {
+        XCTFail("Unexpected error: \(error)")
+      }
+
+      let (event, session) = try XCTUnwrap(emitReceivedParams.value)
+      XCTAssertEqual(event, .signedOut)
+      XCTAssertNil(session)
+      XCTAssertNil(try Dependencies.current.value!.sessionStorage.getSession())
+    }
+  }
+
+  func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
+    let sut = makeSUT()
+
+    let emitReceivedParams = LockIsolated((AuthChangeEvent, Session?)?.none)
+
+    try await withDependencies {
+      $0.api.execute = { _ in throw GoTrueError.api(GoTrueError.APIError(code: 401)) }
+      $0.sessionManager = .live
+      $0.sessionStorage = .inMemory
+      $0.eventEmitter.emit = { @Sendable event, session, _ in
+        emitReceivedParams.setValue((event, session))
+      }
+      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
+    } operation: {
+      do {
+        try await sut.signOut()
+      } catch GoTrueError.api {
+      } catch {
+        XCTFail("Unexpected error: \(error)")
+      }
+
+      let (event, session) = try XCTUnwrap(emitReceivedParams.value)
+      XCTAssertEqual(event, .signedOut)
+      XCTAssertNil(session)
+      XCTAssertNil(try Dependencies.current.value!.sessionStorage.getSession())
+    }
+  }
+
+  private func makeSUT() -> GoTrueClient {
     let configuration = GoTrueClient.Configuration(
       url: clientURL,
-      headers: ["apikey": "dummy.api.key"],
-      fetch: { request in
-        if let fetch {
-          return try await fetch(request)
-        }
-
-        throw UnimplementedError()
-      }
+      headers: ["apikey": "dummy.api.key"]
     )
-
-    api = APIClient(http: HTTPClient(fetchHandler: configuration.fetch))
 
     let sut = GoTrueClient(
       configuration: configuration,
       sessionManager: .mock,
       codeVerifierStorage: .mock,
-      api: api,
+      api: .mock,
       eventEmitter: .mock,
       sessionStorage: .mock
     )
@@ -75,5 +166,19 @@ final class GoTrueClientTests: XCTestCase {
     }
 
     return sut
+  }
+}
+
+extension Response {
+  static func stub(_ body: String = "", code: Int = 200) -> Response {
+    Response(
+      data: body.data(using: .utf8)!,
+      response: HTTPURLResponse(
+        url: clientURL,
+        statusCode: code,
+        httpVersion: nil,
+        headerFields: nil
+      )!
+    )
   }
 }

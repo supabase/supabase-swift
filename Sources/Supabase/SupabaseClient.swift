@@ -27,7 +27,9 @@ public final class SupabaseClient: @unchecked Sendable {
     url: databaseURL,
     schema: options.db.schema,
     headers: defaultHeaders,
-    fetch: fetchWithAuth
+    fetch: fetchWithAuth,
+    encoder: options.db.encoder,
+    decoder: options.db.decoder
   )
 
   /// Supabase Storage allows you to manage user-generated content, such as photos or videos.
