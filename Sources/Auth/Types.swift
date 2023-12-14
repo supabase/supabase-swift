@@ -47,19 +47,35 @@ public struct Session: Codable, Hashable, Sendable {
   /// The oauth provider token. If present, this can be used to make external API requests to the
   /// oauth provider used.
   public var providerToken: String?
+
   /// The oauth provider refresh token. If present, this can be used to refresh the provider_token
   /// via the oauth provider's API. Not all oauth providers return a provider refresh token. If the
   /// provider_refresh_token is missing, please refer to the oauth provider's documentation for
   /// information on how to obtain the provider refresh token.
   public var providerRefreshToken: String?
-  /// The access token jwt. It is recommended to set the JWT_EXPIRY to a shorter expiry value.
+
+  /// A valid JWT that will expire in ``Session/expiresIn`` seconds.
+  /// It is recommended to set the `JWT_EXPIRY` to a shorter expiry value.
   public var accessToken: String
+
+  /// What type of token this is. Only `bearer` returned, may change in the future.
   public var tokenType: String
-  /// The number of seconds until the token expires (since it was issued). Returned when a login is
-  /// confirmed.
-  public var expiresIn: Double
-  /// A one-time used refresh token that never expires.
+
+  /// Number of seconds after which the ``Session/accessToken`` should be renewed by using the
+  /// refresh token with the `refresh_token` grant type.
+  public var expiresIn: TimeInterval
+
+  /// UNIX timestamp after which the ``Session/accessToken`` should be renewed by using the refresh
+  /// token with the `refresh_token` grant type.
+  public var expiresAt: TimeInterval?
+
+  /// An opaque string that can be used once to obtain a new access and refresh token.
   public var refreshToken: String
+
+  /// Only returned on the `/token?grant_type=password` endpoint. When present, it indicates that
+  /// the password used is weak. Inspect the ``WeakPassword/reasons`` property to identify why.
+  public var weakPassword: WeakPassword?
+
   public var user: User
 
   public init(
@@ -67,8 +83,10 @@ public struct Session: Codable, Hashable, Sendable {
     providerRefreshToken: String? = nil,
     accessToken: String,
     tokenType: String,
-    expiresIn: Double,
+    expiresIn: TimeInterval,
+    expiresAt: TimeInterval?,
     refreshToken: String,
+    weakPassword: WeakPassword? = nil,
     user: User
   ) {
     self.providerToken = providerToken
@@ -76,7 +94,9 @@ public struct Session: Codable, Hashable, Sendable {
     self.accessToken = accessToken
     self.tokenType = tokenType
     self.expiresIn = expiresIn
+    self.expiresAt = expiresAt
     self.refreshToken = refreshToken
+    self.weakPassword = weakPassword
     self.user = user
   }
 
@@ -84,6 +104,7 @@ public struct Session: Codable, Hashable, Sendable {
     accessToken: "",
     tokenType: "",
     expiresIn: 0,
+    expiresAt: nil,
     refreshToken: "",
     user: User(
       id: UUID(),
@@ -617,4 +638,10 @@ public struct ResendMobileResponse: Decodable, Hashable, Sendable {
   public init(messageId: String?) {
     self.messageId = messageId
   }
+}
+
+public struct WeakPassword: Codable, Hashable, Sendable {
+  /// List of reasons the password is too weak, could be any of `length`, `characters`, or
+  /// `pwned`.
+  public let reasons: [String]
 }

@@ -71,6 +71,10 @@ public actor AuthClient {
     Dependencies.current.value!.eventEmitter
   }
 
+  private var currentDate: @Sendable () -> Date {
+    Dependencies.current.value!.currentDate
+  }
+
   /// Returns the session, refreshing it if necessary.
   ///
   /// If no session can be found, a ``AuthError/sessionNotFound`` error is thrown.
@@ -496,13 +500,16 @@ public actor AuthClient {
 
     guard
       let accessToken = params.first(where: { $0.name == "access_token" })?.value,
-      let expiresIn = params.first(where: { $0.name == "expires_in" })?.value,
+      let expiresIn = params.first(where: { $0.name == "expires_in" }).map(\.value)
+      .flatMap(TimeInterval.init),
       let refreshToken = params.first(where: { $0.name == "refresh_token" })?.value,
       let tokenType = params.first(where: { $0.name == "token_type" })?.value
     else {
       throw URLError(.badURL)
     }
 
+    let expiresAt = params.first(where: { $0.name == "expires_at" }).map(\.value)
+      .flatMap(TimeInterval.init)
     let providerToken = params.first(where: { $0.name == "provider_token" })?.value
     let providerRefreshToken = params.first(where: { $0.name == "provider_refresh_token" })?.value
 
@@ -519,7 +526,8 @@ public actor AuthClient {
       providerRefreshToken: providerRefreshToken,
       accessToken: accessToken,
       tokenType: tokenType,
-      expiresIn: Double(expiresIn) ?? 0,
+      expiresIn: expiresIn,
+      expiresAt: expiresAt ?? currentDate().addingTimeInterval(expiresIn).timeIntervalSince1970,
       refreshToken: refreshToken,
       user: user
     )
@@ -545,7 +553,7 @@ public actor AuthClient {
   /// - Returns: A new valid session.
   @discardableResult
   public func setSession(accessToken: String, refreshToken: String) async throws -> Session {
-    let now = Date()
+    let now = currentDate()
     var expiresAt = now
     var hasExpired = true
     var session: Session
@@ -566,6 +574,7 @@ public actor AuthClient {
         accessToken: accessToken,
         tokenType: "bearer",
         expiresIn: expiresAt.timeIntervalSince(now),
+        expiresAt: expiresAt.timeIntervalSince1970,
         refreshToken: refreshToken,
         user: user
       )

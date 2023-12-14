@@ -97,6 +97,7 @@ extension Session {
     accessToken: "accesstoken",
     tokenType: "bearer",
     expiresIn: 120,
+    expiresAt: Date().addingTimeInterval(120).timeIntervalSince1970,
     refreshToken: "refreshtoken",
     user: User(fromMockNamed: "user")
   )
@@ -105,6 +106,7 @@ extension Session {
     accessToken: "accesstoken",
     tokenType: "bearer",
     expiresIn: 60,
+    expiresAt: Date().addingTimeInterval(60).timeIntervalSince1970,
     refreshToken: "refreshtoken",
     user: User(fromMockNamed: "user")
   )
