@@ -60,6 +60,9 @@ let package = Package(
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
       ],
+      exclude: [
+        "__Snapshots__",
+      ],
       resources: [.process("Resources")]
     ),
     .target(

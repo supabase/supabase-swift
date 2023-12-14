@@ -355,17 +355,20 @@ final class RequestsTests: XCTestCase {
 
   private func makeSUT(
     record: Bool = false,
+    flowType: AuthFlowType = .implicit,
     fetch: AuthClient.FetchHandler? = nil,
     file: StaticString = #file,
     testName: String = #function,
     line: UInt = #line
   ) -> AuthClient {
-    let encoder = JSONEncoder.goTrue
+    let encoder = AuthClient.Configuration.jsonEncoder
     encoder.outputFormatting = .sortedKeys
 
     let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
+      flowType: flowType,
+      localStorage: InMemoryLocalStorage(),
       encoder: encoder,
       fetch: { request in
         DispatchQueue.main.sync {
