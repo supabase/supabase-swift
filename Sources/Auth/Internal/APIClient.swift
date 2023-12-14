@@ -7,7 +7,7 @@ struct APIClient: Sendable {
 
 extension APIClient {
   static func live(http: HTTPClient) -> Self {
-    var configuration: GoTrueClient.Configuration {
+    var configuration: AuthClient.Configuration {
       Dependencies.current.value!.configuration
     }
 
@@ -20,10 +20,10 @@ extension APIClient {
 
         guard (200 ..< 300).contains(response.statusCode) else {
           let apiError = try configuration.decoder.decode(
-            GoTrueError.APIError.self,
+            AuthError.APIError.self,
             from: response.data
           )
-          throw GoTrueError.api(apiError)
+          throw AuthError.api(apiError)
         }
 
         return response

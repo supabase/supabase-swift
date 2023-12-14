@@ -1,8 +1,6 @@
 import Foundation
 @_spi(Internal) import _Helpers
 
-let version = _Helpers.version
-
 /// PostgREST client.
 public actor PostgrestClient {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
@@ -31,8 +29,8 @@ public actor PostgrestClient {
       schema: String? = nil,
       headers: [String: String] = [:],
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-      encoder: JSONEncoder = .postgrest,
-      decoder: JSONDecoder = .postgrest
+      encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
+      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
     ) {
       self.url = url
       self.schema = schema
@@ -49,9 +47,7 @@ public actor PostgrestClient {
   /// - Parameter configuration: The configuration for the client.
   public init(configuration: Configuration) {
     var configuration = configuration
-    if configuration.headers["X-Client-Info"] == nil {
-      configuration.headers["X-Client-Info"] = "postgrest-swift/\(version)"
-    }
+    configuration.headers.merge(Configuration.defaultHeaders) { l, _ in l }
     self.configuration = configuration
   }
 
@@ -68,8 +64,8 @@ public actor PostgrestClient {
     schema: String? = nil,
     headers: [String: String] = [:],
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    encoder: JSONEncoder = .postgrest,
-    decoder: JSONDecoder = .postgrest
+    encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
+    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
     self.init(
       configuration: Configuration(
@@ -138,48 +134,4 @@ public actor PostgrestClient {
   ) throws -> PostgrestFilterBuilder {
     try rpc(fn, params: NoParams(), count: count)
   }
-}
-
-private let supportedDateFormatters: [ISO8601DateFormatter] = [
-  { () -> ISO8601DateFormatter in
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter
-  }(),
-  { () -> ISO8601DateFormatter in
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime]
-    return formatter
-  }(),
-]
-
-extension JSONDecoder {
-  /// The JSONDecoder instance for PostgREST responses.
-  public static let postgrest = { () -> JSONDecoder in
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .custom { decoder in
-      let container = try decoder.singleValueContainer()
-      let string = try container.decode(String.self)
-
-      for formatter in supportedDateFormatters {
-        if let date = formatter.date(from: string) {
-          return date
-        }
-      }
-
-      throw DecodingError.dataCorruptedError(
-        in: container, debugDescription: "Invalid date format: \(string)"
-      )
-    }
-    return decoder
-  }()
-}
-
-extension JSONEncoder {
-  /// The JSONEncoder instance for PostgREST requests.
-  public static let postgrest = { () -> JSONEncoder in
-    let encoder = JSONEncoder()
-    encoder.dateEncodingStrategy = .iso8601
-    return encoder
-  }()
 }

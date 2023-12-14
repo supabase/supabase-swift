@@ -9,9 +9,9 @@ import XCTest
 @_spi(Internal) import _Helpers
 import ConcurrencyExtras
 
-@testable import GoTrue
+@testable import Auth
 
-final class GoTrueClientTests: XCTestCase {
+final class AuthClientTests: XCTestCase {
   func testAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
@@ -65,7 +65,7 @@ final class GoTrueClientTests: XCTestCase {
 
       do {
         _ = try await sut.session
-      } catch GoTrueError.sessionNotFound {
+      } catch AuthError.sessionNotFound {
       } catch {
         XCTFail("Unexpected error.")
       }
@@ -96,7 +96,7 @@ final class GoTrueClientTests: XCTestCase {
     let emitReceivedParams = LockIsolated((AuthChangeEvent, Session?)?.none)
 
     try await withDependencies {
-      $0.api.execute = { _ in throw GoTrueError.api(GoTrueError.APIError(code: 404)) }
+      $0.api.execute = { _ in throw AuthError.api(AuthError.APIError(code: 404)) }
       $0.sessionManager = .live
       $0.sessionStorage = .inMemory
       $0.eventEmitter.emit = { @Sendable event, session, _ in
@@ -106,7 +106,7 @@ final class GoTrueClientTests: XCTestCase {
     } operation: {
       do {
         try await sut.signOut()
-      } catch GoTrueError.api {
+      } catch AuthError.api {
       } catch {
         XCTFail("Unexpected error: \(error)")
       }
@@ -124,7 +124,7 @@ final class GoTrueClientTests: XCTestCase {
     let emitReceivedParams = LockIsolated((AuthChangeEvent, Session?)?.none)
 
     try await withDependencies {
-      $0.api.execute = { _ in throw GoTrueError.api(GoTrueError.APIError(code: 401)) }
+      $0.api.execute = { _ in throw AuthError.api(AuthError.APIError(code: 401)) }
       $0.sessionManager = .live
       $0.sessionStorage = .inMemory
       $0.eventEmitter.emit = { @Sendable event, session, _ in
@@ -134,7 +134,7 @@ final class GoTrueClientTests: XCTestCase {
     } operation: {
       do {
         try await sut.signOut()
-      } catch GoTrueError.api {
+      } catch AuthError.api {
       } catch {
         XCTFail("Unexpected error: \(error)")
       }
@@ -146,13 +146,13 @@ final class GoTrueClientTests: XCTestCase {
     }
   }
 
-  private func makeSUT() -> GoTrueClient {
-    let configuration = GoTrueClient.Configuration(
+  private func makeSUT() -> AuthClient {
+    let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["apikey": "dummy.api.key"]
     )
 
-    let sut = GoTrueClient(
+    let sut = AuthClient(
       configuration: configuration,
       sessionManager: .mock,
       codeVerifierStorage: .mock,

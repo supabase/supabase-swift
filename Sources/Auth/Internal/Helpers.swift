@@ -36,16 +36,16 @@ func extractParams(from fragment: String) -> [(name: String, value: String)] {
 func decode(jwt: String) throws -> [String: Any] {
   let parts = jwt.split(separator: ".")
   guard parts.count == 3 else {
-    throw GoTrueError.malformedJWT
+    throw AuthError.malformedJWT
   }
 
   let payload = String(parts[1])
   guard let data = base64URLDecode(payload) else {
-    throw GoTrueError.malformedJWT
+    throw AuthError.malformedJWT
   }
   let json = try JSONSerialization.jsonObject(with: data, options: [])
   guard let decodedPayload = json as? [String: Any] else {
-    throw GoTrueError.malformedJWT
+    throw AuthError.malformedJWT
   }
   return decodedPayload
 }

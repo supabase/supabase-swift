@@ -10,7 +10,7 @@ import Foundation
 import XCTestDynamicOverlay
 @_spi(Internal) import _Helpers
 
-@testable import GoTrue
+@testable import Auth
 
 let clientURL = URL(string: "http://localhost:54321/auth/v1")!
 
@@ -70,7 +70,7 @@ extension APIClient {
 
 extension Dependencies {
   static let mock = Dependencies(
-    configuration: GoTrueClient.Configuration(url: clientURL),
+    configuration: AuthClient.Configuration(url: clientURL),
     sessionManager: .mock,
     api: .mock,
     eventEmitter: .mock,
@@ -108,4 +108,24 @@ extension Session {
     refreshToken: "refreshtoken",
     user: User(fromMockNamed: "user")
   )
+}
+
+final class InMemoryLocalStorage: AuthLocalStorage, @unchecked Sendable {
+  let storage = LockIsolated([String: Data]())
+
+  func store(key: String, value: Data) throws {
+    storage.withValue {
+      $0[key] = value
+    }
+  }
+
+  func retrieve(key: String) throws -> Data? {
+    storage.value[key]
+  }
+
+  func remove(key: String) throws {
+    storage.withValue {
+      $0[key] = nil
+    }
+  }
 }

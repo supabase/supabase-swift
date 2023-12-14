@@ -9,7 +9,7 @@ import SnapshotTesting
 import XCTest
 @_spi(Internal) import _Helpers
 
-@testable import GoTrue
+@testable import Auth
 
 struct UnimplementedError: Error {}
 
@@ -92,7 +92,7 @@ final class RequestsTests: XCTestCase {
             idToken: "id-token",
             accessToken: "access-token",
             nonce: "nonce",
-            gotrueMetaSecurity: GoTrueMetaSecurity(
+            gotrueMetaSecurity: AuthMetaSecurity(
               captchaToken: "captcha-token"
             )
           )
@@ -355,17 +355,20 @@ final class RequestsTests: XCTestCase {
 
   private func makeSUT(
     record: Bool = false,
-    fetch: GoTrueClient.FetchHandler? = nil,
+    flowType: AuthFlowType = .implicit,
+    fetch: AuthClient.FetchHandler? = nil,
     file: StaticString = #file,
     testName: String = #function,
     line: UInt = #line
-  ) -> GoTrueClient {
-    let encoder = JSONEncoder.goTrue
+  ) -> AuthClient {
+    let encoder = AuthClient.Configuration.jsonEncoder
     encoder.outputFormatting = .sortedKeys
 
-    let configuration = GoTrueClient.Configuration(
+    let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
+      flowType: flowType,
+      localStorage: InMemoryLocalStorage(),
       encoder: encoder,
       fetch: { request in
         DispatchQueue.main.sync {
@@ -384,7 +387,7 @@ final class RequestsTests: XCTestCase {
 
     let api = APIClient.live(http: HTTPClient(fetchHandler: configuration.fetch))
 
-    return GoTrueClient(
+    return AuthClient(
       configuration: configuration,
       sessionManager: .mock,
       codeVerifierStorage: .mock,

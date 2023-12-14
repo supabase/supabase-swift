@@ -1,6 +1,6 @@
 import Foundation
 
-@testable import GoTrue
+@testable import Auth
 
 func json(named name: String) -> Data {
   let url = Bundle.module.url(forResource: name, withExtension: "json")

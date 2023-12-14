@@ -1,13 +1,13 @@
 import Foundation
 @preconcurrency import KeychainAccess
 
-public protocol GoTrueLocalStorage: Sendable {
+public protocol AuthLocalStorage: Sendable {
   func store(key: String, value: Data) throws
   func retrieve(key: String) throws -> Data?
   func remove(key: String) throws
 }
 
-struct KeychainLocalStorage: GoTrueLocalStorage {
+struct KeychainLocalStorage: AuthLocalStorage {
   private let keychain: Keychain
 
   init(service: String, accessGroup: String?) {

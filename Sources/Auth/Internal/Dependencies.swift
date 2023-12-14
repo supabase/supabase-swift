@@ -4,7 +4,7 @@ import Foundation
 struct Dependencies: Sendable {
   static let current = LockIsolated(Dependencies?.none)
 
-  var configuration: GoTrueClient.Configuration
+  var configuration: AuthClient.Configuration
   var sessionManager: SessionManager
   var api: APIClient
   var eventEmitter: EventEmitter

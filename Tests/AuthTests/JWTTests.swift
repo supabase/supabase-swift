@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import GoTrue
+@testable import Auth
 
 final class JWTTests: XCTestCase {
   func testDecodeJWT() throws {

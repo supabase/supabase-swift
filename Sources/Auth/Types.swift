@@ -38,7 +38,7 @@ struct SignUpRequest: Codable, Hashable, Sendable {
   var password: String?
   var phone: String?
   var data: [String: AnyJSON]?
-  var gotrueMetaSecurity: GoTrueMetaSecurity?
+  var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
 }
@@ -234,14 +234,14 @@ public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
   public var nonce: String?
 
   /// Verification token received when the user completes the captcha on the site.
-  public var gotrueMetaSecurity: GoTrueMetaSecurity?
+  public var gotrueMetaSecurity: AuthMetaSecurity?
 
   public init(
     provider: Provider? = nil,
     idToken: String,
     accessToken: String? = nil,
     nonce: String? = nil,
-    gotrueMetaSecurity: GoTrueMetaSecurity? = nil
+    gotrueMetaSecurity: AuthMetaSecurity? = nil
   ) {
     self.provider = provider
     self.idToken = idToken
@@ -255,7 +255,7 @@ public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
   }
 }
 
-public struct GoTrueMetaSecurity: Codable, Hashable, Sendable {
+public struct AuthMetaSecurity: Codable, Hashable, Sendable {
   public var captchaToken: String
 
   public init(captchaToken: String) {
@@ -268,7 +268,7 @@ struct OTPParams: Codable, Hashable, Sendable {
   var phone: String?
   var createUser: Bool
   var data: [String: AnyJSON]?
-  var gotrueMetaSecurity: GoTrueMetaSecurity?
+  var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
 }
@@ -292,14 +292,14 @@ struct VerifyEmailOTPParams: Encodable, Hashable, Sendable {
   var email: String
   var token: String
   var type: EmailOTPType
-  var gotrueMetaSecurity: GoTrueMetaSecurity?
+  var gotrueMetaSecurity: AuthMetaSecurity?
 }
 
 struct VerifyMobileOTPParams: Encodable, Hashable {
   var phone: String
   var token: String
   var type: MobileOTPType
-  var gotrueMetaSecurity: GoTrueMetaSecurity?
+  var gotrueMetaSecurity: AuthMetaSecurity?
 }
 
 public enum MobileOTPType: String, Encodable, Sendable {
@@ -389,7 +389,7 @@ public struct UserAttributes: Codable, Hashable, Sendable {
 
 struct RecoverParams: Codable, Hashable, Sendable {
   var email: String
-  var gotrueMetaSecurity: GoTrueMetaSecurity?
+  var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
 }
@@ -464,7 +464,7 @@ public struct AuthMFAEnrollResponse: Decodable, Hashable, Sendable {
 }
 
 public struct MFAChallengeParams: Encodable, Hashable {
-  /// ID of the factor to be challenged. Returned in ``GoTrueMFA/enroll(params:)``.
+  /// ID of the factor to be challenged. Returned in ``AuthMFA/enroll(params:)``.
   public let factorId: String
 
   public init(factorId: String) {
@@ -473,7 +473,7 @@ public struct MFAChallengeParams: Encodable, Hashable {
 }
 
 public struct MFAVerifyParams: Encodable, Hashable {
-  /// ID of the factor being verified. Returned in ``GoTrueMFA/enroll(params:)``.
+  /// ID of the factor being verified. Returned in ``AuthMFA/enroll(params:)``.
   public let factorId: String
 
   /// ID of the challenge being verified. Returned in challenge().
@@ -490,7 +490,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
 }
 
 public struct MFAUnenrollParams: Encodable, Hashable, Sendable {
-  /// ID of the factor to unenroll. Returned in ``GoTrueMFA/enroll(params:)``.
+  /// ID of the factor to unenroll. Returned in ``AuthMFA/enroll(params:)``.
   public let factorId: String
 
   public init(factorId: String) {
@@ -499,7 +499,7 @@ public struct MFAUnenrollParams: Encodable, Hashable, Sendable {
 }
 
 public struct MFAChallengeAndVerifyParams: Encodable, Hashable, Sendable {
-  /// ID of the factor to be challenged. Returned in ``GoTrueMFA/enroll(params:)``.
+  /// ID of the factor to be challenged. Returned in ``AuthMFA/enroll(params:)``.
   public let factorId: String
 
   /// Verification code provided by the user.
@@ -585,55 +585,4 @@ public enum SignOutScope: String, Sendable {
   /// ``SignOutScope/others``, there is no ``AuthChangeEvent/signedOut`` event fired on the current
   /// session.
   case others
-}
-
-// MARK: - Encodable & Decodable
-
-private let dateFormatterWithFractionalSeconds = { () -> ISO8601DateFormatter in
-  let formatter = ISO8601DateFormatter()
-  formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-  return formatter
-}()
-
-private let dateFormatter = { () -> ISO8601DateFormatter in
-  let formatter = ISO8601DateFormatter()
-  formatter.formatOptions = [.withInternetDateTime]
-  return formatter
-}()
-
-extension JSONDecoder {
-  public static let goTrue = { () -> JSONDecoder in
-    let decoder = JSONDecoder()
-    decoder.keyDecodingStrategy = .convertFromSnakeCase
-    decoder.dateDecodingStrategy = .custom { decoder in
-      let container = try decoder.singleValueContainer()
-      let string = try container.decode(String.self)
-
-      let supportedFormatters = [dateFormatterWithFractionalSeconds, dateFormatter]
-
-      for formatter in supportedFormatters {
-        if let date = formatter.date(from: string) {
-          return date
-        }
-      }
-
-      throw DecodingError.dataCorruptedError(
-        in: container, debugDescription: "Invalid date format: \(string)"
-      )
-    }
-    return decoder
-  }()
-}
-
-extension JSONEncoder {
-  public static let goTrue = { () -> JSONEncoder in
-    let encoder = JSONEncoder()
-    encoder.keyEncodingStrategy = .convertToSnakeCase
-    encoder.dateEncodingStrategy = .custom { date, encoder in
-      var container = encoder.singleValueContainer()
-      let string = dateFormatter.string(from: date)
-      try container.encode(string)
-    }
-    return encoder
-  }()
 }
