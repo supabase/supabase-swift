@@ -689,6 +689,70 @@ public actor AuthClient {
     return response
   }
 
+  /// Resends an existing signup confirmation email or email change email.
+  ///
+  /// To obfuscate whether such the email already exists in the system this method succeeds in both
+  /// cases.
+  public func resend(
+    email: String,
+    type: ResendEmailType,
+    emailRedirectTo: URL? = nil,
+    captchaToken: String? = nil
+  ) async throws {
+    if type != .emailChange {
+      await sessionManager.remove()
+    }
+
+    _ = try await api.execute(
+      Request(
+        path: "/resend",
+        method: .post,
+        query: [
+          emailRedirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
+        ].compactMap { $0 },
+        body: configuration.encoder.encode(
+          ResendEmailParams(
+            type: type,
+            email: email,
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+          )
+        )
+      )
+    )
+  }
+
+  /// Resends an existing SMS OTP or phone change OTP.
+  /// - Returns: An object containing the unique ID of the message as reported by the SMS sending
+  /// provider. Useful for tracking deliverability problems.
+  ///
+  /// To obfuscate whether such the phone number already exists in the system this method succeeds
+  /// in both cases.
+  @discardableResult
+  public func resend(
+    phone: String,
+    type: ResendMobileType,
+    captchaToken: String? = nil
+  ) async throws -> ResendMobileResponse {
+    if type != .phoneChange {
+      await sessionManager.remove()
+    }
+
+    return try await api.execute(
+      Request(
+        path: "/resend",
+        method: .post,
+        body: configuration.encoder.encode(
+          ResendMobileParams(
+            type: type,
+            phone: phone,
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+          )
+        )
+      )
+    )
+    .decoded(decoder: configuration.decoder)
+  }
+
   /// Gets the current user details if there is an existing session.
   /// - Parameter jwt: Takes in an optional access token jwt. If no jwt is provided, user() will
   /// attempt to get the jwt from the current session.

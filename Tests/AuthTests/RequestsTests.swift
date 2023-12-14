@@ -344,6 +344,31 @@ final class RequestsTests: XCTestCase {
     }
   }
 
+  func testResendEmail() async {
+    let sut = makeSUT()
+
+    await assert {
+      try await sut.resend(
+        email: "example@mail.com",
+        type: .emailChange,
+        emailRedirectTo: URL(string: "https://supabase.com"),
+        captchaToken: "captcha-token"
+      )
+    }
+  }
+
+  func testResendPhone() async {
+    let sut = makeSUT()
+
+    await assert {
+      try await sut.resend(
+        phone: "+1 202-918-2132",
+        type: .phoneChange,
+        captchaToken: "captcha-token"
+      )
+    }
+  }
+
   private func assert(_ block: () async throws -> Void) async {
     do {
       try await block()
