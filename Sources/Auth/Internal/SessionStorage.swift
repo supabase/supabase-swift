@@ -38,11 +38,11 @@ extension SessionStorage {
     return Self(
       getSession: {
         try localStorage.retrieve(key: "supabase.session").flatMap {
-          try JSONDecoder.goTrue.decode(StoredSession.self, from: $0)
+          try JSONDecoder.auth.decode(StoredSession.self, from: $0)
         }
       },
       storeSession: {
-        try localStorage.store(key: "supabase.session", value: JSONEncoder.goTrue.encode($0))
+        try localStorage.store(key: "supabase.session", value: JSONEncoder.auth.encode($0))
       },
       deleteSession: {
         try localStorage.remove(key: "supabase.session")

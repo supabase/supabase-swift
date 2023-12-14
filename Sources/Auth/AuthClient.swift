@@ -53,8 +53,8 @@ public actor AuthClient {
             service: "supabase.gotrue.swift",
             accessGroup: nil
           )
-      self.encoder = encoder ?? .goTrue
-      self.decoder = decoder ?? .goTrue
+      self.encoder = encoder ?? .auth
+      self.decoder = decoder ?? .auth
       self.fetch = fetch
     }
   }

@@ -602,7 +602,7 @@ private let dateFormatter = { () -> ISO8601DateFormatter in
 }()
 
 extension JSONDecoder {
-  public static let goTrue = { () -> JSONDecoder in
+  static let auth = { () -> JSONDecoder in
     let decoder = JSONDecoder()
     decoder.keyDecodingStrategy = .convertFromSnakeCase
     decoder.dateDecodingStrategy = .custom { decoder in
@@ -626,7 +626,7 @@ extension JSONDecoder {
 }
 
 extension JSONEncoder {
-  public static let goTrue = { () -> JSONEncoder in
+  static let auth = { () -> JSONEncoder in
     let encoder = JSONEncoder()
     encoder.keyEncodingStrategy = .convertToSnakeCase
     encoder.dateEncodingStrategy = .custom { date, encoder in
