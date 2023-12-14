@@ -89,6 +89,8 @@ public final class SupabaseClient: @unchecked Sendable {
       headers: defaultHeaders,
       flowType: options.auth.flowType,
       localStorage: options.auth.storage,
+      encoder: options.auth.encoder,
+      decoder: options.auth.decoder,
       fetch: {
         // DON'T use `fetchWithAuth` method within the GoTrueClient as it may cause a deadlock.
         try await options.global.session.data(for: $0)

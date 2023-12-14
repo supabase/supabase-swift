@@ -31,15 +31,15 @@ public actor PostgrestClient {
       schema: String? = nil,
       headers: [String: String] = [:],
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-      encoder: JSONEncoder = .postgrest,
-      decoder: JSONDecoder = .postgrest
+      encoder: JSONEncoder? = nil,
+      decoder: JSONDecoder? = nil
     ) {
       self.url = url
       self.schema = schema
       self.headers = headers
       self.fetch = fetch
-      self.encoder = encoder
-      self.decoder = decoder
+      self.encoder = encoder ?? .postgrest
+      self.decoder = decoder ?? .postgrest
     }
   }
 
@@ -68,8 +68,8 @@ public actor PostgrestClient {
     schema: String? = nil,
     headers: [String: String] = [:],
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    encoder: JSONEncoder = .postgrest,
-    decoder: JSONDecoder = .postgrest
+    encoder: JSONEncoder? = nil,
+    decoder: JSONDecoder? = nil
   ) {
     self.init(
       configuration: Configuration(

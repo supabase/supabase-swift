@@ -24,20 +24,19 @@ public actor GoTrueClient {
     ///
     /// - Parameters:
     ///   - url: The base URL of the GoTrue server.
-    ///   - headers: (Optional) Custom headers to be included in requests.
-    ///   - flowType: (Optional) The authentication flow type. Default is `.implicit`.
-    ///   - localStorage: (Optional) The storage mechanism for local data. Default is a
-    /// KeychainLocalStorage.
-    ///   - encoder: (Optional) The JSON encoder to use for encoding requests.
-    ///   - decoder: (Optional) The JSON decoder to use for decoding responses.
-    ///   - fetch: (Optional) The asynchronous fetch handler for network requests.
+    ///   - headers: Custom headers to be included in requests.
+    ///   - flowType: The authentication flow type.
+    ///   - localStorage: The storage mechanism for local data.
+    ///   - encoder: The JSON encoder to use for encoding requests.
+    ///   - decoder: The JSON decoder to use for decoding responses.
+    ///   - fetch: The asynchronous fetch handler for network requests.
     public init(
       url: URL,
       headers: [String: String] = [:],
-      flowType: AuthFlowType = .implicit,
+      flowType: AuthFlowType? = nil,
       localStorage: GoTrueLocalStorage? = nil,
-      encoder: JSONEncoder = .goTrue,
-      decoder: JSONDecoder = .goTrue,
+      encoder: JSONEncoder? = nil,
+      decoder: JSONDecoder? = nil,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
     ) {
       var headers = headers
@@ -47,15 +46,15 @@ public actor GoTrueClient {
 
       self.url = url
       self.headers = headers
-      self.flowType = flowType
+      self.flowType = flowType ?? .implicit
       self.localStorage =
         localStorage
           ?? KeychainLocalStorage(
             service: "supabase.gotrue.swift",
             accessGroup: nil
           )
-      self.encoder = encoder
-      self.decoder = decoder
+      self.encoder = encoder ?? .goTrue
+      self.decoder = decoder ?? .goTrue
       self.fetch = fetch
     }
   }
@@ -96,20 +95,19 @@ public actor GoTrueClient {
   ///
   /// - Parameters:
   ///   - url: The base URL of the GoTrue server.
-  ///   - headers: (Optional) Custom headers to be included in requests.
-  ///   - flowType: (Optional) The authentication flow type. Default is `.implicit`.
-  ///   - localStorage: (Optional) The storage mechanism for local data. Default is a
-  /// KeychainLocalStorage.
-  ///   - encoder: (Optional) The JSON encoder to use for encoding requests.
-  ///   - decoder: (Optional) The JSON decoder to use for decoding responses.
-  ///   - fetch: (Optional) The asynchronous fetch handler for network requests.
+  ///   - headers: Custom headers to be included in requests.
+  ///   - flowType: The authentication flow type. Default is `.implicit`.
+  ///   - localStorage: The storage mechanism for local data..
+  ///   - encoder: The JSON encoder to use for encoding requests.
+  ///   - decoder: The JSON decoder to use for decoding responses.
+  ///   - fetch: The asynchronous fetch handler for network requests.
   public init(
     url: URL,
     headers: [String: String] = [:],
-    flowType: AuthFlowType = .implicit,
+    flowType: AuthFlowType? = nil,
     localStorage: GoTrueLocalStorage? = nil,
-    encoder: JSONEncoder = .goTrue,
-    decoder: JSONDecoder = .goTrue,
+    encoder: JSONEncoder? = nil,
+    decoder: JSONDecoder? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
   ) {
     self.init(

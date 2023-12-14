@@ -8,15 +8,19 @@ public struct SupabaseClientOptions: Sendable {
 
   public struct DatabaseOptions: Sendable {
     /// The Postgres schema which your tables belong to. Must be on the list of exposed schemas in
-    /// Supabase. Defaults to `public`.
-    public let schema: String
-    public let encoder: JSONEncoder
-    public let decoder: JSONDecoder
+    /// Supabase.
+    public let schema: String?
+
+    /// The JSONEncoder to use when encoding database request objects.
+    public let encoder: JSONEncoder?
+
+    /// The JSONDecoder to use when decoding database response objects.
+    public let decoder: JSONDecoder?
 
     public init(
-      schema: String = "public",
-      encoder: JSONEncoder = .postgrest,
-      decoder: JSONDecoder = .postgrest
+      schema: String? = nil,
+      encoder: JSONEncoder? = nil,
+      decoder: JSONDecoder? = nil
     ) {
       self.schema = schema
       self.encoder = encoder
@@ -32,9 +36,22 @@ public struct SupabaseClientOptions: Sendable {
     /// applications.
     public let flowType: AuthFlowType
 
-    public init(storage: GoTrueLocalStorage? = nil, flowType: AuthFlowType = .pkce) {
+    /// The JSONEncoder to use when encoding database request objects.
+    public let encoder: JSONEncoder?
+
+    /// The JSONDecoder to use when decoding database response objects.
+    public let decoder: JSONDecoder?
+
+    public init(
+      storage: GoTrueLocalStorage? = nil,
+      flowType: AuthFlowType = .pkce,
+      encoder: JSONEncoder? = nil,
+      decoder: JSONDecoder? = nil
+    ) {
       self.storage = storage
       self.flowType = flowType
+      self.encoder = encoder
+      self.decoder = decoder
     }
   }
 
