@@ -26,10 +26,11 @@ extension JSONEncoder {
   @available(
     *,
     deprecated,
-    message: "Access to the default JSONEncoder instance will be removed on the next major release, please use your own instance of JSONEncoder."
+    renamed: "AuthClient.Configuration.jsonEncoder",
+    message: "Access to the default JSONEncoder instance moved to AuthClient.Configuration.jsonEncoder"
   )
   public static var goTrue: JSONEncoder {
-    auth
+    AuthClient.Configuration.jsonEncoder
   }
 }
 
@@ -37,9 +38,10 @@ extension JSONDecoder {
   @available(
     *,
     deprecated,
-    message: "Access to the default JSONDecoder instance will be removed on the next major release, please use your own instance of JSONDecoder."
+    renamed: "AuthClient.Configuration.jsonDecoder",
+    message: "Access to the default JSONDecoder instance moved to AuthClient.Configuration.jsonDecoder"
   )
   public static var goTrue: JSONDecoder {
-    auth
+    AuthClient.Configuration.jsonDecoder
   }
 }

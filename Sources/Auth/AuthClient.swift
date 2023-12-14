@@ -33,28 +33,20 @@ public actor AuthClient {
     public init(
       url: URL,
       headers: [String: String] = [:],
-      flowType: AuthFlowType? = nil,
-      localStorage: AuthLocalStorage? = nil,
-      encoder: JSONEncoder? = nil,
-      decoder: JSONDecoder? = nil,
+      flowType: AuthFlowType = Configuration.defaultFlowType,
+      localStorage: AuthLocalStorage = Configuration.defaultLocalStorage,
+      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
+      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
     ) {
-      var headers = headers
-      if headers["X-Client-Info"] == nil {
-        headers["X-Client-Info"] = "gotrue-swift/\(version)"
-      }
+      let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
 
       self.url = url
       self.headers = headers
-      self.flowType = flowType ?? .implicit
-      self.localStorage =
-        localStorage
-          ?? KeychainLocalStorage(
-            service: "supabase.gotrue.swift",
-            accessGroup: nil
-          )
-      self.encoder = encoder ?? .auth
-      self.decoder = decoder ?? .auth
+      self.flowType = flowType
+      self.localStorage = localStorage
+      self.encoder = encoder
+      self.decoder = decoder
       self.fetch = fetch
     }
   }
@@ -96,7 +88,7 @@ public actor AuthClient {
   /// - Parameters:
   ///   - url: The base URL of the Auth server.
   ///   - headers: Custom headers to be included in requests.
-  ///   - flowType: The authentication flow type. Default is `.implicit`.
+  ///   - flowType: The authentication flow type..
   ///   - localStorage: The storage mechanism for local data..
   ///   - encoder: The JSON encoder to use for encoding requests.
   ///   - decoder: The JSON decoder to use for decoding responses.
@@ -104,10 +96,10 @@ public actor AuthClient {
   public init(
     url: URL,
     headers: [String: String] = [:],
-    flowType: AuthFlowType? = nil,
-    localStorage: AuthLocalStorage? = nil,
-    encoder: JSONEncoder? = nil,
-    decoder: JSONDecoder? = nil,
+    flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
+    localStorage: AuthLocalStorage = AuthClient.Configuration.defaultLocalStorage,
+    encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
+    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
   ) {
     self.init(

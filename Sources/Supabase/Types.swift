@@ -1,5 +1,6 @@
 import Auth
 import Foundation
+import PostgREST
 
 public struct SupabaseClientOptions: Sendable {
   public let db: DatabaseOptions
@@ -12,15 +13,15 @@ public struct SupabaseClientOptions: Sendable {
     public let schema: String?
 
     /// The JSONEncoder to use when encoding database request objects.
-    public let encoder: JSONEncoder?
+    public let encoder: JSONEncoder
 
     /// The JSONDecoder to use when decoding database response objects.
-    public let decoder: JSONDecoder?
+    public let decoder: JSONDecoder
 
     public init(
       schema: String? = nil,
-      encoder: JSONEncoder? = nil,
-      decoder: JSONDecoder? = nil
+      encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
+      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
     ) {
       self.schema = schema
       self.encoder = encoder
@@ -30,23 +31,23 @@ public struct SupabaseClientOptions: Sendable {
 
   public struct AuthOptions: Sendable {
     /// A storage provider. Used to store the logged-in session.
-    public let storage: AuthLocalStorage?
+    public let storage: AuthLocalStorage
 
     /// OAuth flow to use - defaults to PKCE flow. PKCE is recommended for mobile and server-side
     /// applications.
     public let flowType: AuthFlowType
 
-    /// The JSONEncoder to use when encoding database request objects.
-    public let encoder: JSONEncoder?
+    /// The JSON encoder to use for encoding requests.
+    public let encoder: JSONEncoder
 
-    /// The JSONDecoder to use when decoding database response objects.
-    public let decoder: JSONDecoder?
+    /// The JSON decoder to use for decoding responses.
+    public let decoder: JSONDecoder
 
     public init(
-      storage: AuthLocalStorage? = nil,
-      flowType: AuthFlowType = .pkce,
-      encoder: JSONEncoder? = nil,
-      decoder: JSONDecoder? = nil
+      storage: AuthLocalStorage = AuthClient.Configuration.defaultLocalStorage,
+      flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
+      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
+      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
     ) {
       self.storage = storage
       self.flowType = flowType
