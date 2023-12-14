@@ -10,7 +10,7 @@ import XCTestDynamicOverlay
 @_spi(Internal) import _Helpers
 import ConcurrencyExtras
 
-@testable import GoTrue
+@testable import Auth
 
 final class SessionManagerTests: XCTestCase {
   override func setUp() {
@@ -27,8 +27,8 @@ final class SessionManagerTests: XCTestCase {
 
       do {
         _ = try await sut.session()
-        XCTFail("Expected a \(GoTrueError.sessionNotFound) failure")
-      } catch GoTrueError.sessionNotFound {
+        XCTFail("Expected a \(AuthError.sessionNotFound) failure")
+      } catch AuthError.sessionNotFound {
       } catch {
         XCTFail("Unexpected error \(error)")
       }

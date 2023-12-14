@@ -5,7 +5,7 @@ import Foundation
   import FoundationNetworking
 #endif
 
-public actor GoTrueClient {
+public actor AuthClient {
   /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler =
     @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
@@ -15,15 +15,15 @@ public actor GoTrueClient {
     public let url: URL
     public var headers: [String: String]
     public let flowType: AuthFlowType
-    public let localStorage: GoTrueLocalStorage
+    public let localStorage: AuthLocalStorage
     public let encoder: JSONEncoder
     public let decoder: JSONDecoder
     public let fetch: FetchHandler
 
-    /// Initializes a GoTrueClient Configuration with optional parameters.
+    /// Initializes a AuthClient Configuration with optional parameters.
     ///
     /// - Parameters:
-    ///   - url: The base URL of the GoTrue server.
+    ///   - url: The base URL of the Auth server.
     ///   - headers: Custom headers to be included in requests.
     ///   - flowType: The authentication flow type.
     ///   - localStorage: The storage mechanism for local data.
@@ -34,7 +34,7 @@ public actor GoTrueClient {
       url: URL,
       headers: [String: String] = [:],
       flowType: AuthFlowType? = nil,
-      localStorage: GoTrueLocalStorage? = nil,
+      localStorage: AuthLocalStorage? = nil,
       encoder: JSONEncoder? = nil,
       decoder: JSONDecoder? = nil,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -81,7 +81,7 @@ public actor GoTrueClient {
 
   /// Returns the session, refreshing it if necessary.
   ///
-  /// If no session can be found, a ``GoTrueError/sessionNotFound`` error is thrown.
+  /// If no session can be found, a ``AuthError/sessionNotFound`` error is thrown.
   public var session: Session {
     get async throws {
       try await sessionManager.session()
@@ -89,12 +89,12 @@ public actor GoTrueClient {
   }
 
   /// Namespace for accessing multi-factor authentication API.
-  public let mfa: GoTrueMFA
+  public let mfa: AuthMFA
 
-  /// Initializes a GoTrueClient with optional parameters.
+  /// Initializes a AuthClient with optional parameters.
   ///
   /// - Parameters:
-  ///   - url: The base URL of the GoTrue server.
+  ///   - url: The base URL of the Auth server.
   ///   - headers: Custom headers to be included in requests.
   ///   - flowType: The authentication flow type. Default is `.implicit`.
   ///   - localStorage: The storage mechanism for local data..
@@ -105,7 +105,7 @@ public actor GoTrueClient {
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType? = nil,
-    localStorage: GoTrueLocalStorage? = nil,
+    localStorage: AuthLocalStorage? = nil,
     encoder: JSONEncoder? = nil,
     decoder: JSONDecoder? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -123,7 +123,7 @@ public actor GoTrueClient {
     )
   }
 
-  /// Initializes a GoTrueClient with a specific configuration.
+  /// Initializes a AuthClient with a specific configuration.
   ///
   /// - Parameters:
   ///   - configuration: The client configuration.
@@ -149,7 +149,7 @@ public actor GoTrueClient {
     eventEmitter: EventEmitter,
     sessionStorage: SessionStorage
   ) {
-    mfa = GoTrueMFA()
+    mfa = AuthMFA()
 
     Dependencies.current.setValue(
       Dependencies(
@@ -211,7 +211,7 @@ public actor GoTrueClient {
             email: email,
             password: password,
             data: data,
-            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:)),
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod
           )
@@ -241,7 +241,7 @@ public actor GoTrueClient {
             password: password,
             phone: phone,
             data: data,
-            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
           )
         )
       )
@@ -357,7 +357,7 @@ public actor GoTrueClient {
             email: email,
             createUser: shouldCreateUser,
             data: data,
-            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:)),
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod
           )
@@ -389,7 +389,7 @@ public actor GoTrueClient {
             phone: phone,
             createUser: shouldCreateUser,
             data: data,
-            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
           )
         )
       )
@@ -399,7 +399,7 @@ public actor GoTrueClient {
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
   public func exchangeCodeForSession(authCode: String) async throws -> Session {
     guard let codeVerifier = try codeVerifierStorage.getCodeVerifier() else {
-      throw GoTrueError.pkce(.codeVerifierNotFound)
+      throw AuthError.pkce(.codeVerifierNotFound)
     }
     do {
       let session: Session = try await api.execute(
@@ -480,18 +480,18 @@ public actor GoTrueClient {
   @discardableResult
   public func session(from url: URL) async throws -> Session {
     if configuration.flowType == .implicit, !isImplicitGrantFlow(url: url) {
-      throw GoTrueError.invalidImplicitGrantFlowURL
+      throw AuthError.invalidImplicitGrantFlowURL
     }
 
     if configuration.flowType == .pkce, !isPKCEFlow(url: url) {
-      throw GoTrueError.pkce(.invalidPKCEFlowURL)
+      throw AuthError.pkce(.invalidPKCEFlowURL)
     }
 
     let params = extractParams(from: url)
 
     if isPKCEFlow(url: url) {
       guard let code = params.first(where: { $0.name == "code" })?.value else {
-        throw GoTrueError.pkce(.codeVerifierNotFound)
+        throw AuthError.pkce(.codeVerifierNotFound)
       }
 
       let session = try await exchangeCodeForSession(authCode: code)
@@ -499,7 +499,7 @@ public actor GoTrueClient {
     }
 
     if let errorDescription = params.first(where: { $0.name == "error_description" })?.value {
-      throw GoTrueError.api(.init(errorDescription: errorDescription))
+      throw AuthError.api(.init(errorDescription: errorDescription))
     }
 
     guard
@@ -563,7 +563,7 @@ public actor GoTrueClient {
       expiresAt = Date(timeIntervalSince1970: exp)
       hasExpired = expiresAt <= now
     } else {
-      throw GoTrueError.missingExpClaim
+      throw AuthError.missingExpClaim
     }
 
     if hasExpired {
@@ -605,7 +605,7 @@ public actor GoTrueClient {
       // ignore 401s since an invalid or expired JWT should sign out the current session
       let ignoredCodes = Set([404, 401])
 
-      if case let GoTrueError.api(apiError) = error, let code = apiError.code,
+      if case let AuthError.api(apiError) = error, let code = apiError.code,
          !ignoredCodes.contains(code)
       {
         throw error
@@ -640,7 +640,7 @@ public actor GoTrueClient {
               email: email,
               token: token,
               type: type,
-              gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
+              gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
             )
           )
         )
@@ -667,7 +667,7 @@ public actor GoTrueClient {
               phone: phone,
               token: token,
               type: type,
-              gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:))
+              gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
             )
           )
         )
@@ -753,7 +753,7 @@ public actor GoTrueClient {
         body: configuration.encoder.encode(
           RecoverParams(
             email: email,
-            gotrueMetaSecurity: captchaToken.map(GoTrueMetaSecurity.init(captchaToken:)),
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod
           )
@@ -839,17 +839,17 @@ public actor GoTrueClient {
   }
 }
 
-extension GoTrueClient {
+extension AuthClient {
   /// Notification posted when an auth state event is triggered.
   public static let didChangeAuthStateNotification = Notification.Name(
-    "GoTrueClient.didChangeAuthStateNotification"
+    "AuthClient.didChangeAuthStateNotification"
   )
 
   /// A user info key to retrieve the ``AuthChangeEvent`` value for a
-  /// ``GoTrueClient/didChangeAuthStateNotification`` notification.
-  public static let authChangeEventInfoKey = "GoTrueClient.authChangeEvent"
+  /// ``AuthClient/didChangeAuthStateNotification`` notification.
+  public static let authChangeEventInfoKey = "AuthClient.authChangeEvent"
 
   /// A user info key to retrieve the ``Session`` value for a
-  /// ``GoTrueClient/didChangeAuthStateNotification`` notification.
-  public static let authChangeSessionInfoKey = "GoTrueClient.authChangeSession"
+  /// ``AuthClient/didChangeAuthStateNotification`` notification.
+  public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
 }

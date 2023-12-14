@@ -15,13 +15,13 @@ let package = Package(
   ],
   products: [
     .library(name: "Functions", targets: ["Functions"]),
-    .library(name: "GoTrue", targets: ["GoTrue"]),
+    .library(name: "Auth", targets: ["Auth"]),
     .library(name: "PostgREST", targets: ["PostgREST"]),
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
     .library(
       name: "Supabase",
-      targets: ["Supabase", "Functions", "PostgREST", "GoTrue", "Realtime", "Storage"]
+      targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]
     ),
   ],
   dependencies: [
@@ -46,7 +46,7 @@ let package = Package(
       ]
     ),
     .target(
-      name: "GoTrue",
+      name: "Auth",
       dependencies: [
         "_Helpers",
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
@@ -54,9 +54,9 @@ let package = Package(
       ]
     ),
     .testTarget(
-      name: "GoTrueTests",
+      name: "AuthTests",
       dependencies: [
-        "GoTrue",
+        "Auth",
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
       ],
@@ -93,7 +93,7 @@ let package = Package(
       name: "Supabase",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        "GoTrue",
+        "Auth",
         "Storage",
         "Realtime",
         "PostgREST",

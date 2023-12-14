@@ -1,5 +1,5 @@
+import Auth
 import Foundation
-import GoTrue
 
 public struct SupabaseClientOptions: Sendable {
   public let db: DatabaseOptions
@@ -30,7 +30,7 @@ public struct SupabaseClientOptions: Sendable {
 
   public struct AuthOptions: Sendable {
     /// A storage provider. Used to store the logged-in session.
-    public let storage: GoTrueLocalStorage?
+    public let storage: AuthLocalStorage?
 
     /// OAuth flow to use - defaults to PKCE flow. PKCE is recommended for mobile and server-side
     /// applications.
@@ -43,7 +43,7 @@ public struct SupabaseClientOptions: Sendable {
     public let decoder: JSONDecoder?
 
     public init(
-      storage: GoTrueLocalStorage? = nil,
+      storage: AuthLocalStorage? = nil,
       flowType: AuthFlowType = .pkce,
       encoder: JSONEncoder? = nil,
       decoder: JSONDecoder? = nil

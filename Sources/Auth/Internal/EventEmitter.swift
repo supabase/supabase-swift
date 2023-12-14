@@ -42,11 +42,11 @@ extension EventEmitter {
       },
       emit: { event, session, id in
         NotificationCenter.default.post(
-          name: GoTrueClient.didChangeAuthStateNotification,
+          name: AuthClient.didChangeAuthStateNotification,
           object: nil,
           userInfo: [
-            GoTrueClient.authChangeEventInfoKey: event,
-            GoTrueClient.authChangeSessionInfoKey: session as Any,
+            AuthClient.authChangeEventInfoKey: event,
+            AuthClient.authChangeSessionInfoKey: session as Any,
           ]
         )
         if let id {

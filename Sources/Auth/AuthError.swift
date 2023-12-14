@@ -1,6 +1,6 @@
 import Foundation
 
-public enum GoTrueError: LocalizedError, Sendable {
+public enum AuthError: LocalizedError, Sendable {
   case missingExpClaim
   case malformedJWT
   case sessionNotFound

@@ -1,8 +1,8 @@
 import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
+@_exported import Auth
 @_exported import Functions
-@_exported import GoTrue
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
@@ -20,7 +20,7 @@ public final class SupabaseClient: @unchecked Sendable {
 
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured
   /// by access policies.
-  public let auth: GoTrueClient
+  public let auth: AuthClient
 
   /// Database client for Supabase.
   public private(set) lazy var database = PostgrestClient(
@@ -84,7 +84,7 @@ public final class SupabaseClient: @unchecked Sendable {
       "apikey": supabaseKey,
     ].merging(options.global.headers) { _, new in new }
 
-    auth = GoTrueClient(
+    auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       headers: defaultHeaders,
       flowType: options.auth.flowType,
@@ -92,7 +92,7 @@ public final class SupabaseClient: @unchecked Sendable {
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
       fetch: {
-        // DON'T use `fetchWithAuth` method within the GoTrueClient as it may cause a deadlock.
+        // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
         try await options.global.session.data(for: $0)
       }
     )

@@ -9,7 +9,7 @@ struct CodeVerifierStorage: Sendable {
 
 extension CodeVerifierStorage {
   static var live: Self = {
-    var localStorage: GoTrueLocalStorage {
+    var localStorage: AuthLocalStorage {
       Dependencies.current.value!.configuration.localStorage
     }
 

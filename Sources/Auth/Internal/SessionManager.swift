@@ -44,7 +44,7 @@ actor _LiveSessionManager {
     }
 
     guard let currentSession = try storage.getSession() else {
-      throw GoTrueError.sessionNotFound
+      throw AuthError.sessionNotFound
     }
 
     if currentSession.isValid || !shouldValidateExpiration {

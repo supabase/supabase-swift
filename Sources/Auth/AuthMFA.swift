@@ -2,7 +2,7 @@ import Foundation
 @_spi(Internal) import _Helpers
 
 /// Contains the full multi-factor authentication API.
-public actor GoTrueMFA {
+public actor AuthMFA {
   private var api: APIClient {
     Dependencies.current.value!.api
   }
@@ -11,7 +11,7 @@ public actor GoTrueMFA {
     Dependencies.current.value!.sessionManager
   }
 
-  private var configuration: GoTrueClient.Configuration {
+  private var configuration: AuthClient.Configuration {
     Dependencies.current.value!.configuration
   }
 
@@ -148,7 +148,7 @@ public actor GoTrueMFA {
         nextLevel: nextLevel,
         currentAuthenticationMethods: currentAuthenticationMethods
       )
-    } catch GoTrueError.sessionNotFound {
+    } catch AuthError.sessionNotFound {
       return AuthMFAGetAuthenticatorAssuranceLevelResponse(
         currentLevel: nil,
         nextLevel: nil,

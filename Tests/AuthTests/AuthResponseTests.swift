@@ -1,4 +1,4 @@
-import GoTrue
+import Auth
 import SnapshotTesting
 import XCTest
 

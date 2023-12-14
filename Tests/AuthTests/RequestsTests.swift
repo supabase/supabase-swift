@@ -9,7 +9,7 @@ import SnapshotTesting
 import XCTest
 @_spi(Internal) import _Helpers
 
-@testable import GoTrue
+@testable import Auth
 
 struct UnimplementedError: Error {}
 
@@ -92,7 +92,7 @@ final class RequestsTests: XCTestCase {
             idToken: "id-token",
             accessToken: "access-token",
             nonce: "nonce",
-            gotrueMetaSecurity: GoTrueMetaSecurity(
+            gotrueMetaSecurity: AuthMetaSecurity(
               captchaToken: "captcha-token"
             )
           )
@@ -355,15 +355,15 @@ final class RequestsTests: XCTestCase {
 
   private func makeSUT(
     record: Bool = false,
-    fetch: GoTrueClient.FetchHandler? = nil,
+    fetch: AuthClient.FetchHandler? = nil,
     file: StaticString = #file,
     testName: String = #function,
     line: UInt = #line
-  ) -> GoTrueClient {
+  ) -> AuthClient {
     let encoder = JSONEncoder.goTrue
     encoder.outputFormatting = .sortedKeys
 
-    let configuration = GoTrueClient.Configuration(
+    let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       encoder: encoder,
@@ -384,7 +384,7 @@ final class RequestsTests: XCTestCase {
 
     let api = APIClient.live(http: HTTPClient(fetchHandler: configuration.fetch))
 
-    return GoTrueClient(
+    return AuthClient(
       configuration: configuration,
       sessionManager: .mock,
       codeVerifierStorage: .mock,
