@@ -586,3 +586,35 @@ public enum SignOutScope: String, Sendable {
   /// session.
   case others
 }
+
+public enum ResendEmailType: String, Hashable, Sendable, Encodable {
+  case signup
+  case emailChange = "email_change"
+}
+
+struct ResendEmailParams: Encodable {
+  let type: ResendEmailType
+  let email: String
+  let gotrueMetaSecurity: AuthMetaSecurity?
+}
+
+public enum ResendMobileType: String, Hashable, Sendable, Encodable {
+  case sms
+  case phoneChange = "phone_change"
+}
+
+struct ResendMobileParams: Encodable {
+  let type: ResendMobileType
+  let phone: String
+  let gotrueMetaSecurity: AuthMetaSecurity?
+}
+
+public struct ResendMobileResponse: Decodable, Hashable, Sendable {
+  /// Unique ID of the message as reported by the SMS sending provider. Useful for tracking
+  /// deliverability problems.
+  public let messageId: String?
+
+  public init(messageId: String?) {
+    self.messageId = messageId
+  }
+}
