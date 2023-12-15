@@ -23,12 +23,12 @@ struct HomeView: View {
           }
         }
       }
-    .task {
-      mfaStatus = await verifyMFAStatus()
-    }
-    .sheet(unwrapping: $mfaStatus) { $mfaStatus in
-      MFAFlow(status: mfaStatus)
-    }
+      .task {
+        mfaStatus = await verifyMFAStatus()
+      }
+      .sheet(unwrapping: $mfaStatus) { $mfaStatus in
+        MFAFlow(status: mfaStatus)
+      }
   }
 
   private func verifyMFAStatus() async -> MFAStatus? {

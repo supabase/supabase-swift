@@ -9,7 +9,7 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.supabase.Examples://</string>
+				<string>com.supabase.Examples</string>
 			</array>
 		</dict>
 	</array>

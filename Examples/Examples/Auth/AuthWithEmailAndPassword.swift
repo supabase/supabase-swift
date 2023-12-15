@@ -1,49 +1,20 @@
 //
-//  AuthView.swift
+//  AuthWithEmailAndPassword.swift
 //  Examples
 //
-//  Created by Guilherme Souza on 22/12/22.
+//  Created by Guilherme Souza on 15/12/23.
 //
 
-import Auth
 import SwiftUI
 
-@Observable
-@MainActor
-final class AuthController {
-  var session: Session?
-
-  var currentUserID: UUID {
-    guard let id = session?.user.id else {
-      preconditionFailure("Required session.")
-    }
-
-    return id
-  }
-
-  @ObservationIgnored
-  private var observeAuthStateChangesTask: Task<Void, Never>?
-
-  init() {
-    observeAuthStateChangesTask = Task {
-      for await (event, session) in await supabase.auth.authStateChanges {
-        guard event == .initialSession || event == .signedIn || event == .signedOut else {
-          return
-        }
-
-        self.session = session
-      }
-    }
-  }
-
-  deinit {
-    observeAuthStateChangesTask?.cancel()
-  }
-}
-
-struct AuthView: View {
+struct AuthWithEmailAndPassword: View {
   enum Mode {
     case signIn, signUp
+  }
+
+  enum Result {
+    case failure(Error)
+    case needsEmailConfirmation
   }
 
   @Environment(AuthController.self) var auth
@@ -52,11 +23,6 @@ struct AuthView: View {
   @State var password = ""
   @State var mode: Mode = .signIn
   @State var result: Result?
-
-  enum Result {
-    case failure(Error)
-    case needsEmailConfirmation
-  }
 
   var body: some View {
     Form {
@@ -76,12 +42,20 @@ struct AuthView: View {
           }
         }
 
-        if case .failure(let error) = result {
+        if case let .failure(error) = result {
           ErrorText(error)
         }
+      }
 
-        if case .needsEmailConfirmation = result {
+      if mode == .signUp, case .needsEmailConfirmation = result {
+        Section {
           Text("Check you inbox.")
+
+          Button("Resend confirmation") {
+            Task {
+              await resendConfirmationButtonTapped()
+            }
+          }
         }
       }
 
@@ -96,8 +70,6 @@ struct AuthView: View {
         }
       }
     }
-    .navigationTitle("Auth with Email & Password")
-    .navigationBarTitleDisplayMode(.inline)
   }
 
   func primaryActionButtonTapped() async {
@@ -108,7 +80,7 @@ struct AuthView: View {
         try await supabase.auth.signIn(email: email, password: password)
       case .signUp:
         let response = try await supabase.auth.signUp(
-          email: email, password: password, redirectTo: URL(string: "com.supabase.Examples://")!
+          email: email, password: password, redirectTo: URL(string: "com.supabase.Examples://")
         )
 
         if case .user = response {
@@ -121,10 +93,16 @@ struct AuthView: View {
       }
     }
   }
+
+  private func resendConfirmationButtonTapped() async {
+    do {
+      try await supabase.auth.resend(email: email, type: .signup)
+    } catch {
+      debug("Fail to resend email confirmation: \(error)")
+    }
+  }
 }
 
-struct AuthView_Previews: PreviewProvider {
-  static var previews: some View {
-    AuthView()
-  }
+#Preview {
+  AuthWithEmailAndPassword()
 }
