@@ -16,6 +16,8 @@
 		793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895CB2954ABFF0044F2B8 /* RootView.swift */; };
 		793895CE2954AC000044F2B8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 793895CD2954AC000044F2B8 /* Assets.xcassets */; };
 		793895D22954AC000044F2B8 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 793895D12954AC000044F2B8 /* Preview Assets.xcassets */; };
+		793E03092B2CED5D00AC7DED /* Contants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E03082B2CED5D00AC7DED /* Contants.swift */; };
+		793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E030A2B2CEDDA00AC7DED /* ActionState.swift */; };
 		794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1212955F26A008C9526 /* AddTodoListView.swift */; };
 		794EF1242955F3DE008C9526 /* TodoListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1232955F3DE008C9526 /* TodoListRow.swift */; };
 		7956405E2954ADE00088A06F /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405D2954ADE00088A06F /* Secrets.swift */; };
@@ -59,6 +61,8 @@
 		793895CD2954AC000044F2B8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		793895CF2954AC000044F2B8 /* Examples.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Examples.entitlements; sourceTree = "<group>"; };
 		793895D12954AC000044F2B8 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		793E03082B2CED5D00AC7DED /* Contants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contants.swift; sourceTree = "<group>"; };
+		793E030A2B2CEDDA00AC7DED /* ActionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionState.swift; sourceTree = "<group>"; };
 		794EF1212955F26A008C9526 /* AddTodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTodoListView.swift; sourceTree = "<group>"; };
 		794EF1232955F3DE008C9526 /* TodoListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListRow.swift; sourceTree = "<group>"; };
 		7956405D2954ADE00088A06F /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
@@ -179,6 +183,8 @@
 				794EF1232955F3DE008C9526 /* TodoListRow.swift */,
 				796298982AEBBA77000AA957 /* MFAFlow.swift */,
 				79AF04852B2CE586008761AD /* Debug.swift */,
+				793E03082B2CED5D00AC7DED /* Contants.swift */,
+				793E030A2B2CEDDA00AC7DED /* ActionState.swift */,
 			);
 			path = Examples;
 			sourceTree = "<group>";
@@ -395,6 +401,7 @@
 				796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */,
 				79AF04862B2CE586008761AD /* Debug.swift in Sources */,
 				79AF04842B2CE408008761AD /* AuthWithMagicLink.swift in Sources */,
+				793E03092B2CED5D00AC7DED /* Contants.swift in Sources */,
 				793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */,
 				7956406A2955AFBD0088A06F /* ErrorText.swift in Sources */,
 				79AF04812B2CE261008761AD /* AuthView.swift in Sources */,
@@ -407,6 +414,7 @@
 				79AF047F2B2CE207008761AD /* AuthWithEmailAndPassword.swift in Sources */,
 				795640622955AD2B0088A06F /* HomeView.swift in Sources */,
 				793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */,
+				793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

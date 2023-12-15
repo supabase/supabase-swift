@@ -9,7 +9,7 @@ import SwiftUI
 
 struct AuthWithMagicLink: View {
   @State var email = ""
-  @State var error: Error?
+  @State var actionState: ActionState<Void, Error> = .idle
 
   var body: some View {
     Form {
@@ -24,6 +24,15 @@ struct AuthWithMagicLink: View {
           }
         }
       }
+
+      switch actionState {
+      case .idle, .result(.success):
+        EmptyView()
+      case .inFlight:
+        ProgressView()
+      case let .result(.failure(error)):
+        ErrorText(error)
+      }
     }
     .onOpenURL { url in
       Task { await onOpenURL(url) }
@@ -31,24 +40,27 @@ struct AuthWithMagicLink: View {
   }
 
   private func signInWithMagicLinkTapped() async {
-    do {
-      try await supabase.auth.signInWithOTP(
-        email: email,
-        redirectTo: URL(string: "com.supabase.Examples://")
-      )
-    } catch {
-      self.error = error
-    }
+    actionState = .inFlight
+
+    actionState = await .result(
+      Result {
+        try await supabase.auth.signInWithOTP(
+          email: email,
+          redirectTo: Constants.redirectToURL
+        )
+      }
+    )
   }
 
   private func onOpenURL(_ url: URL) async {
-    debug("onOpenURL: \(url)")
+    debug("received url: \(url)")
 
-    do {
-      try await supabase.auth.session(from: url)
-    } catch {
-      self.error = error
-    }
+    actionState = .inFlight
+    actionState = await .result(
+      Result {
+        try await supabase.auth.session(from: url)
+      }
+    )
   }
 }
 

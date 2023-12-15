@@ -80,7 +80,9 @@ struct AuthWithEmailAndPassword: View {
         try await supabase.auth.signIn(email: email, password: password)
       case .signUp:
         let response = try await supabase.auth.signUp(
-          email: email, password: password, redirectTo: URL(string: "com.supabase.Examples://")
+          email: email,
+          password: password,
+          redirectTo: Constants.redirectToURL
         )
 
         if case .user = response {

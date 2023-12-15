@@ -24,7 +24,7 @@ struct HomeView: View {
         }
       }
       .task {
-        mfaStatus = await verifyMFAStatus()
+//        mfaStatus = await verifyMFAStatus()
       }
       .sheet(unwrapping: $mfaStatus) { $mfaStatus in
         MFAFlow(status: mfaStatus)
