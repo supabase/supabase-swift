@@ -11,4 +11,5 @@ struct Dependencies: Sendable {
   var sessionStorage: SessionStorage
   var sessionRefresher: SessionRefresher
   var codeVerifierStorage: CodeVerifierStorage
+  var currentDate: @Sendable () -> Date = { Date() }
 }

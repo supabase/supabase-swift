@@ -166,11 +166,14 @@ final class RequestsTests: XCTestCase {
       return (json(named: "user"), HTTPURLResponse())
     })
 
+    let currentDate = Date()
+
     try await withDependencies {
       $0.sessionManager.update = { _ in }
       $0.sessionStorage.storeSession = { _ in }
       $0.codeVerifierStorage.getCodeVerifier = { nil }
       $0.eventEmitter = .live
+      $0.currentDate = { currentDate }
     } operation: {
       let url = URL(
         string:
@@ -182,6 +185,7 @@ final class RequestsTests: XCTestCase {
         accessToken: "accesstoken",
         tokenType: "bearer",
         expiresIn: 60,
+        expiresAt: currentDate.addingTimeInterval(60).timeIntervalSince1970,
         refreshToken: "refreshtoken",
         user: User(fromMockNamed: "user")
       )
