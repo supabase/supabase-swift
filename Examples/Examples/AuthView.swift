@@ -5,12 +5,13 @@
 //  Created by Guilherme Souza on 22/12/22.
 //
 
-import GoTrue
+import Auth
 import SwiftUI
 
+@Observable
 @MainActor
-final class AuthController: ObservableObject {
-  @Published var session: Session?
+final class AuthController {
+  var session: Session?
 
   var currentUserID: UUID {
     guard let id = session?.user.id else {
@@ -20,14 +21,23 @@ final class AuthController: ObservableObject {
     return id
   }
 
-  func observeAuth() async {
-    for await (event, session) in await supabase.auth.onAuthStateChange() {
-      guard event == .signedIn || event == .signedOut else {
-        return
-      }
+  @ObservationIgnored
+  private var observeAuthStateChangesTask: Task<Void, Never>?
 
-      self.session = session
+  init() {
+    observeAuthStateChangesTask = Task {
+      for await (event, session) in await supabase.auth.authStateChanges {
+        guard event == .initialSession || event == .signedIn || event == .signedOut else {
+          return
+        }
+
+        self.session = session
+      }
     }
+  }
+
+  deinit {
+    observeAuthStateChangesTask?.cancel()
   }
 }
 
@@ -36,12 +46,17 @@ struct AuthView: View {
     case signIn, signUp
   }
 
-  @EnvironmentObject var auth: AuthController
+  @Environment(AuthController.self) var auth
 
   @State var email = ""
   @State var password = ""
   @State var mode: Mode = .signIn
-  @State var error: Error?
+  @State var result: Result?
+
+  enum Result {
+    case failure(Error)
+    case needsEmailConfirmation
+  }
 
   var body: some View {
     Form {
@@ -61,8 +76,12 @@ struct AuthView: View {
           }
         }
 
-        if let error {
+        if case .failure(let error) = result {
           ErrorText(error)
+        }
+
+        if case .needsEmailConfirmation = result {
+          Text("Check you inbox.")
         }
       }
 
@@ -72,26 +91,33 @@ struct AuthView: View {
         ) {
           withAnimation {
             mode = mode == .signIn ? .signUp : .signIn
+            result = nil
           }
         }
       }
     }
+    .navigationTitle("Auth with Email & Password")
+    .navigationBarTitleDisplayMode(.inline)
   }
 
   func primaryActionButtonTapped() async {
     do {
-      error = nil
+      result = nil
       switch mode {
       case .signIn:
         try await supabase.auth.signIn(email: email, password: password)
       case .signUp:
-        try await supabase.auth.signUp(
+        let response = try await supabase.auth.signUp(
           email: email, password: password, redirectTo: URL(string: "com.supabase.Examples://")!
         )
+
+        if case .user = response {
+          result = .needsEmailConfirmation
+        }
       }
     } catch {
       withAnimation {
-        self.error = error
+        result = .failure(error)
       }
     }
   }

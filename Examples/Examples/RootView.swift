@@ -5,22 +5,19 @@
 //  Created by Guilherme Souza on 22/12/22.
 //
 
-import GoTrue
+import Auth
 import SwiftUI
 
 struct RootView: View {
-  @EnvironmentObject var auth: AuthController
+  @Environment(AuthController.self) var auth
 
   var body: some View {
-    Group {
+    NavigationStack {
       if auth.session == nil {
         AuthView()
       } else {
         HomeView()
       }
-    }
-    .task {
-      await auth.observeAuth()
     }
     .onOpenURL { url in
       Task {

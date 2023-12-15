@@ -10,7 +10,7 @@ import SwiftUI
 import SwiftUINavigation
 
 struct TodoListView: View {
-  @EnvironmentObject var auth: AuthController
+  @Environment(AuthController.self) var auth
 
   @State var todos: IdentifiedArrayOf<Todo> = []
   @State var error: Error?
@@ -92,6 +92,7 @@ struct TodoListView: View {
     }
   }
 
+  @MainActor
   func toggleCompletion(of todo: Todo) async {
     var updatedTodo = todo
     updatedTodo.isComplete.toggle()
