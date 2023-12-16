@@ -19,11 +19,6 @@ struct RootView: View {
         HomeView()
       }
     }
-    .onOpenURL { url in
-      Task {
-        try? await supabase.auth.session(from: url)
-      }
-    }
   }
 }
 

@@ -5,8 +5,10 @@
 //  Created by Guilherme Souza on 15/12/23.
 //
 
+import CasePaths
 import Foundation
 
+@CasePathable
 enum ActionState<Success, Failure: Error> {
   case idle
   case inFlight

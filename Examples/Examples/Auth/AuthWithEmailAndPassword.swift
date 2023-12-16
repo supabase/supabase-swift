@@ -31,10 +31,14 @@ struct AuthWithEmailAndPassword: View {
           .textContentType(.emailAddress)
           .autocorrectionDisabled()
           .textInputAutocapitalization(.never)
+
         SecureField("Password", text: $password)
           .textContentType(.password)
           .autocorrectionDisabled()
           .textInputAutocapitalization(.never)
+      }
+
+      Section {
         Button(mode == .signIn ? "Sign in" : "Sign up") {
           Task {
             await primaryActionButtonTapped()
@@ -69,13 +73,17 @@ struct AuthWithEmailAndPassword: View {
         Button(
           mode == .signIn ? "Don't have an account? Sign up." : "Already have an account? Sign in."
         ) {
-          withAnimation {
-            mode = mode == .signIn ? .signUp : .signIn
-            actionState = .idle
-          }
+          mode = mode == .signIn ? .signUp : .signIn
+          actionState = .idle
         }
       }
     }
+    .onOpenURL { url in
+      Task {
+        await onOpenURL(url)
+      }
+    }
+    .animation(.default, value: mode)
   }
 
   func primaryActionButtonTapped() async {
@@ -102,6 +110,14 @@ struct AuthWithEmailAndPassword: View {
     }
   }
 
+  private func onOpenURL(_ url: URL) async {
+    do {
+      try await supabase.auth.session(from: url)
+    } catch {
+      debug("Fail to init session with url: \(url)")
+    }
+  }
+
   private func resendConfirmationButtonTapped() async {
     do {
       try await supabase.auth.resend(email: email, type: .signup)
@@ -113,4 +129,5 @@ struct AuthWithEmailAndPassword: View {
 
 #Preview {
   AuthWithEmailAndPassword()
+    .environment(AuthController())
 }

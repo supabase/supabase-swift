@@ -15,6 +15,10 @@ struct AuthWithMagicLink: View {
     Form {
       Section {
         TextField("Email", text: $email)
+          .keyboardType(.emailAddress)
+          .textContentType(.emailAddress)
+          .autocorrectionDisabled()
+          .textInputAutocapitalization(.never)
       }
 
       Section {
