@@ -13,7 +13,6 @@ struct AuthWithEmailAndPassword: View {
   }
 
   enum Result {
-    case failure(Error)
     case needsEmailConfirmation
   }
 
@@ -22,7 +21,7 @@ struct AuthWithEmailAndPassword: View {
   @State var email = ""
   @State var password = ""
   @State var mode: Mode = .signIn
-  @State var result: Result?
+  @State var actionState = ActionState<Result, Error>.idle
 
   var body: some View {
     Form {
@@ -41,13 +40,20 @@ struct AuthWithEmailAndPassword: View {
             await primaryActionButtonTapped()
           }
         }
-
-        if case let .failure(error) = result {
-          ErrorText(error)
-        }
       }
 
-      if mode == .signUp, case .needsEmailConfirmation = result {
+      if case let .result(.failure(error)) = actionState {
+        ErrorText(error)
+      }
+
+      switch actionState {
+      case .idle:
+        EmptyView()
+      case .inFlight:
+        ProgressView()
+      case let .result(.failure(error)):
+        ErrorText(error)
+      case .result(.success(.needsEmailConfirmation)):
         Section {
           Text("Check you inbox.")
 
@@ -65,7 +71,7 @@ struct AuthWithEmailAndPassword: View {
         ) {
           withAnimation {
             mode = mode == .signIn ? .signUp : .signIn
-            result = nil
+            actionState = .idle
           }
         }
       }
@@ -74,7 +80,7 @@ struct AuthWithEmailAndPassword: View {
 
   func primaryActionButtonTapped() async {
     do {
-      result = nil
+      actionState = .inFlight
       switch mode {
       case .signIn:
         try await supabase.auth.signIn(email: email, password: password)
@@ -86,12 +92,12 @@ struct AuthWithEmailAndPassword: View {
         )
 
         if case .user = response {
-          result = .needsEmailConfirmation
+          actionState = .result(.success(.needsEmailConfirmation))
         }
       }
     } catch {
       withAnimation {
-        result = .failure(error)
+        actionState = .result(.failure(error))
       }
     }
   }

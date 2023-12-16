@@ -11,11 +11,13 @@ struct AuthView: View {
   enum Option: CaseIterable {
     case emailAndPassword
     case magicLink
+    case signInWithApple
 
     var title: String {
       switch self {
       case .emailAndPassword: "Auth with Email & Password"
       case .magicLink: "Auth with Magic Link"
+      case .signInWithApple: "Sign in with Apple"
       }
     }
   }
@@ -39,6 +41,7 @@ extension AuthView.Option: View {
     switch self {
     case .emailAndPassword: AuthWithEmailAndPassword()
     case .magicLink: AuthWithMagicLink()
+    case .signInWithApple: SignInWithApple()
     }
   }
 }

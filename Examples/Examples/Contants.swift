@@ -8,5 +8,5 @@
 import Foundation
 
 enum Constants {
-  static let redirectToURL = URL(string: "com.supabase.Examples://")!
+  static let redirectToURL = URL(string: "com.supabase.swift-examples://")!
 }

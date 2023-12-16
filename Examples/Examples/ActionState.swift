@@ -12,14 +12,3 @@ enum ActionState<Success, Failure: Error> {
   case inFlight
   case result(Result<Success, Failure>)
 }
-
-extension Result where Failure == Error {
-  init(catching operation: () async throws -> Success) async {
-    do {
-      let value = try await operation()
-      self = .success(value)
-    } catch {
-      self = .failure(error)
-    }
-  }
-}
