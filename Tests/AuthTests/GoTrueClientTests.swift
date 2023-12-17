@@ -18,14 +18,14 @@ import FoundationNetworking
 final class AuthClientTests: XCTestCase {
   fileprivate var api: APIClient!
 
-  #if !os(Linux)
-  // `fullfillment` doesn't exist on Linux yet.
   func testAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
 
     let events = ActorIsolated([AuthChangeEvent]())
-    let expectation = expectation(description: "onAuthStateChangeEnd")
+
+    // We use a semaphore here instead of the nicer XCTestExpectation as that isn't fully available on Linux.
+    let semaphore = DispatchSemaphore(value: 0)
 
     await withDependencies {
       $0.eventEmitter = .live
@@ -39,11 +39,11 @@ final class AuthClientTests: XCTestCase {
             $0.append(event)
           }
 
-          expectation.fulfill()
+          semaphore.signal()
         }
       }
 
-      await fulfillment(of: [expectation], timeout: 2)
+      _ = semaphore.wait(timeout: .now() + 2.0)
 
       let events = await events.value
       XCTAssertEqual(events, [.initialSession])
@@ -51,7 +51,6 @@ final class AuthClientTests: XCTestCase {
       streamTask.cancel()
     }
   }
-  #endif
 
   func testSignOut() async throws {
     let sut = makeSUT()
