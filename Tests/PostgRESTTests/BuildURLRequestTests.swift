@@ -106,6 +106,11 @@ final class BuildURLRequestTests: XCTestCase {
           .gt("received_at", value: "2023-03-23T15:50:30.511743+00:00")
           .order("received_at")
       },
+      TestCase(name: "query non-default schema") { client in
+        await client.schema("storage")
+          .from("objects")
+          .select()
+      }
     ]
 
     for testCase in testCases {
