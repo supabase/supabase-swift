@@ -157,7 +157,8 @@ final class AuthClientTests: XCTestCase {
   private func makeSUT() -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: clientURL,
-      headers: ["apikey": "dummy.api.key"]
+      headers: ["apikey": "dummy.api.key"],
+      localStorage: Dependencies.localStorage
     )
 
     let sut = AuthClient(

@@ -68,7 +68,45 @@ extension APIClient {
   static let mock = APIClient(execute: unimplemented("APIClient.execute"))
 }
 
+struct InsecureMockLocalStorage: GoTrueLocalStorage {
+  private let defaults: UserDefaults
+
+  init(service: String, accessGroup: String?) {
+    guard let defaults = UserDefaults(suiteName: service) else {
+      fatalError("Unable to create defautls for service: \(service)")
+    }
+
+    self.defaults = defaults
+  }
+
+  func store(key: String, value: Data) throws {
+    print("[WARN] YOU ARE YOU WRITING TO INSECURE LOCAL STORAGE")
+    defaults.set(value, forKey: key)
+  }
+
+  func retrieve(key: String) throws -> Data? {
+    print("[WARN] YOU ARE READING FROM INSECURE LOCAL STORAGE")
+    return defaults.data(forKey: key)
+  }
+
+  func remove(key: String) throws {
+    print("[WARN] YOU ARE REMOVING A KEY FROM INSECURE LOCAL STORAGE")
+    defaults.removeObject(forKey: key)
+  }
+}
+
 extension Dependencies {
+  static let localStorage: some GoTrueLocalStorage = {
+    #if os(iOS) || os(macOS) || os(watchOS)
+    KeychainLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
+    #elseif os(Windows)
+    WinCredLocalStorage(service: "supabase.gotrue.swift")
+    #else
+    // Only use an insecure mock when needed for testing
+    InsecureMockLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
+    #endif
+  }()
+
   static let mock = Dependencies(
     configuration: AuthClient.Configuration(url: clientURL),
     sessionManager: .mock,
