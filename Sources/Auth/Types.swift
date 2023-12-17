@@ -238,7 +238,7 @@ public enum Provider: String, Codable, CaseIterable, Sendable {
 public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
   /// Provider name or OIDC `iss` value identifying which provider should be used to verify the
   /// provided token. Supported names: `google`, `apple`, `azure`, `facebook`.
-  public var provider: Provider?
+  public var provider: Provider
 
   /// OIDC ID token issued by the specified provider. The `iss` claim in the ID token must match the
   /// supplied provider. Some ID tokens contain an `at_hash` which require that you provide an
@@ -258,7 +258,7 @@ public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
   public var gotrueMetaSecurity: AuthMetaSecurity?
 
   public init(
-    provider: Provider? = nil,
+    provider: Provider,
     idToken: String,
     accessToken: String? = nil,
     nonce: String? = nil,

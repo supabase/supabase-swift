@@ -8,29 +8,27 @@
 import SwiftUI
 
 struct HomeView: View {
-  @EnvironmentObject var auth: AuthController
+  @Environment(AuthController.self) var auth
 
   @State private var mfaStatus: MFAStatus?
 
   var body: some View {
-    NavigationStack {
-      TodoListView()
-        .toolbar {
-          ToolbarItem(placement: .cancellationAction) {
-            Button("Sign out") {
-              Task {
-                try! await supabase.auth.signOut()
-              }
+    TodoListView()
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Sign out") {
+            Task {
+              try! await supabase.auth.signOut()
             }
           }
         }
-    }
-    .task {
-      mfaStatus = await verifyMFAStatus()
-    }
-    .sheet(unwrapping: $mfaStatus) { $mfaStatus in
-      MFAFlow(status: mfaStatus)
-    }
+      }
+      .task {
+//        mfaStatus = await verifyMFAStatus()
+      }
+      .sheet(unwrapping: $mfaStatus) { $mfaStatus in
+        MFAFlow(status: mfaStatus)
+      }
   }
 
   private func verifyMFAStatus() async -> MFAStatus? {

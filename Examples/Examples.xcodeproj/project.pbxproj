@@ -16,10 +16,13 @@
 		793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895CB2954ABFF0044F2B8 /* RootView.swift */; };
 		793895CE2954AC000044F2B8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 793895CD2954AC000044F2B8 /* Assets.xcassets */; };
 		793895D22954AC000044F2B8 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 793895D12954AC000044F2B8 /* Preview Assets.xcassets */; };
+		793E03092B2CED5D00AC7DED /* Contants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E03082B2CED5D00AC7DED /* Contants.swift */; };
+		793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E030A2B2CEDDA00AC7DED /* ActionState.swift */; };
+		793E030D2B2DAB5700AC7DED /* SignInWithApple.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */; };
 		794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1212955F26A008C9526 /* AddTodoListView.swift */; };
 		794EF1242955F3DE008C9526 /* TodoListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1232955F3DE008C9526 /* TodoListRow.swift */; };
 		7956405E2954ADE00088A06F /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405D2954ADE00088A06F /* Secrets.swift */; };
-		795640602954AE140088A06F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405F2954AE140088A06F /* AuthView.swift */; };
+		795640602954AE140088A06F /* AuthController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405F2954AE140088A06F /* AuthController.swift */; };
 		795640622955AD2B0088A06F /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640612955AD2B0088A06F /* HomeView.swift */; };
 		795640662955AE9C0088A06F /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640652955AE9C0088A06F /* TodoListView.swift */; };
 		795640682955AEB30088A06F /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640672955AEB30088A06F /* Models.swift */; };
@@ -29,6 +32,10 @@
 		796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796298982AEBBA77000AA957 /* MFAFlow.swift */; };
 		7962989D2AEBC6F9000AA957 /* SVGView in Frameworks */ = {isa = PBXBuildFile; productRef = 7962989C2AEBC6F9000AA957 /* SVGView */; };
 		79719ECE2ADF26C400737804 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79719ECD2ADF26C400737804 /* Supabase */; };
+		79AF047F2B2CE207008761AD /* AuthWithEmailAndPassword.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */; };
+		79AF04812B2CE261008761AD /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04802B2CE261008761AD /* AuthView.swift */; };
+		79AF04842B2CE408008761AD /* AuthWithMagicLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */; };
+		79AF04862B2CE586008761AD /* Debug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04852B2CE586008761AD /* Debug.swift */; };
 		79FEFFAF2B07873600D36347 /* UserManagementApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFAE2B07873600D36347 /* UserManagementApp.swift */; };
 		79FEFFB12B07873600D36347 /* AppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFB02B07873600D36347 /* AppView.swift */; };
 		79FEFFB32B07873700D36347 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79FEFFB22B07873700D36347 /* Assets.xcassets */; };
@@ -55,16 +62,23 @@
 		793895CD2954AC000044F2B8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		793895CF2954AC000044F2B8 /* Examples.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Examples.entitlements; sourceTree = "<group>"; };
 		793895D12954AC000044F2B8 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		793E03082B2CED5D00AC7DED /* Contants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contants.swift; sourceTree = "<group>"; };
+		793E030A2B2CEDDA00AC7DED /* ActionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionState.swift; sourceTree = "<group>"; };
+		793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInWithApple.swift; sourceTree = "<group>"; };
 		794EF1212955F26A008C9526 /* AddTodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTodoListView.swift; sourceTree = "<group>"; };
 		794EF1232955F3DE008C9526 /* TodoListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListRow.swift; sourceTree = "<group>"; };
 		7956405D2954ADE00088A06F /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
-		7956405F2954AE140088A06F /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		7956405F2954AE140088A06F /* AuthController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthController.swift; sourceTree = "<group>"; };
 		795640612955AD2B0088A06F /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		795640652955AE9C0088A06F /* TodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListView.swift; sourceTree = "<group>"; };
 		795640672955AEB30088A06F /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		795640692955AFBD0088A06F /* ErrorText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorText.swift; sourceTree = "<group>"; };
 		796298982AEBBA77000AA957 /* MFAFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MFAFlow.swift; sourceTree = "<group>"; };
 		7962989A2AEBBD9F000AA957 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthWithEmailAndPassword.swift; sourceTree = "<group>"; };
+		79AF04802B2CE261008761AD /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthWithMagicLink.swift; sourceTree = "<group>"; };
+		79AF04852B2CE586008761AD /* Debug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debug.swift; sourceTree = "<group>"; };
 		79FEFFAC2B07873600D36347 /* UserManagement.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UserManagement.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		79FEFFAE2B07873600D36347 /* UserManagementApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserManagementApp.swift; sourceTree = "<group>"; };
 		79FEFFB02B07873600D36347 /* AppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppView.swift; sourceTree = "<group>"; };
@@ -155,9 +169,9 @@
 		793895C82954ABFF0044F2B8 /* Examples */ = {
 			isa = PBXGroup;
 			children = (
+				79AF04822B2CE3BD008761AD /* Auth */,
 				7962989A2AEBBD9F000AA957 /* Info.plist */,
 				793895CD2954AC000044F2B8 /* Assets.xcassets */,
-				7956405F2954AE140088A06F /* AuthView.swift */,
 				793895CF2954AC000044F2B8 /* Examples.entitlements */,
 				793895C92954ABFF0044F2B8 /* ExamplesApp.swift */,
 				793895D02954AC000044F2B8 /* Preview Content */,
@@ -170,6 +184,9 @@
 				794EF1212955F26A008C9526 /* AddTodoListView.swift */,
 				794EF1232955F3DE008C9526 /* TodoListRow.swift */,
 				796298982AEBBA77000AA957 /* MFAFlow.swift */,
+				79AF04852B2CE586008761AD /* Debug.swift */,
+				793E03082B2CED5D00AC7DED /* Contants.swift */,
+				793E030A2B2CEDDA00AC7DED /* ActionState.swift */,
 			);
 			path = Examples;
 			sourceTree = "<group>";
@@ -187,6 +204,18 @@
 			children = (
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		79AF04822B2CE3BD008761AD /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				7956405F2954AE140088A06F /* AuthController.swift */,
+				79AF04802B2CE261008761AD /* AuthView.swift */,
+				79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */,
+				79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */,
+				793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */,
+			);
+			path = Auth;
 			sourceTree = "<group>";
 		};
 		79FEFFAD2B07873600D36347 /* UserManagement */ = {
@@ -290,7 +319,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 1510;
 				TargetAttributes = {
 					790308E52AEE7B4D003C4A98 = {
 						CreatedOnToolsVersion = 15.0.1;
@@ -373,16 +402,23 @@
 			buildActionMask = 2147483647;
 			files = (
 				796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */,
+				79AF04862B2CE586008761AD /* Debug.swift in Sources */,
+				79AF04842B2CE408008761AD /* AuthWithMagicLink.swift in Sources */,
+				793E03092B2CED5D00AC7DED /* Contants.swift in Sources */,
 				793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */,
 				7956406A2955AFBD0088A06F /* ErrorText.swift in Sources */,
+				79AF04812B2CE261008761AD /* AuthView.swift in Sources */,
 				794EF1242955F3DE008C9526 /* TodoListRow.swift in Sources */,
 				794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */,
 				7956405E2954ADE00088A06F /* Secrets.swift in Sources */,
 				795640682955AEB30088A06F /* Models.swift in Sources */,
 				795640662955AE9C0088A06F /* TodoListView.swift in Sources */,
-				795640602954AE140088A06F /* AuthView.swift in Sources */,
+				795640602954AE140088A06F /* AuthController.swift in Sources */,
+				79AF047F2B2CE207008761AD /* AuthWithEmailAndPassword.swift in Sources */,
 				795640622955AD2B0088A06F /* HomeView.swift in Sources */,
 				793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */,
+				793E030D2B2DAB5700AC7DED /* SignInWithApple.swift in Sources */,
+				793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -425,7 +461,6 @@
 					"@executable_path/../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.grds.RealtimeSample;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -460,7 +495,6 @@
 					"@executable_path/../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.grds.RealtimeSample;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -477,6 +511,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -527,11 +562,12 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -548,6 +584,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -592,11 +629,12 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -622,7 +660,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Examples/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.Examples;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.supabase.swift-examples";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
@@ -642,7 +680,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Examples/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.Examples;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.supabase.swift-examples";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
@@ -677,7 +715,6 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.UserManagement;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -719,7 +756,6 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.UserManagement;
 				PRODUCT_NAME = "$(TARGET_NAME)";

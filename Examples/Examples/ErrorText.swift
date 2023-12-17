@@ -15,7 +15,7 @@ struct ErrorText: View {
   }
 
   var body: some View {
-    Text(String(describing: error))
+    Text(error.localizedDescription)
       .foregroundColor(.red)
       .font(.footnote)
   }
