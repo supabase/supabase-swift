@@ -2,11 +2,11 @@ import Foundation
 
 // Borrowed from the Vapor project, https://github.com/vapor/vapor/blob/main/Sources/Vapor/Utilities/Array%2BRandom.swift#L14
 extension FixedWidthInteger {
-    public static func random() -> Self {
+    internal static func random() -> Self {
         return Self.random(in: .min ... .max)
     }
 
-    public static func random<T>(using generator: inout T) -> Self
+    internal static func random<T>(using generator: inout T) -> Self
         where T : RandomNumberGenerator
     {
         return Self.random(in: .min ... .max, using: &generator)
@@ -14,13 +14,13 @@ extension FixedWidthInteger {
 }
 
 extension Array where Element: FixedWidthInteger {
-    public static func random(count: Int) -> [Element] {
+    internal static func random(count: Int) -> [Element] {
         var array: [Element] = .init(repeating: 0, count: count)
         (0..<count).forEach { array[$0] = Element.random() }
         return array
     }
 
-    public static func random<T>(count: Int, using generator: inout T) -> [Element]
+    internal static func random<T>(count: Int, using generator: inout T) -> [Element]
         where T: RandomNumberGenerator
     {
         var array: [Element] = .init(repeating: 0, count: count)
