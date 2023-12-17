@@ -72,7 +72,7 @@ public final class SupabaseClient: @unchecked Sendable {
   public init(
     supabaseURL: URL,
     supabaseKey: String,
-    options: SupabaseClientOptions = .init()
+    options: SupabaseClientOptions
   ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
@@ -110,6 +110,7 @@ public final class SupabaseClient: @unchecked Sendable {
     listenForAuthEvents()
   }
 
+  #if os(iOS) || os(macOS) || os(watchOS) || os(tvOS)
   /// Create a new client.
   /// - Parameters:
   ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
@@ -120,7 +121,7 @@ public final class SupabaseClient: @unchecked Sendable {
   public convenience init(
     supabaseURL: String,
     supabaseKey: String,
-    options: SupabaseClientOptions = .init()
+    options: SupabaseClientOptions = .init(auth: .init(storage: LocalStorageEngines.keychain))
   ) {
     guard let supabaseURL = URL(string: supabaseURL) else {
       fatalError("Invalid supabaseURL: \(supabaseURL)")
@@ -128,6 +129,28 @@ public final class SupabaseClient: @unchecked Sendable {
 
     self.init(supabaseURL: supabaseURL, supabaseKey: supabaseKey, options: options)
   }
+  #endif
+
+  #if os(Windows)
+    /// Create a new client.
+  /// - Parameters:
+  ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
+  /// your project dashboard.
+  ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
+  /// your project dashboard.
+  ///   - options: Custom options to configure client's behavior.
+  public convenience init(
+    supabaseURL: String,
+    supabaseKey: String,
+    options: SupabaseClientOptions = .init(auth: .init(storage: LocalStorageEngines.wincred))
+  ) {
+    guard let supabaseURL = URL(string: supabaseURL) else {
+      fatalError("Invalid supabaseURL: \(supabaseURL)")
+    }
+
+    self.init(supabaseURL: supabaseURL, supabaseKey: supabaseKey, options: options)
+  }
+  #endif
 
   deinit {
     listenForAuthEventsTask.value?.cancel()

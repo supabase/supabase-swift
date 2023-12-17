@@ -1,13 +1,15 @@
 import Foundation
 
 public enum LocalStorageEngines {
-  public static func platformSpecific() -> some GoTrueLocalStorage {
-    #if os(iOS) || os(macOS) || os(watchOS)
+  #if os(iOS) || os(macOS) || os(watchOS) || os(tvOS)
+  public static let keychain: some GoTrueLocalStorage = {
     KeychainLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
-    #elseif os(Windows)
+  }()
+  #endif
+
+  #if os(Windows)
+  public static let wincred: some GoTrueLocalStorage = {
     WinCredLocalStorage(service: "supabase.gotrue.swift")
-    #else
-    preconditionFailure("There is no default storage engine implemented for this platform, please set your own implementation.")
-    #endif
-  }
+  }()
+  #endif
 }

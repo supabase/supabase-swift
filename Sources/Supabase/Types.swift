@@ -75,7 +75,7 @@ public struct SupabaseClientOptions: Sendable {
 
   public init(
     db: DatabaseOptions = .init(),
-    auth: AuthOptions = .init(storage: LocalStorageEngines.platformSpecific()),
+    auth: AuthOptions,
     global: GlobalOptions = .init()
   ) {
     self.db = db
