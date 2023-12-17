@@ -134,4 +134,14 @@ public actor PostgrestClient {
   ) throws -> PostgrestFilterBuilder {
     try rpc(fn, params: NoParams(), count: count)
   }
+
+  /// Select a schema to query or perform an function (rpc) call.
+  ///
+  /// The schema needs to be on the list of exposed schemas inside Supabase.
+  /// - Parameter schema: The schema to query.
+  public func schema(_ schema: String) -> PostgrestClient {
+    var configuration = configuration
+    configuration.schema = schema
+    return PostgrestClient(configuration: configuration)
+  }
 }
