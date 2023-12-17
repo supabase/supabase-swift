@@ -8,6 +8,7 @@ EXAMPLE = Examples
 test-library:
 	for platform in "$(PLATFORM_IOS)" "$(PLATFORM_MACOS)" "$(PLATFORM_MAC_CATALYST)" "$(PLATFORM_TVOS)" "$(PLATFORM_WATCHOS)"; do \
 		xcodebuild test \
+			-skipMacroValidation \
 			-workspace supabase-swift.xcworkspace \
 			-scheme Supabase \
 			-destination platform="$$platform" || exit 1; \
@@ -37,6 +38,7 @@ test-docs:
 build-examples:
 	for scheme in Examples UserManagement; do \
 		xcodebuild build \
+			-skipMacroValidation \
 			-workspace supabase-swift.xcworkspace \
 			-scheme "$$scheme" \
 			-destination platform="$(PLATFORM_IOS)" || exit 1; \
