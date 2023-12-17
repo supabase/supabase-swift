@@ -35,7 +35,7 @@ test-docs:
 		&& exit 1)
 
 build-examples:
-	for scheme in UserManagement; do \
+	for scheme in Examples UserManagement; do \
 		xcodebuild build \
 			-workspace supabase-swift.xcworkspace \
 			-scheme "$$scheme" \
