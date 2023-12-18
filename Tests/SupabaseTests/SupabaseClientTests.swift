@@ -1,9 +1,9 @@
-import GoTrue
+import Auth
 import XCTest
 
 @testable import Supabase
 
-final class GoTrueLocalStorageMock: GoTrueLocalStorage {
+final class AuthLocalStorageMock: AuthLocalStorage {
   func store(key _: String, value _: Data) throws {}
 
   func retrieve(key _: String) throws -> Data? {
@@ -16,7 +16,7 @@ final class GoTrueLocalStorageMock: GoTrueLocalStorage {
 final class SupabaseClientTests: XCTestCase {
   func testClientInitialization() {
     let customSchema = "custom_schema"
-    let localStorage = GoTrueLocalStorageMock()
+    let localStorage = AuthLocalStorageMock()
     let customHeaders = ["header_field": "header_value"]
 
     let client = SupabaseClient(

@@ -22,13 +22,6 @@
     {
       "target" : {
         "containerPath" : "container:",
-        "identifier" : "GoTrueTests",
-        "name" : "GoTrueTests"
-      }
-    },
-    {
-      "target" : {
-        "containerPath" : "container:",
         "identifier" : "PostgRESTIntegrationTests",
         "name" : "PostgRESTIntegrationTests"
       }
@@ -59,6 +52,13 @@
         "containerPath" : "container:",
         "identifier" : "SupabaseTests",
         "name" : "SupabaseTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "AuthTests",
+        "name" : "AuthTests"
       }
     }
   ],

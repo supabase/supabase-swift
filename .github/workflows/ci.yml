@@ -41,6 +41,8 @@ jobs:
       - uses: actions/checkout@v3
       - name: Select Xcode 15.0.1
         run: sudo xcode-select -s /Applications/Xcode_15.0.1.app
+      - name: Prepare Examples Project
+        run: cp Examples/Examples/_Secrets.swift Examples/Examples/Secrets.swift
       - name: Build examples
         run: make build-examples
         

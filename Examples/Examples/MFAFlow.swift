@@ -169,8 +169,9 @@ struct MFAVerifyView: View {
 }
 
 struct MFAVerifiedView: View {
-  @EnvironmentObject var auth: AuthController
+  @Environment(AuthController.self) var auth
 
+  @MainActor
   var factors: [Factor] {
     auth.session?.user.factors ?? []
   }
