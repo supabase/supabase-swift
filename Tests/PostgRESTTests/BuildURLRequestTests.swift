@@ -110,7 +110,7 @@ final class BuildURLRequestTests: XCTestCase {
         await client.schema("storage")
           .from("objects")
           .select()
-      }
+      },
     ]
 
     for testCase in testCases {
