@@ -349,6 +349,10 @@ public class RealtimeChannel {
     timeout: TimeInterval? = nil,
     callback: ((RealtimeSubscribeStates, Error?) -> Void)? = nil
   ) -> RealtimeChannel {
+    if socket?.isConnected == false {
+      socket?.connect()
+    }
+
     guard !joinedOnce else {
       fatalError(
         "tried to join multiple times. 'join' "
