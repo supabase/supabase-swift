@@ -10,6 +10,11 @@ import XCTest
   import FoundationNetworking
 #endif
 
+struct User: Encodable {
+  var email: String
+  var username: String?
+}
+
 @MainActor
 final class BuildURLRequestTests: XCTestCase {
   let url = URL(string: "https://example.supabase.co")!
@@ -55,7 +60,16 @@ final class BuildURLRequestTests: XCTestCase {
       },
       TestCase(name: "insert new user") { client in
         try await client.from("users")
-          .insert(["email": "johndoe@supabase.io"])
+          .insert(User(email: "johndoe@supabase.io"))
+      },
+      TestCase(name: "bulk insert users") { client in
+        try await client.from("users")
+          .insert(
+            [
+              User(email: "johndoe@supabase.io"),
+              User(email: "johndoe2@supabase.io", username: "johndoe2"),
+            ]
+          )
       },
       TestCase(name: "call rpc") { client in
         try await client.rpc("test_fcn", params: ["KEY": "VALUE"])
@@ -89,11 +103,20 @@ final class BuildURLRequestTests: XCTestCase {
       },
       TestCase(name: "test upsert not ignoring duplicates") { client in
         try await client.from("users")
-          .upsert(["email": "johndoe@supabase.io"])
+          .upsert(User(email: "johndoe@supabase.io"))
+      },
+      TestCase(name: "bulk upsert") { client in
+        try await client.from("users")
+          .upsert(
+            [
+              User(email: "johndoe@supabase.io"),
+              User(email: "johndoe2@supabase.io", username: "johndoe2"),
+            ]
+          )
       },
       TestCase(name: "test upsert ignoring duplicates") { client in
         try await client.from("users")
-          .upsert(["email": "johndoe@supabase.io"], ignoreDuplicates: true)
+          .upsert(User(email: "johndoe@supabase.io"), ignoreDuplicates: true)
       },
       TestCase(name: "query with + character") { client in
         await client.from("users")
