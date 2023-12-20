@@ -21,12 +21,31 @@ final class BuildURLRequestTests: XCTestCase {
 
   struct TestCase: Sendable {
     let name: String
-    var record = false
+    let record: Bool
+    let file: StaticString
+    let line: UInt
     let build: @Sendable (PostgrestClient) async throws -> PostgrestBuilder
+
+    init(
+      name: String,
+      record: Bool = false,
+      file: StaticString = #file,
+      line: UInt = #line,
+      build: @escaping @Sendable (PostgrestClient) async throws -> PostgrestBuilder
+    ) {
+      self.name = name
+      self.record = record
+      self.file = file
+      self.line = line
+      self.build = build
+    }
   }
 
   func testBuildRequest() async throws {
     let runningTestCase = ActorIsolated(TestCase?.none)
+
+    let encoder = PostgrestClient.Configuration.jsonEncoder
+    encoder.outputFormatting = .sortedKeys
 
     let client = PostgrestClient(
       url: url,
@@ -44,12 +63,15 @@ final class BuildURLRequestTests: XCTestCase {
             as: .curl,
             named: runningTestCase.name,
             record: runningTestCase.record,
-            testName: "testBuildRequest()"
+            file: runningTestCase.file, 
+            testName: "testBuildRequest()",
+            line: runningTestCase.line
           )
         }
 
         return (Data(), URLResponse())
-      }
+      },
+      encoder: encoder
     )
 
     let testCases: [TestCase] = [
