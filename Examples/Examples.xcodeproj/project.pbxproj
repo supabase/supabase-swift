@@ -19,6 +19,7 @@
 		793E03092B2CED5D00AC7DED /* Contants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E03082B2CED5D00AC7DED /* Contants.swift */; };
 		793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E030A2B2CEDDA00AC7DED /* ActionState.swift */; };
 		793E030D2B2DAB5700AC7DED /* SignInWithApple.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */; };
+		7940E3152B36187A0089BEE1 /* GoogleSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7940E3142B36187A0089BEE1 /* GoogleSignIn.swift */; };
 		794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1212955F26A008C9526 /* AddTodoListView.swift */; };
 		794EF1242955F3DE008C9526 /* TodoListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1232955F3DE008C9526 /* TodoListRow.swift */; };
 		7956405E2954ADE00088A06F /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405D2954ADE00088A06F /* Secrets.swift */; };
@@ -65,6 +66,7 @@
 		793E03082B2CED5D00AC7DED /* Contants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contants.swift; sourceTree = "<group>"; };
 		793E030A2B2CEDDA00AC7DED /* ActionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionState.swift; sourceTree = "<group>"; };
 		793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInWithApple.swift; sourceTree = "<group>"; };
+		7940E3142B36187A0089BEE1 /* GoogleSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignIn.swift; sourceTree = "<group>"; };
 		794EF1212955F26A008C9526 /* AddTodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTodoListView.swift; sourceTree = "<group>"; };
 		794EF1232955F3DE008C9526 /* TodoListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListRow.swift; sourceTree = "<group>"; };
 		7956405D2954ADE00088A06F /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
@@ -214,6 +216,7 @@
 				79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */,
 				79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */,
 				793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */,
+				7940E3142B36187A0089BEE1 /* GoogleSignIn.swift */,
 			);
 			path = Auth;
 			sourceTree = "<group>";
@@ -416,6 +419,7 @@
 				795640602954AE140088A06F /* AuthController.swift in Sources */,
 				79AF047F2B2CE207008761AD /* AuthWithEmailAndPassword.swift in Sources */,
 				795640622955AD2B0088A06F /* HomeView.swift in Sources */,
+				7940E3152B36187A0089BEE1 /* GoogleSignIn.swift in Sources */,
 				793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */,
 				793E030D2B2DAB5700AC7DED /* SignInWithApple.swift in Sources */,
 				793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */,
