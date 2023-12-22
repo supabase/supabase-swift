@@ -5,7 +5,7 @@ import Foundation
   import FoundationNetworking
 #endif
 
-public final class AuthClient {
+public actor AuthClient {
   /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler =
     @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
@@ -97,7 +97,7 @@ public final class AuthClient {
   ///   - encoder: The JSON encoder to use for encoding requests.
   ///   - decoder: The JSON decoder to use for decoding responses.
   ///   - fetch: The asynchronous fetch handler for network requests.
-  public convenience init(
+  public init(
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
@@ -123,7 +123,7 @@ public final class AuthClient {
   ///
   /// - Parameters:
   ///   - configuration: The client configuration.
-  public convenience init(configuration: Configuration) {
+  public init(configuration: Configuration) {
     let api = APIClient.live(http: HTTPClient(fetchHandler: configuration.fetch))
 
     self.init(

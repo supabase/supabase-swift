@@ -20,7 +20,7 @@ struct GoogleSignIn: View {
 
   private func signInWithGoogleButtonTapped() async {
     do {
-      let url = try supabase.auth.getOAuthSignInURL(
+      let url = try await supabase.auth.getOAuthSignInURL(
         provider: .google,
         redirectTo: Constants.redirectToURL
       )
