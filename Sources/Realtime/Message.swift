@@ -84,3 +84,35 @@ public struct Message {
     }
   }
 }
+
+extension Message {
+  public var eventType: EventType? {
+    switch event {
+    case ChannelEvent.system where status == .ok: return .system
+    case ChannelEvent.reply where payload.keys.contains(ChannelEvent.postgresChanges):
+      return .postgresServerChanges
+    case ChannelEvent.postgresChanges:
+      return .postgresChanges
+    case ChannelEvent.broadcast:
+      return .broadcast
+    case ChannelEvent.close:
+      return .close
+    case ChannelEvent.error:
+      return .error
+    case ChannelEvent.presenceDiff:
+      return .presenceDiff
+    case ChannelEvent.presenceState:
+      return .presenceState
+    case ChannelEvent.system
+      where (payload["message"] as? String)?.contains("access token has expired") == true:
+      return .tokenExpired
+    default:
+      return nil
+    }
+  }
+
+  public enum EventType {
+    case system, postgresServerChanges, postgresChanges, broadcast, close, error, presenceDiff,
+         presenceState, tokenExpired
+  }
+}
