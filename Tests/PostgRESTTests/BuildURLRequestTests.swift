@@ -63,7 +63,7 @@ final class BuildURLRequestTests: XCTestCase {
             as: .curl,
             named: runningTestCase.name,
             record: runningTestCase.record,
-            file: runningTestCase.file, 
+            file: runningTestCase.file,
             testName: "testBuildRequest()",
             line: runningTestCase.line
           )

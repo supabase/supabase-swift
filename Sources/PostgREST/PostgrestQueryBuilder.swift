@@ -69,10 +69,15 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
       if !prefersHeaders.isEmpty {
         $0.request.headers["Prefer"] = prefersHeaders.joined(separator: ",")
       }
-      if let body = $0.request.body, let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]] {
+      if let body = $0.request.body,
+         let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
+      {
         let allKeys = jsonObject.flatMap(\.keys)
         let uniqueKeys = Set(allKeys).sorted()
-        $0.request.query.append(URLQueryItem(name: "columns", value: uniqueKeys.joined(separator: ",")))
+        $0.request.query.append(URLQueryItem(
+          name: "columns",
+          value: uniqueKeys.joined(separator: ",")
+        ))
       }
     }
 
@@ -115,10 +120,15 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
         $0.request.headers["Prefer"] = prefersHeaders.joined(separator: ",")
       }
 
-      if let body = $0.request.body, let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]] {
+      if let body = $0.request.body,
+         let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
+      {
         let allKeys = jsonObject.flatMap(\.keys)
         let uniqueKeys = Set(allKeys).sorted()
-        $0.request.query.append(URLQueryItem(name: "columns", value: uniqueKeys.joined(separator: ",")))
+        $0.request.query.append(URLQueryItem(
+          name: "columns",
+          value: uniqueKeys.joined(separator: ",")
+        ))
       }
     }
     return PostgrestFilterBuilder(self)
