@@ -1,6 +1,11 @@
 import Foundation
 
-func extractParams(from url: URL) -> [(name: String, value: String)] {
+struct Params: Hashable {
+  var name: String
+  var value: String
+}
+
+func extractParams(from url: URL) -> [Params] {
   guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
     return []
   }
@@ -11,14 +16,14 @@ func extractParams(from url: URL) -> [(name: String, value: String)] {
 
   if let queryItems = components.queryItems {
     return queryItems.map {
-      (name: $0.name, value: $0.value ?? "")
+      Params(name: $0.name, value: $0.value ?? "")
     }
   }
 
   return []
 }
 
-func extractParams(from fragment: String) -> [(name: String, value: String)] {
+func extractParams(from fragment: String) -> [Params] {
   let components =
     fragment
       .split(separator: "&")
@@ -28,7 +33,7 @@ func extractParams(from fragment: String) -> [(name: String, value: String)] {
     components
       .compactMap {
         $0.count == 2
-          ? (name: String($0[0]), value: String($0[1]))
+          ? Params(name: String($0[0]), value: String($0[1]))
           : nil
       }
 }
