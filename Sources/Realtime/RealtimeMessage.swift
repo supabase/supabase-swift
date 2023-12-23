@@ -21,7 +21,7 @@
 import Foundation
 
 /// Data that is received from the Server.
-public struct Message {
+public struct RealtimeMessage {
   /// Reference number. Empty if missing
   public let ref: String
 
@@ -85,7 +85,7 @@ public struct Message {
   }
 }
 
-extension Message {
+extension RealtimeMessage {
   public var eventType: EventType? {
     switch event {
     case ChannelEvent.system where status == .ok: return .system

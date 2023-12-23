@@ -42,7 +42,7 @@ struct StateChangeCallbacks {
   var close: LockIsolated<[(ref: String, callback: Delegated<(Int, String?), Void>)]> = .init([])
   var error: LockIsolated<[(ref: String, callback: Delegated<(Error, URLResponse?), Void>)]> =
     .init([])
-  var message: LockIsolated<[(ref: String, callback: Delegated<Message, Void>)]> = .init([])
+  var message: LockIsolated<[(ref: String, callback: Delegated<RealtimeMessage, Void>)]> = .init([])
 }
 
 /// ## Socket Connection
@@ -588,8 +588,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - parameter callback: Called when the Socket receives a message event
   @discardableResult
-  public func onMessage(callback: @escaping (Message) -> Void) -> String {
-    var delegated = Delegated<Message, Void>()
+  public func onMessage(callback: @escaping (RealtimeMessage) -> Void) -> String {
+    var delegated = Delegated<RealtimeMessage, Void>()
     delegated.manuallyDelegate(with: callback)
 
     return stateChangeCallbacks.message.withValue { [delegated] in
@@ -611,9 +611,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
   @discardableResult
   public func delegateOnMessage<T: AnyObject>(
     to owner: T,
-    callback: @escaping ((T, Message) -> Void)
+    callback: @escaping ((T, RealtimeMessage) -> Void)
   ) -> String {
-    var delegated = Delegated<Message, Void>()
+    var delegated = Delegated<RealtimeMessage, Void>()
     delegated.delegate(to: owner, with: callback)
 
     return stateChangeCallbacks.message.withValue { [delegated] in
@@ -823,7 +823,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     guard
       let data = rawMessage.data(using: String.Encoding.utf8),
       let json = decode(data) as? [Any?],
-      let message = Message(json: json)
+      let message = RealtimeMessage(json: json)
     else {
       logItems("receive: Unable to parse JSON: \(rawMessage)")
       return

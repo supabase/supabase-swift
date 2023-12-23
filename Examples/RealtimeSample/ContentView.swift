@@ -9,9 +9,9 @@ import Realtime
 import SwiftUI
 
 struct ContentView: View {
-  @State var inserts: [Message] = []
-  @State var updates: [Message] = []
-  @State var deletes: [Message] = []
+  @State var inserts: [RealtimeMessage] = []
+  @State var updates: [RealtimeMessage] = []
+  @State var deletes: [RealtimeMessage] = []
 
   @State var socketStatus: String?
   @State var channelStatus: String?
@@ -107,7 +107,7 @@ struct ContentView: View {
   }
 }
 
-extension Message {
+extension RealtimeMessage {
   func stringfiedPayload() -> String {
     do {
       let data = try JSONSerialization.data(
