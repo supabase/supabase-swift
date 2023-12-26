@@ -35,8 +35,8 @@ struct Binding {
 }
 
 public struct ChannelFilter {
-  public let event: String?
-  public let schema: String?
+  public var event: String?
+  public var schema: String?
   public let table: String?
   public let filter: String?
 
@@ -179,6 +179,8 @@ public class RealtimeChannel {
 
   /// Refs of stateChange hooks
   var stateChangeRefs: [String]
+
+  let callbackManager = CallbackManager()
 
   /// Initialize a RealtimeChannel
   ///
@@ -336,9 +338,9 @@ public class RealtimeChannel {
   ///
   /// - parameter msg: The Message received by the client from the server
   /// - return: Must return the message, modified or unmodified
-  public var onMessage: (_ message: RealtimeMessage) -> RealtimeMessage = { message in
-    message
-  }
+//  public var onMessage: (_ message: RealtimeMessage) -> RealtimeMessage = { message in
+//    message
+//  }
 
   /// Joins the channel
   ///
@@ -852,9 +854,9 @@ public class RealtimeChannel {
   /// - parameter payload: The payload for the message
   /// - parameter ref: The reference of the message
   /// - return: Must return the payload, modified or unmodified
-  public func onMessage(callback: @escaping (RealtimeMessage) -> RealtimeMessage) {
-    onMessage = callback
-  }
+//  public func onMessage(callback: @escaping (RealtimeMessage) -> RealtimeMessage) {
+//    onMessage = callback
+//  }
 
   // ----------------------------------------------------------------------
 
@@ -915,7 +917,7 @@ public class RealtimeChannel {
       return
     }
 
-    let handledMessage = onMessage(message)
+    let handledMessage = message
 
     let bindings: [Binding]
 
@@ -1038,5 +1040,161 @@ extension RealtimeChannel {
 extension [String: Any] {
   subscript<T>(_ key: Key, as _: T.Type) -> T? {
     self[key] as? T
+  }
+}
+
+extension RealtimeChannel {
+  func onMessage(_ message: RealtimeMessage) throws {
+    guard let eventType = message.eventType else {
+      throw RealtimeError("Received message without event type: \(message)")
+    }
+
+    switch eventType {
+    case .tokenExpired:
+      socket?.logItems(
+        "onMessage",
+        "Received token expired event. This should not happen, please report this warning."
+      )
+
+    case .system:
+      socket?.logItems("onMessage", "Subscribed to channel", message.topic)
+      state = .joined
+
+    case .postgresServerChanges:
+      let serverPostgresChanges = try AnyJSON(message.payload)?.objectValue?["postgres_changes"]?
+        .decode([PostgresJoinConfig].self) ?? []
+      callbackManager.setServerChanges(changes: serverPostgresChanges)
+
+      if state != .joined {
+        state = .joined
+        socket?.logItems("onMessage", "Subscribed to channel", message.topic)
+      }
+
+    case .postgresChanges:
+      guard let payload = AnyJSON(message.payload)?.objectValue,
+            let data = payload["data"] else { return }
+      let ids = payload["ids"]?.arrayValue?.compactMap(\.intValue) ?? []
+
+      let postgresActions = try data.decode(PostgresActionData.self)
+
+      let action: PostgresAction = switch postgresActions.type {
+      case "UPDATE":
+        PostgresAction(
+          columns: postgresActions.columns,
+          commitTimestamp: postgresActions.commitTimestamp,
+          action: .update(
+            record: postgresActions.record ?? [:],
+            oldRecord: postgresActions.oldRecord ?? [:]
+          )
+        )
+      case "DELETE":
+        PostgresAction(
+          columns: postgresActions.columns,
+          commitTimestamp: postgresActions.commitTimestamp,
+          action: .delete(
+            oldRecord: postgresActions.oldRecord ?? [:]
+          )
+        )
+      case "INSERT":
+        PostgresAction(
+          columns: postgresActions.columns,
+          commitTimestamp: postgresActions.commitTimestamp,
+          action: .insert(
+            record: postgresActions.record ?? [:]
+          )
+        )
+      case "SELECT":
+        PostgresAction(
+          columns: postgresActions.columns,
+          commitTimestamp: postgresActions.commitTimestamp,
+          action: .select(
+            record: postgresActions.record ?? [:]
+          )
+        )
+      default:
+        throw RealtimeError("Unknown event type: \(postgresActions.type)")
+      }
+
+      callbackManager.triggerPostgresChanges(ids: ids, data: action)
+
+    case .broadcast:
+      let event = message.event
+      let payload = AnyJSON(message.payload)
+      callbackManager.triggerBroadcast(event: event, json: payload ?? .object([:]))
+
+    case .close:
+      socket?.remove(self)
+      socket?.logItems("onMessage", "Unsubscribed from channel \(message.topic)")
+
+    case .error:
+      socket?.logItems(
+        "onMessage",
+        "Received an error in channel ${message.topic}. That could be as a result of an invalid access token"
+      )
+
+    case .presenceDiff:
+      let joins: [String: Presence] = [:]
+      let leaves: [String: Presence] = [:]
+      callbackManager.triggerPresenceDiffs(joins: joins, leaves: leaves)
+
+    case .presenceState:
+      let joins: [String: Presence] = [:]
+      callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:])
+    }
+  }
+
+  /// Listen for clients joining / leaving the channel using presences.
+  public func presenceChange() -> AsyncStream<PresenceAction> {
+    let (stream, continuation) = AsyncStream<PresenceAction>.makeStream()
+
+    let id = callbackManager.addPresenceCallback {
+      continuation.yield($0)
+    }
+
+    continuation.onTermination = { _ in
+      self.callbackManager.removeCallback(id: id)
+    }
+
+    return stream
+  }
+
+  /// Listen for postgres changes in a channel.
+  public func postgresChange(filter: ChannelFilter = ChannelFilter())
+    -> AsyncStream<PostgresAction>
+  {
+    let (stream, continuation) = AsyncStream<PostgresAction>.makeStream()
+
+    let id = callbackManager.addPostgresCallback(
+      filter: PostgresJoinConfig(
+        schema: filter.schema ?? "public",
+        table: filter.table,
+        filter: filter.filter,
+        event: filter.event ?? "*"
+      )
+    ) { action in
+      continuation.yield(action)
+    }
+
+    continuation.onTermination = { _ in
+      self.callbackManager.removeCallback(id: id)
+    }
+
+    return stream
+  }
+
+  /// Listen for broadcast messages sent by other clients within the same channel under a specific
+  /// `event`.
+  public func broadcast(event: String) -> AsyncStream<AnyJSON> {
+    let (stream, continuation) = AsyncStream<AnyJSON>.makeStream()
+
+    let id = callbackManager.addBroadcastCallback(event: event) {
+      continuation.yield($0)
+    }
+
+    continuation.onTermination = { _ in
+      self.callbackManager.removeCallback(id: id)
+    }
+
+    return stream
   }
 }

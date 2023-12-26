@@ -51,6 +51,13 @@ public enum AnyJSON: Sendable, Codable, Hashable {
     return nil
   }
 
+  public var intValue: Int? {
+    if case let .number(nSNumber) = self {
+      return nSNumber.intValue
+    }
+    return nil
+  }
+
   public init(from decoder: Decoder) throws {
     let container = try decoder.singleValueContainer()
 

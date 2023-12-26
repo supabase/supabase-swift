@@ -42,7 +42,7 @@ struct PostgresJoinConfig: Codable, Hashable {
   var table: String?
   var filter: String?
   var event: String
-  var id: Int
+  var id: Int = 0
 
   static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.schema == rhs.schema && lhs.table == rhs.table && lhs.filter == rhs
