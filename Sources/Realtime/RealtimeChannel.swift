@@ -538,7 +538,9 @@ public class RealtimeChannel {
   /// - parameter handler: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onError(_ handler: @escaping ((_ message: RealtimeMessage) -> Void)) -> RealtimeChannel {
+  public func onError(_ handler: @escaping ((_ message: RealtimeMessage) -> Void))
+    -> RealtimeChannel
+  {
     on(ChannelEvent.error, filter: ChannelFilter(), handler: handler)
   }
 
