@@ -12,9 +12,9 @@ struct RealtimeJoinPayload: Codable, Hashable {
 }
 
 struct RealtimeJoinConfig: Codable, Hashable {
-  var broadcast: BroadcastJoinConfig
-  var presence: PresenceJoinConfig
-  var postgresChanges: PostgresJoinConfig
+  var broadcast: BroadcastJoinConfig = .init()
+  var presence: PresenceJoinConfig = .init()
+  var postgresChanges: [PostgresJoinConfig] = []
 
   enum CodingKeys: String, CodingKey {
     case broadcast
@@ -23,9 +23,9 @@ struct RealtimeJoinConfig: Codable, Hashable {
   }
 }
 
-struct BroadcastJoinConfig: Codable, Hashable {
-  var acknowledgeBroadcasts: Bool
-  var receiveOwnBroadcasts: Bool
+public struct BroadcastJoinConfig: Codable, Hashable {
+  public var acknowledgeBroadcasts: Bool = false
+  public var receiveOwnBroadcasts: Bool = false
 
   enum CodingKeys: String, CodingKey {
     case acknowledgeBroadcasts = "ack"
@@ -33,8 +33,8 @@ struct BroadcastJoinConfig: Codable, Hashable {
   }
 }
 
-struct PresenceJoinConfig: Codable, Hashable {
-  var key: String
+public struct PresenceJoinConfig: Codable, Hashable {
+  public var key: String = ""
 }
 
 struct PostgresJoinConfig: Codable, Hashable {

@@ -19,6 +19,7 @@
 // THE SOFTWARE.
 
 import Foundation
+@_spi(Internal) import _Helpers
 
 /// Data that is received from the Server.
 public struct RealtimeMessage {
@@ -85,10 +86,15 @@ public struct RealtimeMessage {
   }
 }
 
-extension RealtimeMessage {
+public struct _RealtimeMessage: Codable, Equatable {
+  let topic: String
+  let event: String
+  let payload: [String: AnyJSON]
+  let ref: String?
+
   public var eventType: EventType? {
     switch event {
-    case ChannelEvent.system where status == .ok: return .system
+    case ChannelEvent.system where payload["status"]?.stringValue == "ok": return .system
     case ChannelEvent.reply where payload.keys.contains(ChannelEvent.postgresChanges):
       return .postgresServerChanges
     case ChannelEvent.postgresChanges:
@@ -104,7 +110,7 @@ extension RealtimeMessage {
     case ChannelEvent.presenceState:
       return .presenceState
     case ChannelEvent.system
-      where (payload["message"] as? String)?.contains("access token has expired") == true:
+      where payload["message"]?.stringValue?.contains("access token has expired") == true:
       return .tokenExpired
     default:
       return nil
@@ -116,3 +122,28 @@ extension RealtimeMessage {
          presenceState, tokenExpired
   }
 }
+
+//
+// extension _RealtimeMessage: Codable {
+//  public init(from decoder: Decoder) throws {
+//    var container = try decoder.unkeyedContainer()
+//
+//    joinRef = try container.decode(String?.self)
+//    ref = try container.decode(String?.self) ?? ""
+//    topic = try container.decode(String.self)
+//    event = try container.decode(String.self)
+//
+//    let payload = try container.decode([String: AnyJSON].self)
+//    rawPayload = payload.mapValues(\.value)
+//  }
+//
+//  public func encode(to encoder: Encoder) throws {
+//    var container = encoder.unkeyedContainer()
+//
+//    try container.encode(joinRef)
+//    try container.encode(ref)
+//    try container.encode(topic)
+//    try container.encode(event)
+//    try container.encode(AnyJSON(rawPayload))
+//  }
+// }

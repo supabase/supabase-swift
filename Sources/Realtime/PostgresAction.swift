@@ -8,7 +8,7 @@
 import Foundation
 @_spi(Internal) import _Helpers
 
-public struct Column: Equatable, Decodable {
+public struct Column: Equatable, Codable {
   public let name: String
   public let type: String
 }

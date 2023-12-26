@@ -152,14 +152,10 @@ extension AnyJSON {
 }
 
 extension AnyJSON {
-  public init?(_ value: Any) {
+  public init(_ value: Any) {
     switch value {
     case let value as AnyJSON:
       self = value
-    case let value as String:
-      self = .string(value)
-    case let value as Bool:
-      self = .bool(value)
     case let intValue as Int:
       self = .number(intValue as NSNumber)
     case let intValue as Int8:
@@ -188,14 +184,23 @@ extension AnyJSON {
       self = .number(doubleValue as NSNumber)
     case let numberValue as NSNumber:
       self = .number(numberValue as NSNumber)
+    case let value as String:
+      self = .string(value)
+    case let value as Bool:
+      self = .bool(value)
     case _ as NSNull:
       self = .null
     case let value as [Any]:
       self = .array(value.compactMap(AnyJSON.init))
     case let value as [String: Any]:
       self = .object(value.compactMapValues(AnyJSON.init))
+    case let value as any Codable:
+      let data = try! JSONEncoder().encode(value)
+      let json = try! JSONSerialization.jsonObject(with: data)
+      self = AnyJSON(json)
     default:
-      return nil
+      print("Failed to create AnyJSON with: \(value)")
+      self = .null
     }
   }
 }

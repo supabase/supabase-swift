@@ -8,7 +8,7 @@
 import Foundation
 @_spi(Internal) import _Helpers
 
-struct PostgresActionData: Decodable {
+struct PostgresActionData: Codable {
   var type: String
   var record: [String: AnyJSON]?
   var oldRecord: [String: AnyJSON]?
