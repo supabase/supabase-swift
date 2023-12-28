@@ -9,10 +9,15 @@ import Combine
 import ConcurrencyExtras
 import Foundation
 
+public protocol AuthTokenProvider {
+  func authToken() async -> String?
+}
+
 public final class Realtime {
   public struct Configuration {
     var url: URL
     var apiKey: String
+    var authTokenProvider: AuthTokenProvider?
     var heartbeatInterval: TimeInterval
     var reconnectDelay: TimeInterval
     var jwtToken: String?
@@ -22,6 +27,7 @@ public final class Realtime {
     public init(
       url: URL,
       apiKey: String,
+      authTokenProvider: AuthTokenProvider?,
       heartbeatInterval: TimeInterval = 15,
       reconnectDelay: TimeInterval = 7,
       jwtToken: String? = nil,
@@ -30,6 +36,7 @@ public final class Realtime {
     ) {
       self.url = url
       self.apiKey = apiKey
+      self.authTokenProvider = authTokenProvider
       self.heartbeatInterval = heartbeatInterval
       self.reconnectDelay = reconnectDelay
       self.jwtToken = jwtToken
@@ -73,25 +80,28 @@ public final class Realtime {
   deinit {
     heartbeatTask?.cancel()
     messageTask?.cancel()
-    ws?.cancel()
+    Task {
+      await ws?.cancel()
+    }
   }
 
   public convenience init(config: Configuration) {
     self.init(
       config: config,
-      makeWebSocketClient: { WebSocketClient(realtimeURL: $0, session: .shared) }
+      makeWebSocketClient: { WebSocketClient(realtimeURL: $0, configuration: .default) }
     )
   }
 
-  public func connect() async {
-    await connect(reconnect: false)
+  public func connect() async throws {
+    try await connect(reconnect: false)
   }
 
-  func connect(reconnect: Bool) async {
+  func connect(reconnect: Bool) async throws {
     if reconnect {
       try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.reconnectDelay))
 
       if Task.isCancelled {
+        print("reconnect cancelled, returning")
         return
       }
     }
@@ -107,9 +117,7 @@ public final class Realtime {
 
     ws = makeWebSocketClient(realtimeURL)
 
-    // TODO: should we consider a timeout?
-    // wait for status
-    let connectionStatus = await ws?.status.first(where: { _ in true })
+    let connectionStatus = try await ws?.connect().first { _ in true }
 
     if connectionStatus == .open {
       _status.value = .connected
@@ -117,14 +125,14 @@ public final class Realtime {
       listenForMessages()
       startHeartbeating()
       if reconnect {
-        await rejoinChannels()
+        try await rejoinChannels()
       }
     } else {
       print(
-        "Error while trying to connect to realtime websocket. Trying again in \(config.reconnectDelay)"
+        "Error while trying to connect to realtime websocket. Trying again in \(config.reconnectDelay) seconds."
       )
-      disconnect()
-      await connect(reconnect: true)
+      await disconnect()
+      try await connect(reconnect: true)
     }
   }
 
@@ -160,35 +168,33 @@ public final class Realtime {
     }
   }
 
-  private func rejoinChannels() async {
+  private func rejoinChannels() async throws {
     // TODO: should we fire all subscribe calls concurrently?
     for channel in subscriptions.values {
-      await channel.subscribe()
+      try await channel.subscribe()
     }
   }
 
   private func listenForMessages() {
-    messageTask = Task { [weak self] in
-      guard let self else { return }
+    Task { [weak self] in
+      guard let self, let ws else { return }
 
       do {
-        while let message = try await ws?.receive() {
-          await onMessage(message)
+        for try await message in await ws.receive() {
+          try await onMessage(message)
         }
       } catch {
-        if error is CancellationError {
-          return
-        }
-
-        print("Error while listening for messages. Trying again in \(config.reconnectDelay)")
-        disconnect()
-        await connect(reconnect: true)
+        print(
+          "Error while listening for messages. Trying again in \(config.reconnectDelay) \(error)"
+        )
+        await disconnect()
+        try await connect(reconnect: true)
       }
     }
   }
 
   private func startHeartbeating() {
-    heartbeatTask = Task { [weak self] in
+    Task { [weak self] in
       guard let self else { return }
 
       while !Task.isCancelled {
@@ -206,8 +212,8 @@ public final class Realtime {
       heartbeatRef = 0
       ref = 0
       print("Heartbeat timeout. Trying to reconnect in \(config.reconnectDelay)")
-      disconnect()
-      await connect(reconnect: true)
+      await disconnect()
+      try await connect(reconnect: true)
       return
     }
 
@@ -221,10 +227,10 @@ public final class Realtime {
     ))
   }
 
-  public func disconnect() {
+  public func disconnect() async {
     print("Closing websocket connection")
     messageTask?.cancel()
-    ws?.cancel()
+    await ws?.cancel()
     ws = nil
     heartbeatTask?.cancel()
     _status.value = .disconnected
@@ -235,14 +241,14 @@ public final class Realtime {
     return ref
   }
 
-  private func onMessage(_ message: _RealtimeMessage) async {
+  private func onMessage(_ message: _RealtimeMessage) async throws {
     let channel = subscriptions[message.topic]
     if Int(message.ref ?? "") == heartbeatRef {
       print("heartbeat received")
       heartbeatRef = 0
     } else {
       print("Received event \(message.event) for channel \(channel?.topic ?? "null")")
-      try? await channel?.onMessage(message)
+      try await channel?.onMessage(message)
     }
   }
 
@@ -290,14 +296,17 @@ public final class Realtime {
 }
 
 protocol WebSocketClientProtocol {
-  var status: AsyncStream<WebSocketClient.ConnectionStatus> { get }
-
   func send(_ message: _RealtimeMessage) async throws
-  func receive() async throws -> _RealtimeMessage?
-  func cancel()
+  func receive() async -> AsyncThrowingStream<_RealtimeMessage, Error>
+  func connect() async -> AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error>
+  func cancel() async
 }
 
-final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketClientProtocol {
+actor WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketClientProtocol {
+  private var session: URLSession?
+  private let realtimeURL: URL
+  private let configuration: URLSessionConfiguration
+
   private var task: URLSessionWebSocketTask?
 
   enum ConnectionStatus {
@@ -305,59 +314,94 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     case close
   }
 
-  let status: AsyncStream<ConnectionStatus>
-  private let continuation: AsyncStream<ConnectionStatus>.Continuation
+  private var statusContinuation: AsyncThrowingStream<ConnectionStatus, Error>.Continuation?
 
-  init(realtimeURL: URL, session: URLSession) {
-    (status, continuation) = AsyncStream<ConnectionStatus>.makeStream()
-    task = session.webSocketTask(with: realtimeURL)
+  init(realtimeURL: URL, configuration: URLSessionConfiguration) {
+    self.realtimeURL = realtimeURL
+    self.configuration = configuration
 
     super.init()
-
-    task?.resume()
   }
 
   deinit {
-    continuation.finish()
+    statusContinuation?.finish()
     task?.cancel()
+  }
+
+  func connect() -> AsyncThrowingStream<ConnectionStatus, Error> {
+    session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+    task = session?.webSocketTask(with: realtimeURL)
+
+    let (stream, continuation) = AsyncThrowingStream<ConnectionStatus, Error>.makeStream()
+    statusContinuation = continuation
+
+    task?.resume()
+
+    return stream
   }
 
   func cancel() {
     task?.cancel()
   }
 
-  func urlSession(
+  nonisolated func urlSession(
     _: URLSession,
     webSocketTask _: URLSessionWebSocketTask,
     didOpenWithProtocol _: String?
   ) {
-    continuation.yield(.open)
+    Task {
+      await statusContinuation?.yield(.open)
+    }
   }
 
-  func urlSession(
+  nonisolated func urlSession(
     _: URLSession,
     webSocketTask _: URLSessionWebSocketTask,
     didCloseWith _: URLSessionWebSocketTask.CloseCode,
     reason _: Data?
   ) {
-    continuation.yield(.close)
+    Task {
+      await statusContinuation?.yield(.close)
+    }
   }
 
-  func receive() async throws -> _RealtimeMessage? {
-    switch try await task?.receive() {
-    case let .string(stringMessage):
-      guard let data = stringMessage.data(using: .utf8),
-            let message = try? JSONDecoder().decode(_RealtimeMessage.self, from: data)
-      else {
-        return nil
-      }
-      return message
-    case .data:
-      fallthrough
-    default:
-      print("Unsupported message type")
-      return nil
+  nonisolated func urlSession(
+    _: URLSession,
+    task _: URLSessionTask,
+    didCompleteWithError error: Error?
+  ) {
+    Task {
+      await statusContinuation?.finish(throwing: error)
     }
+  }
+
+  func receive() -> AsyncThrowingStream<_RealtimeMessage, Error> {
+    let (stream, continuation) = AsyncThrowingStream<_RealtimeMessage, Error>.makeStream()
+
+    Task {
+      while let message = try await self.task?.receive() {
+        do {
+          switch message {
+          case let .string(stringMessage):
+            guard let data = stringMessage.data(using: .utf8) else {
+              throw RealtimeError("Expected a UTF8 encoded message.")
+            }
+
+            let message = try JSONDecoder().decode(_RealtimeMessage.self, from: data)
+            continuation.yield(message)
+
+          case .data:
+            fallthrough
+          default:
+            throw RealtimeError("Unsupported message type.")
+          }
+        } catch {
+          continuation.finish(throwing: error)
+        }
+      }
+    }
+
+    return stream
   }
 
   func send(_ message: _RealtimeMessage) async throws {

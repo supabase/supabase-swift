@@ -55,6 +55,13 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
       ]
     ),
+    .testTarget(
+      name: "_HelpersTests",
+      dependencies: [
+        "_Helpers",
+        .product(name: "CustomDump", package: "swift-custom-dump"),
+      ]
+    ),
     .target(name: "Functions", dependencies: ["_Helpers"]),
     .testTarget(
       name: "FunctionsTests",

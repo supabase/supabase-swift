@@ -54,6 +54,14 @@ public final class SupabaseClient: @unchecked Sendable {
   /// Realtime client for Supabase
   public let realtime: RealtimeClient
 
+  public lazy var realtimeV2: Realtime = .init(
+    config: Realtime.Configuration(
+      url: supabaseURL.appendingPathComponent("/realtime/v1"),
+      apiKey: supabaseKey,
+      authTokenProvider: self
+    )
+  )
+
   /// Supabase Functions allows you to deploy and invoke edge functions.
   public private(set) lazy var functions = FunctionsClient(
     url: functionsURL,
@@ -158,5 +166,11 @@ public final class SupabaseClient: @unchecked Sendable {
     guard supportedEvents.contains(event) else { return }
 
     realtime.setAuth(session?.accessToken)
+  }
+}
+
+extension SupabaseClient: AuthTokenProvider {
+  public func authToken() async -> String? {
+    try? await auth.session.accessToken
   }
 }

@@ -72,7 +72,9 @@ final class CallbackManager {
     // Read mutableState at start to acquire lock once.
     let mutableState = mutableState.value
 
-    let filters = mutableState.serverChanges.filter { ids.contains($0.id) }
+    let filters = mutableState.serverChanges.filter {
+      ids.contains($0.id)
+    }
     let postgresCallbacks = mutableState.callbacks.compactMap {
       if case let .postgres(callback) = $0 {
         return callback

@@ -95,7 +95,8 @@ public struct _RealtimeMessage: Codable, Equatable {
   public var eventType: EventType? {
     switch event {
     case ChannelEvent.system where payload["status"]?.stringValue == "ok": return .system
-    case ChannelEvent.reply where payload.keys.contains(ChannelEvent.postgresChanges):
+    case ChannelEvent.reply
+      where payload["response"]?.objectValue?.keys.contains(ChannelEvent.postgresChanges) == true:
       return .postgresServerChanges
     case ChannelEvent.postgresChanges:
       return .postgresChanges
@@ -122,28 +123,3 @@ public struct _RealtimeMessage: Codable, Equatable {
          presenceState, tokenExpired
   }
 }
-
-//
-// extension _RealtimeMessage: Codable {
-//  public init(from decoder: Decoder) throws {
-//    var container = try decoder.unkeyedContainer()
-//
-//    joinRef = try container.decode(String?.self)
-//    ref = try container.decode(String?.self) ?? ""
-//    topic = try container.decode(String.self)
-//    event = try container.decode(String.self)
-//
-//    let payload = try container.decode([String: AnyJSON].self)
-//    rawPayload = payload.mapValues(\.value)
-//  }
-//
-//  public func encode(to encoder: Encoder) throws {
-//    var container = encoder.unkeyedContainer()
-//
-//    try container.encode(joinRef)
-//    try container.encode(ref)
-//    try container.encode(topic)
-//    try container.encode(event)
-//    try container.encode(AnyJSON(rawPayload))
-//  }
-// }

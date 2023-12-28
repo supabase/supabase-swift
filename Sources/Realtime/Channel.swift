@@ -48,14 +48,14 @@ public final class _RealtimeChannel {
     self.presenceJoinConfig = presenceJoinConfig
   }
 
-  public func subscribe() async {
+  public func subscribe() async throws {
     if socket?.status != .connected {
       if socket?.config.connectOnSubscribe != true {
         fatalError(
           "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
         )
       }
-      await socket?.connect()
+      try await socket?.connect()
     }
 
     socket?.addChannel(self)
@@ -63,7 +63,8 @@ public final class _RealtimeChannel {
     _status.value = .subscribing
     print("subscribing to channel \(topic)")
 
-    let currentJwt = socket?.config.jwtToken
+    let authToken = await socket?.config.authTokenProvider?.authToken()
+    let currentJwt = socket?.config.jwtToken ?? authToken
 
     let postgresChanges = clientChanges
 
@@ -75,7 +76,7 @@ public final class _RealtimeChannel {
 
     print("subscribing to channel with body: \(joinConfig)")
 
-    var payload = AnyJSON(joinConfig).objectValue ?? [:]
+    var payload = try AnyJSON(joinConfig).objectValue ?? [:]
     if let currentJwt {
       payload["access_token"] = .string(currentJwt)
     }
@@ -84,7 +85,7 @@ public final class _RealtimeChannel {
       topic: topic,
       event: ChannelEvent.join,
       payload: payload,
-      ref: nil
+      ref: socket?.makeRef().description ?? ""
     ))
   }
 
@@ -106,7 +107,7 @@ public final class _RealtimeChannel {
         topic: topic,
         event: ChannelEvent.accessToken,
         payload: ["access_token": .string(jwt)],
-        ref: socket?.makeRef().description
+        ref: socket?.makeRef().description ?? ""
       )
     )
   }
@@ -124,7 +125,7 @@ public final class _RealtimeChannel {
             "event": .string(event),
             "payload": .object(message),
           ],
-          ref: socket?.makeRef().description
+          ref: socket?.makeRef().description ?? ""
         )
       )
     }
@@ -145,7 +146,7 @@ public final class _RealtimeChannel {
         "event": "track",
         "payload": .object(state),
       ],
-      ref: socket?.makeRef().description
+      ref: socket?.makeRef().description ?? ""
     ))
   }
 
@@ -157,7 +158,7 @@ public final class _RealtimeChannel {
         "type": "presence",
         "event": "untrack",
       ],
-      ref: socket?.makeRef().description
+      ref: socket?.makeRef().description ?? ""
     ))
   }
 
@@ -178,9 +179,9 @@ public final class _RealtimeChannel {
       _status.value = .subscribed
 
     case .postgresServerChanges:
-      let serverPostgresChanges = try AnyJSON(message.payload).objectValue?["postgres_changes"]?
-        .decode([PostgresJoinConfig].self) ?? []
-      callbackManager.setServerChanges(changes: serverPostgresChanges)
+      let serverPostgresChanges = try message.payload["response"]?.objectValue?["postgres_changes"]?
+        .decode([PostgresJoinConfig].self)
+      callbackManager.setServerChanges(changes: serverPostgresChanges ?? [])
 
       if status != .subscribed {
         _status.value = .subscribed
@@ -188,7 +189,7 @@ public final class _RealtimeChannel {
       }
 
     case .postgresChanges:
-      guard let payload = AnyJSON(message.payload).objectValue,
+      guard let payload = try AnyJSON(message.payload).objectValue,
             let data = payload["data"] else { return }
       let ids = payload["ids"]?.arrayValue?.compactMap(\.intValue) ?? []
 
@@ -236,7 +237,7 @@ public final class _RealtimeChannel {
 
     case .broadcast:
       let event = message.event
-      let payload = AnyJSON(message.payload)
+      let payload = try AnyJSON(message.payload)
       callbackManager.triggerBroadcast(event: event, json: payload)
 
     case .close:
@@ -276,18 +277,21 @@ public final class _RealtimeChannel {
   }
 
   /// Listen for postgres changes in a channel.
-  public func postgresChange(filter: ChannelFilter = ChannelFilter())
-    -> AsyncStream<PostgresAction>
-  {
+  public func postgresChange(
+    _ event: PostgresChangeEvent,
+    schema: String = "public",
+    table: String,
+    filter: String? = nil
+  ) -> AsyncStream<PostgresAction> {
     precondition(status != .subscribed, "You cannot call postgresChange after joining the channel")
 
     let (stream, continuation) = AsyncStream<PostgresAction>.makeStream()
 
     let config = PostgresJoinConfig(
-      schema: filter.schema ?? "public",
-      table: filter.table,
-      filter: filter.filter,
-      event: filter.event ?? "*"
+      event: event,
+      schema: schema,
+      table: table,
+      filter: filter
     )
 
     clientChanges.append(config)
