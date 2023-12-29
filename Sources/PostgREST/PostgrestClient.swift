@@ -5,8 +5,6 @@ import Foundation
 import FoundationNetworking
 #endif
 
-let version = _Helpers.version
-
 /// PostgREST client.
 public actor PostgrestClient {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (

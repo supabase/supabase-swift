@@ -7,7 +7,7 @@ enum WinCredLocalStorageError: Error {
   case other(Int)
 }
 
-public struct WinCredLocalStorage: GoTrueLocalStorage {
+public struct WinCredLocalStorage: AuthLocalStorage {
   private let service: String
 
   private let credentialType: DWORD

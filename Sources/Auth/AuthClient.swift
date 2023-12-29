@@ -34,7 +34,7 @@ public actor AuthClient {
       url: URL,
       headers: [String: String] = [:],
       flowType: AuthFlowType = Configuration.defaultFlowType,
-      localStorage: AuthLocalStorage = Configuration.defaultLocalStorage,
+      localStorage: AuthLocalStorage,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -101,7 +101,7 @@ public actor AuthClient {
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-    localStorage: AuthLocalStorage = AuthClient.Configuration.defaultLocalStorage,
+    localStorage: AuthLocalStorage,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }

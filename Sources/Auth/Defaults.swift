@@ -62,10 +62,4 @@ extension AuthClient.Configuration {
 
   /// The default ``AuthFlowType`` used when initializing a ``AuthClient`` instance.
   public static let defaultFlowType: AuthFlowType = .pkce
-
-  /// The default ``AuthLocalStorage`` instance used by the ``AuthClient``.
-  public static let defaultLocalStorage: AuthLocalStorage = KeychainLocalStorage(
-    service: "supabase.gotrue.swift",
-    accessGroup: nil
-  )
 }

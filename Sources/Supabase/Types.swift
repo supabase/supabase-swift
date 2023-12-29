@@ -48,7 +48,7 @@ public struct SupabaseClientOptions: Sendable {
     public let decoder: JSONDecoder
 
     public init(
-      storage: AuthLocalStorage = AuthClient.Configuration.defaultLocalStorage,
+      storage: AuthLocalStorage,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder

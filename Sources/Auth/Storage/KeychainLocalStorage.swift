@@ -2,7 +2,7 @@
 import Foundation
 @preconcurrency import KeychainAccess
 
-struct KeychainLocalStorage: GoTrueLocalStorage {
+struct KeychainLocalStorage: AuthLocalStorage {
   private let keychain: Keychain
 
   init(service: String, accessGroup: String?) {
