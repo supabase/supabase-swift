@@ -14,7 +14,7 @@ final class RealtimeTests: XCTestCase {
     return "\(ref)"
   }
 
-  func testConnect() async throws {
+  func testConnect() async {
     let mock = MockWebSocketClient(status: [.success(.open)])
 
     let realtime = Realtime(
@@ -24,9 +24,9 @@ final class RealtimeTests: XCTestCase {
 
     XCTAssertNoLeak(realtime)
 
-    try await realtime.connect()
+    await realtime.connect()
 
-    XCTAssertEqual(realtime.status, .connected)
+    XCTAssertEqual(realtime._status.value, .connected)
   }
 
   func testChannelSubscription() async throws {
@@ -46,7 +46,7 @@ final class RealtimeTests: XCTestCase {
       table: "users"
     )
 
-    try await channel.subscribe()
+    await channel.subscribe()
 
     let receivedPostgresChangeTask = Task {
       let change = await changes
@@ -131,12 +131,22 @@ final class RealtimeTests: XCTestCase {
     let receivedChange = await receivedPostgresChangeTask.value
     XCTAssertNoDifference(receivedChange, action)
 
-    try await channel.unsubscribe()
+    await channel.unsubscribe()
 
     mock.mockReceive(
-      RealtimeMessageV2(joinRef: nil, ref: nil, topic: "realtime:users", event: ChannelEvent.leave, payload: [:])
+      RealtimeMessageV2(
+        joinRef: nil,
+        ref: nil,
+        topic: "realtime:users",
+        event: ChannelEvent.leave,
+        payload: [:]
+      )
     )
 
     await Task.megaYield()
+  }
+
+  func testHeartbeat() {
+    // TODO: test heartbeat behavior
   }
 }

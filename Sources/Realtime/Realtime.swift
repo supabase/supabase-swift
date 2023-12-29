@@ -56,9 +56,7 @@ public final class Realtime: @unchecked Sendable {
   let makeWebSocketClient: (URL) -> WebSocketClientProtocol
 
   let _status = CurrentValueSubject<Status, Never>(.disconnected)
-  public var status: Status {
-    _status.value
-  }
+  public lazy var status = _status.share().eraseToAnyPublisher()
 
   public var subscriptions: [String: RealtimeChannelV2] {
     mutableState.subscriptions
@@ -100,11 +98,11 @@ public final class Realtime: @unchecked Sendable {
     )
   }
 
-  public func connect() async throws {
-    try await connect(reconnect: false)
+  public func connect() async {
+    await connect(reconnect: false)
   }
 
-  func connect(reconnect: Bool) async throws {
+  func connect(reconnect: Bool) async {
     if reconnect {
       try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.reconnectDelay))
 
@@ -114,7 +112,7 @@ public final class Realtime: @unchecked Sendable {
       }
     }
 
-    if status == .connected {
+    if _status.value == .connected {
       debug("Websocket already connected")
       return
     }
@@ -128,7 +126,7 @@ public final class Realtime: @unchecked Sendable {
       return $0.ws!
     }
 
-    let connectionStatus = try await ws.connect().first { _ in true }
+    let connectionStatus = try? await ws.connect().first { _ in true }
 
     if connectionStatus == .open {
       _status.value = .connected
@@ -136,14 +134,14 @@ public final class Realtime: @unchecked Sendable {
       listenForMessages()
       startHeartbeating()
       if reconnect {
-        try await rejoinChannels()
+        await rejoinChannels()
       }
     } else {
       debug(
         "Error while trying to connect to realtime websocket. Trying again in \(config.reconnectDelay) seconds."
       )
       disconnect()
-      try await connect(reconnect: true)
+      await connect(reconnect: true)
     }
   }
 
@@ -169,9 +167,9 @@ public final class Realtime: @unchecked Sendable {
     mutableState.withValue { $0.subscriptions[channel.topic] = channel }
   }
 
-  public func removeChannel(_ channel: RealtimeChannelV2) async throws {
-    if channel.status == .subscribed {
-      try await channel.unsubscribe()
+  public func removeChannel(_ channel: RealtimeChannelV2) async {
+    if channel._status.value == .subscribed {
+      await channel.unsubscribe()
     }
 
     mutableState.withValue {
@@ -179,10 +177,10 @@ public final class Realtime: @unchecked Sendable {
     }
   }
 
-  private func rejoinChannels() async throws {
+  private func rejoinChannels() async {
     // TODO: should we fire all subscribe calls concurrently?
     for channel in subscriptions.values {
-      try await channel.subscribe()
+      await channel.subscribe()
     }
   }
 
@@ -195,14 +193,14 @@ public final class Realtime: @unchecked Sendable {
 
         do {
           for try await message in ws.receive() {
-            try await onMessage(message)
+            await onMessage(message)
           }
         } catch {
           debug(
             "Error while listening for messages. Trying again in \(config.reconnectDelay) \(error)"
           )
           disconnect()
-          try? await connect(reconnect: true)
+          await connect(reconnect: true)
         }
       }
     }
@@ -218,13 +216,13 @@ public final class Realtime: @unchecked Sendable {
           if Task.isCancelled {
             break
           }
-          try? await sendHeartbeat()
+          await sendHeartbeat()
         }
       }
     }
   }
 
-  private func sendHeartbeat() async throws {
+  private func sendHeartbeat() async {
     let timedOut = mutableState.withValue {
       if $0.heartbeatRef != 0 {
         $0.heartbeatRef = 0
@@ -237,7 +235,7 @@ public final class Realtime: @unchecked Sendable {
     if timedOut {
       debug("Heartbeat timeout. Trying to reconnect in \(config.reconnectDelay)")
       disconnect()
-      try await connect(reconnect: true)
+      await connect(reconnect: true)
       return
     }
 
@@ -246,13 +244,15 @@ public final class Realtime: @unchecked Sendable {
       return $0.heartbeatRef
     }
 
-    try await mutableState.ws?.send(RealtimeMessageV2(
-      joinRef: nil,
-      ref: heartbeatRef.description,
-      topic: "phoenix",
-      event: "heartbeat",
-      payload: [:]
-    ))
+    await send(
+      RealtimeMessageV2(
+        joinRef: nil,
+        ref: heartbeatRef.description,
+        topic: "phoenix",
+        event: "heartbeat",
+        payload: [:]
+      )
+    )
   }
 
   public func disconnect() {
@@ -266,7 +266,7 @@ public final class Realtime: @unchecked Sendable {
     _status.value = .disconnected
   }
 
-  private func onMessage(_ message: RealtimeMessageV2) async throws {
+  private func onMessage(_ message: RealtimeMessageV2) async {
     guard let channel = subscriptions[message.topic] else {
       return
     }
@@ -283,12 +283,22 @@ public final class Realtime: @unchecked Sendable {
       debug("heartbeat received")
     } else {
       debug("Received event \(message.event) for channel \(channel.topic)")
-      try await channel.onMessage(message)
+      await channel.onMessage(message)
     }
   }
 
-  func send(_ message: RealtimeMessageV2) async throws {
-    try await mutableState.ws?.send(message)
+  func send(_ message: RealtimeMessageV2) async {
+    do {
+      try await mutableState.ws?.send(message)
+    } catch {
+      debug("""
+      Failed to send message:
+      \(message)
+
+      Error:
+      \(error)
+      """)
+    }
   }
 
   func makeRef() -> Int {

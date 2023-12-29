@@ -16,7 +16,7 @@ public struct RealtimeChannelConfig: Sendable {
 }
 
 public final class RealtimeChannelV2: @unchecked Sendable {
-  public enum Status {
+  public enum Status: Sendable {
     case unsubscribed
     case subscribing
     case subscribed
@@ -38,9 +38,7 @@ public final class RealtimeChannelV2: @unchecked Sendable {
   private let clientChanges: LockIsolated<[PostgresJoinConfig]> = .init([])
 
   let _status = CurrentValueSubject<Status, Never>(.unsubscribed)
-  public var status: Status {
-    _status.value
-  }
+  public lazy var status = _status.share().eraseToAnyPublisher()
 
   init(
     topic: String,
@@ -58,14 +56,14 @@ public final class RealtimeChannelV2: @unchecked Sendable {
     callbackManager.reset()
   }
 
-  public func subscribe() async throws {
-    if socket?.status != .connected {
+  public func subscribe() async {
+    if socket?._status.value != .connected {
       if socket?.config.connectOnSubscribe != true {
         fatalError(
           "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
         )
       }
-      try await socket?.connect()
+      await socket?.connect()
     }
 
     socket?.addChannel(self)
@@ -87,20 +85,22 @@ public final class RealtimeChannelV2: @unchecked Sendable {
 
     debug("subscribing to channel with body: \(joinConfig)")
 
-    try? await socket?.send(RealtimeMessageV2(
-      joinRef: nil,
-      ref: socket?.makeRef().description ?? "",
-      topic: topic,
-      event: ChannelEvent.join,
-      payload: AnyJSON(RealtimeJoinPayload(config: joinConfig)).objectValue ?? [:]
-    ))
+    try? await socket?.send(
+      RealtimeMessageV2(
+        joinRef: nil,
+        ref: socket?.makeRef().description ?? "",
+        topic: topic,
+        event: ChannelEvent.join,
+        payload: AnyJSON(RealtimeJoinPayload(config: joinConfig)).objectValue ?? [:]
+      )
+    )
   }
 
-  public func unsubscribe() async throws {
+  public func unsubscribe() async {
     _status.value = .unsubscribing
     debug("unsubscribing from channel \(topic)")
 
-    try await socket?.send(
+    await socket?.send(
       RealtimeMessageV2(
         joinRef: nil,
         ref: socket?.makeRef().description,
@@ -111,9 +111,9 @@ public final class RealtimeChannelV2: @unchecked Sendable {
     )
   }
 
-  public func updateAuth(jwt: String) async throws {
+  public func updateAuth(jwt: String) async {
     debug("Updating auth token for channel \(topic)")
-    try await socket?.send(
+    await socket?.send(
       RealtimeMessageV2(
         joinRef: nil,
         ref: socket?.makeRef().description,
@@ -124,11 +124,11 @@ public final class RealtimeChannelV2: @unchecked Sendable {
     )
   }
 
-  public func broadcast(event: String, message: [String: AnyJSON]) async throws {
-    if status != .subscribed {
+  public func broadcast(event: String, message: [String: AnyJSON]) async {
+    if _status.value != .subscribed {
       // TODO: use HTTP
     } else {
-      try await socket?.send(
+      await socket?.send(
         RealtimeMessageV2(
           joinRef: nil,
           ref: socket?.makeRef().description,
@@ -144,14 +144,13 @@ public final class RealtimeChannelV2: @unchecked Sendable {
     }
   }
 
-  public func track(state: [String: AnyJSON]) async throws {
-    guard status == .subscribed else {
-      throw RealtimeError(
-        "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
-      )
-    }
+  public func track(state: JSONObject) async {
+    assert(
+      _status.value == .subscribed,
+      "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
+    )
 
-    try await socket?.send(RealtimeMessageV2(
+    await socket?.send(RealtimeMessageV2(
       joinRef: nil,
       ref: socket?.makeRef().description,
       topic: topic,
@@ -164,8 +163,8 @@ public final class RealtimeChannelV2: @unchecked Sendable {
     ))
   }
 
-  public func untrack() async throws {
-    try await socket?.send(RealtimeMessageV2(
+  public func untrack() async {
+    await socket?.send(RealtimeMessageV2(
       joinRef: nil,
       ref: socket?.makeRef().description,
       topic: topic,
@@ -177,99 +176,116 @@ public final class RealtimeChannelV2: @unchecked Sendable {
     ))
   }
 
-  func onMessage(_ message: RealtimeMessageV2) async throws {
-    guard let eventType = message.eventType else {
-      throw RealtimeError("Received message without event type: \(message)")
-    }
+  func onMessage(_ message: RealtimeMessageV2) async {
+    do {
+      guard let eventType = message.eventType else {
+        throw RealtimeError("Received message without event type: \(message)")
+      }
 
-    switch eventType {
-    case .tokenExpired:
-      debug(
-        "Received token expired event. This should not happen, please report this warning."
-      )
+      switch eventType {
+      case .tokenExpired:
+        debug(
+          "Received token expired event. This should not happen, please report this warning."
+        )
 
-    case .system:
-      debug("Subscribed to channel \(message.topic)")
-      _status.value = .subscribed
-
-    case .postgresServerChanges:
-      let serverPostgresChanges = try message.payload["response"]?.objectValue?["postgres_changes"]?
-        .decode([PostgresJoinConfig].self)
-      callbackManager.setServerChanges(changes: serverPostgresChanges ?? [])
-
-      if status != .subscribed {
-        _status.value = .subscribed
+      case .system:
         debug("Subscribed to channel \(message.topic)")
+        _status.value = .subscribed
+
+      case .postgresServerChanges:
+        let serverPostgresChanges = try message.payload["response"]?
+          .objectValue?["postgres_changes"]?
+          .decode([PostgresJoinConfig].self)
+
+        callbackManager.setServerChanges(changes: serverPostgresChanges ?? [])
+
+        if _status.value != .subscribed {
+          _status.value = .subscribed
+          debug("Subscribed to channel \(message.topic)")
+        }
+
+      case .postgresChanges:
+        guard let data = message.payload["data"] else {
+          debug("Expected \"data\" key in message payload.")
+          return
+        }
+
+        let ids = message.payload["ids"]?.arrayValue?.compactMap(\.intValue) ?? []
+
+        let postgresActions = try data.decode(PostgresActionData.self)
+
+        let action: AnyAction = switch postgresActions.type {
+        case "UPDATE":
+          .update(
+            UpdateAction(
+              columns: postgresActions.columns,
+              commitTimestamp: postgresActions.commitTimestamp,
+              record: postgresActions.record ?? [:],
+              oldRecord: postgresActions.oldRecord ?? [:],
+              rawMessage: message
+            )
+          )
+
+        case "DELETE":
+          .delete(
+            DeleteAction(
+              columns: postgresActions.columns,
+              commitTimestamp: postgresActions.commitTimestamp,
+              oldRecord: postgresActions.oldRecord ?? [:],
+              rawMessage: message
+            )
+          )
+
+        case "INSERT":
+          .insert(
+            InsertAction(
+              columns: postgresActions.columns,
+              commitTimestamp: postgresActions.commitTimestamp,
+              record: postgresActions.record ?? [:],
+              rawMessage: message
+            )
+          )
+
+        case "SELECT":
+          .select(
+            SelectAction(
+              columns: postgresActions.columns,
+              commitTimestamp: postgresActions.commitTimestamp,
+              record: postgresActions.record ?? [:],
+              rawMessage: message
+            )
+          )
+
+        default:
+          throw RealtimeError("Unknown event type: \(postgresActions.type)")
+        }
+
+        callbackManager.triggerPostgresChanges(ids: ids, data: action)
+
+      case .broadcast:
+        let event = message.event
+        callbackManager.triggerBroadcast(event: event, message: message)
+
+      case .close:
+        await socket?.removeChannel(self)
+        debug("Unsubscribed from channel \(message.topic)")
+
+      case .error:
+        debug(
+          "Received an error in channel ${message.topic}. That could be as a result of an invalid access token"
+        )
+
+      case .presenceDiff:
+        let joins = try message.payload["joins"]?.decode([String: _Presence].self) ?? [:]
+        let leaves = try message.payload["leaves"]?.decode([String: _Presence].self) ?? [:]
+        callbackManager.triggerPresenceDiffs(joins: joins, leaves: leaves, rawMessage: message)
+
+      case .presenceState:
+        let joins = try message.payload.decode([String: _Presence].self)
+        callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:], rawMessage: message)
       }
-
-    case .postgresChanges:
-      guard let payload = try AnyJSON(message.payload).objectValue,
-            let data = payload["data"] else { return }
-      let ids = payload["ids"]?.arrayValue?.compactMap(\.intValue) ?? []
-
-      let postgresActions = try data.decode(PostgresActionData.self)
-
-      let action: AnyAction = switch postgresActions.type {
-      case "UPDATE":
-        .update(UpdateAction(
-          columns: postgresActions.columns,
-          commitTimestamp: postgresActions.commitTimestamp,
-          record: postgresActions.record ?? [:],
-          oldRecord: postgresActions.oldRecord ?? [:],
-          rawMessage: message
-        ))
-
-      case "DELETE":
-        .delete(DeleteAction(
-          columns: postgresActions.columns,
-          commitTimestamp: postgresActions.commitTimestamp,
-          oldRecord: postgresActions.oldRecord ?? [:],
-          rawMessage: message
-        ))
-
-      case "INSERT":
-        .insert(InsertAction(
-          columns: postgresActions.columns,
-          commitTimestamp: postgresActions.commitTimestamp,
-          record: postgresActions.record ?? [:],
-          rawMessage: message
-        ))
-
-      case "SELECT":
-        .select(SelectAction(
-          columns: postgresActions.columns,
-          commitTimestamp: postgresActions.commitTimestamp,
-          record: postgresActions.record ?? [:],
-          rawMessage: message
-        ))
-
-      default:
-        throw RealtimeError("Unknown event type: \(postgresActions.type)")
-      }
-
-      callbackManager.triggerPostgresChanges(ids: ids, data: action)
-
-    case .broadcast:
-      let event = message.event
-      callbackManager.triggerBroadcast(event: event, message: message)
-
-    case .close:
-      try await socket?.removeChannel(self)
-      debug("Unsubscribed from channel \(message.topic)")
-
-    case .error:
-      debug(
-        "Received an error in channel ${message.topic}. That could be as a result of an invalid access token"
-      )
-
-    case .presenceDiff:
-      let joins: [String: Presence] = [:]
-      let leaves: [String: Presence] = [:]
-      callbackManager.triggerPresenceDiffs(joins: joins, leaves: leaves, rawMessage: message)
-
-    case .presenceState:
-      let joins: [String: Presence] = [:]
-      callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:], rawMessage: message)
+    } catch {
+      debug("Failed: \(error)")
     }
   }
 
@@ -296,7 +312,10 @@ public final class RealtimeChannelV2: @unchecked Sendable {
     table: String,
     filter: String? = nil
   ) -> AsyncStream<Action> {
-    precondition(status != .subscribed, "You cannot call postgresChange after joining the channel")
+    precondition(
+      _status.value != .subscribed,
+      "You cannot call postgresChange after joining the channel"
+    )
 
     let (stream, continuation) = AsyncStream<Action>.makeStream()
 

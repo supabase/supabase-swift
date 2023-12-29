@@ -108,8 +108,8 @@ final class CallbackManager: @unchecked Sendable {
   }
 
   func triggerPresenceDiffs(
-    joins: [String: Presence],
-    leaves: [String: Presence],
+    joins: [String: _Presence],
+    leaves: [String: _Presence],
     rawMessage: RealtimeMessageV2
   ) {
     let presenceCallbacks = mutableState.callbacks.compactMap {
@@ -118,11 +118,15 @@ final class CallbackManager: @unchecked Sendable {
       }
       return nil
     }
-    presenceCallbacks.forEach { $0.callback(PresenceActionImpl(
-      joins: joins,
-      leaves: leaves,
-      rawMessage: rawMessage
-    )) }
+    presenceCallbacks.forEach {
+      $0.callback(
+        PresenceActionImpl(
+          joins: joins,
+          leaves: leaves,
+          rawMessage: rawMessage
+        )
+      )
+    }
   }
 
   func reset() {

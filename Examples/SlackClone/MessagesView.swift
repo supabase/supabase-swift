@@ -15,6 +15,7 @@ final class MessagesViewModel {
   let channel: Channel
   var messages: [Message] = []
   var newMessage = ""
+  var presences: [UserPresence] = []
 
   let api: MessagesAPI
 
@@ -41,41 +42,60 @@ final class MessagesViewModel {
   func startObservingNewMessages() {
     realtimeChannelV2 = supabase.realtimeV2.channel("messages:\(channel.id)")
 
-    let changes = realtimeChannelV2!.postgresChange(
+    let messagesChanges = realtimeChannelV2!.postgresChange(
       AnyAction.self,
       schema: "public",
       table: "messages",
       filter: "channel_id=eq.\(channel.id)"
     )
 
+    let presenceChange = realtimeChannelV2!.presenceChange()
+
     observationTask = Task {
-      try! await realtimeChannelV2!.subscribe()
+      await realtimeChannelV2!.subscribe()
 
-      for await change in changes {
-        do {
-          switch change {
-          case let .insert(record):
-            let message = try await self.message(from: record)
-            self.messages.append(message)
+      let state = try? await UserPresence(userId: supabase.auth.session.user.id, onlineAt: Date())
 
-          case let .update(record):
-            let message = try await self.message(from: record)
+      _ = await realtimeChannelV2!.status.values.first { $0 == .subscribed }
 
-            if let index = self.messages.firstIndex(where: { $0.id == message.id }) {
-              messages[index] = message
-            } else {
-              messages.append(message)
+      if let state = try? AnyJSON(state).objectValue {
+        await realtimeChannelV2!.track(state: state)
+      }
+
+      Task {
+        for await change in messagesChanges {
+          do {
+            switch change {
+            case let .insert(record):
+              let message = try await self.message(from: record)
+              self.messages.append(message)
+
+            case let .update(record):
+              let message = try await self.message(from: record)
+
+              if let index = self.messages.firstIndex(where: { $0.id == message.id }) {
+                messages[index] = message
+              } else {
+                messages.append(message)
+              }
+
+            case let .delete(oldRecord):
+              let id = oldRecord.oldRecord["id"]?.intValue
+              self.messages.removeAll { $0.id == id }
+
+            default:
+              break
             }
-
-          case let .delete(oldRecord):
-            let id = oldRecord.oldRecord["id"]?.intValue
-            self.messages.removeAll { $0.id == id }
-
-          default:
-            break
+          } catch {
+            dump(error)
           }
-        } catch {
-          dump(error)
+        }
+      }
+
+      Task {
+        for await change in presenceChange {
+          let presences = try change.decodeJoins(as: UserPresence.self)
+          self.presences = presences
         }
       }
     }
@@ -83,11 +103,9 @@ final class MessagesViewModel {
 
   func stopObservingMessages() {
     Task {
-      do {
-        try await realtimeChannelV2?.unsubscribe()
-      } catch {
-        dump(error)
-      }
+      observationTask?.cancel()
+      await realtimeChannelV2?.untrack()
+      await realtimeChannelV2?.unsubscribe()
     }
   }
 
@@ -138,6 +156,11 @@ final class MessagesViewModel {
   }
 }
 
+struct UserPresence: Codable {
+  var userId: UUID
+  var onlineAt: Date
+}
+
 struct MessagesView: View {
   @Bindable var model: MessagesViewModel
 
@@ -159,6 +182,11 @@ struct MessagesView: View {
       .padding()
     }
     .navigationTitle(model.channel.slug)
+    .toolbar {
+      ToolbarItem(placement: .principal) {
+        Text("\(model.presences.count) online")
+      }
+    }
     .onAppear {
       model.loadInitialMessages()
       model.startObservingNewMessages()

@@ -193,13 +193,10 @@ final class CallbackManagerTests: XCTestCase {
   }
 
   func testTriggerPresenceDiffs() {
-    let socket = RealtimeClient("/socket")
-    let channel = RealtimeChannel(topic: "room", socket: socket)
-
     let callbackManager = CallbackManager()
 
-    let joins = ["user1": Presence(channel: channel)]
-    let leaves = ["user2": Presence(channel: channel)]
+    let joins = ["user1": _Presence(ref: "ref", state: [:])]
+    let leaves = ["user2": _Presence(ref: "ref", state: [:])]
 
     let receivedAction = LockIsolated(PresenceAction?.none)
 
@@ -213,11 +210,8 @@ final class CallbackManagerTests: XCTestCase {
       rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
 
-    XCTAssertIdentical(receivedAction.value?.joins["user1"], joins["user1"])
-    XCTAssertIdentical(receivedAction.value?.leaves["user2"], leaves["user2"])
-
-    XCTAssertEqual(receivedAction.value?.joins.count, 1)
-    XCTAssertEqual(receivedAction.value?.leaves.count, 1)
+    XCTAssertNoDifference(receivedAction.value?.joins, joins)
+    XCTAssertNoDifference(receivedAction.value?.leaves, leaves)
   }
 }
 
