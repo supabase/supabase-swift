@@ -13,7 +13,7 @@ struct PostgresActionData: Codable {
   var record: [String: AnyJSON]?
   var oldRecord: [String: AnyJSON]?
   var columns: [Column]
-  var commitTimestamp: TimeInterval
+  var commitTimestamp: Date
 
   enum CodingKeys: String, CodingKey {
     case type

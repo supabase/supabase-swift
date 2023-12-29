@@ -8,6 +8,7 @@
 import Combine
 import ConcurrencyExtras
 import Foundation
+@_spi(Internal) import _Helpers
 
 public protocol AuthTokenProvider {
   func authToken() async -> String?
@@ -61,8 +62,8 @@ public final class Realtime {
     _status.value
   }
 
-  let _subscriptions = LockIsolated<[String: _RealtimeChannel]>([:])
-  public var subscriptions: [String: _RealtimeChannel] {
+  let _subscriptions = LockIsolated<[String: RealtimeChannel]>([:])
+  public var subscriptions: [String: RealtimeChannel] {
     _subscriptions.value
   }
 
@@ -101,13 +102,13 @@ public final class Realtime {
       try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.reconnectDelay))
 
       if Task.isCancelled {
-        print("reconnect cancelled, returning")
+        debug("reconnect cancelled, returning")
         return
       }
     }
 
     if status == .connected {
-      print("Websocket already connected")
+      debug("Websocket already connected")
       return
     }
 
@@ -121,14 +122,14 @@ public final class Realtime {
 
     if connectionStatus == .open {
       _status.value = .connected
-      print("Connected to realtime websocket")
+      debug("Connected to realtime websocket")
       listenForMessages()
       startHeartbeating()
       if reconnect {
         try await rejoinChannels()
       }
     } else {
-      print(
+      debug(
         "Error while trying to connect to realtime websocket. Trying again in \(config.reconnectDelay) seconds."
       )
       await disconnect()
@@ -139,14 +140,14 @@ public final class Realtime {
   public func channel(
     _ topic: String,
     options: (inout RealtimeChannelConfig) -> Void = { _ in }
-  ) -> _RealtimeChannel {
+  ) -> RealtimeChannel {
     var config = RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
       presence: PresenceJoinConfig(key: "")
     )
     options(&config)
 
-    return _RealtimeChannel(
+    return RealtimeChannel(
       topic: "realtime:\(topic)",
       socket: self,
       broadcastJoinConfig: config.broadcast,
@@ -154,11 +155,11 @@ public final class Realtime {
     )
   }
 
-  public func addChannel(_ channel: _RealtimeChannel) {
+  public func addChannel(_ channel: RealtimeChannel) {
     _subscriptions.withValue { $0[channel.topic] = channel }
   }
 
-  public func removeChannel(_ channel: _RealtimeChannel) async throws {
+  public func removeChannel(_ channel: RealtimeChannel) async throws {
     if channel.status == .subscribed {
       try await channel.unsubscribe()
     }
@@ -184,7 +185,7 @@ public final class Realtime {
           try await onMessage(message)
         }
       } catch {
-        print(
+        debug(
           "Error while listening for messages. Trying again in \(config.reconnectDelay) \(error)"
         )
         await disconnect()
@@ -211,7 +212,7 @@ public final class Realtime {
     if heartbeatRef != 0 {
       heartbeatRef = 0
       ref = 0
-      print("Heartbeat timeout. Trying to reconnect in \(config.reconnectDelay)")
+      debug("Heartbeat timeout. Trying to reconnect in \(config.reconnectDelay)")
       await disconnect()
       try await connect(reconnect: true)
       return
@@ -220,15 +221,16 @@ public final class Realtime {
     heartbeatRef = makeRef()
 
     try await ws?.send(_RealtimeMessage(
+      joinRef: nil,
+      ref: heartbeatRef.description,
       topic: "phoenix",
       event: "heartbeat",
-      payload: [:],
-      ref: heartbeatRef.description
+      payload: [:]
     ))
   }
 
   public func disconnect() async {
-    print("Closing websocket connection")
+    debug("Closing websocket connection")
     messageTask?.cancel()
     await ws?.cancel()
     ws = nil
@@ -244,10 +246,10 @@ public final class Realtime {
   private func onMessage(_ message: _RealtimeMessage) async throws {
     let channel = subscriptions[message.topic]
     if Int(message.ref ?? "") == heartbeatRef {
-      print("heartbeat received")
+      debug("heartbeat received")
       heartbeatRef = 0
     } else {
-      print("Received event \(message.event) for channel \(channel?.topic ?? "null")")
+      debug("Received event \(message.event) for channel \(channel?.topic ?? "null")")
       try await channel?.onMessage(message)
     }
   }

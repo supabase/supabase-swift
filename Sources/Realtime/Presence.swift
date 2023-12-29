@@ -163,7 +163,7 @@ public final class Presence {
 
   // ----------------------------------------------------------------------
   /// The channel the Presence belongs to
-  weak var channel: RealtimeChannel?
+  weak var channel: OldRealtimeChannel?
 
   /// Caller to callback hooks
   var caller: Caller
@@ -215,7 +215,7 @@ public final class Presence {
     onSync = callback
   }
 
-  public init(channel: RealtimeChannel, opts: Options = Options.defaults) {
+  public init(channel: OldRealtimeChannel, opts: Options = Options.defaults) {
     state = [:]
     pendingDiffs = []
     self.channel = channel

@@ -9,7 +9,7 @@ import Foundation
 @_spi(Internal) import _Helpers
 import ConcurrencyExtras
 
-final class CallbackManager {
+final class CallbackManager: @unchecked Sendable {
   struct MutableState {
     var id = 0
     var serverChanges: [PostgresJoinConfig] = []
@@ -19,7 +19,7 @@ final class CallbackManager {
   let mutableState = LockIsolated(MutableState())
 
   @discardableResult
-  func addBroadcastCallback(event: String, callback: @escaping (AnyJSON) -> Void) -> Int {
+  func addBroadcastCallback(event: String, callback: @escaping @Sendable (AnyJSON) -> Void) -> Int {
     mutableState.withValue {
       $0.id += 1
       $0.callbacks.append(.broadcast(BroadcastCallback(
@@ -34,7 +34,7 @@ final class CallbackManager {
   @discardableResult
   func addPostgresCallback(
     filter: PostgresJoinConfig,
-    callback: @escaping (PostgresAction) -> Void
+    callback: @escaping @Sendable (AnyAction) -> Void
   ) -> Int {
     mutableState.withValue {
       $0.id += 1
@@ -48,7 +48,7 @@ final class CallbackManager {
   }
 
   @discardableResult
-  func addPresenceCallback(callback: @escaping (PresenceAction) -> Void) -> Int {
+  func addPresenceCallback(callback: @escaping @Sendable (PresenceAction) -> Void) -> Int {
     mutableState.withValue {
       $0.id += 1
       $0.callbacks.append(.presence(PresenceCallback(id: $0.id, callback: callback)))
@@ -68,7 +68,7 @@ final class CallbackManager {
     }
   }
 
-  func triggerPostgresChanges(ids: [Int], data: PostgresAction) {
+  func triggerPostgresChanges(ids: [Int], data: AnyAction) {
     // Read mutableState at start to acquire lock once.
     let mutableState = mutableState.value
 
@@ -118,18 +118,18 @@ final class CallbackManager {
 struct PostgresCallback {
   var id: Int
   var filter: PostgresJoinConfig
-  var callback: (PostgresAction) -> Void
+  var callback: @Sendable (AnyAction) -> Void
 }
 
 struct BroadcastCallback {
   var id: Int
   var event: String
-  var callback: (AnyJSON) -> Void
+  var callback: @Sendable (AnyJSON) -> Void
 }
 
 struct PresenceCallback {
   var id: Int
-  var callback: (PresenceAction) -> Void
+  var callback: @Sendable (PresenceAction) -> Void
 }
 
 enum RealtimeCallback {

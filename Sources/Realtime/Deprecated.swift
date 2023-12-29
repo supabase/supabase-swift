@@ -10,6 +10,83 @@ import Foundation
 @available(*, deprecated, renamed: "RealtimeMessage")
 public typealias Message = RealtimeMessage
 
+extension RealtimeChannel {
+  @available(
+    *,
+    deprecated,
+    message: "Please use one of postgresChanges, presenceState, or broadcast methods that returns an AsyncSequence instead."
+  )
+  @discardableResult
+  public func on(
+    _ event: String,
+    filter: ChannelFilter,
+    handler: @escaping (_RealtimeMessage) -> Void
+  ) -> RealtimeChannel {
+    let stream: AsyncStream<HasRawMessage>
+
+    switch event {
+    case "postgres_changes":
+      switch filter.event {
+      case "UPDATE":
+        stream = postgresChange(
+          UpdateAction.self,
+          schema: filter.schema ?? "public",
+          table: filter.table!,
+          filter: filter.filter
+        )
+        .map { $0 as HasRawMessage }
+        .eraseToStream()
+      case "INSERT":
+        stream = postgresChange(
+          InsertAction.self,
+          schema: filter.schema ?? "public",
+          table: filter.table!,
+          filter: filter.filter
+        )
+        .map { $0 as HasRawMessage }
+        .eraseToStream()
+      case "DELETE":
+        stream = postgresChange(
+          DeleteAction.self,
+          schema: filter.schema ?? "public",
+          table: filter.table!,
+          filter: filter.filter
+        )
+        .map { $0 as HasRawMessage }
+        .eraseToStream()
+      case "SELECT":
+        stream = postgresChange(
+          SelectAction.self,
+          schema: filter.schema ?? "public",
+          table: filter.table!,
+          filter: filter.filter
+        )
+        .map { $0 as HasRawMessage }
+        .eraseToStream()
+      default:
+        stream = postgresChange(
+          AnyAction.self,
+          schema: filter.schema ?? "public",
+          table: filter.table!,
+          filter: filter.filter
+        )
+        .map { $0 as HasRawMessage }
+        .eraseToStream()
+      }
+
+      Task {
+        for await action in stream {
+          handler(action.rawMessage)
+        }
+      }
+
+    default:
+      ()
+    }
+
+    return self
+}
+
 extension RealtimeClient {
   @available(
     *,

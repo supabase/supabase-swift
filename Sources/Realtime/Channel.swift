@@ -14,7 +14,7 @@ public struct RealtimeChannelConfig {
   public var presence: PresenceJoinConfig
 }
 
-public final class _RealtimeChannel {
+public final class RealtimeChannel {
   public enum Status {
     case unsubscribed
     case subscribing
@@ -61,7 +61,7 @@ public final class _RealtimeChannel {
     socket?.addChannel(self)
 
     _status.value = .subscribing
-    print("subscribing to channel \(topic)")
+    debug("subscribing to channel \(topic)")
 
     let authToken = await socket?.config.authTokenProvider?.authToken()
     let currentJwt = socket?.config.jwtToken ?? authToken
@@ -74,40 +74,46 @@ public final class _RealtimeChannel {
       postgresChanges: postgresChanges
     )
 
-    print("subscribing to channel with body: \(joinConfig)")
+    debug("subscribing to channel with body: \(joinConfig)")
 
-    var payload = try AnyJSON(joinConfig).objectValue ?? [:]
+    var config = try AnyJSON(joinConfig).objectValue ?? [:]
     if let currentJwt {
-      payload["access_token"] = .string(currentJwt)
+      config["access_token"] = .string(currentJwt)
     }
 
     try? await socket?.ws?.send(_RealtimeMessage(
+      joinRef: nil,
+      ref: socket?.makeRef().description ?? "",
       topic: topic,
       event: ChannelEvent.join,
-      payload: payload,
-      ref: socket?.makeRef().description ?? ""
+      payload: ["config": .object(config)]
     ))
   }
 
   public func unsubscribe() async throws {
     _status.value = .unsubscribing
-    print("unsubscribing from channel \(topic)")
-
-    let ref = socket?.makeRef() ?? 0
+    debug("unsubscribing from channel \(topic)")
 
     try await socket?.ws?.send(
-      _RealtimeMessage(topic: topic, event: ChannelEvent.leave, payload: [:], ref: ref.description)
+      _RealtimeMessage(
+        joinRef: nil,
+        ref: socket?.makeRef().description,
+        topic: topic,
+        event: ChannelEvent.leave,
+        payload: [:]
+      )
     )
   }
 
   public func updateAuth(jwt: String) async throws {
-    print("Updating auth token for channel \(topic)")
+    debug("Updating auth token for channel \(topic)")
     try await socket?.ws?.send(
       _RealtimeMessage(
+        joinRef: nil,
+        ref: socket?.makeRef().description,
         topic: topic,
         event: ChannelEvent.accessToken,
-        payload: ["access_token": .string(jwt)],
-        ref: socket?.makeRef().description ?? ""
+        payload: ["access_token": .string(jwt)]
       )
     )
   }
@@ -118,14 +124,15 @@ public final class _RealtimeChannel {
     } else {
       try await socket?.ws?.send(
         _RealtimeMessage(
+          joinRef: nil,
+          ref: socket?.makeRef().description,
           topic: topic,
           event: ChannelEvent.broadcast,
           payload: [
             "type": .string("broadcast"),
             "event": .string(event),
             "payload": .object(message),
-          ],
-          ref: socket?.makeRef().description ?? ""
+          ]
         )
       )
     }
@@ -139,26 +146,28 @@ public final class _RealtimeChannel {
     }
 
     try await socket?.ws?.send(_RealtimeMessage(
+      joinRef: nil,
+      ref: socket?.makeRef().description,
       topic: topic,
       event: ChannelEvent.presence,
       payload: [
         "type": "presence",
         "event": "track",
         "payload": .object(state),
-      ],
-      ref: socket?.makeRef().description ?? ""
+      ]
     ))
   }
 
   public func untrack() async throws {
     try await socket?.ws?.send(_RealtimeMessage(
+      joinRef: nil,
+      ref: socket?.makeRef().description,
       topic: topic,
       event: ChannelEvent.presence,
       payload: [
         "type": "presence",
         "event": "untrack",
-      ],
-      ref: socket?.makeRef().description ?? ""
+      ]
     ))
   }
 
@@ -169,13 +178,12 @@ public final class _RealtimeChannel {
 
     switch eventType {
     case .tokenExpired:
-      print(
-        "onMessage",
+      debug(
         "Received token expired event. This should not happen, please report this warning."
       )
 
     case .system:
-      print("onMessage", "Subscribed to channel", message.topic)
+      debug("Subscribed to channel \(message.topic)")
       _status.value = .subscribed
 
     case .postgresServerChanges:
@@ -185,7 +193,7 @@ public final class _RealtimeChannel {
 
       if status != .subscribed {
         _status.value = .subscribed
-        print("onMessage", "Subscribed to channel", message.topic)
+        debug("Subscribed to channel \(message.topic)")
       }
 
     case .postgresChanges:
@@ -195,40 +203,40 @@ public final class _RealtimeChannel {
 
       let postgresActions = try data.decode(PostgresActionData.self)
 
-      let action: PostgresAction = switch postgresActions.type {
+      let action: AnyAction = switch postgresActions.type {
       case "UPDATE":
-        PostgresAction(
+        .update(UpdateAction(
           columns: postgresActions.columns,
           commitTimestamp: postgresActions.commitTimestamp,
-          action: .update(
-            record: postgresActions.record ?? [:],
-            oldRecord: postgresActions.oldRecord ?? [:]
-          )
-        )
+          record: postgresActions.record ?? [:],
+          oldRecord: postgresActions.oldRecord ?? [:],
+          rawMessage: message
+        ))
+
       case "DELETE":
-        PostgresAction(
+        .delete(DeleteAction(
           columns: postgresActions.columns,
           commitTimestamp: postgresActions.commitTimestamp,
-          action: .delete(
-            oldRecord: postgresActions.oldRecord ?? [:]
-          )
-        )
+          oldRecord: postgresActions.oldRecord ?? [:],
+          rawMessage: message
+        ))
+
       case "INSERT":
-        PostgresAction(
+        .insert(InsertAction(
           columns: postgresActions.columns,
           commitTimestamp: postgresActions.commitTimestamp,
-          action: .insert(
-            record: postgresActions.record ?? [:]
-          )
-        )
+          record: postgresActions.record ?? [:],
+          rawMessage: message
+        ))
+
       case "SELECT":
-        PostgresAction(
+        .select(SelectAction(
           columns: postgresActions.columns,
           commitTimestamp: postgresActions.commitTimestamp,
-          action: .select(
-            record: postgresActions.record ?? [:]
-          )
-        )
+          record: postgresActions.record ?? [:],
+          rawMessage: message
+        ))
+
       default:
         throw RealtimeError("Unknown event type: \(postgresActions.type)")
       }
@@ -242,11 +250,10 @@ public final class _RealtimeChannel {
 
     case .close:
       try await socket?.removeChannel(self)
-      print("onMessage", "Unsubscribed from channel \(message.topic)")
+      debug("Unsubscribed from channel \(message.topic)")
 
     case .error:
-      print(
-        "onMessage",
+      debug(
         "Received an error in channel ${message.topic}. That could be as a result of an invalid access token"
       )
 
@@ -277,18 +284,18 @@ public final class _RealtimeChannel {
   }
 
   /// Listen for postgres changes in a channel.
-  public func postgresChange(
-    _ event: PostgresChangeEvent,
+  public func postgresChange<Action: PostgresAction>(
+    _ action: Action.Type,
     schema: String = "public",
     table: String,
     filter: String? = nil
-  ) -> AsyncStream<PostgresAction> {
+  ) -> AsyncStream<Action> {
     precondition(status != .subscribed, "You cannot call postgresChange after joining the channel")
 
-    let (stream, continuation) = AsyncStream<PostgresAction>.makeStream()
+    let (stream, continuation) = AsyncStream<Action>.makeStream()
 
     let config = PostgresJoinConfig(
-      event: event,
+      event: Action.eventType,
       schema: schema,
       table: table,
       filter: filter
@@ -297,7 +304,13 @@ public final class _RealtimeChannel {
     clientChanges.append(config)
 
     let id = callbackManager.addPostgresCallback(filter: config) { action in
-      continuation.yield(action)
+      if let action = action.wrappedAction as? Action {
+        continuation.yield(action)
+      } else {
+        assertionFailure(
+          "Expected an action of type \(Action.self), but got a \(type(of: action.wrappedAction))."
+        )
+      }
     }
 
     continuation.onTermination = { _ in

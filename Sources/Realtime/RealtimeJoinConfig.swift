@@ -1,15 +1,11 @@
 //
-//  RealtimeJoinPayload.swift
+//  RealtimeJoinConfig.swift
 //
 //
 //  Created by Guilherme Souza on 24/12/23.
 //
 
 import Foundation
-
-struct RealtimeJoinPayload: Codable, Hashable {
-  var config: RealtimeJoinConfig
-}
 
 struct RealtimeJoinConfig: Codable, Hashable {
   var broadcast: BroadcastJoinConfig = .init()

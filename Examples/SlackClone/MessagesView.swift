@@ -20,6 +20,8 @@ final class MessagesViewModel {
   init(channel: Channel, api: MessagesAPI = MessagesAPIImpl(supabase: supabase)) {
     self.channel = channel
     self.api = api
+
+    supabase.realtime.logger = { print($0) }
   }
 
   func loadInitialMessages() {
@@ -32,27 +34,30 @@ final class MessagesViewModel {
     }
   }
 
-  private var realtimeChannel: _RealtimeChannel?
-  func startObservingNewMessages() {
-    realtimeChannel = supabase.realtimeV2.channel("messages:\(channel.id)")
+  private var realtimeChannelV2: RealtimeChannel?
+  private var observationTask: Task<Void, Never>?
 
-    let changes = realtimeChannel!.postgresChange(
-      .all,
+  func startObservingNewMessages() {
+    realtimeChannelV2 = supabase.realtimeV2.channel("messages:\(channel.id)")
+
+    let changes = realtimeChannelV2!.postgresChange(
+      AnyAction.self,
+      schema: "public",
       table: "messages",
       filter: "channel_id=eq.\(channel.id)"
     )
 
-    Task {
-      try! await realtimeChannel!.subscribe()
+    observationTask = Task {
+      try! await realtimeChannelV2!.subscribe()
 
       for await change in changes {
         do {
-          switch change.action {
+          switch change {
           case let .insert(record):
             let message = try await self.message(from: record)
             self.messages.append(message)
 
-          case let .update(record, _):
+          case let .update(record):
             let message = try await self.message(from: record)
 
             if let index = self.messages.firstIndex(where: { $0.id == message.id }) {
@@ -62,7 +67,7 @@ final class MessagesViewModel {
             }
 
           case let .delete(oldRecord):
-            let id = oldRecord["id"]?.intValue
+            let id = oldRecord.oldRecord["id"]?.intValue
             self.messages.removeAll { $0.id == id }
 
           default:
@@ -78,14 +83,14 @@ final class MessagesViewModel {
   func stopObservingMessages() {
     Task {
       do {
-        try await realtimeChannel?.unsubscribe()
+        try await realtimeChannelV2?.unsubscribe()
       } catch {
         dump(error)
       }
     }
   }
 
-  private func message(from payload: [String: AnyJSON]) async throws -> Message {
+  private func message(from record: HasRecord) async throws -> Message {
     struct MessagePayload: Decodable {
       let id: Int
       let message: String
@@ -94,7 +99,7 @@ final class MessagesViewModel {
       let channelId: UUID
     }
 
-    let message = try payload.decode(MessagePayload.self)
+    let message = try record.decodeRecord() as MessagePayload
 
     return try await Message(
       id: message.id,

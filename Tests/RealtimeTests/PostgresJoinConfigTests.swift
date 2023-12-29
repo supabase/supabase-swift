@@ -11,17 +11,17 @@ import XCTest
 final class PostgresJoinConfigTests: XCTestCase {
   func testSameConfigButDifferentIdAreEqual() {
     let config1 = PostgresJoinConfig(
+      event: .insert,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "INSERT",
       id: 1
     )
     let config2 = PostgresJoinConfig(
+      event: .insert,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "INSERT",
       id: 2
     )
 
@@ -30,17 +30,17 @@ final class PostgresJoinConfigTests: XCTestCase {
 
   func testSameConfigWithGlobEventAreEqual() {
     let config1 = PostgresJoinConfig(
+      event: .insert,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "INSERT",
       id: 1
     )
     let config2 = PostgresJoinConfig(
+      event: .all,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "*",
       id: 2
     )
 
@@ -49,17 +49,17 @@ final class PostgresJoinConfigTests: XCTestCase {
 
   func testNonEqualConfig() {
     let config1 = PostgresJoinConfig(
+      event: .insert,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "INSERT",
       id: 1
     )
     let config2 = PostgresJoinConfig(
+      event: .update,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "UPDATE",
       id: 2
     )
 
@@ -68,17 +68,17 @@ final class PostgresJoinConfigTests: XCTestCase {
 
   func testSameConfigButDifferentIdHaveEqualHash() {
     let config1 = PostgresJoinConfig(
+      event: .insert,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "INSERT",
       id: 1
     )
     let config2 = PostgresJoinConfig(
+      event: .insert,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "INSERT",
       id: 2
     )
 
@@ -87,17 +87,17 @@ final class PostgresJoinConfigTests: XCTestCase {
 
   func testSameConfigWithGlobEventHaveDiffHash() {
     let config1 = PostgresJoinConfig(
+      event: .insert,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "INSERT",
       id: 1
     )
     let config2 = PostgresJoinConfig(
+      event: .all,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "*",
       id: 2
     )
 
@@ -106,17 +106,17 @@ final class PostgresJoinConfigTests: XCTestCase {
 
   func testNonEqualConfigHaveDiffHash() {
     let config1 = PostgresJoinConfig(
+      event: .insert,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "INSERT",
       id: 1
     )
     let config2 = PostgresJoinConfig(
+      event: .update,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "UPDATE",
       id: 2
     )
 

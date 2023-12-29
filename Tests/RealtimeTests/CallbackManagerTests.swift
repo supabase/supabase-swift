@@ -14,10 +14,10 @@ final class CallbackManagerTests: XCTestCase {
   func testIntegration() {
     let callbackManager = CallbackManager()
     let filter = PostgresJoinConfig(
+      event: .update,
       schema: "public",
       table: "users",
       filter: nil,
-      event: "update",
       id: 1
     )
 
@@ -48,10 +48,10 @@ final class CallbackManagerTests: XCTestCase {
   func testSetServerChanges() {
     let callbackManager = CallbackManager()
     let changes = [PostgresJoinConfig(
+      event: .update,
       schema: "public",
       table: "users",
       filter: nil,
-      event: "update",
       id: 1
     )]
 
@@ -63,31 +63,31 @@ final class CallbackManagerTests: XCTestCase {
   func testTriggerPostgresChanges() {
     let callbackManager = CallbackManager()
     let updateUsersFilter = PostgresJoinConfig(
+      event: .update,
       schema: "public",
       table: "users",
       filter: nil,
-      event: "update",
       id: 1
     )
     let insertUsersFilter = PostgresJoinConfig(
+      event: .insert,
       schema: "public",
       table: "users",
       filter: nil,
-      event: "insert",
       id: 2
     )
     let anyUsersFilter = PostgresJoinConfig(
+      event: .all,
       schema: "public",
       table: "users",
       filter: nil,
-      event: "*",
       id: 3
     )
     let deleteSpecificUserFilter = PostgresJoinConfig(
+      event: .delete,
       schema: "public",
       table: "users",
       filter: "id=1",
-      event: "delete",
       id: 4
     )
 
@@ -98,7 +98,7 @@ final class CallbackManagerTests: XCTestCase {
       deleteSpecificUserFilter,
     ])
 
-    var receivedActions: [PostgresAction] = []
+    var receivedActions: [AnyAction] = []
     let updateUsersId = callbackManager.addPostgresCallback(filter: updateUsersFilter) { action in
       receivedActions.append(action)
     }
@@ -116,52 +116,45 @@ final class CallbackManagerTests: XCTestCase {
         receivedActions.append(action)
       }
 
-    let updateUserAction = PostgresAction(
-      columns: [],
-      commitTimestamp: 0,
-      action: .update(
-        record: ["email": .string("new@mail.com")],
-        oldRecord: ["email": .string("old@mail.com")]
-      )
-    )
-    callbackManager.triggerPostgresChanges(ids: [updateUsersId], data: updateUserAction)
+    let currentDate = Date()
 
-    let insertUserAction = PostgresAction(
+    let updateUserAction = UpdateAction(
       columns: [],
-      commitTimestamp: 0,
-      action: .insert(
-        record: ["email": .string("email@mail.com")]
-      )
+      commitTimestamp: currentDate,
+      record: ["email": .string("new@mail.com")],
+      oldRecord: ["email": .string("old@mail.com")]
     )
-    callbackManager.triggerPostgresChanges(ids: [insertUsersId], data: insertUserAction)
+    callbackManager.triggerPostgresChanges(ids: [updateUsersId], data: .update(updateUserAction))
 
-    let anyUserAction = insertUserAction
+    let insertUserAction = InsertAction(
+      columns: [],
+      commitTimestamp: currentDate,
+      record: ["email": .string("email@mail.com")]
+    )
+    callbackManager.triggerPostgresChanges(ids: [insertUsersId], data: .insert(insertUserAction))
+
+    let anyUserAction = AnyAction.insert(insertUserAction)
     callbackManager.triggerPostgresChanges(ids: [anyUsersId], data: anyUserAction)
 
-    let deleteSpecificUserAction = PostgresAction(
+    let deleteSpecificUserAction = DeleteAction(
       columns: [],
-      commitTimestamp: 0,
-      action: .delete(
-        oldRecord: ["id": .string("1234")]
-      )
+      commitTimestamp: currentDate,
+      oldRecord: ["id": .string("1234")]
     )
     callbackManager.triggerPostgresChanges(
       ids: [deleteSpecificUserId],
-      data: deleteSpecificUserAction
+      data: .delete(deleteSpecificUserAction)
     )
 
     XCTAssertNoDifference(
       receivedActions,
       [
-        updateUserAction,
+        .update(updateUserAction),
         anyUserAction,
-
-        insertUserAction,
+        .insert(insertUserAction),
         anyUserAction,
-
-        insertUserAction,
-
-        deleteSpecificUserAction,
+        .insert(insertUserAction),
+        .delete(deleteSpecificUserAction),
       ]
     )
   }
@@ -183,7 +176,7 @@ final class CallbackManagerTests: XCTestCase {
 
   func testTriggerPresenceDiffs() {
     let socket = RealtimeClient("/socket")
-    let channel = RealtimeChannel(topic: "room", socket: socket)
+    let channel = OldRealtimeChannel(topic: "room", socket: socket)
 
     let callbackManager = CallbackManager()
 

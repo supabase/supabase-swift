@@ -86,11 +86,12 @@ public struct RealtimeMessage {
   }
 }
 
-public struct _RealtimeMessage: Codable, Equatable {
+public struct _RealtimeMessage: Hashable, Codable, Sendable {
+  let joinRef: String?
+  let ref: String?
   let topic: String
   let event: String
   let payload: [String: AnyJSON]
-  let ref: String?
 
   public var eventType: EventType? {
     switch event {

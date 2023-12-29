@@ -27,7 +27,7 @@ final class RealtimeTests: XCTestCase {
       try await realtime.connect()
     }
 
-    mock.statusContinuation.yield(.open)
+    mock.statusContinuation?.yield(.open)
 
     try await connectTask.value
 
@@ -47,22 +47,20 @@ final class RealtimeTests: XCTestCase {
     }
     await Task.megaYield()
 
-    mock.statusContinuation.yield(.open)
+    mock.statusContinuation?.yield(.open)
 
     try await connectTask.value
 
     let channel = realtime.channel("users")
 
     let changes = channel.postgresChange(
-      filter: ChannelFilter(
-        event: "*",
-        table: "users"
-      )
+      AnyAction.self,
+      table: "users"
     )
 
     try await channel.subscribe()
 
-    let receivedPostgresChanges: ActorIsolated<[PostgresAction]> = .init([])
+    let receivedPostgresChanges: ActorIsolated<[any PostgresAction]> = .init([])
     Task {
       for await change in changes {
         await receivedPostgresChanges.withValue { $0.append(change) }
@@ -75,47 +73,57 @@ final class RealtimeTests: XCTestCase {
       receivedMessages,
       try [
         _RealtimeMessage(
+          joinRef: nil,
+          ref: makeRef(),
           topic: "realtime:users",
           event: "phx_join",
-          payload: AnyJSON(
-            RealtimeJoinConfig(
-              postgresChanges: [
-                .init(schema: "public", table: "users", filter: nil, event: "*"),
-              ]
-            )
-          ).objectValue ?? [:],
-          ref: makeRef()
+          payload: [
+            "config": AnyJSON(
+              RealtimeJoinConfig(
+                postgresChanges: [
+                  .init(event: .all, schema: "public", table: "users", filter: nil),
+                ]
+              )
+            ),
+          ]
         ),
       ]
     )
 
     mock.receiveContinuation?.yield(
       _RealtimeMessage(
+        joinRef: nil,
+        ref: makeRef(),
         topic: "realtime:users",
         event: "phx_reply",
         payload: [
-          "postgres_changes": [
-            [
-              "schema": "public",
-              "table": "users",
-              "filter": nil,
-              "event": "*",
-              "id": 0,
+          "response": [
+            "postgres_changes": [
+              [
+                "schema": "public",
+                "table": "users",
+                "filter": nil,
+                "event": "*",
+                "id": 0,
+              ],
             ],
           ],
-        ],
-        ref: makeRef()
+        ]
       )
     )
 
-    let action = PostgresAction(
+    let currentDate = Date()
+
+    let action = DeleteAction(
       columns: [Column(name: "email", type: "string")],
-      commitTimestamp: 0,
-      action: .delete(oldRecord: ["email": "mail@example.com"])
+      commitTimestamp: currentDate,
+      oldRecord: ["email": "mail@example.com"]
     )
 
     try mock.receiveContinuation?.yield(
       _RealtimeMessage(
+        joinRef: nil,
+        ref: makeRef(),
         topic: "realtime:users",
         event: "postgres_changes",
         payload: [
@@ -127,32 +135,30 @@ final class RealtimeTests: XCTestCase {
               columns: [
                 Column(name: "email", type: "string"),
               ],
-              commitTimestamp: 0
+              commitTimestamp: currentDate
             )
           ),
           "ids": [0],
-        ],
-        ref: makeRef()
+        ]
       )
     )
 
     await Task.megaYield()
 
     let receivedChanges = await receivedPostgresChanges.value
-    XCTAssertNoDifference(receivedChanges, [action])
+    XCTAssertNoDifference(receivedChanges as? [DeleteAction], [action])
   }
 }
 
 class MockWebSocketClient: WebSocketClientProtocol {
-  var status: AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error>
-  let statusContinuation: AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error>.Continuation
-
-  func connect() {}
-
-  init() {
-    (status, statusContinuation) = AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error>
+  func connect() async -> AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error> {
+    let (stream, continuation) = AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error>
       .makeStream()
+    statusContinuation = continuation
+    return stream
   }
+
+  var statusContinuation: AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error>.Continuation?
 
   var messages: [_RealtimeMessage] = []
   func send(_ message: _RealtimeMessage) async throws {
@@ -161,15 +167,15 @@ class MockWebSocketClient: WebSocketClientProtocol {
 
   var receiveStream: AsyncThrowingStream<_RealtimeMessage, Error>?
   var receiveContinuation: AsyncThrowingStream<_RealtimeMessage, Error>.Continuation?
-  func receive() -> AsyncThrowingStream<_RealtimeMessage, Error> {
+  func receive() async -> AsyncThrowingStream<_RealtimeMessage, Error> {
     let (stream, continuation) = AsyncThrowingStream<_RealtimeMessage, Error>.makeStream()
     receiveStream = stream
     receiveContinuation = continuation
     return stream
   }
 
-  func cancel() {
-    statusContinuation.finish()
+  func cancel() async {
+    statusContinuation?.finish()
     receiveContinuation?.finish()
   }
 }
