@@ -68,7 +68,7 @@ extension APIClient {
   static let mock = APIClient(execute: unimplemented("APIClient.execute"))
 }
 
-struct InsecureMockLocalStorage: GoTrueLocalStorage {
+struct InsecureMockLocalStorage: AuthLocalStorage {
   private let defaults: UserDefaults
 
   init(service: String, accessGroup: String?) {
@@ -96,7 +96,7 @@ struct InsecureMockLocalStorage: GoTrueLocalStorage {
 }
 
 extension Dependencies {
-  static let localStorage: some GoTrueLocalStorage = {
+  static let localStorage: some AuthLocalStorage = {
     #if os(iOS) || os(macOS) || os(watchOS) || os(tvOS)
     KeychainLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
     #elseif os(Windows)
@@ -108,7 +108,7 @@ extension Dependencies {
   }()
 
   static let mock = Dependencies(
-    configuration: AuthClient.Configuration(url: clientURL),
+    configuration: AuthClient.Configuration(url: clientURL, localStorage: Self.localStorage),
     sessionManager: .mock,
     api: .mock,
     eventEmitter: .mock,
