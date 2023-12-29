@@ -22,6 +22,8 @@ final class RealtimeTests: XCTestCase {
       makeWebSocketClient: { _ in mock }
     )
 
+    XCTAssertNoLeak(realtime)
+
     try await realtime.connect()
 
     XCTAssertEqual(realtime.status, .connected)
@@ -34,8 +36,10 @@ final class RealtimeTests: XCTestCase {
       config: Realtime.Configuration(url: url, apiKey: apiKey, authTokenProvider: nil),
       makeWebSocketClient: { _ in mock }
     )
+    XCTAssertNoLeak(realtime)
 
     let channel = realtime.channel("users")
+    XCTAssertNoLeak(channel)
 
     let changes = channel.postgresChange(
       AnyAction.self,
@@ -126,5 +130,13 @@ final class RealtimeTests: XCTestCase {
 
     let receivedChange = await receivedPostgresChangeTask.value
     XCTAssertNoDifference(receivedChange, action)
+
+    try await channel.unsubscribe()
+
+    mock.mockReceive(
+      RealtimeMessageV2(joinRef: nil, ref: nil, topic: "realtime:users", event: ChannelEvent.leave, payload: [:])
+    )
+
+    await Task.megaYield()
   }
 }

@@ -281,9 +281,9 @@ public final class RealtimeChannelV2: @unchecked Sendable {
       continuation.yield($0)
     }
 
-    continuation.onTermination = { _ in
+    continuation.onTermination = { [weak callbackManager] _ in
       debug("Removing presence callback with id: \(id)")
-      self.callbackManager.removeCallback(id: id)
+      callbackManager?.removeCallback(id: id)
     }
 
     return stream
@@ -321,9 +321,9 @@ public final class RealtimeChannelV2: @unchecked Sendable {
       }
     }
 
-    continuation.onTermination = { _ in
+    continuation.onTermination = { [weak callbackManager] _ in
       debug("Removing postgres callback with id: \(id)")
-      self.callbackManager.removeCallback(id: id)
+      callbackManager?.removeCallback(id: id)
     }
 
     return stream
@@ -338,9 +338,9 @@ public final class RealtimeChannelV2: @unchecked Sendable {
       continuation.yield($0)
     }
 
-    continuation.onTermination = { _ in
+    continuation.onTermination = { [weak callbackManager] _ in
       debug("Removing broadcast callback with id: \(id)")
-      self.callbackManager.removeCallback(id: id)
+      callbackManager?.removeCallback(id: id)
     }
 
     return stream

@@ -63,7 +63,10 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
   }
 
   func cancel() {
-    mutableState.task?.cancel()
+    mutableState.withValue {
+      $0.task?.cancel()
+      $0.statusContinuation?.finish()
+    }
   }
 
   func urlSession(
@@ -74,7 +77,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     mutableState.statusContinuation?.yield(.open)
   }
 
-  nonisolated func urlSession(
+  func urlSession(
     _: URLSession,
     webSocketTask _: URLSessionWebSocketTask,
     didCloseWith _: URLSessionWebSocketTask.CloseCode,
@@ -83,7 +86,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     mutableState.statusContinuation?.yield(.close)
   }
 
-  nonisolated func urlSession(
+  func urlSession(
     _: URLSession,
     task _: URLSessionTask,
     didCompleteWithError error: Error?

@@ -336,9 +336,9 @@ public class RealtimeChannel {
   ///
   /// - parameter msg: The Message received by the client from the server
   /// - return: Must return the message, modified or unmodified
-//  public var onMessage: (_ message: RealtimeMessage) -> RealtimeMessage = { message in
-//    message
-//  }
+  public var onMessage: (_ message: RealtimeMessage) -> RealtimeMessage = { message in
+    message
+  }
 
   /// Joins the channel
   ///
@@ -852,9 +852,9 @@ public class RealtimeChannel {
   /// - parameter payload: The payload for the message
   /// - parameter ref: The reference of the message
   /// - return: Must return the payload, modified or unmodified
-//  public func onMessage(callback: @escaping (RealtimeMessage) -> RealtimeMessage) {
-//    onMessage = callback
-//  }
+  public func onMessage(callback: @escaping (RealtimeMessage) -> RealtimeMessage) {
+    onMessage = callback
+  }
 
   // ----------------------------------------------------------------------
 
