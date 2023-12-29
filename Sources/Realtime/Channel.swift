@@ -56,7 +56,10 @@ public final class RealtimeChannelV2: @unchecked Sendable {
     callbackManager.reset()
   }
 
-  public func subscribe() async {
+  /// Subscribes to the channel
+  /// - Parameter blockUntilSubscribed: if true, the method will block the current Task until the
+  /// ``status-swift.property`` is ``Status-swift.enum/subscribed``.
+  public func subscribe(blockUntilSubscribed: Bool = false) async {
     if socket?._status.value != .connected {
       if socket?.config.connectOnSubscribe != true {
         fatalError(
@@ -94,6 +97,23 @@ public final class RealtimeChannelV2: @unchecked Sendable {
         payload: AnyJSON(RealtimeJoinPayload(config: joinConfig)).objectValue ?? [:]
       )
     )
+
+    if blockUntilSubscribed {
+      var continuation: CheckedContinuation<Void, Never>?
+      let cancellable = status
+        .first { $0 == .subscribed }
+        .sink { _ in
+          continuation?.resume()
+        }
+
+      await withTaskCancellationHandler {
+        await withCheckedContinuation {
+          continuation = $0
+        }
+      } onCancel: {
+        cancellable.cancel()
+      }
+    }
   }
 
   public func unsubscribe() async {
@@ -142,6 +162,14 @@ public final class RealtimeChannelV2: @unchecked Sendable {
         )
       )
     }
+  }
+
+  public func track(_ state: some Codable) async throws {
+    guard let jsonObject = try AnyJSON(state).objectValue else {
+      throw RealtimeError("Expected to decode state as a key-value type.")
+    }
+
+    await track(state: jsonObject)
   }
 
   public func track(state: JSONObject) async {

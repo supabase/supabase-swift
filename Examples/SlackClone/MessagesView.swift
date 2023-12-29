@@ -52,15 +52,11 @@ final class MessagesViewModel {
     let presenceChange = realtimeChannelV2!.presenceChange()
 
     observationTask = Task {
-      await realtimeChannelV2!.subscribe()
+      await realtimeChannelV2!.subscribe(blockUntilSubscribed: true)
 
       let state = try? await UserPresence(userId: supabase.auth.session.user.id, onlineAt: Date())
 
-      _ = await realtimeChannelV2!.status.values.first { $0 == .subscribed }
-
-      if let state = try? AnyJSON(state).objectValue {
-        await realtimeChannelV2!.track(state: state)
-      }
+      try? await realtimeChannelV2!.track(state)
 
       Task {
         for await change in messagesChanges {
