@@ -21,7 +21,7 @@ final class CallbackManager: @unchecked Sendable {
   @discardableResult
   func addBroadcastCallback(
     event: String,
-    callback: @escaping @Sendable (_RealtimeMessage) -> Void
+    callback: @escaping @Sendable (RealtimeMessageV2) -> Void
   ) -> Int {
     mutableState.withValue {
       $0.id += 1
@@ -96,7 +96,7 @@ final class CallbackManager: @unchecked Sendable {
     }
   }
 
-  func triggerBroadcast(event: String, message: _RealtimeMessage) {
+  func triggerBroadcast(event: String, message: RealtimeMessageV2) {
     let broadcastCallbacks = mutableState.callbacks.compactMap {
       if case let .broadcast(callback) = $0 {
         return callback
@@ -110,7 +110,7 @@ final class CallbackManager: @unchecked Sendable {
   func triggerPresenceDiffs(
     joins: [String: Presence],
     leaves: [String: Presence],
-    rawMessage: _RealtimeMessage
+    rawMessage: RealtimeMessageV2
   ) {
     let presenceCallbacks = mutableState.callbacks.compactMap {
       if case let .presence(callback) = $0 {
@@ -139,7 +139,7 @@ struct PostgresCallback {
 struct BroadcastCallback {
   var id: Int
   var event: String
-  var callback: @Sendable (_RealtimeMessage) -> Void
+  var callback: @Sendable (RealtimeMessageV2) -> Void
 }
 
 struct PresenceCallback {

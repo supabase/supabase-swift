@@ -147,7 +147,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   var stateChangeCallbacks: StateChangeCallbacks = .init()
 
   /// Collection on channels created for the Socket
-  public internal(set) var channels: [OldRealtimeChannel] = []
+  public internal(set) var channels: [RealtimeChannel] = []
 
   /// Buffers messages that need to be sent once the socket has connected. It is an array
   /// of tuples, with the ref of the message to send and the callback that will send the message.
@@ -656,8 +656,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public func channel(
     _ topic: String,
     params: RealtimeChannelOptions = .init()
-  ) -> OldRealtimeChannel {
-    let channel = OldRealtimeChannel(
+  ) -> RealtimeChannel {
+    let channel = RealtimeChannel(
       topic: "realtime:\(topic)", params: params.params, socket: self
     )
     channels.append(channel)
@@ -666,7 +666,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   }
 
   /// Unsubscribes and removes a single channel
-  public func remove(_ channel: OldRealtimeChannel) {
+  public func remove(_ channel: RealtimeChannel) {
     channel.unsubscribe()
     off(channel.stateChangeRefs)
     channels.removeAll(where: { $0.joinRef == channel.joinRef })

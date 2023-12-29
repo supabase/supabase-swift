@@ -176,7 +176,7 @@ final class CallbackManagerTests: XCTestCase {
 
   func testTriggerPresenceDiffs() {
     let socket = RealtimeClient("/socket")
-    let channel = OldRealtimeChannel(topic: "room", socket: socket)
+    let channel = RealtimeChannel(topic: "room", socket: socket)
 
     let callbackManager = CallbackManager()
 

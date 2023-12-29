@@ -9,8 +9,8 @@ import ConcurrencyExtras
 import Foundation
 
 protocol WebSocketClientProtocol: Sendable {
-  func send(_ message: _RealtimeMessage) async throws
-  func receive() -> AsyncThrowingStream<_RealtimeMessage, Error>
+  func send(_ message: RealtimeMessageV2) async throws
+  func receive() -> AsyncThrowingStream<RealtimeMessageV2, Error>
   func connect() -> AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error>
   func cancel()
 }
@@ -91,8 +91,8 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     mutableState.statusContinuation?.finish(throwing: error)
   }
 
-  func receive() -> AsyncThrowingStream<_RealtimeMessage, Error> {
-    let (stream, continuation) = AsyncThrowingStream<_RealtimeMessage, Error>.makeStream()
+  func receive() -> AsyncThrowingStream<RealtimeMessageV2, Error> {
+    let (stream, continuation) = AsyncThrowingStream<RealtimeMessageV2, Error>.makeStream()
 
     Task {
       while let message = try await self.mutableState.task?.receive() {
@@ -103,7 +103,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
               throw RealtimeError("Expected a UTF8 encoded message.")
             }
 
-            let message = try JSONDecoder().decode(_RealtimeMessage.self, from: data)
+            let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
             continuation.yield(message)
 
           case .data:
@@ -120,7 +120,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     return stream
   }
 
-  func send(_ message: _RealtimeMessage) async throws {
+  func send(_ message: RealtimeMessageV2) async throws {
     let data = try JSONEncoder().encode(message)
     let string = String(decoding: data, as: UTF8.self)
     try await mutableState.task?.send(.string(string))

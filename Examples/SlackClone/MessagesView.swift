@@ -35,7 +35,7 @@ final class MessagesViewModel {
     }
   }
 
-  private var realtimeChannelV2: RealtimeChannel?
+  private var realtimeChannelV2: RealtimeChannelV2?
   private var observationTask: Task<Void, Never>?
 
   func startObservingNewMessages() {

@@ -15,7 +15,7 @@ public struct RealtimeChannelConfig: Sendable {
   public var presence: PresenceJoinConfig
 }
 
-public final class RealtimeChannel: @unchecked Sendable {
+public final class RealtimeChannelV2: @unchecked Sendable {
   public enum Status {
     case unsubscribed
     case subscribing
@@ -87,7 +87,7 @@ public final class RealtimeChannel: @unchecked Sendable {
 
     debug("subscribing to channel with body: \(joinConfig)")
 
-    try? await socket?.send(_RealtimeMessage(
+    try? await socket?.send(RealtimeMessageV2(
       joinRef: nil,
       ref: socket?.makeRef().description ?? "",
       topic: topic,
@@ -101,7 +101,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     debug("unsubscribing from channel \(topic)")
 
     try await socket?.send(
-      _RealtimeMessage(
+      RealtimeMessageV2(
         joinRef: nil,
         ref: socket?.makeRef().description,
         topic: topic,
@@ -114,7 +114,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   public func updateAuth(jwt: String) async throws {
     debug("Updating auth token for channel \(topic)")
     try await socket?.send(
-      _RealtimeMessage(
+      RealtimeMessageV2(
         joinRef: nil,
         ref: socket?.makeRef().description,
         topic: topic,
@@ -129,7 +129,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       // TODO: use HTTP
     } else {
       try await socket?.send(
-        _RealtimeMessage(
+        RealtimeMessageV2(
           joinRef: nil,
           ref: socket?.makeRef().description,
           topic: topic,
@@ -151,7 +151,7 @@ public final class RealtimeChannel: @unchecked Sendable {
       )
     }
 
-    try await socket?.send(_RealtimeMessage(
+    try await socket?.send(RealtimeMessageV2(
       joinRef: nil,
       ref: socket?.makeRef().description,
       topic: topic,
@@ -165,7 +165,7 @@ public final class RealtimeChannel: @unchecked Sendable {
   }
 
   public func untrack() async throws {
-    try await socket?.send(_RealtimeMessage(
+    try await socket?.send(RealtimeMessageV2(
       joinRef: nil,
       ref: socket?.makeRef().description,
       topic: topic,
@@ -177,7 +177,7 @@ public final class RealtimeChannel: @unchecked Sendable {
     ))
   }
 
-  func onMessage(_ message: _RealtimeMessage) async throws {
+  func onMessage(_ message: RealtimeMessageV2) async throws {
     guard let eventType = message.eventType else {
       throw RealtimeError("Received message without event type: \(message)")
     }
@@ -331,8 +331,8 @@ public final class RealtimeChannel: @unchecked Sendable {
 
   /// Listen for broadcast messages sent by other clients within the same channel under a specific
   /// `event`.
-  public func broadcast(event: String) -> AsyncStream<_RealtimeMessage> {
-    let (stream, continuation) = AsyncStream<_RealtimeMessage>.makeStream()
+  public func broadcast(event: String) -> AsyncStream<RealtimeMessageV2> {
+    let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream()
 
     let id = callbackManager.addBroadcastCallback(event: event) {
       continuation.yield($0)

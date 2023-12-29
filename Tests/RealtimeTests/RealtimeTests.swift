@@ -72,7 +72,7 @@ final class RealtimeTests: XCTestCase {
     XCTAssertNoDifference(
       receivedMessages,
       try [
-        _RealtimeMessage(
+        RealtimeMessageV2(
           joinRef: nil,
           ref: makeRef(),
           topic: "realtime:users",
@@ -91,7 +91,7 @@ final class RealtimeTests: XCTestCase {
     )
 
     mock.receiveContinuation?.yield(
-      _RealtimeMessage(
+      RealtimeMessageV2(
         joinRef: nil,
         ref: makeRef(),
         topic: "realtime:users",
@@ -121,7 +121,7 @@ final class RealtimeTests: XCTestCase {
     )
 
     try mock.receiveContinuation?.yield(
-      _RealtimeMessage(
+      RealtimeMessageV2(
         joinRef: nil,
         ref: makeRef(),
         topic: "realtime:users",
@@ -160,15 +160,15 @@ class MockWebSocketClient: WebSocketClientProtocol {
 
   var statusContinuation: AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error>.Continuation?
 
-  var messages: [_RealtimeMessage] = []
-  func send(_ message: _RealtimeMessage) async throws {
+  var messages: [RealtimeMessageV2] = []
+  func send(_ message: RealtimeMessageV2) async throws {
     messages.append(message)
   }
 
-  var receiveStream: AsyncThrowingStream<_RealtimeMessage, Error>?
-  var receiveContinuation: AsyncThrowingStream<_RealtimeMessage, Error>.Continuation?
-  func receive() async -> AsyncThrowingStream<_RealtimeMessage, Error> {
-    let (stream, continuation) = AsyncThrowingStream<_RealtimeMessage, Error>.makeStream()
+  var receiveStream: AsyncThrowingStream<RealtimeMessageV2, Error>?
+  var receiveContinuation: AsyncThrowingStream<RealtimeMessageV2, Error>.Continuation?
+  func receive() async -> AsyncThrowingStream<RealtimeMessageV2, Error> {
+    let (stream, continuation) = AsyncThrowingStream<RealtimeMessageV2, Error>.makeStream()
     receiveStream = stream
     receiveContinuation = continuation
     return stream

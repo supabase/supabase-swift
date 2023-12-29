@@ -86,7 +86,7 @@ public struct RealtimeMessage {
   }
 }
 
-public struct _RealtimeMessage: Hashable, Codable, Sendable {
+public struct RealtimeMessageV2: Hashable, Codable, Sendable {
   let joinRef: String?
   let ref: String?
   let topic: String
@@ -125,6 +125,6 @@ public struct _RealtimeMessage: Hashable, Codable, Sendable {
   }
 }
 
-extension _RealtimeMessage: HasRawMessage {
-  public var rawMessage: _RealtimeMessage { self }
+extension RealtimeMessageV2: HasRawMessage {
+  public var rawMessage: RealtimeMessageV2 { self }
 }

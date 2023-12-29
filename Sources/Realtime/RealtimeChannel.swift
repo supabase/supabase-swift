@@ -120,9 +120,9 @@ public enum RealtimeSubscribeStates {
 }
 
 ///
-/// Represents a OldRealtimeChannel which is bound to a topic
+/// Represents a RealtimeChannel which is bound to a topic
 ///
-/// A OldRealtimeChannel can bind to multiple events on a given topic and
+/// A RealtimeChannel can bind to multiple events on a given topic and
 /// be informed when those events occur within a topic.
 ///
 /// ### Example:
@@ -135,13 +135,13 @@ public enum RealtimeSubscribeStates {
 ///         .receive("timeout") { payload in print("Networking issue...", payload) }
 ///
 ///     channel.join()
-///         .receive("ok") { payload in print("OldRealtimeChannel Joined", payload) }
+///         .receive("ok") { payload in print("RealtimeChannel Joined", payload) }
 ///         .receive("error") { payload in print("Failed ot join", payload) }
 ///         .receive("timeout") { payload in print("Networking issue...", payload) }
 ///
 
-public class OldRealtimeChannel {
-  /// The topic of the OldRealtimeChannel. e.g. "rooms:friends"
+public class RealtimeChannel {
+  /// The topic of the RealtimeChannel. e.g. "rooms:friends"
   public let topic: String
 
   /// The params sent when joining the channel
@@ -156,13 +156,13 @@ public class OldRealtimeChannel {
 
   var subTopic: String
 
-  /// Current state of the OldRealtimeChannel
+  /// Current state of the RealtimeChannel
   var state: ChannelState
 
   /// Collection of event bindings
   let bindings: LockIsolated<[String: [Binding]]>
 
-  /// Timeout when attempting to join a OldRealtimeChannel
+  /// Timeout when attempting to join a RealtimeChannel
   var timeout: TimeInterval
 
   /// Set to true once the channel calls .join()
@@ -180,9 +180,9 @@ public class OldRealtimeChannel {
   /// Refs of stateChange hooks
   var stateChangeRefs: [String]
 
-  /// Initialize a OldRealtimeChannel
+  /// Initialize a RealtimeChannel
   ///
-  /// - parameter topic: Topic of the OldRealtimeChannel
+  /// - parameter topic: Topic of the RealtimeChannel
   /// - parameter params: Optional. Parameters to send when joining.
   /// - parameter socket: Socket that the channel is a part of
   init(topic: String, params: [String: Any] = [:], socket: RealtimeClient) {
@@ -237,7 +237,7 @@ public class OldRealtimeChannel {
 
     /// Handle when a response is received after join()
     joinPush.delegateReceive(.ok, to: self) { (self, _) in
-      // Mark the OldRealtimeChannel as joined
+      // Mark the RealtimeChannel as joined
       self.state = ChannelState.joined
 
       // Reset the timer, preventing it from attempting to join again
@@ -248,7 +248,7 @@ public class OldRealtimeChannel {
       self.pushBuffer = []
     }
 
-    // Perform if OldRealtimeChannel errors while attempting to joi
+    // Perform if RealtimeChannel errors while attempting to joi
     joinPush.delegateReceive(.error, to: self) { (self, _) in
       self.state = .errored
       if self.socket?.isConnected == true { self.rejoinTimer.scheduleTimeout() }
@@ -269,14 +269,14 @@ public class OldRealtimeChannel {
       )
       leavePush.send()
 
-      // Mark the OldRealtimeChannel as in an error and attempt to rejoin if socket is connected
+      // Mark the RealtimeChannel as in an error and attempt to rejoin if socket is connected
       self.state = ChannelState.errored
       self.joinPush.reset()
 
       if self.socket?.isConnected == true { self.rejoinTimer.scheduleTimeout() }
     }
 
-    /// Perfom when the OldRealtimeChannel has been closed
+    /// Perfom when the RealtimeChannel has been closed
     delegateOnClose(to: self) { (self, _) in
       // Reset any timer that may be on-going
       self.rejoinTimer.reset()
@@ -291,7 +291,7 @@ public class OldRealtimeChannel {
       self.socket?.remove(self)
     }
 
-    /// Perfom when the OldRealtimeChannel errors
+    /// Perfom when the RealtimeChannel errors
     delegateOnError(to: self) { (self, message) in
       // Log that the channel received an error
       self.socket?.logItems(
@@ -348,7 +348,7 @@ public class OldRealtimeChannel {
   public func subscribe(
     timeout: TimeInterval? = nil,
     callback: ((RealtimeSubscribeStates, Error?) -> Void)? = nil
-  ) -> OldRealtimeChannel {
+  ) -> RealtimeChannel {
     if socket?.isConnected == false {
       socket?.connect()
     }
@@ -370,7 +370,7 @@ public class OldRealtimeChannel {
       callback?(.closed, nil)
     }
 
-    // Join the OldRealtimeChannel
+    // Join the RealtimeChannel
     if let safeTimeout = timeout {
       self.timeout = safeTimeout
     }
@@ -484,47 +484,47 @@ public class OldRealtimeChannel {
     )
   }
 
-  /// Hook into when the OldRealtimeChannel is closed. Does not handle retain cycles.
+  /// Hook into when the RealtimeChannel is closed. Does not handle retain cycles.
   /// Use `delegateOnClose(to:)` for automatic handling of retain cycles.
   ///
   /// Example:
   ///
   ///     let channel = socket.channel("topic")
   ///     channel.onClose() { [weak self] message in
-  ///         self?.print("OldRealtimeChannel \(message.topic) has closed"
+  ///         self?.print("RealtimeChannel \(message.topic) has closed"
   ///     }
   ///
-  /// - parameter handler: Called when the OldRealtimeChannel closes
+  /// - parameter handler: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onClose(_ handler: @escaping ((RealtimeMessage) -> Void)) -> OldRealtimeChannel {
+  public func onClose(_ handler: @escaping ((RealtimeMessage) -> Void)) -> RealtimeChannel {
     on(ChannelEvent.close, filter: ChannelFilter(), handler: handler)
   }
 
-  /// Hook into when the OldRealtimeChannel is closed. Automatically handles retain
+  /// Hook into when the RealtimeChannel is closed. Automatically handles retain
   /// cycles. Use `onClose()` to handle yourself.
   ///
   /// Example:
   ///
   ///     let channel = socket.channel("topic")
   ///     channel.delegateOnClose(to: self) { (self, message) in
-  ///         self.print("OldRealtimeChannel \(message.topic) has closed"
+  ///         self.print("RealtimeChannel \(message.topic) has closed"
   ///     }
   ///
   /// - parameter owner: Class registering the callback. Usually `self`
-  /// - parameter callback: Called when the OldRealtimeChannel closes
+  /// - parameter callback: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
   public func delegateOnClose<Target: AnyObject>(
     to owner: Target,
     callback: @escaping ((Target, RealtimeMessage) -> Void)
-  ) -> OldRealtimeChannel {
+  ) -> RealtimeChannel {
     delegateOn(
       ChannelEvent.close, filter: ChannelFilter(), to: owner, callback: callback
     )
   }
 
-  /// Hook into when the OldRealtimeChannel receives an Error. Does not handle retain
+  /// Hook into when the RealtimeChannel receives an Error. Does not handle retain
   /// cycles. Use `delegateOnError(to:)` for automatic handling of retain
   /// cycles.
   ///
@@ -532,36 +532,36 @@ public class OldRealtimeChannel {
   ///
   ///     let channel = socket.channel("topic")
   ///     channel.onError() { [weak self] (message) in
-  ///         self?.print("OldRealtimeChannel \(message.topic) has errored"
+  ///         self?.print("RealtimeChannel \(message.topic) has errored"
   ///     }
   ///
-  /// - parameter handler: Called when the OldRealtimeChannel closes
+  /// - parameter handler: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
   public func onError(_ handler: @escaping ((_ message: RealtimeMessage) -> Void))
-    -> OldRealtimeChannel
+    -> RealtimeChannel
   {
     on(ChannelEvent.error, filter: ChannelFilter(), handler: handler)
   }
 
-  /// Hook into when the OldRealtimeChannel receives an Error. Automatically handles
+  /// Hook into when the RealtimeChannel receives an Error. Automatically handles
   /// retain cycles. Use `onError()` to handle yourself.
   ///
   /// Example:
   ///
   ///     let channel = socket.channel("topic")
   ///     channel.delegateOnError(to: self) { (self, message) in
-  ///         self.print("OldRealtimeChannel \(message.topic) has closed"
+  ///         self.print("RealtimeChannel \(message.topic) has closed"
   ///     }
   ///
   /// - parameter owner: Class registering the callback. Usually `self`
-  /// - parameter callback: Called when the OldRealtimeChannel closes
+  /// - parameter callback: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
   public func delegateOnError<Target: AnyObject>(
     to owner: Target,
     callback: @escaping ((Target, RealtimeMessage) -> Void)
-  ) -> OldRealtimeChannel {
+  ) -> RealtimeChannel {
     delegateOn(
       ChannelEvent.error, filter: ChannelFilter(), to: owner, callback: callback
     )
@@ -595,7 +595,7 @@ public class OldRealtimeChannel {
     _ event: String,
     filter: ChannelFilter,
     handler: @escaping ((RealtimeMessage) -> Void)
-  ) -> OldRealtimeChannel {
+  ) -> RealtimeChannel {
     var delegated = Delegated<RealtimeMessage, Void>()
     delegated.manuallyDelegate(with: handler)
 
@@ -632,7 +632,7 @@ public class OldRealtimeChannel {
     filter: ChannelFilter,
     to owner: Target,
     callback: @escaping ((Target, RealtimeMessage) -> Void)
-  ) -> OldRealtimeChannel {
+  ) -> RealtimeChannel {
     var delegated = Delegated<RealtimeMessage, Void>()
     delegated.delegate(to: owner, with: callback)
 
@@ -643,7 +643,7 @@ public class OldRealtimeChannel {
   @discardableResult
   private func on(
     _ type: String, filter: ChannelFilter, delegated: Delegated<RealtimeMessage, Void>
-  ) -> OldRealtimeChannel {
+  ) -> RealtimeChannel {
     bindings.withValue {
       $0[type.lowercased(), default: []].append(
         Binding(type: type.lowercased(), filter: filter.asDictionary, callback: delegated, id: nil)
@@ -680,7 +680,7 @@ public class OldRealtimeChannel {
     }
   }
 
-  /// Push a payload to the OldRealtimeChannel
+  /// Push a payload to the RealtimeChannel
   ///
   /// Example:
   ///
@@ -836,7 +836,7 @@ public class OldRealtimeChannel {
       .receive(.timeout, delegated: onCloseDelegate)
     leavePush.send()
 
-    // If the OldRealtimeChannel cannot send push events, trigger a success locally
+    // If the RealtimeChannel cannot send push events, trigger a success locally
     if !canPush {
       leavePush.trigger(.ok, payload: [:])
     }
@@ -861,7 +861,7 @@ public class OldRealtimeChannel {
   // MARK: - Internal
 
   // ----------------------------------------------------------------------
-  /// Checks if an event received by the Socket belongs to this OldRealtimeChannel
+  /// Checks if an event received by the Socket belongs to this RealtimeChannel
   func isMember(_ message: RealtimeMessage) -> Bool {
     // Return false if the message's topic does not match the RealtimeChannel's topic
     guard message.topic == topic else { return false }
@@ -879,7 +879,7 @@ public class OldRealtimeChannel {
     return false
   }
 
-  /// Sends the payload to join the OldRealtimeChannel
+  /// Sends the payload to join the RealtimeChannel
   func sendJoin(_ timeout: TimeInterval) {
     state = ChannelState.joining
     joinPush.resend(timeout)
@@ -984,7 +984,7 @@ public class OldRealtimeChannel {
     joinPush.ref
   }
 
-  /// - return: True if the OldRealtimeChannel can push messages, meaning the socket
+  /// - return: True if the RealtimeChannel can push messages, meaning the socket
   ///           is connected and the channel is joined
   var canPush: Bool {
     socket?.isConnected == true && isJoined
@@ -1008,13 +1008,13 @@ public class OldRealtimeChannel {
 // MARK: - Public API
 
 // ----------------------------------------------------------------------
-extension OldRealtimeChannel {
-  /// - return: True if the OldRealtimeChannel has been closed
+extension RealtimeChannel {
+  /// - return: True if the RealtimeChannel has been closed
   public var isClosed: Bool {
     state == .closed
   }
 
-  /// - return: True if the OldRealtimeChannel experienced an error
+  /// - return: True if the RealtimeChannel experienced an error
   public var isErrored: Bool {
     state == .errored
   }

@@ -23,7 +23,7 @@ import Foundation
 /// Represnts pushing data to a `Channel` through the `Socket`
 public class Push {
   /// The channel sending the Push
-  public weak var channel: OldRealtimeChannel?
+  public weak var channel: RealtimeChannel?
 
   /// The event, for example `phx_join`
   public let event: String
@@ -62,7 +62,7 @@ public class Push {
   /// - parameter payload: Optional. The Payload to send, e.g. ["user_id": "abc123"]
   /// - parameter timeout: Optional. The push timeout. Default is 10.0s
   init(
-    channel: OldRealtimeChannel,
+    channel: RealtimeChannel,
     event: String,
     payload: Payload = [:],
     timeout: TimeInterval = Defaults.timeoutInterval

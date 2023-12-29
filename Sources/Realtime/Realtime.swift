@@ -60,7 +60,7 @@ public final class Realtime: @unchecked Sendable {
     _status.value
   }
 
-  public var subscriptions: [String: RealtimeChannel] {
+  public var subscriptions: [String: RealtimeChannelV2] {
     mutableState.subscriptions
   }
 
@@ -69,7 +69,7 @@ public final class Realtime: @unchecked Sendable {
     var heartbeatRef = 0
     var heartbeatTask: Task<Void, Never>?
     var messageTask: Task<Void, Never>?
-    var subscriptions: [String: RealtimeChannel] = [:]
+    var subscriptions: [String: RealtimeChannelV2] = [:]
     var ws: WebSocketClientProtocol?
 
     mutating func makeRef() -> Int {
@@ -150,14 +150,14 @@ public final class Realtime: @unchecked Sendable {
   public func channel(
     _ topic: String,
     options: (inout RealtimeChannelConfig) -> Void = { _ in }
-  ) -> RealtimeChannel {
+  ) -> RealtimeChannelV2 {
     var config = RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
       presence: PresenceJoinConfig(key: "")
     )
     options(&config)
 
-    return RealtimeChannel(
+    return RealtimeChannelV2(
       topic: "realtime:\(topic)",
       socket: self,
       broadcastJoinConfig: config.broadcast,
@@ -165,11 +165,11 @@ public final class Realtime: @unchecked Sendable {
     )
   }
 
-  public func addChannel(_ channel: RealtimeChannel) {
+  public func addChannel(_ channel: RealtimeChannelV2) {
     mutableState.withValue { $0.subscriptions[channel.topic] = channel }
   }
 
-  public func removeChannel(_ channel: RealtimeChannel) async throws {
+  public func removeChannel(_ channel: RealtimeChannelV2) async throws {
     if channel.status == .subscribed {
       try await channel.unsubscribe()
     }
@@ -246,7 +246,7 @@ public final class Realtime: @unchecked Sendable {
       return $0.heartbeatRef
     }
 
-    try await mutableState.ws?.send(_RealtimeMessage(
+    try await mutableState.ws?.send(RealtimeMessageV2(
       joinRef: nil,
       ref: heartbeatRef.description,
       topic: "phoenix",
@@ -266,7 +266,7 @@ public final class Realtime: @unchecked Sendable {
     _status.value = .disconnected
   }
 
-  private func onMessage(_ message: _RealtimeMessage) async throws {
+  private func onMessage(_ message: RealtimeMessageV2) async throws {
     guard let channel = subscriptions[message.topic] else {
       return
     }
@@ -287,7 +287,7 @@ public final class Realtime: @unchecked Sendable {
     }
   }
 
-  func send(_ message: _RealtimeMessage) async throws {
+  func send(_ message: RealtimeMessageV2) async throws {
     try await mutableState.ws?.send(message)
   }
 

@@ -22,5 +22,5 @@ public protocol PresenceAction: HasRawMessage {
 struct PresenceActionImpl: PresenceAction {
   var joins: [String: Presence]
   var leaves: [String: Presence]
-  var rawMessage: _RealtimeMessage
+  var rawMessage: RealtimeMessageV2
 }
