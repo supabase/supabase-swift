@@ -27,8 +27,15 @@ struct Message: Identifiable, Decodable {
   var channel: Channel
 }
 
+struct NewMessage: Encodable {
+  var message: String
+  var userId: UUID
+  let channelId: Int
+}
+
 protocol MessagesAPI {
   func fetchAllMessages(for channelId: Int) async throws -> [Message]
+  func insertMessage(_ message: NewMessage) async throws
 }
 
 struct MessagesAPIImpl: MessagesAPI {
@@ -40,5 +47,12 @@ struct MessagesAPIImpl: MessagesAPI {
       .eq("channel_id", value: channelId)
       .execute()
       .value
+  }
+
+  func insertMessage(_ message: NewMessage) async throws {
+    try await supabase.database
+      .from("messages")
+      .insert(message)
+      .execute()
   }
 }

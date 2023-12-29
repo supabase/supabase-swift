@@ -10,12 +10,12 @@ import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
 
-public protocol AuthTokenProvider {
+public protocol AuthTokenProvider: Sendable {
   func authToken() async -> String?
 }
 
-public final class Realtime {
-  public struct Configuration {
+public final class Realtime: @unchecked Sendable {
+  public struct Configuration: Sendable {
     var url: URL
     var apiKey: String
     var authTokenProvider: AuthTokenProvider?
@@ -53,8 +53,6 @@ public final class Realtime {
   }
 
   let config: Configuration
-
-  var ws: WebSocketClientProtocol?
   let makeWebSocketClient: (URL) -> WebSocketClientProtocol
 
   let _status = CurrentValueSubject<Status, Never>(.disconnected)
@@ -62,16 +60,25 @@ public final class Realtime {
     _status.value
   }
 
-  let _subscriptions = LockIsolated<[String: RealtimeChannel]>([:])
   public var subscriptions: [String: RealtimeChannel] {
-    _subscriptions.value
+    mutableState.subscriptions
   }
 
-  var heartbeatTask: Task<Void, Never>?
-  var messageTask: Task<Void, Never>?
+  struct MutableState {
+    var ref = 0
+    var heartbeatRef = 0
+    var heartbeatTask: Task<Void, Never>?
+    var messageTask: Task<Void, Never>?
+    var subscriptions: [String: RealtimeChannel] = [:]
+    var ws: WebSocketClientProtocol?
 
-  private var ref = 0
-  var heartbeatRef = 0
+    mutating func makeRef() -> Int {
+      ref += 1
+      return ref
+    }
+  }
+
+  let mutableState = LockIsolated(MutableState())
 
   init(config: Configuration, makeWebSocketClient: @escaping (URL) -> WebSocketClientProtocol) {
     self.config = config
@@ -79,10 +86,10 @@ public final class Realtime {
   }
 
   deinit {
-    heartbeatTask?.cancel()
-    messageTask?.cancel()
-    Task {
-      await ws?.cancel()
+    mutableState.withValue {
+      $0.heartbeatTask?.cancel()
+      $0.messageTask?.cancel()
+      $0.ws?.cancel()
     }
   }
 
@@ -116,9 +123,12 @@ public final class Realtime {
 
     let realtimeURL = realtimeWebSocketURL
 
-    ws = makeWebSocketClient(realtimeURL)
+    let ws = mutableState.withValue {
+      $0.ws = makeWebSocketClient(realtimeURL)
+      return $0.ws!
+    }
 
-    let connectionStatus = try await ws?.connect().first { _ in true }
+    let connectionStatus = try await ws.connect().first { _ in true }
 
     if connectionStatus == .open {
       _status.value = .connected
@@ -132,7 +142,7 @@ public final class Realtime {
       debug(
         "Error while trying to connect to realtime websocket. Trying again in \(config.reconnectDelay) seconds."
       )
-      await disconnect()
+      disconnect()
       try await connect(reconnect: true)
     }
   }
@@ -156,7 +166,7 @@ public final class Realtime {
   }
 
   public func addChannel(_ channel: RealtimeChannel) {
-    _subscriptions.withValue { $0[channel.topic] = channel }
+    mutableState.withValue { $0.subscriptions[channel.topic] = channel }
   }
 
   public func removeChannel(_ channel: RealtimeChannel) async throws {
@@ -164,8 +174,8 @@ public final class Realtime {
       try await channel.unsubscribe()
     }
 
-    _subscriptions.withValue {
-      $0[channel.topic] = nil
+    mutableState.withValue {
+      $0.subscriptions[channel.topic] = nil
     }
   }
 
@@ -177,50 +187,66 @@ public final class Realtime {
   }
 
   private func listenForMessages() {
-    Task { [weak self] in
-      guard let self, let ws else { return }
+    mutableState.withValue {
+      let ws = $0.ws
 
-      do {
-        for try await message in await ws.receive() {
-          try await onMessage(message)
+      $0.messageTask = Task { [weak self] in
+        guard let self, let ws else { return }
+
+        do {
+          for try await message in ws.receive() {
+            try await onMessage(message)
+          }
+        } catch {
+          debug(
+            "Error while listening for messages. Trying again in \(config.reconnectDelay) \(error)"
+          )
+          disconnect()
+          try? await connect(reconnect: true)
         }
-      } catch {
-        debug(
-          "Error while listening for messages. Trying again in \(config.reconnectDelay) \(error)"
-        )
-        await disconnect()
-        try await connect(reconnect: true)
       }
     }
   }
 
   private func startHeartbeating() {
-    Task { [weak self] in
-      guard let self else { return }
+    mutableState.withValue {
+      $0.heartbeatTask = Task { [weak self] in
+        guard let self else { return }
 
-      while !Task.isCancelled {
-        try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.heartbeatInterval))
-        if Task.isCancelled {
-          break
+        while !Task.isCancelled {
+          try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.heartbeatInterval))
+          if Task.isCancelled {
+            break
+          }
+          try? await sendHeartbeat()
         }
-        try? await sendHeartbeat()
       }
     }
   }
 
   private func sendHeartbeat() async throws {
-    if heartbeatRef != 0 {
-      heartbeatRef = 0
-      ref = 0
+    let timedOut = mutableState.withValue {
+      if $0.heartbeatRef != 0 {
+        $0.heartbeatRef = 0
+        $0.ref = 0
+        return true
+      }
+      return false
+    }
+
+    if timedOut {
       debug("Heartbeat timeout. Trying to reconnect in \(config.reconnectDelay)")
-      await disconnect()
+      disconnect()
       try await connect(reconnect: true)
       return
     }
 
-    heartbeatRef = makeRef()
+    let heartbeatRef = mutableState.withValue {
+      $0.heartbeatRef = $0.makeRef()
+      return $0.heartbeatRef
+    }
 
-    try await ws?.send(_RealtimeMessage(
+    try await mutableState.ws?.send(_RealtimeMessage(
       joinRef: nil,
       ref: heartbeatRef.description,
       topic: "phoenix",
@@ -229,29 +255,44 @@ public final class Realtime {
     ))
   }
 
-  public func disconnect() async {
+  public func disconnect() {
     debug("Closing websocket connection")
-    messageTask?.cancel()
-    await ws?.cancel()
-    ws = nil
-    heartbeatTask?.cancel()
+    mutableState.withValue {
+      $0.messageTask?.cancel()
+      $0.ws?.cancel()
+      $0.ws = nil
+      $0.heartbeatTask?.cancel()
+    }
     _status.value = .disconnected
   }
 
-  func makeRef() -> Int {
-    ref += 1
-    return ref
+  private func onMessage(_ message: _RealtimeMessage) async throws {
+    guard let channel = subscriptions[message.topic] else {
+      return
+    }
+
+    let heartbeatReceived = mutableState.withValue {
+      if Int(message.ref ?? "") == $0.heartbeatRef {
+        $0.heartbeatRef = 0
+        return true
+      }
+      return false
+    }
+
+    if heartbeatReceived {
+      debug("heartbeat received")
+    } else {
+      debug("Received event \(message.event) for channel \(channel.topic)")
+      try await channel.onMessage(message)
+    }
   }
 
-  private func onMessage(_ message: _RealtimeMessage) async throws {
-    let channel = subscriptions[message.topic]
-    if Int(message.ref ?? "") == heartbeatRef {
-      debug("heartbeat received")
-      heartbeatRef = 0
-    } else {
-      debug("Received event \(message.event) for channel \(channel?.topic ?? "null")")
-      try await channel?.onMessage(message)
-    }
+  func send(_ message: _RealtimeMessage) async throws {
+    try await mutableState.ws?.send(message)
+  }
+
+  func makeRef() -> Int {
+    mutableState.withValue { $0.makeRef() }
   }
 
   private var realtimeBaseURL: URL {
@@ -294,121 +335,5 @@ public final class Realtime {
 
   var broadcastURL: URL {
     config.url.appendingPathComponent("api/broadcast")
-  }
-}
-
-protocol WebSocketClientProtocol {
-  func send(_ message: _RealtimeMessage) async throws
-  func receive() async -> AsyncThrowingStream<_RealtimeMessage, Error>
-  func connect() async -> AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error>
-  func cancel() async
-}
-
-actor WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketClientProtocol {
-  private var session: URLSession?
-  private let realtimeURL: URL
-  private let configuration: URLSessionConfiguration
-
-  private var task: URLSessionWebSocketTask?
-
-  enum ConnectionStatus {
-    case open
-    case close
-  }
-
-  private var statusContinuation: AsyncThrowingStream<ConnectionStatus, Error>.Continuation?
-
-  init(realtimeURL: URL, configuration: URLSessionConfiguration) {
-    self.realtimeURL = realtimeURL
-    self.configuration = configuration
-
-    super.init()
-  }
-
-  deinit {
-    statusContinuation?.finish()
-    task?.cancel()
-  }
-
-  func connect() -> AsyncThrowingStream<ConnectionStatus, Error> {
-    session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-    task = session?.webSocketTask(with: realtimeURL)
-
-    let (stream, continuation) = AsyncThrowingStream<ConnectionStatus, Error>.makeStream()
-    statusContinuation = continuation
-
-    task?.resume()
-
-    return stream
-  }
-
-  func cancel() {
-    task?.cancel()
-  }
-
-  nonisolated func urlSession(
-    _: URLSession,
-    webSocketTask _: URLSessionWebSocketTask,
-    didOpenWithProtocol _: String?
-  ) {
-    Task {
-      await statusContinuation?.yield(.open)
-    }
-  }
-
-  nonisolated func urlSession(
-    _: URLSession,
-    webSocketTask _: URLSessionWebSocketTask,
-    didCloseWith _: URLSessionWebSocketTask.CloseCode,
-    reason _: Data?
-  ) {
-    Task {
-      await statusContinuation?.yield(.close)
-    }
-  }
-
-  nonisolated func urlSession(
-    _: URLSession,
-    task _: URLSessionTask,
-    didCompleteWithError error: Error?
-  ) {
-    Task {
-      await statusContinuation?.finish(throwing: error)
-    }
-  }
-
-  func receive() -> AsyncThrowingStream<_RealtimeMessage, Error> {
-    let (stream, continuation) = AsyncThrowingStream<_RealtimeMessage, Error>.makeStream()
-
-    Task {
-      while let message = try await self.task?.receive() {
-        do {
-          switch message {
-          case let .string(stringMessage):
-            guard let data = stringMessage.data(using: .utf8) else {
-              throw RealtimeError("Expected a UTF8 encoded message.")
-            }
-
-            let message = try JSONDecoder().decode(_RealtimeMessage.self, from: data)
-            continuation.yield(message)
-
-          case .data:
-            fallthrough
-          default:
-            throw RealtimeError("Unsupported message type.")
-          }
-        } catch {
-          continuation.finish(throwing: error)
-        }
-      }
-    }
-
-    return stream
-  }
-
-  func send(_ message: _RealtimeMessage) async throws {
-    let data = try JSONEncoder().encode(message)
-    let string = String(decoding: data, as: UTF8.self)
-    try await task?.send(.string(string))
   }
 }

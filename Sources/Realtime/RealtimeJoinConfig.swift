@@ -7,19 +7,25 @@
 
 import Foundation
 
+struct RealtimeJoinPayload: Codable {
+  var config: RealtimeJoinConfig
+}
+
 struct RealtimeJoinConfig: Codable, Hashable {
   var broadcast: BroadcastJoinConfig = .init()
   var presence: PresenceJoinConfig = .init()
   var postgresChanges: [PostgresJoinConfig] = []
+  var accessToken: String?
 
   enum CodingKeys: String, CodingKey {
     case broadcast
     case presence
     case postgresChanges = "postgres_changes"
+    case accessToken = "access_token"
   }
 }
 
-public struct BroadcastJoinConfig: Codable, Hashable {
+public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
   public var acknowledgeBroadcasts: Bool = false
   public var receiveOwnBroadcasts: Bool = false
 
@@ -29,7 +35,7 @@ public struct BroadcastJoinConfig: Codable, Hashable {
   }
 }
 
-public struct PresenceJoinConfig: Codable, Hashable {
+public struct PresenceJoinConfig: Codable, Hashable, Sendable {
   public var key: String = ""
 }
 

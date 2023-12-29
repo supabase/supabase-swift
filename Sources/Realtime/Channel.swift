@@ -7,14 +7,15 @@
 
 @_spi(Internal) import _Helpers
 import Combine
+import ConcurrencyExtras
 import Foundation
 
-public struct RealtimeChannelConfig {
+public struct RealtimeChannelConfig: Sendable {
   public var broadcast: BroadcastJoinConfig
   public var presence: PresenceJoinConfig
 }
 
-public final class RealtimeChannel {
+public final class RealtimeChannel: @unchecked Sendable {
   public enum Status {
     case unsubscribed
     case subscribing
@@ -22,14 +23,19 @@ public final class RealtimeChannel {
     case unsubscribing
   }
 
-  weak var socket: Realtime?
+  weak var socket: Realtime? {
+    didSet {
+      assert(oldValue == nil, "socket should not be modified once set")
+    }
+  }
+
   let topic: String
   let broadcastJoinConfig: BroadcastJoinConfig
   let presenceJoinConfig: PresenceJoinConfig
 
   let callbackManager = CallbackManager()
 
-  private var clientChanges: [PostgresJoinConfig] = []
+  private let clientChanges: LockIsolated<[PostgresJoinConfig]> = .init([])
 
   let _status = CurrentValueSubject<Status, Never>(.unsubscribed)
   public var status: Status {
@@ -46,6 +52,10 @@ public final class RealtimeChannel {
     self.topic = topic
     self.broadcastJoinConfig = broadcastJoinConfig
     self.presenceJoinConfig = presenceJoinConfig
+  }
+
+  deinit {
+    callbackManager.reset()
   }
 
   public func subscribe() async throws {
@@ -66,27 +76,23 @@ public final class RealtimeChannel {
     let authToken = await socket?.config.authTokenProvider?.authToken()
     let currentJwt = socket?.config.jwtToken ?? authToken
 
-    let postgresChanges = clientChanges
+    let postgresChanges = clientChanges.value
 
     let joinConfig = RealtimeJoinConfig(
       broadcast: broadcastJoinConfig,
       presence: presenceJoinConfig,
-      postgresChanges: postgresChanges
+      postgresChanges: postgresChanges,
+      accessToken: currentJwt
     )
 
     debug("subscribing to channel with body: \(joinConfig)")
 
-    var config = try AnyJSON(joinConfig).objectValue ?? [:]
-    if let currentJwt {
-      config["access_token"] = .string(currentJwt)
-    }
-
-    try? await socket?.ws?.send(_RealtimeMessage(
+    try? await socket?.send(_RealtimeMessage(
       joinRef: nil,
       ref: socket?.makeRef().description ?? "",
       topic: topic,
       event: ChannelEvent.join,
-      payload: ["config": .object(config)]
+      payload: AnyJSON(RealtimeJoinPayload(config: joinConfig)).objectValue ?? [:]
     ))
   }
 
@@ -94,7 +100,7 @@ public final class RealtimeChannel {
     _status.value = .unsubscribing
     debug("unsubscribing from channel \(topic)")
 
-    try await socket?.ws?.send(
+    try await socket?.send(
       _RealtimeMessage(
         joinRef: nil,
         ref: socket?.makeRef().description,
@@ -107,7 +113,7 @@ public final class RealtimeChannel {
 
   public func updateAuth(jwt: String) async throws {
     debug("Updating auth token for channel \(topic)")
-    try await socket?.ws?.send(
+    try await socket?.send(
       _RealtimeMessage(
         joinRef: nil,
         ref: socket?.makeRef().description,
@@ -122,7 +128,7 @@ public final class RealtimeChannel {
     if status != .subscribed {
       // TODO: use HTTP
     } else {
-      try await socket?.ws?.send(
+      try await socket?.send(
         _RealtimeMessage(
           joinRef: nil,
           ref: socket?.makeRef().description,
@@ -145,7 +151,7 @@ public final class RealtimeChannel {
       )
     }
 
-    try await socket?.ws?.send(_RealtimeMessage(
+    try await socket?.send(_RealtimeMessage(
       joinRef: nil,
       ref: socket?.makeRef().description,
       topic: topic,
@@ -159,7 +165,7 @@ public final class RealtimeChannel {
   }
 
   public func untrack() async throws {
-    try await socket?.ws?.send(_RealtimeMessage(
+    try await socket?.send(_RealtimeMessage(
       joinRef: nil,
       ref: socket?.makeRef().description,
       topic: topic,
@@ -245,8 +251,7 @@ public final class RealtimeChannel {
 
     case .broadcast:
       let event = message.event
-      let payload = try AnyJSON(message.payload)
-      callbackManager.triggerBroadcast(event: event, json: payload)
+      callbackManager.triggerBroadcast(event: event, message: message)
 
     case .close:
       try await socket?.removeChannel(self)
@@ -260,11 +265,11 @@ public final class RealtimeChannel {
     case .presenceDiff:
       let joins: [String: Presence] = [:]
       let leaves: [String: Presence] = [:]
-      callbackManager.triggerPresenceDiffs(joins: joins, leaves: leaves)
+      callbackManager.triggerPresenceDiffs(joins: joins, leaves: leaves, rawMessage: message)
 
     case .presenceState:
       let joins: [String: Presence] = [:]
-      callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:])
+      callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:], rawMessage: message)
     }
   }
 
@@ -277,6 +282,7 @@ public final class RealtimeChannel {
     }
 
     continuation.onTermination = { _ in
+      debug("Removing presence callback with id: \(id)")
       self.callbackManager.removeCallback(id: id)
     }
 
@@ -301,10 +307,12 @@ public final class RealtimeChannel {
       filter: filter
     )
 
-    clientChanges.append(config)
+    clientChanges.withValue { $0.append(config) }
 
     let id = callbackManager.addPostgresCallback(filter: config) { action in
-      if let action = action.wrappedAction as? Action {
+      if let action = action as? Action {
+        continuation.yield(action)
+      } else if let action = action.wrappedAction as? Action {
         continuation.yield(action)
       } else {
         assertionFailure(
@@ -314,6 +322,7 @@ public final class RealtimeChannel {
     }
 
     continuation.onTermination = { _ in
+      debug("Removing postgres callback with id: \(id)")
       self.callbackManager.removeCallback(id: id)
     }
 
@@ -322,14 +331,15 @@ public final class RealtimeChannel {
 
   /// Listen for broadcast messages sent by other clients within the same channel under a specific
   /// `event`.
-  public func broadcast(event: String) -> AsyncStream<AnyJSON> {
-    let (stream, continuation) = AsyncStream<AnyJSON>.makeStream()
+  public func broadcast(event: String) -> AsyncStream<_RealtimeMessage> {
+    let (stream, continuation) = AsyncStream<_RealtimeMessage>.makeStream()
 
     let id = callbackManager.addBroadcastCallback(event: event) {
       continuation.yield($0)
     }
 
     continuation.onTermination = { _ in
+      debug("Removing broadcast callback with id: \(id)")
       self.callbackManager.removeCallback(id: id)
     }
 

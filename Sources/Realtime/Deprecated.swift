@@ -14,7 +14,7 @@ extension RealtimeChannel {
   @available(
     *,
     deprecated,
-    message: "Please use one of postgresChanges, presenceState, or broadcast methods that returns an AsyncSequence instead."
+    message: "Please use one of postgresChanges, presenceChange, or broadcast methods that returns an AsyncSequence instead."
   )
   @discardableResult
   public func on(
@@ -24,9 +24,9 @@ extension RealtimeChannel {
   ) -> RealtimeChannel {
     let stream: AsyncStream<HasRawMessage>
 
-    switch event {
+    switch event.lowercased() {
     case "postgres_changes":
-      switch filter.event {
+      switch filter.event?.uppercased() {
       case "UPDATE":
         stream = postgresChange(
           UpdateAction.self,
@@ -74,14 +74,20 @@ extension RealtimeChannel {
         .eraseToStream()
       }
 
-      Task {
-        for await action in stream {
-          handler(action.rawMessage)
-        }
-      }
-
+    case "presence":
+      stream = presenceChange().map { $0 as HasRawMessage }.eraseToStream()
+    case "broadcast":
+      stream = broadcast(event: filter.event!).map { $0 as HasRawMessage }.eraseToStream()
     default:
-      ()
+      fatalError(
+        "Unsupported event '\(event)'. Expected one of: postgres_changes, presence, or broadcast."
+      )
+    }
+
+    Task {
+      for await action in stream {
+        handler(action.rawMessage)
+      }
     }
 
     return self

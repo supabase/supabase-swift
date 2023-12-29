@@ -14,6 +14,7 @@ import SwiftUI
 final class MessagesViewModel {
   let channel: Channel
   var messages: [Message] = []
+  var newMessage = ""
 
   let api: MessagesAPI
 
@@ -90,6 +91,22 @@ final class MessagesViewModel {
     }
   }
 
+  func submitNewMessageButtonTapped() {
+    Task {
+      do {
+        try await api.insertMessage(
+          NewMessage(
+            message: newMessage,
+            userId: supabase.auth.session.user.id,
+            channelId: channel.id
+          )
+        )
+      } catch {
+        dump(error)
+      }
+    }
+  }
+
   private func message(from record: HasRecord) async throws -> Message {
     struct MessagePayload: Decodable {
       let id: Int
@@ -122,7 +139,7 @@ final class MessagesViewModel {
 }
 
 struct MessagesView: View {
-  let model: MessagesViewModel
+  @Bindable var model: MessagesViewModel
 
   var body: some View {
     List {
@@ -135,6 +152,12 @@ struct MessagesView: View {
         }
       }
     }
+    .safeAreaInset(edge: .bottom) {
+      ComposeMessageView(text: $model.newMessage) {
+        model.submitNewMessageButtonTapped()
+      }
+      .padding()
+    }
     .navigationTitle(model.channel.slug)
     .onAppear {
       model.loadInitialMessages()
@@ -142,6 +165,22 @@ struct MessagesView: View {
     }
     .onDisappear {
       model.stopObservingMessages()
+    }
+  }
+}
+
+struct ComposeMessageView: View {
+  @Binding var text: String
+  var onSubmit: () -> Void
+
+  var body: some View {
+    HStack {
+      TextField("Type here", text: $text)
+      Button {
+        onSubmit()
+      } label: {
+        Image(systemName: "arrow.up.right.circle")
+      }
     }
   }
 }

@@ -124,3 +124,7 @@ public struct _RealtimeMessage: Hashable, Codable, Sendable {
          presenceState, tokenExpired
   }
 }
+
+extension _RealtimeMessage: HasRawMessage {
+  public var rawMessage: _RealtimeMessage { self }
+}

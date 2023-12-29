@@ -19,7 +19,10 @@ final class CallbackManager: @unchecked Sendable {
   let mutableState = LockIsolated(MutableState())
 
   @discardableResult
-  func addBroadcastCallback(event: String, callback: @escaping @Sendable (AnyJSON) -> Void) -> Int {
+  func addBroadcastCallback(
+    event: String,
+    callback: @escaping @Sendable (_RealtimeMessage) -> Void
+  ) -> Int {
     mutableState.withValue {
       $0.id += 1
       $0.callbacks.append(.broadcast(BroadcastCallback(
@@ -93,7 +96,7 @@ final class CallbackManager: @unchecked Sendable {
     }
   }
 
-  func triggerBroadcast(event: String, json: AnyJSON) {
+  func triggerBroadcast(event: String, message: _RealtimeMessage) {
     let broadcastCallbacks = mutableState.callbacks.compactMap {
       if case let .broadcast(callback) = $0 {
         return callback
@@ -101,17 +104,29 @@ final class CallbackManager: @unchecked Sendable {
       return nil
     }
     let callbacks = broadcastCallbacks.filter { $0.event == event }
-    callbacks.forEach { $0.callback(json) }
+    callbacks.forEach { $0.callback(message) }
   }
 
-  func triggerPresenceDiffs(joins: [String: Presence], leaves: [String: Presence]) {
+  func triggerPresenceDiffs(
+    joins: [String: Presence],
+    leaves: [String: Presence],
+    rawMessage: _RealtimeMessage
+  ) {
     let presenceCallbacks = mutableState.callbacks.compactMap {
       if case let .presence(callback) = $0 {
         return callback
       }
       return nil
     }
-    presenceCallbacks.forEach { $0.callback(PresenceActionImpl(joins: joins, leaves: leaves)) }
+    presenceCallbacks.forEach { $0.callback(PresenceActionImpl(
+      joins: joins,
+      leaves: leaves,
+      rawMessage: rawMessage
+    )) }
+  }
+
+  func reset() {
+    mutableState.setValue(MutableState())
   }
 }
 
@@ -124,7 +139,7 @@ struct PostgresCallback {
 struct BroadcastCallback {
   var id: Int
   var event: String
-  var callback: @Sendable (AnyJSON) -> Void
+  var callback: @Sendable (_RealtimeMessage) -> Void
 }
 
 struct PresenceCallback {
