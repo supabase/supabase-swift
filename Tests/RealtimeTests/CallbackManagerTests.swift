@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
+import ConcurrencyExtras
 import CustomDump
 @testable import Realtime
 import XCTest
@@ -98,22 +99,22 @@ final class CallbackManagerTests: XCTestCase {
       deleteSpecificUserFilter,
     ])
 
-    var receivedActions: [AnyAction] = []
+    let receivedActions = LockIsolated<[AnyAction]>([])
     let updateUsersId = callbackManager.addPostgresCallback(filter: updateUsersFilter) { action in
-      receivedActions.append(action)
+      receivedActions.withValue { $0.append(action) }
     }
 
     let insertUsersId = callbackManager.addPostgresCallback(filter: insertUsersFilter) { action in
-      receivedActions.append(action)
+      receivedActions.withValue { $0.append(action) }
     }
 
     let anyUsersId = callbackManager.addPostgresCallback(filter: anyUsersFilter) { action in
-      receivedActions.append(action)
+      receivedActions.withValue { $0.append(action) }
     }
 
     let deleteSpecificUserId = callbackManager
       .addPostgresCallback(filter: deleteSpecificUserFilter) { action in
-        receivedActions.append(action)
+        receivedActions.withValue { $0.append(action) }
       }
 
     let currentDate = Date()
@@ -122,14 +123,16 @@ final class CallbackManagerTests: XCTestCase {
       columns: [],
       commitTimestamp: currentDate,
       record: ["email": .string("new@mail.com")],
-      oldRecord: ["email": .string("old@mail.com")]
+      oldRecord: ["email": .string("old@mail.com")],
+      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
     callbackManager.triggerPostgresChanges(ids: [updateUsersId], data: .update(updateUserAction))
 
     let insertUserAction = InsertAction(
       columns: [],
       commitTimestamp: currentDate,
-      record: ["email": .string("email@mail.com")]
+      record: ["email": .string("email@mail.com")],
+      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
     callbackManager.triggerPostgresChanges(ids: [insertUsersId], data: .insert(insertUserAction))
 
@@ -139,7 +142,8 @@ final class CallbackManagerTests: XCTestCase {
     let deleteSpecificUserAction = DeleteAction(
       columns: [],
       commitTimestamp: currentDate,
-      oldRecord: ["id": .string("1234")]
+      oldRecord: ["id": .string("1234")],
+      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
     callbackManager.triggerPostgresChanges(
       ids: [deleteSpecificUserId],
@@ -147,7 +151,7 @@ final class CallbackManagerTests: XCTestCase {
     )
 
     XCTAssertNoDifference(
-      receivedActions,
+      receivedActions.value,
       [
         .update(updateUserAction),
         anyUserAction,
@@ -162,16 +166,22 @@ final class CallbackManagerTests: XCTestCase {
   func testTriggerBroadcast() {
     let callbackManager = CallbackManager()
     let event = "new_user"
-    let json = AnyJSON.object(["email": .string("example@mail.com")])
+    let message = RealtimeMessageV2(
+      joinRef: nil,
+      ref: nil,
+      topic: "realtime:users",
+      event: event,
+      payload: ["email": "mail@example.com"]
+    )
 
-    var receivedJSON: AnyJSON?
+    let receivedMessage = LockIsolated(RealtimeMessageV2?.none)
     callbackManager.addBroadcastCallback(event: event) {
-      receivedJSON = $0
+      receivedMessage.setValue($0)
     }
 
-    callbackManager.triggerBroadcast(event: event, json: json)
+    callbackManager.triggerBroadcast(event: event, message: message)
 
-    XCTAssertEqual(receivedJSON, json)
+    XCTAssertEqual(receivedMessage.value, message)
   }
 
   func testTriggerPresenceDiffs() {
@@ -183,18 +193,22 @@ final class CallbackManagerTests: XCTestCase {
     let joins = ["user1": Presence(channel: channel)]
     let leaves = ["user2": Presence(channel: channel)]
 
-    var receivedAction: PresenceAction?
+    let receivedAction = LockIsolated(PresenceAction?.none)
 
     callbackManager.addPresenceCallback {
-      receivedAction = $0
+      receivedAction.setValue($0)
     }
 
-    callbackManager.triggerPresenceDiffs(joins: joins, leaves: leaves)
+    callbackManager.triggerPresenceDiffs(
+      joins: joins,
+      leaves: leaves,
+      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
+    )
 
-    XCTAssertIdentical(receivedAction?.joins["user1"], joins["user1"])
-    XCTAssertIdentical(receivedAction?.leaves["user2"], leaves["user2"])
+    XCTAssertIdentical(receivedAction.value?.joins["user1"], joins["user1"])
+    XCTAssertIdentical(receivedAction.value?.leaves["user2"], leaves["user2"])
 
-    XCTAssertEqual(receivedAction?.joins.count, 1)
-    XCTAssertEqual(receivedAction?.leaves.count, 1)
+    XCTAssertEqual(receivedAction.value?.joins.count, 1)
+    XCTAssertEqual(receivedAction.value?.leaves.count, 1)
   }
 }
