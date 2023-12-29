@@ -38,7 +38,7 @@ final class IntegrationTests: XCTestCase {
   let client = PostgrestClient(
     url: URL(string: "http://localhost:54321/rest/v1")!,
     headers: [
-      "apikey":
+      "Apikey":
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
     ]
   )

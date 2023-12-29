@@ -58,7 +58,7 @@ final class BuildURLRequestTests: XCTestCase {
         }
 
         await MainActor.run { [runningTestCase] in
-          platformSpecificAssertSnapshot(
+          assertSnapshot(
             of: request,
             as: .curl,
             named: runningTestCase.name,

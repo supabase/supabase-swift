@@ -45,7 +45,7 @@ final class SupabaseClientTests: XCTestCase {
       client.defaultHeaders,
       [
         "X-Client-Info": "supabase-swift/\(Supabase.version)",
-        "apikey": "ANON_KEY",
+        "Apikey": "ANON_KEY",
         "header_field": "header_value",
         "Authorization": "Bearer ANON_KEY",
       ]

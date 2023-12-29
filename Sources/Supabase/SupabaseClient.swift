@@ -85,7 +85,7 @@ public final class SupabaseClient: @unchecked Sendable {
     defaultHeaders = [
       "X-Client-Info": "supabase-swift/\(version)",
       "Authorization": "Bearer \(supabaseKey)",
-      "apikey": supabaseKey,
+      "Apikey": supabaseKey,
     ].merging(options.global.headers) { _, new in new }
 
     auth = AuthClient(

@@ -165,8 +165,10 @@ final class RequestsTests: XCTestCase {
 
   func testSessionFromURL() async throws {
     // For some reason this crashes the testing bundle
-    // on Linux, macOS, and Windows, skipping it.
+    // on Linux and Windows, skipping it.
+    #if os(Linux) || os(Windows)
     try XCTSkipIf(true)
+    #endif
 
     let sut = makeSUT(fetch: { request in
       let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
@@ -403,13 +405,13 @@ final class RequestsTests: XCTestCase {
 
     let configuration = AuthClient.Configuration(
       url: clientURL,
-      headers: ["apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
+      headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       flowType: flowType,
       localStorage: InMemoryLocalStorage(),
       encoder: encoder,
       fetch: { request in
         DispatchQueue.main.sync {
-          platformSpecificAssertSnapshot(
+          assertSnapshot(
             of: request, as: .curl, record: record, file: file, testName: testName, line: line
           )
         }

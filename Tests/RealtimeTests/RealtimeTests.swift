@@ -27,7 +27,7 @@ final class RealtimeTests: XCTestCase {
 //    )
 //
 //    let socket = RealtimeClient(
-//      "\(supabaseUrl)/realtime/v1", params: ["apikey": supabaseKey]
+//      "\(supabaseUrl)/realtime/v1", params: ["Apikey": supabaseKey]
 //    )
 //
 //    let e = expectation(description: "testConnection")
@@ -63,7 +63,7 @@ final class RealtimeTests: XCTestCase {
 //    )
 //
 //    let client = RealtimeClient(
-//      "\(supabaseUrl)/realtime/v1", params: ["apikey": supabaseKey]
+//      "\(supabaseUrl)/realtime/v1", params: ["Apikey": supabaseKey]
 //    )
 //    let allChanges = client.channel(.all)
 //    allChanges.on(.all) { message in
