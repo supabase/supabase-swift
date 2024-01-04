@@ -71,7 +71,7 @@ public actor RealtimeChannelV2 {
       await socket?.connect()
     }
 
-    socket?.addChannel(self)
+    await socket?.addChannel(self)
 
     _status.value = .subscribing
     debug("subscribing to channel \(topic)")
@@ -88,7 +88,7 @@ public actor RealtimeChannelV2 {
       accessToken: currentJwt
     )
 
-    joinRef = socket?.makeRef().description
+    joinRef = await socket?.makeRef().description
 
     debug("subscribing to channel with body: \(joinConfig)")
 

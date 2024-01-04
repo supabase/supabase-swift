@@ -21,7 +21,7 @@ actor _Push {
 
   func send() async -> PushStatus {
     do {
-      try await channel?.socket?.mutableState.ws?.send(message)
+      try await channel?.socket?.ws?.send(message)
 
       if channel?.config.broadcast.acknowledgeBroadcasts == true {
         return await withCheckedContinuation {
