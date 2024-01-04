@@ -96,6 +96,7 @@ public actor Realtime {
     }
 
     inFlightConnectionTask = Task {
+      defer { inFlightConnectionTask = nil }
       if reconnect {
         try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.reconnectDelay))
 

@@ -64,7 +64,7 @@ final class _PushTests: XCTestCase {
     }
     await Task.megaYield()
 
-    push.didReceive(status: .ok)
+    await push.didReceive(status: .ok)
 
     let status = await task.value
     XCTAssertEqual(status, .ok)

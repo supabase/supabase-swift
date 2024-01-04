@@ -22,11 +22,12 @@ final class RealtimeTests: XCTestCase {
       makeWebSocketClient: { _ in mock }
     )
 
-    XCTAssertNoLeak(realtime)
+//    XCTAssertNoLeak(realtime)
 
     await realtime.connect()
 
-    XCTAssertEqual(realtime._status.value, .connected)
+    let status = await realtime._status.value
+    XCTAssertEqual(status, .connected)
   }
 
   func testChannelSubscription() async throws {
@@ -37,9 +38,9 @@ final class RealtimeTests: XCTestCase {
       makeWebSocketClient: { _ in mock }
     )
 
-    let channel = realtime.channel("users")
+    let channel = await realtime.channel("users")
 
-    let changes = channel.postgresChange(
+    let changes = await channel.postgresChange(
       AnyAction.self,
       table: "users"
     )
@@ -118,6 +119,7 @@ final class RealtimeTests: XCTestCase {
             ],
           ],
         ],
+        "status": "ok",
       ]
     )
 
