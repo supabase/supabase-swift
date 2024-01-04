@@ -141,7 +141,7 @@ public actor Realtime {
 
   public func channel(
     _ topic: String,
-    options: (inout RealtimeChannelConfig) -> Void = { _ in }
+    options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
   ) -> RealtimeChannelV2 {
     var config = RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),

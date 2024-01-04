@@ -23,7 +23,7 @@ final class Store {
     channels = try await fetchChannels()
 
     Task {
-      let channel = supabase.realtimeV2.channel("public:messages")
+      let channel = await supabase.realtimeV2.channel("public:messages")
       messagesListener = channel
 
       let insertions = await channel.postgresChange(InsertAction.self, table: "messages")
@@ -52,7 +52,7 @@ final class Store {
     }
 
     Task {
-      let channel = supabase.realtimeV2.channel("public:users")
+      let channel = await supabase.realtimeV2.channel("public:users")
       usersListener = channel
 
       let changes = await channel.postgresChange(AnyAction.self, table: "users")
@@ -65,7 +65,7 @@ final class Store {
     }
 
     Task {
-      let channel = supabase.realtimeV2.channel("public:channels")
+      let channel = await supabase.realtimeV2.channel("public:channels")
       channelsListener = channel
 
       let insertions = await channel.postgresChange(InsertAction.self, table: "channels")
@@ -87,7 +87,13 @@ final class Store {
     }
   }
 
-  func loadInitialMessages(_: Channel.ID) async {}
+  func loadInitialMessages(_ channelId: Channel.ID) async {
+    do {
+      messages[channelId] = try await fetchMessages(channelId)
+    } catch {
+      dump(error)
+    }
+  }
 
   private func handleInsertedOrUpdatedMessage(_ action: HasRecord) async {
     do {
@@ -112,18 +118,57 @@ final class Store {
     }
   }
 
-  private func handleDeletedMessage(_: DeleteAction) {}
+  private func handleDeletedMessage(_ action: DeleteAction) {
+    guard let id = action.oldRecord["id"]?.intValue else {
+      return
+    }
 
-  private func handleChangedUser(_: AnyAction) {}
+    let allMessages = messages.flatMap(\.value)
+    guard let message = allMessages.first(where: { $0.id == id }) else { return }
 
-  private func handleInsertedChannel(_: InsertAction) {}
-  private func handleDeletedChannel(_: DeleteAction) {}
+    messages[message.channel.id]?.removeAll(where: { $0.id == message.id })
+  }
+
+  private func handleChangedUser(_ action: AnyAction) {
+    do {
+      switch action {
+      case let .insert(action):
+        let user = try action.decodeRecord() as User
+        users[user.id] = user
+      case let .update(action):
+        let user = try action.decodeRecord() as User
+        users[user.id] = user
+      case let .delete(action):
+        guard let id = action.oldRecord["id"]?.stringValue else { return }
+        users[UUID(uuidString: id)!] = nil
+      default:
+        break
+      }
+    } catch {
+      dump(error)
+    }
+  }
+
+  private func handleInsertedChannel(_ action: InsertAction) {
+    do {
+      let channel = try action.decodeRecord() as Channel
+      channels.append(channel)
+    } catch {
+      dump(error)
+    }
+  }
+
+  private func handleDeletedChannel(_ action: DeleteAction) {
+    guard let id = action.oldRecord["id"]?.intValue else { return }
+    channels.removeAll { $0.id == id }
+    messages[id] = nil
+  }
 
   /// Fetch all messages and their authors.
   private func fetchMessages(_ channelId: Channel.ID) async throws -> [Message] {
     try await supabase.database
       .from("messages")
-      .select("*,author:user_id(*),channel:channel_id(*)")
+      .select("*,user:user_id(*),channel:channel_id(*)")
       .eq("channel_id", value: channelId)
       .order("inserted_at", ascending: true)
       .execute()
