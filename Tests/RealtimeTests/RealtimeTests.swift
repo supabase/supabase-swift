@@ -17,8 +17,8 @@ final class RealtimeTests: XCTestCase {
   func testConnect() async {
     let mock = MockWebSocketClient(status: [.success(.open)])
 
-    let realtime = Realtime(
-      config: Realtime.Configuration(url: url, apiKey: apiKey, authTokenProvider: nil),
+    let realtime = RealtimeClientV2(
+      config: RealtimeClientV2.Configuration(url: url, apiKey: apiKey, authTokenProvider: nil),
       makeWebSocketClient: { _ in mock }
     )
 
@@ -33,8 +33,8 @@ final class RealtimeTests: XCTestCase {
   func testChannelSubscription() async throws {
     let mock = MockWebSocketClient(status: [.success(.open)])
 
-    let realtime = Realtime(
-      config: Realtime.Configuration(url: url, apiKey: apiKey, authTokenProvider: nil),
+    let realtime = RealtimeClientV2(
+      config: RealtimeClientV2.Configuration(url: url, apiKey: apiKey, authTokenProvider: nil),
       makeWebSocketClient: { _ in mock }
     )
 

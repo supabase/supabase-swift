@@ -54,8 +54,8 @@ public final class SupabaseClient: @unchecked Sendable {
   /// Realtime client for Supabase
   public let realtime: RealtimeClient
 
-  public lazy var realtimeV2: Realtime = .init(
-    config: Realtime.Configuration(
+  public lazy var realtimeV2: RealtimeClientV2 = .init(
+    config: RealtimeClientV2.Configuration(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
       apiKey: supabaseKey,
       authTokenProvider: self

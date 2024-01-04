@@ -58,7 +58,7 @@ struct StateChangeCallbacks {
 /// The `RealtimeClient` constructor takes the mount point of the socket,
 /// the authentication params, as well as options that can be found in
 /// the Socket docs, such as configuring the heartbeat.
-@available(*, deprecated, message: "Use new Realtime class instead.")
+@available(*, deprecated, message: "Use new RealtimeClientV2 class instead.")
 public class RealtimeClient: PhoenixTransportDelegate {
   // ----------------------------------------------------------------------
 

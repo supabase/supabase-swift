@@ -14,7 +14,7 @@ public protocol AuthTokenProvider: Sendable {
   func authToken() async -> String?
 }
 
-public actor Realtime {
+public actor RealtimeClientV2 {
   public struct Configuration: Sendable {
     var url: URL
     var apiKey: String

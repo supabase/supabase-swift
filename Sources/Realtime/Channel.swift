@@ -23,7 +23,7 @@ public actor RealtimeChannelV2 {
     case unsubscribing
   }
 
-  weak var socket: Realtime? {
+  weak var socket: RealtimeClientV2? {
     didSet {
       assert(oldValue == nil, "socket should not be modified once set")
     }
@@ -44,7 +44,7 @@ public actor RealtimeChannelV2 {
   init(
     topic: String,
     config: RealtimeChannelConfig,
-    socket: Realtime
+    socket: RealtimeClientV2
   ) {
     _status = CurrentValueSubject(.unsubscribed)
     status = _status.share().eraseToAnyPublisher()

@@ -9,7 +9,7 @@
 import XCTest
 
 final class _PushTests: XCTestCase {
-  let socket = Realtime(config: Realtime.Configuration(
+  let socket = RealtimeClientV2(config: RealtimeClientV2.Configuration(
     url: URL(string: "https://localhost:54321/v1/realtime")!,
     apiKey: "apikey",
     authTokenProvider: nil
