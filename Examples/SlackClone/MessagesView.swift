@@ -9,160 +9,25 @@ import Realtime
 import Supabase
 import SwiftUI
 
-@Observable
-@MainActor
-final class MessagesViewModel {
-  let channel: Channel
-  var messages: [Message] = []
-  var newMessage = ""
-  var presences: [UserPresence] = []
-
-  let api: MessagesAPI
-
-  init(channel: Channel, api: MessagesAPI = MessagesAPIImpl(supabase: supabase)) {
-    self.channel = channel
-    self.api = api
-
-    supabase.realtime.logger = { print($0) }
-  }
-
-  func loadInitialMessages() {
-    Task {
-      do {
-        messages = try await api.fetchAllMessages(for: channel.id)
-      } catch {
-        dump(error)
-      }
-    }
-  }
-
-  private var realtimeChannelV2: RealtimeChannelV2?
-  private var observationTask: Task<Void, Never>?
-
-  func startObservingNewMessages() {
-    realtimeChannelV2 = supabase.realtimeV2.channel("messages:\(channel.id)")
-
-    let messagesChanges = realtimeChannelV2!.postgresChange(
-      AnyAction.self,
-      schema: "public",
-      table: "messages",
-      filter: "channel_id=eq.\(channel.id)"
-    )
-
-    let presenceChange = realtimeChannelV2!.presenceChange()
-
-    observationTask = Task {
-      await realtimeChannelV2!.subscribe(blockUntilSubscribed: true)
-
-      let state = try? await UserPresence(userId: supabase.auth.session.user.id, onlineAt: Date())
-
-      try? await realtimeChannelV2!.track(state)
-
-      Task {
-        for await change in messagesChanges {
-          do {
-            switch change {
-            case let .insert(record):
-              let message = try await self.message(from: record)
-              self.messages.append(message)
-
-            case let .update(record):
-              let message = try await self.message(from: record)
-
-              if let index = self.messages.firstIndex(where: { $0.id == message.id }) {
-                messages[index] = message
-              } else {
-                messages.append(message)
-              }
-
-            case let .delete(oldRecord):
-              let id = oldRecord.oldRecord["id"]?.intValue
-              self.messages.removeAll { $0.id == id }
-
-            default:
-              break
-            }
-          } catch {
-            dump(error)
-          }
-        }
-      }
-
-      Task {
-        for await change in presenceChange {
-          let presences = try change.decodeJoins(as: UserPresence.self)
-          self.presences = presences
-        }
-      }
-    }
-  }
-
-  func stopObservingMessages() {
-    Task {
-      observationTask?.cancel()
-      await realtimeChannelV2?.untrack()
-      await realtimeChannelV2?.unsubscribe()
-    }
-  }
-
-  func submitNewMessageButtonTapped() {
-    Task {
-      do {
-        try await api.insertMessage(
-          NewMessage(
-            message: newMessage,
-            userId: supabase.auth.session.user.id,
-            channelId: channel.id
-          )
-        )
-      } catch {
-        dump(error)
-      }
-    }
-  }
-
-  private func message(from record: HasRecord) async throws -> Message {
-    struct MessagePayload: Decodable {
-      let id: Int
-      let message: String
-      let insertedAt: Date
-      let authorId: UUID
-      let channelId: UUID
-    }
-
-    let message = try record.decodeRecord() as MessagePayload
-
-    return try await Message(
-      id: message.id,
-      insertedAt: message.insertedAt,
-      message: message.message,
-      user: user(for: message.authorId),
-      channel: channel
-    )
-  }
-
-  private var users: [UUID: User] = [:]
-  private func user(for id: UUID) async throws -> User {
-    if let user = users[id] { return user }
-
-    let user = try await supabase.database.from("users").select().eq("id", value: id).execute()
-      .value as User
-    users[id] = user
-    return user
-  }
-}
-
 struct UserPresence: Codable {
   var userId: UUID
   var onlineAt: Date
 }
 
+@MainActor
 struct MessagesView: View {
-  @Bindable var model: MessagesViewModel
+  @Environment(Store.self) var store
+
+  let channel: Channel
+  @State private var newMessage = ""
+
+  var messages: [Message] {
+    store.messages[channel.id, default: []]
+  }
 
   var body: some View {
     List {
-      ForEach(model.messages) { message in
+      ForEach(messages) { message in
         VStack(alignment: .leading) {
           Text(message.user.username)
             .font(.caption)
@@ -172,24 +37,31 @@ struct MessagesView: View {
       }
     }
     .safeAreaInset(edge: .bottom) {
-      ComposeMessageView(text: $model.newMessage) {
-        model.submitNewMessageButtonTapped()
+      ComposeMessageView(text: $newMessage) {
+        Task {
+          try! await submitNewMessageButtonTapped()
+        }
       }
       .padding()
     }
-    .navigationTitle(model.channel.slug)
-    .toolbar {
-      ToolbarItem(placement: .principal) {
-        Text("\(model.presences.count) online")
-      }
+    .navigationTitle(channel.slug)
+//    .toolbar {
+//      ToolbarItem(placement: .principal) {
+//        Text("\(model.presences.count) online")
+//      }
+//    }
+    .task {
+      await store.loadInitialMessages(channel.id)
     }
-    .onAppear {
-      model.loadInitialMessages()
-      model.startObservingNewMessages()
-    }
-    .onDisappear {
-      model.stopObservingMessages()
-    }
+  }
+
+  private func submitNewMessageButtonTapped() async throws {
+    let message = try await NewMessage(
+      message: newMessage,
+      userId: supabase.auth.session.user.id, channelId: channel.id
+    )
+
+    try await supabase.database.from("messages").insert(message).execute()
   }
 }
 
@@ -207,12 +79,4 @@ struct ComposeMessageView: View {
       }
     }
   }
-}
-
-#Preview {
-  MessagesView(model: MessagesViewModel(channel: Channel(
-    id: 1,
-    slug: "public",
-    insertedAt: Date()
-  )))
 }

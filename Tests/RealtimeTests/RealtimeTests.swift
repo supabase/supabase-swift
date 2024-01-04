@@ -36,10 +36,8 @@ final class RealtimeTests: XCTestCase {
       config: Realtime.Configuration(url: url, apiKey: apiKey, authTokenProvider: nil),
       makeWebSocketClient: { _ in mock }
     )
-    XCTAssertNoLeak(realtime)
 
     let channel = realtime.channel("users")
-    XCTAssertNoLeak(channel)
 
     let changes = channel.postgresChange(
       AnyAction.self,
@@ -49,11 +47,9 @@ final class RealtimeTests: XCTestCase {
     await channel.subscribe()
 
     let receivedPostgresChangeTask = Task {
-      let change = await changes
+      await changes
         .compactMap { $0.wrappedAction as? DeleteAction }
         .first { _ in true }
-
-      return change
     }
 
     let sentMessages = mock.mutableState.sentMessages

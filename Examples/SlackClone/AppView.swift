@@ -23,13 +23,17 @@ final class AppViewModel {
   }
 }
 
+@MainActor
 struct AppView: View {
   let model: AppViewModel
+
+  let store = Store()
 
   @ViewBuilder
   var body: some View {
     if model.session != nil {
       ChannelListView()
+        .environment(store)
     } else {
       AuthView()
     }

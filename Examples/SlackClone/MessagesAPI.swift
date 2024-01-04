@@ -8,7 +8,7 @@
 import Foundation
 import Supabase
 
-struct User: Codable {
+struct User: Codable, Identifiable {
   var id: UUID
   var username: String
 }
@@ -27,7 +27,7 @@ struct Message: Identifiable, Decodable {
   var channel: Channel
 }
 
-struct NewMessage: Encodable {
+struct NewMessage: Codable {
   var message: String
   var userId: UUID
   let channelId: Int

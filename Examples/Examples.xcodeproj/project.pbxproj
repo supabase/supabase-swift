@@ -28,6 +28,7 @@
 		796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796298982AEBBA77000AA957 /* MFAFlow.swift */; };
 		7962989D2AEBC6F9000AA957 /* SVGView in Frameworks */ = {isa = PBXBuildFile; productRef = 7962989C2AEBC6F9000AA957 /* SVGView */; };
 		79719ECE2ADF26C400737804 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79719ECD2ADF26C400737804 /* Supabase */; };
+		797D664A2B46A1D8007592ED /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797D66492B46A1D8007592ED /* Store.swift */; };
 		7993B8A92B3C673A009B610B /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993B8A82B3C673A009B610B /* AuthView.swift */; };
 		7993B8AB2B3C67E0009B610B /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993B8AA2B3C67E0009B610B /* Toast.swift */; };
 		79AF047F2B2CE207008761AD /* AuthWithEmailAndPassword.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */; };
@@ -77,6 +78,7 @@
 		795640692955AFBD0088A06F /* ErrorText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorText.swift; sourceTree = "<group>"; };
 		796298982AEBBA77000AA957 /* MFAFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MFAFlow.swift; sourceTree = "<group>"; };
 		7962989A2AEBBD9F000AA957 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		797D66492B46A1D8007592ED /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		7993B8A82B3C673A009B610B /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		7993B8AA2B3C67E0009B610B /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
 		7993B8AC2B3C97B6009B610B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -229,6 +231,7 @@
 				79D884DE2B3C19420009EA4A /* MessagesAPI.swift */,
 				7993B8A82B3C673A009B610B /* AuthView.swift */,
 				7993B8AA2B3C67E0009B610B /* Toast.swift */,
+				797D66492B46A1D8007592ED /* Store.swift */,
 			);
 			path = SlackClone;
 			sourceTree = "<group>";
@@ -444,6 +447,7 @@
 				7993B8A92B3C673A009B610B /* AuthView.swift in Sources */,
 				7993B8AB2B3C67E0009B610B /* Toast.swift in Sources */,
 				79D884DD2B3C19320009EA4A /* MessagesView.swift in Sources */,
+				797D664A2B46A1D8007592ED /* Store.swift in Sources */,
 				79D884DB2B3C191F0009EA4A /* ChannelListView.swift in Sources */,
 				79D884CC2B3C18830009EA4A /* AppView.swift in Sources */,
 				79D884D72B3C18DB0009EA4A /* Supabase.swift in Sources */,

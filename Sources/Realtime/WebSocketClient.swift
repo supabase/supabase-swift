@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
+@_spi(Internal) import _Helpers
 
 protocol WebSocketClientProtocol: Sendable {
   func send(_ message: RealtimeMessageV2) async throws
@@ -102,6 +103,8 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
         do {
           switch message {
           case let .string(stringMessage):
+            debug("Received message: \(stringMessage)")
+
             guard let data = stringMessage.data(using: .utf8) else {
               throw RealtimeError("Expected a UTF8 encoded message.")
             }
@@ -126,6 +129,8 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
   func send(_ message: RealtimeMessageV2) async throws {
     let data = try JSONEncoder().encode(message)
     let string = String(decoding: data, as: UTF8.self)
+
+    debug("Sending message: \(string)")
     try await mutableState.task?.send(.string(string))
   }
 }

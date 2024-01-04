@@ -134,6 +134,20 @@ extension JSONObject {
     let data = try AnyJSON.encoder.encode(self)
     return try AnyJSON.decoder.decode(T.self, from: data)
   }
+
+  public init(_ value: some Codable) throws {
+    guard let object = try AnyJSON(value).objectValue else {
+      throw DecodingError.typeMismatch(
+        JSONObject.self,
+        DecodingError.Context(
+          codingPath: [],
+          debugDescription: "Expected to decode value to \(JSONObject.self)."
+        )
+      )
+    }
+
+    self = object
+  }
 }
 
 extension JSONArray {
@@ -229,5 +243,11 @@ extension AnyJSON: ExpressibleByBooleanLiteral {
 extension AnyJSON: ExpressibleByDictionaryLiteral {
   public init(dictionaryLiteral elements: (String, AnyJSON)...) {
     self = .object(Dictionary(uniqueKeysWithValues: elements))
+  }
+}
+
+extension AnyJSON: CustomStringConvertible {
+  public var description: String {
+    String(describing: value)
   }
 }

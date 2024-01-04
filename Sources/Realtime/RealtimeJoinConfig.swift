@@ -27,6 +27,9 @@ struct RealtimeJoinConfig: Codable, Hashable {
 
 public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
   public var acknowledgeBroadcasts: Bool = false
+  /// Broadcast messages back to the sender.
+  ///
+  /// By default, broadcast messages are only sent to other clients.
   public var receiveOwnBroadcasts: Bool = false
 
   enum CodingKeys: String, CodingKey {
@@ -72,8 +75,8 @@ struct PostgresJoinConfig: Codable, Hashable {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(event, forKey: .event)
     try container.encode(schema, forKey: .schema)
-    try container.encode(table, forKey: .table)
-    try container.encode(filter, forKey: .filter)
+    try container.encodeIfPresent(table, forKey: .table)
+    try container.encodeIfPresent(filter, forKey: .filter)
 
     if id != 0 {
       try container.encode(id, forKey: .id)

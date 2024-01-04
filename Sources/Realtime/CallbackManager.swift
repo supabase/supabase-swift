@@ -21,15 +21,19 @@ final class CallbackManager: @unchecked Sendable {
   @discardableResult
   func addBroadcastCallback(
     event: String,
-    callback: @escaping @Sendable (RealtimeMessageV2) -> Void
+    callback: @escaping @Sendable (JSONObject) -> Void
   ) -> Int {
     mutableState.withValue {
       $0.id += 1
-      $0.callbacks.append(.broadcast(BroadcastCallback(
-        id: $0.id,
-        event: event,
-        callback: callback
-      )))
+      $0.callbacks.append(
+        .broadcast(
+          BroadcastCallback(
+            id: $0.id,
+            event: event,
+            callback: callback
+          )
+        )
+      )
       return $0.id
     }
   }
@@ -41,11 +45,15 @@ final class CallbackManager: @unchecked Sendable {
   ) -> Int {
     mutableState.withValue {
       $0.id += 1
-      $0.callbacks.append(.postgres(PostgresCallback(
-        id: $0.id,
-        filter: filter,
-        callback: callback
-      )))
+      $0.callbacks.append(
+        .postgres(
+          PostgresCallback(
+            id: $0.id,
+            filter: filter,
+            callback: callback
+          )
+        )
+      )
       return $0.id
     }
   }
@@ -96,7 +104,7 @@ final class CallbackManager: @unchecked Sendable {
     }
   }
 
-  func triggerBroadcast(event: String, message: RealtimeMessageV2) {
+  func triggerBroadcast(event: String, json: JSONObject) {
     let broadcastCallbacks = mutableState.callbacks.compactMap {
       if case let .broadcast(callback) = $0 {
         return callback
@@ -104,7 +112,7 @@ final class CallbackManager: @unchecked Sendable {
       return nil
     }
     let callbacks = broadcastCallbacks.filter { $0.event == event }
-    callbacks.forEach { $0.callback(message) }
+    callbacks.forEach { $0.callback(json) }
   }
 
   func triggerPresenceDiffs(
@@ -143,7 +151,7 @@ struct PostgresCallback {
 struct BroadcastCallback {
   var id: Int
   var event: String
-  var callback: @Sendable (RealtimeMessageV2) -> Void
+  var callback: @Sendable (JSONObject) -> Void
 }
 
 struct PresenceCallback {

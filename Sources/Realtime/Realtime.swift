@@ -52,19 +52,9 @@ public final class Realtime: @unchecked Sendable {
     case connected
   }
 
-  let config: Configuration
-  let makeWebSocketClient: (URL) -> WebSocketClientProtocol
-
-  let _status = CurrentValueSubject<Status, Never>(.disconnected)
-  public lazy var status = _status.share().eraseToAnyPublisher()
-
-  public var subscriptions: [String: RealtimeChannelV2] {
-    mutableState.subscriptions
-  }
-
   struct MutableState {
     var ref = 0
-    var heartbeatRef = 0
+    var heartbeatRef: Int?
     var heartbeatTask: Task<Void, Never>?
     var messageTask: Task<Void, Never>?
     var subscriptions: [String: RealtimeChannelV2] = [:]
@@ -76,7 +66,15 @@ public final class Realtime: @unchecked Sendable {
     }
   }
 
+  let config: Configuration
+  let makeWebSocketClient: (URL) -> WebSocketClientProtocol
   let mutableState = LockIsolated(MutableState())
+  let _status: CurrentValueSubject<Status, Never> = CurrentValueSubject(.disconnected)
+  public var status: Status { _status.value }
+
+  public var subscriptions: [String: RealtimeChannelV2] {
+    mutableState.subscriptions
+  }
 
   init(config: Configuration, makeWebSocketClient: @escaping (URL) -> WebSocketClientProtocol) {
     self.config = config
@@ -87,6 +85,7 @@ public final class Realtime: @unchecked Sendable {
     mutableState.withValue {
       $0.heartbeatTask?.cancel()
       $0.messageTask?.cancel()
+      $0.subscriptions = [:]
       $0.ws?.cancel()
     }
   }
@@ -157,9 +156,8 @@ public final class Realtime: @unchecked Sendable {
 
     return RealtimeChannelV2(
       topic: "realtime:\(topic)",
-      socket: self,
-      broadcastJoinConfig: config.broadcast,
-      presenceJoinConfig: config.presence
+      config: config,
+      socket: self
     )
   }
 
@@ -174,6 +172,11 @@ public final class Realtime: @unchecked Sendable {
 
     mutableState.withValue {
       $0.subscriptions[channel.topic] = nil
+
+      if $0.subscriptions.isEmpty {
+        debug("No more subscribed channel in socket")
+        disconnect()
+      }
     }
   }
 
@@ -224,9 +227,8 @@ public final class Realtime: @unchecked Sendable {
 
   private func sendHeartbeat() async {
     let timedOut = mutableState.withValue {
-      if $0.heartbeatRef != 0 {
-        $0.heartbeatRef = 0
-        $0.ref = 0
+      if $0.heartbeatRef != nil {
+        $0.heartbeatRef = nil
         return true
       }
       return false
@@ -247,7 +249,7 @@ public final class Realtime: @unchecked Sendable {
     await send(
       RealtimeMessageV2(
         joinRef: nil,
-        ref: heartbeatRef.description,
+        ref: heartbeatRef?.description,
         topic: "phoenix",
         event: "heartbeat",
         payload: [:]
@@ -258,33 +260,32 @@ public final class Realtime: @unchecked Sendable {
   public func disconnect() {
     debug("Closing websocket connection")
     mutableState.withValue {
+      $0.ref = 0
       $0.messageTask?.cancel()
+      $0.heartbeatTask?.cancel()
       $0.ws?.cancel()
       $0.ws = nil
-      $0.heartbeatTask?.cancel()
     }
     _status.value = .disconnected
   }
 
   private func onMessage(_ message: RealtimeMessageV2) async {
-    guard let channel = subscriptions[message.topic] else {
-      return
-    }
+    let forward: () async -> Void = mutableState.withValue {
+      let channel = $0.subscriptions[message.topic]
 
-    let heartbeatReceived = mutableState.withValue {
       if Int(message.ref ?? "") == $0.heartbeatRef {
         $0.heartbeatRef = 0
-        return true
+        debug("heartbeat received")
+        return {}
+      } else {
+        debug("Received event \(message.event) for channel \(channel?.topic ?? "null")")
+        return {
+          await channel?.onMessage(message)
+        }
       }
-      return false
     }
 
-    if heartbeatReceived {
-      debug("heartbeat received")
-    } else {
-      debug("Received event \(message.event) for channel \(channel.topic)")
-      await channel.onMessage(message)
-    }
+    await forward()
   }
 
   func send(_ message: RealtimeMessageV2) async {
@@ -343,7 +344,7 @@ public final class Realtime: @unchecked Sendable {
     return url
   }
 
-  var broadcastURL: URL {
+  private var broadcastURL: URL {
     config.url.appendingPathComponent("api/broadcast")
   }
 }
