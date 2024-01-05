@@ -365,7 +365,7 @@ public actor RealtimeChannelV2 {
   public func postgresChange(
     _: InsertAction.Type,
     schema: String = "public",
-    table: String,
+    table: String? = nil,
     filter: String? = nil
   ) -> AsyncStream<InsertAction> {
     postgresChange(event: .insert, schema: schema, table: table, filter: filter)
@@ -377,7 +377,7 @@ public actor RealtimeChannelV2 {
   public func postgresChange(
     _: UpdateAction.Type,
     schema: String = "public",
-    table: String,
+    table: String? = nil,
     filter: String? = nil
   ) -> AsyncStream<UpdateAction> {
     postgresChange(event: .update, schema: schema, table: table, filter: filter)
@@ -389,7 +389,7 @@ public actor RealtimeChannelV2 {
   public func postgresChange(
     _: DeleteAction.Type,
     schema: String = "public",
-    table: String,
+    table: String? = nil,
     filter: String? = nil
   ) -> AsyncStream<DeleteAction> {
     postgresChange(event: .delete, schema: schema, table: table, filter: filter)
@@ -401,7 +401,7 @@ public actor RealtimeChannelV2 {
   public func postgresChange(
     _: SelectAction.Type,
     schema: String = "public",
-    table: String,
+    table: String? = nil,
     filter: String? = nil
   ) -> AsyncStream<SelectAction> {
     postgresChange(event: .select, schema: schema, table: table, filter: filter)
@@ -413,7 +413,7 @@ public actor RealtimeChannelV2 {
   public func postgresChange(
     _: AnyAction.Type,
     schema: String = "public",
-    table: String,
+    table: String? = nil,
     filter: String? = nil
   ) -> AsyncStream<AnyAction> {
     postgresChange(event: .all, schema: schema, table: table, filter: filter)
@@ -422,7 +422,7 @@ public actor RealtimeChannelV2 {
   private func postgresChange(
     event: PostgresChangeEvent,
     schema: String,
-    table: String,
+    table: String?,
     filter: String?
   ) -> AsyncStream<AnyAction> {
     precondition(

@@ -248,7 +248,7 @@ public actor RealtimeClientV2 {
   private func onMessage(_ message: RealtimeMessageV2) async {
     let channel = subscriptions[message.topic]
 
-    if Int(message.ref ?? "") == pendingHeartbeatRef {
+    if let ref = message.ref, Int(ref) == pendingHeartbeatRef {
       pendingHeartbeatRef = nil
       debug("heartbeat received")
     } else {
