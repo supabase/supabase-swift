@@ -52,7 +52,6 @@ let package = Package(
       name: "_Helpers",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
       ]
     ),
     .target(name: "Functions", dependencies: ["_Helpers"]),
