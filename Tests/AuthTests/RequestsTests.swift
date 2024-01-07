@@ -163,17 +163,14 @@ final class RequestsTests: XCTestCase {
     }
   }
 
+  #if !os(Windows) || !os(Linux)
+  // For some reason this crashes the testing bundle
+  // on Linux and Windows, skipping it.
   func testSessionFromURL() async throws {
-    // For some reason this crashes the testing bundle
-    // on Linux and Windows, skipping it.
-    #if os(Linux) || os(Windows)
-    try XCTSkipIf(true)
-    #endif
-
     let sut = makeSUT(fetch: { request in
       let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
       XCTAssertEqual(authorizationHeader, "bearer accesstoken")
-      return (json(named: "user"), HTTPURLResponse.empty())
+      return (json(named: "user"), HTTPURLResponse())
     })
 
     let currentDate = Date()
@@ -202,6 +199,7 @@ final class RequestsTests: XCTestCase {
       XCTAssertEqual(session, expectedSession)
     }
   }
+  #endif
 
   func testSessionFromURLWithMissingComponent() async {
     let sut = makeSUT()
@@ -435,17 +433,4 @@ final class RequestsTests: XCTestCase {
       sessionStorage: .mock
     )
   }
-}
-
-extension HTTPURLResponse {
-    // Windows and Linux don't have the ability to empty initialize a URLResponse like `URLResponse()` so
-    // We provide a function that can give us the right value on an platform.
-    // See https://github.com/apple/swift-corelibs-foundation/pull/4778
-    fileprivate static func empty() -> URLResponse {
-        #if os(Windows) || os(Linux)
-        URLResponse(url: .init(string: "https://supabase.com")!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
-        #else
-        URLResponse()
-        #endif
-    }
 }
