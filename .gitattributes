@@ -1,4 +1,1 @@
-* text=auto
-Tests/**/__Snapshots__/**/darwin/* text eol=lf
-Tests/**/__Snapshots__/**/linux/* text eol=lf
-Tests/**/__Snapshots__/**/windows/* text eol=lf
+/Tests/**/__Snapshots__/**/*.txt eol=lf

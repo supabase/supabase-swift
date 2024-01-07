@@ -57,9 +57,6 @@ jobs:
             github-repo: "thebrowsercompany/swift-build"
             release-asset-name: installer-amd64.exe
             github-token: ${{ secrets.GITHUB_TOKEN }}
-        - name: Enable line ending conversion
-          run: |
-            git config --global core.autocrlf true
         - uses: actions/checkout@v3
         - name: Run Tests
           run: swift test
