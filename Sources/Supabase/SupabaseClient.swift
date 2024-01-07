@@ -121,7 +121,7 @@ public final class SupabaseClient: @unchecked Sendable {
   public convenience init(
     supabaseURL: String,
     supabaseKey: String,
-    options: SupabaseClientOptions = .init(auth: .init(storage: LocalStorageEngines.keychain))
+    options: SupabaseClientOptions = .init(auth: .init(storage: KeychainLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)))
   ) {
     guard let supabaseURL = URL(string: supabaseURL) else {
       fatalError("Invalid supabaseURL: \(supabaseURL)")
@@ -142,7 +142,7 @@ public final class SupabaseClient: @unchecked Sendable {
   public convenience init(
     supabaseURL: String,
     supabaseKey: String,
-    options: SupabaseClientOptions = .init(auth: .init(storage: LocalStorageEngines.wincred))
+    options: SupabaseClientOptions = .init(auth: .init(storage: WinCredLocalStorage(service: "supabase.gotrue.swift")))
   ) {
     guard let supabaseURL = URL(string: supabaseURL) else {
       fatalError("Invalid supabaseURL: \(supabaseURL)")

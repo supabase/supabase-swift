@@ -2,10 +2,10 @@
 import Foundation
 @preconcurrency import KeychainAccess
 
-struct KeychainLocalStorage: AuthLocalStorage {
+public struct KeychainLocalStorage: AuthLocalStorage {
   private let keychain: Keychain
 
-  init(service: String, accessGroup: String?) {
+  public init(service: String, accessGroup: String?) {
     if let accessGroup {
       keychain = Keychain(service: service, accessGroup: accessGroup)
     } else {
@@ -13,15 +13,15 @@ struct KeychainLocalStorage: AuthLocalStorage {
     }
   }
 
-  func store(key: String, value: Data) throws {
+  public func store(key: String, value: Data) throws {
     try keychain.set(value, key: key)
   }
 
-  func retrieve(key: String) throws -> Data? {
+  public func retrieve(key: String) throws -> Data? {
     try keychain.getData(key)
   }
 
-  func remove(key: String) throws {
+  public func remove(key: String) throws {
     try keychain.remove(key)
   }
 }
