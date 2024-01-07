@@ -173,7 +173,7 @@ final class RequestsTests: XCTestCase {
     let sut = makeSUT(fetch: { request in
       let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
       XCTAssertEqual(authorizationHeader, "bearer accesstoken")
-      return (json(named: "user"), HTTPURLResponse.empty())
+      return (json(named: "user"), HTTPURLResponse())
     })
 
     let currentDate = Date()
@@ -434,11 +434,5 @@ final class RequestsTests: XCTestCase {
       eventEmitter: .mock,
       sessionStorage: .mock
     )
-  }
-}
-
-extension URLResponse {
-  static func empty() -> URLResponse {
-    URLResponse(url: .init(string: "https://arc.net")!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
   }
 }
