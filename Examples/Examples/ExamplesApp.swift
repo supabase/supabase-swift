@@ -19,6 +19,6 @@ struct ExamplesApp: App {
 }
 
 let supabase = SupabaseClient(
-  supabaseURL: Secrets.supabaseURL,
+  supabaseURL: Secrets.supabaseURL.absoluteString,
   supabaseKey: Secrets.supabaseAnonKey
 )
