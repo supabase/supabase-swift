@@ -173,7 +173,7 @@ final class RequestsTests: XCTestCase {
     let sut = makeSUT(fetch: { request in
       let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
       XCTAssertEqual(authorizationHeader, "bearer accesstoken")
-      return (json(named: "user"), HTTPURLResponse())
+      return (json(named: "user"), HTTPURLResponse.empty())
     })
 
     let currentDate = Date()
@@ -435,4 +435,17 @@ final class RequestsTests: XCTestCase {
       sessionStorage: .mock
     )
   }
+}
+
+extension HTTPURLResponse {
+    // Windows and Linux don't have the ability to empty initialize a URLResponse like `URLResponse()` so
+    // We provide a function that can give us the right value on an platform.
+    // See https://github.com/apple/swift-corelibs-foundation/pull/4778
+    fileprivate static func empty() -> URLResponse {
+        #if os(Windows) || os(Linux)
+        URLResponse(url: .init(string: "https://supabase.com")!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
+        #else
+        URLResponse()
+        #endif
+    }
 }

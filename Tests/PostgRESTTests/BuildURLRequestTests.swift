@@ -173,7 +173,14 @@ final class BuildURLRequestTests: XCTestCase {
 }
 
 extension URLResponse {
-  static func empty() -> URLResponse {
-    URLResponse(url: .init(string: "https://arc.net")!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
-  }
+    // Windows and Linux don't have the ability to empty initialize a URLResponse like `URLResponse()` so
+    // We provide a function that can give us the right value on an platform.
+    // See https://github.com/apple/swift-corelibs-foundation/pull/4778
+    fileprivate static func empty() -> URLResponse {
+        #if os(Windows) || os(Linux)
+        URLResponse(url: .init(string: "https://supabase.com")!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
+        #else
+        URLResponse()
+        #endif
+    }
 }
