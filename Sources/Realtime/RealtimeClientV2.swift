@@ -1,5 +1,5 @@
 //
-//  Realtime.swift
+//  RealtimeClientV2.swift
 //
 //
 //  Created by Guilherme Souza on 26/12/23.
@@ -10,37 +10,30 @@ import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
 
-public protocol AuthTokenProvider: Sendable {
-  func authToken() async -> String?
-}
-
 public actor RealtimeClientV2 {
   public struct Configuration: Sendable {
     var url: URL
     var apiKey: String
-    var authTokenProvider: AuthTokenProvider?
+    var headers: [String: String]
     var heartbeatInterval: TimeInterval
     var reconnectDelay: TimeInterval
-    var jwtToken: String?
     var disconnectOnSessionLoss: Bool
     var connectOnSubscribe: Bool
 
     public init(
       url: URL,
       apiKey: String,
-      authTokenProvider: AuthTokenProvider?,
+      headers: [String: String],
       heartbeatInterval: TimeInterval = 15,
       reconnectDelay: TimeInterval = 7,
-      jwtToken: String? = nil,
       disconnectOnSessionLoss: Bool = true,
       connectOnSubscribe: Bool = true
     ) {
       self.url = url
       self.apiKey = apiKey
-      self.authTokenProvider = authTokenProvider
+      self.headers = headers
       self.heartbeatInterval = heartbeatInterval
       self.reconnectDelay = reconnectDelay
-      self.jwtToken = jwtToken
       self.disconnectOnSessionLoss = disconnectOnSessionLoss
       self.connectOnSubscribe = connectOnSubscribe
     }
@@ -52,6 +45,7 @@ public actor RealtimeClientV2 {
     case connected
   }
 
+  var accessToken: String?
   var ref = 0
   var pendingHeartbeatRef: Int?
   var heartbeatTask: Task<Void, Never>?
@@ -62,14 +56,24 @@ public actor RealtimeClientV2 {
   var ws: WebSocketClientProtocol?
 
   let config: Configuration
-  let makeWebSocketClient: (URL) -> WebSocketClientProtocol
+  let makeWebSocketClient: (_ url: URL, _ headers: [String: String]) -> WebSocketClientProtocol
 
   let _status: CurrentValueSubject<Status, Never> = CurrentValueSubject(.disconnected)
   public var status: Status { _status.value }
 
-  init(config: Configuration, makeWebSocketClient: @escaping (URL) -> WebSocketClientProtocol) {
+  init(
+    config: Configuration,
+    makeWebSocketClient: @escaping (_ url: URL, _ headers: [String: String])
+      -> WebSocketClientProtocol
+  ) {
     self.config = config
     self.makeWebSocketClient = makeWebSocketClient
+
+    if let customJWT = config.headers["Authorization"]?.split(separator: " ").last {
+      accessToken = String(customJWT)
+    } else {
+      accessToken = config.apiKey
+    }
   }
 
   deinit {
@@ -82,7 +86,11 @@ public actor RealtimeClientV2 {
   public init(config: Configuration) {
     self.init(
       config: config,
-      makeWebSocketClient: { WebSocketClient(realtimeURL: $0, configuration: .default) }
+      makeWebSocketClient: { url, headers in
+        let configuration = URLSessionConfiguration.default
+        configuration.httpAdditionalHeaders = headers
+        return WebSocketClient(realtimeURL: url, configuration: configuration)
+      }
     )
   }
 
@@ -115,7 +123,7 @@ public actor RealtimeClientV2 {
 
       let realtimeURL = realtimeWebSocketURL
 
-      let ws = makeWebSocketClient(realtimeURL)
+      let ws = makeWebSocketClient(realtimeURL, config.headers)
       self.ws = ws
 
       let connectionStatus = try? await ws.connect().first { _ in true }
@@ -243,6 +251,16 @@ public actor RealtimeClientV2 {
     ws?.cancel()
     ws = nil
     _status.value = .disconnected
+  }
+
+  public func setAuth(_ token: String?) async {
+    accessToken = token
+
+    for channel in subscriptions.values {
+      if let token {
+        await channel.updateAuth(jwt: token)
+      }
+    }
   }
 
   private func onMessage(_ message: RealtimeMessageV2) async {

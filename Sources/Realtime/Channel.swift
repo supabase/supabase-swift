@@ -76,8 +76,7 @@ public actor RealtimeChannelV2 {
     _status.value = .subscribing
     debug("subscribing to channel \(topic)")
 
-    let authToken = await socket?.config.authTokenProvider?.authToken()
-    let currentJwt = socket?.config.jwtToken ?? authToken
+    let accessToken = await socket?.accessToken
 
     let postgresChanges = clientChanges
 
@@ -85,7 +84,7 @@ public actor RealtimeChannelV2 {
       broadcast: config.broadcast,
       presence: config.presence,
       postgresChanges: postgresChanges,
-      accessToken: currentJwt
+      accessToken: accessToken
     )
 
     joinRef = await socket?.makeRef().description
@@ -94,7 +93,7 @@ public actor RealtimeChannelV2 {
 
     await push(
       RealtimeMessageV2(
-        joinRef: nil,
+        joinRef: joinRef,
         ref: joinRef,
         topic: topic,
         event: ChannelEvent.join,
