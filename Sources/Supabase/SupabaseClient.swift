@@ -110,69 +110,6 @@ public final class SupabaseClient: @unchecked Sendable {
     listenForAuthEvents()
   }
 
-  #if os(iOS) || os(macOS) || os(watchOS) || os(tvOS)
-  /// Create a new client.
-  /// - Parameters:
-  ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
-  /// your project dashboard.
-  ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
-  /// your project dashboard.
-  ///   - options: Custom options to configure client's behavior.
-  public convenience init(
-    supabaseURL: String,
-    supabaseKey: String,
-    options: SupabaseClientOptions = .init(auth: .init(storage: KeychainLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)))
-  ) {
-    guard let supabaseURL = URL(string: supabaseURL) else {
-      fatalError("Invalid supabaseURL: \(supabaseURL)")
-    }
-
-    self.init(supabaseURL: supabaseURL, supabaseKey: supabaseKey, options: options)
-  }
-  #endif
-
-  #if os(Windows)
-  /// Create a new client.
-  /// - Parameters:
-  ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
-  /// your project dashboard.
-  ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
-  /// your project dashboard.
-  ///   - options: Custom options to configure client's behavior.
-  public convenience init(
-    supabaseURL: String,
-    supabaseKey: String,
-    options: SupabaseClientOptions = .init(auth: .init(storage: WinCredLocalStorage(service: "supabase.gotrue.swift")))
-  ) {
-    guard let supabaseURL = URL(string: supabaseURL) else {
-      fatalError("Invalid supabaseURL: \(supabaseURL)")
-    }
-
-    self.init(supabaseURL: supabaseURL, supabaseKey: supabaseKey, options: options)
-  }
-  #endif
-
-  #if os(Linux)
-  /// Create a new client.
-  /// - Parameters:
-  ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
-  /// your project dashboard.
-  ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
-  /// your project dashboard.
-  ///   - options: Custom options to configure client's behavior.
-  public convenience init(
-    supabaseURL: String,
-    supabaseKey: String,
-    options: SupabaseClientOptions
-  ) {
-    guard let supabaseURL = URL(string: supabaseURL) else {
-      fatalError("Invalid supabaseURL: \(supabaseURL)")
-    }
-
-    self.init(supabaseURL: supabaseURL, supabaseKey: supabaseKey, options: options)
-  }
-  #endif
-
   deinit {
     listenForAuthEventsTask.value?.cancel()
   }

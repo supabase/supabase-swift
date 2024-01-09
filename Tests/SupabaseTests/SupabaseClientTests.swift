@@ -20,7 +20,7 @@ final class SupabaseClientTests: XCTestCase {
     let customHeaders = ["header_field": "header_value"]
 
     let client = SupabaseClient(
-      supabaseURL: "https://project-ref.supabase.co",
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "ANON_KEY",
       options: SupabaseClientOptions(
         db: SupabaseClientOptions.DatabaseOptions(schema: customSchema),
