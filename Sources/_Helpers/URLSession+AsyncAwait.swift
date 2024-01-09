@@ -43,7 +43,10 @@ private actor URLSessionTaskCancellationHelper {
     case .registered:
       preconditionFailure("Attempting to register another task while the current helper already has a registered task!")
     case .cancelled:
-      preconditionFailure("Attempting to register a task while the current handler is in the cancelled state!")
+      // Run through any cancellation logic which should be a noop as we're already cancelled.
+      actuallyCancel()
+      // Cancel the passed in task since we're already in a cancelled state.
+      task.cancel()
     case .initialized:
       state = .registered(task)
 
@@ -51,6 +54,8 @@ private actor URLSessionTaskCancellationHelper {
   }
 
   private func actuallyCancel() {
+    state = .cancelled
+
     switch state {
     case let .registered(task):
       task.cancel()
