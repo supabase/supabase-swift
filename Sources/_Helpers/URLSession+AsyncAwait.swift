@@ -54,8 +54,7 @@ private actor URLSessionTaskCancellationHelper {
   }
 
   private func actuallyCancel() {
-    state = .cancelled
-
+    // Handle whatever needs to be done based on the current state
     switch state {
     case let .registered(task):
       task.cancel()
@@ -64,6 +63,9 @@ private actor URLSessionTaskCancellationHelper {
     case .initialized:
       break
     }
+
+    // Set state into cancelled to short circuit subsequent cancellations or registrations.
+    state = .cancelled
   }
 }
 
