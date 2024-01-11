@@ -1,7 +1,7 @@
 curl \
 	--request POST \
+	--header "Apikey: dummy.api.key" \
 	--header "Content-Type: application/json" \
 	--header "X-Client-Info: gotrue-swift/x.y.z" \
-	--header "apikey: dummy.api.key" \
 	--data "{\"create_user\":true,\"data\":{\"custom_key\":\"custom_value\"},\"gotrue_meta_security\":{\"captcha_token\":\"dummy-captcha\"},\"phone\":\"+1 202-918-2132\"}" \
 	"http://localhost:54321/auth/v1/otp"

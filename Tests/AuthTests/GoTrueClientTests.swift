@@ -11,13 +11,21 @@ import ConcurrencyExtras
 
 @testable import Auth
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 final class AuthClientTests: XCTestCase {
+  fileprivate var api: APIClient!
+
   func testAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
 
     let events = ActorIsolated([AuthChangeEvent]())
-    let expectation = expectation(description: "onAuthStateChangeEnd")
+
+    // We use a semaphore here instead of the nicer XCTestExpectation as that isn't fully available on Linux.
+    let semaphore = DispatchSemaphore(value: 0)
 
     await withDependencies {
       $0.eventEmitter = .live
@@ -31,11 +39,11 @@ final class AuthClientTests: XCTestCase {
             $0.append(event)
           }
 
-          expectation.fulfill()
+          semaphore.signal()
         }
       }
 
-      await fulfillment(of: [expectation])
+      _ = semaphore.wait(timeout: .now() + 2.0)
 
       let events = await events.value
       XCTAssertEqual(events, [.initialSession])
@@ -149,7 +157,8 @@ final class AuthClientTests: XCTestCase {
   private func makeSUT() -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: clientURL,
-      headers: ["apikey": "dummy.api.key"]
+      headers: ["Apikey": "dummy.api.key"],
+      localStorage: Dependencies.localStorage
     )
 
     let sut = AuthClient(

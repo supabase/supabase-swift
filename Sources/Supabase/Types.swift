@@ -2,6 +2,10 @@ import Auth
 import Foundation
 import PostgREST
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 public struct SupabaseClientOptions: Sendable {
   public let db: DatabaseOptions
   public let auth: AuthOptions
@@ -44,7 +48,7 @@ public struct SupabaseClientOptions: Sendable {
     public let decoder: JSONDecoder
 
     public init(
-      storage: AuthLocalStorage = AuthClient.Configuration.defaultLocalStorage,
+      storage: AuthLocalStorage,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
@@ -71,7 +75,7 @@ public struct SupabaseClientOptions: Sendable {
 
   public init(
     db: DatabaseOptions = .init(),
-    auth: AuthOptions = .init(),
+    auth: AuthOptions,
     global: GlobalOptions = .init()
   ) {
     self.db = db

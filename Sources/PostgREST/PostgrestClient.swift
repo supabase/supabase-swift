@@ -1,6 +1,10 @@
 import Foundation
 @_spi(Internal) import _Helpers
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 /// PostgREST client.
 public actor PostgrestClient {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (

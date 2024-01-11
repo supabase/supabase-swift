@@ -3,17 +3,21 @@ import XCTest
 @_spi(Internal) import _Helpers
 @testable import Functions
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 final class FunctionsClientTests: XCTestCase {
   let url = URL(string: "http://localhost:5432/functions/v1")!
   let apiKey = "supabase.anon.key"
 
-  lazy var sut = FunctionsClient(url: url, headers: ["apikey": apiKey])
+  lazy var sut = FunctionsClient(url: url, headers: ["Apikey": apiKey])
 
   func testInvoke() async throws {
     let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
     let _request = ActorIsolated(URLRequest?.none)
 
-    let sut = FunctionsClient(url: self.url, headers: ["apikey": apiKey]) { request in
+    let sut = FunctionsClient(url: self.url, headers: ["Apikey": apiKey]) { request in
       await _request.setValue(request)
       return (
         Data(), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -31,7 +35,7 @@ final class FunctionsClientTests: XCTestCase {
 
     XCTAssertEqual(request?.url, url)
     XCTAssertEqual(request?.httpMethod, "POST")
-    XCTAssertEqual(request?.value(forHTTPHeaderField: "apikey"), apiKey)
+    XCTAssertEqual(request?.value(forHTTPHeaderField: "Apikey"), apiKey)
     XCTAssertEqual(request?.value(forHTTPHeaderField: "X-Custom-Key"), "value")
     XCTAssertEqual(
       request?.value(forHTTPHeaderField: "X-Client-Info"),
@@ -40,7 +44,7 @@ final class FunctionsClientTests: XCTestCase {
   }
 
   func testInvoke_shouldThrow_URLError_badServerResponse() async {
-    let sut = FunctionsClient(url: url, headers: ["apikey": apiKey]) { _ in
+    let sut = FunctionsClient(url: url, headers: ["Apikey": apiKey]) { _ in
       throw URLError(.badServerResponse)
     }
 
@@ -56,7 +60,7 @@ final class FunctionsClientTests: XCTestCase {
   func testInvoke_shouldThrow_FunctionsError_httpError() async {
     let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
 
-    let sut = FunctionsClient(url: self.url, headers: ["apikey": apiKey]) { _ in
+    let sut = FunctionsClient(url: self.url, headers: ["Apikey": apiKey]) { _ in
       (
         "error".data(using: .utf8)!,
         HTTPURLResponse(url: url, statusCode: 300, httpVersion: nil, headerFields: nil)!
@@ -77,7 +81,7 @@ final class FunctionsClientTests: XCTestCase {
   func testInvoke_shouldThrow_FunctionsError_relayError() async {
     let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
 
-    let sut = FunctionsClient(url: self.url, headers: ["apikey": apiKey]) { _ in
+    let sut = FunctionsClient(url: self.url, headers: ["Apikey": apiKey]) { _ in
       (
         Data(),
         HTTPURLResponse(

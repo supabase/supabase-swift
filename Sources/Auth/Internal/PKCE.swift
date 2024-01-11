@@ -1,10 +1,9 @@
-import CryptoKit
+import Crypto
 import Foundation
 
 enum PKCE {
   static func generateCodeVerifier() -> String {
-    var buffer = [UInt8](repeating: 0, count: 64)
-    _ = SecRandomCopyBytes(kSecRandomDefault, buffer.count, &buffer)
+    let buffer = [UInt8].random(count: 64)
     return Data(buffer).pkceBase64EncodedString()
   }
 
@@ -12,8 +11,10 @@ enum PKCE {
     guard let data = string.data(using: .utf8) else {
       preconditionFailure("provided string should be utf8 encoded.")
     }
-    let hashed = SHA256.hash(data: data)
 
+    var hasher = SHA256()
+    hasher.update(data: data)
+    let hashed = hasher.finalize()
     return Data(hashed).pkceBase64EncodedString()
   }
 }

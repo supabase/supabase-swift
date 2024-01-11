@@ -14,9 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  library:
+  library-darwin:
     runs-on: macos-13
-    name: Test Library
+    name: Test Library (Darwin)
     steps:
       - uses: actions/checkout@v3
       - name: Select Xcode 15.0.1
@@ -25,7 +25,7 @@ jobs:
         run: make test-library
 
   library-evolution:
-    name: Library (evolution)
+    name: Library (evolution, Darwin)
     runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +33,33 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_15.0.1.app
       - name: Build for library evolution
         run: make build-for-library-evolution
+
+  library-linux:
+    runs-on: ubuntu-latest
+    name: Test Library (Linux)
+    steps:
+      - uses: swift-actions/setup-swift@v1
+        with:
+          swift-version: "5.9"
+      - uses: actions/checkout@v3
+      - name: Run Tests
+        run: swift test
+
+  library-windows:
+      runs-on: windows-latest
+      name: Test Library (Windows)
+      steps:
+        # We use BCNY's repo since they have newer builds of Swift
+        # which have fixed libcurl in Foundation.
+        - uses: compnerd/gha-setup-swift@main
+          with:
+            release-tag-name: "20231203.0"
+            github-repo: "thebrowsercompany/swift-build"
+            release-asset-name: installer-amd64.exe
+            github-token: ${{ secrets.GITHUB_TOKEN }}
+        - uses: actions/checkout@v3
+        - name: Run Tests
+          run: swift test
 
   examples:
     runs-on: macos-13
@@ -45,4 +72,3 @@ jobs:
         run: cp Examples/Examples/_Secrets.swift Examples/Examples/Secrets.swift
       - name: Build examples
         run: make build-examples
-        

@@ -7,6 +7,10 @@ import Foundation
 @_exported import Realtime
 @_exported import Storage
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 let version = _Helpers.version
 
 /// Supabase Client.
@@ -68,7 +72,7 @@ public final class SupabaseClient: @unchecked Sendable {
   public init(
     supabaseURL: URL,
     supabaseKey: String,
-    options: SupabaseClientOptions = .init()
+    options: SupabaseClientOptions
   ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
@@ -81,7 +85,7 @@ public final class SupabaseClient: @unchecked Sendable {
     defaultHeaders = [
       "X-Client-Info": "supabase-swift/\(version)",
       "Authorization": "Bearer \(supabaseKey)",
-      "apikey": supabaseKey,
+      "Apikey": supabaseKey,
     ].merging(options.global.headers) { _, new in new }
 
     auth = AuthClient(
@@ -104,25 +108,6 @@ public final class SupabaseClient: @unchecked Sendable {
     )
 
     listenForAuthEvents()
-  }
-
-  /// Create a new client.
-  /// - Parameters:
-  ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
-  /// your project dashboard.
-  ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
-  /// your project dashboard.
-  ///   - options: Custom options to configure client's behavior.
-  public convenience init(
-    supabaseURL: String,
-    supabaseKey: String,
-    options: SupabaseClientOptions = .init()
-  ) {
-    guard let supabaseURL = URL(string: supabaseURL) else {
-      fatalError("Invalid supabaseURL: \(supabaseURL)")
-    }
-
-    self.init(supabaseURL: supabaseURL, supabaseKey: supabaseKey, options: options)
   }
 
   deinit {

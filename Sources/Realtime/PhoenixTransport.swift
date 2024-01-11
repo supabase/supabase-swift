@@ -20,6 +20,10 @@
 
 import Foundation
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 // ----------------------------------------------------------------------
 
 // MARK: - Transport Protocol
@@ -224,8 +228,8 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   }
 
   open func send(data: Data) {
-    task?.send(.string(String(data: data, encoding: .utf8)!)) { _ in
-      // TODO: What is the behavior when an error occurs?
+    Task {
+      try? await task?.send(.string(String(data: data, encoding: .utf8)!))
     }
   }
 
@@ -272,25 +276,25 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   // MARK: - Private
 
   private func receive() {
-    task?.receive { [weak self] result in
-      switch result {
-      case let .success(message):
-        switch message {
+    Task {
+      do {
+        let result = try await task?.receive()
+        switch result {
         case .data:
           print("Data received. This method is unsupported by the Client")
         case let .string(text):
-          self?.delegate?.onMessage(message: text)
+          self.delegate?.onMessage(message: text)
         default:
-          fatalError("Unknown result was received. [\(result)]")
+          fatalError("Unknown result was received. [\(String(describing: result))]")
         }
 
         // Since `.receive()` is only good for a single message, it must
         // be called again after a message is received in order to
         // received the next message.
-        self?.receive()
-      case let .failure(error):
+        self.receive()
+      } catch {
         print("Error when receiving \(error)")
-        self?.abnormalErrorReceived(error, response: nil)
+        self.abnormalErrorReceived(error, response: nil)
       }
     }
   }
