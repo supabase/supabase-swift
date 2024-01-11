@@ -59,7 +59,9 @@ public actor RealtimeClientV2 {
   let makeWebSocketClient: (_ url: URL, _ headers: [String: String]) -> WebSocketClientProtocol
 
   let _status: CurrentValueSubject<Status, Never> = CurrentValueSubject(.disconnected)
-  public var status: Status { _status.value }
+  public var status: AnyPublisher<Status, Never> {
+    _status.share().eraseToAnyPublisher()
+  }
 
   init(
     config: Configuration,
@@ -126,9 +128,12 @@ public actor RealtimeClientV2 {
       let ws = makeWebSocketClient(realtimeURL, config.headers)
       self.ws = ws
 
-      let connectionStatus = try? await ws.connect().first { _ in true }
+      await ws.connect()
 
-      if connectionStatus == .open {
+      let connectionStatus = await ws.status.first { _ in true }
+
+      switch connectionStatus {
+      case .open:
         _status.value = .connected
         debug("Connected to realtime websocket")
         listenForMessages()
@@ -136,7 +141,8 @@ public actor RealtimeClientV2 {
         if reconnect {
           await rejoinChannels()
         }
-      } else {
+
+      case .close, .error, nil:
         debug(
           "Error while trying to connect to realtime websocket. Trying again in \(config.reconnectDelay) seconds."
         )

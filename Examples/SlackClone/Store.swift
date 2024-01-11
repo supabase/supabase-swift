@@ -15,16 +15,38 @@ final class Store {
   private var channelsListener: RealtimeChannelV2?
   private var usersListener: RealtimeChannelV2?
 
+  var messagesListenerStatus: String?
+  var channelsListenerStatus: String?
+  var usersListenerStatus: String?
+  var socketConnectionStatus: String?
+
   var channels: [Channel] = []
   var messages: [Channel.ID: [Message]] = [:]
   var users: [User.ID: User] = [:]
 
   func loadInitialDataAndSetUpListeners() async throws {
+    if messagesListener != nil && channelsListener != nil && usersListener != nil {
+      return
+    }
+
     channels = try await fetchChannels()
+
+
+    Task {
+      for await status in await supabase.realtimeV2.status.values {
+        self.socketConnectionStatus = String(describing: status)
+      }
+    }
 
     Task {
       let channel = await supabase.realtimeV2.channel("public:messages")
       messagesListener = channel
+
+      Task {
+        for await status in await channel.status.values {
+          self.messagesListenerStatus = String(describing: status)
+        }
+      }
 
       let insertions = await channel.postgresChange(InsertAction.self, table: "messages")
       let updates = await channel.postgresChange(UpdateAction.self, table: "messages")
@@ -55,6 +77,12 @@ final class Store {
       let channel = await supabase.realtimeV2.channel("public:users")
       usersListener = channel
 
+      Task {
+        for await status in await channel.status.values {
+          self.usersListenerStatus = String(describing: status)
+        }
+      }
+
       let changes = await channel.postgresChange(AnyAction.self, table: "users")
 
       await channel.subscribe(blockUntilSubscribed: true)
@@ -67,6 +95,12 @@ final class Store {
     Task {
       let channel = await supabase.realtimeV2.channel("public:channels")
       channelsListener = channel
+
+      Task {
+        for await status in await channel.status.values {
+          self.channelsListenerStatus = String(describing: status)
+        }
+      }
 
       let insertions = await channel.postgresChange(InsertAction.self, table: "channels")
       let deletions = await channel.postgresChange(DeleteAction.self, table: "channels")

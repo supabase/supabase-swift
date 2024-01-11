@@ -102,20 +102,8 @@ public actor RealtimeChannelV2 {
     )
 
     if blockUntilSubscribed {
-      var continuation: CheckedContinuation<Void, Never>?
-      let cancellable = status
+      _ = await status.values
         .first { $0 == .subscribed }
-        .sink { _ in
-          continuation?.resume()
-        }
-
-      await withTaskCancellationHandler {
-        await withCheckedContinuation {
-          continuation = $0
-        }
-      } onCancel: {
-        cancellable.cancel()
-      }
     }
   }
 

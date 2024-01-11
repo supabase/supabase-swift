@@ -21,7 +21,7 @@ let decoder: JSONDecoder = {
 }()
 
 let supabase = SupabaseClient(
-  supabaseURL: URL(string: "https://SUPABASE_URL.com")!,
-  supabaseKey: "SUPABASE_ANON_KEY",
+  supabaseURL: URL(string: "https://xxpemjxnvjqnjjermerd.supabase.co")!,
+  supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4cGVtanhudmpxbmpqZXJtZXJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDE1MTc3OTEsImV4cCI6MjAxNzA5Mzc5MX0.SLcEdwQEwZkif49WylKfQQv5ZiWRQdpDm8d2JhvBdtk",
   options: SupabaseClientOptions(db: .init(encoder: encoder, decoder: decoder))
 )

@@ -5,14 +5,17 @@
 //  Created by Guilherme Souza on 29/12/23.
 //
 
+import Combine
 import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
 
 protocol WebSocketClientProtocol: Sendable {
+  var status: AsyncStream<WebSocketClient.ConnectionStatus> { get }
+
   func send(_ message: RealtimeMessageV2) async throws
   func receive() -> AsyncThrowingStream<RealtimeMessageV2, Error>
-  func connect() -> AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error>
+  func connect() async
   func cancel()
 }
 
@@ -22,7 +25,6 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
   struct MutableState {
     var session: URLSession?
     var task: URLSessionWebSocketTask?
-    var statusContinuation: AsyncThrowingStream<ConnectionStatus, Error>.Continuation?
   }
 
   private let realtimeURL: URL
@@ -33,6 +35,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
   enum ConnectionStatus {
     case open
     case close
+    case error(Error)
   }
 
   init(realtimeURL: URL, configuration: URLSessionConfiguration) {
@@ -44,30 +47,32 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
 
   deinit {
     mutableState.withValue {
-      $0.statusContinuation?.finish()
       $0.task?.cancel()
     }
+
+    statusSubject.send(completion: .finished)
   }
 
-  func connect() -> AsyncThrowingStream<ConnectionStatus, Error> {
+  private let statusSubject = PassthroughSubject<ConnectionStatus, Never>()
+
+  var status: AsyncStream<ConnectionStatus> {
+    statusSubject.values
+  }
+
+  func connect() {
     mutableState.withValue {
       $0.session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
       $0.task = $0.session?.webSocketTask(with: realtimeURL)
-
-      let (stream, continuation) = AsyncThrowingStream<ConnectionStatus, Error>.makeStream()
-      $0.statusContinuation = continuation
-
       $0.task?.resume()
-
-      return stream
     }
   }
 
   func cancel() {
     mutableState.withValue {
       $0.task?.cancel()
-      $0.statusContinuation?.finish()
     }
+
+    statusSubject.send(completion: .finished)
   }
 
   func urlSession(
@@ -75,7 +80,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     webSocketTask _: URLSessionWebSocketTask,
     didOpenWithProtocol _: String?
   ) {
-    mutableState.statusContinuation?.yield(.open)
+    statusSubject.send(.open)
   }
 
   func urlSession(
@@ -84,7 +89,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     didCloseWith _: URLSessionWebSocketTask.CloseCode,
     reason _: Data?
   ) {
-    mutableState.statusContinuation?.yield(.close)
+    statusSubject.send(.close)
   }
 
   func urlSession(
@@ -92,7 +97,9 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     task _: URLSessionTask,
     didCompleteWithError error: Error?
   ) {
-    mutableState.statusContinuation?.finish(throwing: error)
+    if let error {
+      statusSubject.send(.error(error))
+    }
   }
 
   func receive() -> AsyncThrowingStream<RealtimeMessageV2, Error> {
