@@ -32,7 +32,7 @@ final class Store {
     channels = try await fetchChannels()
 
     Task {
-      for await status in await supabase.realtimeV2.status.values {
+      for await status in await supabase.realtimeV2.status {
         self.socketConnectionStatus = String(describing: status)
       }
     }
@@ -42,7 +42,7 @@ final class Store {
       messagesListener = channel
 
       Task {
-        for await status in await channel.status.values {
+        for await status in await channel.status {
           self.messagesListenerStatus = String(describing: status)
         }
       }
@@ -77,7 +77,7 @@ final class Store {
       usersListener = channel
 
       Task {
-        for await status in await channel.status.values {
+        for await status in await channel.status {
           self.usersListenerStatus = String(describing: status)
         }
       }
@@ -96,7 +96,7 @@ final class Store {
       channelsListener = channel
 
       Task {
-        for await status in await channel.status.values {
+        for await status in await channel.status {
           self.channelsListenerStatus = String(describing: status)
         }
       }

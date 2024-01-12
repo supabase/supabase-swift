@@ -38,7 +38,7 @@ public actor RealtimeClientV2 {
     }
   }
 
-  public enum Status {
+  public enum Status: Sendable {
     case disconnected
     case connecting
     case connected
