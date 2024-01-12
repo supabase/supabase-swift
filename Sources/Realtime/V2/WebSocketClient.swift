@@ -9,6 +9,10 @@ import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 protocol WebSocketClientProtocol: Sendable {
   var status: AsyncStream<WebSocketClient.ConnectionStatus> { get }
 

@@ -9,6 +9,10 @@ import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 public actor RealtimeClientV2 {
   public struct Configuration: Sendable {
     var url: URL
