@@ -99,8 +99,8 @@ final class CallbackManager: @unchecked Sendable {
       }
     }
 
-    callbacks.forEach {
-      $0.callback(data)
+    for item in callbacks {
+      item.callback(data)
     }
   }
 
@@ -126,8 +126,8 @@ final class CallbackManager: @unchecked Sendable {
       }
       return nil
     }
-    presenceCallbacks.forEach {
-      $0.callback(
+    for presenceCallback in presenceCallbacks {
+      presenceCallback.callback(
         PresenceActionImpl(
           joins: joins,
           leaves: leaves,

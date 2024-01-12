@@ -25,12 +25,11 @@ final class Store {
   var users: [User.ID: User] = [:]
 
   func loadInitialDataAndSetUpListeners() async throws {
-    if messagesListener != nil && channelsListener != nil && usersListener != nil {
+    if messagesListener != nil, channelsListener != nil, usersListener != nil {
       return
     }
 
     channels = try await fetchChannels()
-
 
     Task {
       for await status in await supabase.realtimeV2.status.values {

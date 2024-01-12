@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 29/12/23.
 //
 
-import Combine
 import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
@@ -42,6 +41,10 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     self.realtimeURL = realtimeURL
     self.configuration = configuration
 
+    let (stream, continuation) = AsyncStream<ConnectionStatus>.makeStream()
+    status = stream
+    self.continuation = continuation
+
     super.init()
   }
 
@@ -50,14 +53,11 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
       $0.task?.cancel()
     }
 
-    statusSubject.send(completion: .finished)
+    continuation.finish()
   }
 
-  private let statusSubject = PassthroughSubject<ConnectionStatus, Never>()
-
-  var status: AsyncStream<ConnectionStatus> {
-    statusSubject.values
-  }
+  private let continuation: AsyncStream<ConnectionStatus>.Continuation
+  var status: AsyncStream<ConnectionStatus>
 
   func connect() {
     mutableState.withValue {
@@ -72,7 +72,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
       $0.task?.cancel()
     }
 
-    statusSubject.send(completion: .finished)
+    continuation.finish()
   }
 
   func urlSession(
@@ -80,7 +80,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     webSocketTask _: URLSessionWebSocketTask,
     didOpenWithProtocol _: String?
   ) {
-    statusSubject.send(.open)
+    continuation.yield(.open)
   }
 
   func urlSession(
@@ -89,7 +89,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     didCloseWith _: URLSessionWebSocketTask.CloseCode,
     reason _: Data?
   ) {
-    statusSubject.send(.close)
+    continuation.yield(.close)
   }
 
   func urlSession(
@@ -98,7 +98,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     didCompleteWithError error: Error?
   ) {
     if let error {
-      statusSubject.send(.error(error))
+      continuation.yield(.error(error))
     }
   }
 

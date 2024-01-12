@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
-import Combine
 import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
@@ -58,9 +57,10 @@ public actor RealtimeClientV2 {
   let config: Configuration
   let makeWebSocketClient: (_ url: URL, _ headers: [String: String]) -> WebSocketClientProtocol
 
-  let _status: CurrentValueSubject<Status, Never> = CurrentValueSubject(.disconnected)
-  public var status: AnyPublisher<Status, Never> {
-    _status.share().eraseToAnyPublisher()
+  let statusStreamManager = AsyncStreamManager<Status>()
+
+  public var status: AsyncStream<Status> {
+    statusStreamManager.makeStream()
   }
 
   init(
@@ -116,12 +116,12 @@ public actor RealtimeClientV2 {
         }
       }
 
-      if _status.value == .connected {
+      if statusStreamManager.value == .connected {
         debug("Websocket already connected")
         return
       }
 
-      _status.value = .connecting
+      statusStreamManager.yield(.connecting)
 
       let realtimeURL = realtimeWebSocketURL
 
@@ -134,7 +134,7 @@ public actor RealtimeClientV2 {
 
       switch connectionStatus {
       case .open:
-        _status.value = .connected
+        statusStreamManager.yield(.connected)
         debug("Connected to realtime websocket")
         listenForMessages()
         startHeartbeating()
@@ -176,7 +176,7 @@ public actor RealtimeClientV2 {
   }
 
   public func removeChannel(_ channel: RealtimeChannelV2) async {
-    if channel._status.value == .subscribed {
+    if channel.statusStreamManager.value == .subscribed {
       await channel.unsubscribe()
     }
 
@@ -256,7 +256,7 @@ public actor RealtimeClientV2 {
     heartbeatTask?.cancel()
     ws?.cancel()
     ws = nil
-    _status.value = .disconnected
+    statusStreamManager.yield(.disconnected)
   }
 
   public func setAuth(_ token: String?) async {
