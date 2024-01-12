@@ -238,7 +238,7 @@ public final class Presence {
         onLeave: self.caller.onLeave
       )
 
-      self.pendingDiffs.forEach { diff in
+      for diff in self.pendingDiffs {
         self.state = Presence.syncDiff(
           self.state,
           diff: diff,
@@ -305,13 +305,13 @@ public final class Presence {
     var leaves: Presence.State = [:]
     var joins: Presence.State = [:]
 
-    state.forEach { key, presence in
+    for (key, presence) in state {
       if newState[key] == nil {
         leaves[key] = presence
       }
     }
 
-    newState.forEach { key, newPresence in
+    for (key, newPresence) in newState {
       if let currentPresence = state[key] {
         let newRefs = newPresence["metas"]!.map { $0["phx_ref"] as! String }
         let curRefs = currentPresence["metas"]!.map { $0["phx_ref"] as! String }

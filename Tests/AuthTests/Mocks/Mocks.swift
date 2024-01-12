@@ -71,7 +71,7 @@ extension APIClient {
 struct InsecureMockLocalStorage: AuthLocalStorage {
   private let defaults: UserDefaults
 
-  init(service: String, accessGroup: String?) {
+  init(service: String, accessGroup _: String?) {
     guard let defaults = UserDefaults(suiteName: service) else {
       fatalError("Unable to create defautls for service: \(service)")
     }
@@ -98,12 +98,12 @@ struct InsecureMockLocalStorage: AuthLocalStorage {
 extension Dependencies {
   static let localStorage: some AuthLocalStorage = {
     #if os(iOS) || os(macOS) || os(watchOS) || os(tvOS)
-    KeychainLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
+      KeychainLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
     #elseif os(Windows)
-    WinCredLocalStorage(service: "supabase.gotrue.swift")
+      WinCredLocalStorage(service: "supabase.gotrue.swift")
     #else
-    // Only use an insecure mock when needed for testing
-    InsecureMockLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
+      // Only use an insecure mock when needed for testing
+      InsecureMockLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
     #endif
   }()
 

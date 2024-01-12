@@ -18,12 +18,12 @@ var goTrueDependencies: [Target.Dependency] = [
 ]
 
 #if !os(Windows) && !os(Linux)
-dependencies += [
-  .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
-]
-goTrueDependencies += [
-  .product(name: "KeychainAccess", package: "KeychainAccess"),
-]
+  dependencies += [
+    .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
+  ]
+  goTrueDependencies += [
+    .product(name: "KeychainAccess", package: "KeychainAccess"),
+  ]
 #endif
 
 let package = Package(

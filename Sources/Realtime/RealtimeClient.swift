@@ -23,7 +23,7 @@ import Foundation
 import ConcurrencyExtras
 
 #if canImport(FoundationNetworking)
-import FoundationNetworking
+  import FoundationNetworking
 #endif
 
 public enum SocketError: Error {
@@ -842,7 +842,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   /// Triggers an error event to all of the connected Channels
   func triggerChannelError() {
-    channels.forEach { channel in
+    for channel in channels {
       // Only trigger a channel error if it is in an "opened" state
       if !(channel.isErrored || channel.isLeaving || channel.isClosed) {
         channel.trigger(event: ChannelEvent.error)

@@ -3,7 +3,7 @@ import Foundation
 import PostgREST
 
 #if canImport(FoundationNetworking)
-import FoundationNetworking
+  import FoundationNetworking
 #endif
 
 public struct SupabaseClientOptions: Sendable {

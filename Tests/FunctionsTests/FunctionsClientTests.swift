@@ -4,7 +4,7 @@ import XCTest
 @testable import Functions
 
 #if canImport(FoundationNetworking)
-import FoundationNetworking
+  import FoundationNetworking
 #endif
 
 final class FunctionsClientTests: XCTestCase {

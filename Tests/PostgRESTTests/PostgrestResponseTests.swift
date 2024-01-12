@@ -3,7 +3,7 @@ import XCTest
 @testable import PostgREST
 
 #if canImport(FoundationNetworking)
-import FoundationNetworking
+  import FoundationNetworking
 #endif
 
 class PostgrestResponseTests: XCTestCase {

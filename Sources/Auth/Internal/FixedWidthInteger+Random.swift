@@ -1,30 +1,27 @@
 import Foundation
 
-// Borrowed from the Vapor project, https://github.com/vapor/vapor/blob/main/Sources/Vapor/Utilities/Array%2BRandom.swift#L14
+// Borrowed from the Vapor project,
+// https://github.com/vapor/vapor/blob/main/Sources/Vapor/Utilities/Array%2BRandom.swift#L14
 extension FixedWidthInteger {
-    internal static func random() -> Self {
-        return Self.random(in: .min ... .max)
-    }
+  static func random() -> Self {
+    random(in: .min ... .max)
+  }
 
-    internal static func random<T>(using generator: inout T) -> Self
-        where T : RandomNumberGenerator
-    {
-        return Self.random(in: .min ... .max, using: &generator)
-    }
+  static func random(using generator: inout some RandomNumberGenerator) -> Self {
+    random(in: .min ... .max, using: &generator)
+  }
 }
 
 extension Array where Element: FixedWidthInteger {
-    internal static func random(count: Int) -> [Element] {
-        var array: [Element] = .init(repeating: 0, count: count)
-        (0..<count).forEach { array[$0] = Element.random() }
-        return array
-    }
+  static func random(count: Int) -> [Element] {
+    var array: [Element] = .init(repeating: 0, count: count)
+    (0 ..< count).forEach { array[$0] = Element.random() }
+    return array
+  }
 
-    internal static func random<T>(count: Int, using generator: inout T) -> [Element]
-        where T: RandomNumberGenerator
-    {
-        var array: [Element] = .init(repeating: 0, count: count)
-        (0..<count).forEach { array[$0] = Element.random(using: &generator) }
-        return array
-    }
+  static func random(count: Int, using generator: inout some RandomNumberGenerator) -> [Element] {
+    var array: [Element] = .init(repeating: 0, count: count)
+    (0 ..< count).forEach { array[$0] = Element.random(using: &generator) }
+    return array
+  }
 }

@@ -239,7 +239,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
 
   public func match(_ query: [String: URLQueryRepresentable]) -> PostgrestFilterBuilder {
     mutableState.withValue { mutableState in
-      query.forEach { key, value in
+      for (key, value) in query {
         mutableState.request.query.append(URLQueryItem(
           name: key,
           value: "eq.\(value.queryValue)"

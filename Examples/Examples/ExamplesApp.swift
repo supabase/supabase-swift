@@ -21,5 +21,8 @@ struct ExamplesApp: App {
 let supabase = SupabaseClient(
   supabaseURL: Secrets.supabaseURL,
   supabaseKey: Secrets.supabaseAnonKey,
-  options: .init(auth: .init(storage: KeychainLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)))
+  options: .init(auth: .init(storage: KeychainLocalStorage(
+    service: "supabase.gotrue.swift",
+    accessGroup: nil
+  )))
 )

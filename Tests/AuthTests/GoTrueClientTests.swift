@@ -12,7 +12,7 @@ import ConcurrencyExtras
 @testable import Auth
 
 #if canImport(FoundationNetworking)
-import FoundationNetworking
+  import FoundationNetworking
 #endif
 
 final class AuthClientTests: XCTestCase {
@@ -24,7 +24,8 @@ final class AuthClientTests: XCTestCase {
 
     let events = ActorIsolated([AuthChangeEvent]())
 
-    // We use a semaphore here instead of the nicer XCTestExpectation as that isn't fully available on Linux.
+    // We use a semaphore here instead of the nicer XCTestExpectation as that isn't fully available
+    // on Linux.
     let semaphore = DispatchSemaphore(value: 0)
 
     await withDependencies {

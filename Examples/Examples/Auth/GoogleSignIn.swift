@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 22/12/23.
 //
 
-import SwiftUI
 import AuthenticationServices
+import SwiftUI
 
 struct GoogleSignIn: View {
   @Environment(\.webAuthenticationSession) var webAuthenticationSession

@@ -1,7 +1,7 @@
 import Foundation
 
 #if os(Linux) || os(Windows)
-import FoundationNetworking
+  import FoundationNetworking
 #endif
 
 @_spi(Internal)
