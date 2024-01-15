@@ -1,3 +1,4 @@
+import _Helpers
 import Auth
 import Foundation
 import PostgREST
@@ -67,9 +68,17 @@ public struct SupabaseClientOptions: Sendable {
     /// A session to use for making requests, defaults to `URLSession.shared`.
     public let session: URLSession
 
-    public init(headers: [String: String] = [:], session: URLSession = .shared) {
+    /// The log handler instance to use across all Supabase sub-packages.
+    public let logHandler: SupabaseLogHandler
+
+    public init(
+      headers: [String: String] = [:],
+      session: URLSession = .shared,
+      logHandler: SupabaseLogHandler = DefaultSupabaseLogHandler.shared
+    ) {
       self.headers = headers
       self.session = session
+      self.logHandler = logHandler
     }
   }
 

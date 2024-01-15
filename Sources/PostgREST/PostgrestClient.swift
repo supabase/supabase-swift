@@ -20,6 +20,8 @@ public actor PostgrestClient {
     public var encoder: JSONEncoder
     public var decoder: JSONDecoder
 
+    let logger: SupabaseLogger
+
     /// Initializes a new configuration for the PostgREST client.
     /// - Parameters:
     ///   - url: The URL of the PostgREST server.
@@ -32,6 +34,7 @@ public actor PostgrestClient {
       url: URL,
       schema: String? = nil,
       headers: [String: String] = [:],
+      logHandler: SupabaseLogHandler = DefaultSupabaseLogHandler.shared,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
@@ -42,6 +45,8 @@ public actor PostgrestClient {
       self.fetch = fetch
       self.encoder = encoder
       self.decoder = decoder
+
+      logger = SupabaseLogger(system: "Postgrest", handler: logHandler)
     }
   }
 
@@ -67,6 +72,7 @@ public actor PostgrestClient {
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
+    logHandler: SupabaseLogHandler = DefaultSupabaseLogHandler.shared,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
@@ -76,6 +82,7 @@ public actor PostgrestClient {
         url: url,
         schema: schema,
         headers: headers,
+        logHandler: logHandler,
         fetch: fetch,
         encoder: encoder,
         decoder: decoder
