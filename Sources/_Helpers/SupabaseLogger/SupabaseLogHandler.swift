@@ -43,3 +43,9 @@ public final class DefaultSupabaseLogHandler: SupabaseLogHandler {
     debugPrint(entry.description)
   }
 }
+
+@_spi(Internal)
+public struct NoopSupabaseLogHandler: SupabaseLogHandler {
+  public init() {}
+  public func didLog(_: SupabaseLogger.Entry) {}
+}

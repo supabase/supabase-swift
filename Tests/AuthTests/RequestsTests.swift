@@ -430,7 +430,8 @@ final class RequestsTests: XCTestCase {
       codeVerifierStorage: .mock,
       api: api,
       eventEmitter: .mock,
-      sessionStorage: .mock
+      sessionStorage: .mock,
+      logger: SupabaseLogger(system: "AuthClientTests", handler: NoopSupabaseLogHandler())
     )
   }
 }
