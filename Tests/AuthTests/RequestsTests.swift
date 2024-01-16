@@ -422,7 +422,7 @@ final class RequestsTests: XCTestCase {
       }
     )
 
-    let api = APIClient.live(http: HTTPClient(fetchHandler: configuration.fetch))
+    let api = APIClient.live(http: HTTPClient(logger: nil, fetchHandler: configuration.fetch))
 
     return AuthClient(
       configuration: configuration,
@@ -430,7 +430,8 @@ final class RequestsTests: XCTestCase {
       codeVerifierStorage: .mock,
       api: api,
       eventEmitter: .mock,
-      sessionStorage: .mock
+      sessionStorage: .mock,
+      logger: nil
     )
   }
 }

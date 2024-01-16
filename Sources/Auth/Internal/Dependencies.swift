@@ -1,3 +1,4 @@
+@_spi(Internal) import _Helpers
 import ConcurrencyExtras
 import Foundation
 
@@ -12,4 +13,5 @@ struct Dependencies: Sendable {
   var sessionRefresher: SessionRefresher
   var codeVerifierStorage: CodeVerifierStorage
   var currentDate: @Sendable () -> Date = { Date() }
+  var logger: SupabaseLogger?
 }

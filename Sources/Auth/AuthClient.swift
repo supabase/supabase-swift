@@ -16,6 +16,7 @@ public actor AuthClient {
     public var headers: [String: String]
     public let flowType: AuthFlowType
     public let localStorage: AuthLocalStorage
+    public let logger: SupabaseLogger?
     public let encoder: JSONEncoder
     public let decoder: JSONDecoder
     public let fetch: FetchHandler
@@ -27,6 +28,7 @@ public actor AuthClient {
     ///   - headers: Custom headers to be included in requests.
     ///   - flowType: The authentication flow type.
     ///   - localStorage: The storage mechanism for local data.
+    ///   - logger: The logger to use.
     ///   - encoder: The JSON encoder to use for encoding requests.
     ///   - decoder: The JSON decoder to use for decoding responses.
     ///   - fetch: The asynchronous fetch handler for network requests.
@@ -35,6 +37,7 @@ public actor AuthClient {
       headers: [String: String] = [:],
       flowType: AuthFlowType = Configuration.defaultFlowType,
       localStorage: AuthLocalStorage,
+      logger: SupabaseLogger? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -45,6 +48,7 @@ public actor AuthClient {
       self.headers = headers
       self.flowType = flowType
       self.localStorage = localStorage
+      self.logger = logger
       self.encoder = encoder
       self.decoder = decoder
       self.fetch = fetch
@@ -75,6 +79,10 @@ public actor AuthClient {
     Dependencies.current.value!.currentDate
   }
 
+  private var logger: SupabaseLogger? {
+    Dependencies.current.value!.logger
+  }
+
   /// Returns the session, refreshing it if necessary.
   ///
   /// If no session can be found, a ``AuthError/sessionNotFound`` error is thrown.
@@ -94,6 +102,7 @@ public actor AuthClient {
   ///   - headers: Custom headers to be included in requests.
   ///   - flowType: The authentication flow type..
   ///   - localStorage: The storage mechanism for local data..
+  ///   - logger: The logger to use.
   ///   - encoder: The JSON encoder to use for encoding requests.
   ///   - decoder: The JSON decoder to use for decoding responses.
   ///   - fetch: The asynchronous fetch handler for network requests.
@@ -102,6 +111,7 @@ public actor AuthClient {
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
     localStorage: AuthLocalStorage,
+    logger: SupabaseLogger? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -112,6 +122,7 @@ public actor AuthClient {
         headers: headers,
         flowType: flowType,
         localStorage: localStorage,
+        logger: logger,
         encoder: encoder,
         decoder: decoder,
         fetch: fetch
@@ -124,7 +135,10 @@ public actor AuthClient {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    let api = APIClient.live(http: HTTPClient(fetchHandler: configuration.fetch))
+    let api = APIClient.live(http: HTTPClient(
+      logger: configuration.logger,
+      fetchHandler: configuration.fetch
+    ))
 
     self.init(
       configuration: configuration,
@@ -132,7 +146,8 @@ public actor AuthClient {
       codeVerifierStorage: .live,
       api: api,
       eventEmitter: .live,
-      sessionStorage: .live
+      sessionStorage: .live,
+      logger: configuration.logger
     )
   }
 
@@ -143,7 +158,8 @@ public actor AuthClient {
     codeVerifierStorage: CodeVerifierStorage,
     api: APIClient,
     eventEmitter: EventEmitter,
-    sessionStorage: SessionStorage
+    sessionStorage: SessionStorage,
+    logger: SupabaseLogger?
   ) {
     mfa = AuthMFA()
 
@@ -159,7 +175,8 @@ public actor AuthClient {
             try await self?.refreshSession(refreshToken: $0) ?? .empty
           }
         ),
-        codeVerifierStorage: codeVerifierStorage
+        codeVerifierStorage: codeVerifierStorage,
+        logger: logger
       )
     )
   }
@@ -172,9 +189,11 @@ public actor AuthClient {
     session: Session?
   )> {
     let (id, stream) = eventEmitter.attachListener()
+    logger?.debug("auth state change listener with id '\(id.uuidString)' attached.")
 
     Task { [id] in
       await emitInitialSession(forStreamWithID: id)
+      logger?.debug("initial session for listener with id '\(id.uuidString)' emitted.")
     }
 
     return stream

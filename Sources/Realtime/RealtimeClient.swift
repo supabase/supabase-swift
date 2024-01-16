@@ -186,14 +186,16 @@ public class RealtimeClient: PhoenixTransportDelegate {
     _ endPoint: String,
     headers: [String: String] = [:],
     params: Payload? = nil,
-    vsn: String = Defaults.vsn
+    vsn: String = Defaults.vsn,
+    logger: SupabaseLogger? = nil
   ) {
     self.init(
       endPoint: endPoint,
       headers: headers,
       transport: { url in URLSessionTransport(url: url) },
       paramsClosure: { params },
-      vsn: vsn
+      vsn: vsn,
+      logger: logger
     )
   }
 
@@ -202,14 +204,16 @@ public class RealtimeClient: PhoenixTransportDelegate {
     _ endPoint: String,
     headers: [String: String] = [:],
     paramsClosure: PayloadClosure?,
-    vsn: String = Defaults.vsn
+    vsn: String = Defaults.vsn,
+    logger: SupabaseLogger? = nil
   ) {
     self.init(
       endPoint: endPoint,
       headers: headers,
       transport: { url in URLSessionTransport(url: url) },
       paramsClosure: paramsClosure,
-      vsn: vsn
+      vsn: vsn,
+      logger: logger
     )
   }
 
@@ -218,7 +222,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
     headers: [String: String] = [:],
     transport: @escaping ((URL) -> PhoenixTransport),
     paramsClosure: PayloadClosure? = nil,
-    vsn: String = Defaults.vsn
+    vsn: String = Defaults.vsn,
+    logger: SupabaseLogger? = nil
   ) {
     self.transport = transport
     self.paramsClosure = paramsClosure
@@ -230,7 +235,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       headers["X-Client-Info"] = "realtime-swift/\(version)"
     }
     self.headers = headers
-    http = HTTPClient(fetchHandler: { try await URLSession.shared.data(for: $0) })
+    http = HTTPClient(logger: logger, fetchHandler: { try await URLSession.shared.data(for: $0) })
 
     let params = paramsClosure?()
     if let jwt = (params?["Authorization"] as? String)?.split(separator: " ").last {

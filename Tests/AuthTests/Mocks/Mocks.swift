@@ -114,7 +114,8 @@ extension Dependencies {
     eventEmitter: .mock,
     sessionStorage: .mock,
     sessionRefresher: .mock,
-    codeVerifierStorage: .mock
+    codeVerifierStorage: .mock,
+    logger: nil
   )
 }
 

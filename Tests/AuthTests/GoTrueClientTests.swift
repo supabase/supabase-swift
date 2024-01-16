@@ -24,9 +24,7 @@ final class AuthClientTests: XCTestCase {
 
     let events = ActorIsolated([AuthChangeEvent]())
 
-    // We use a semaphore here instead of the nicer XCTestExpectation as that isn't fully available
-    // on Linux.
-    let semaphore = DispatchSemaphore(value: 0)
+    let (stream, continuation) = AsyncStream<Void>.makeStream()
 
     await withDependencies {
       $0.eventEmitter = .live
@@ -40,11 +38,11 @@ final class AuthClientTests: XCTestCase {
             $0.append(event)
           }
 
-          semaphore.signal()
+          continuation.yield()
         }
       }
 
-      _ = semaphore.wait(timeout: .now() + 2.0)
+      _ = await stream.first { _ in true }
 
       let events = await events.value
       XCTAssertEqual(events, [.initialSession])
@@ -168,7 +166,8 @@ final class AuthClientTests: XCTestCase {
       codeVerifierStorage: .mock,
       api: .mock,
       eventEmitter: .mock,
-      sessionStorage: .mock
+      sessionStorage: .mock,
+      logger: nil
     )
 
     addTeardownBlock { [weak sut] in
