@@ -5,7 +5,12 @@
 //  Created by Guilherme Souza on 14/12/23.
 //
 
+import _Helpers
 import Foundation
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 
 @available(*, deprecated, renamed: "AuthClient")
 public typealias GoTrueClient = AuthClient

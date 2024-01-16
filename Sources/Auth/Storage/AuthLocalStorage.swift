@@ -7,14 +7,13 @@ public protocol AuthLocalStorage: Sendable {
 }
 
 extension AuthClient.Configuration {
-  public static let defaultLocalStorage: AuthLocalStorage = {
-    #if os(iOS) || os(macOS) || os(watchOS) || os(tvOS)
-      KeychainLocalStorage(
-        service: "supabase.gotrue.swift",
-        accessGroup: nil
-      )
-    #elseif os(Windows)
+  #if os(iOS) || os(macOS) || os(watchOS) || os(tvOS)
+    public static let defaultLocalStorage: AuthLocalStorage = KeychainLocalStorage(
+      service: "supabase.gotrue.swift",
+      accessGroup: nil
+    )
+  #elseif os(Windows)
+    public static let defaultLocalStorage: AuthLocalStorage =
       WinCredLocalStorage(service: "supabase.gotrue.swift")
-    #endif
-  }()
+  #endif
 }
