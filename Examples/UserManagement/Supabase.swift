@@ -13,9 +13,6 @@ let supabase = SupabaseClient(
   supabaseURL: URL(string: "https://PROJECT_ID.supabase.co")!,
   supabaseKey: "YOUR_SUPABASE_ANON_KEY",
   options: .init(
-    auth: .init(
-      storage: KeychainLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
-    ),
     global: .init(logger: AppLogger())
   )
 )

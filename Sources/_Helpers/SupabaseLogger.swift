@@ -25,6 +25,25 @@ public struct SupabaseLogMessage: Codable, CustomStringConvertible {
   public let line: UInt
   public let timestamp: TimeInterval
 
+  @usableFromInline
+  init(
+    system: String,
+    level: SupabaseLogLevel,
+    message: String,
+    fileID: String,
+    function: String,
+    line: UInt,
+    timestamp: TimeInterval
+  ) {
+    self.system = system
+    self.level = level
+    self.message = message
+    self.fileID = fileID
+    self.function = function
+    self.line = line
+    self.timestamp = timestamp
+  }
+
   public var description: String {
     let date = iso8601Formatter.string(from: Date(timeIntervalSince1970: timestamp))
     let file = fileID.split(separator: ".", maxSplits: 1).first.map(String.init) ?? fileID
@@ -43,6 +62,7 @@ public protocol SupabaseLogger: Sendable {
 }
 
 extension SupabaseLogger {
+  @inlinable
   public func log(
     _ level: SupabaseLogLevel,
     message: @autoclosure () -> String,
@@ -65,6 +85,7 @@ extension SupabaseLogger {
     )
   }
 
+  @inlinable
   public func verbose(
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
@@ -74,6 +95,7 @@ extension SupabaseLogger {
     log(.verbose, message: message(), fileID: fileID, function: function, line: line)
   }
 
+  @inlinable
   public func debug(
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
@@ -83,6 +105,7 @@ extension SupabaseLogger {
     log(.debug, message: message(), fileID: fileID, function: function, line: line)
   }
 
+  @inlinable
   public func warning(
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
@@ -92,6 +115,7 @@ extension SupabaseLogger {
     log(.warning, message: message(), fileID: fileID, function: function, line: line)
   }
 
+  @inlinable
   public func error(
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,

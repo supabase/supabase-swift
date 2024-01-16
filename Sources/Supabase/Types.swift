@@ -92,3 +92,33 @@ public struct SupabaseClientOptions: Sendable {
     self.global = global
   }
 }
+
+extension SupabaseClientOptions {
+  #if !os(Linux)
+    public init(
+      db: DatabaseOptions = .init(),
+      global: GlobalOptions = .init()
+    ) {
+      self.db = db
+      auth = .init()
+      self.global = global
+    }
+  #endif
+}
+
+extension SupabaseClientOptions.AuthOptions {
+  #if !os(Linux)
+    public init(
+      flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
+      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
+      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
+    ) {
+      self.init(
+        storage: AuthClient.Configuration.defaultAuthLocalStorage,
+        flowType: flowType,
+        encoder: encoder,
+        decoder: decoder
+      )
+    }
+  #endif
+}
