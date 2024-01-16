@@ -115,13 +115,7 @@ extension Dependencies {
     sessionStorage: .mock,
     sessionRefresher: .mock,
     codeVerifierStorage: .mock,
-    logger: SupabaseLogger(
-      system: "AuthClientTests",
-      configuration: SupabaseLoggingConfiguration(
-        logFile: URL(fileURLWithPath: NSTemporaryDirectory())
-          .appendingPathComponent("supabase-swift.log")
-      )
-    )
+    logger: nil
   )
 }
 

@@ -11,6 +11,10 @@ import Foundation
   import FoundationNetworking
 #endif
 
+public typealias SupabaseLogger = _Helpers.SupabaseLogger
+public typealias SupabaseLogLevel = _Helpers.SupabaseLogLevel
+public typealias SupabaseLogMessage = _Helpers.SupabaseLogMessage
+
 let version = _Helpers.version
 
 /// Supabase Client.
@@ -31,7 +35,7 @@ public final class SupabaseClient: @unchecked Sendable {
     url: databaseURL,
     schema: options.db.schema,
     headers: defaultHeaders,
-    loggingConfiguration: options.global.loggingConfiguration,
+    logger: options.global.logger,
     fetch: fetchWithAuth,
     encoder: options.db.encoder,
     decoder: options.db.decoder
@@ -42,7 +46,8 @@ public final class SupabaseClient: @unchecked Sendable {
     configuration: StorageClientConfiguration(
       url: storageURL,
       headers: defaultHeaders,
-      session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth)
+      session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+      logger: options.global.logger
     )
   )
 
@@ -94,7 +99,7 @@ public final class SupabaseClient: @unchecked Sendable {
       headers: defaultHeaders,
       flowType: options.auth.flowType,
       localStorage: options.auth.storage,
-      loggingConfiguration: options.global.loggingConfiguration,
+      logger: options.global.logger,
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
       fetch: {
@@ -106,7 +111,8 @@ public final class SupabaseClient: @unchecked Sendable {
     realtime = RealtimeClient(
       supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
       headers: defaultHeaders,
-      params: defaultHeaders
+      params: defaultHeaders,
+      logger: options.global.logger
     )
 
     listenForAuthEvents()

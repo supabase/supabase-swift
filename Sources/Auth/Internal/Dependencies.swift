@@ -13,5 +13,5 @@ struct Dependencies: Sendable {
   var sessionRefresher: SessionRefresher
   var codeVerifierStorage: CodeVerifierStorage
   var currentDate: @Sendable () -> Date = { Date() }
-  var logger: SupabaseLogger
+  var logger: SupabaseLogger?
 }

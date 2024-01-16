@@ -68,17 +68,17 @@ public struct SupabaseClientOptions: Sendable {
     /// A session to use for making requests, defaults to `URLSession.shared`.
     public let session: URLSession
 
-    /// The log configuration to use across all Supabase sub-packages.
-    public let loggingConfiguration: SupabaseLoggingConfiguration
+    /// The logger  to use across all Supabase sub-packages.
+    public let logger: SupabaseLogger?
 
     public init(
       headers: [String: String] = [:],
       session: URLSession = .shared,
-      loggingConfiguration: SupabaseLoggingConfiguration = SupabaseLoggingConfiguration()
+      logger: SupabaseLogger? = nil
     ) {
       self.headers = headers
       self.session = session
-      self.loggingConfiguration = loggingConfiguration
+      self.logger = logger
     }
   }
 
