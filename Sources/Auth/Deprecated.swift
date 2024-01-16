@@ -45,3 +45,79 @@ extension JSONDecoder {
     AuthClient.Configuration.jsonDecoder
   }
 }
+
+extension AuthClient.Configuration {
+  /// Initializes a AuthClient Configuration with optional parameters.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server.
+  ///   - headers: Custom headers to be included in requests.
+  ///   - flowType: The authentication flow type.
+  ///   - localStorage: The storage mechanism for local data.
+  ///   - encoder: The JSON encoder to use for encoding requests.
+  ///   - decoder: The JSON decoder to use for decoding responses.
+  ///   - fetch: The asynchronous fetch handler for network requests.
+  @available(
+    *,
+    deprecated,
+    message: "Replace usages of this initializer with new init(url:headers:flowType:localStorage:logger:encoder:decoder:fetch)"
+  )
+  public init(
+    url: URL,
+    headers: [String: String] = [:],
+    flowType: AuthFlowType = Self.defaultFlowType,
+    localStorage: AuthLocalStorage,
+    encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
+    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
+    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) }
+  ) {
+    self.init(
+      url: url,
+      headers: headers,
+      flowType: flowType,
+      localStorage: localStorage,
+      logger: nil,
+      encoder: encoder,
+      decoder: decoder,
+      fetch: fetch
+    )
+  }
+}
+
+extension AuthClient {
+  /// Initializes a AuthClient Configuration with optional parameters.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server.
+  ///   - headers: Custom headers to be included in requests.
+  ///   - flowType: The authentication flow type.
+  ///   - localStorage: The storage mechanism for local data.
+  ///   - encoder: The JSON encoder to use for encoding requests.
+  ///   - decoder: The JSON decoder to use for decoding responses.
+  ///   - fetch: The asynchronous fetch handler for network requests.
+  @available(
+    *,
+    deprecated,
+    message: "Replace usages of this initializer with new init(url:headers:flowType:localStorage:logger:encoder:decoder:fetch)"
+  )
+  public init(
+    url: URL,
+    headers: [String: String] = [:],
+    flowType: AuthFlowType = Configuration.defaultFlowType,
+    localStorage: AuthLocalStorage,
+    encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
+    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
+    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) }
+  ) {
+    self.init(
+      url: url,
+      headers: headers,
+      flowType: flowType,
+      localStorage: localStorage,
+      logger: nil,
+      encoder: encoder,
+      decoder: decoder,
+      fetch: fetch
+    )
+  }
+}

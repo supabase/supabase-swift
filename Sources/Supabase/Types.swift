@@ -114,7 +114,7 @@ extension SupabaseClientOptions.AuthOptions {
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
     ) {
       self.init(
-        storage: AuthClient.Configuration.defaultAuthLocalStorage,
+        storage: AuthClient.Configuration.defaultLocalStorage,
         flowType: flowType,
         encoder: encoder,
         decoder: decoder
