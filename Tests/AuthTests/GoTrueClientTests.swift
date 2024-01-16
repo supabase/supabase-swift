@@ -167,7 +167,13 @@ final class AuthClientTests: XCTestCase {
       api: .mock,
       eventEmitter: .mock,
       sessionStorage: .mock,
-      logger: SupabaseLogger(system: "AuthClientTests", handler: NoopSupabaseLogHandler())
+      logger: SupabaseLogger(
+        system: "AuthClientTests",
+        configuration: SupabaseLoggingConfiguration(
+          logFile: URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("supabase-swift.log")
+        )
+      )
     )
 
     addTeardownBlock { [weak sut] in

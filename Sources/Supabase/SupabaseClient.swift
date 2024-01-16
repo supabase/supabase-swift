@@ -31,7 +31,7 @@ public final class SupabaseClient: @unchecked Sendable {
     url: databaseURL,
     schema: options.db.schema,
     headers: defaultHeaders,
-    logHandler: options.global.logHandler,
+    loggingConfiguration: options.global.loggingConfiguration,
     fetch: fetchWithAuth,
     encoder: options.db.encoder,
     decoder: options.db.decoder
@@ -94,7 +94,7 @@ public final class SupabaseClient: @unchecked Sendable {
       headers: defaultHeaders,
       flowType: options.auth.flowType,
       localStorage: options.auth.storage,
-      logHandler: options.global.logHandler,
+      loggingConfiguration: options.global.loggingConfiguration,
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
       fetch: {

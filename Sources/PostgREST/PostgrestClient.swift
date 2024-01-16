@@ -27,6 +27,7 @@ public actor PostgrestClient {
     ///   - url: The URL of the PostgREST server.
     ///   - schema: The schema to use.
     ///   - headers: The headers to include in requests.
+    ///   - loggingConfiguration: The configuration used for the internal logger.
     ///   - fetch: The fetch handler to use for requests.
     ///   - encoder: The JSONEncoder to use for encoding.
     ///   - decoder: The JSONDecoder to use for decoding.
@@ -34,7 +35,7 @@ public actor PostgrestClient {
       url: URL,
       schema: String? = nil,
       headers: [String: String] = [:],
-      logHandler: SupabaseLogHandler = DefaultSupabaseLogHandler.shared,
+      loggingConfiguration: SupabaseLoggingConfiguration = SupabaseLoggingConfiguration(),
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
@@ -46,7 +47,7 @@ public actor PostgrestClient {
       self.encoder = encoder
       self.decoder = decoder
 
-      logger = SupabaseLogger(system: "Postgrest", handler: logHandler)
+      logger = SupabaseLogger(system: "Postgrest", configuration: loggingConfiguration)
     }
   }
 
@@ -65,6 +66,7 @@ public actor PostgrestClient {
   ///   - url: The URL of the PostgREST server.
   ///   - schema: The schema to use.
   ///   - headers: The headers to include in requests.
+  ///   - loggingConfiguration: The configuration used for the internal logger.
   ///   - session: The URLSession to use for requests.
   ///   - encoder: The JSONEncoder to use for encoding.
   ///   - decoder: The JSONDecoder to use for decoding.
@@ -72,7 +74,7 @@ public actor PostgrestClient {
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
-    logHandler: SupabaseLogHandler = DefaultSupabaseLogHandler.shared,
+    loggingConfiguration: SupabaseLoggingConfiguration = SupabaseLoggingConfiguration(),
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
@@ -82,7 +84,7 @@ public actor PostgrestClient {
         url: url,
         schema: schema,
         headers: headers,
-        logHandler: logHandler,
+        loggingConfiguration: loggingConfiguration,
         fetch: fetch,
         encoder: encoder,
         decoder: decoder

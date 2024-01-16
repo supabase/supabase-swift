@@ -8,16 +8,16 @@
 import Foundation
 
 extension SupabaseLogger {
-  public struct Entry: Codable, CustomStringConvertible {
-    public let system: String
-    public let level: Level
-    public let message: String
-    public let fileID: String
-    public let function: String
-    public let line: UInt
-    public let timestamp: TimeInterval
+  struct Entry: Codable, CustomStringConvertible {
+    let system: String
+    let level: SupabaseLogLevel
+    let message: String
+    let fileID: String
+    let function: String
+    let line: UInt
+    let timestamp: TimeInterval
 
-    public var description: String {
+    var description: String {
       let date = iso8601Formatter.string(from: Date(timeIntervalSince1970: timestamp))
       let file = fileID.split(separator: ".", maxSplits: 1).first.map(String.init) ?? fileID
       return "\(date) [\(level)] [\(system)] [\(file).\(function):\(line)] \(message)"

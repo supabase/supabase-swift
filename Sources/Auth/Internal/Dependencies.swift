@@ -1,4 +1,4 @@
-import _Helpers
+@_spi(Internal) import _Helpers
 import ConcurrencyExtras
 import Foundation
 

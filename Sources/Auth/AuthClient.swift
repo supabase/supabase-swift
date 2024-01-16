@@ -16,7 +16,7 @@ public actor AuthClient {
     public var headers: [String: String]
     public let flowType: AuthFlowType
     public let localStorage: AuthLocalStorage
-    public let logHandler: SupabaseLogHandler
+    public let loggingConfiguration: SupabaseLoggingConfiguration
     public let encoder: JSONEncoder
     public let decoder: JSONDecoder
     public let fetch: FetchHandler
@@ -28,7 +28,7 @@ public actor AuthClient {
     ///   - headers: Custom headers to be included in requests.
     ///   - flowType: The authentication flow type.
     ///   - localStorage: The storage mechanism for local data.
-    ///   - logHandler: The LogHandler to use.
+    ///   - loggingConfiguration: The configuration used for the internal logger.
     ///   - encoder: The JSON encoder to use for encoding requests.
     ///   - decoder: The JSON decoder to use for decoding responses.
     ///   - fetch: The asynchronous fetch handler for network requests.
@@ -37,7 +37,7 @@ public actor AuthClient {
       headers: [String: String] = [:],
       flowType: AuthFlowType = Configuration.defaultFlowType,
       localStorage: AuthLocalStorage,
-      logHandler: SupabaseLogHandler = DefaultSupabaseLogHandler.shared,
+      loggingConfiguration: SupabaseLoggingConfiguration = SupabaseLoggingConfiguration(),
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -48,7 +48,7 @@ public actor AuthClient {
       self.headers = headers
       self.flowType = flowType
       self.localStorage = localStorage
-      self.logHandler = logHandler
+      self.loggingConfiguration = loggingConfiguration
       self.encoder = encoder
       self.decoder = decoder
       self.fetch = fetch
@@ -102,6 +102,7 @@ public actor AuthClient {
   ///   - headers: Custom headers to be included in requests.
   ///   - flowType: The authentication flow type..
   ///   - localStorage: The storage mechanism for local data..
+  ///   - loggingConfiguration: The configuration used for the internal logger.
   ///   - encoder: The JSON encoder to use for encoding requests.
   ///   - decoder: The JSON decoder to use for decoding responses.
   ///   - fetch: The asynchronous fetch handler for network requests.
@@ -110,7 +111,7 @@ public actor AuthClient {
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
     localStorage: AuthLocalStorage,
-    logHandler: SupabaseLogHandler = DefaultSupabaseLogHandler.shared,
+    loggingConfiguration: SupabaseLoggingConfiguration = SupabaseLoggingConfiguration(),
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -121,7 +122,7 @@ public actor AuthClient {
         headers: headers,
         flowType: flowType,
         localStorage: localStorage,
-        logHandler: logHandler,
+        loggingConfiguration: loggingConfiguration,
         encoder: encoder,
         decoder: decoder,
         fetch: fetch
@@ -143,7 +144,10 @@ public actor AuthClient {
       api: api,
       eventEmitter: .live,
       sessionStorage: .live,
-      logger: SupabaseLogger(system: "AuthClient", handler: configuration.logHandler)
+      logger: SupabaseLogger(
+        system: "AuthClient",
+        configuration: configuration.loggingConfiguration
+      )
     )
   }
 

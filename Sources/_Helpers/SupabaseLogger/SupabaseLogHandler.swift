@@ -5,47 +5,47 @@
 //  Created by Guilherme Souza on 15/01/24.
 //
 
+import ConcurrencyExtras
 import Foundation
 
-public protocol SupabaseLogHandler: Sendable {
+protocol SupabaseLogHandler: Sendable {
   func didLog(_ entry: SupabaseLogger.Entry)
 }
 
-public final class DefaultSupabaseLogHandler: SupabaseLogHandler {
-  /// The default log handler instance used across all Supabase sub-packages.
-  public static let shared: SupabaseLogHandler = try! DefaultSupabaseLogHandler(
-    localFile: FileManager.default.url(
-      for: .applicationSupportDirectory,
-      in: .userDomainMask,
-      appropriateFor: nil,
-      create: true
-    ).appendingPathComponent("supabase-swift.log")
-  )
+final class DefaultSupabaseLogHandler: SupabaseLogHandler {
+  private static let cachedInstances = LockIsolated([URL: DefaultSupabaseLogHandler]())
+  static func instance(for url: URL) -> DefaultSupabaseLogHandler {
+    if let instance = cachedInstances[url] {
+      return instance
+    }
+
+    let instance = cachedInstances.withValue {
+      let instance = try! DefaultSupabaseLogHandler(localFile: url)
+      $0[url] = instance
+      return instance
+    }
+
+    return instance
+  }
 
   let fileHandle: FileHandle
 
-  public init(localFile url: URL) throws {
+  private init(localFile url: URL) throws {
     if !FileManager.default.fileExists(atPath: url.path) {
       FileManager.default.createFile(atPath: url.path, contents: nil)
     }
 
     fileHandle = try FileHandle(forWritingTo: url)
     fileHandle.seekToEndOfFile()
-
-    debugPrint("SupabaseLogHandler initialized at: \(url)")
   }
 
-  public func didLog(_ entry: SupabaseLogger.Entry) {
+  func didLog(_ entry: SupabaseLogger.Entry) {
     let logLine = "\(entry.description)\n"
     guard let data = logLine.data(using: .utf8) else { return }
     fileHandle.write(data)
 
-    debugPrint(entry.description)
+    #if DEBUG
+      print(entry.description)
+    #endif
   }
-}
-
-@_spi(Internal)
-public struct NoopSupabaseLogHandler: SupabaseLogHandler {
-  public init() {}
-  public func didLog(_: SupabaseLogger.Entry) {}
 }
