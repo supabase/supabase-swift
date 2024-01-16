@@ -1,7 +1,5 @@
-import ConcurrencyExtras
-import Foundation
-@_spi(Internal) import _Helpers
 @_exported import Auth
+import Foundation
 @_exported import Functions
 @_exported import PostgREST
 @_exported import Realtime
@@ -10,8 +8,6 @@ import Foundation
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
-
-let version = _Helpers.version
 
 /// Supabase Client.
 public final class SupabaseClient: @unchecked Sendable {
@@ -56,7 +52,7 @@ public final class SupabaseClient: @unchecked Sendable {
   )
 
   let defaultHeaders: [String: String]
-  private let listenForAuthEventsTask = LockIsolated(Task<Void, Never>?.none)
+  private let listenForAuthEventsTask = LockedState(initialState: Task<Void, Never>?.none)
 
   private var session: URLSession {
     options.global.session
@@ -111,7 +107,7 @@ public final class SupabaseClient: @unchecked Sendable {
   }
 
   deinit {
-    listenForAuthEventsTask.value?.cancel()
+    listenForAuthEventsTask.withLock { $0?.cancel() }
   }
 
   @Sendable
@@ -136,13 +132,13 @@ public final class SupabaseClient: @unchecked Sendable {
   }
 
   private func listenForAuthEvents() {
-    listenForAuthEventsTask.setValue(
-      Task {
+    listenForAuthEventsTask.withLock {
+      $0 = Task {
         for await (event, session) in await auth.authStateChanges {
           handleTokenChanged(event: event, session: session)
         }
       }
-    )
+    }
   }
 
   private func handleTokenChanged(event: AuthChangeEvent, session: Session?) {

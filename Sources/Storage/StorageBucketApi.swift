@@ -1,5 +1,4 @@
 import Foundation
-@_spi(Internal) import _Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

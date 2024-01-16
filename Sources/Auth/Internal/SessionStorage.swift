@@ -6,7 +6,6 @@
 //
 
 import Foundation
-@_spi(Internal) import _Helpers
 
 /// A locally stored ``Session``, it contains metadata such as `expirationDate`.
 struct StoredSession: Codable {
@@ -32,7 +31,7 @@ struct SessionStorage: Sendable {
 extension SessionStorage {
   static var live: Self = {
     var localStorage: AuthLocalStorage {
-      Dependencies.current.value!.configuration.localStorage
+      Dependencies.current.withLock { $0!.configuration.localStorage }
     }
 
     return Self(

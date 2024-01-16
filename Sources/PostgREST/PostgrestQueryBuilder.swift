@@ -1,5 +1,4 @@
 import Foundation
-@_spi(Internal) import _Helpers
 
 public final class PostgrestQueryBuilder: PostgrestBuilder {
   /// Performs a vertical filtering with SELECT.
@@ -13,7 +12,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     head: Bool = false,
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
-    mutableState.withValue {
+    mutableState.withLock {
       $0.request.method = .get
       // remove whitespaces except when quoted.
       var quoted = false
@@ -53,7 +52,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    try mutableState.withValue {
+    try mutableState.withLock {
       $0.request.method = .post
       var prefersHeaders: [String] = []
       if let returning {
@@ -100,7 +99,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     count: CountOption? = nil,
     ignoreDuplicates: Bool = false
   ) throws -> PostgrestFilterBuilder {
-    try mutableState.withValue {
+    try mutableState.withLock {
       $0.request.method = .post
       var prefersHeaders = [
         "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates",
@@ -146,7 +145,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    try mutableState.withValue {
+    try mutableState.withLock {
       $0.request.method = .patch
       var preferHeaders = ["return=\(returning.rawValue)"]
       $0.request.body = try configuration.encoder.encode(values)
@@ -172,7 +171,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
-    mutableState.withValue {
+    mutableState.withLock {
       $0.request.method = .delete
       var preferHeaders = ["return=\(returning.rawValue)"]
       if let count {

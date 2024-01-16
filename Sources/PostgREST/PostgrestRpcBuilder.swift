@@ -1,5 +1,4 @@
 import Foundation
-@_spi(Internal) import _Helpers
 
 struct NoParams: Encodable {}
 
@@ -21,7 +20,7 @@ public final class PostgrestRpcBuilder: PostgrestBuilder {
     // https://github.com/supabase/postgrest-js/blob/master/src/lib/PostgrestRpcBuilder.ts#L38
     assert(head == false, "HEAD is not currently supported yet.")
 
-    try mutableState.withValue {
+    try mutableState.withLock {
       $0.request.method = .post
       if params is NoParams {
         // noop

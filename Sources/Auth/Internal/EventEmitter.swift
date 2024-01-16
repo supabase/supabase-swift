@@ -1,4 +1,3 @@
-import ConcurrencyExtras
 import Foundation
 
 struct EventEmitter: Sendable {
@@ -17,8 +16,8 @@ extension EventEmitter {
 
 extension EventEmitter {
   static var live: Self = {
-    let continuations = LockIsolated(
-      [UUID: AsyncStream<(event: AuthChangeEvent, session: Session?)>.Continuation]()
+    let continuations = LockedState(
+      initialState: [UUID: AsyncStream<(event: AuthChangeEvent, session: Session?)>.Continuation]()
     )
 
     return Self(
@@ -29,12 +28,12 @@ extension EventEmitter {
           .makeStream()
 
         continuation.onTermination = { [id] _ in
-          continuations.withValue {
+          continuations.withLock {
             $0[id] = nil
           }
         }
 
-        continuations.withValue {
+        continuations.withLock {
           $0[id] = continuation
         }
 
@@ -50,9 +49,11 @@ extension EventEmitter {
           ]
         )
         if let id {
-          continuations.value[id]?.yield((event, session))
+          _ = continuations.withLock {
+            $0[id]?.yield((event, session))
+          }
         } else {
-          for continuation in continuations.value.values {
+          for continuation in continuations.withLock(\.values) {
             continuation.yield((event, session))
           }
         }

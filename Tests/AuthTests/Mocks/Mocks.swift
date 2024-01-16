@@ -5,10 +5,8 @@
 //  Created by Guilherme Souza on 27/10/23.
 //
 
-import ConcurrencyExtras
 import Foundation
 import XCTestDynamicOverlay
-@_spi(Internal) import _Helpers
 
 @testable import Auth
 
@@ -50,12 +48,12 @@ extension SessionStorage {
   )
 
   static var inMemory: Self {
-    let session = LockIsolated(StoredSession?.none)
+    let session = LockedState(initialState: StoredSession?.none)
 
     return Self(
-      getSession: { session.value },
-      storeSession: { session.setValue($0) },
-      deleteSession: { session.setValue(nil) }
+      getSession: { session.withLock { $0 } },
+      storeSession: { newSession in session.withLock { $0 = newSession } },
+      deleteSession: { session.withLock { $0 = nil } }
     )
   }
 }
@@ -122,11 +120,11 @@ func withDependencies(
   _ mutation: (inout Dependencies) throws -> Void,
   operation: () async throws -> Void
 ) async rethrows {
-  let current = Dependencies.current.value ?? .mock
+  let current = Dependencies.current.withLock { $0 } ?? .mock
   var copy = current
   try mutation(&copy)
-  Dependencies.current.withValue { [copy] in $0 = copy }
-  defer { Dependencies.current.setValue(current) }
+  Dependencies.current.withLock { [copy] in $0 = copy }
+  defer { Dependencies.current.withLock { $0 = current } }
   try await operation()
 }
 
@@ -151,20 +149,20 @@ extension Session {
 }
 
 final class InMemoryLocalStorage: AuthLocalStorage, @unchecked Sendable {
-  let storage = LockIsolated([String: Data]())
+  let storage = LockedState(initialState: [String: Data]())
 
   func store(key: String, value: Data) throws {
-    storage.withValue {
+    storage.withLock {
       $0[key] = value
     }
   }
 
   func retrieve(key: String) throws -> Data? {
-    storage.value[key]
+    storage.withLock { $0[key] }
   }
 
   func remove(key: String) throws {
-    storage.withValue {
+    storage.withLock {
       $0[key] = nil
     }
   }

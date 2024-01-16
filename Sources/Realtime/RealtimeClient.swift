@@ -19,8 +19,6 @@
 // THE SOFTWARE.
 
 import Foundation
-@_spi(Internal) import _Helpers
-import ConcurrencyExtras
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -38,11 +36,14 @@ public typealias PayloadClosure = () -> Payload?
 
 /// Struct that gathers callbacks assigned to the Socket
 struct StateChangeCallbacks {
-  var open: LockIsolated<[(ref: String, callback: Delegated<URLResponse?, Void>)]> = .init([])
-  var close: LockIsolated<[(ref: String, callback: Delegated<(Int, String?), Void>)]> = .init([])
-  var error: LockIsolated<[(ref: String, callback: Delegated<(Error, URLResponse?), Void>)]> =
-    .init([])
-  var message: LockIsolated<[(ref: String, callback: Delegated<Message, Void>)]> = .init([])
+  var open: LockedState<[(ref: String, callback: Delegated<URLResponse?, Void>)]> =
+    .init(initialState: [])
+  var close: LockedState<[(ref: String, callback: Delegated<(Int, String?), Void>)]> =
+    .init(initialState: [])
+  var error: LockedState<[(ref: String, callback: Delegated<(Error, URLResponse?), Void>)]> =
+    .init(initialState: [])
+  var message: LockedState<[(ref: String, callback: Delegated<Message, Void>)]> =
+    .init(initialState: [])
 }
 
 /// ## Socket Connection
@@ -361,7 +362,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
     // Since the connection's delegate was nil'd out, inform all state
     // callbacks that the connection has closed
-    stateChangeCallbacks.close.value.forEach { $0.callback.call((code.rawValue, reason)) }
+    stateChangeCallbacks.close.withLock { $0.forEach { $0.callback.call((code.rawValue, reason)) } }
     callback?()
   }
 
@@ -401,7 +402,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<URLResponse?, Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return stateChangeCallbacks.open.withValue { [delegated] in
+    return stateChangeCallbacks.open.withLock { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -444,7 +445,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<URLResponse?, Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return stateChangeCallbacks.open.withValue { [delegated] in
+    return stateChangeCallbacks.open.withLock { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -479,7 +480,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Int, String?), Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return stateChangeCallbacks.close.withValue { [delegated] in
+    return stateChangeCallbacks.close.withLock { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -522,7 +523,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Int, String?), Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return stateChangeCallbacks.close.withValue { [delegated] in
+    return stateChangeCallbacks.close.withLock { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -542,7 +543,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Error, URLResponse?), Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return stateChangeCallbacks.error.withValue { [delegated] in
+    return stateChangeCallbacks.error.withLock { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -566,7 +567,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<(Error, URLResponse?), Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return stateChangeCallbacks.error.withValue { [delegated] in
+    return stateChangeCallbacks.error.withLock { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -587,7 +588,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<Message, Void>()
     delegated.manuallyDelegate(with: callback)
 
-    return stateChangeCallbacks.message.withValue { [delegated] in
+    return stateChangeCallbacks.message.withLock { [delegated] in
       append(callback: delegated, to: &$0)
     }
   }
@@ -611,7 +612,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     var delegated = Delegated<Message, Void>()
     delegated.delegate(to: owner, with: callback)
 
-    return stateChangeCallbacks.message.withValue { [delegated] in
+    return stateChangeCallbacks.message.withLock { [delegated] in
       self.append(callback: delegated, to: &$0)
     }
   }
@@ -628,10 +629,10 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// call this method when you are finished when the Socket in order to release
   /// any references held by the socket.
   public func releaseCallbacks() {
-    stateChangeCallbacks.open.setValue([])
-    stateChangeCallbacks.close.setValue([])
-    stateChangeCallbacks.error.setValue([])
-    stateChangeCallbacks.message.setValue([])
+    stateChangeCallbacks.open.withLock { $0 = [] }
+    stateChangeCallbacks.close.withLock { $0 = [] }
+    stateChangeCallbacks.error.withLock { $0 = [] }
+    stateChangeCallbacks.message.withLock { $0 = [] }
   }
 
   // ----------------------------------------------------------------------
@@ -683,22 +684,22 @@ public class RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - Parameter refs: List of refs returned by calls to `onOpen`, `onClose`, etc
   public func off(_ refs: [String]) {
-    stateChangeCallbacks.open.withValue {
+    stateChangeCallbacks.open.withLock {
       $0 = $0.filter {
         !refs.contains($0.ref)
       }
     }
-    stateChangeCallbacks.close.withValue {
+    stateChangeCallbacks.close.withLock {
       $0 = $0.filter {
         !refs.contains($0.ref)
       }
     }
-    stateChangeCallbacks.error.withValue {
+    stateChangeCallbacks.error.withLock {
       $0 = $0.filter {
         !refs.contains($0.ref)
       }
     }
-    stateChangeCallbacks.message.withValue {
+    stateChangeCallbacks.message.withLock {
       $0 = $0.filter {
         !refs.contains($0.ref)
       }
@@ -781,7 +782,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     resetHeartbeat()
 
     // Inform all onOpen callbacks that the Socket has opened
-    stateChangeCallbacks.open.value.forEach { $0.callback.call(response) }
+    stateChangeCallbacks.open.withLock { $0.forEach { $0.callback.call(response) } }
   }
 
   func onConnectionClosed(code: Int, reason: String?) {
@@ -799,7 +800,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       reconnectTimer.scheduleTimeout()
     }
 
-    stateChangeCallbacks.close.value.forEach { $0.callback.call((code, reason)) }
+    stateChangeCallbacks.close.withLock { $0.forEach { $0.callback.call((code, reason)) } }
   }
 
   func onConnectionError(_ error: Error, response: URLResponse?) {
@@ -809,7 +810,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     triggerChannelError()
 
     // Inform any state callbacks of the error
-    stateChangeCallbacks.error.value.forEach { $0.callback.call((error, response)) }
+    stateChangeCallbacks.error.withLock { $0.forEach { $0.callback.call((error, response)) } }
   }
 
   func onConnectionMessage(_ rawMessage: String) {
@@ -837,7 +838,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       .forEach { $0.trigger(message) }
 
     // Inform all onMessage callbacks of the message
-    stateChangeCallbacks.message.value.forEach { $0.callback.call(message) }
+    stateChangeCallbacks.message.withLock { $0.forEach { $0.callback.call(message) } }
   }
 
   /// Triggers an error event to all of the connected Channels

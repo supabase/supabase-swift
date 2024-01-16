@@ -1,5 +1,4 @@
 import Foundation
-@_spi(Internal) import _Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -52,27 +51,27 @@ public actor AuthClient {
   }
 
   private var configuration: Configuration {
-    Dependencies.current.value!.configuration
+    Dependencies.current.withLock { $0!.configuration }
   }
 
   private var api: APIClient {
-    Dependencies.current.value!.api
+    Dependencies.current.withLock { $0!.api }
   }
 
   private var sessionManager: SessionManager {
-    Dependencies.current.value!.sessionManager
+    Dependencies.current.withLock { $0!.sessionManager }
   }
 
   private var codeVerifierStorage: CodeVerifierStorage {
-    Dependencies.current.value!.codeVerifierStorage
+    Dependencies.current.withLock { $0!.codeVerifierStorage }
   }
 
   private var eventEmitter: EventEmitter {
-    Dependencies.current.value!.eventEmitter
+    Dependencies.current.withLock { $0!.eventEmitter }
   }
 
   private var currentDate: @Sendable () -> Date {
-    Dependencies.current.value!.currentDate
+    Dependencies.current.withLock { $0!.currentDate }
   }
 
   /// Returns the session, refreshing it if necessary.
@@ -147,8 +146,8 @@ public actor AuthClient {
   ) {
     mfa = AuthMFA()
 
-    Dependencies.current.setValue(
-      Dependencies(
+    Dependencies.current.withLock {
+      $0 = Dependencies(
         configuration: configuration,
         sessionManager: sessionManager,
         api: api,
@@ -161,7 +160,7 @@ public actor AuthClient {
         ),
         codeVerifierStorage: codeVerifierStorage
       )
-    )
+    }
   }
 
   /// Listen for auth state changes.

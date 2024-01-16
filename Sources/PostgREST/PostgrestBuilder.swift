@@ -1,6 +1,4 @@
-import ConcurrencyExtras
 import Foundation
-@_spi(Internal) import _Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -19,7 +17,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     var fetchOptions: FetchOptions
   }
 
-  let mutableState: LockIsolated<MutableState>
+  let mutableState: LockedState<MutableState>
 
   init(
     configuration: PostgrestClient.Configuration,
@@ -28,8 +26,8 @@ public class PostgrestBuilder: @unchecked Sendable {
     self.configuration = configuration
     http = HTTPClient(fetchHandler: configuration.fetch)
 
-    mutableState = LockIsolated(
-      MutableState(
+    mutableState = LockedState(
+      initialState: MutableState(
         request: request,
         fetchOptions: FetchOptions()
       )
@@ -39,7 +37,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   convenience init(_ other: PostgrestBuilder) {
     self.init(
       configuration: other.configuration,
-      request: other.mutableState.value.request
+      request: other.mutableState.withLock(\.request)
     )
   }
 
@@ -51,7 +49,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   public func execute(
     options: FetchOptions = FetchOptions()
   ) async throws -> PostgrestResponse<Void> {
-    mutableState.withValue {
+    mutableState.withLock {
       $0.fetchOptions = options
     }
 
@@ -66,7 +64,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   public func execute<T: Decodable>(
     options: FetchOptions = FetchOptions()
   ) async throws -> PostgrestResponse<T> {
-    mutableState.withValue {
+    mutableState.withLock {
       $0.fetchOptions = options
     }
 
@@ -81,7 +79,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   }
 
   private func execute<T>(decode: (Data) throws -> T) async throws -> PostgrestResponse<T> {
-    mutableState.withValue {
+    mutableState.withLock {
       if $0.fetchOptions.head {
         $0.request.method = .head
       }
@@ -108,7 +106,10 @@ public class PostgrestBuilder: @unchecked Sendable {
       }
     }
 
-    let response = try await http.fetch(mutableState.value.request, baseURL: configuration.url)
+    let response = try await http.fetch(
+      mutableState.withLock(\.request),
+      baseURL: configuration.url
+    )
 
     guard 200 ..< 300 ~= response.statusCode else {
       let error = try configuration.decoder.decode(PostgrestError.self, from: response.data)

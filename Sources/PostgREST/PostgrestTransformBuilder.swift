@@ -1,4 +1,3 @@
-@_spi(Internal) import _Helpers
 import Foundation
 
 public class PostgrestTransformBuilder: PostgrestBuilder {
@@ -18,7 +17,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
       return String(char)
     }
     .joined(separator: "")
-    mutableState.withValue {
+    mutableState.withLock {
       $0.request.query.append(URLQueryItem(name: "select", value: cleanedColumns))
     }
     return self
@@ -36,7 +35,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     nullsFirst: Bool = false,
     referencedTable: String? = nil
   ) -> PostgrestTransformBuilder {
-    mutableState.withValue {
+    mutableState.withLock {
       let key = referencedTable.map { "\($0).order" } ?? "order"
       let existingOrderIndex = $0.request.query.firstIndex { $0.name == key }
       let value =
@@ -62,7 +61,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   ///   - count: The maximum no. of rows to limit to.
   ///   - referencedTable: The foreign table to use (for foreign columns).
   public func limit(_ count: Int, referencedTable: String? = nil) -> PostgrestTransformBuilder {
-    mutableState.withValue {
+    mutableState.withLock {
       let key = referencedTable.map { "\($0).limit" } ?? "limit"
       if let index = $0.request.query.firstIndex(where: { $0.name == key }) {
         $0.request.query[index] = URLQueryItem(name: key, value: "\(count)")
@@ -86,7 +85,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     let keyOffset = referencedTable.map { "\($0).offset" } ?? "offset"
     let keyLimit = referencedTable.map { "\($0).limit" } ?? "limit"
 
-    mutableState.withValue {
+    mutableState.withLock {
       if let index = $0.request.query.firstIndex(where: { $0.name == keyOffset }) {
         $0.request.query[index] = URLQueryItem(name: keyOffset, value: "\(lowerBounds)")
       } else {
@@ -113,7 +112,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   /// Retrieves only one row from the result. Result must be one row (e.g. using `limit`), otherwise
   /// this will result in an error.
   public func single() -> PostgrestTransformBuilder {
-    mutableState.withValue {
+    mutableState.withLock {
       $0.request.headers["Accept"] = "application/vnd.pgrst.object+json"
     }
     return self
@@ -121,7 +120,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
 
   /// Set the response type to CSV.
   public func csv() -> PostgrestTransformBuilder {
-    mutableState.withValue {
+    mutableState.withLock {
       $0.request.headers["Accept"] = "text/csv"
     }
     return self

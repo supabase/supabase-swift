@@ -7,8 +7,6 @@
 
 import XCTest
 import XCTestDynamicOverlay
-@_spi(Internal) import _Helpers
-import ConcurrencyExtras
 
 @testable import Auth
 
@@ -16,7 +14,7 @@ final class SessionManagerTests: XCTestCase {
   override func setUp() {
     super.setUp()
 
-    Dependencies.current.setValue(.mock)
+    Dependencies.current.withLock { $0 = .mock }
   }
 
   func testSession_shouldFailWithSessionNotFound() async {
@@ -52,8 +50,8 @@ final class SessionManagerTests: XCTestCase {
     let currentSession = Session.expiredSession
     let validSession = Session.validSession
 
-    let storeSessionCallCount = LockIsolated(0)
-    let refreshSessionCallCount = ActorIsolated(0)
+    let storeSessionCallCount = LockedState(initialState: 0)
+    let refreshSessionCallCount = LockedState(initialState: 0)
 
     let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
@@ -62,12 +60,12 @@ final class SessionManagerTests: XCTestCase {
         .init(session: currentSession)
       }
       $0.sessionStorage.storeSession = { _ in
-        storeSessionCallCount.withValue {
+        storeSessionCallCount.withLock {
           $0 += 1
         }
       }
       $0.sessionRefresher.refreshSession = { _ in
-        await refreshSessionCallCount.withValue { $0 += 1 }
+        refreshSessionCallCount.withLock { $0 += 1 }
         return await refreshSessionStream.first { _ in true } ?? .empty
       }
     } operation: {
@@ -93,10 +91,17 @@ final class SessionManagerTests: XCTestCase {
       }
 
       // Verify that refresher and storage was called only once.
-      let refreshSessionCallCount = await refreshSessionCallCount.value
-      XCTAssertEqual(refreshSessionCallCount, 1)
-      XCTAssertEqual(storeSessionCallCount.value, 1)
+      XCTAssertEqual(refreshSessionCallCount.withLock { $0 }, 1)
+      XCTAssertEqual(storeSessionCallCount.withLock { $0 }, 1)
       XCTAssertEqual(try result.map { try $0.get() }, (0 ..< 10).map { _ in validSession })
+    }
+  }
+}
+
+extension Task where Success == Never, Failure == Never {
+  static func megaYield() async {
+    for _ in 0 ..< 20 {
+      await Task<Void, Never>.detached(priority: .background) { await Task.yield() }.value
     }
   }
 }

@@ -1,5 +1,4 @@
 import Foundation
-@_spi(Internal) import _Helpers
 
 struct APIClient: Sendable {
   var execute: @Sendable (_ request: Request) async throws -> Response
@@ -8,7 +7,7 @@ struct APIClient: Sendable {
 extension APIClient {
   static func live(http: HTTPClient) -> Self {
     var configuration: AuthClient.Configuration {
-      Dependencies.current.value!.configuration
+      Dependencies.current.withLock { $0!.configuration }
     }
 
     return APIClient(
@@ -35,7 +34,7 @@ extension APIClient {
 extension APIClient {
   @discardableResult
   func authorizedExecute(_ request: Request) async throws -> Response {
-    let session = try await Dependencies.current.value!.sessionManager.session()
+    let session = try await Dependencies.current.withLock { $0!.sessionManager }.session()
 
     var request = request
     request.headers["Authorization"] = "Bearer \(session.accessToken)"

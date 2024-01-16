@@ -1,22 +1,21 @@
 import Foundation
-@_spi(Internal) import _Helpers
 
 /// Contains the full multi-factor authentication API.
 public actor AuthMFA {
   private var api: APIClient {
-    Dependencies.current.value!.api
+    Dependencies.current.withLock { $0!.api }
   }
 
   private var sessionManager: SessionManager {
-    Dependencies.current.value!.sessionManager
+    Dependencies.current.withLock { $0!.sessionManager }
   }
 
   private var configuration: AuthClient.Configuration {
-    Dependencies.current.value!.configuration
+    Dependencies.current.withLock { $0!.configuration }
   }
 
   private var eventEmitter: EventEmitter {
-    Dependencies.current.value!.eventEmitter
+    Dependencies.current.withLock { $0!.eventEmitter }
   }
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method

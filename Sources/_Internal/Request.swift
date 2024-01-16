@@ -4,17 +4,12 @@ import Foundation
   import FoundationNetworking
 #endif
 
-@_spi(Internal)
-public struct HTTPClient: Sendable {
-  public typealias FetchHandler = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+struct HTTPClient: Sendable {
+  typealias FetchHandler = @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
   let fetchHandler: FetchHandler
 
-  public init(fetchHandler: @escaping FetchHandler) {
-    self.fetchHandler = fetchHandler
-  }
-
-  public func fetch(_ request: Request, baseURL: URL) async throws -> Response {
+  func fetch(_ request: Request, baseURL: URL) async throws -> Response {
     let urlRequest = try request.urlRequest(withBaseURL: baseURL)
     let (data, response) = try await fetchHandler(urlRequest)
 
@@ -26,15 +21,14 @@ public struct HTTPClient: Sendable {
   }
 }
 
-@_spi(Internal)
-public struct Request: Sendable {
-  public var path: String
-  public var method: Method
-  public var query: [URLQueryItem]
-  public var headers: [String: String]
-  public var body: Data?
+struct Request: Sendable {
+  var path: String
+  var method: Method
+  var query: [URLQueryItem] = []
+  var headers: [String: String] = [:]
+  var body: Data?
 
-  public enum Method: String, Sendable {
+  enum Method: String, Sendable {
     case get = "GET"
     case post = "POST"
     case put = "PUT"
@@ -43,21 +37,7 @@ public struct Request: Sendable {
     case head = "HEAD"
   }
 
-  public init(
-    path: String,
-    method: Method,
-    query: [URLQueryItem] = [],
-    headers: [String: String] = [:],
-    body: Data? = nil
-  ) {
-    self.path = path
-    self.method = method
-    self.query = query
-    self.headers = headers
-    self.body = body
-  }
-
-  public func urlRequest(withBaseURL baseURL: URL) throws -> URLRequest {
+  func urlRequest(withBaseURL baseURL: URL) throws -> URLRequest {
     var url = baseURL.appendingPathComponent(path)
     if !query.isEmpty {
       guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
@@ -132,7 +112,6 @@ extension CharacterSet {
   }()
 }
 
-@_spi(Internal)
 public struct Response: Sendable {
   public let data: Data
   public let response: HTTPURLResponse

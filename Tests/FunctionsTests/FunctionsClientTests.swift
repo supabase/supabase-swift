@@ -1,7 +1,5 @@
-import ConcurrencyExtras
-import XCTest
-@_spi(Internal) import _Helpers
 @testable import Functions
+import XCTest
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -15,10 +13,10 @@ final class FunctionsClientTests: XCTestCase {
 
   func testInvoke() async throws {
     let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
-    let _request = ActorIsolated(URLRequest?.none)
+    let _request = LockedState(initialState: URLRequest?.none)
 
     let sut = FunctionsClient(url: self.url, headers: ["Apikey": apiKey]) { request in
-      await _request.setValue(request)
+      _request.withLock { $0 = request }
       return (
         Data(), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
       )
@@ -31,7 +29,7 @@ final class FunctionsClientTests: XCTestCase {
       options: .init(headers: ["X-Custom-Key": "value"], body: body)
     )
 
-    let request = await _request.value
+    let request = _request.withLock { $0 }
 
     XCTAssertEqual(request?.url, url)
     XCTAssertEqual(request?.httpMethod, "POST")

@@ -4,7 +4,7 @@
 
   /// A set of errors that can be returned from the
   /// polyfilled extensions on ``URLSession``
-  public enum URLSessionPolyfillError: Error {
+  enum URLSessionPolyfillError: Error {
     /// Returned when no data and no error are provided.
     case noDataNoErrorReturned
   }

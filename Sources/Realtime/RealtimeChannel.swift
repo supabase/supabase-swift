@@ -20,8 +20,6 @@
 
 import Foundation
 import Swift
-@_spi(Internal) import _Helpers
-import ConcurrencyExtras
 
 /// Container class of bindings to the channel
 struct Binding {
@@ -160,7 +158,7 @@ public class RealtimeChannel {
   var state: ChannelState
 
   /// Collection of event bindings
-  let bindings: LockIsolated<[String: [Binding]]>
+  let bindings: LockedState<[String: [Binding]]>
 
   /// Timeout when attempting to join a RealtimeChannel
   var timeout: TimeInterval
@@ -191,7 +189,7 @@ public class RealtimeChannel {
     subTopic = topic.replacingOccurrences(of: "realtime:", with: "")
     self.params = params
     self.socket = socket
-    bindings = LockIsolated([:])
+    bindings = LockedState(initialState: [:])
     timeout = socket.timeout
     joinedOnce = false
     pushBuffer = []
@@ -380,7 +378,7 @@ public class RealtimeChannel {
 
     var accessTokenPayload: Payload = [:]
     var config: Payload = [
-      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? [],
+      "postgres_changes": bindings.withLock { $0["postgres_changes"]?.map(\.filter) ?? [] },
     ]
 
     config["broadcast"] = broadcast
@@ -407,7 +405,7 @@ public class RealtimeChannel {
           return
         }
 
-        let clientPostgresBindings = self.bindings.value["postgres_changes"] ?? []
+        let clientPostgresBindings = self.bindings.withLock { $0["postgres_changes"] ?? [] }
         let bindingsCount = clientPostgresBindings.count
         var newPostgresBindings: [Binding] = []
 
@@ -444,7 +442,7 @@ public class RealtimeChannel {
           }
         }
 
-        self.bindings.withValue { [newPostgresBindings] in
+        self.bindings.withLock { [newPostgresBindings] in
           $0["postgres_changes"] = newPostgresBindings
         }
         callback?(.subscribed, nil)
@@ -642,7 +640,7 @@ public class RealtimeChannel {
   private func on(
     _ type: String, filter: ChannelFilter, delegated: Delegated<Message, Void>
   ) -> RealtimeChannel {
-    bindings.withValue {
+    bindings.withLock {
       $0[type.lowercased(), default: []].append(
         Binding(type: type.lowercased(), filter: filter.asDictionary, callback: delegated, id: nil)
       )
@@ -671,7 +669,7 @@ public class RealtimeChannel {
   /// - parameter event: Event to unsubscribe from
   /// - parameter ref: Ref counter returned when subscribing. Can be omitted
   public func off(_ type: String, filter: [String: String] = [:]) {
-    bindings.withValue {
+    bindings.withLock {
       $0[type.lowercased()] = $0[type.lowercased(), default: []].filter { bind in
         !(bind.type.lowercased() == type.lowercased() && bind.filter == filter)
       }
@@ -918,30 +916,34 @@ public class RealtimeChannel {
     let bindings: [Binding]
 
     if ["insert", "update", "delete"].contains(typeLower) {
-      bindings = self.bindings.value["postgres_changes", default: []].filter { bind in
-        bind.filter["event"] == "*" || bind.filter["event"] == typeLower
+      bindings = self.bindings.withLock {
+        $0["postgres_changes", default: []].filter { bind in
+          bind.filter["event"] == "*" || bind.filter["event"] == typeLower
+        }
       }
     } else {
-      bindings = self.bindings.value[typeLower, default: []].filter { bind in
-        if ["broadcast", "presence", "postgres_changes"].contains(typeLower) {
-          let bindEvent = bind.filter["event"]?.lowercased()
+      bindings = self.bindings.withLock {
+        $0[typeLower, default: []].filter { bind in
+          if ["broadcast", "presence", "postgres_changes"].contains(typeLower) {
+            let bindEvent = bind.filter["event"]?.lowercased()
 
-          if let bindId = bind.id.flatMap(Int.init) {
-            let ids = message.payload["ids", as: [Int].self] ?? []
-            return ids.contains(bindId)
-              && (
-                bindEvent == "*"
-                  || bindEvent
-                  == message.payload["data", as: [String: Any].self]?["type", as: String.self]?
-                  .lowercased()
-              )
+            if let bindId = bind.id.flatMap(Int.init) {
+              let ids = message.payload["ids", as: [Int].self] ?? []
+              return ids.contains(bindId)
+                && (
+                  bindEvent == "*"
+                    || bindEvent
+                    == message.payload["data", as: [String: Any].self]?["type", as: String.self]?
+                    .lowercased()
+                )
+            }
+
+            return bindEvent == "*"
+              || bindEvent == message.payload["event", as: String.self]?.lowercased()
           }
 
-          return bindEvent == "*"
-            || bindEvent == message.payload["event", as: String.self]?.lowercased()
+          return bind.type.lowercased() == typeLower
         }
-
-        return bind.type.lowercased() == typeLower
       }
     }
 

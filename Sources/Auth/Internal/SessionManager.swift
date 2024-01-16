@@ -1,5 +1,4 @@
 import Foundation
-@_spi(Internal) import _Helpers
 
 struct SessionRefresher: Sendable {
   var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
@@ -30,11 +29,11 @@ actor _LiveSessionManager {
   private var task: Task<Session, Error>?
 
   private var storage: SessionStorage {
-    Dependencies.current.value!.sessionStorage
+    Dependencies.current.withLock { $0!.sessionStorage }
   }
 
   private var sessionRefresher: SessionRefresher {
-    Dependencies.current.value!.sessionRefresher
+    Dependencies.current.withLock { $0!.sessionRefresher }
   }
 
   func session(shouldValidateExpiration: Bool) async throws -> Session {

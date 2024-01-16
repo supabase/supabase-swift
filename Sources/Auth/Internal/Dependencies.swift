@@ -1,8 +1,7 @@
-import ConcurrencyExtras
 import Foundation
 
 struct Dependencies: Sendable {
-  static let current = LockIsolated(Dependencies?.none)
+  static let current = LockedState(initialState: Dependencies?.none)
 
   var configuration: AuthClient.Configuration
   var sessionManager: SessionManager

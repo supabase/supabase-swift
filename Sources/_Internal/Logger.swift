@@ -5,17 +5,16 @@
 //  Created by Guilherme Souza on 11/12/23.
 //
 
-import ConcurrencyExtras
 import Foundation
 
-private let _debugLoggingEnabled = LockIsolated(false)
-@_spi(Internal) public var debugLoggingEnabled: Bool {
-  get { _debugLoggingEnabled.value }
-  set { _debugLoggingEnabled.setValue(newValue) }
+private let _debugLoggingEnabled = LockedState(initialState: false)
+var debugLoggingEnabled: Bool {
+  get { _debugLoggingEnabled.withLock { $0 } }
+  set { _debugLoggingEnabled.withLock { $0 = newValue } }
 }
 
-private let standardError = LockIsolated(FileHandle.standardError)
-@_spi(Internal) public func debug(
+private let standardError = LockedState(initialState: FileHandle.standardError)
+func debug(
   _ message: @autoclosure () -> String,
   function: String = #function,
   file: String = #file,
@@ -24,7 +23,7 @@ private let standardError = LockIsolated(FileHandle.standardError)
   assert(
     {
       if debugLoggingEnabled {
-        standardError.withValue {
+        standardError.withLock {
           let logLine = "[\(function) \(file.split(separator: "/").last!):\(line)] \(message())\n"
           $0.write(Data(logLine.utf8))
         }

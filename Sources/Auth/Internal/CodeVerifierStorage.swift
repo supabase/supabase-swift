@@ -1,5 +1,4 @@
 import Foundation
-@_spi(Internal) import _Helpers
 
 struct CodeVerifierStorage: Sendable {
   var getCodeVerifier: @Sendable () throws -> String?
@@ -10,7 +9,7 @@ struct CodeVerifierStorage: Sendable {
 extension CodeVerifierStorage {
   static var live: Self = {
     var localStorage: AuthLocalStorage {
-      Dependencies.current.value!.configuration.localStorage
+      Dependencies.current.withLock { $0!.configuration.localStorage }
     }
 
     let key = "supabase.code-verifier"

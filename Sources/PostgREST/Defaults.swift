@@ -6,9 +6,6 @@
 //
 
 import Foundation
-@_spi(Internal) import _Helpers
-
-let version = _Helpers.version
 
 extension PostgrestClient.Configuration {
   private static let supportedDateFormatters: [ISO8601DateFormatter] = [

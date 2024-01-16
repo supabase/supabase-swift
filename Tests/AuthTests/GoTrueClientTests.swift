@@ -6,8 +6,6 @@
 //
 
 import XCTest
-@_spi(Internal) import _Helpers
-import ConcurrencyExtras
 
 @testable import Auth
 
@@ -22,7 +20,7 @@ final class AuthClientTests: XCTestCase {
     let session = Session.validSession
     let sut = makeSUT()
 
-    let events = ActorIsolated([AuthChangeEvent]())
+    let events = LockedState(initialState: [AuthChangeEvent]())
 
     // We use a semaphore here instead of the nicer XCTestExpectation as that isn't fully available
     // on Linux.
@@ -36,7 +34,7 @@ final class AuthClientTests: XCTestCase {
 
       let streamTask = Task {
         for await (event, _) in authStateStream {
-          await events.withValue {
+          events.withLock {
             $0.append(event)
           }
 
@@ -46,8 +44,7 @@ final class AuthClientTests: XCTestCase {
 
       _ = semaphore.wait(timeout: .now() + 2.0)
 
-      let events = await events.value
-      XCTAssertEqual(events, [.initialSession])
+      XCTAssertEqual(events.withLock { $0 }, [.initialSession])
 
       streamTask.cancel()
     }
@@ -56,13 +53,13 @@ final class AuthClientTests: XCTestCase {
   func testSignOut() async throws {
     let sut = makeSUT()
 
-    let events = LockIsolated([AuthChangeEvent]())
+    let events = LockedState(initialState: [AuthChangeEvent]())
 
     try await withDependencies {
       $0.api.execute = { _ in .stub() }
       $0.eventEmitter = .mock
       $0.eventEmitter.emit = { @Sendable event, _, _ in
-        events.withValue {
+        events.withLock {
           $0.append(event)
         }
       }
@@ -79,7 +76,7 @@ final class AuthClientTests: XCTestCase {
         XCTFail("Unexpected error.")
       }
 
-      XCTAssertEqual(events.value, [.signedOut])
+      XCTAssertEqual(events.withLock { $0 }, [.signedOut])
     }
   }
 
@@ -102,14 +99,14 @@ final class AuthClientTests: XCTestCase {
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
     let sut = makeSUT()
 
-    let emitReceivedParams = LockIsolated((AuthChangeEvent, Session?)?.none)
+    let emitReceivedParams = LockedState(initialState: ((AuthChangeEvent, Session?)?.none))
 
     try await withDependencies {
       $0.api.execute = { _ in throw AuthError.api(AuthError.APIError(code: 404)) }
       $0.sessionManager = .live
       $0.sessionStorage = .inMemory
       $0.eventEmitter.emit = { @Sendable event, session, _ in
-        emitReceivedParams.setValue((event, session))
+        emitReceivedParams.withLock { $0 = (event, session) }
       }
       try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
     } operation: {
@@ -120,24 +117,24 @@ final class AuthClientTests: XCTestCase {
         XCTFail("Unexpected error: \(error)")
       }
 
-      let (event, session) = try XCTUnwrap(emitReceivedParams.value)
+      let (event, session) = try XCTUnwrap(emitReceivedParams.withLock { $0 })
       XCTAssertEqual(event, .signedOut)
       XCTAssertNil(session)
-      XCTAssertNil(try Dependencies.current.value!.sessionStorage.getSession())
+      XCTAssertNil(try Dependencies.current.withLock { try $0?.sessionStorage.getSession() })
     }
   }
 
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
     let sut = makeSUT()
 
-    let emitReceivedParams = LockIsolated((AuthChangeEvent, Session?)?.none)
+    let emitReceivedParams = LockedState(initialState: (AuthChangeEvent, Session?)?.none)
 
     try await withDependencies {
       $0.api.execute = { _ in throw AuthError.api(AuthError.APIError(code: 401)) }
       $0.sessionManager = .live
       $0.sessionStorage = .inMemory
       $0.eventEmitter.emit = { @Sendable event, session, _ in
-        emitReceivedParams.setValue((event, session))
+        emitReceivedParams.withLock { $0 = (event, session) }
       }
       try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
     } operation: {
@@ -148,10 +145,10 @@ final class AuthClientTests: XCTestCase {
         XCTFail("Unexpected error: \(error)")
       }
 
-      let (event, session) = try XCTUnwrap(emitReceivedParams.value)
+      let (event, session) = try XCTUnwrap(emitReceivedParams.withLock { $0 })
       XCTAssertEqual(event, .signedOut)
       XCTAssertNil(session)
-      XCTAssertNil(try Dependencies.current.value!.sessionStorage.getSession())
+      XCTAssertNil(try Dependencies.current.withLock { try $0?.sessionStorage.getSession() })
     }
   }
 
