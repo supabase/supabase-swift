@@ -11,8 +11,7 @@ import XCTest
 final class _PushTests: XCTestCase {
   let socket = RealtimeClientV2(config: RealtimeClientV2.Configuration(
     url: URL(string: "https://localhost:54321/v1/realtime")!,
-    apiKey: "apikey",
-    authTokenProvider: nil
+    apiKey: "apikey"
   ))
 
   func testPushWithoutAck() async {
@@ -22,7 +21,8 @@ final class _PushTests: XCTestCase {
         broadcast: .init(acknowledgeBroadcasts: false),
         presence: .init()
       ),
-      socket: socket
+      socket: socket,
+      logger: nil
     )
     let push = _Push(
       channel: channel,
@@ -46,7 +46,8 @@ final class _PushTests: XCTestCase {
         broadcast: .init(acknowledgeBroadcasts: true),
         presence: .init()
       ),
-      socket: socket
+      socket: socket,
+      logger: nil
     )
     let push = _Push(
       channel: channel,

@@ -31,13 +31,15 @@ actor _Push {
 
       return .ok
     } catch {
-      debug("""
-      Failed to send message:
-      \(message)
+      await channel?.socket?.config.logger?.debug(
+        """
+        Failed to send message:
+        \(message)
 
-      Error:
-      \(error)
-      """)
+        Error:
+        \(error)
+        """
+      )
       return .error
     }
   }

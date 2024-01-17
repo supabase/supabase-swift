@@ -32,6 +32,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
 
   private let realtimeURL: URL
   private let configuration: URLSessionConfiguration
+  private let logger: SupabaseLogger?
 
   private let mutableState = LockIsolated(MutableState())
 
@@ -41,7 +42,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     case error(Error)
   }
 
-  init(realtimeURL: URL, configuration: URLSessionConfiguration) {
+  init(realtimeURL: URL, configuration: URLSessionConfiguration, logger: SupabaseLogger?) {
     self.realtimeURL = realtimeURL
     self.configuration = configuration
 
@@ -49,6 +50,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     status = stream
     self.continuation = continuation
 
+    self.logger = logger
     super.init()
   }
 
@@ -114,7 +116,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
         do {
           switch message {
           case let .string(stringMessage):
-            debug("Received message: \(stringMessage)")
+            logger?.debug("Received message: \(stringMessage)")
 
             guard let data = stringMessage.data(using: .utf8) else {
               throw RealtimeError("Expected a UTF8 encoded message.")
@@ -141,7 +143,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     let data = try JSONEncoder().encode(message)
     let string = String(decoding: data, as: UTF8.self)
 
-    debug("Sending message: \(string)")
+    logger?.debug("Sending message: \(string)")
     try await mutableState.task?.send(.string(string))
   }
 }

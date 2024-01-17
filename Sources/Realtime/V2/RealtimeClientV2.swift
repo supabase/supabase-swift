@@ -22,15 +22,17 @@ public actor RealtimeClientV2 {
     var reconnectDelay: TimeInterval
     var disconnectOnSessionLoss: Bool
     var connectOnSubscribe: Bool
+    var logger: SupabaseLogger?
 
     public init(
       url: URL,
       apiKey: String,
-      headers: [String: String],
+      headers: [String: String] = [:],
       heartbeatInterval: TimeInterval = 15,
       reconnectDelay: TimeInterval = 7,
       disconnectOnSessionLoss: Bool = true,
-      connectOnSubscribe: Bool = true
+      connectOnSubscribe: Bool = true,
+      logger: SupabaseLogger? = nil
     ) {
       self.url = url
       self.apiKey = apiKey
@@ -39,6 +41,7 @@ public actor RealtimeClientV2 {
       self.reconnectDelay = reconnectDelay
       self.disconnectOnSessionLoss = disconnectOnSessionLoss
       self.connectOnSubscribe = connectOnSubscribe
+      self.logger = logger
     }
   }
 
@@ -95,7 +98,11 @@ public actor RealtimeClientV2 {
       makeWebSocketClient: { url, headers in
         let configuration = URLSessionConfiguration.default
         configuration.httpAdditionalHeaders = headers
-        return WebSocketClient(realtimeURL: url, configuration: configuration)
+        return WebSocketClient(
+          realtimeURL: url,
+          configuration: configuration,
+          logger: config.logger
+        )
       }
     )
   }
@@ -115,13 +122,13 @@ public actor RealtimeClientV2 {
         try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.reconnectDelay))
 
         if Task.isCancelled {
-          debug("reconnect cancelled, returning")
+          config.logger?.debug("reconnect cancelled, returning")
           return
         }
       }
 
       if statusStreamManager.value == .connected {
-        debug("Websocket already connected")
+        config.logger?.debug("Websocket already connected")
         return
       }
 
@@ -139,7 +146,7 @@ public actor RealtimeClientV2 {
       switch connectionStatus {
       case .open:
         statusStreamManager.yield(.connected)
-        debug("Connected to realtime websocket")
+        config.logger?.debug("Connected to realtime websocket")
         listenForMessages()
         startHeartbeating()
         if reconnect {
@@ -147,7 +154,7 @@ public actor RealtimeClientV2 {
         }
 
       case .close, .error, nil:
-        debug(
+        config.logger?.debug(
           "Error while trying to connect to realtime websocket. Trying again in \(config.reconnectDelay) seconds."
         )
         disconnect()
@@ -171,7 +178,8 @@ public actor RealtimeClientV2 {
     return RealtimeChannelV2(
       topic: "realtime:\(topic)",
       config: config,
-      socket: self
+      socket: self,
+      logger: self.config.logger
     )
   }
 
@@ -187,7 +195,7 @@ public actor RealtimeClientV2 {
     subscriptions[channel.topic] = nil
 
     if subscriptions.isEmpty {
-      debug("No more subscribed channel in socket")
+      config.logger?.debug("No more subscribed channel in socket")
       disconnect()
     }
   }
@@ -208,7 +216,7 @@ public actor RealtimeClientV2 {
           await onMessage(message)
         }
       } catch {
-        debug(
+        config.logger?.debug(
           "Error while listening for messages. Trying again in \(config.reconnectDelay) \(error)"
         )
         await disconnect()
@@ -234,7 +242,7 @@ public actor RealtimeClientV2 {
   private func sendHeartbeat() async {
     if pendingHeartbeatRef != nil {
       pendingHeartbeatRef = nil
-      debug("Heartbeat timeout. Trying to reconnect in \(config.reconnectDelay)")
+      config.logger?.debug("Heartbeat timeout. Trying to reconnect in \(config.reconnectDelay)")
       disconnect()
       await connect(reconnect: true)
       return
@@ -254,7 +262,7 @@ public actor RealtimeClientV2 {
   }
 
   public func disconnect() {
-    debug("Closing websocket connection")
+    config.logger?.debug("Closing websocket connection")
     ref = 0
     messageTask?.cancel()
     heartbeatTask?.cancel()
@@ -278,9 +286,10 @@ public actor RealtimeClientV2 {
 
     if let ref = message.ref, Int(ref) == pendingHeartbeatRef {
       pendingHeartbeatRef = nil
-      debug("heartbeat received")
+      config.logger?.debug("heartbeat received")
     } else {
-      debug("Received event \(message.event) for channel \(channel?.topic ?? "null")")
+      config.logger?
+        .debug("Received event \(message.event) for channel \(channel?.topic ?? "null")")
       await channel?.onMessage(message)
     }
   }
@@ -289,7 +298,7 @@ public actor RealtimeClientV2 {
     do {
       try await ws?.send(message)
     } catch {
-      debug("""
+      config.logger?.debug("""
       Failed to send message:
       \(message)
 

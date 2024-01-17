@@ -10,26 +10,22 @@ import Foundation
 @testable import Realtime
 
 final class MockWebSocketClient: WebSocketClientProtocol {
+  private let continuation: AsyncStream<WebSocketClient.ConnectionStatus>.Continuation
+  let status: AsyncStream<WebSocketClient.ConnectionStatus>
+
   struct MutableState {
     var sentMessages: [RealtimeMessageV2] = []
     var responsesHandlers: [(RealtimeMessageV2) -> RealtimeMessageV2?] = []
     var receiveContinuation: AsyncThrowingStream<RealtimeMessageV2, Error>.Continuation?
   }
 
-  let status: [Result<WebSocketClient.ConnectionStatus, Error>]
   let mutableState = LockIsolated(MutableState())
 
-  init(status: [Result<WebSocketClient.ConnectionStatus, Error>]) {
-    self.status = status
+  init() {
+    (status, continuation) = AsyncStream<WebSocketClient.ConnectionStatus>.makeStream()
   }
 
-  func connect() -> AsyncThrowingStream<WebSocketClient.ConnectionStatus, Error> {
-    AsyncThrowingStream {
-      for result in status {
-        $0.yield(with: result)
-      }
-    }
-  }
+  func connect() async {  }
 
   func send(_ message: RealtimeMessageV2) async throws {
     mutableState.withValue {

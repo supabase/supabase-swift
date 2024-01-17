@@ -30,6 +30,7 @@ public actor RealtimeChannelV2 {
 
   let topic: String
   let config: RealtimeChannelConfig
+  let logger: SupabaseLogger?
 
   private let callbackManager = CallbackManager()
   let statusStreamManager = AsyncStreamManager<Status>()
@@ -45,11 +46,13 @@ public actor RealtimeChannelV2 {
   init(
     topic: String,
     config: RealtimeChannelConfig,
-    socket: RealtimeClientV2
+    socket: RealtimeClientV2,
+    logger: SupabaseLogger?
   ) {
     self.socket = socket
     self.topic = topic
     self.config = config
+    self.logger = logger
   }
 
   deinit {
@@ -72,7 +75,7 @@ public actor RealtimeChannelV2 {
     await socket?.addChannel(self)
 
     statusStreamManager.yield(.subscribing)
-    debug("subscribing to channel \(topic)")
+    logger?.debug("subscribing to channel \(topic)")
 
     let accessToken = await socket?.accessToken
 
@@ -87,7 +90,7 @@ public actor RealtimeChannelV2 {
 
     joinRef = await socket?.makeRef().description
 
-    debug("subscribing to channel with body: \(joinConfig)")
+    logger?.debug("subscribing to channel with body: \(joinConfig)")
 
     await push(
       RealtimeMessageV2(
@@ -106,7 +109,7 @@ public actor RealtimeChannelV2 {
 
   public func unsubscribe() async {
     statusStreamManager.yield(.unsubscribing)
-    debug("unsubscribing from channel \(topic)")
+    logger?.debug("unsubscribing from channel \(topic)")
 
     await push(
       RealtimeMessageV2(
@@ -120,7 +123,7 @@ public actor RealtimeChannelV2 {
   }
 
   public func updateAuth(jwt: String) async {
-    debug("Updating auth token for channel \(topic)")
+    logger?.debug("Updating auth token for channel \(topic)")
     await push(
       RealtimeMessageV2(
         joinRef: joinRef,
@@ -196,18 +199,18 @@ public actor RealtimeChannelV2 {
   func onMessage(_ message: RealtimeMessageV2) {
     do {
       guard let eventType = message.eventType else {
-        debug("Received message without event type: \(message)")
+        logger?.debug("Received message without event type: \(message)")
         return
       }
 
       switch eventType {
       case .tokenExpired:
-        debug(
+        logger?.debug(
           "Received token expired event. This should not happen, please report this warning."
         )
 
       case .system:
-        debug("Subscribed to channel \(message.topic)")
+        logger?.debug("Subscribed to channel \(message.topic)")
         statusStreamManager.yield(.subscribed)
 
       case .reply:
@@ -231,13 +234,13 @@ public actor RealtimeChannelV2 {
 
           if statusStreamManager.value != .subscribed {
             statusStreamManager.yield(.subscribed)
-            debug("Subscribed to channel \(message.topic)")
+            logger?.debug("Subscribed to channel \(message.topic)")
           }
         }
 
       case .postgresChanges:
         guard let data = message.payload["data"] else {
-          debug("Expected \"data\" key in message payload.")
+          logger?.debug("Expected \"data\" key in message payload.")
           return
         }
 
@@ -307,11 +310,11 @@ public actor RealtimeChannelV2 {
           guard let self else { return }
 
           await socket?.removeChannel(self)
-          debug("Unsubscribed from channel \(message.topic)")
+          logger?.debug("Unsubscribed from channel \(message.topic)")
         }
 
       case .error:
-        debug(
+        logger?.debug(
           "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
         )
 
@@ -325,7 +328,7 @@ public actor RealtimeChannelV2 {
         callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:], rawMessage: message)
       }
     } catch {
-      debug("Failed: \(error)")
+      logger?.debug("Failed: \(error)")
     }
   }
 
@@ -337,8 +340,10 @@ public actor RealtimeChannelV2 {
       continuation.yield($0)
     }
 
+    let logger = logger
+
     continuation.onTermination = { [weak callbackManager] _ in
-      debug("Removing presence callback with id: \(id)")
+      logger?.debug("Removing presence callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
 
@@ -429,8 +434,10 @@ public actor RealtimeChannelV2 {
       continuation.yield(action)
     }
 
+    let logger = logger
+
     continuation.onTermination = { [weak callbackManager] _ in
-      debug("Removing postgres callback with id: \(id)")
+      logger?.debug("Removing postgres callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
 
@@ -446,8 +453,10 @@ public actor RealtimeChannelV2 {
       continuation.yield($0)
     }
 
+    let logger = logger
+
     continuation.onTermination = { [weak callbackManager] _ in
-      debug("Removing broadcast callback with id: \(id)")
+      logger?.debug("Removing broadcast callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
 
