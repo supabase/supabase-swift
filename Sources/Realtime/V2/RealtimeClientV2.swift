@@ -143,15 +143,12 @@ public actor RealtimeClientV2 {
       status = .connecting
 
       let realtimeURL = realtimeWebSocketURL
-
       let ws = makeWebSocketClient(realtimeURL, config.headers)
       self.ws = ws
 
-      await ws.connect()
+      ws.connect()
 
-      let connectionStatus = try? await Task(timeout: config.timeoutInterval) {
-        await ws.status.first { _ in true }
-      }.value
+      let connectionStatus = await ws.status.first { _ in true }
 
       switch connectionStatus {
       case .open:

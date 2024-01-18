@@ -25,7 +25,7 @@ final class MockWebSocketClient: WebSocketClientProtocol {
     (status, continuation) = AsyncStream<WebSocketClient.ConnectionStatus>.makeStream()
   }
 
-  func connect() async {}
+  func connect() {}
 
   func send(_ message: RealtimeMessageV2) async throws {
     mutableState.withValue {
@@ -57,5 +57,9 @@ final class MockWebSocketClient: WebSocketClientProtocol {
 
   func mockReceive(_ message: RealtimeMessageV2) {
     mutableState.receiveContinuation?.yield(message)
+  }
+
+  func mockStatus(_ status: WebSocketClient.ConnectionStatus) {
+    continuation.yield(status)
   }
 }

@@ -18,7 +18,7 @@ protocol WebSocketClientProtocol: Sendable {
 
   func send(_ message: RealtimeMessageV2) async throws
   func receive() -> AsyncThrowingStream<RealtimeMessageV2, Error>
-  func connect() async
+  func connect()
   func cancel()
 }
 
