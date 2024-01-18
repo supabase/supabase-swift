@@ -63,7 +63,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
   }
 
   private let continuation: AsyncStream<ConnectionStatus>.Continuation
-  var status: AsyncStream<ConnectionStatus>
+  let status: AsyncStream<ConnectionStatus>
 
   func connect() {
     mutableState.withValue {

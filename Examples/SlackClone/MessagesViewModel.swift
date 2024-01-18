@@ -29,7 +29,7 @@ final class MessagesViewModel: MessagesStore {
       let updates = await channel.postgresChange(UpdateAction.self, table: "messages")
       let deletions = await channel.postgresChange(DeleteAction.self, table: "messages")
 
-      await channel.subscribe(blockUntilSubscribed: true)
+      await channel.subscribe()
 
       Task {
         for await insertion in insertions {

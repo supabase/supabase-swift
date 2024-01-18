@@ -67,10 +67,15 @@ public actor RealtimeClientV2 {
   let config: Configuration
   let makeWebSocketClient: (_ url: URL, _ headers: [String: String]) -> WebSocketClientProtocol
 
-  let statusStreamManager = AsyncStreamManager<Status>()
+  private let statusStream = SharedStream<Status>(initialElement: .disconnected)
 
-  public var status: AsyncStream<Status> {
-    statusStreamManager.makeStream()
+  public var statusChange: AsyncStream<Status> {
+    statusStream.makeStream()
+  }
+
+  public private(set) var status: Status {
+    get { statusStream.lastElement }
+    set { statusStream.yield(newValue) }
   }
 
   init(
@@ -119,7 +124,7 @@ public actor RealtimeClientV2 {
       return await inFlightConnectionTask.value
     }
 
-    inFlightConnectionTask = Task {
+    inFlightConnectionTask = Task { [self] in
       defer { inFlightConnectionTask = nil }
       if reconnect {
         try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.reconnectDelay))
@@ -130,12 +135,12 @@ public actor RealtimeClientV2 {
         }
       }
 
-      if statusStreamManager.value == .connected {
+      if status == .connected {
         config.logger?.debug("Websocket already connected")
         return
       }
 
-      statusStreamManager.yield(.connecting)
+      status = .connecting
 
       let realtimeURL = realtimeWebSocketURL
 
@@ -150,7 +155,7 @@ public actor RealtimeClientV2 {
 
       switch connectionStatus {
       case .open:
-        statusStreamManager.yield(.connected)
+        status = .connected
         config.logger?.debug("Connected to realtime websocket")
         listenForMessages()
         startHeartbeating()
@@ -193,7 +198,7 @@ public actor RealtimeClientV2 {
   }
 
   public func removeChannel(_ channel: RealtimeChannelV2) async {
-    if channel.statusStreamManager.value == .subscribed {
+    if await channel.status == .subscribed {
       await channel.unsubscribe()
     }
 
@@ -206,9 +211,14 @@ public actor RealtimeClientV2 {
   }
 
   private func rejoinChannels() async {
-    // TODO: should we fire all subscribe calls concurrently?
-    for channel in subscriptions.values {
-      await channel.subscribe()
+    await withTaskGroup(of: Void.self) { group in
+      for channel in subscriptions.values {
+        _ = group.addTaskUnlessCancelled {
+          await channel.subscribe()
+        }
+
+        await group.waitForAll()
+      }
     }
   }
 
@@ -273,14 +283,14 @@ public actor RealtimeClientV2 {
     heartbeatTask?.cancel()
     ws?.cancel()
     ws = nil
-    statusStreamManager.yield(.disconnected)
+    status = .disconnected
   }
 
   public func setAuth(_ token: String?) async {
     accessToken = token
 
     for channel in subscriptions.values {
-      if let token, channel.statusStreamManager.value == .subscribed {
+      if let token, await channel.status == .subscribed {
         await channel.updateAuth(jwt: token)
       }
     }

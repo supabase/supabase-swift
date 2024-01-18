@@ -18,7 +18,7 @@ final class UserStore {
       let channel = await supabase.realtimeV2.channel("public:users")
       let changes = await channel.postgresChange(AnyAction.self, table: "users")
 
-      await channel.subscribe(blockUntilSubscribed: true)
+      await channel.subscribe()
 
       for await change in changes {
         handleChangedUser(change)

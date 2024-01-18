@@ -28,7 +28,7 @@ final class ChannelsViewModel: ChannelsStore {
       let insertions = await channel.postgresChange(InsertAction.self, table: "channels")
       let deletions = await channel.postgresChange(DeleteAction.self, table: "channels")
 
-      await channel.subscribe(blockUntilSubscribed: true)
+      await channel.subscribe()
 
       Task {
         for await insertion in insertions {

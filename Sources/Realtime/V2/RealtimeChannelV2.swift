@@ -1,5 +1,5 @@
 //
-//  Channel.swift
+//  RealtimeChannelV2.swift
 //
 //
 //  Created by Guilherme Souza on 26/12/23.
@@ -33,14 +33,19 @@ public actor RealtimeChannelV2 {
   let logger: SupabaseLogger?
 
   private let callbackManager = CallbackManager()
-  let statusStreamManager = AsyncStreamManager<Status>()
+  private let statusStream = SharedStream<Status>(initialElement: .unsubscribed)
 
   private var clientChanges: [PostgresJoinConfig] = []
   private var joinRef: String?
   private var pushes: [String: _Push] = [:]
 
-  public var status: AsyncStream<Status> {
-    statusStreamManager.makeStream()
+  public private(set) var status: Status {
+    get { statusStream.lastElement }
+    set { statusStream.yield(newValue) }
+  }
+
+  public var statusChange: AsyncStream<Status> {
+    statusStream.makeStream()
   }
 
   init(
@@ -60,10 +65,8 @@ public actor RealtimeChannelV2 {
   }
 
   /// Subscribes to the channel
-  /// - Parameter blockUntilSubscribed: if true, the method will block the current Task until the
-  /// ``status-swift.property`` is ``Status-swift.enum/subscribed``.
-  public func subscribe(blockUntilSubscribed: Bool = false) async {
-    if socket?.statusStreamManager.value != .connected {
+  public func subscribe() async {
+    if await socket?.status != .connected {
       if socket?.config.connectOnSubscribe != true {
         fatalError(
           "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
@@ -74,20 +77,19 @@ public actor RealtimeChannelV2 {
 
     await socket?.addChannel(self)
 
-    statusStreamManager.yield(.subscribing)
+    status = .subscribing
     logger?.debug("subscribing to channel \(topic)")
-
-    let accessToken = await socket?.accessToken
-
-    let postgresChanges = clientChanges
 
     let joinConfig = RealtimeJoinConfig(
       broadcast: config.broadcast,
       presence: config.presence,
-      postgresChanges: postgresChanges
+      postgresChanges: clientChanges
     )
 
-    let payload = RealtimeJoinPayload(config: joinConfig, accessToken: accessToken)
+    let payload = await RealtimeJoinPayload(
+      config: joinConfig,
+      accessToken: socket?.accessToken
+    )
 
     joinRef = await socket?.makeRef().description
 
@@ -99,17 +101,15 @@ public actor RealtimeChannelV2 {
         ref: joinRef,
         topic: topic,
         event: ChannelEvent.join,
-        payload: (try? JSONObject(payload)) ?? [:]
+        payload: try! JSONObject(payload)
       )
     )
 
-    if blockUntilSubscribed {
-      _ = await status.first { $0 == .subscribed }
-    }
+    _ = await statusChange.first { $0 == .subscribed }
   }
 
   public func unsubscribe() async {
-    statusStreamManager.yield(.unsubscribing)
+    status = .unsubscribing
     logger?.debug("unsubscribing from channel \(topic)")
 
     await push(
@@ -136,9 +136,9 @@ public actor RealtimeChannelV2 {
     )
   }
 
-  public func broadcast(event: String, message: [String: AnyJSON]) async {
+  public func broadcast(event: String, message: JSONObject) async {
     assert(
-      statusStreamManager.value == .subscribed,
+      status == .subscribed,
       "You can only broadcast after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
     )
 
@@ -163,7 +163,7 @@ public actor RealtimeChannelV2 {
 
   public func track(state: JSONObject) async {
     assert(
-      statusStreamManager.value == .subscribed,
+      status == .subscribed,
       "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
     )
 
@@ -212,7 +212,7 @@ public actor RealtimeChannelV2 {
 
       case .system:
         logger?.debug("Subscribed to channel \(message.topic)")
-        statusStreamManager.yield(.subscribed)
+        status = .subscribed
 
       case .reply:
         guard
@@ -233,8 +233,8 @@ public actor RealtimeChannelV2 {
 
           callbackManager.setServerChanges(changes: serverPostgresChanges ?? [])
 
-          if statusStreamManager.value != .subscribed {
-            statusStreamManager.yield(.subscribed)
+          if self.status != .subscribed {
+            self.status = .subscribed
             logger?.debug("Subscribed to channel \(message.topic)")
           }
         }
@@ -416,7 +416,7 @@ public actor RealtimeChannelV2 {
     filter: String?
   ) -> AsyncStream<AnyAction> {
     precondition(
-      statusStreamManager.value != .subscribed,
+      status != .subscribed,
       "You cannot call postgresChange after joining the channel"
     )
 
