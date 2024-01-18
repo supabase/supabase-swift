@@ -35,6 +35,9 @@
 		79AF04812B2CE261008761AD /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04802B2CE261008761AD /* AuthView.swift */; };
 		79AF04842B2CE408008761AD /* AuthWithMagicLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */; };
 		79AF04862B2CE586008761AD /* Debug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04852B2CE586008761AD /* Debug.swift */; };
+		79BD76772B59C3E300CA3D68 /* UserStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD76762B59C3E300CA3D68 /* UserStore.swift */; };
+		79BD76792B59C53900CA3D68 /* ChannelsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD76782B59C53900CA3D68 /* ChannelsViewModel.swift */; };
+		79BD767B2B59C61300CA3D68 /* MessagesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD767A2B59C61300CA3D68 /* MessagesViewModel.swift */; };
 		79D884CA2B3C18830009EA4A /* SlackCloneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884C92B3C18830009EA4A /* SlackCloneApp.swift */; };
 		79D884CC2B3C18830009EA4A /* AppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884CB2B3C18830009EA4A /* AppView.swift */; };
 		79D884CE2B3C18840009EA4A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79D884CD2B3C18840009EA4A /* Assets.xcassets */; };
@@ -43,7 +46,6 @@
 		79D884D92B3C18E90009EA4A /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79D884D82B3C18E90009EA4A /* Supabase */; };
 		79D884DB2B3C191F0009EA4A /* ChannelListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884DA2B3C191F0009EA4A /* ChannelListView.swift */; };
 		79D884DD2B3C19320009EA4A /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884DC2B3C19320009EA4A /* MessagesView.swift */; };
-		79D884DF2B3C19420009EA4A /* MessagesAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884DE2B3C19420009EA4A /* MessagesAPI.swift */; };
 		79FEFFAF2B07873600D36347 /* UserManagementApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFAE2B07873600D36347 /* UserManagementApp.swift */; };
 		79FEFFB12B07873600D36347 /* AppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFB02B07873600D36347 /* AppView.swift */; };
 		79FEFFB32B07873700D36347 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79FEFFB22B07873700D36347 /* Assets.xcassets */; };
@@ -86,6 +88,9 @@
 		79AF04802B2CE261008761AD /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthWithMagicLink.swift; sourceTree = "<group>"; };
 		79AF04852B2CE586008761AD /* Debug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debug.swift; sourceTree = "<group>"; };
+		79BD76762B59C3E300CA3D68 /* UserStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStore.swift; sourceTree = "<group>"; };
+		79BD76782B59C53900CA3D68 /* ChannelsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelsViewModel.swift; sourceTree = "<group>"; };
+		79BD767A2B59C61300CA3D68 /* MessagesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesViewModel.swift; sourceTree = "<group>"; };
 		79D884C72B3C18830009EA4A /* SlackClone.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SlackClone.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		79D884C92B3C18830009EA4A /* SlackCloneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackCloneApp.swift; sourceTree = "<group>"; };
 		79D884CB2B3C18830009EA4A /* AppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppView.swift; sourceTree = "<group>"; };
@@ -95,7 +100,6 @@
 		79D884D62B3C18DB0009EA4A /* Supabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Supabase.swift; sourceTree = "<group>"; };
 		79D884DA2B3C191F0009EA4A /* ChannelListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelListView.swift; sourceTree = "<group>"; };
 		79D884DC2B3C19320009EA4A /* MessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesView.swift; sourceTree = "<group>"; };
-		79D884DE2B3C19420009EA4A /* MessagesAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesAPI.swift; sourceTree = "<group>"; };
 		79FEFFAC2B07873600D36347 /* UserManagement.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UserManagement.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		79FEFFAE2B07873600D36347 /* UserManagementApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserManagementApp.swift; sourceTree = "<group>"; };
 		79FEFFB02B07873600D36347 /* AppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppView.swift; sourceTree = "<group>"; };
@@ -228,10 +232,12 @@
 				79D884D62B3C18DB0009EA4A /* Supabase.swift */,
 				79D884DA2B3C191F0009EA4A /* ChannelListView.swift */,
 				79D884DC2B3C19320009EA4A /* MessagesView.swift */,
-				79D884DE2B3C19420009EA4A /* MessagesAPI.swift */,
 				7993B8A82B3C673A009B610B /* AuthView.swift */,
 				7993B8AA2B3C67E0009B610B /* Toast.swift */,
 				797D66492B46A1D8007592ED /* Store.swift */,
+				79BD76762B59C3E300CA3D68 /* UserStore.swift */,
+				79BD76782B59C53900CA3D68 /* ChannelsViewModel.swift */,
+				79BD767A2B59C61300CA3D68 /* MessagesViewModel.swift */,
 			);
 			path = SlackClone;
 			sourceTree = "<group>";
@@ -447,11 +453,13 @@
 				7993B8A92B3C673A009B610B /* AuthView.swift in Sources */,
 				7993B8AB2B3C67E0009B610B /* Toast.swift in Sources */,
 				79D884DD2B3C19320009EA4A /* MessagesView.swift in Sources */,
+				79BD76792B59C53900CA3D68 /* ChannelsViewModel.swift in Sources */,
 				797D664A2B46A1D8007592ED /* Store.swift in Sources */,
 				79D884DB2B3C191F0009EA4A /* ChannelListView.swift in Sources */,
+				79BD767B2B59C61300CA3D68 /* MessagesViewModel.swift in Sources */,
 				79D884CC2B3C18830009EA4A /* AppView.swift in Sources */,
+				79BD76772B59C3E300CA3D68 /* UserStore.swift in Sources */,
 				79D884D72B3C18DB0009EA4A /* Supabase.swift in Sources */,
-				79D884DF2B3C19420009EA4A /* MessagesAPI.swift in Sources */,
 				79D884CA2B3C18830009EA4A /* SlackCloneApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

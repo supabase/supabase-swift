@@ -123,15 +123,15 @@ public enum AnyJSON: Sendable, Codable, Hashable {
     }
   }
 
-  public func decode<T: Decodable>(_: T.Type) throws -> T {
+  public func decode<T: Decodable>(_: T.Type, decoder: JSONDecoder = AnyJSON.decoder) throws -> T {
     let data = try AnyJSON.encoder.encode(self)
-    return try AnyJSON.decoder.decode(T.self, from: data)
+    return try decoder.decode(T.self, from: data)
   }
 }
 
 extension JSONObject {
-  public func decode<T: Decodable>(_: T.Type) throws -> T {
-    try AnyJSON.object(self).decode(T.self)
+  public func decode<T: Decodable>(_: T.Type, decoder: JSONDecoder = AnyJSON.decoder) throws -> T {
+    try AnyJSON.object(self).decode(T.self, decoder: decoder)
   }
 
   public init(_ value: some Codable) throws {

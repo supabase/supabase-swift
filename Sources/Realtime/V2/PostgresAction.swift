@@ -88,13 +88,13 @@ public enum AnyAction: PostgresAction, HasRawMessage {
 }
 
 extension HasRecord {
-  public func decodeRecord<T: Decodable>() throws -> T {
-    try record.decode(T.self)
+  public func decodeRecord<T: Decodable>(decoder: JSONDecoder) throws -> T {
+    try record.decode(T.self, decoder: decoder)
   }
 }
 
 extension HasOldRecord {
-  public func decodeOldRecord<T: Decodable>() throws -> T {
-    try oldRecord.decode(T.self)
+  public func decodeOldRecord<T: Decodable>(decoder: JSONDecoder) throws -> T {
+    try oldRecord.decode(T.self, decoder: decoder)
   }
 }

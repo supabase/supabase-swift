@@ -84,9 +84,10 @@ public actor RealtimeChannelV2 {
     let joinConfig = RealtimeJoinConfig(
       broadcast: config.broadcast,
       presence: config.presence,
-      postgresChanges: postgresChanges,
-      accessToken: accessToken
+      postgresChanges: postgresChanges
     )
+
+    let payload = RealtimeJoinPayload(config: joinConfig, accessToken: accessToken)
 
     joinRef = await socket?.makeRef().description
 
@@ -98,7 +99,7 @@ public actor RealtimeChannelV2 {
         ref: joinRef,
         topic: topic,
         event: ChannelEvent.join,
-        payload: (try? JSONObject(RealtimeJoinPayload(config: joinConfig))) ?? [:]
+        payload: (try? JSONObject(payload)) ?? [:]
       )
     )
 

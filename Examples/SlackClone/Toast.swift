@@ -58,6 +58,7 @@ struct ToastModifier: ViewModifier {
         VStack {
           if let state = state.wrappedValue {
             Toast(state: state)
+              .padding()
               .transition(.move(edge: .bottom))
           }
         }

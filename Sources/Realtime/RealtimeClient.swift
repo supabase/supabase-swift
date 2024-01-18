@@ -118,7 +118,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public var rejoinAfter: (Int) -> TimeInterval = Defaults.rejoinSteppedBackOff
 
   /// The optional function to receive logs
-  public var logger: ((String) -> Void)?
+  public let logger: SupabaseLogger?
 
   /// Disables heartbeats from being sent. Default is false.
   public var skipHeartbeat: Bool = false
@@ -230,6 +230,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     self.paramsClosure = paramsClosure
     self.endPoint = endPoint
     self.vsn = vsn
+    self.logger = logger
 
     var headers = headers
     if headers["X-Client-Info"] == nil {
@@ -762,7 +763,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// - parameter items: List of items to be logged. Behaves just like debugPrint()
   func logItems(_ items: Any...) {
     let msg = items.map { String(describing: $0) }.joined(separator: ", ")
-    logger?("SwiftPhoenixClient: \(msg)")
+    logger?.debug("SwiftPhoenixClient: \(msg)")
   }
 
   // ----------------------------------------------------------------------

@@ -16,7 +16,7 @@ struct UserPresence: Codable {
 
 @MainActor
 struct MessagesView: View {
-  @Environment(Store.self) var store
+  let store = Store.shared.messages
 
   let channel: Channel
   @State private var newMessage = ""
@@ -36,6 +36,9 @@ struct MessagesView: View {
         }
       }
     }
+    .task {
+      await store.loadInitialMessages(channel.id)
+    }
     .safeAreaInset(edge: .bottom) {
       ComposeMessageView(text: $newMessage) {
         Task {
@@ -45,20 +48,13 @@ struct MessagesView: View {
       .padding()
     }
     .navigationTitle(channel.slug)
-//    .toolbar {
-//      ToolbarItem(placement: .principal) {
-//        Text("\(model.presences.count) online")
-//      }
-//    }
-    .task {
-      await store.loadInitialMessages(channel.id)
-    }
   }
 
   private func submitNewMessageButtonTapped() async throws {
     let message = try await NewMessage(
       message: newMessage,
-      userId: supabase.auth.session.user.id, channelId: channel.id
+      userId: supabase.auth.session.user.id,
+      channelId: channel.id
     )
 
     try await supabase.database.from("messages").insert(message).execute()

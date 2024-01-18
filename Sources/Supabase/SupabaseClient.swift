@@ -122,7 +122,8 @@ public final class SupabaseClient: @unchecked Sendable {
       config: RealtimeClientV2.Configuration(
         url: supabaseURL.appendingPathComponent("/realtime/v1"),
         apiKey: supabaseKey,
-        headers: defaultHeaders
+        headers: defaultHeaders,
+        logger: options.global.logger
       )
     )
 

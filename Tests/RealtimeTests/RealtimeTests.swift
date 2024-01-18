@@ -22,7 +22,7 @@ final class RealtimeTests: XCTestCase {
 //      makeWebSocketClient: { _, _ in mock }
 //    )
 //
-////    XCTAssertNoLeak(realtime)
+  ////    XCTAssertNoLeak(realtime)
 //
 //    await realtime.connect()
 //

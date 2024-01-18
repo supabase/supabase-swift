@@ -12,12 +12,19 @@ import SwiftUI
 @MainActor
 final class AppViewModel {
   var session: Session?
+  var selectedChannel: Channel?
 
   init() {
     Task { [weak self] in
       for await (event, session) in await supabase.auth.authStateChanges {
         guard [.signedIn, .signedOut, .initialSession].contains(event) else { return }
         self?.session = session
+
+        if session == nil {
+          for subscription in await supabase.realtimeV2.subscriptions.values {
+            await subscription.unsubscribe()
+          }
+        }
       }
     }
   }
@@ -25,15 +32,18 @@ final class AppViewModel {
 
 @MainActor
 struct AppView: View {
-  let model: AppViewModel
-
-  let store = Store()
+  @Bindable var model: AppViewModel
 
   @ViewBuilder
   var body: some View {
     if model.session != nil {
-      ChannelListView()
-        .environment(store)
+      NavigationSplitView {
+        ChannelListView(channel: $model.selectedChannel)
+      } detail: {
+        if let channel = model.selectedChannel {
+          MessagesView(channel: channel).id(channel.id)
+        }
+      }
     } else {
       AuthView()
     }

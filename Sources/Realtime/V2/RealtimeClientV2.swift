@@ -20,6 +20,7 @@ public actor RealtimeClientV2 {
     var headers: [String: String]
     var heartbeatInterval: TimeInterval
     var reconnectDelay: TimeInterval
+    var timeoutInterval: TimeInterval
     var disconnectOnSessionLoss: Bool
     var connectOnSubscribe: Bool
     var logger: SupabaseLogger?
@@ -30,6 +31,7 @@ public actor RealtimeClientV2 {
       headers: [String: String] = [:],
       heartbeatInterval: TimeInterval = 15,
       reconnectDelay: TimeInterval = 7,
+      timeoutInterval: TimeInterval = 10,
       disconnectOnSessionLoss: Bool = true,
       connectOnSubscribe: Bool = true,
       logger: SupabaseLogger? = nil
@@ -39,6 +41,7 @@ public actor RealtimeClientV2 {
       self.headers = headers
       self.heartbeatInterval = heartbeatInterval
       self.reconnectDelay = reconnectDelay
+      self.timeoutInterval = timeoutInterval
       self.disconnectOnSessionLoss = disconnectOnSessionLoss
       self.connectOnSubscribe = connectOnSubscribe
       self.logger = logger
@@ -141,7 +144,9 @@ public actor RealtimeClientV2 {
 
       await ws.connect()
 
-      let connectionStatus = await ws.status.first { _ in true }
+      let connectionStatus = try? await Task(timeout: config.timeoutInterval) {
+        await ws.status.first { _ in true }
+      }.value
 
       switch connectionStatus {
       case .open:
@@ -275,7 +280,7 @@ public actor RealtimeClientV2 {
     accessToken = token
 
     for channel in subscriptions.values {
-      if let token {
+      if let token, channel.statusStreamManager.value == .subscribed {
         await channel.updateAuth(jwt: token)
       }
     }
@@ -353,5 +358,39 @@ public actor RealtimeClientV2 {
 
   private var broadcastURL: URL {
     config.url.appendingPathComponent("api/broadcast")
+  }
+}
+
+struct TimeoutError: Error {}
+
+func withThrowingTimeout<R>(
+  seconds: TimeInterval,
+  body: @escaping @Sendable () async throws -> R
+) async throws -> R {
+  try await withThrowingTaskGroup(of: R.self) { group in
+    group.addTask {
+      try await body()
+    }
+
+    group.addTask {
+      try await Task.sleep(nanoseconds: UInt64(seconds * 1000000000))
+      throw TimeoutError()
+    }
+
+    let result = try await group.next()!
+    group.cancelAll()
+    return result
+  }
+}
+
+extension Task where Success: Sendable, Failure == Error {
+  init(
+    priority: TaskPriority? = nil,
+    timeout: TimeInterval,
+    operation: @escaping @Sendable () async throws -> Success
+  ) {
+    self = Task(priority: priority) {
+      try await withThrowingTimeout(seconds: timeout, body: operation)
+    }
   }
 }

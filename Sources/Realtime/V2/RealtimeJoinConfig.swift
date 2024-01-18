@@ -9,19 +9,23 @@ import Foundation
 
 struct RealtimeJoinPayload: Codable {
   var config: RealtimeJoinConfig
+  var accessToken: String?
+
+  enum CodingKeys: String, CodingKey {
+    case config
+    case accessToken = "access_token"
+  }
 }
 
 struct RealtimeJoinConfig: Codable, Hashable {
   var broadcast: BroadcastJoinConfig = .init()
   var presence: PresenceJoinConfig = .init()
   var postgresChanges: [PostgresJoinConfig] = []
-  var accessToken: String?
 
   enum CodingKeys: String, CodingKey {
     case broadcast
     case presence
     case postgresChanges = "postgres_changes"
-    case accessToken = "access_token"
   }
 }
 

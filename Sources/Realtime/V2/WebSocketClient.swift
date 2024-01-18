@@ -116,7 +116,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
         do {
           switch message {
           case let .string(stringMessage):
-            logger?.debug("Received message: \(stringMessage)")
+            logger?.verbose("Received message: \(stringMessage)")
 
             guard let data = stringMessage.data(using: .utf8) else {
               throw RealtimeError("Expected a UTF8 encoded message.")
@@ -143,7 +143,7 @@ final class WebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCli
     let data = try JSONEncoder().encode(message)
     let string = String(decoding: data, as: UTF8.self)
 
-    logger?.debug("Sending message: \(string)")
+    logger?.verbose("Sending message: \(string)")
     try await mutableState.task?.send(.string(string))
   }
 }

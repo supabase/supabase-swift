@@ -21,12 +21,16 @@ let decoder: JSONDecoder = {
 }()
 
 let supabase = SupabaseClient(
-  supabaseURL: URL(string: "https://xxpemjxnvjqnjjermerd.supabase.co")!,
-  supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4cGVtanhudmpxbmpqZXJtZXJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDE1MTc3OTEsImV4cCI6MjAxNzA5Mzc5MX0.SLcEdwQEwZkif49WylKfQQv5ZiWRQdpDm8d2JhvBdtk",
+  supabaseURL: URL(string: "http://127.0.0.1:54321")!,
+  supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
   options: SupabaseClientOptions(
     db: .init(encoder: encoder, decoder: decoder),
-    auth: SupabaseClientOptions.AuthOptions(
-      storage: KeychainLocalStorage(service: "supabase", accessGroup: nil)
-    )
+    global: SupabaseClientOptions.GlobalOptions(logger: Logger())
   )
 )
+
+struct Logger: SupabaseLogger {
+  func log(message: SupabaseLogMessage) {
+    print(message)
+  }
+}
