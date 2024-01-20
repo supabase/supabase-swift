@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
+import Dispatch
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
