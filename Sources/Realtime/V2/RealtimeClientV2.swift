@@ -8,7 +8,6 @@
 import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
-import Dispatch
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -242,7 +241,7 @@ public actor RealtimeClientV2 {
       guard let self else { return }
 
       while !Task.isCancelled {
-        try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.heartbeatInterval))
+        try? await Task.sleep(nanoseconds: 1_000_000_000 * UInt64(config.heartbeatInterval))
         if Task.isCancelled {
           break
         }
