@@ -42,7 +42,7 @@ test-docs:
 		&& exit 1)
 
 build-examples:
-	for scheme in Examples UserManagement; do \
+	for scheme in Examples UserManagement SlackClone; do \
 		xcodebuild build \
 			-skipMacroValidation \
 			-workspace supabase-swift.xcworkspace \

@@ -12,7 +12,7 @@ import Foundation
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 
-  let NSEC_PER_SEC: UInt64 = 1_000_000_000
+  let NSEC_PER_SEC: UInt64 = 1000000000
 #endif
 
 public actor RealtimeClientV2 {

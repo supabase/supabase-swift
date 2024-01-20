@@ -37,7 +37,7 @@ public actor RealtimeChannelV2 {
 
   private var clientChanges: [PostgresJoinConfig] = []
   private var joinRef: String?
-  private var pushes: [String: _Push] = [:]
+  private var pushes: [String: PushV2] = [:]
 
   public private(set) var status: Status {
     get { statusStream.lastElement }
@@ -466,7 +466,7 @@ public actor RealtimeChannelV2 {
 
   @discardableResult
   private func push(_ message: RealtimeMessageV2) async -> PushStatus {
-    let push = _Push(channel: self, message: message)
+    let push = PushV2(channel: self, message: message)
     if let ref = message.ref {
       pushes[ref] = push
     }

@@ -24,7 +24,7 @@ final class _PushTests: XCTestCase {
       socket: socket,
       logger: nil
     )
-    let push = _Push(
+    let push = PushV2(
       channel: channel,
       message: RealtimeMessageV2(
         joinRef: nil,
@@ -49,7 +49,7 @@ final class _PushTests: XCTestCase {
       socket: socket,
       logger: nil
     )
-    let push = _Push(
+    let push = PushV2(
       channel: channel,
       message: RealtimeMessageV2(
         joinRef: nil,

@@ -1,5 +1,5 @@
 //
-//  _Push.swift
+//  PushV2.swift
 //
 //
 //  Created by Guilherme Souza on 02/01/24.
@@ -8,7 +8,7 @@
 import Foundation
 @_spi(Internal) import _Helpers
 
-actor _Push {
+actor PushV2 {
   private weak var channel: RealtimeChannelV2?
   let message: RealtimeMessageV2
 
