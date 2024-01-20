@@ -62,10 +62,10 @@ public actor RealtimeClientV2 {
   var inFlightConnectionTask: Task<Void, Never>?
 
   public private(set) var subscriptions: [String: RealtimeChannelV2] = [:]
-  var ws: WebSocketClientProtocol?
+  var ws: WebSocketClient?
 
   let config: Configuration
-  let makeWebSocketClient: (_ url: URL, _ headers: [String: String]) -> WebSocketClientProtocol
+  let makeWebSocketClient: (_ url: URL, _ headers: [String: String]) -> WebSocketClient
 
   private let statusStream = SharedStream<Status>(initialElement: .disconnected)
 
@@ -80,8 +80,7 @@ public actor RealtimeClientV2 {
 
   init(
     config: Configuration,
-    makeWebSocketClient: @escaping (_ url: URL, _ headers: [String: String])
-      -> WebSocketClientProtocol
+    makeWebSocketClient: @escaping (_ url: URL, _ headers: [String: String]) -> WebSocketClient
   ) {
     self.config = config
     self.makeWebSocketClient = makeWebSocketClient
@@ -146,7 +145,7 @@ public actor RealtimeClientV2 {
       let ws = makeWebSocketClient(realtimeURL, config.headers)
       self.ws = ws
 
-      ws.connect()
+      await ws.connect()
 
       let connectionStatus = await ws.status.first { _ in true }
 
