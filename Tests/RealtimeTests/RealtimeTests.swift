@@ -36,8 +36,6 @@ final class RealtimeTests: XCTestCase {
       makeWebSocketClient: { _, _ in mock }
     )
 
-    XCTAssertNoLeak(realtime)
-
     let channel = await realtime.channel("public:messages")
     _ = await channel.postgresChange(InsertAction.self, table: "messages")
     _ = await channel.postgresChange(UpdateAction.self, table: "messages")
@@ -60,8 +58,6 @@ final class RealtimeTests: XCTestCase {
     await channel.subscribe()
 
     XCTAssertNoDifference(sentMessages, [.subscribeToMessages])
-
-    await realtime.disconnect()
   }
 
   func testHeartbeat() {

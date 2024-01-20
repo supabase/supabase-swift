@@ -11,6 +11,8 @@ import Foundation
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
+
+  let NSEC_PER_SEC: UInt64 = 1_000_000_000
 #endif
 
 public actor RealtimeClientV2 {
@@ -241,7 +243,7 @@ public actor RealtimeClientV2 {
       guard let self else { return }
 
       while !Task.isCancelled {
-        try? await Task.sleep(nanoseconds: 1_000_000_000 * UInt64(config.heartbeatInterval))
+        try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.heartbeatInterval))
         if Task.isCancelled {
           break
         }
@@ -379,7 +381,7 @@ func withThrowingTimeout<R>(
     }
 
     group.addTask {
-      try await Task.sleep(nanoseconds: UInt64(seconds * 1000000000))
+      try await Task.sleep(nanoseconds: UInt64(seconds) * NSEC_PER_SEC)
       throw TimeoutError()
     }
 
