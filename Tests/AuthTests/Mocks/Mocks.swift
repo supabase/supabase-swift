@@ -97,7 +97,7 @@ struct InsecureMockLocalStorage: AuthLocalStorage {
 
 extension Dependencies {
   static let localStorage: some AuthLocalStorage = {
-    #if os(iOS) || os(macOS) || os(watchOS) || os(tvOS)
+    #if !os(Linux) && !os(Windows)
       KeychainLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
     #elseif os(Windows)
       WinCredLocalStorage(service: "supabase.gotrue.swift")

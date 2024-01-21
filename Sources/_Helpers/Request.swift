@@ -1,6 +1,6 @@
 import Foundation
 
-#if os(Linux) || os(Windows)
+#if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
