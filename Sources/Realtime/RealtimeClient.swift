@@ -42,7 +42,7 @@ struct StateChangeCallbacks {
   var close: LockIsolated<[(ref: String, callback: Delegated<(Int, String?), Void>)]> = .init([])
   var error: LockIsolated<[(ref: String, callback: Delegated<(Error, URLResponse?), Void>)]> =
     .init([])
-  var message: LockIsolated<[(ref: String, callback: Delegated<Message, Void>)]> = .init([])
+  var message: LockIsolated<[(ref: String, callback: Delegated<RealtimeMessage, Void>)]> = .init([])
 }
 
 /// ## Socket Connection
@@ -58,6 +58,7 @@ struct StateChangeCallbacks {
 /// The `RealtimeClient` constructor takes the mount point of the socket,
 /// the authentication params, as well as options that can be found in
 /// the Socket docs, such as configuring the heartbeat.
+@available(*, deprecated, message: "Use new RealtimeClientV2 class instead.")
 public class RealtimeClient: PhoenixTransportDelegate {
   // ----------------------------------------------------------------------
 
@@ -117,7 +118,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public var rejoinAfter: (Int) -> TimeInterval = Defaults.rejoinSteppedBackOff
 
   /// The optional function to receive logs
-  public var logger: ((String) -> Void)?
+  public let logger: SupabaseLogger?
 
   /// Disables heartbeats from being sent. Default is false.
   public var skipHeartbeat: Bool = false
@@ -229,6 +230,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     self.paramsClosure = paramsClosure
     self.endPoint = endPoint
     self.vsn = vsn
+    self.logger = logger
 
     var headers = headers
     if headers["X-Client-Info"] == nil {
@@ -588,8 +590,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - parameter callback: Called when the Socket receives a message event
   @discardableResult
-  public func onMessage(callback: @escaping (Message) -> Void) -> String {
-    var delegated = Delegated<Message, Void>()
+  public func onMessage(callback: @escaping (RealtimeMessage) -> Void) -> String {
+    var delegated = Delegated<RealtimeMessage, Void>()
     delegated.manuallyDelegate(with: callback)
 
     return stateChangeCallbacks.message.withValue { [delegated] in
@@ -611,9 +613,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
   @discardableResult
   public func delegateOnMessage<T: AnyObject>(
     to owner: T,
-    callback: @escaping ((T, Message) -> Void)
+    callback: @escaping ((T, RealtimeMessage) -> Void)
   ) -> String {
-    var delegated = Delegated<Message, Void>()
+    var delegated = Delegated<RealtimeMessage, Void>()
     delegated.delegate(to: owner, with: callback)
 
     return stateChangeCallbacks.message.withValue { [delegated] in
@@ -761,7 +763,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// - parameter items: List of items to be logged. Behaves just like debugPrint()
   func logItems(_ items: Any...) {
     let msg = items.map { String(describing: $0) }.joined(separator: ", ")
-    logger?("SwiftPhoenixClient: \(msg)")
+    logger?.debug("SwiftPhoenixClient: \(msg)")
   }
 
   // ----------------------------------------------------------------------
@@ -823,7 +825,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     guard
       let data = rawMessage.data(using: String.Encoding.utf8),
       let json = decode(data) as? [Any?],
-      let message = Message(json: json)
+      let message = RealtimeMessage(json: json)
     else {
       logItems("receive: Unable to parse JSON: \(rawMessage)")
       return

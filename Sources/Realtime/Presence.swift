@@ -90,6 +90,12 @@ import Foundation
 ///     }
 ///
 ///     presence.onSync { renderUsers(presence.list()) }
+@available(
+  *,
+  deprecated,
+  renamed: "PresenceV2",
+  message: "Presence class is deprecated in favor of PresenceV2."
+)
 public final class Presence {
   // ----------------------------------------------------------------------
 

@@ -60,6 +60,13 @@
         "identifier" : "AuthTests",
         "name" : "AuthTests"
       }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "_HelpersTests",
+        "name" : "_HelpersTests"
+      }
     }
   ],
   "version" : 1

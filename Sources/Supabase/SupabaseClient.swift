@@ -54,6 +54,9 @@ public final class SupabaseClient: @unchecked Sendable {
   /// Realtime client for Supabase
   public let realtime: RealtimeClient
 
+  /// Realtime client for Supabase
+  public let realtimeV2: RealtimeClientV2
+
   /// Supabase Functions allows you to deploy and invoke edge functions.
   public private(set) lazy var functions = FunctionsClient(
     url: functionsURL,
@@ -115,6 +118,15 @@ public final class SupabaseClient: @unchecked Sendable {
       logger: options.global.logger
     )
 
+    realtimeV2 = RealtimeClientV2(
+      config: RealtimeClientV2.Configuration(
+        url: supabaseURL.appendingPathComponent("/realtime/v1"),
+        apiKey: supabaseKey,
+        headers: defaultHeaders,
+        logger: options.global.logger
+      )
+    )
+
     listenForAuthEvents()
   }
 
@@ -147,16 +159,17 @@ public final class SupabaseClient: @unchecked Sendable {
     listenForAuthEventsTask.setValue(
       Task {
         for await (event, session) in await auth.authStateChanges {
-          handleTokenChanged(event: event, session: session)
+          await handleTokenChanged(event: event, session: session)
         }
       }
     )
   }
 
-  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) {
+  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
     let supportedEvents: [AuthChangeEvent] = [.initialSession, .signedIn, .tokenRefreshed]
     guard supportedEvents.contains(event) else { return }
 
     realtime.setAuth(session?.accessToken)
+    await realtimeV2.setAuth(session?.accessToken)
   }
 }

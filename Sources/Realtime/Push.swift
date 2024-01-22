@@ -35,7 +35,7 @@ public class Push {
   public var timeout: TimeInterval
 
   /// The server's response to the Push
-  var receivedMessage: Message?
+  var receivedMessage: RealtimeMessage?
 
   /// Timer which triggers a timeout event
   var timeoutTimer: TimerQueue
@@ -44,7 +44,7 @@ public class Push {
   var timeoutWorkItem: DispatchWorkItem?
 
   /// Hooks into a Push. Where .receive("ok", callback(Payload)) are stored
-  var receiveHooks: [PushStatus: [Delegated<Message, Void>]]
+  var receiveHooks: [PushStatus: [Delegated<RealtimeMessage, Void>]]
 
   /// True if the Push has been sent
   var sent: Bool
@@ -121,9 +121,9 @@ public class Push {
   @discardableResult
   public func receive(
     _ status: PushStatus,
-    callback: @escaping ((Message) -> Void)
+    callback: @escaping ((RealtimeMessage) -> Void)
   ) -> Push {
-    var delegated = Delegated<Message, Void>()
+    var delegated = Delegated<RealtimeMessage, Void>()
     delegated.manuallyDelegate(with: callback)
 
     return receive(status, delegated: delegated)
@@ -148,9 +148,9 @@ public class Push {
   public func delegateReceive<Target: AnyObject>(
     _ status: PushStatus,
     to owner: Target,
-    callback: @escaping ((Target, Message) -> Void)
+    callback: @escaping ((Target, RealtimeMessage) -> Void)
   ) -> Push {
-    var delegated = Delegated<Message, Void>()
+    var delegated = Delegated<RealtimeMessage, Void>()
     delegated.delegate(to: owner, with: callback)
 
     return receive(status, delegated: delegated)
@@ -158,7 +158,7 @@ public class Push {
 
   /// Shared behavior between `receive` calls
   @discardableResult
-  func receive(_ status: PushStatus, delegated: Delegated<Message, Void>) -> Push {
+  func receive(_ status: PushStatus, delegated: Delegated<RealtimeMessage, Void>) -> Push {
     // If the message has already been received, pass it to the callback immediately
     if hasReceived(status: status), let receivedMessage {
       delegated.call(receivedMessage)
@@ -188,7 +188,7 @@ public class Push {
   ///
   /// - parameter status: Status which was received, e.g. "ok", "error", "timeout"
   /// - parameter response: Response that was received
-  private func matchReceive(_ status: PushStatus, message: Message) {
+  private func matchReceive(_ status: PushStatus, message: RealtimeMessage) {
     receiveHooks[status]?.forEach { $0.call(message) }
   }
 

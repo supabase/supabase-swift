@@ -7,7 +7,7 @@ public protocol AuthLocalStorage: Sendable {
 }
 
 extension AuthClient.Configuration {
-  #if os(iOS) || os(macOS) || os(watchOS) || os(tvOS)
+  #if !os(Linux) && !os(Windows)
     public static let defaultLocalStorage: AuthLocalStorage = KeychainLocalStorage(
       service: "supabase.gotrue.swift",
       accessGroup: nil

@@ -5,6 +5,8 @@ PLATFORM_TVOS = tvOS Simulator,name=Apple TV
 PLATFORM_WATCHOS = watchOS Simulator,name=Apple Watch Series 9 (41mm)
 EXAMPLE = Examples
 
+test-all: test-library test-linux
+
 test-library:
 	for platform in "$(PLATFORM_IOS)" "$(PLATFORM_MACOS)" "$(PLATFORM_MAC_CATALYST)" "$(PLATFORM_TVOS)" "$(PLATFORM_WATCHOS)"; do \
 		xcodebuild test \
@@ -13,6 +15,10 @@ test-library:
 			-scheme Supabase \
 			-destination platform="$$platform" || exit 1; \
 	done;
+
+test-linux:
+	docker build -t supabase-swift .
+	docker run supabase-swift
 
 build-for-library-evolution:
 	swift build \
@@ -36,7 +42,7 @@ test-docs:
 		&& exit 1)
 
 build-examples:
-	for scheme in Examples UserManagement; do \
+	for scheme in Examples UserManagement SlackClone; do \
 		xcodebuild build \
 			-skipMacroValidation \
 			-workspace supabase-swift.xcworkspace \
@@ -47,4 +53,4 @@ build-examples:
 format:
 	@swiftformat .
 
-.PHONY: test-library build-example format
+.PHONY: test-library test-linux build-example format

@@ -2,6 +2,7 @@ import Foundation
 @_spi(Internal) import _Helpers
 
 public typealias AnyJSON = _Helpers.AnyJSON
+public typealias JSONObject = _Helpers.JSONObject
 
 public enum AuthChangeEvent: String, Sendable {
   case initialSession = "INITIAL_SESSION"

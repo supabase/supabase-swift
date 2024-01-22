@@ -9,6 +9,7 @@ var dependencies: [Package.Dependency] = [
   .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
   .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.0.0"),
   .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "3.0.0"),
+  .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
 ]
 
 var goTrueDependencies: [Target.Dependency] = [
@@ -52,6 +53,13 @@ let package = Package(
       name: "_Helpers",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+      ]
+    ),
+    .testTarget(
+      name: "_HelpersTests",
+      dependencies: [
+        "_Helpers",
+        .product(name: "CustomDump", package: "swift-custom-dump"),
       ]
     ),
     .target(name: "Functions", dependencies: ["_Helpers"]),
@@ -103,7 +111,13 @@ let package = Package(
         "_Helpers",
       ]
     ),
-    .testTarget(name: "RealtimeTests", dependencies: ["Realtime"]),
+    .testTarget(
+      name: "RealtimeTests",
+      dependencies: [
+        "Realtime",
+        .product(name: "CustomDump", package: "swift-custom-dump"),
+      ]
+    ),
     .target(name: "Storage", dependencies: ["_Helpers"]),
     .testTarget(name: "StorageTests", dependencies: ["Storage"]),
     .target(

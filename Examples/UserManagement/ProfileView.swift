@@ -176,8 +176,6 @@ struct ProfileView: View {
   }
 }
 
-#if swift(>=5.9)
-  #Preview {
-    ProfileView()
-  }
-#endif
+#Preview {
+  ProfileView()
+}
