@@ -94,7 +94,7 @@ import Foundation
   *,
   deprecated,
   renamed: "PresenceV2",
-  message: "Presence class is deprecated in favor of PresenceV2."
+  message: "Presence class is deprecated in favor of PresenceV2. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
 )
 public final class Presence {
   // ----------------------------------------------------------------------
