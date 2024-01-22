@@ -136,6 +136,10 @@ public actor RealtimeChannelV2 {
     )
   }
 
+  public func broadcast(event: String, message: some Codable) async throws {
+    try await broadcast(event: event, message: JSONObject(message))
+  }
+
   public func broadcast(event: String, message: JSONObject) async {
     assert(
       status == .subscribed,
@@ -229,7 +233,7 @@ public actor RealtimeChannelV2 {
         {
           let serverPostgresChanges = try message.payload["response"]?
             .objectValue?["postgres_changes"]?
-            .decode([PostgresJoinConfig].self)
+            .decode(as: [PostgresJoinConfig].self)
 
           callbackManager.setServerChanges(changes: serverPostgresChanges ?? [])
 
@@ -247,7 +251,7 @@ public actor RealtimeChannelV2 {
 
         let ids = message.payload["ids"]?.arrayValue?.compactMap(\.intValue) ?? []
 
-        let postgresActions = try data.decode(PostgresActionData.self)
+        let postgresActions = try data.decode(as: PostgresActionData.self)
 
         let action: AnyAction = switch postgresActions.type {
         case "UPDATE":
@@ -320,12 +324,12 @@ public actor RealtimeChannelV2 {
         )
 
       case .presenceDiff:
-        let joins = try message.payload["joins"]?.decode([String: _Presence].self) ?? [:]
-        let leaves = try message.payload["leaves"]?.decode([String: _Presence].self) ?? [:]
+        let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]
+        let leaves = try message.payload["leaves"]?.decode(as: [String: PresenceV2].self) ?? [:]
         callbackManager.triggerPresenceDiffs(joins: joins, leaves: leaves, rawMessage: message)
 
       case .presenceState:
-        let joins = try message.payload.decode([String: _Presence].self)
+        let joins = try message.payload.decode(as: [String: PresenceV2].self)
         callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:], rawMessage: message)
       }
     } catch {

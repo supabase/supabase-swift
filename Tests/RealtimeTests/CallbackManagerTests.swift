@@ -197,8 +197,8 @@ final class CallbackManagerTests: XCTestCase {
   func testTriggerPresenceDiffs() {
     let callbackManager = CallbackManager()
 
-    let joins = ["user1": _Presence(ref: "ref", state: [:])]
-    let leaves = ["user2": _Presence(ref: "ref", state: [:])]
+    let joins = ["user1": PresenceV2(ref: "ref", state: [:])]
+    let leaves = ["user2": PresenceV2(ref: "ref", state: [:])]
 
     let receivedAction = LockIsolated(PresenceAction?.none)
 

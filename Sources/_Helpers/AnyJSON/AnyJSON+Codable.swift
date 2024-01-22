@@ -54,7 +54,10 @@ extension AnyJSON {
     }
   }
 
-  public func decode<T: Decodable>(_: T.Type, decoder: JSONDecoder = AnyJSON.decoder) throws -> T {
+  public func decode<T: Decodable>(
+    as _: T.Type = T.self,
+    decoder: JSONDecoder = AnyJSON.decoder
+  ) throws -> T {
     let data = try AnyJSON.encoder.encode(self)
     return try decoder.decode(T.self, from: data)
   }
@@ -62,16 +65,19 @@ extension AnyJSON {
 
 extension JSONArray {
   public func decode<T: Decodable>(
-    _: T.Type,
+    as _: T.Type = T.self,
     decoder: JSONDecoder = AnyJSON.decoder
   ) throws -> [T] {
-    try AnyJSON.array(self).decode([T].self, decoder: decoder)
+    try AnyJSON.array(self).decode(as: [T].self, decoder: decoder)
   }
 }
 
 extension JSONObject {
-  public func decode<T: Decodable>(_: T.Type, decoder: JSONDecoder = AnyJSON.decoder) throws -> T {
-    try AnyJSON.object(self).decode(T.self, decoder: decoder)
+  public func decode<T: Decodable>(
+    as _: T.Type = T.self,
+    decoder: JSONDecoder = AnyJSON.decoder
+  ) throws -> T {
+    try AnyJSON.object(self).decode(as: T.self, decoder: decoder)
   }
 
   public init(_ value: some Codable) throws {

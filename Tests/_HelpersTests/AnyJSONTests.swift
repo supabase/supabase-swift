@@ -105,7 +105,7 @@ final class AnyJSONTests: XCTestCase {
     ]
 
     XCTAssertNoDifference(try AnyJSON(codableValue), json)
-    XCTAssertNoDifference(codableValue, try json.decode(CodableValue.self))
+    XCTAssertNoDifference(codableValue, try json.decode(as: CodableValue.self))
   }
 }
 

@@ -8,12 +8,12 @@
 import Foundation
 @_spi(Internal) import _Helpers
 
-public struct _Presence: Hashable, Sendable {
+public struct PresenceV2: Hashable, Sendable {
   public let ref: String
   public let state: JSONObject
 }
 
-extension _Presence: Codable {
+extension PresenceV2: Codable {
   struct _StringCodingKey: CodingKey {
     var stringValue: String
 
@@ -48,7 +48,7 @@ extension _Presence: Codable {
         JSONObject.self,
         DecodingError.Context(
           codingPath: codingPath,
-          debugDescription: "A presence should at least have a phx_ref"
+          debugDescription: "A presence should at least have a phx_ref."
         )
       )
     }
@@ -58,13 +58,13 @@ extension _Presence: Codable {
         String.self,
         DecodingError.Context(
           codingPath: codingPath + [_StringCodingKey("phx_ref")],
-          debugDescription: "A presence should at least have a phx_ref"
+          debugDescription: "A presence should at least have a phx_ref."
         )
       )
     }
 
     meta["phx_ref"] = nil
-    self = _Presence(ref: presenceRef, state: meta)
+    self = PresenceV2(ref: presenceRef, state: meta)
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -75,33 +75,36 @@ extension _Presence: Codable {
 }
 
 public protocol PresenceAction: Sendable, HasRawMessage {
-  var joins: [String: _Presence] { get }
-  var leaves: [String: _Presence] { get }
+  var joins: [String: PresenceV2] { get }
+  var leaves: [String: PresenceV2] { get }
 }
 
 extension PresenceAction {
-  public func decodeJoins<T: Decodable>(as _: T.Type, ignoreOtherTypes: Bool = true) throws -> [T] {
-    if ignoreOtherTypes {
-      return joins.values.compactMap { try? $0.state.decode(T.self) }
-    }
-
-    return try joins.values.map { try $0.state.decode(T.self) }
-  }
-
-  public func decodeLeaves<T: Decodable>(
-    as _: T.Type,
+  public func decodeJoins<T: Decodable>(
+    as _: T.Type = T.self,
     ignoreOtherTypes: Bool = true
   ) throws -> [T] {
     if ignoreOtherTypes {
-      return leaves.values.compactMap { try? $0.state.decode(T.self) }
+      return joins.values.compactMap { try? $0.state.decode(as: T.self) }
     }
 
-    return try leaves.values.map { try $0.state.decode(T.self) }
+    return try joins.values.map { try $0.state.decode(as: T.self) }
+  }
+
+  public func decodeLeaves<T: Decodable>(
+    as _: T.Type = T.self,
+    ignoreOtherTypes: Bool = true
+  ) throws -> [T] {
+    if ignoreOtherTypes {
+      return leaves.values.compactMap { try? $0.state.decode(as: T.self) }
+    }
+
+    return try leaves.values.map { try $0.state.decode(as: T.self) }
   }
 }
 
 struct PresenceActionImpl: PresenceAction {
-  var joins: [String: _Presence]
-  var leaves: [String: _Presence]
+  var joins: [String: PresenceV2]
+  var leaves: [String: PresenceV2]
   var rawMessage: RealtimeMessageV2
 }
