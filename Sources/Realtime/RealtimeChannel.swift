@@ -139,7 +139,7 @@ public enum RealtimeSubscribeStates {
 ///         .receive("error") { payload in print("Failed ot join", payload) }
 ///         .receive("timeout") { payload in print("Networking issue...", payload) }
 ///
-
+@available(*, deprecated, message: "Use new RealtimeChannelV2 class instead. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md")
 public class RealtimeChannel {
   /// The topic of the RealtimeChannel. e.g. "rooms:friends"
   public let topic: String
