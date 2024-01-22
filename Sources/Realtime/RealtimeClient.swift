@@ -122,7 +122,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public var rejoinAfter: (Int) -> TimeInterval = Defaults.rejoinSteppedBackOff
 
   /// The optional function to receive logs
-  public let logger: SupabaseLogger?
+  public var logger: ((String) -> Void)?
 
   /// Disables heartbeats from being sent. Default is false.
   public var skipHeartbeat: Bool = false
@@ -191,16 +191,14 @@ public class RealtimeClient: PhoenixTransportDelegate {
     _ endPoint: String,
     headers: [String: String] = [:],
     params: Payload? = nil,
-    vsn: String = Defaults.vsn,
-    logger: SupabaseLogger? = nil
+    vsn: String = Defaults.vsn
   ) {
     self.init(
       endPoint: endPoint,
       headers: headers,
       transport: { url in URLSessionTransport(url: url) },
       paramsClosure: { params },
-      vsn: vsn,
-      logger: logger
+      vsn: vsn
     )
   }
 
@@ -209,16 +207,14 @@ public class RealtimeClient: PhoenixTransportDelegate {
     _ endPoint: String,
     headers: [String: String] = [:],
     paramsClosure: PayloadClosure?,
-    vsn: String = Defaults.vsn,
-    logger: SupabaseLogger? = nil
+    vsn: String = Defaults.vsn
   ) {
     self.init(
       endPoint: endPoint,
       headers: headers,
       transport: { url in URLSessionTransport(url: url) },
       paramsClosure: paramsClosure,
-      vsn: vsn,
-      logger: logger
+      vsn: vsn
     )
   }
 
@@ -227,21 +223,19 @@ public class RealtimeClient: PhoenixTransportDelegate {
     headers: [String: String] = [:],
     transport: @escaping ((URL) -> PhoenixTransport),
     paramsClosure: PayloadClosure? = nil,
-    vsn: String = Defaults.vsn,
-    logger: SupabaseLogger? = nil
+    vsn: String = Defaults.vsn
   ) {
     self.transport = transport
     self.paramsClosure = paramsClosure
     self.endPoint = endPoint
     self.vsn = vsn
-    self.logger = logger
 
     var headers = headers
     if headers["X-Client-Info"] == nil {
       headers["X-Client-Info"] = "realtime-swift/\(version)"
     }
     self.headers = headers
-    http = HTTPClient(logger: logger, fetchHandler: { try await URLSession.shared.data(for: $0) })
+    http = HTTPClient(logger: nil, fetchHandler: { try await URLSession.shared.data(for: $0) })
 
     let params = paramsClosure?()
     if let jwt = (params?["Authorization"] as? String)?.split(separator: " ").last {
@@ -767,7 +761,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// - parameter items: List of items to be logged. Behaves just like debugPrint()
   func logItems(_ items: Any...) {
     let msg = items.map { String(describing: $0) }.joined(separator: ", ")
-    logger?.debug("SwiftPhoenixClient: \(msg)")
+    logger?("SwiftPhoenixClient: \(msg)")
   }
 
   // ----------------------------------------------------------------------

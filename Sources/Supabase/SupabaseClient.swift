@@ -114,8 +114,7 @@ public final class SupabaseClient: @unchecked Sendable {
     realtime = RealtimeClient(
       supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
       headers: defaultHeaders,
-      params: defaultHeaders,
-      logger: options.global.logger
+      params: defaultHeaders
     )
 
     realtimeV2 = RealtimeClientV2(
