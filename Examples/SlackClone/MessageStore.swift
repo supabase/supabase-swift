@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import IdentifiedCollections
 import Supabase
 
 struct Messages {
@@ -15,7 +16,7 @@ struct Messages {
     var id: AnyHashable { self }
 
     var author: User
-    var messages: [Message]
+    var messages: IdentifiedArrayOf<Message>
   }
 
   init(sections: [Section]) {
@@ -43,7 +44,7 @@ struct Messages {
 
   mutating func remove(id: Message.ID) {
     if let index = messageToSectionLookupTable[id] {
-      sections[index].messages.removeAll { $0.id == id }
+      sections[index].messages.remove(id: id)
       messageToSectionLookupTable[id] = nil
       if sections[index].messages.isEmpty {
         sections.remove(at: index)

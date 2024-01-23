@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OSLog
 import Supabase
 
 @MainActor
@@ -14,6 +15,7 @@ final class UserStore {
   static let shared = UserStore()
 
   private(set) var users: [User.ID: User] = [:]
+  private(set) var presences: [User.ID: UserPresence] = [:]
 
   private init() {
     Task {
@@ -39,11 +41,13 @@ final class UserStore {
           let leaves = try presence.decodeLeaves(as: UserPresence.self)
 
           for join in joins {
-            self.users[join.userId]?.status = .online
+            self.presences[join.userId] = join
+            Logger.main.debug("User \(join.userId) joined")
           }
 
           for leave in leaves {
-            self.users[leave.userId]?.status = .offline
+            self.presences[leave.userId] = nil
+            Logger.main.debug("User \(leave.userId) leaved")
           }
         }
       }

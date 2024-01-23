@@ -19,12 +19,6 @@ class Dependencies {
 struct User: Codable, Identifiable, Hashable {
   var id: UUID
   var username: String
-  var status: Status = .offline
-
-  enum Status: String, Codable {
-    case online = "ONLINE"
-    case offline = "OFFLINE"
-  }
 }
 
 struct AddChannel: Encodable {
@@ -38,7 +32,7 @@ struct Channel: Identifiable, Codable, Hashable {
   var insertedAt: Date
 }
 
-struct Message: Identifiable, Decodable, Hashable {
+struct Message: Identifiable, Codable, Hashable {
   var id: Int
   var insertedAt: Date
   var message: String
@@ -52,7 +46,7 @@ struct NewMessage: Codable {
   let channelId: Int
 }
 
-struct UserPresence: Codable {
+struct UserPresence: Codable, Hashable {
   var userId: UUID
   var onlineAt: Date
 }

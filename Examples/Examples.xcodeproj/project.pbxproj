@@ -35,6 +35,8 @@
 		79AF04812B2CE261008761AD /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04802B2CE261008761AD /* AuthView.swift */; };
 		79AF04842B2CE408008761AD /* AuthWithMagicLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */; };
 		79AF04862B2CE586008761AD /* Debug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04852B2CE586008761AD /* Debug.swift */; };
+		79B8F4242B5FED7C0000E839 /* IdentifiedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 79B8F4232B5FED7C0000E839 /* IdentifiedCollections */; };
+		79B8F4262B602F640000E839 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79B8F4252B602F640000E839 /* Logger.swift */; };
 		79BD76772B59C3E300CA3D68 /* UserStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD76762B59C3E300CA3D68 /* UserStore.swift */; };
 		79BD76792B59C53900CA3D68 /* ChannelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD76782B59C53900CA3D68 /* ChannelStore.swift */; };
 		79BD767B2B59C61300CA3D68 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD767A2B59C61300CA3D68 /* MessageStore.swift */; };
@@ -88,6 +90,7 @@
 		79AF04802B2CE261008761AD /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthWithMagicLink.swift; sourceTree = "<group>"; };
 		79AF04852B2CE586008761AD /* Debug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debug.swift; sourceTree = "<group>"; };
+		79B8F4252B602F640000E839 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		79BD76762B59C3E300CA3D68 /* UserStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStore.swift; sourceTree = "<group>"; };
 		79BD76782B59C53900CA3D68 /* ChannelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelStore.swift; sourceTree = "<group>"; };
 		79BD767A2B59C61300CA3D68 /* MessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
@@ -132,6 +135,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				79D884D92B3C18E90009EA4A /* Supabase in Frameworks */,
+				79B8F4242B5FED7C0000E839 /* IdentifiedCollections in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -238,6 +242,7 @@
 				79BD76762B59C3E300CA3D68 /* UserStore.swift */,
 				79BD76782B59C53900CA3D68 /* ChannelStore.swift */,
 				79BD767A2B59C61300CA3D68 /* MessageStore.swift */,
+				79B8F4252B602F640000E839 /* Logger.swift */,
 			);
 			path = SlackClone;
 			sourceTree = "<group>";
@@ -318,6 +323,7 @@
 			name = SlackClone;
 			packageProductDependencies = (
 				79D884D82B3C18E90009EA4A /* Supabase */,
+				79B8F4232B5FED7C0000E839 /* IdentifiedCollections */,
 			);
 			productName = SlackClone;
 			productReference = 79D884C72B3C18830009EA4A /* SlackClone.app */;
@@ -457,6 +463,7 @@
 				797D664A2B46A1D8007592ED /* Dependencies.swift in Sources */,
 				79D884DB2B3C191F0009EA4A /* ChannelListView.swift in Sources */,
 				79BD767B2B59C61300CA3D68 /* MessageStore.swift in Sources */,
+				79B8F4262B602F640000E839 /* Logger.swift in Sources */,
 				79D884CC2B3C18830009EA4A /* AppView.swift in Sources */,
 				79BD76772B59C3E300CA3D68 /* UserStore.swift in Sources */,
 				79D884D72B3C18DB0009EA4A /* Supabase.swift in Sources */,
@@ -910,6 +917,11 @@
 		79719ECD2ADF26C400737804 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Supabase;
+		};
+		79B8F4232B5FED7C0000E839 /* IdentifiedCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */;
+			productName = IdentifiedCollections;
 		};
 		79D884D82B3C18E90009EA4A /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;

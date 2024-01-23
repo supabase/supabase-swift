@@ -12,6 +12,7 @@ import SwiftUI
 @MainActor
 struct MessagesView: View {
   let store = Dependencies.shared.messages
+  let userStore = Dependencies.shared.users
 
   let channel: Channel
   @State private var newMessage = ""
@@ -41,7 +42,10 @@ struct MessagesView: View {
               .foregroundStyle(.secondary)
 
             Image(systemName: "circle.fill")
-              .foregroundStyle(section.author.status == .online ? Color.green : Color.red)
+              .foregroundStyle(
+                userStore.presences[section.author.id] != nil ? Color.green : Color
+                  .red
+              )
           }
         }
       }
