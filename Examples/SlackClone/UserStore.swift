@@ -11,17 +11,41 @@ import Supabase
 @MainActor
 @Observable
 final class UserStore {
+  static let shared = UserStore()
+
   private(set) var users: [User.ID: User] = [:]
 
-  init() {
+  private init() {
     Task {
       let channel = await supabase.realtimeV2.channel("public:users")
       let changes = await channel.postgresChange(AnyAction.self, table: "users")
 
+      let prenseces = await channel.presenceChange()
+
       await channel.subscribe()
 
-      for await change in changes {
-        handleChangedUser(change)
+      let userId = try await supabase.auth.session.user.id
+      try await channel.track(UserPresence(userId: userId, onlineAt: Date()))
+
+      Task {
+        for await change in changes {
+          handleChangedUser(change)
+        }
+      }
+
+      Task {
+        for await presence in prenseces {
+          let joins = try presence.decodeJoins(as: UserPresence.self)
+          let leaves = try presence.decodeLeaves(as: UserPresence.self)
+
+          for join in joins {
+            self.users[join.userId]?.status = .online
+          }
+
+          for leave in leaves {
+            self.users[leave.userId]?.status = .offline
+          }
+        }
       }
     }
   }
