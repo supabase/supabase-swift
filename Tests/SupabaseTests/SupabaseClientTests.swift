@@ -51,4 +51,13 @@ final class SupabaseClientTests: XCTestCase {
       ]
     )
   }
+
+  #if !os(Linux)
+    func testClientInitWithDefaultOptionsShouldBeAvailableInNonLinux() {
+      _ = SupabaseClient(
+        supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+        supabaseKey: "ANON_KEY"
+      )
+    }
+  #endif
 }
