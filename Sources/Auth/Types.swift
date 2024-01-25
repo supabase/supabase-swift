@@ -646,3 +646,7 @@ public struct WeakPassword: Codable, Hashable, Sendable {
   /// `pwned`.
   public let reasons: [String]
 }
+
+struct DeleteUserRequest: Encodable {
+  let shouldSoftDelete: Bool
+}
