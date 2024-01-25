@@ -71,6 +71,22 @@ public final class SupabaseClient: @unchecked Sendable {
     options.global.session
   }
 
+  #if !os(Linux)
+    /// Create a new client.
+    /// - Parameters:
+    ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
+    /// your project dashboard.
+    ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
+    /// your project dashboard.
+    public convenience init(supabaseURL: URL, supabaseKey: String) {
+      self.init(
+        supabaseURL: supabaseURL,
+        supabaseKey: supabaseKey,
+        options: SupabaseClientOptions()
+      )
+    }
+  #endif
+
   /// Create a new client.
   /// - Parameters:
   ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
