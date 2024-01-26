@@ -7,11 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		790132E02B0C29080051B356 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 790132DF2B0C29080051B356 /* Supabase */; };
-		790308E92AEE7B4D003C4A98 /* RealtimeSampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790308E82AEE7B4D003C4A98 /* RealtimeSampleApp.swift */; };
-		790308EB2AEE7B4D003C4A98 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790308EA2AEE7B4D003C4A98 /* ContentView.swift */; };
-		790308ED2AEE7B4E003C4A98 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 790308EC2AEE7B4E003C4A98 /* Assets.xcassets */; };
-		790308F02AEE7B4E003C4A98 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 790308EF2AEE7B4E003C4A98 /* Preview Assets.xcassets */; };
 		793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895C92954ABFF0044F2B8 /* ExamplesApp.swift */; };
 		793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895CB2954ABFF0044F2B8 /* RootView.swift */; };
 		793895CE2954AC000044F2B8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 793895CD2954AC000044F2B8 /* Assets.xcassets */; };
@@ -19,6 +14,7 @@
 		793E03092B2CED5D00AC7DED /* Contants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E03082B2CED5D00AC7DED /* Contants.swift */; };
 		793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E030A2B2CEDDA00AC7DED /* ActionState.swift */; };
 		793E030D2B2DAB5700AC7DED /* SignInWithApple.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */; };
+		7940E3152B36187A0089BEE1 /* GoogleSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7940E3142B36187A0089BEE1 /* GoogleSignIn.swift */; };
 		794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1212955F26A008C9526 /* AddTodoListView.swift */; };
 		794EF1242955F3DE008C9526 /* TodoListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1232955F3DE008C9526 /* TodoListRow.swift */; };
 		7956405E2954ADE00088A06F /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405D2954ADE00088A06F /* Secrets.swift */; };
@@ -32,10 +28,24 @@
 		796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796298982AEBBA77000AA957 /* MFAFlow.swift */; };
 		7962989D2AEBC6F9000AA957 /* SVGView in Frameworks */ = {isa = PBXBuildFile; productRef = 7962989C2AEBC6F9000AA957 /* SVGView */; };
 		79719ECE2ADF26C400737804 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79719ECD2ADF26C400737804 /* Supabase */; };
+		797D664A2B46A1D8007592ED /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797D66492B46A1D8007592ED /* Store.swift */; };
+		7993B8A92B3C673A009B610B /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993B8A82B3C673A009B610B /* AuthView.swift */; };
+		7993B8AB2B3C67E0009B610B /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993B8AA2B3C67E0009B610B /* Toast.swift */; };
 		79AF047F2B2CE207008761AD /* AuthWithEmailAndPassword.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */; };
 		79AF04812B2CE261008761AD /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04802B2CE261008761AD /* AuthView.swift */; };
 		79AF04842B2CE408008761AD /* AuthWithMagicLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */; };
 		79AF04862B2CE586008761AD /* Debug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04852B2CE586008761AD /* Debug.swift */; };
+		79BD76772B59C3E300CA3D68 /* UserStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD76762B59C3E300CA3D68 /* UserStore.swift */; };
+		79BD76792B59C53900CA3D68 /* ChannelsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD76782B59C53900CA3D68 /* ChannelsViewModel.swift */; };
+		79BD767B2B59C61300CA3D68 /* MessagesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD767A2B59C61300CA3D68 /* MessagesViewModel.swift */; };
+		79D884CA2B3C18830009EA4A /* SlackCloneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884C92B3C18830009EA4A /* SlackCloneApp.swift */; };
+		79D884CC2B3C18830009EA4A /* AppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884CB2B3C18830009EA4A /* AppView.swift */; };
+		79D884CE2B3C18840009EA4A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79D884CD2B3C18840009EA4A /* Assets.xcassets */; };
+		79D884D22B3C18840009EA4A /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79D884D12B3C18840009EA4A /* Preview Assets.xcassets */; };
+		79D884D72B3C18DB0009EA4A /* Supabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884D62B3C18DB0009EA4A /* Supabase.swift */; };
+		79D884D92B3C18E90009EA4A /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79D884D82B3C18E90009EA4A /* Supabase */; };
+		79D884DB2B3C191F0009EA4A /* ChannelListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884DA2B3C191F0009EA4A /* ChannelListView.swift */; };
+		79D884DD2B3C19320009EA4A /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884DC2B3C19320009EA4A /* MessagesView.swift */; };
 		79FEFFAF2B07873600D36347 /* UserManagementApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFAE2B07873600D36347 /* UserManagementApp.swift */; };
 		79FEFFB12B07873600D36347 /* AppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFB02B07873600D36347 /* AppView.swift */; };
 		79FEFFB32B07873700D36347 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79FEFFB22B07873700D36347 /* Assets.xcassets */; };
@@ -50,12 +60,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		790308E62AEE7B4D003C4A98 /* RealtimeSample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RealtimeSample.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		790308E82AEE7B4D003C4A98 /* RealtimeSampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeSampleApp.swift; sourceTree = "<group>"; };
-		790308EA2AEE7B4D003C4A98 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		790308EC2AEE7B4E003C4A98 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		790308EF2AEE7B4E003C4A98 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		790308F12AEE7B4E003C4A98 /* RealtimeSample.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RealtimeSample.entitlements; sourceTree = "<group>"; };
 		793895C62954ABFF0044F2B8 /* Examples.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Examples.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		793895C92954ABFF0044F2B8 /* ExamplesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExamplesApp.swift; sourceTree = "<group>"; };
 		793895CB2954ABFF0044F2B8 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -65,6 +69,7 @@
 		793E03082B2CED5D00AC7DED /* Contants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contants.swift; sourceTree = "<group>"; };
 		793E030A2B2CEDDA00AC7DED /* ActionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionState.swift; sourceTree = "<group>"; };
 		793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInWithApple.swift; sourceTree = "<group>"; };
+		7940E3142B36187A0089BEE1 /* GoogleSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignIn.swift; sourceTree = "<group>"; };
 		794EF1212955F26A008C9526 /* AddTodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTodoListView.swift; sourceTree = "<group>"; };
 		794EF1232955F3DE008C9526 /* TodoListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListRow.swift; sourceTree = "<group>"; };
 		7956405D2954ADE00088A06F /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
@@ -75,10 +80,26 @@
 		795640692955AFBD0088A06F /* ErrorText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorText.swift; sourceTree = "<group>"; };
 		796298982AEBBA77000AA957 /* MFAFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MFAFlow.swift; sourceTree = "<group>"; };
 		7962989A2AEBBD9F000AA957 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		797D66492B46A1D8007592ED /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
+		7993B8A82B3C673A009B610B /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		7993B8AA2B3C67E0009B610B /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
+		7993B8AC2B3C97B6009B610B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthWithEmailAndPassword.swift; sourceTree = "<group>"; };
 		79AF04802B2CE261008761AD /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthWithMagicLink.swift; sourceTree = "<group>"; };
 		79AF04852B2CE586008761AD /* Debug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debug.swift; sourceTree = "<group>"; };
+		79BD76762B59C3E300CA3D68 /* UserStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStore.swift; sourceTree = "<group>"; };
+		79BD76782B59C53900CA3D68 /* ChannelsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelsViewModel.swift; sourceTree = "<group>"; };
+		79BD767A2B59C61300CA3D68 /* MessagesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesViewModel.swift; sourceTree = "<group>"; };
+		79D884C72B3C18830009EA4A /* SlackClone.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SlackClone.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		79D884C92B3C18830009EA4A /* SlackCloneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackCloneApp.swift; sourceTree = "<group>"; };
+		79D884CB2B3C18830009EA4A /* AppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppView.swift; sourceTree = "<group>"; };
+		79D884CD2B3C18840009EA4A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		79D884CF2B3C18840009EA4A /* SlackClone.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SlackClone.entitlements; sourceTree = "<group>"; };
+		79D884D12B3C18840009EA4A /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		79D884D62B3C18DB0009EA4A /* Supabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Supabase.swift; sourceTree = "<group>"; };
+		79D884DA2B3C191F0009EA4A /* ChannelListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelListView.swift; sourceTree = "<group>"; };
+		79D884DC2B3C19320009EA4A /* MessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesView.swift; sourceTree = "<group>"; };
 		79FEFFAC2B07873600D36347 /* UserManagement.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UserManagement.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		79FEFFAE2B07873600D36347 /* UserManagementApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserManagementApp.swift; sourceTree = "<group>"; };
 		79FEFFB02B07873600D36347 /* AppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppView.swift; sourceTree = "<group>"; };
@@ -95,14 +116,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		790308E32AEE7B4D003C4A98 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				790132E02B0C29080051B356 /* Supabase in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		793895C32954ABFF0044F2B8 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -111,6 +124,14 @@
 				7956406D2955B3500088A06F /* SwiftUINavigation in Frameworks */,
 				7962989D2AEBC6F9000AA957 /* SVGView in Frameworks */,
 				79719ECE2ADF26C400737804 /* Supabase in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		79D884C42B3C18830009EA4A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				79D884D92B3C18E90009EA4A /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -125,32 +146,12 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		790308E72AEE7B4D003C4A98 /* RealtimeSample */ = {
-			isa = PBXGroup;
-			children = (
-				790308E82AEE7B4D003C4A98 /* RealtimeSampleApp.swift */,
-				790308EA2AEE7B4D003C4A98 /* ContentView.swift */,
-				790308EC2AEE7B4E003C4A98 /* Assets.xcassets */,
-				790308F12AEE7B4E003C4A98 /* RealtimeSample.entitlements */,
-				790308EE2AEE7B4E003C4A98 /* Preview Content */,
-			);
-			path = RealtimeSample;
-			sourceTree = "<group>";
-		};
-		790308EE2AEE7B4E003C4A98 /* Preview Content */ = {
-			isa = PBXGroup;
-			children = (
-				790308EF2AEE7B4E003C4A98 /* Preview Assets.xcassets */,
-			);
-			path = "Preview Content";
-			sourceTree = "<group>";
-		};
 		793895BD2954ABFF0044F2B8 = {
 			isa = PBXGroup;
 			children = (
 				793895C82954ABFF0044F2B8 /* Examples */,
-				790308E72AEE7B4D003C4A98 /* RealtimeSample */,
 				79FEFFAD2B07873600D36347 /* UserManagement */,
+				79D884C82B3C18830009EA4A /* SlackClone */,
 				793895C72954ABFF0044F2B8 /* Products */,
 				7956405A2954AC3E0088A06F /* Frameworks */,
 			);
@@ -160,8 +161,8 @@
 			isa = PBXGroup;
 			children = (
 				793895C62954ABFF0044F2B8 /* Examples.app */,
-				790308E62AEE7B4D003C4A98 /* RealtimeSample.app */,
 				79FEFFAC2B07873600D36347 /* UserManagement.app */,
+				79D884C72B3C18830009EA4A /* SlackClone.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -214,8 +215,39 @@
 				79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */,
 				79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */,
 				793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */,
+				7940E3142B36187A0089BEE1 /* GoogleSignIn.swift */,
 			);
 			path = Auth;
+			sourceTree = "<group>";
+		};
+		79D884C82B3C18830009EA4A /* SlackClone */ = {
+			isa = PBXGroup;
+			children = (
+				7993B8AC2B3C97B6009B610B /* Info.plist */,
+				79D884C92B3C18830009EA4A /* SlackCloneApp.swift */,
+				79D884CB2B3C18830009EA4A /* AppView.swift */,
+				79D884CD2B3C18840009EA4A /* Assets.xcassets */,
+				79D884CF2B3C18840009EA4A /* SlackClone.entitlements */,
+				79D884D02B3C18840009EA4A /* Preview Content */,
+				79D884D62B3C18DB0009EA4A /* Supabase.swift */,
+				79D884DA2B3C191F0009EA4A /* ChannelListView.swift */,
+				79D884DC2B3C19320009EA4A /* MessagesView.swift */,
+				7993B8A82B3C673A009B610B /* AuthView.swift */,
+				7993B8AA2B3C67E0009B610B /* Toast.swift */,
+				797D66492B46A1D8007592ED /* Store.swift */,
+				79BD76762B59C3E300CA3D68 /* UserStore.swift */,
+				79BD76782B59C53900CA3D68 /* ChannelsViewModel.swift */,
+				79BD767A2B59C61300CA3D68 /* MessagesViewModel.swift */,
+			);
+			path = SlackClone;
+			sourceTree = "<group>";
+		};
+		79D884D02B3C18840009EA4A /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				79D884D12B3C18840009EA4A /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
 			sourceTree = "<group>";
 		};
 		79FEFFAD2B07873600D36347 /* UserManagement */ = {
@@ -248,26 +280,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		790308E52AEE7B4D003C4A98 /* RealtimeSample */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 790308F22AEE7B4E003C4A98 /* Build configuration list for PBXNativeTarget "RealtimeSample" */;
-			buildPhases = (
-				790308E22AEE7B4D003C4A98 /* Sources */,
-				790308E32AEE7B4D003C4A98 /* Frameworks */,
-				790308E42AEE7B4D003C4A98 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = RealtimeSample;
-			packageProductDependencies = (
-				790132DF2B0C29080051B356 /* Supabase */,
-			);
-			productName = RealtimeSample;
-			productReference = 790308E62AEE7B4D003C4A98 /* RealtimeSample.app */;
-			productType = "com.apple.product-type.application";
-		};
 		793895C52954ABFF0044F2B8 /* Examples */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 793895D52954AC000044F2B8 /* Build configuration list for PBXNativeTarget "Examples" */;
@@ -289,6 +301,26 @@
 			);
 			productName = Examples;
 			productReference = 793895C62954ABFF0044F2B8 /* Examples.app */;
+			productType = "com.apple.product-type.application";
+		};
+		79D884C62B3C18830009EA4A /* SlackClone */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 79D884D52B3C18840009EA4A /* Build configuration list for PBXNativeTarget "SlackClone" */;
+			buildPhases = (
+				79D884C32B3C18830009EA4A /* Sources */,
+				79D884C42B3C18830009EA4A /* Frameworks */,
+				79D884C52B3C18830009EA4A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SlackClone;
+			packageProductDependencies = (
+				79D884D82B3C18E90009EA4A /* Supabase */,
+			);
+			productName = SlackClone;
+			productReference = 79D884C72B3C18830009EA4A /* SlackClone.app */;
 			productType = "com.apple.product-type.application";
 		};
 		79FEFFAB2B07873600D36347 /* UserManagement */ = {
@@ -318,14 +350,14 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1500;
+				LastSwiftUpdateCheck = 1510;
 				LastUpgradeCheck = 1510;
 				TargetAttributes = {
-					790308E52AEE7B4D003C4A98 = {
-						CreatedOnToolsVersion = 15.0.1;
-					};
 					793895C52954ABFF0044F2B8 = {
 						CreatedOnToolsVersion = 14.1;
+					};
+					79D884C62B3C18830009EA4A = {
+						CreatedOnToolsVersion = 15.1;
 					};
 					79FEFFAB2B07873600D36347 = {
 						CreatedOnToolsVersion = 15.0.1;
@@ -351,28 +383,28 @@
 			projectRoot = "";
 			targets = (
 				793895C52954ABFF0044F2B8 /* Examples */,
-				790308E52AEE7B4D003C4A98 /* RealtimeSample */,
 				79FEFFAB2B07873600D36347 /* UserManagement */,
+				79D884C62B3C18830009EA4A /* SlackClone */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		790308E42AEE7B4D003C4A98 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				790308F02AEE7B4E003C4A98 /* Preview Assets.xcassets in Resources */,
-				790308ED2AEE7B4E003C4A98 /* Assets.xcassets in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		793895C42954ABFF0044F2B8 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				793895D22954AC000044F2B8 /* Preview Assets.xcassets in Resources */,
 				793895CE2954AC000044F2B8 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		79D884C52B3C18830009EA4A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				79D884D22B3C18840009EA4A /* Preview Assets.xcassets in Resources */,
+				79D884CE2B3C18840009EA4A /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -388,15 +420,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		790308E22AEE7B4D003C4A98 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				790308EB2AEE7B4D003C4A98 /* ContentView.swift in Sources */,
-				790308E92AEE7B4D003C4A98 /* RealtimeSampleApp.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		793895C22954ABFF0044F2B8 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -416,9 +439,28 @@
 				795640602954AE140088A06F /* AuthController.swift in Sources */,
 				79AF047F2B2CE207008761AD /* AuthWithEmailAndPassword.swift in Sources */,
 				795640622955AD2B0088A06F /* HomeView.swift in Sources */,
+				7940E3152B36187A0089BEE1 /* GoogleSignIn.swift in Sources */,
 				793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */,
 				793E030D2B2DAB5700AC7DED /* SignInWithApple.swift in Sources */,
 				793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		79D884C32B3C18830009EA4A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7993B8A92B3C673A009B610B /* AuthView.swift in Sources */,
+				7993B8AB2B3C67E0009B610B /* Toast.swift in Sources */,
+				79D884DD2B3C19320009EA4A /* MessagesView.swift in Sources */,
+				79BD76792B59C53900CA3D68 /* ChannelsViewModel.swift in Sources */,
+				797D664A2B46A1D8007592ED /* Store.swift in Sources */,
+				79D884DB2B3C191F0009EA4A /* ChannelListView.swift in Sources */,
+				79BD767B2B59C61300CA3D68 /* MessagesViewModel.swift in Sources */,
+				79D884CC2B3C18830009EA4A /* AppView.swift in Sources */,
+				79BD76772B59C3E300CA3D68 /* UserStore.swift in Sources */,
+				79D884D72B3C18DB0009EA4A /* Supabase.swift in Sources */,
+				79D884CA2B3C18830009EA4A /* SlackCloneApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -440,73 +482,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		790308F32AEE7B4E003C4A98 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = RealtimeSample/RealtimeSample.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"RealtimeSample/Preview Content\"";
-				DEVELOPMENT_TEAM = ELTTE7K8TT;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.grds.RealtimeSample;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Debug;
-		};
-		790308F42AEE7B4E003C4A98 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = RealtimeSample/RealtimeSample.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"RealtimeSample/Preview Content\"";
-				DEVELOPMENT_TEAM = ELTTE7K8TT;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.grds.RealtimeSample;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Release;
-		};
 		793895D32954AC000044F2B8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -686,6 +661,87 @@
 			};
 			name = Release;
 		};
+		79D884D32B3C18840009EA4A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = SlackClone/SlackClone.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"SlackClone/Preview Content\"";
+				DEVELOPMENT_TEAM = ELTTE7K8TT;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SlackClone/Info.plist;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.SlackClone;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+			};
+			name = Debug;
+		};
+		79D884D42B3C18840009EA4A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = SlackClone/SlackClone.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"SlackClone/Preview Content\"";
+				DEVELOPMENT_TEAM = ELTTE7K8TT;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SlackClone/Info.plist;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.SlackClone;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+			};
+			name = Release;
+		};
 		79FEFFB92B07873700D36347 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -770,15 +826,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		790308F22AEE7B4E003C4A98 /* Build configuration list for PBXNativeTarget "RealtimeSample" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				790308F32AEE7B4E003C4A98 /* Debug */,
-				790308F42AEE7B4E003C4A98 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		793895C12954ABFF0044F2B8 /* Build configuration list for PBXProject "Examples" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -793,6 +840,15 @@
 			buildConfigurations = (
 				793895D62954AC000044F2B8 /* Debug */,
 				793895D72954AC000044F2B8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		79D884D52B3C18840009EA4A /* Build configuration list for PBXNativeTarget "SlackClone" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				79D884D32B3C18840009EA4A /* Debug */,
+				79D884D42B3C18840009EA4A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -836,10 +892,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		790132DF2B0C29080051B356 /* Supabase */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Supabase;
-		};
 		7956406C2955B3500088A06F /* SwiftUINavigation */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7956406B2955B3500088A06F /* XCRemoteSwiftPackageReference "swiftui-navigation" */;
@@ -856,6 +908,10 @@
 			productName = SVGView;
 		};
 		79719ECD2ADF26C400737804 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Supabase;
+		};
+		79D884D82B3C18E90009EA4A /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Supabase;
 		};

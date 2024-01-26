@@ -1,7 +1,7 @@
 curl \
 	--request POST \
+	--header "Apikey: dummy.api.key" \
 	--header "Content-Type: application/json" \
 	--header "X-Client-Info: gotrue-swift/x.y.z" \
-	--header "apikey: dummy.api.key" \
 	--data "{\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"phone\":\"+1 202-918-2132\",\"token\":\"123456\",\"type\":\"sms\"}" \
 	"http://localhost:54321/auth/v1/verify"

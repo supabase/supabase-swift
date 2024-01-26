@@ -90,6 +90,12 @@ import Foundation
 ///     }
 ///
 ///     presence.onSync { renderUsers(presence.list()) }
+@available(
+  *,
+  deprecated,
+  renamed: "PresenceV2",
+  message: "Presence class is deprecated in favor of PresenceV2. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
+)
 public final class Presence {
   // ----------------------------------------------------------------------
 
@@ -238,7 +244,7 @@ public final class Presence {
         onLeave: self.caller.onLeave
       )
 
-      self.pendingDiffs.forEach { diff in
+      for diff in self.pendingDiffs {
         self.state = Presence.syncDiff(
           self.state,
           diff: diff,
@@ -305,13 +311,13 @@ public final class Presence {
     var leaves: Presence.State = [:]
     var joins: Presence.State = [:]
 
-    state.forEach { key, presence in
+    for (key, presence) in state {
       if newState[key] == nil {
         leaves[key] = presence
       }
     }
 
-    newState.forEach { key, newPresence in
+    for (key, newPresence) in newState {
       if let currentPresence = state[key] {
         let newRefs = newPresence["metas"]!.map { $0["phx_ref"] as! String }
         let curRefs = currentPresence["metas"]!.map { $0["phx_ref"] as! String }

@@ -22,6 +22,10 @@ import Foundation
 @_spi(Internal) import _Helpers
 import ConcurrencyExtras
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 public enum SocketError: Error {
   case abnormalClosureError
 }
@@ -38,7 +42,7 @@ struct StateChangeCallbacks {
   var close: LockIsolated<[(ref: String, callback: Delegated<(Int, String?), Void>)]> = .init([])
   var error: LockIsolated<[(ref: String, callback: Delegated<(Error, URLResponse?), Void>)]> =
     .init([])
-  var message: LockIsolated<[(ref: String, callback: Delegated<Message, Void>)]> = .init([])
+  var message: LockIsolated<[(ref: String, callback: Delegated<RealtimeMessage, Void>)]> = .init([])
 }
 
 /// ## Socket Connection
@@ -54,6 +58,11 @@ struct StateChangeCallbacks {
 /// The `RealtimeClient` constructor takes the mount point of the socket,
 /// the authentication params, as well as options that can be found in
 /// the Socket docs, such as configuring the heartbeat.
+@available(
+  *,
+  deprecated,
+  message: "Use new RealtimeClientV2 class instead. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
+)
 public class RealtimeClient: PhoenixTransportDelegate {
   // ----------------------------------------------------------------------
 
@@ -122,7 +131,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// must be set before calling `socket.connect()` in order to be applied
   public var disableSSLCertValidation: Bool = false
 
-  #if os(Linux)
+  #if os(Linux) || os(Windows)
   #else
     /// Configure custom SSL validation logic, eg. SSL pinning. This
     /// must be set before calling `socket.connect()` in order to apply.
@@ -226,7 +235,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       headers["X-Client-Info"] = "realtime-swift/\(version)"
     }
     self.headers = headers
-    http = HTTPClient(fetchHandler: { try await URLSession.shared.data(for: $0) })
+    http = HTTPClient(logger: nil, fetchHandler: { try await URLSession.shared.data(for: $0) })
 
     let params = paramsClosure?()
     if let jwt = (params?["Authorization"] as? String)?.split(separator: " ").last {
@@ -579,8 +588,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - parameter callback: Called when the Socket receives a message event
   @discardableResult
-  public func onMessage(callback: @escaping (Message) -> Void) -> String {
-    var delegated = Delegated<Message, Void>()
+  public func onMessage(callback: @escaping (RealtimeMessage) -> Void) -> String {
+    var delegated = Delegated<RealtimeMessage, Void>()
     delegated.manuallyDelegate(with: callback)
 
     return stateChangeCallbacks.message.withValue { [delegated] in
@@ -602,9 +611,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
   @discardableResult
   public func delegateOnMessage<T: AnyObject>(
     to owner: T,
-    callback: @escaping ((T, Message) -> Void)
+    callback: @escaping ((T, RealtimeMessage) -> Void)
   ) -> String {
-    var delegated = Delegated<Message, Void>()
+    var delegated = Delegated<RealtimeMessage, Void>()
     delegated.delegate(to: owner, with: callback)
 
     return stateChangeCallbacks.message.withValue { [delegated] in
@@ -814,7 +823,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     guard
       let data = rawMessage.data(using: String.Encoding.utf8),
       let json = decode(data) as? [Any?],
-      let message = Message(json: json)
+      let message = RealtimeMessage(json: json)
     else {
       logItems("receive: Unable to parse JSON: \(rawMessage)")
       return
@@ -838,7 +847,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   /// Triggers an error event to all of the connected Channels
   func triggerChannelError() {
-    channels.forEach { channel in
+    for channel in channels {
       // Only trigger a channel error if it is in an "opened" state
       if !(channel.isErrored || channel.isLeaving || channel.isClosed) {
         channel.trigger(event: ChannelEvent.error)
@@ -924,7 +933,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   }
 
   /// Sends a heartbeat payload to the phoenix servers
-  @objc func sendHeartbeat() {
+  func sendHeartbeat() {
     // Do not send if the connection is closed
     guard isConnected else { return }
 

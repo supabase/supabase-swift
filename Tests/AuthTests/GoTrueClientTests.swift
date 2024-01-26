@@ -11,13 +11,20 @@ import ConcurrencyExtras
 
 @testable import Auth
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class AuthClientTests: XCTestCase {
+  fileprivate var api: APIClient!
+
   func testAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
 
     let events = ActorIsolated([AuthChangeEvent]())
-    let expectation = expectation(description: "onAuthStateChangeEnd")
+
+    let (stream, continuation) = AsyncStream<Void>.makeStream()
 
     await withDependencies {
       $0.eventEmitter = .live
@@ -31,11 +38,11 @@ final class AuthClientTests: XCTestCase {
             $0.append(event)
           }
 
-          expectation.fulfill()
+          continuation.yield()
         }
       }
 
-      await fulfillment(of: [expectation])
+      _ = await stream.first { _ in true }
 
       let events = await events.value
       XCTAssertEqual(events, [.initialSession])
@@ -149,7 +156,8 @@ final class AuthClientTests: XCTestCase {
   private func makeSUT() -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: clientURL,
-      headers: ["apikey": "dummy.api.key"]
+      headers: ["Apikey": "dummy.api.key"],
+      localStorage: Dependencies.localStorage
     )
 
     let sut = AuthClient(
@@ -158,7 +166,8 @@ final class AuthClientTests: XCTestCase {
       codeVerifierStorage: .mock,
       api: .mock,
       eventEmitter: .mock,
-      sessionStorage: .mock
+      sessionStorage: .mock,
+      logger: nil
     )
 
     addTeardownBlock { [weak sut] in

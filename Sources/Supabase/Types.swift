@@ -1,6 +1,11 @@
+import _Helpers
 import Auth
 import Foundation
 import PostgREST
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 
 public struct SupabaseClientOptions: Sendable {
   public let db: DatabaseOptions
@@ -44,7 +49,7 @@ public struct SupabaseClientOptions: Sendable {
     public let decoder: JSONDecoder
 
     public init(
-      storage: AuthLocalStorage = AuthClient.Configuration.defaultLocalStorage,
+      storage: AuthLocalStorage,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
@@ -63,19 +68,57 @@ public struct SupabaseClientOptions: Sendable {
     /// A session to use for making requests, defaults to `URLSession.shared`.
     public let session: URLSession
 
-    public init(headers: [String: String] = [:], session: URLSession = .shared) {
+    /// The logger  to use across all Supabase sub-packages.
+    public let logger: SupabaseLogger?
+
+    public init(
+      headers: [String: String] = [:],
+      session: URLSession = .shared,
+      logger: SupabaseLogger? = nil
+    ) {
       self.headers = headers
       self.session = session
+      self.logger = logger
     }
   }
 
   public init(
     db: DatabaseOptions = .init(),
-    auth: AuthOptions = .init(),
+    auth: AuthOptions,
     global: GlobalOptions = .init()
   ) {
     self.db = db
     self.auth = auth
     self.global = global
   }
+}
+
+extension SupabaseClientOptions {
+  #if !os(Linux)
+    public init(
+      db: DatabaseOptions = .init(),
+      global: GlobalOptions = .init()
+    ) {
+      self.db = db
+      auth = .init()
+      self.global = global
+    }
+  #endif
+}
+
+extension SupabaseClientOptions.AuthOptions {
+  #if !os(Linux)
+    public init(
+      flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
+      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
+      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
+    ) {
+      self.init(
+        storage: AuthClient.Configuration.defaultLocalStorage,
+        flowType: flowType,
+        encoder: encoder,
+        decoder: decoder
+      )
+    }
+  #endif
 }

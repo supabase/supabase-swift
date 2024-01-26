@@ -29,14 +29,14 @@ struct Binding {
   let filter: [String: String]
 
   // The callback to be triggered
-  let callback: Delegated<Message, Void>
+  let callback: Delegated<RealtimeMessage, Void>
 
   let id: String?
 }
 
 public struct ChannelFilter {
-  public let event: String?
-  public let schema: String?
+  public var event: String?
+  public var schema: String?
   public let table: String?
   public let filter: String?
 
@@ -106,7 +106,7 @@ public struct RealtimeChannelOptions {
 }
 
 /// Represents the different status of a push
-public enum PushStatus: String {
+public enum PushStatus: String, Sendable {
   case ok
   case error
   case timeout
@@ -139,7 +139,11 @@ public enum RealtimeSubscribeStates {
 ///         .receive("error") { payload in print("Failed ot join", payload) }
 ///         .receive("timeout") { payload in print("Networking issue...", payload) }
 ///
-
+@available(
+  *,
+  deprecated,
+  message: "Use new RealtimeChannelV2 class instead. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
+)
 public class RealtimeChannel {
   /// The topic of the RealtimeChannel. e.g. "rooms:friends"
   public let topic: String
@@ -336,7 +340,7 @@ public class RealtimeChannel {
   ///
   /// - parameter msg: The Message received by the client from the server
   /// - return: Must return the message, modified or unmodified
-  public var onMessage: (_ message: Message) -> Message = { message in
+  public var onMessage: (_ message: RealtimeMessage) -> RealtimeMessage = { message in
     message
   }
 
@@ -349,6 +353,10 @@ public class RealtimeChannel {
     timeout: TimeInterval? = nil,
     callback: ((RealtimeSubscribeStates, Error?) -> Void)? = nil
   ) -> RealtimeChannel {
+    if socket?.isConnected == false {
+      socket?.connect()
+    }
+
     guard !joinedOnce else {
       fatalError(
         "tried to join multiple times. 'join' "
@@ -493,7 +501,7 @@ public class RealtimeChannel {
   /// - parameter handler: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onClose(_ handler: @escaping ((Message) -> Void)) -> RealtimeChannel {
+  public func onClose(_ handler: @escaping ((RealtimeMessage) -> Void)) -> RealtimeChannel {
     on(ChannelEvent.close, filter: ChannelFilter(), handler: handler)
   }
 
@@ -513,7 +521,7 @@ public class RealtimeChannel {
   @discardableResult
   public func delegateOnClose<Target: AnyObject>(
     to owner: Target,
-    callback: @escaping ((Target, Message) -> Void)
+    callback: @escaping ((Target, RealtimeMessage) -> Void)
   ) -> RealtimeChannel {
     delegateOn(
       ChannelEvent.close, filter: ChannelFilter(), to: owner, callback: callback
@@ -534,7 +542,9 @@ public class RealtimeChannel {
   /// - parameter handler: Called when the RealtimeChannel closes
   /// - return: Ref counter of the subscription. See `func off()`
   @discardableResult
-  public func onError(_ handler: @escaping ((_ message: Message) -> Void)) -> RealtimeChannel {
+  public func onError(_ handler: @escaping ((_ message: RealtimeMessage) -> Void))
+    -> RealtimeChannel
+  {
     on(ChannelEvent.error, filter: ChannelFilter(), handler: handler)
   }
 
@@ -554,7 +564,7 @@ public class RealtimeChannel {
   @discardableResult
   public func delegateOnError<Target: AnyObject>(
     to owner: Target,
-    callback: @escaping ((Target, Message) -> Void)
+    callback: @escaping ((Target, RealtimeMessage) -> Void)
   ) -> RealtimeChannel {
     delegateOn(
       ChannelEvent.error, filter: ChannelFilter(), to: owner, callback: callback
@@ -588,9 +598,9 @@ public class RealtimeChannel {
   public func on(
     _ event: String,
     filter: ChannelFilter,
-    handler: @escaping ((Message) -> Void)
+    handler: @escaping ((RealtimeMessage) -> Void)
   ) -> RealtimeChannel {
-    var delegated = Delegated<Message, Void>()
+    var delegated = Delegated<RealtimeMessage, Void>()
     delegated.manuallyDelegate(with: handler)
 
     return on(event, filter: filter, delegated: delegated)
@@ -625,9 +635,9 @@ public class RealtimeChannel {
     _ event: String,
     filter: ChannelFilter,
     to owner: Target,
-    callback: @escaping ((Target, Message) -> Void)
+    callback: @escaping ((Target, RealtimeMessage) -> Void)
   ) -> RealtimeChannel {
-    var delegated = Delegated<Message, Void>()
+    var delegated = Delegated<RealtimeMessage, Void>()
     delegated.delegate(to: owner, with: callback)
 
     return on(event, filter: filter, delegated: delegated)
@@ -636,7 +646,7 @@ public class RealtimeChannel {
   /// Shared method between `on` and `manualOn`
   @discardableResult
   private func on(
-    _ type: String, filter: ChannelFilter, delegated: Delegated<Message, Void>
+    _ type: String, filter: ChannelFilter, delegated: Delegated<RealtimeMessage, Void>
   ) -> RealtimeChannel {
     bindings.withValue {
       $0[type.lowercased(), default: []].append(
@@ -808,7 +818,7 @@ public class RealtimeChannel {
     state = .leaving
 
     /// Delegated callback for a successful or a failed channel leave
-    var onCloseDelegate = Delegated<Message, Void>()
+    var onCloseDelegate = Delegated<RealtimeMessage, Void>()
     onCloseDelegate.delegate(to: self) { (self, _) in
       self.socket?.logItems("channel", "leave \(self.topic)")
 
@@ -846,7 +856,7 @@ public class RealtimeChannel {
   /// - parameter payload: The payload for the message
   /// - parameter ref: The reference of the message
   /// - return: Must return the payload, modified or unmodified
-  public func onMessage(callback: @escaping (Message) -> Message) {
+  public func onMessage(callback: @escaping (RealtimeMessage) -> RealtimeMessage) {
     onMessage = callback
   }
 
@@ -856,7 +866,7 @@ public class RealtimeChannel {
 
   // ----------------------------------------------------------------------
   /// Checks if an event received by the Socket belongs to this RealtimeChannel
-  func isMember(_ message: Message) -> Bool {
+  func isMember(_ message: RealtimeMessage) -> Bool {
     // Return false if the message's topic does not match the RealtimeChannel's topic
     guard message.topic == topic else { return false }
 
@@ -895,7 +905,7 @@ public class RealtimeChannel {
   /// `channel.on("event")`.
   ///
   /// - parameter message: Message to pass to the event bindings
-  func trigger(_ message: Message) {
+  func trigger(_ message: RealtimeMessage) {
     let typeLower = message.event.lowercased()
 
     let events = Set([
@@ -909,7 +919,7 @@ public class RealtimeChannel {
       return
     }
 
-    let handledMessage = onMessage(message)
+    let handledMessage = message
 
     let bindings: [Binding]
 
@@ -957,7 +967,7 @@ public class RealtimeChannel {
     ref: String = "",
     joinRef: String? = nil
   ) {
-    let message = Message(
+    let message = RealtimeMessage(
       ref: ref,
       topic: topic,
       event: event,

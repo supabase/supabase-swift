@@ -10,18 +10,42 @@ import XCTest
   import FoundationNetworking
 #endif
 
+struct User: Encodable {
+  var email: String
+  var username: String?
+}
+
 @MainActor
 final class BuildURLRequestTests: XCTestCase {
   let url = URL(string: "https://example.supabase.co")!
 
   struct TestCase: Sendable {
     let name: String
-    var record = false
+    let record: Bool
+    let file: StaticString
+    let line: UInt
     let build: @Sendable (PostgrestClient) async throws -> PostgrestBuilder
+
+    init(
+      name: String,
+      record: Bool = false,
+      file: StaticString = #file,
+      line: UInt = #line,
+      build: @escaping @Sendable (PostgrestClient) async throws -> PostgrestBuilder
+    ) {
+      self.name = name
+      self.record = record
+      self.file = file
+      self.line = line
+      self.build = build
+    }
   }
 
   func testBuildRequest() async throws {
     let runningTestCase = ActorIsolated(TestCase?.none)
+
+    let encoder = PostgrestClient.Configuration.jsonEncoder
+    encoder.outputFormatting = .sortedKeys
 
     let client = PostgrestClient(
       url: url,
@@ -30,21 +54,24 @@ final class BuildURLRequestTests: XCTestCase {
       fetch: { request in
         guard let runningTestCase = await runningTestCase.value else {
           XCTFail("execute called without a runningTestCase set.")
-          return (Data(), URLResponse())
+          return (Data(), URLResponse.empty())
         }
 
         await MainActor.run { [runningTestCase] in
           assertSnapshot(
-            matching: request,
+            of: request,
             as: .curl,
             named: runningTestCase.name,
             record: runningTestCase.record,
-            testName: "testBuildRequest()"
+            file: runningTestCase.file,
+            testName: "testBuildRequest()",
+            line: runningTestCase.line
           )
         }
 
-        return (Data(), URLResponse())
-      }
+        return (Data(), URLResponse.empty())
+      },
+      encoder: encoder
     )
 
     let testCases: [TestCase] = [
@@ -55,7 +82,16 @@ final class BuildURLRequestTests: XCTestCase {
       },
       TestCase(name: "insert new user") { client in
         try await client.from("users")
-          .insert(["email": "johndoe@supabase.io"])
+          .insert(User(email: "johndoe@supabase.io"))
+      },
+      TestCase(name: "bulk insert users") { client in
+        try await client.from("users")
+          .insert(
+            [
+              User(email: "johndoe@supabase.io"),
+              User(email: "johndoe2@supabase.io", username: "johndoe2"),
+            ]
+          )
       },
       TestCase(name: "call rpc") { client in
         try await client.rpc("test_fcn", params: ["KEY": "VALUE"])
@@ -89,11 +125,20 @@ final class BuildURLRequestTests: XCTestCase {
       },
       TestCase(name: "test upsert not ignoring duplicates") { client in
         try await client.from("users")
-          .upsert(["email": "johndoe@supabase.io"])
+          .upsert(User(email: "johndoe@supabase.io"))
+      },
+      TestCase(name: "bulk upsert") { client in
+        try await client.from("users")
+          .upsert(
+            [
+              User(email: "johndoe@supabase.io"),
+              User(email: "johndoe2@supabase.io", username: "johndoe2"),
+            ]
+          )
       },
       TestCase(name: "test upsert ignoring duplicates") { client in
         try await client.from("users")
-          .upsert(["email": "johndoe@supabase.io"], ignoreDuplicates: true)
+          .upsert(User(email: "johndoe@supabase.io"), ignoreDuplicates: true)
       },
       TestCase(name: "query with + character") { client in
         await client.from("users")
@@ -110,7 +155,7 @@ final class BuildURLRequestTests: XCTestCase {
         await client.schema("storage")
           .from("objects")
           .select()
-      }
+      },
     ]
 
     for testCase in testCases {
@@ -124,5 +169,24 @@ final class BuildURLRequestTests: XCTestCase {
     let client = PostgrestClient(url: url, schema: nil)
     let clientInfoHeader = await client.configuration.headers["X-Client-Info"]
     XCTAssertNotNil(clientInfoHeader)
+  }
+}
+
+extension URLResponse {
+  // Windows and Linux don't have the ability to empty initialize a URLResponse like `URLResponse()`
+  // so
+  // We provide a function that can give us the right value on an platform.
+  // See https://github.com/apple/swift-corelibs-foundation/pull/4778
+  fileprivate static func empty() -> URLResponse {
+    #if os(Windows) || os(Linux)
+      URLResponse(
+        url: .init(string: "https://supabase.com")!,
+        mimeType: nil,
+        expectedContentLength: 0,
+        textEncodingName: nil
+      )
+    #else
+      URLResponse()
+    #endif
   }
 }

@@ -1,18 +1,27 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 @_spi(Internal)
 public struct HTTPClient: Sendable {
   public typealias FetchHandler = @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
+  let logger: SupabaseLogger?
   let fetchHandler: FetchHandler
 
-  public init(fetchHandler: @escaping FetchHandler) {
+  public init(logger: SupabaseLogger?, fetchHandler: @escaping FetchHandler) {
+    self.logger = logger
     self.fetchHandler = fetchHandler
   }
 
   public func fetch(_ request: Request, baseURL: URL) async throws -> Response {
+    let id = UUID().uuidString
     let urlRequest = try request.urlRequest(withBaseURL: baseURL)
+    logger?.verbose("Request [\(id)]: \(urlRequest)")
     let (data, response) = try await fetchHandler(urlRequest)
+    logger?.verbose("Response [\(id)]: \(response)")
 
     guard let httpResponse = response as? HTTPURLResponse else {
       throw URLError(.badServerResponse)

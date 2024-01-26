@@ -19,9 +19,10 @@
 // THE SOFTWARE.
 
 import Foundation
+@_spi(Internal) import _Helpers
 
 /// Data that is received from the Server.
-public struct Message {
+public struct RealtimeMessage {
   /// Reference number. Empty if missing
   public let ref: String
 

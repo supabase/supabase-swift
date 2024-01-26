@@ -26,7 +26,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     request: Request
   ) {
     self.configuration = configuration
-    http = HTTPClient(fetchHandler: configuration.fetch)
+    http = HTTPClient(logger: configuration.logger, fetchHandler: configuration.fetch)
 
     mutableState = LockIsolated(
       MutableState(
@@ -74,7 +74,7 @@ public class PostgrestBuilder: @unchecked Sendable {
       do {
         return try configuration.decoder.decode(T.self, from: data)
       } catch {
-        debug("Fail to decode type '\(T.self) with error: \(error)")
+        configuration.logger?.error("Fail to decode type '\(T.self) with error: \(error)")
         throw error
       }
     }

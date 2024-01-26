@@ -4,6 +4,29 @@
 import Foundation
 import PackageDescription
 
+var dependencies: [Package.Dependency] = [
+  .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
+  .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
+  .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.0.0"),
+  .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "3.0.0"),
+  .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
+]
+
+var goTrueDependencies: [Target.Dependency] = [
+  "_Helpers",
+  .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+  .product(name: "Crypto", package: "swift-crypto"),
+]
+
+#if !os(Windows) && !os(Linux)
+  dependencies += [
+    .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
+  ]
+  goTrueDependencies += [
+    .product(name: "KeychainAccess", package: "KeychainAccess"),
+  ]
+#endif
+
 let package = Package(
   name: "Supabase",
   platforms: [
@@ -24,17 +47,19 @@ let package = Package(
       targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]
     ),
   ],
-  dependencies: [
-    .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
-    .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
-    .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
-    .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.0.0"),
-  ],
+  dependencies: dependencies,
   targets: [
     .target(
       name: "_Helpers",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+      ]
+    ),
+    .testTarget(
+      name: "_HelpersTests",
+      dependencies: [
+        "_Helpers",
+        .product(name: "CustomDump", package: "swift-custom-dump"),
       ]
     ),
     .target(name: "Functions", dependencies: ["_Helpers"]),
@@ -47,16 +72,13 @@ let package = Package(
     ),
     .target(
       name: "Auth",
-      dependencies: [
-        "_Helpers",
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "KeychainAccess", package: "KeychainAccess"),
-      ]
+      dependencies: goTrueDependencies
     ),
     .testTarget(
       name: "AuthTests",
       dependencies: [
         "Auth",
+        "_Helpers",
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
       ],
@@ -89,7 +111,13 @@ let package = Package(
         "_Helpers",
       ]
     ),
-    .testTarget(name: "RealtimeTests", dependencies: ["Realtime"]),
+    .testTarget(
+      name: "RealtimeTests",
+      dependencies: [
+        "Realtime",
+        .product(name: "CustomDump", package: "swift-custom-dump"),
+      ]
+    ),
     .target(name: "Storage", dependencies: ["_Helpers"]),
     .testTarget(name: "StorageTests", dependencies: ["Storage"]),
     .target(

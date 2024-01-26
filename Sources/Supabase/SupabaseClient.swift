@@ -7,6 +7,14 @@ import Foundation
 @_exported import Realtime
 @_exported import Storage
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
+public typealias SupabaseLogger = _Helpers.SupabaseLogger
+public typealias SupabaseLogLevel = _Helpers.SupabaseLogLevel
+public typealias SupabaseLogMessage = _Helpers.SupabaseLogMessage
+
 let version = _Helpers.version
 
 /// Supabase Client.
@@ -27,6 +35,7 @@ public final class SupabaseClient: @unchecked Sendable {
     url: databaseURL,
     schema: options.db.schema,
     headers: defaultHeaders,
+    logger: options.global.logger,
     fetch: fetchWithAuth,
     encoder: options.db.encoder,
     decoder: options.db.decoder
@@ -37,12 +46,16 @@ public final class SupabaseClient: @unchecked Sendable {
     configuration: StorageClientConfiguration(
       url: storageURL,
       headers: defaultHeaders,
-      session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth)
+      session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+      logger: options.global.logger
     )
   )
 
   /// Realtime client for Supabase
   public let realtime: RealtimeClient
+
+  /// Realtime client for Supabase
+  public let realtimeV2: RealtimeClientV2
 
   /// Supabase Functions allows you to deploy and invoke edge functions.
   public private(set) lazy var functions = FunctionsClient(
@@ -58,6 +71,22 @@ public final class SupabaseClient: @unchecked Sendable {
     options.global.session
   }
 
+  #if !os(Linux)
+    /// Create a new client.
+    /// - Parameters:
+    ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
+    /// your project dashboard.
+    ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
+    /// your project dashboard.
+    public convenience init(supabaseURL: URL, supabaseKey: String) {
+      self.init(
+        supabaseURL: supabaseURL,
+        supabaseKey: supabaseKey,
+        options: SupabaseClientOptions()
+      )
+    }
+  #endif
+
   /// Create a new client.
   /// - Parameters:
   ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
@@ -68,7 +97,7 @@ public final class SupabaseClient: @unchecked Sendable {
   public init(
     supabaseURL: URL,
     supabaseKey: String,
-    options: SupabaseClientOptions = .init()
+    options: SupabaseClientOptions
   ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
@@ -81,7 +110,7 @@ public final class SupabaseClient: @unchecked Sendable {
     defaultHeaders = [
       "X-Client-Info": "supabase-swift/\(version)",
       "Authorization": "Bearer \(supabaseKey)",
-      "apikey": supabaseKey,
+      "Apikey": supabaseKey,
     ].merging(options.global.headers) { _, new in new }
 
     auth = AuthClient(
@@ -89,6 +118,7 @@ public final class SupabaseClient: @unchecked Sendable {
       headers: defaultHeaders,
       flowType: options.auth.flowType,
       localStorage: options.auth.storage,
+      logger: options.global.logger,
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
       fetch: {
@@ -103,26 +133,16 @@ public final class SupabaseClient: @unchecked Sendable {
       params: defaultHeaders
     )
 
+    realtimeV2 = RealtimeClientV2(
+      config: RealtimeClientV2.Configuration(
+        url: supabaseURL.appendingPathComponent("/realtime/v1"),
+        apiKey: supabaseKey,
+        headers: defaultHeaders,
+        logger: options.global.logger
+      )
+    )
+
     listenForAuthEvents()
-  }
-
-  /// Create a new client.
-  /// - Parameters:
-  ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
-  /// your project dashboard.
-  ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
-  /// your project dashboard.
-  ///   - options: Custom options to configure client's behavior.
-  public convenience init(
-    supabaseURL: String,
-    supabaseKey: String,
-    options: SupabaseClientOptions = .init()
-  ) {
-    guard let supabaseURL = URL(string: supabaseURL) else {
-      fatalError("Invalid supabaseURL: \(supabaseURL)")
-    }
-
-    self.init(supabaseURL: supabaseURL, supabaseKey: supabaseKey, options: options)
   }
 
   deinit {
@@ -154,16 +174,17 @@ public final class SupabaseClient: @unchecked Sendable {
     listenForAuthEventsTask.setValue(
       Task {
         for await (event, session) in await auth.authStateChanges {
-          handleTokenChanged(event: event, session: session)
+          await handleTokenChanged(event: event, session: session)
         }
       }
     )
   }
 
-  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) {
+  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
     let supportedEvents: [AuthChangeEvent] = [.initialSession, .signedIn, .tokenRefreshed]
     guard supportedEvents.contains(event) else { return }
 
     realtime.setAuth(session?.accessToken)
+    await realtimeV2.setAuth(session?.accessToken)
   }
 }

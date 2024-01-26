@@ -16,7 +16,7 @@ public class StorageApi: @unchecked Sendable {
       configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
     }
     self.configuration = configuration
-    http = HTTPClient(fetchHandler: configuration.session.fetch)
+    http = HTTPClient(logger: configuration.logger, fetchHandler: configuration.session.fetch)
   }
 
   @discardableResult

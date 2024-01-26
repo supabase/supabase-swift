@@ -1,3 +1,4 @@
+import _Helpers
 import Foundation
 
 public struct StorageClientConfiguration {
@@ -6,19 +7,22 @@ public struct StorageClientConfiguration {
   public let encoder: JSONEncoder
   public let decoder: JSONDecoder
   public let session: StorageHTTPSession
+  public let logger: SupabaseLogger?
 
   public init(
     url: URL,
     headers: [String: String],
     encoder: JSONEncoder = .defaultStorageEncoder,
     decoder: JSONDecoder = .defaultStorageDecoder,
-    session: StorageHTTPSession = .init()
+    session: StorageHTTPSession = .init(),
+    logger: SupabaseLogger? = nil
   ) {
     self.url = url
     self.headers = headers
     self.encoder = encoder
     self.decoder = decoder
     self.session = session
+    self.logger = logger
   }
 }
 

@@ -1,7 +1,7 @@
 curl \
 	--request POST \
+	--header "Apikey: dummy.api.key" \
 	--header "Content-Type: application/json" \
 	--header "X-Client-Info: gotrue-swift/x.y.z" \
-	--header "apikey: dummy.api.key" \
 	--data "{\"access_token\":\"access-token\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"id_token\":\"id-token\",\"nonce\":\"nonce\",\"provider\":\"apple\"}" \
 	"http://localhost:54321/auth/v1/token?grant_type=id_token"
