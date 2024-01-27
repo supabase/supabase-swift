@@ -1,6 +1,6 @@
 import Foundation
 
-public struct TransformOptions: Encodable {
+public struct TransformOptions: Encodable, Sendable {
   public var width: Int?
   public var height: Int?
   public var resize: String?

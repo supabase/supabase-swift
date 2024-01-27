@@ -17,8 +17,6 @@ public actor AuthAdmin {
     Dependencies.current.value!.api
   }
 
-  public init() {}
-
   /// Delete a user. Requires `service_role` key.
   /// - Parameter id: The id of the user you want to delete.
   /// - Parameter shouldSoftDelete: If true, then the user will be soft-deleted (setting
@@ -26,15 +24,13 @@ public actor AuthAdmin {
   /// from the auth schema.
   ///
   /// - Warning: Never expose your `service_role` key on the client.
-  @discardableResult
-  public func deleteUser(id: String, shouldSoftDelete: Bool = true) async throws -> User {
-    try await api.execute(
+  public func deleteUser(id: String, shouldSoftDelete: Bool = false) async throws {
+    _ = try await api.execute(
       Request(
         path: "/admin/users/\(id)",
         method: .delete,
         body: configuration.encoder.encode(DeleteUserRequest(shouldSoftDelete: shouldSoftDelete))
       )
     )
-    .decoded(decoder: configuration.decoder)
   }
 }

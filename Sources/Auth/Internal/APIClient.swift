@@ -19,11 +19,18 @@ extension APIClient {
         let response = try await http.fetch(request, baseURL: configuration.url)
 
         guard (200 ..< 300).contains(response.statusCode) else {
-          let apiError = try configuration.decoder.decode(
+          if let apiError = try? configuration.decoder.decode(
             AuthError.APIError.self,
             from: response.data
+          ) {
+            throw AuthError.api(apiError)
+          }
+
+          let postgrestError = try configuration.decoder.decode(
+            PostgrestError.self,
+            from: response.data
           )
-          throw AuthError.api(apiError)
+          throw postgrestError
         }
 
         return response

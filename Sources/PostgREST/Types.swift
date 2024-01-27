@@ -4,26 +4,6 @@ import Foundation
   import FoundationNetworking
 #endif
 
-public struct PostgrestError: Error, Codable, Sendable {
-  public let details: String?
-  public let hint: String?
-  public let code: String?
-  public let message: String
-
-  public init(details: String? = nil, hint: String? = nil, code: String? = nil, message: String) {
-    self.hint = hint
-    self.details = details
-    self.code = code
-    self.message = message
-  }
-}
-
-extension PostgrestError: LocalizedError {
-  public var errorDescription: String? {
-    message
-  }
-}
-
 public struct PostgrestResponse<T: Sendable>: Sendable {
   public let data: Data
   public let response: HTTPURLResponse
