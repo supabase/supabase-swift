@@ -37,7 +37,7 @@ public struct SortBy: Encodable {
   }
 }
 
-public struct FileOptions {
+public struct FileOptions: Sendable {
   /// The number of seconds the asset is cached in the browser and in the Supabase CDN. This is set
   /// in the `Cache-Control: max-age=<seconds>` header. Defaults to 3600 seconds.
   public var cacheControl: String
