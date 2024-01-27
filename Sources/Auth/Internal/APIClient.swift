@@ -26,6 +26,9 @@ extension APIClient {
             throw AuthError.api(apiError)
           }
 
+          /// There are some GoTrue endpoints that can return a `PostgrestError`, for example the
+          /// ``AuthAdmin/deleteUser(id:shouldSoftDelete:)`` that could return an error in case the
+          /// user is referenced by other schemas.
           let postgrestError = try configuration.decoder.decode(
             PostgrestError.self,
             from: response.data
