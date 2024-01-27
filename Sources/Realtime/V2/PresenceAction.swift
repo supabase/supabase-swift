@@ -9,7 +9,11 @@ import Foundation
 @_spi(Internal) import _Helpers
 
 public struct PresenceV2: Hashable, Sendable {
+  /// The presence reference of the object.
   public let ref: String
+
+  /// The object the other client is tracking. Can be done via the
+  /// ``RealtimeChannelV2/track(state:)`` method.
   public let state: JSONObject
 }
 
@@ -72,34 +76,63 @@ extension PresenceV2: Codable {
     try container.encode(ref, forKey: _StringCodingKey("phx_ref"))
     try container.encode(state, forKey: _StringCodingKey("state"))
   }
+
+  /// Decode ``state``.
+  ///
+  /// - Note: You can also receive your own presence, but without your state so be aware of
+  /// exceptions.
+  public func decodeState<T: Decodable>(
+    as _: T.Type = T.self,
+    decoder: JSONDecoder = AnyJSON.decoder
+  ) throws -> T {
+    try state.decode(as: T.self, decoder: decoder)
+  }
 }
 
+/// Represents a presence action.
 public protocol PresenceAction: Sendable, HasRawMessage {
+  /// Represents a map of ``PresenceV2`` objects indexed by their key.
+  ///
+  /// Your own key can be customized when creating the channel within the presence config.
   var joins: [String: PresenceV2] { get }
+
+  /// Represents a map of ``PresenceV2`` objects indexed by their key.
+  ///
+  /// Your own key can be customized when creating the channel within the presence config.
   var leaves: [String: PresenceV2] { get }
 }
 
 extension PresenceAction {
+  /// Decode all ``PresenceAction/joins`` values.
+  /// - Parameters:
+  ///   - ignoreOtherTypes: Whether to ignore presences which cannot be decoded such as your own
+  /// presence.
   public func decodeJoins<T: Decodable>(
     as _: T.Type = T.self,
-    ignoreOtherTypes: Bool = true
+    ignoreOtherTypes: Bool = true,
+    decoder: JSONDecoder = AnyJSON.decoder
   ) throws -> [T] {
     if ignoreOtherTypes {
-      return joins.values.compactMap { try? $0.state.decode(as: T.self) }
+      return joins.values.compactMap { try? $0.decodeState(as: T.self, decoder: decoder) }
     }
 
-    return try joins.values.map { try $0.state.decode(as: T.self) }
+    return try joins.values.map { try $0.decodeState(as: T.self, decoder: decoder) }
   }
 
+  /// Decode all ``PresenceAction/leaves`` values.
+  /// - Parameters:
+  ///   - ignoreOtherTypes: Whether to ignore presences which cannot be decoded such as your own
+  /// presence.
   public func decodeLeaves<T: Decodable>(
     as _: T.Type = T.self,
-    ignoreOtherTypes: Bool = true
+    ignoreOtherTypes: Bool = true,
+    decoder: JSONDecoder = AnyJSON.decoder
   ) throws -> [T] {
     if ignoreOtherTypes {
-      return leaves.values.compactMap { try? $0.state.decode(as: T.self) }
+      return leaves.values.compactMap { try? $0.decodeState(as: T.self, decoder: decoder) }
     }
 
-    return try leaves.values.map { try $0.state.decode(as: T.self) }
+    return try leaves.values.map { try $0.decodeState(as: T.self, decoder: decoder) }
   }
 }
 
