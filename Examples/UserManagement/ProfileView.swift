@@ -167,14 +167,15 @@ struct ProfileView: View {
   private func uploadImage() async throws -> String? {
     guard let data = avatarImage?.data else { return nil }
 
-    let filePath = "\(UUID().uuidString).jpeg"
+    let userId = try await supabase.auth.session.user.id.uuidString
+    let filePath = "\(userId)/profile.jpeg"
 
     try await supabase.storage
       .from("avatars")
       .upload(
         path: filePath,
         file: data,
-        options: FileOptions(contentType: "image/jpeg")
+        options: FileOptions(contentType: "image/jpeg", upsert: true)
       )
 
     return filePath
