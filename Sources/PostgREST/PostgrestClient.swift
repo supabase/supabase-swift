@@ -1,6 +1,8 @@
 import Foundation
 @_spi(Internal) import _Helpers
 
+public typealias PostgrestError = _Helpers.PostgrestError
+
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
