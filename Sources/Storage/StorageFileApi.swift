@@ -71,9 +71,11 @@ public class StorageFileApi: StorageApi {
   ///   - file: The Data to be stored in the bucket.
   ///   - options: HTTP headers. For example `cacheControl`
   @discardableResult
-  public func upload(path: String, file: Data, options: FileOptions = FileOptions())
-    async throws -> String
-  {
+  public func upload(
+    path: String,
+    file: Data,
+    options: FileOptions = FileOptions()
+  ) async throws -> String {
     try await uploadOrUpdate(method: .post, path: path, file: file, options: options)
   }
 
@@ -84,9 +86,11 @@ public class StorageFileApi: StorageApi {
   ///   - file: The Data to be stored in the bucket.
   ///   - options: HTTP headers. For example `cacheControl`
   @discardableResult
-  public func update(path: String, file: Data, options: FileOptions = FileOptions())
-    async throws -> String
-  {
+  public func update(
+    path: String,
+    file: Data,
+    options: FileOptions = FileOptions()
+  ) async throws -> String {
     try await uploadOrUpdate(method: .put, path: path, file: file, options: options)
   }
 

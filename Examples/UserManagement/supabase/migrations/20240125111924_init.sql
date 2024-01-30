@@ -49,16 +49,23 @@ insert into storage.buckets(id, name)
 
 -- Set up access controls for storage.
 -- See https://supabase.com/docs/guides/storage/security/access-control#policy-examples for more details.
-create policy "Avatar images are publicly accessible." on storage.objects
-  for select
-    using (bucket_id = 'avatars');
+create policy "Give users access to own folder 1oj01fe_0" on storage.objects
+  for select to authenticated
+    using (bucket_id = 'avatars'
+      and LOWER(auth.uid()::text) = LOWER((storage.foldername(name))[1]));
 
-create policy "Anyone can upload an avatar." on storage.objects
-  for insert
-    with check (bucket_id = 'avatars');
+create policy "Give users access to own folder 1oj01fe_1" on storage.objects
+  for insert to authenticated
+    with check (bucket_id = 'avatars'
+    and LOWER(auth.uid()::text) = LOWER((storage.foldername(name))[1]));
 
-create policy "Anyone can update their own avatar." on storage.objects
-  for update
-    using (auth.uid() = owner)
-    with check (bucket_id = 'avatars');
+create policy "Give users access to own folder 1oj01fe_2" on storage.objects
+  for update to authenticated
+    using (bucket_id = 'avatars'
+      and LOWER(auth.uid()::text) = LOWER((storage.foldername(name))[1]));
+
+create policy "Give users access to own folder 1oj01fe_3" on storage.objects
+  for delete to authenticated
+    using (bucket_id = 'avatars'
+      and LOWER(auth.uid()::text) = LOWER((storage.foldername(name))[1]));
 
