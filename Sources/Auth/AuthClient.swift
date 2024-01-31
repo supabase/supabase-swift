@@ -99,6 +99,11 @@ public actor AuthClient {
   /// Namespace for accessing multi-factor authentication API.
   public let mfa: AuthMFA
 
+  /// Namespace for the GoTrue admin methods.
+  /// - Warning: This methods requires `service_role` key, be careful to never expose `service_role`
+  /// key in the client.
+  public let admin: AuthAdmin
+
   /// Initializes a AuthClient with optional parameters.
   ///
   /// - Parameters:
@@ -166,6 +171,7 @@ public actor AuthClient {
     logger: SupabaseLogger?
   ) {
     mfa = AuthMFA()
+    admin = AuthAdmin()
 
     Dependencies.current.setValue(
       Dependencies(

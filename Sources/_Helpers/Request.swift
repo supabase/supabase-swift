@@ -19,13 +19,24 @@ public struct HTTPClient: Sendable {
   public func fetch(_ request: Request, baseURL: URL) async throws -> Response {
     let id = UUID().uuidString
     let urlRequest = try request.urlRequest(withBaseURL: baseURL)
-    logger?.verbose("Request [\(id)]: \(urlRequest)")
+    logger?
+      .verbose(
+        "Request [\(id)]: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")"
+      )
     let (data, response) = try await fetchHandler(urlRequest)
-    logger?.verbose("Response [\(id)]: \(response)")
 
     guard let httpResponse = response as? HTTPURLResponse else {
+      logger?
+        .error(
+          "Response [\(id)]: Expected a \(HTTPURLResponse.self) instance, but got a \(type(of: response))."
+        )
       throw URLError(.badServerResponse)
     }
+
+    logger?
+      .verbose(
+        "Response [\(id)]: Status code: \(httpResponse.statusCode) Content-Length: \(httpResponse.expectedContentLength)"
+      )
 
     return Response(data: data, response: httpResponse)
   }

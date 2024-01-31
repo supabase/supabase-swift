@@ -8,6 +8,7 @@
 import Supabase
 import SwiftUI
 
+@MainActor
 struct AuthView: View {
   @State var email = ""
   @State var isLoading = false

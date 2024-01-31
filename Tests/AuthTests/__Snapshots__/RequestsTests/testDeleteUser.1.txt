@@ -1,0 +1,7 @@
+curl \
+	--request DELETE \
+	--header "Apikey: dummy.api.key" \
+	--header "Content-Type: application/json" \
+	--header "X-Client-Info: gotrue-swift/x.y.z" \
+	--data "{\"should_soft_delete\":false}" \
+	"http://localhost:54321/auth/v1/admin/users/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"

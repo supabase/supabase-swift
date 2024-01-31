@@ -9,6 +9,7 @@ import PhotosUI
 import Supabase
 import SwiftUI
 
+@MainActor
 struct ProfileView: View {
   @State var username = ""
   @State var fullName = ""
@@ -69,6 +70,10 @@ struct ProfileView: View {
           if isLoading {
             ProgressView()
           }
+
+          Button("Delete account", role: .destructive) {
+            deleteAccountButtonTapped()
+          }
         }
       }
       .onMac { $0.padding() }
@@ -82,7 +87,7 @@ struct ProfileView: View {
           }
         }
       })
-      .onChange(of: imageSelection) { newValue in
+      .onChange(of: imageSelection) { _, newValue in
         guard let newValue else { return }
         loadTransferable(from: newValue)
       }
@@ -162,17 +167,32 @@ struct ProfileView: View {
   private func uploadImage() async throws -> String? {
     guard let data = avatarImage?.data else { return nil }
 
-    let filePath = "\(UUID().uuidString).jpeg"
+    let userId = try await supabase.auth.session.user.id.uuidString
+    let filePath = "\(userId)/profile.jpeg"
 
     try await supabase.storage
       .from("avatars")
       .upload(
         path: filePath,
         file: data,
-        options: FileOptions(contentType: "image/jpeg")
+        options: FileOptions(contentType: "image/jpeg", upsert: true)
       )
 
     return filePath
+  }
+
+  private func deleteAccountButtonTapped() {
+    Task {
+      do {
+        let currentUserId = try await supabase.auth.session.user.id
+        try await supabase.auth.admin.deleteUser(
+          id: currentUserId.uuidString,
+          shouldSoftDelete: true
+        )
+      } catch {
+        debugPrint(error)
+      }
+    }
   }
 }
 
