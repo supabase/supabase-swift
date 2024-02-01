@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   library-darwin:
-    runs-on: macos-13
+    runs-on: macos-14
     name: Test Library (Darwin)
     steps:
       - uses: actions/checkout@v3
@@ -26,7 +26,7 @@ jobs:
 
   library-evolution:
     name: Library (evolution, Darwin)
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode 15.2
@@ -62,7 +62,7 @@ jobs:
           run: swift test
 
   examples:
-    runs-on: macos-13
+    runs-on: macos-14
     name: Build Examples
     steps:
       - uses: actions/checkout@v3
