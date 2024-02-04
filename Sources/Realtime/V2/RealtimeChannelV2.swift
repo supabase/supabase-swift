@@ -253,9 +253,10 @@ public actor RealtimeChannelV2 {
 
         let postgresActions = try data.decode(as: PostgresActionData.self)
 
-        let action: AnyAction = switch postgresActions.type {
+        let action: AnyAction
+        switch postgresActions.type {
         case "UPDATE":
-          .update(
+          action = .update(
             UpdateAction(
               columns: postgresActions.columns,
               commitTimestamp: postgresActions.commitTimestamp,
@@ -266,7 +267,7 @@ public actor RealtimeChannelV2 {
           )
 
         case "DELETE":
-          .delete(
+          action = .delete(
             DeleteAction(
               columns: postgresActions.columns,
               commitTimestamp: postgresActions.commitTimestamp,
@@ -276,7 +277,7 @@ public actor RealtimeChannelV2 {
           )
 
         case "INSERT":
-          .insert(
+          action = .insert(
             InsertAction(
               columns: postgresActions.columns,
               commitTimestamp: postgresActions.commitTimestamp,
@@ -286,7 +287,7 @@ public actor RealtimeChannelV2 {
           )
 
         case "SELECT":
-          .select(
+          action = .select(
             SelectAction(
               columns: postgresActions.columns,
               commitTimestamp: postgresActions.commitTimestamp,
