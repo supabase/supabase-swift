@@ -45,6 +45,17 @@ jobs:
       - name: Run Tests
         run: swift test
 
+  library-compatibility:
+    runs-on: ubuntu-latest
+    name: Test Library (Swift 5.8)
+    steps:
+      - uses: swift-actions/setup-swift@v1
+        with:
+          swift-version: "5.8"
+      - uses: actions/checkout@v3
+      - name: Run Tests
+        run: swift test
+
   library-windows:
       runs-on: windows-latest
       name: Test Library (Windows)
