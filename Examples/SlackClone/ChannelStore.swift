@@ -1,5 +1,5 @@
 //
-//  ChannelsViewModel.swift
+//  ChannelStore.swift
 //  SlackClone
 //
 //  Created by Guilherme Souza on 18/01/24.
@@ -8,20 +8,19 @@
 import Foundation
 import Supabase
 
-protocol ChannelsStore: AnyObject {
-  func fetchChannel(id: Channel.ID) async throws -> Channel
-}
-
 @MainActor
 @Observable
-final class ChannelsViewModel: ChannelsStore {
+final class ChannelStore {
+  static let shared = ChannelStore()
+
   private(set) var channels: [Channel] = []
+  var toast: ToastState?
 
-  weak var messages: MessagesStore!
+  var messages: MessageStore { Dependencies.shared.messages }
 
-  init() {
+  private init() {
     Task {
-      channels = try await fetchChannels()
+      channels = await fetchChannels()
 
       let channel = await supabase.realtimeV2.channel("public:channels")
 
@@ -41,6 +40,20 @@ final class ChannelsViewModel: ChannelsStore {
           handleDeletedChannel(delete)
         }
       }
+    }
+  }
+
+  func addChannel(_ name: String) async {
+    do {
+      let userId = try await supabase.auth.session.user.id
+      let channel = AddChannel(slug: name, createdBy: userId)
+      try await supabase.database
+        .from("channels")
+        .insert(channel)
+        .execute()
+    } catch {
+      dump(error)
+      toast = .init(status: .error, title: "Error", description: error.localizedDescription)
     }
   }
 
@@ -65,6 +78,7 @@ final class ChannelsViewModel: ChannelsStore {
       channels.append(channel)
     } catch {
       dump(error)
+      toast = .init(status: .error, title: "Error", description: error.localizedDescription)
     }
   }
 
@@ -74,7 +88,13 @@ final class ChannelsViewModel: ChannelsStore {
     messages.removeMessages(for: id)
   }
 
-  private func fetchChannels() async throws -> [Channel] {
-    try await supabase.database.from("channels").select().execute().value
+  private func fetchChannels() async -> [Channel] {
+    do {
+      return try await supabase.database.from("channels").select().execute().value
+    } catch {
+      dump(error)
+      toast = .init(status: .error, title: "Error", description: error.localizedDescription)
+      return []
+    }
   }
 }

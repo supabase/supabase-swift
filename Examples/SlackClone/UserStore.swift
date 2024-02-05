@@ -6,22 +6,50 @@
 //
 
 import Foundation
+import OSLog
 import Supabase
 
 @MainActor
 @Observable
 final class UserStore {
-  private(set) var users: [User.ID: User] = [:]
+  static let shared = UserStore()
 
-  init() {
+  private(set) var users: [User.ID: User] = [:]
+  private(set) var presences: [User.ID: UserPresence] = [:]
+
+  private init() {
     Task {
       let channel = await supabase.realtimeV2.channel("public:users")
       let changes = await channel.postgresChange(AnyAction.self, table: "users")
 
+      let prenseces = await channel.presenceChange()
+
       await channel.subscribe()
 
-      for await change in changes {
-        handleChangedUser(change)
+      let userId = try await supabase.auth.session.user.id
+      try await channel.track(UserPresence(userId: userId, onlineAt: Date()))
+
+      Task {
+        for await change in changes {
+          handleChangedUser(change)
+        }
+      }
+
+      Task {
+        for await presence in prenseces {
+          let joins = try presence.decodeJoins(as: UserPresence.self)
+          let leaves = try presence.decodeLeaves(as: UserPresence.self)
+
+          for join in joins {
+            self.presences[join.userId] = join
+            Logger.main.debug("User \(join.userId) joined")
+          }
+
+          for leave in leaves {
+            self.presences[leave.userId] = nil
+            Logger.main.debug("User \(leave.userId) leaved")
+          }
+        }
       }
     }
   }
