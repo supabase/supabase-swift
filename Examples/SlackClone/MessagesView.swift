@@ -9,30 +9,44 @@ import Realtime
 import Supabase
 import SwiftUI
 
-struct UserPresence: Codable {
-  var userId: UUID
-  var onlineAt: Date
-}
-
 @MainActor
 struct MessagesView: View {
-  let store = Store.shared.messages
+  let store = Dependencies.shared.messages
+  let userStore = Dependencies.shared.users
 
   let channel: Channel
   @State private var newMessage = ""
 
-  var messages: [Message] {
-    store.messages[channel.id, default: []]
+  var messages: Messages {
+    store.messages[channel.id] ?? .init(sections: [])
   }
 
   var body: some View {
     List {
-      ForEach(messages) { message in
-        VStack(alignment: .leading) {
-          Text(message.user.username)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-          Text(message.message)
+      ForEach(messages.sections) { section in
+        Section {
+          ForEach(section.messages) { message in
+            HStack(alignment: .top) {
+              Text(message.message)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+              Text(message.insertedAt.formatted())
+                .font(.footnote)
+            }
+          }
+        } header: {
+          HStack {
+            Text(section.author.username)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+
+            Image(systemName: "circle.fill")
+              .foregroundStyle(
+                userStore.presences[section.author.id] != nil ? Color.green : Color
+                  .red
+              )
+          }
         }
       }
     }
@@ -42,7 +56,7 @@ struct MessagesView: View {
     .safeAreaInset(edge: .bottom) {
       ComposeMessageView(text: $newMessage) {
         Task {
-          try! await submitNewMessageButtonTapped()
+          await submitNewMessageButtonTapped()
         }
       }
       .padding()
@@ -50,14 +64,21 @@ struct MessagesView: View {
     .navigationTitle(channel.slug)
   }
 
-  private func submitNewMessageButtonTapped() async throws {
-    let message = try await NewMessage(
-      message: newMessage,
-      userId: supabase.auth.session.user.id,
-      channelId: channel.id
-    )
+  private func submitNewMessageButtonTapped() async {
+    guard !newMessage.isEmpty else { return }
 
-    try await supabase.database.from("messages").insert(message).execute()
+    do {
+      let message = try await NewMessage(
+        message: newMessage,
+        userId: supabase.auth.session.user.id,
+        channelId: channel.id
+      )
+
+      try await supabase.database.from("messages").insert(message).execute()
+      newMessage = ""
+    } catch {
+      dump(error)
+    }
   }
 }
 
@@ -68,6 +89,10 @@ struct ComposeMessageView: View {
   var body: some View {
     HStack {
       TextField("Type here", text: $text)
+        .onSubmit {
+          onSubmit()
+        }
+
       Button {
         onSubmit()
       } label: {

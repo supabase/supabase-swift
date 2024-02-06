@@ -1,1 +1,1 @@
-@_spi(Internal) public let version = "2.3.0"
+@_spi(Internal) public let version = "2.3.1"
