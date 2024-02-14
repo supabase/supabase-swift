@@ -3,6 +3,10 @@ import Foundation
 
 import Logging
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
@@ -862,13 +866,21 @@ public actor AuthClient {
   /// - Returns: A new session.
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {
+#if os(iOS)
+    var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
+    backgroundTaskId = await UIApplication.shared.beginBackgroundTask(withName: "authRefreshSession") { [weak self] in
+      self?.persistentLogger.info("Refresh session background task killed.")
+      UIApplication.shared.endBackgroundTask(backgroundTaskId)
+      backgroundTaskId = .invalid
+    }
+#endif
     var credentials = UserCredentials(refreshToken: refreshToken)
     if credentials.refreshToken == nil {
       credentials.refreshToken = try await sessionManager.session(shouldValidateExpiration: false)
         .refreshToken
     }
       
-      persistentLogger.info("Refresh called with: \(String(describing: refreshToken))")
+    persistentLogger.info("Refresh called with: \(String(describing: refreshToken))")
 
     let session = try await api.execute(
       .init(
@@ -879,7 +891,7 @@ public actor AuthClient {
       )
     ).decoded(as: Session.self, decoder: configuration.decoder)
 
-      persistentLogger.info("Session obtained, next refreshToken: \(session.refreshToken)")
+    persistentLogger.info("Session obtained, next refreshToken: \(session.refreshToken)")
       
     if session.user.phoneConfirmedAt != nil || session.user.emailConfirmedAt != nil
       || session
@@ -889,6 +901,10 @@ public actor AuthClient {
       eventEmitter.emit(.tokenRefreshed, session: session)
     }
 
+    persistentLogger.info("Session updated.")
+#if os(iOS)
+    await UIApplication.shared.endBackgroundTask(backgroundTaskId)
+#endif
     return session
   }
 
