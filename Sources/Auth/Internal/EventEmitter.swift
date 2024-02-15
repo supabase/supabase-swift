@@ -1,62 +1,50 @@
 import ConcurrencyExtras
 import Foundation
 
-struct EventEmitter: Sendable {
-  var attachListener: @Sendable () -> (
-    id: UUID,
-    stream: AsyncStream<(event: AuthChangeEvent, session: Session?)>
-  )
-  var emit: @Sendable (_ event: AuthChangeEvent, _ session: Session?, _ id: UUID?) -> Void
-}
+class EventEmitter: @unchecked Sendable {
+  let listeners = LockIsolated<[ObjectIdentifier: AuthStateChangeListener]>([:])
 
-extension EventEmitter {
-  func emit(_ event: AuthChangeEvent, session: Session?) {
-    emit(event, session, nil)
-  }
-}
+  func attachListener(_ listener: @escaping AuthStateChangeListener)
+    -> AuthStateChangeListenerHandle
+  {
+    let handle = AuthStateChangeListenerHandle()
+    let key = ObjectIdentifier(handle)
 
-extension EventEmitter {
-  static var live: Self = {
-    let continuations = LockIsolated(
-      [UUID: AsyncStream<(event: AuthChangeEvent, session: Session?)>.Continuation]()
-    )
-
-    return Self(
-      attachListener: {
-        let id = UUID()
-
-        let (stream, continuation) = AsyncStream<(event: AuthChangeEvent, session: Session?)>
-          .makeStream()
-
-        continuation.onTermination = { [id] _ in
-          continuations.withValue {
-            $0[id] = nil
-          }
-        }
-
-        continuations.withValue {
-          $0[id] = continuation
-        }
-
-        return (id, stream)
-      },
-      emit: { event, session, id in
-        NotificationCenter.default.post(
-          name: AuthClient.didChangeAuthStateNotification,
-          object: nil,
-          userInfo: [
-            AuthClient.authChangeEventInfoKey: event,
-            AuthClient.authChangeSessionInfoKey: session as Any,
-          ]
-        )
-        if let id {
-          continuations.value[id]?.yield((event, session))
-        } else {
-          for continuation in continuations.value.values {
-            continuation.yield((event, session))
-          }
-        }
+    handle.onCancel = { [weak self] in
+      self?.listeners.withValue {
+        $0[key] = nil
       }
+    }
+
+    listeners.withValue {
+      $0[key] = listener
+    }
+
+    return handle
+  }
+
+  func emit(
+    _ event: AuthChangeEvent,
+    session: Session?,
+    handle: AuthStateChangeListenerHandle? = nil
+  ) {
+    NotificationCenter.default.post(
+      name: AuthClient.didChangeAuthStateNotification,
+      object: nil,
+      userInfo: [
+        AuthClient.authChangeEventInfoKey: event,
+        AuthClient.authChangeSessionInfoKey: session as Any,
+      ]
     )
-  }()
+
+    let listeners = listeners.value
+
+    if let handle {
+      listeners[ObjectIdentifier(handle)]?(event, session)
+    } else {
+      for listener in listeners.values {
+        listener(event, session)
+      }
+    }
+  }
 }
