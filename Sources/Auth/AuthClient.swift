@@ -866,12 +866,24 @@ public actor AuthClient {
   /// - Returns: A new session.
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {
-#if os(iOS)
+    // UIApplication is unavailable on watchOS.
+    // .performExpiringEquivalent might be possible for watchOS, but is synchronous so requires a much more complex implementation.
+    // https://developer.apple.com/documentation/foundation/processinfo/1617030-performexpiringactivity
+#if canImport(UIKit) && !os(watchOS)
     var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
     backgroundTaskId = await UIApplication.shared.beginBackgroundTask(withName: "authRefreshSession") { [weak self] in
       self?.persistentLogger.info("Refresh session background task killed.")
-      UIApplication.shared.endBackgroundTask(backgroundTaskId)
+      Task {
+        @MainActor [backgroundTaskId] in
+        UIApplication.shared.endBackgroundTask(backgroundTaskId)
+      }
       backgroundTaskId = .invalid
+    }
+    defer {
+      Task {
+        @MainActor [backgroundTaskId] in
+        UIApplication.shared.endBackgroundTask(backgroundTaskId)
+      }
     }
 #endif
     var credentials = UserCredentials(refreshToken: refreshToken)
@@ -902,9 +914,7 @@ public actor AuthClient {
     }
 
     persistentLogger.info("Session updated.")
-#if os(iOS)
-    await UIApplication.shared.endBackgroundTask(backgroundTaskId)
-#endif
+    
     return session
   }
 
