@@ -57,8 +57,6 @@ final class AuthClientTests: XCTestCase {
         XCTAssertNil(handle, "handle should be deallocated")
       }
 
-      await Task.megaYield()
-
       XCTAssertEqual(events.value, [.initialSession])
     }
   }

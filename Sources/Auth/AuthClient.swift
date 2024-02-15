@@ -207,16 +207,18 @@ public actor AuthClient {
   }
 
   /// Listen for auth state changes.
+  /// - Parameter listener: Block that executes when a new event is emitted.
+  /// - Returns: A handle that can be used to manually unsubscribe.
   ///
-  /// An `.initialSession` is always emitted when this method is called.
+  /// - Note: This method blocks execution until the ``AuthChangeEvent/initialSession`` event is
+  /// emitted. Although this operation is usually fast, in case of the current stored session being
+  /// invalid, a call to the endpoint is necessary for refreshing the session.
   @discardableResult
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
-  ) -> AuthStateChangeListenerHandle {
+  ) async -> AuthStateChangeListenerHandle {
     let handle = eventEmitter.attachListener(listener)
-    Task {
-      await emitInitialSession(forHandle: handle)
-    }
+    await emitInitialSession(forHandle: handle)
     return handle
   }
 
@@ -232,12 +234,14 @@ public actor AuthClient {
       session: Session?
     )>.makeStream()
 
-    let handle = onAuthStateChange { event, session in
-      continuation.yield((event, session))
-    }
+    Task {
+      let handle = await onAuthStateChange { event, session in
+        continuation.yield((event, session))
+      }
 
-    continuation.onTermination = { _ in
-      handle.cancel()
+      continuation.onTermination = { _ in
+        handle.cancel()
+      }
     }
 
     return stream
