@@ -10,16 +10,16 @@ import ConcurrencyExtras
 import Foundation
 
 final class MockEventEmitter: EventEmitter {
-  let emitedParams: LockIsolated<[(AuthChangeEvent, Session?, AuthStateChangeListenerHandle?)]> =
-    .init([])
+  let emitReceivedParams: LockIsolated<[(AuthChangeEvent, Session?)]> = .init([])
 
   override func emit(
     _ event: AuthChangeEvent,
     session: Session?,
     handle: AuthStateChangeListenerHandle? = nil
   ) {
-    emitedParams.withValue {
-      $0.append((event, session, handle))
+    emitReceivedParams.withValue {
+      $0.append((event, session))
     }
+    super.emit(event, session: session, handle: handle)
   }
 }
