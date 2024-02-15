@@ -179,7 +179,6 @@ final class RequestsTests: XCTestCase {
         $0.sessionManager.update = { _ in }
         $0.sessionStorage.storeSession = { _ in }
         $0.codeVerifierStorage.getCodeVerifier = { nil }
-        $0.eventEmitter = .live
         $0.currentDate = { currentDate }
       } operation: {
         let url = URL(
@@ -255,7 +254,6 @@ final class RequestsTests: XCTestCase {
     await withDependencies {
       $0.sessionManager.session = { @Sendable _ in .validSession }
       $0.sessionManager.remove = {}
-      $0.eventEmitter = .noop
     } operation: {
       await assert {
         try await sut.signOut()
@@ -268,7 +266,6 @@ final class RequestsTests: XCTestCase {
     await withDependencies {
       $0.sessionManager.session = { @Sendable _ in .validSession }
       $0.sessionManager.remove = {}
-      $0.eventEmitter = .noop
     } operation: {
       await assert {
         try await sut.signOut(scope: .local)
@@ -280,7 +277,6 @@ final class RequestsTests: XCTestCase {
     let sut = makeSUT()
     await withDependencies {
       $0.sessionManager.session = { @Sendable _ in .validSession }
-      $0.eventEmitter = .noop
     } operation: {
       await assert {
         try await sut.signOut(scope: .others)
@@ -438,7 +434,7 @@ final class RequestsTests: XCTestCase {
       sessionManager: .mock,
       codeVerifierStorage: .mock,
       api: api,
-      eventEmitter: .mock,
+      eventEmitter: EventEmitter(),
       sessionStorage: .mock,
       logger: nil
     )

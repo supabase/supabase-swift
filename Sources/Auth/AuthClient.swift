@@ -5,10 +5,29 @@ import Foundation
   import FoundationNetworking
 #endif
 
+public final class AuthStateChangeListenerHandle {
+  var onCancel: (@Sendable () -> Void)?
+
+  public func cancel() {
+    onCancel?()
+    onCancel = nil
+  }
+
+  deinit {
+    cancel()
+  }
+}
+
+public typealias AuthStateChangeListener = @Sendable (
+  _ event: AuthChangeEvent,
+  _ session: Session?
+) -> Void
+
 public actor AuthClient {
   /// FetchHandler is a type alias for asynchronous network request handling.
-  public typealias FetchHandler =
-    @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
+  public typealias FetchHandler = @Sendable (
+    _ request: URLRequest
+  ) async throws -> (Data, URLResponse)
 
   /// Configuration struct represents the client configuration.
   public struct Configuration: Sendable {
@@ -150,7 +169,7 @@ public actor AuthClient {
       sessionManager: .live,
       codeVerifierStorage: .live,
       api: api,
-      eventEmitter: .live,
+      eventEmitter: EventEmitter(),
       sessionStorage: .live,
       logger: configuration.logger
     )
@@ -190,16 +209,35 @@ public actor AuthClient {
   /// Listen for auth state changes.
   ///
   /// An `.initialSession` is always emitted when this method is called.
+  @discardableResult
+  public func onAuthStateChange(
+    _ listener: @escaping AuthStateChangeListener
+  ) -> AuthStateChangeListenerHandle {
+    let handle = eventEmitter.attachListener(listener)
+    Task {
+      await emitInitialSession(forHandle: handle)
+    }
+    return handle
+  }
+
+  /// Listen for auth state changes.
+  ///
+  /// An `.initialSession` is always emitted when this method is called.
   public var authStateChanges: AsyncStream<(
     event: AuthChangeEvent,
     session: Session?
   )> {
-    let (id, stream) = eventEmitter.attachListener()
-    logger?.debug("auth state change listener with id '\(id.uuidString)' attached.")
+    let (stream, continuation) = AsyncStream<(
+      event: AuthChangeEvent,
+      session: Session?
+    )>.makeStream()
 
-    Task { [id] in
-      await emitInitialSession(forStreamWithID: id)
-      logger?.debug("initial session for listener with id '\(id.uuidString)' emitted.")
+    let handle = onAuthStateChange { event, session in
+      continuation.yield((event, session))
+    }
+
+    continuation.onTermination = { _ in
+      handle.cancel()
     }
 
     return stream
@@ -884,9 +922,9 @@ public actor AuthClient {
     return session
   }
 
-  private func emitInitialSession(forStreamWithID id: UUID) async {
+  private func emitInitialSession(forHandle handle: AuthStateChangeListenerHandle) async {
     let session = try? await session
-    eventEmitter.emit(.initialSession, session, id)
+    eventEmitter.emit(.initialSession, session: session, handle: handle)
   }
 
   private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {
