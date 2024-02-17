@@ -23,7 +23,7 @@ final class SessionManagerTests: XCTestCase {
     await withDependencies {
       $0.sessionStorage.getSession = { nil }
     } operation: {
-      let sut = SessionManager.live
+      let sut = DefaultSessionManager.shared
 
       do {
         _ = try await sut.session()
@@ -41,7 +41,7 @@ final class SessionManagerTests: XCTestCase {
         .init(session: .validSession)
       }
     } operation: {
-      let sut = SessionManager.live
+      let sut = DefaultSessionManager.shared
 
       let session = try await sut.session()
       XCTAssertEqual(session, .validSession)
@@ -71,7 +71,7 @@ final class SessionManagerTests: XCTestCase {
         return await refreshSessionStream.first { _ in true } ?? .empty
       }
     } operation: {
-      let sut = SessionManager.live
+      let sut = DefaultSessionManager.shared
 
       // Fire N tasks and call sut.session()
       let tasks = (0 ..< 10).map { _ in

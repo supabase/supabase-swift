@@ -22,14 +22,6 @@ extension CodeVerifierStorage {
   )
 }
 
-extension SessionManager {
-  static let mock = Self(
-    session: unimplemented("SessionManager.session"),
-    update: unimplemented("SessionManager.update"),
-    remove: unimplemented("SessionManager.remove")
-  )
-}
-
 extension SessionStorage {
   static let mock = Self(
     getSession: unimplemented("SessionStorage.getSession"),
@@ -101,9 +93,9 @@ extension Dependencies {
       localStorage: Self.localStorage,
       logger: nil
     ),
-    sessionManager: .mock,
+    sessionManager: MockSessionManager(),
     api: .mock,
-    eventEmitter: EventEmitter(),
+    eventEmitter: MockEventEmitter(),
     sessionStorage: .mock,
     sessionRefresher: .mock,
     codeVerifierStorage: .mock,

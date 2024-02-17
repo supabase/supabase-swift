@@ -10,16 +10,28 @@ import ConcurrencyExtras
 import Foundation
 
 final class MockEventEmitter: EventEmitter {
-  let emitReceivedParams: LockIsolated<[(AuthChangeEvent, Session?)]> = .init([])
+  private let emitter = DefaultEventEmitter.shared
 
-  override func emit(
+  func attachListener(_ listener: @escaping AuthStateChangeListener)
+    -> AuthStateChangeListenerHandle
+  {
+    emitter.attachListener(listener)
+  }
+
+  private let _emitReceivedParams: LockIsolated<[(AuthChangeEvent, Session?)]> = .init([])
+  var emitReceivedParams: [(AuthChangeEvent, Session?)] {
+    _emitReceivedParams.value
+  }
+
+  func emit(
     _ event: AuthChangeEvent,
     session: Session?,
     handle: AuthStateChangeListenerHandle? = nil
   ) {
-    emitReceivedParams.withValue {
+    _emitReceivedParams.withValue {
       $0.append((event, session))
     }
-    super.emit(event, session: session, handle: handle)
+
+    emitter.emit(event, session: session, handle: handle)
   }
 }

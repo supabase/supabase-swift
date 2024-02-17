@@ -18,125 +18,105 @@ import XCTest
 struct UnimplementedError: Error {}
 
 final class RequestsTests: XCTestCase {
+  var sessionManager: MockSessionManager!
+
+  override func setUp() {
+    super.setUp()
+
+    sessionManager = MockSessionManager()
+  }
+
   func testSignUpWithEmailAndPassword() async {
     let sut = makeSUT()
 
-    await withDependencies {
-      $0.sessionManager.remove = {}
-    } operation: {
-      await assert {
-        try await sut.signUp(
-          email: "example@mail.com",
-          password: "the.pass",
-          data: ["custom_key": .string("custom_value")],
-          redirectTo: URL(string: "https://supabase.com"),
-          captchaToken: "dummy-captcha"
-        )
-      }
+    await assert {
+      try await sut.signUp(
+        email: "example@mail.com",
+        password: "the.pass",
+        data: ["custom_key": .string("custom_value")],
+        redirectTo: URL(string: "https://supabase.com"),
+        captchaToken: "dummy-captcha"
+      )
     }
   }
 
   func testSignUpWithPhoneAndPassword() async {
     let sut = makeSUT()
 
-    await withDependencies {
-      $0.sessionManager.remove = {}
-    } operation: {
-      await assert {
-        try await sut.signUp(
-          phone: "+1 202-918-2132",
-          password: "the.pass",
-          data: ["custom_key": .string("custom_value")],
-          captchaToken: "dummy-captcha"
-        )
-      }
+    await assert {
+      try await sut.signUp(
+        phone: "+1 202-918-2132",
+        password: "the.pass",
+        data: ["custom_key": .string("custom_value")],
+        captchaToken: "dummy-captcha"
+      )
     }
   }
 
   func testSignInWithEmailAndPassword() async {
     let sut = makeSUT()
 
-    await withDependencies {
-      $0.sessionManager.remove = {}
-    } operation: {
-      await assert {
-        try await sut.signIn(
-          email: "example@mail.com",
-          password: "the.pass"
-        )
-      }
+    await assert {
+      try await sut.signIn(
+        email: "example@mail.com",
+        password: "the.pass"
+      )
     }
   }
 
   func testSignInWithPhoneAndPassword() async {
     let sut = makeSUT()
 
-    await withDependencies {
-      $0.sessionManager.remove = {}
-    } operation: {
-      await assert {
-        try await sut.signIn(
-          phone: "+1 202-918-2132",
-          password: "the.pass"
-        )
-      }
+    await assert {
+      try await sut.signIn(
+        phone: "+1 202-918-2132",
+        password: "the.pass"
+      )
     }
   }
 
   func testSignInWithIdToken() async {
     let sut = makeSUT()
 
-    await withDependencies {
-      $0.sessionManager.remove = {}
-    } operation: {
-      await assert {
-        try await sut.signInWithIdToken(
-          credentials: OpenIDConnectCredentials(
-            provider: .apple,
-            idToken: "id-token",
-            accessToken: "access-token",
-            nonce: "nonce",
-            gotrueMetaSecurity: AuthMetaSecurity(
-              captchaToken: "captcha-token"
-            )
+    await assert {
+      try await sut.signInWithIdToken(
+        credentials: OpenIDConnectCredentials(
+          provider: .apple,
+          idToken: "id-token",
+          accessToken: "access-token",
+          nonce: "nonce",
+          gotrueMetaSecurity: AuthMetaSecurity(
+            captchaToken: "captcha-token"
           )
         )
-      }
+      )
     }
   }
 
   func testSignInWithOTPUsingEmail() async {
     let sut = makeSUT()
 
-    await withDependencies {
-      $0.sessionManager.remove = {}
-    } operation: {
-      await assert {
-        try await sut.signInWithOTP(
-          email: "example@mail.com",
-          redirectTo: URL(string: "https://supabase.com"),
-          shouldCreateUser: true,
-          data: ["custom_key": .string("custom_value")],
-          captchaToken: "dummy-captcha"
-        )
-      }
+    await assert {
+      try await sut.signInWithOTP(
+        email: "example@mail.com",
+        redirectTo: URL(string: "https://supabase.com"),
+        shouldCreateUser: true,
+        data: ["custom_key": .string("custom_value")],
+        captchaToken: "dummy-captcha"
+      )
     }
   }
 
   func testSignInWithOTPUsingPhone() async {
     let sut = makeSUT()
 
-    await withDependencies {
-      $0.sessionManager.remove = {}
-    } operation: {
-      await assert {
-        try await sut.signInWithOTP(
-          phone: "+1 202-918-2132",
-          shouldCreateUser: true,
-          data: ["custom_key": .string("custom_value")],
-          captchaToken: "dummy-captcha"
-        )
-      }
+    await assert {
+      try await sut.signInWithOTP(
+        phone: "+1 202-918-2132",
+        shouldCreateUser: true,
+        data: ["custom_key": .string("custom_value")],
+        captchaToken: "dummy-captcha"
+      )
     }
   }
 
@@ -176,7 +156,6 @@ final class RequestsTests: XCTestCase {
       let currentDate = Date()
 
       try await withDependencies {
-        $0.sessionManager.update = { _ in }
         $0.sessionStorage.storeSession = { _ in }
         $0.codeVerifierStorage.getCodeVerifier = { nil }
         $0.currentDate = { currentDate }
@@ -222,19 +201,15 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSetSessionWithAFutureExpirationDate() async throws {
+    sessionManager.returnSession = .success(.validSession)
+
     let sut = makeSUT()
 
-    await withDependencies {
-      $0.sessionManager.session = { @Sendable _ in
-        .validSession
-      }
-    } operation: {
-      let accessToken =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
+    let accessToken =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
 
-      await assert {
-        try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
-      }
+    await assert {
+      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
   }
 
@@ -250,94 +225,77 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSignOut() async {
+    sessionManager.returnSession = .success(.validSession)
+
     let sut = makeSUT()
-    await withDependencies {
-      $0.sessionManager.session = { @Sendable _ in .validSession }
-      $0.sessionManager.remove = {}
-    } operation: {
-      await assert {
-        try await sut.signOut()
-      }
+
+    await assert {
+      try await sut.signOut()
     }
   }
 
   func testSignOutWithLocalScope() async {
+    sessionManager.returnSession = .success(.validSession)
+
     let sut = makeSUT()
-    await withDependencies {
-      $0.sessionManager.session = { @Sendable _ in .validSession }
-      $0.sessionManager.remove = {}
-    } operation: {
-      await assert {
-        try await sut.signOut(scope: .local)
-      }
+
+    await assert {
+      try await sut.signOut(scope: .local)
     }
   }
 
   func testSignOutWithOthersScope() async {
+    sessionManager.returnSession = .success(.validSession)
+
     let sut = makeSUT()
-    await withDependencies {
-      $0.sessionManager.session = { @Sendable _ in .validSession }
-    } operation: {
-      await assert {
-        try await sut.signOut(scope: .others)
-      }
+
+    await assert {
+      try await sut.signOut(scope: .others)
     }
   }
 
   func testVerifyOTPUsingEmail() async {
     let sut = makeSUT()
 
-    await withDependencies {
-      $0.sessionManager.remove = {}
-    } operation: {
-      await assert {
-        try await sut.verifyOTP(
-          email: "example@mail.com",
-          token: "123456",
-          type: .magiclink,
-          redirectTo: URL(string: "https://supabase.com"),
-          captchaToken: "captcha-token"
-        )
-      }
+    await assert {
+      try await sut.verifyOTP(
+        email: "example@mail.com",
+        token: "123456",
+        type: .magiclink,
+        redirectTo: URL(string: "https://supabase.com"),
+        captchaToken: "captcha-token"
+      )
     }
   }
 
   func testVerifyOTPUsingPhone() async {
     let sut = makeSUT()
 
-    await withDependencies {
-      $0.sessionManager.remove = {}
-    } operation: {
-      await assert {
-        try await sut.verifyOTP(
-          phone: "+1 202-918-2132",
-          token: "123456",
-          type: .sms,
-          captchaToken: "captcha-token"
-        )
-      }
+    await assert {
+      try await sut.verifyOTP(
+        phone: "+1 202-918-2132",
+        token: "123456",
+        type: .sms,
+        captchaToken: "captcha-token"
+      )
     }
   }
 
   func testUpdateUser() async throws {
+    sessionManager.returnSession = .success(.validSession)
+
     let sut = makeSUT()
 
-    await withDependencies {
-      $0.sessionManager.session = { @Sendable _ in
-        .validSession
-      }
-    } operation: {
-      await assert {
-        try await sut.update(
-          user: UserAttributes(
-            email: "example@mail.com",
-            phone: "+1 202-918-2132",
-            password: "another.pass",
-            emailChangeToken: "123456",
-            data: ["custom_key": .string("custom_value")]
-          )
+    await assert {
+      try await sut.update(
+        user: UserAttributes(
+          email: "example@mail.com",
+          phone: "+1 202-918-2132",
+          password: "another.pass",
+          emailChangeToken: "123456",
+          data: ["custom_key": .string("custom_value")]
         )
-      }
+      )
     }
   }
 
@@ -411,6 +369,7 @@ final class RequestsTests: XCTestCase {
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       flowType: flowType,
       localStorage: InMemoryLocalStorage(),
+      logger: nil,
       encoder: encoder,
       fetch: { request in
         DispatchQueue.main.sync {
@@ -431,10 +390,10 @@ final class RequestsTests: XCTestCase {
 
     return AuthClient(
       configuration: configuration,
-      sessionManager: .mock,
+      sessionManager: sessionManager,
       codeVerifierStorage: .mock,
       api: api,
-      eventEmitter: EventEmitter(),
+      eventEmitter: MockEventEmitter(),
       sessionStorage: .mock,
       logger: nil
     )
