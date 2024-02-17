@@ -1,12 +1,37 @@
 import ConcurrencyExtras
 import Foundation
 
-class EventEmitter: @unchecked Sendable {
+protocol EventEmitter: Sendable {
+  func attachListener(
+    _ listener: @escaping AuthStateChangeListener
+  ) -> AuthStateChangeListenerHandle
+
+  func emit(
+    _ event: AuthChangeEvent,
+    session: Session?,
+    handle: AuthStateChangeListenerHandle?
+  )
+}
+
+extension EventEmitter {
+  func emit(
+    _ event: AuthChangeEvent,
+    session: Session?
+  ) {
+    emit(event, session: session, handle: nil)
+  }
+}
+
+final class DefaultEventEmitter: EventEmitter {
+  static let shared = DefaultEventEmitter()
+
+  private init() {}
+
   let listeners = LockIsolated<[ObjectIdentifier: AuthStateChangeListener]>([:])
 
-  func attachListener(_ listener: @escaping AuthStateChangeListener)
-    -> AuthStateChangeListenerHandle
-  {
+  func attachListener(
+    _ listener: @escaping AuthStateChangeListener
+  ) -> AuthStateChangeListenerHandle {
     let handle = AuthStateChangeListenerHandle()
     let key = ObjectIdentifier(handle)
 

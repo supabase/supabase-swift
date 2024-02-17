@@ -166,10 +166,10 @@ public actor AuthClient {
 
     self.init(
       configuration: configuration,
-      sessionManager: .live,
+      sessionManager: DefaultSessionManager.shared,
       codeVerifierStorage: .live,
       api: api,
-      eventEmitter: EventEmitter(),
+      eventEmitter: DefaultEventEmitter.shared,
       sessionStorage: .live,
       logger: configuration.logger
     )

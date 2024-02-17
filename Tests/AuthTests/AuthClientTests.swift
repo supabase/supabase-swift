@@ -17,6 +17,7 @@ import ConcurrencyExtras
 
 final class AuthClientTests: XCTestCase {
   var eventEmitter: MockEventEmitter!
+  var sessionManager: MockSessionManager!
 
   var sut: AuthClient!
 
@@ -24,6 +25,7 @@ final class AuthClientTests: XCTestCase {
     super.setUp()
 
     eventEmitter = MockEventEmitter()
+    sessionManager = MockSessionManager()
     sut = makeSUT()
   }
 
@@ -38,66 +40,60 @@ final class AuthClientTests: XCTestCase {
 
     sut = nil
     eventEmitter = nil
+    sessionManager = nil
   }
 
   func testOnAuthStateChanges() async {
     let session = Session.validSession
+    sessionManager.returnSession = .success(session)
 
     let events = LockIsolated([AuthChangeEvent]())
 
-    await withDependencies {
-      $0.sessionManager.session = { @Sendable _ in session }
-    } operation: {
-      let handle = await sut.onAuthStateChange { event, _ in
-        events.withValue {
-          $0.append(event)
-        }
+    let handle = await sut.onAuthStateChange { event, _ in
+      events.withValue {
+        $0.append(event)
       }
-      addTeardownBlock { [weak handle] in
-        XCTAssertNil(handle, "handle should be deallocated")
-      }
-
-      XCTAssertEqual(events.value, [.initialSession])
     }
+    addTeardownBlock { [weak handle] in
+      XCTAssertNil(handle, "handle should be deallocated")
+    }
+
+    XCTAssertEqual(events.value, [.initialSession])
   }
 
   func testAuthStateChanges() async throws {
     let session = Session.validSession
+    sessionManager.returnSession = .success(session)
 
     let events = ActorIsolated([AuthChangeEvent]())
 
     let (stream, continuation) = AsyncStream<Void>.makeStream()
 
-    await withDependencies {
-      $0.sessionManager.session = { @Sendable _ in session }
-    } operation: {
-      let authStateStream = await sut.authStateChanges
+    let authStateStream = await sut.authStateChanges
 
-      let streamTask = Task {
-        for await (event, _) in authStateStream {
-          await events.withValue {
-            $0.append(event)
-          }
-
-          continuation.yield()
+    let streamTask = Task {
+      for await (event, _) in authStateStream {
+        await events.withValue {
+          $0.append(event)
         }
+
+        continuation.yield()
       }
-
-      _ = await stream.first { _ in true }
-
-      let events = await events.value
-      XCTAssertEqual(events, [.initialSession])
-
-      streamTask.cancel()
     }
+
+    _ = await stream.first { _ in true }
+
+    let receivedEvents = await events.value
+    XCTAssertEqual(receivedEvents, [.initialSession])
+
+    streamTask.cancel()
   }
 
   func testSignOut() async throws {
+    sessionManager.returnSession = .success(.validSession)
+
     try await withDependencies {
       $0.api.execute = { _ in .stub() }
-      $0.sessionManager = .live
-      $0.sessionStorage = .inMemory
-      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
     } operation: {
       try await sut.signOut()
 
@@ -108,30 +104,27 @@ final class AuthClientTests: XCTestCase {
         XCTFail("Unexpected error.")
       }
 
-      XCTAssertEqual(eventEmitter.emitReceivedParams.value.map(\.0), [.signedOut])
+      XCTAssertEqual(eventEmitter.emitReceivedParams.map(\.0), [.signedOut])
     }
   }
 
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
+    sessionManager.returnSession = .success(.validSession)
+
     try await withDependencies {
       $0.api.execute = { _ in .stub() }
-      $0.sessionManager = .live
-      $0.sessionStorage = .inMemory
-      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
     } operation: {
       try await sut.signOut(scope: .others)
 
-      // Session should still be valid.
-      _ = try await sut.session
+      XCTAssertFalse(sessionManager.removeCalled)
     }
   }
 
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
-    try await withDependencies {
+    sessionManager.returnSession = .success(.validSession)
+
+    await withDependencies {
       $0.api.execute = { _ in throw AuthError.api(AuthError.APIError(code: 404)) }
-      $0.sessionManager = .live
-      $0.sessionStorage = .inMemory
-      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
     } operation: {
       do {
         try await sut.signOut()
@@ -140,23 +133,23 @@ final class AuthClientTests: XCTestCase {
         XCTFail("Unexpected error: \(error)")
       }
 
-      let emitedParams = eventEmitter.emitReceivedParams.value
+      let emitedParams = eventEmitter.emitReceivedParams
       let emitedEvents = emitedParams.map(\.0)
       let emitedSessions = emitedParams.map(\.1)
 
       XCTAssertEqual(emitedEvents, [.signedOut])
       XCTAssertEqual(emitedSessions.count, 1)
       XCTAssertNil(emitedSessions[0])
-      XCTAssertNil(try Dependencies.current.value!.sessionStorage.getSession())
+
+      XCTAssertEqual(sessionManager.removeCallCount, 1)
     }
   }
 
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
-    try await withDependencies {
+    sessionManager.returnSession = .success(.validSession)
+
+    await withDependencies {
       $0.api.execute = { _ in throw AuthError.api(AuthError.APIError(code: 401)) }
-      $0.sessionManager = .live
-      $0.sessionStorage = .inMemory
-      try $0.sessionStorage.storeSession(StoredSession(session: .validSession))
     } operation: {
       do {
         try await sut.signOut()
@@ -165,14 +158,15 @@ final class AuthClientTests: XCTestCase {
         XCTFail("Unexpected error: \(error)")
       }
 
-      let emitedParams = eventEmitter.emitReceivedParams.value
+      let emitedParams = eventEmitter.emitReceivedParams
       let emitedEvents = emitedParams.map(\.0)
       let emitedSessions = emitedParams.map(\.1)
 
       XCTAssertEqual(emitedEvents, [.signedOut])
       XCTAssertEqual(emitedSessions.count, 1)
       XCTAssertNil(emitedSessions[0])
-      XCTAssertNil(try Dependencies.current.value!.sessionStorage.getSession())
+
+      XCTAssertEqual(sessionManager.removeCallCount, 1)
     }
   }
 
@@ -186,7 +180,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = AuthClient(
       configuration: configuration,
-      sessionManager: .mock,
+      sessionManager: sessionManager,
       codeVerifierStorage: .mock,
       api: .mock,
       eventEmitter: eventEmitter,
