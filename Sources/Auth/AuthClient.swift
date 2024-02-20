@@ -5,24 +5,6 @@ import Foundation
   import FoundationNetworking
 #endif
 
-public final class AuthStateChangeListenerHandle {
-  var onCancel: (@Sendable () -> Void)?
-
-  public func cancel() {
-    onCancel?()
-    onCancel = nil
-  }
-
-  deinit {
-    cancel()
-  }
-}
-
-public typealias AuthStateChangeListener = @Sendable (
-  _ event: AuthChangeEvent,
-  _ session: Session?
-) -> Void
-
 public actor AuthClient {
   /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler = @Sendable (
@@ -216,7 +198,7 @@ public actor AuthClient {
   @discardableResult
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
-  ) async -> AuthStateChangeListenerHandle {
+  ) async -> AuthStateChangeListenerRegistration {
     let handle = eventEmitter.attachListener(listener)
     await emitInitialSession(forHandle: handle)
     return handle
@@ -240,7 +222,7 @@ public actor AuthClient {
       }
 
       continuation.onTermination = { _ in
-        handle.cancel()
+        handle.remove()
       }
     }
 
