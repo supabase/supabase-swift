@@ -123,6 +123,11 @@ final class BuildURLRequestTests: XCTestCase {
           .select()
           .contains("name", value: ["is:online", "faction:red"])
       },
+      TestCase(name: "test or filter with referenced table") { client in
+        await client.from("users")
+          .select("*, messages(*)")
+          .or("public.eq.true,recipient_id.eq.1", referencedTable: "messages")
+      },
       TestCase(name: "test upsert not ignoring duplicates") { client in
         try await client.from("users")
           .upsert(User(email: "johndoe@supabase.io"))

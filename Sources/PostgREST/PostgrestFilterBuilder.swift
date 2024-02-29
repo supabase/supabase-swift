@@ -22,9 +22,10 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
     return self
   }
 
-  public func or(_ filters: URLQueryRepresentable) -> PostgrestFilterBuilder {
+  public func or(_ filters: URLQueryRepresentable, referencedTable: String? = nil) -> PostgrestFilterBuilder {
+    let key = referencedTable.map { "\($0).or" } ?? "or"
     mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: "or", value: "(\(filters.queryValue.queryValue))"))
+      $0.request.query.append(URLQueryItem(name: key, value: "(\(filters.queryValue.queryValue))"))
     }
     return self
   }
