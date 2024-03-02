@@ -10,12 +10,22 @@ import Foundation
 @testable import Realtime
 import XCTestDynamicOverlay
 
-extension WebSocketClient {
-  static let mock = WebSocketClient(
-    status: .never,
-    send: unimplemented("WebSocketClient.send"),
-    receive: unimplemented("WebSocketClient.receive"),
-    connect: unimplemented("WebSocketClient.connect"),
-    cancel: unimplemented("WebSocketClient.cancel")
-  )
+final class MockWebSocketClient: WebSocketClient {
+  var status: AsyncStream<Realtime.ConnectionStatus> = .never
+
+  func send(_ message: Realtime.RealtimeMessageV2) async throws {
+
+  }
+  
+  func receive() -> AsyncThrowingStream<Realtime.RealtimeMessageV2, Error> {
+    .never
+  }
+  
+  func connect() {
+
+  }
+  
+  func cancel() {
+
+  }
 }

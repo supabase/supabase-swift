@@ -64,10 +64,17 @@ public actor RealtimeClientV2 {
   var inFlightConnectionTask: Task<Void, Never>?
 
   public private(set) var subscriptions: [String: RealtimeChannelV2] = [:]
-  var ws: WebSocketClient?
 
   let config: Configuration
-  let makeWebSocketClient: (_ url: URL, _ headers: [String: String]) -> WebSocketClient
+  lazy var ws: WebSocketClient = {
+    let sessionConfiguration = URLSessionConfiguration.default
+    sessionConfiguration.httpAdditionalHeaders = config.headers
+    return DefaultWebSocketClient(
+      realtimeURL: realtimeBaseURL,
+      configuration: sessionConfiguration,
+      logger: config.logger
+    )
+  }()
 
   private let statusStream = SharedStream<Status>(initialElement: .disconnected)
 
@@ -80,13 +87,14 @@ public actor RealtimeClientV2 {
     set { statusStream.yield(newValue) }
   }
 
-  init(
-    config: Configuration,
-    makeWebSocketClient: @escaping (_ url: URL, _ headers: [String: String]) -> WebSocketClient
-  ) {
-    self.config = config
-    self.makeWebSocketClient = makeWebSocketClient
+  deinit {
+    heartbeatTask?.cancel()
+    messageTask?.cancel()
+    subscriptions = [:]
+  }
 
+  public init(config: Configuration) {
+    self.config = config
     if let customJWT = config.headers["Authorization"]?.split(separator: " ").last {
       accessToken = String(customJWT)
     } else {
@@ -94,29 +102,15 @@ public actor RealtimeClientV2 {
     }
   }
 
-  deinit {
-    heartbeatTask?.cancel()
-    messageTask?.cancel()
-    subscriptions = [:]
-    ws?.cancel()
-  }
-
-  public init(config: Configuration) {
-    self.init(
-      config: config,
-      makeWebSocketClient: { url, headers in
-        let configuration = URLSessionConfiguration.default
-        configuration.httpAdditionalHeaders = headers
-        return WebSocketClient(
-          realtimeURL: url,
-          configuration: configuration,
-          logger: config.logger
-        )
-      }
-    )
-  }
-
   public func connect() async {
+    guard status != .connected else {
+      return
+    }
+
+    if status == .connecting {
+
+    }
+
     await connect(reconnect: false)
   }
 
@@ -143,30 +137,26 @@ public actor RealtimeClientV2 {
 
       status = .connecting
 
-      let realtimeURL = realtimeWebSocketURL
-      let ws = makeWebSocketClient(realtimeURL, config.headers)
-      self.ws = ws
+      ws.connect()
 
-      await ws.connect()
+      for await connectionStatus in ws.status {
+        switch connectionStatus {
+        case .open:
+          status = .connected
+          config.logger?.debug("Connected to realtime WebSocket")
+          listenForMessages()
+          startHeartbeating()
+          if reconnect {
+            await rejoinChannels()
+          }
 
-      let connectionStatus = await ws.status.first { @Sendable _ in true }
-
-      switch connectionStatus {
-      case .open:
-        status = .connected
-        config.logger?.debug("Connected to realtime websocket")
-        listenForMessages()
-        startHeartbeating()
-        if reconnect {
-          await rejoinChannels()
+        case .close, .complete:
+          config.logger?.debug(
+            "Error while trying to connect to realtime WebSocket. Trying again in \(config.reconnectDelay) seconds."
+          )
+          disconnect()
+          await connect(reconnect: true)
         }
-
-      case .close, .error, nil:
-        config.logger?.debug(
-          "Error while trying to connect to realtime websocket. Trying again in \(config.reconnectDelay) seconds."
-        )
-        disconnect()
-        await connect(reconnect: true)
       }
     }
 
@@ -222,10 +212,10 @@ public actor RealtimeClientV2 {
 
   private func listenForMessages() {
     messageTask = Task { [weak self] in
-      guard let self, let ws = await ws else { return }
+      guard let self else { return }
 
       do {
-        for try await message in ws.receive() {
+        for try await message in await ws.receive() {
           await onMessage(message)
         }
       } catch {
@@ -279,8 +269,7 @@ public actor RealtimeClientV2 {
     ref = 0
     messageTask?.cancel()
     heartbeatTask?.cancel()
-    ws?.cancel()
-    ws = nil
+    ws.cancel()
     status = .disconnected
   }
 
@@ -309,7 +298,7 @@ public actor RealtimeClientV2 {
 
   func send(_ message: RealtimeMessageV2) async {
     do {
-      try await ws?.send(message)
+      try await ws.send(message)
     } catch {
       config.logger?.debug("""
       Failed to send message:
