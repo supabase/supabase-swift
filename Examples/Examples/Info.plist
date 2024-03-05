@@ -4,6 +4,8 @@
 <dict>
 	<key>GIDClientID</key>
 	<string>YOUR_IOS_CLIENT_ID</string>
+	<key>GIDServerClientID</key>
+	<string>YOUR_SERVER_CLIENT_ID</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
