@@ -7,6 +7,7 @@
 
 import Supabase
 import SwiftUI
+import GoogleSignIn
 
 @main
 struct ExamplesApp: App {

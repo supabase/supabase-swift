@@ -1,5 +1,5 @@
 //
-//  GoogleSignIn.swift
+//  GoogleSignInWithWebFlow.swift
 //  Examples
 //
 //  Created by Guilherme Souza on 22/12/23.
@@ -8,7 +8,7 @@
 import AuthenticationServices
 import SwiftUI
 
-struct GoogleSignIn: View {
+struct GoogleSignInWithWebFlow: View {
   @Environment(\.webAuthenticationSession) var webAuthenticationSession
 
   var body: some View {
@@ -37,5 +37,5 @@ struct GoogleSignIn: View {
 }
 
 #Preview {
-  GoogleSignIn()
+  GoogleSignInWithWebFlow()
 }
