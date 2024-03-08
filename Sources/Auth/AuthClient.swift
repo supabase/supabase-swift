@@ -855,6 +855,11 @@ public actor AuthClient {
     eventEmitter.emit(.userUpdated, session: session)
     return updatedUser
   }
+  
+  /// Gets all the identities linked to a user.
+  public func userIdentities() async throws -> [UserIdentity] {
+    try await user().identities ?? []
+  }
 
   /// Sends a reset request to an email address.
   public func resetPasswordForEmail(
