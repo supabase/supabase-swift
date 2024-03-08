@@ -35,7 +35,7 @@ final class DefaultEventEmitter: EventEmitter {
     let handle = AuthStateChangeListenerHandle()
     let key = ObjectIdentifier(handle)
 
-    handle.onCancel = { [weak self] in
+    handle._onRemove.setValue { [weak self] in
       self?.listeners.withValue {
         $0[key] = nil
       }
