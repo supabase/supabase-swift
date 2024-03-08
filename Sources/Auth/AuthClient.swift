@@ -480,45 +480,13 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
   ) throws -> URL {
-    guard
-      var components = URLComponents(
-        url: configuration.url.appendingPathComponent("authorize"), resolvingAgainstBaseURL: false
-      )
-    else {
-      throw URLError(.badURL)
-    }
-
-    var queryItems: [URLQueryItem] = [
-      URLQueryItem(name: "provider", value: provider.rawValue),
-    ]
-
-    if let scopes {
-      queryItems.append(URLQueryItem(name: "scopes", value: scopes))
-    }
-
-    if let redirectTo {
-      queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
-    }
-
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
-
-    if let codeChallenge {
-      queryItems.append(URLQueryItem(name: "code_challenge", value: codeChallenge))
-    }
-
-    if let codeChallengeMethod {
-      queryItems.append(URLQueryItem(name: "code_challenge_method", value: codeChallengeMethod))
-    }
-
-    queryItems.append(contentsOf: queryParams.map(URLQueryItem.init))
-
-    components.queryItems = queryItems
-
-    guard let url = components.url else {
-      throw URLError(.badURL)
-    }
-
-    return url
+    try getURLForProvider(
+      url: configuration.url.appendingPathComponent("authorize"),
+      provider: provider,
+      scopes: scopes,
+      redirectTo: redirectTo,
+      queryParams: queryParams
+    )
   }
 
   /// Gets the session data from a OAuth2 callback URL.
@@ -861,6 +829,16 @@ public actor AuthClient {
     try await user().identities ?? []
   }
 
+  public func linkIdentity(provider: Provider) async throws {
+    let url = try getURLForProvider(url: configuration.url.appendingPathComponent("user/identities/authorize"), provider: provider)
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    request.allHTTPHeaderFields = configuration.headers
+
+    let (data, response) = try await configuration.fetch(request)
+  }
+
   /// Sends a reset request to an email address.
   public func resetPasswordForEmail(
     _ email: String,
@@ -963,6 +941,55 @@ public actor AuthClient {
     let currentCodeVerifier = try? codeVerifierStorage.getCodeVerifier()
     return fragments.contains(where: { $0.name == "code" }) && currentCodeVerifier != nil
   }
+
+  private func getURLForProvider(
+    url: URL,
+    provider: Provider,
+    scopes: String? = nil,
+    redirectTo: URL? = nil,
+    queryParams: [(name: String, value: String?)] = []
+  ) throws -> URL {
+    guard
+      var components = URLComponents(
+        url: url, resolvingAgainstBaseURL: false
+      )
+    else {
+      throw URLError(.badURL)
+    }
+
+    var queryItems: [URLQueryItem] = [
+      URLQueryItem(name: "provider", value: provider.rawValue),
+    ]
+
+    if let scopes {
+      queryItems.append(URLQueryItem(name: "scopes", value: scopes))
+    }
+
+    if let redirectTo {
+      queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
+    }
+
+    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+
+    if let codeChallenge {
+      queryItems.append(URLQueryItem(name: "code_challenge", value: codeChallenge))
+    }
+
+    if let codeChallengeMethod {
+      queryItems.append(URLQueryItem(name: "code_challenge_method", value: codeChallengeMethod))
+    }
+
+    queryItems.append(contentsOf: queryParams.map(URLQueryItem.init))
+
+    components.queryItems = queryItems
+
+    guard let url = components.url else {
+      throw URLError(.badURL)
+    }
+
+    return url
+  }
+
 }
 
 extension AuthClient {
