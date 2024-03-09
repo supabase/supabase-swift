@@ -23,22 +23,28 @@ public struct HTTPClient: Sendable {
       .verbose(
         "Request [\(id)]: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")"
       )
-    let (data, response) = try await fetchHandler(urlRequest)
 
-    guard let httpResponse = response as? HTTPURLResponse else {
+    do {
+      let (data, response) = try await fetchHandler(urlRequest)
+
+      guard let httpResponse = response as? HTTPURLResponse else {
+        logger?
+          .error(
+            "Response [\(id)]: Expected a \(HTTPURLResponse.self) instance, but got a \(type(of: response))."
+          )
+        throw URLError(.badServerResponse)
+      }
+
       logger?
-        .error(
-          "Response [\(id)]: Expected a \(HTTPURLResponse.self) instance, but got a \(type(of: response))."
+        .verbose(
+          "Response [\(id)]: Status code: \(httpResponse.statusCode) Content-Length: \(httpResponse.expectedContentLength)"
         )
-      throw URLError(.badServerResponse)
+
+      return Response(data: data, response: httpResponse)
+    } catch {
+      logger?.error("Response [\(id)]: Failure \(error)")
+      throw error
     }
-
-    logger?
-      .verbose(
-        "Response [\(id)]: Status code: \(httpResponse.statusCode) Content-Length: \(httpResponse.expectedContentLength)"
-      )
-
-    return Response(data: data, response: httpResponse)
   }
 }
 

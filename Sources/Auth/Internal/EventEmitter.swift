@@ -1,15 +1,16 @@
 import ConcurrencyExtras
 import Foundation
+@_spi(Internal) import _Helpers
 
 protocol EventEmitter: Sendable {
   func attachListener(
     _ listener: @escaping AuthStateChangeListener
-  ) -> AuthStateChangeListenerHandle
+  ) -> ObservationToken
 
   func emit(
     _ event: AuthChangeEvent,
     session: Session?,
-    handle: AuthStateChangeListenerHandle?
+    token: ObservationToken?
   )
 }
 
@@ -18,7 +19,7 @@ extension EventEmitter {
     _ event: AuthChangeEvent,
     session: Session?
   ) {
-    emit(event, session: session, handle: nil)
+    emit(event, session: session, token: nil)
   }
 }
 
@@ -27,31 +28,18 @@ final class DefaultEventEmitter: EventEmitter {
 
   private init() {}
 
-  let listeners = LockIsolated<[ObjectIdentifier: AuthStateChangeListener]>([:])
+  let emitter = _Helpers.EventEmitter<(AuthChangeEvent, Session?)>()
 
   func attachListener(
     _ listener: @escaping AuthStateChangeListener
-  ) -> AuthStateChangeListenerHandle {
-    let handle = AuthStateChangeListenerHandle()
-    let key = ObjectIdentifier(handle)
-
-    handle._onRemove.setValue { [weak self] in
-      self?.listeners.withValue {
-        $0[key] = nil
-      }
-    }
-
-    listeners.withValue {
-      $0[key] = listener
-    }
-
-    return handle
+  ) -> ObservationToken {
+    emitter.attach(listener)
   }
 
   func emit(
     _ event: AuthChangeEvent,
     session: Session?,
-    handle: AuthStateChangeListenerHandle? = nil
+    token: ObservationToken? = nil
   ) {
     NotificationCenter.default.post(
       name: AuthClient.didChangeAuthStateNotification,
@@ -62,14 +50,6 @@ final class DefaultEventEmitter: EventEmitter {
       ]
     )
 
-    let listeners = listeners.value
-
-    if let handle {
-      listeners[ObjectIdentifier(handle)]?(event, session)
-    } else {
-      for listener in listeners.values {
-        listener(event, session)
-      }
-    }
+    emitter.emit((event, session), to: token)
   }
 }

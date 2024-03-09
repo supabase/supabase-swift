@@ -76,15 +76,22 @@ public actor RealtimeClientV2 {
     )
   }()
 
-  private let statusStream = SharedStream<Status>(initialElement: .disconnected)
+  private let statusEventEmitter = EventEmitter<Status>()
 
   public var statusChange: AsyncStream<Status> {
-    statusStream.makeStream()
+    statusEventEmitter.stream()
   }
 
-  public private(set) var status: Status {
-    get { statusStream.lastElement }
-    set { statusStream.yield(newValue) }
+  public private(set) var status: Status = .disconnected {
+    didSet {
+      statusEventEmitter.emit(status)
+    }
+  }
+
+  public func onStatusChange(
+    _ listener: @escaping @Sendable (Status) -> Void
+  ) -> ObservationToken {
+    statusEventEmitter.attach(listener)
   }
 
   deinit {

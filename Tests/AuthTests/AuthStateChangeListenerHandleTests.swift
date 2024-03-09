@@ -9,10 +9,11 @@
 import ConcurrencyExtras
 import Foundation
 import XCTest
+@testable import _Helpers
 
 final class AuthStateChangeListenerHandleTests: XCTestCase {
   func testRemove() {
-    let handle = AuthStateChangeListenerHandle()
+    let handle = ObservationToken()
 
     let onRemoveCallCount = LockIsolated(0)
     handle._onRemove.setValue {
@@ -28,7 +29,7 @@ final class AuthStateChangeListenerHandleTests: XCTestCase {
   }
 
   func testDeinit() {
-    var handle: AuthStateChangeListenerHandle? = AuthStateChangeListenerHandle()
+    var handle: ObservationToken? = ObservationToken()
 
     let onRemoveCallCount = LockIsolated(0)
     handle?._onRemove.setValue {

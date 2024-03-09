@@ -199,9 +199,9 @@ public actor AuthClient {
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
   ) async -> some AuthStateChangeListenerRegistration {
-    let handle = eventEmitter.attachListener(listener)
-    await emitInitialSession(forHandle: handle)
-    return handle
+    let token = eventEmitter.attachListener(listener)
+    await emitInitialSession(forToken: token)
+    return token
   }
 
   /// Listen for auth state changes.
@@ -908,9 +908,9 @@ public actor AuthClient {
     return session
   }
 
-  private func emitInitialSession(forHandle handle: AuthStateChangeListenerHandle) async {
+  private func emitInitialSession(forToken token: ObservationToken) async {
     let session = try? await session
-    eventEmitter.emit(.initialSession, session: session, handle: handle)
+    eventEmitter.emit(.initialSession, session: session, token: token)
   }
 
   private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {
