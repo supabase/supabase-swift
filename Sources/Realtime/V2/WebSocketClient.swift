@@ -13,23 +13,23 @@ import Foundation
   import FoundationNetworking
 #endif
 
-struct WebSocketClient {
-  enum ConnectionStatus {
+struct WebSocketClient: Sendable {
+  enum ConnectionStatus: Sendable {
     case open
     case close
-    case error(Error)
+    case error(any Error)
   }
 
   var status: AsyncStream<WebSocketClient.ConnectionStatus>
 
-  var send: (_ message: RealtimeMessageV2) async throws -> Void
-  var receive: () -> AsyncThrowingStream<RealtimeMessageV2, Error>
-  var connect: () async -> Void
-  var cancel: () -> Void
+  var send: @Sendable (_ message: RealtimeMessageV2) async throws -> Void
+  var receive: @Sendable () -> AsyncThrowingStream<RealtimeMessageV2, any Error>
+  var connect: @Sendable () async -> Void
+  var cancel: @Sendable () -> Void
 }
 
 extension WebSocketClient {
-  init(realtimeURL: URL, configuration: URLSessionConfiguration, logger: SupabaseLogger?) {
+  init(realtimeURL: URL, configuration: URLSessionConfiguration, logger: (any SupabaseLogger)?) {
     let client = LiveWebSocketClient(
       realtimeURL: realtimeURL,
       configuration: configuration,
@@ -48,13 +48,13 @@ extension WebSocketClient {
 private actor LiveWebSocketClient {
   private let realtimeURL: URL
   private let configuration: URLSessionConfiguration
-  private let logger: SupabaseLogger?
+  private let logger: (any SupabaseLogger)?
 
   private var delegate: Delegate?
   private var session: URLSession?
   private var task: URLSessionWebSocketTask?
 
-  init(realtimeURL: URL, configuration: URLSessionConfiguration, logger: SupabaseLogger?) {
+  init(realtimeURL: URL, configuration: URLSessionConfiguration, logger: (any SupabaseLogger)?) {
     self.realtimeURL = realtimeURL
     self.configuration = configuration
 
@@ -91,8 +91,8 @@ private actor LiveWebSocketClient {
     continuation.finish()
   }
 
-  nonisolated func receive() -> AsyncThrowingStream<RealtimeMessageV2, Error> {
-    let (stream, continuation) = AsyncThrowingStream<RealtimeMessageV2, Error>.makeStream()
+  nonisolated func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error> {
+    let (stream, continuation) = AsyncThrowingStream<RealtimeMessageV2, any Error>.makeStream()
 
     Task {
       while let message = try await self.task?.receive() {
@@ -157,7 +157,7 @@ private actor LiveWebSocketClient {
     func urlSession(
       _: URLSession,
       task _: URLSessionTask,
-      didCompleteWithError error: Error?
+      didCompleteWithError error: (any Error)?
     ) {
       if let error {
         onStatusChange(.error(error))

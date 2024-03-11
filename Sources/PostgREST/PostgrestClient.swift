@@ -14,7 +14,7 @@ public actor PostgrestClient {
   )
 
   /// The configuration struct for the PostgREST client.
-  public struct Configuration {
+  public struct Configuration: Sendable {
     public var url: URL
     public var schema: String?
     public var headers: [String: String]
@@ -22,7 +22,7 @@ public actor PostgrestClient {
     public var encoder: JSONEncoder
     public var decoder: JSONDecoder
 
-    let logger: SupabaseLogger?
+    let logger: (any SupabaseLogger)?
 
     /// Initializes a new configuration for the PostgREST client.
     /// - Parameters:
@@ -37,7 +37,7 @@ public actor PostgrestClient {
       url: URL,
       schema: String? = nil,
       headers: [String: String] = [:],
-      logger: SupabaseLogger? = nil,
+      logger: (any SupabaseLogger)? = nil,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
@@ -75,7 +75,7 @@ public actor PostgrestClient {
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
-    logger: SupabaseLogger? = nil,
+    logger: (any SupabaseLogger)? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
@@ -126,7 +126,7 @@ public actor PostgrestClient {
   /// - Throws: An error if the function call fails.
   public func rpc(
     _ fn: String,
-    params: some Encodable,
+    params: some Encodable & Sendable,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     try PostgrestRpcBuilder(

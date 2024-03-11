@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 22/12/22.
 //
 
+import GoogleSignIn
 import Supabase
 import SwiftUI
-import GoogleSignIn
 
 @main
 struct ExamplesApp: App {

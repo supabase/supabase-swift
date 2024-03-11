@@ -8,10 +8,10 @@ import Foundation
 public struct HTTPClient: Sendable {
   public typealias FetchHandler = @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
-  let logger: SupabaseLogger?
+  let logger: (any SupabaseLogger)?
   let fetchHandler: FetchHandler
 
-  public init(logger: SupabaseLogger?, fetchHandler: @escaping FetchHandler) {
+  public init(logger: (any SupabaseLogger)?, fetchHandler: @escaping FetchHandler) {
     self.logger = logger
     self.fetchHandler = fetchHandler
   }

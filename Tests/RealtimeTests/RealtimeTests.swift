@@ -28,8 +28,10 @@ final class RealtimeTests: XCTestCase {
       }
     }
 
-    var sentMessages: [RealtimeMessageV2] = []
-    mock.send = { sentMessages.append($0) }
+    let sentMessages: LockIsolated<[RealtimeMessageV2]> = .init([])
+    mock.send = { message in
+      sentMessages.withValue { $0.append(message) }
+    }
 
     let realtime = RealtimeClientV2(
       config: RealtimeClientV2.Configuration(url: url, apiKey: apiKey),
@@ -57,7 +59,7 @@ final class RealtimeTests: XCTestCase {
 
     await channel.subscribe()
 
-    XCTAssertNoDifference(sentMessages, [.subscribeToMessages])
+    XCTAssertNoDifference(sentMessages.value, [.subscribeToMessages])
   }
 
   func testHeartbeat() {

@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 05/03/24.
 //
 
-import SwiftUI
 @preconcurrency import GoogleSignIn
 import GoogleSignInSwift
 import Supabase
+import SwiftUI
 
 @MainActor
 struct GoogleSignInSDKFlow: View {

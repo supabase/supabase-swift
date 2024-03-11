@@ -71,7 +71,7 @@ extension AuthClient.Configuration {
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = Self.defaultFlowType,
-    localStorage: AuthLocalStorage,
+    localStorage: any AuthLocalStorage,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -109,7 +109,7 @@ extension AuthClient {
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = Configuration.defaultFlowType,
-    localStorage: AuthLocalStorage,
+    localStorage: any AuthLocalStorage,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) }

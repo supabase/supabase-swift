@@ -16,8 +16,8 @@ public actor AuthClient {
     public let url: URL
     public var headers: [String: String]
     public let flowType: AuthFlowType
-    public let localStorage: AuthLocalStorage
-    public let logger: SupabaseLogger?
+    public let localStorage: any AuthLocalStorage
+    public let logger: (any SupabaseLogger)?
     public let encoder: JSONEncoder
     public let decoder: JSONDecoder
     public let fetch: FetchHandler
@@ -37,8 +37,8 @@ public actor AuthClient {
       url: URL,
       headers: [String: String] = [:],
       flowType: AuthFlowType = Configuration.defaultFlowType,
-      localStorage: AuthLocalStorage,
-      logger: SupabaseLogger? = nil,
+      localStorage: any AuthLocalStorage,
+      logger: (any SupabaseLogger)? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -64,7 +64,7 @@ public actor AuthClient {
     Dependencies.current.value!.api
   }
 
-  private var sessionManager: SessionManager {
+  private var sessionManager: any SessionManager {
     Dependencies.current.value!.sessionManager
   }
 
@@ -72,7 +72,7 @@ public actor AuthClient {
     Dependencies.current.value!.codeVerifierStorage
   }
 
-  private var eventEmitter: EventEmitter {
+  private var eventEmitter: any EventEmitter {
     Dependencies.current.value!.eventEmitter
   }
 
@@ -80,7 +80,7 @@ public actor AuthClient {
     Dependencies.current.value!.currentDate
   }
 
-  private var logger: SupabaseLogger? {
+  private var logger: (any SupabaseLogger)? {
     Dependencies.current.value!.logger
   }
 
@@ -116,8 +116,8 @@ public actor AuthClient {
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-    localStorage: AuthLocalStorage,
-    logger: SupabaseLogger? = nil,
+    localStorage: any AuthLocalStorage,
+    logger: (any SupabaseLogger)? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -160,12 +160,12 @@ public actor AuthClient {
   /// This internal initializer is here only for easy injecting mock instances when testing.
   init(
     configuration: Configuration,
-    sessionManager: SessionManager,
+    sessionManager: any SessionManager,
     codeVerifierStorage: CodeVerifierStorage,
     api: APIClient,
-    eventEmitter: EventEmitter,
+    eventEmitter: any EventEmitter,
     sessionStorage: SessionStorage,
-    logger: SupabaseLogger?
+    logger: (any SupabaseLogger)?
   ) {
     mfa = AuthMFA()
     admin = AuthAdmin()
@@ -198,7 +198,7 @@ public actor AuthClient {
   @discardableResult
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
-  ) async -> AuthStateChangeListenerRegistration {
+  ) async -> some AuthStateChangeListenerRegistration {
     let handle = eventEmitter.attachListener(listener)
     await emitInitialSession(forHandle: handle)
     return handle

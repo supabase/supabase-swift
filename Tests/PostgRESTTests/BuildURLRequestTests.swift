@@ -51,6 +51,7 @@ final class BuildURLRequestTests: XCTestCase {
       url: url,
       schema: nil,
       headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
+      logger: nil,
       fetch: { request in
         guard let runningTestCase = await runningTestCase.value else {
           XCTFail("execute called without a runningTestCase set.")
@@ -171,7 +172,7 @@ final class BuildURLRequestTests: XCTestCase {
   }
 
   func testSessionConfiguration() async {
-    let client = PostgrestClient(url: url, schema: nil)
+    let client = PostgrestClient(url: url, schema: nil, logger: nil)
     let clientInfoHeader = await client.configuration.headers["X-Client-Info"]
     XCTAssertNotNil(clientInfoHeader)
   }

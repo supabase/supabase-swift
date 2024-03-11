@@ -1,4 +1,4 @@
-public struct SearchOptions: Encodable {
+public struct SearchOptions: Encodable, Sendable {
   var prefix: String
 
   /// The number of files you want to be returned.
@@ -27,7 +27,7 @@ public struct SearchOptions: Encodable {
   }
 }
 
-public struct SortBy: Encodable {
+public struct SortBy: Encodable, Sendable {
   public var column: String?
   public var order: String?
 

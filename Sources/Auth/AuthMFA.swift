@@ -7,7 +7,7 @@ public actor AuthMFA {
     Dependencies.current.value!.api
   }
 
-  private var sessionManager: SessionManager {
+  private var sessionManager: any SessionManager {
     Dependencies.current.value!.sessionManager
   }
 
@@ -15,7 +15,7 @@ public actor AuthMFA {
     Dependencies.current.value!.configuration
   }
 
-  private var eventEmitter: EventEmitter {
+  private var eventEmitter: any EventEmitter {
     Dependencies.current.value!.eventEmitter
   }
 
