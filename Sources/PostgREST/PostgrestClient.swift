@@ -14,7 +14,7 @@ public actor PostgrestClient {
   )
 
   /// The configuration struct for the PostgREST client.
-  public struct Configuration {
+  public struct Configuration: Sendable {
     public var url: URL
     public var schema: String?
     public var headers: [String: String]
@@ -126,7 +126,7 @@ public actor PostgrestClient {
   /// - Throws: An error if the function call fails.
   public func rpc(
     _ fn: String,
-    params: some Encodable,
+    params: some Encodable & Sendable,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     try PostgrestRpcBuilder(

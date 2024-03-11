@@ -105,7 +105,7 @@ public actor RealtimeChannelV2 {
       )
     )
 
-    _ = await statusChange.first { $0 == .subscribed }
+    _ = await statusChange.first { @Sendable in $0 == .subscribed }
   }
 
   public func unsubscribe() async {

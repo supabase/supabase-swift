@@ -49,7 +49,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
   /// - Throws: An error if the insert fails.
   public func insert(
-    _ values: some Encodable,
+    _ values: some Encodable & Sendable,
     returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
@@ -94,7 +94,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
   /// - Throws: An error if the upsert fails.
   public func upsert(
-    _ values: some Encodable,
+    _ values: some Encodable & Sendable,
     onConflict: String? = nil,
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil,
@@ -142,7 +142,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
   /// - Throws: An error if the update fails.
   public func update(
-    _ values: some Encodable,
+    _ values: some Encodable & Sendable,
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {

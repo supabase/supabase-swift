@@ -16,7 +16,8 @@ extension SupabaseStorageClient {
         headers: [
           "Authorization": "Bearer \(apiKey)",
           "Apikey": apiKey,
-        ]
+        ],
+        logger: nil
       )
     )
   }

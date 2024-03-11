@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 18/10/23.
 //
 
+import ConcurrencyExtras
 import Foundation
 
 extension JSONEncoder {
@@ -18,14 +19,16 @@ extension JSONEncoder {
 extension JSONDecoder {
   public static let defaultStorageDecoder: JSONDecoder = {
     let decoder = JSONDecoder()
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let formatter = LockIsolated(ISO8601DateFormatter())
+    formatter.withValue {
+      $0.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    }
 
     decoder.dateDecodingStrategy = .custom { decoder in
       let container = try decoder.singleValueContainer()
       let string = try container.decode(String.self)
 
-      if let date = formatter.date(from: string) {
+      if let date = formatter.withValue({ $0.date(from: string) }) {
         return date
       }
 

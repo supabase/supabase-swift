@@ -149,7 +149,7 @@ public actor RealtimeClientV2 {
 
       await ws.connect()
 
-      let connectionStatus = await ws.status.first { _ in true }
+      let connectionStatus = await ws.status.first { @Sendable _ in true }
 
       switch connectionStatus {
       case .open:
@@ -371,7 +371,7 @@ public actor RealtimeClientV2 {
 
 struct TimeoutError: Error {}
 
-func withThrowingTimeout<R>(
+func withThrowingTimeout<R: Sendable>(
   seconds: TimeInterval,
   body: @escaping @Sendable () async throws -> R
 ) async throws -> R {

@@ -46,7 +46,7 @@ public struct PresenceJoinConfig: Codable, Hashable, Sendable {
   public var key: String = ""
 }
 
-public enum PostgresChangeEvent: String, Codable {
+public enum PostgresChangeEvent: String, Codable, Sendable {
   case insert = "INSERT"
   case update = "UPDATE"
   case delete = "DELETE"
@@ -54,7 +54,7 @@ public enum PostgresChangeEvent: String, Codable {
   case all = "*"
 }
 
-struct PostgresJoinConfig: Codable, Hashable {
+struct PostgresJoinConfig: Codable, Hashable, Sendable {
   var event: PostgresChangeEvent?
   var schema: String
   var table: String?

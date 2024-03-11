@@ -13,7 +13,7 @@ public final class PostgrestRpcBuilder: PostgrestBuilder {
   /// - Returns: The `PostgrestTransformBuilder` instance for method chaining.
   /// - Throws: An error if the function call fails.
   func rpc(
-    params: some Encodable,
+    params: some Encodable & Sendable,
     head: Bool = false,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {

@@ -13,8 +13,8 @@ import Foundation
   import FoundationNetworking
 #endif
 
-struct WebSocketClient {
-  enum ConnectionStatus {
+struct WebSocketClient: Sendable {
+  enum ConnectionStatus: Sendable {
     case open
     case close
     case error(Error)
@@ -22,10 +22,10 @@ struct WebSocketClient {
 
   var status: AsyncStream<WebSocketClient.ConnectionStatus>
 
-  var send: (_ message: RealtimeMessageV2) async throws -> Void
-  var receive: () -> AsyncThrowingStream<RealtimeMessageV2, Error>
-  var connect: () async -> Void
-  var cancel: () -> Void
+  var send: @Sendable (_ message: RealtimeMessageV2) async throws -> Void
+  var receive: @Sendable () -> AsyncThrowingStream<RealtimeMessageV2, Error>
+  var connect: @Sendable () async -> Void
+  var cancel: @Sendable () -> Void
 }
 
 extension WebSocketClient {
