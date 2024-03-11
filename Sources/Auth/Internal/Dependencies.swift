@@ -6,12 +6,12 @@ struct Dependencies: Sendable {
   static let current = LockIsolated(Dependencies?.none)
 
   var configuration: AuthClient.Configuration
-  var sessionManager: SessionManager
+  var sessionManager: any SessionManager
   var api: APIClient
-  var eventEmitter: EventEmitter
+  var eventEmitter: any EventEmitter
   var sessionStorage: SessionStorage
   var sessionRefresher: SessionRefresher
   var codeVerifierStorage: CodeVerifierStorage
   var currentDate: @Sendable () -> Date = { Date() }
-  var logger: SupabaseLogger?
+  var logger: (any SupabaseLogger)?
 }

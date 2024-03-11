@@ -59,7 +59,7 @@ final class CallbackManager: @unchecked Sendable {
   }
 
   @discardableResult
-  func addPresenceCallback(callback: @escaping @Sendable (PresenceAction) -> Void) -> Int {
+  func addPresenceCallback(callback: @escaping @Sendable (any PresenceAction) -> Void) -> Int {
     mutableState.withValue {
       $0.id += 1
       $0.callbacks.append(.presence(PresenceCallback(id: $0.id, callback: callback)))
@@ -156,7 +156,7 @@ struct BroadcastCallback {
 
 struct PresenceCallback {
   var id: Int
-  var callback: @Sendable (PresenceAction) -> Void
+  var callback: @Sendable (any PresenceAction) -> Void
 }
 
 enum RealtimeCallback {

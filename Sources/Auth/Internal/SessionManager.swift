@@ -22,7 +22,7 @@ actor DefaultSessionManager: SessionManager {
 
   private init() {}
 
-  private var task: Task<Session, Error>?
+  private var task: Task<Session, any Error>?
 
   private var storage: SessionStorage {
     Dependencies.current.value!.sessionStorage

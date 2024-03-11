@@ -22,7 +22,7 @@ public actor PostgrestClient {
     public var encoder: JSONEncoder
     public var decoder: JSONDecoder
 
-    let logger: SupabaseLogger?
+    let logger: (any SupabaseLogger)?
 
     /// Initializes a new configuration for the PostgREST client.
     /// - Parameters:
@@ -37,7 +37,7 @@ public actor PostgrestClient {
       url: URL,
       schema: String? = nil,
       headers: [String: String] = [:],
-      logger: SupabaseLogger? = nil,
+      logger: (any SupabaseLogger)? = nil,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
@@ -75,7 +75,7 @@ public actor PostgrestClient {
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
-    logger: SupabaseLogger? = nil,
+    logger: (any SupabaseLogger)? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder

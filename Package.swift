@@ -137,7 +137,7 @@ let package = Package(
 
 for target in package.targets where !target.isTest {
   target.swiftSettings = [
-    .enableExperimentalFeature("ExistentialAny"),
+    .enableUpcomingFeature("ExistentialAny"),
     .enableExperimentalFeature("StrictConcurrency"),
   ]
 }

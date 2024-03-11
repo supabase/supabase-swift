@@ -31,7 +31,7 @@ struct SessionStorage: Sendable {
 
 extension SessionStorage {
   static var live: Self = {
-    var localStorage: AuthLocalStorage {
+    var localStorage: any AuthLocalStorage {
       Dependencies.current.value!.configuration.localStorage
     }
 

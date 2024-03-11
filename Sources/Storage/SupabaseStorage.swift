@@ -7,7 +7,7 @@ public struct StorageClientConfiguration {
   public let encoder: JSONEncoder
   public let decoder: JSONDecoder
   public let session: StorageHTTPSession
-  public let logger: SupabaseLogger?
+  public let logger: (any SupabaseLogger)?
 
   public init(
     url: URL,
@@ -15,7 +15,7 @@ public struct StorageClientConfiguration {
     encoder: JSONEncoder = .defaultStorageEncoder,
     decoder: JSONDecoder = .defaultStorageDecoder,
     session: StorageHTTPSession = .init(),
-    logger: SupabaseLogger? = nil
+    logger: (any SupabaseLogger)? = nil
   ) {
     self.url = url
     self.headers = headers

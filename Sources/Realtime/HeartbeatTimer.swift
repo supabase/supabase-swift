@@ -51,7 +51,7 @@ class HeartbeatTimer {
 
   // ----------------------------------------------------------------------
   // The underlying, cancelable, resettable, timer.
-  private var temporaryTimer: DispatchSourceTimer?
+  private var temporaryTimer: (any DispatchSourceTimer)?
   // The event handler that is called by the timer when it fires.
   private var temporaryEventHandler: (() -> Void)?
 

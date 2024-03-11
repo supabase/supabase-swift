@@ -25,7 +25,7 @@ public actor RealtimeClientV2 {
     var timeoutInterval: TimeInterval
     var disconnectOnSessionLoss: Bool
     var connectOnSubscribe: Bool
-    var logger: SupabaseLogger?
+    var logger: (any SupabaseLogger)?
 
     public init(
       url: URL,
@@ -36,7 +36,7 @@ public actor RealtimeClientV2 {
       timeoutInterval: TimeInterval = 10,
       disconnectOnSessionLoss: Bool = true,
       connectOnSubscribe: Bool = true,
-      logger: SupabaseLogger? = nil
+      logger: (any SupabaseLogger)? = nil
     ) {
       self.url = url
       self.apiKey = apiKey
@@ -391,7 +391,7 @@ func withThrowingTimeout<R: Sendable>(
   }
 }
 
-extension Task where Success: Sendable, Failure == Error {
+extension Task where Success: Sendable, Failure == any Error {
   init(
     priority: TaskPriority? = nil,
     timeout: TimeInterval,

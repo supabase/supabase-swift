@@ -38,7 +38,7 @@ public protocol PhoenixTransport {
   var readyState: PhoenixTransportReadyState { get }
 
   /// Delegate for the `Transport` layer
-  var delegate: PhoenixTransportDelegate? { get set }
+  var delegate: (any PhoenixTransportDelegate)? { get set }
 
   /**
    Connect to the server
@@ -86,7 +86,7 @@ public protocol PhoenixTransportDelegate {
    - Parameter response: Response from the server, if any, that occurred with the Error
 
    */
-  func onError(error: Error, response: URLResponse?)
+  func onError(error: any Error, response: URLResponse?)
 
   /**
    Notified when the `Transport` receives a message from the server.
@@ -190,7 +190,7 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   // MARK: - Transport
 
   public var readyState: PhoenixTransportReadyState = .closed
-  public var delegate: PhoenixTransportDelegate? = nil
+  public var delegate: (any PhoenixTransportDelegate)? = nil
 
   public func connect(with headers: [String: String]) {
     // Set the transport state as connecting
@@ -264,7 +264,7 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   open func urlSession(
     _: URLSession,
     task: URLSessionTask,
-    didCompleteWithError error: Error?
+    didCompleteWithError error: (any Error)?
   ) {
     // The task has terminated. Inform the delegate that the transport has closed abnormally
     // if this was caused by an error.
@@ -299,7 +299,7 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
     }
   }
 
-  private func abnormalErrorReceived(_ error: Error, response: URLResponse?) {
+  private func abnormalErrorReceived(_ error: any Error, response: URLResponse?) {
     // Set the state of the Transport to closed
     readyState = .closed
 
