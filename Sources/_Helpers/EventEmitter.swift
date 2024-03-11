@@ -28,7 +28,7 @@ public final class ObservationToken: Sendable {
 }
 
 @_spi(Internal)
-public final class EventEmitter<Event>: Sendable {
+public final class EventEmitter<Event: Sendable>: Sendable {
   public typealias Listener = @Sendable (Event) -> Void
 
   let listeners = LockIsolated<[ObjectIdentifier: Listener]>([:])
