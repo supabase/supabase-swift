@@ -74,7 +74,7 @@ public actor RealtimeClientV2 {
   public private(set) var subscriptions: [String: RealtimeChannelV2] = [:]
 
   let config: Configuration
-  let ws: WebSocketClient
+  let ws: any WebSocketClient
 
   private let statusEventEmitter = EventEmitter<Status>(initialEvent: .disconnected)
 
@@ -111,7 +111,7 @@ public actor RealtimeClientV2 {
     self.init(config: config, ws: ws)
   }
 
-  init(config: Configuration, ws: WebSocketClient) {
+  init(config: Configuration, ws: any WebSocketClient) {
     self.config = config
     self.ws = ws
 
@@ -175,7 +175,7 @@ public actor RealtimeClientV2 {
         }
       }
 
-      _ = await statusChange.first { $0 == .connected }
+      _ = await statusChange.first { @Sendable in $0 == .connected }
     }
 
     await inFlightConnectionTask?.value

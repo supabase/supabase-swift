@@ -16,12 +16,12 @@ import Foundation
 enum ConnectionStatus {
   case open
   case close
-  case complete(Error?)
+  case complete((any Error)?)
 }
 
 protocol WebSocketClient: Sendable {
   func send(_ message: RealtimeMessageV2) async throws -> Void
-  func receive() -> AsyncThrowingStream<RealtimeMessageV2, Error>
+  func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error>
   func connect() -> AsyncStream<ConnectionStatus>
   func cancel()
 }
@@ -70,8 +70,8 @@ class DefaultWebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCl
     }
   }
 
-  func receive() -> AsyncThrowingStream<RealtimeMessageV2, Error> {
-    let (stream, continuation) = AsyncThrowingStream<RealtimeMessageV2, Error>.makeStream()
+  func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error> {
+    let (stream, continuation) = AsyncThrowingStream<RealtimeMessageV2, any Error>.makeStream()
 
     Task {
       while let message = try await mutableState.task?.receive() {
@@ -133,7 +133,7 @@ class DefaultWebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCl
   func urlSession(
     _: URLSession,
     task _: URLSessionTask,
-    didCompleteWithError error: Error?
+    didCompleteWithError error: (any Error)?
   ) {
     mutableState.continuation?.yield(.complete(error))
   }
