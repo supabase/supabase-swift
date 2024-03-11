@@ -73,7 +73,7 @@
   extension URLSession {
     public func data(
       for request: URLRequest,
-      delegate _: URLSessionTaskDelegate? = nil
+      delegate _: (any URLSessionTaskDelegate)? = nil
     ) async throws -> (Data, URLResponse) {
       let helper = URLSessionTaskCancellationHelper()
 
@@ -101,7 +101,7 @@
     public func upload(
       for request: URLRequest,
       from bodyData: Data,
-      delegate _: URLSessionTaskDelegate? = nil
+      delegate _: (any URLSessionTaskDelegate)? = nil
     ) async throws -> (Data, URLResponse) {
       let helper = URLSessionTaskCancellationHelper()
 
