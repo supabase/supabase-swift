@@ -1,15 +1,6 @@
 {
   "pins" : [
     {
-      "identity" : "keychainaccess",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/kishikawakatsumi/KeychainAccess",
-      "state" : {
-        "revision" : "84e546727d66f1adc5439debad16270d0fdd04e7",
-        "version" : "4.2.2"
-      }
-    },
-    {
       "identity" : "swift-concurrency-extras",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-concurrency-extras",
@@ -59,8 +50,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
       "state" : {
-        "revision" : "b58e6627149808b40634c4552fcf2f44d0b3ca87",
-        "version" : "1.1.0"
+        "revision" : "b13b1d1a8e787a5ffc71ac19dcaf52183ab27ba2",
+        "version" : "1.1.1"
       }
     }
   ],
