@@ -28,7 +28,10 @@ final class DefaultEventEmitter: EventEmitter {
 
   private init() {}
 
-  let emitter = _Helpers.EventEmitter<(AuthChangeEvent, Session?)?>(initialEvent: nil)
+  let emitter = _Helpers.EventEmitter<(AuthChangeEvent, Session?)?>(
+    initialEvent: nil,
+    emitsLastEventWhenAttaching: false
+  )
 
   func attachListener(
     _ listener: @escaping AuthStateChangeListener

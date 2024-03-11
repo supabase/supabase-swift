@@ -12,7 +12,7 @@ import Foundation
 /// A listener that can be removed by calling ``AuthStateChangeListenerRegistration/remove()``.
 ///
 /// - Note: Listener is automatically removed on deinit.
-public protocol AuthStateChangeListenerRegistration: Sendable, AnyObject {
+public protocol AuthStateChangeListenerRegistration: Sendable {
   /// Removes the listener. After the initial call, subsequent calls have no effect.
   func remove()
 }

@@ -54,11 +54,10 @@ final class AuthClientTests: XCTestCase {
         $0.append(event)
       }
     }
-    addTeardownBlock { [weak handle] in
-      XCTAssertNil(handle, "handle should be deallocated")
-    }
 
     XCTAssertEqual(events.value, [.initialSession])
+
+    handle.remove()
   }
 
   func testAuthStateChanges() async throws {
