@@ -28,12 +28,15 @@ final class DefaultEventEmitter: EventEmitter {
 
   private init() {}
 
-  let emitter = _Helpers.EventEmitter<(AuthChangeEvent, Session?)>()
+  let emitter = _Helpers.EventEmitter<(AuthChangeEvent, Session?)?>(initialEvent: nil)
 
   func attachListener(
     _ listener: @escaping AuthStateChangeListener
   ) -> ObservationToken {
-    emitter.attach(listener)
+    emitter.attach { event in
+      guard let event else { return }
+      listener(event.0, event.1)
+    }
   }
 
   func emit(

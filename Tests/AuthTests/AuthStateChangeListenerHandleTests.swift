@@ -5,11 +5,11 @@
 //  Created by Guilherme Souza on 17/02/24.
 //
 
+@testable import _Helpers
 @testable import Auth
 import ConcurrencyExtras
 import Foundation
 import XCTest
-@testable import _Helpers
 
 final class AuthStateChangeListenerHandleTests: XCTestCase {
   func testRemove() {

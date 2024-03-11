@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 15/02/24.
 //
 
+import _Helpers
 @testable import Auth
 import ConcurrencyExtras
 import Foundation
-import _Helpers
 
 final class MockEventEmitter: EventEmitter {
   private let emitter = DefaultEventEmitter.shared

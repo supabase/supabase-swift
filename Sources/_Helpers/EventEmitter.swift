@@ -32,10 +32,25 @@ public final class EventEmitter<Event>: Sendable {
   public typealias Listener = @Sendable (Event) -> Void
 
   let listeners = LockIsolated<[ObjectIdentifier: Listener]>([:])
+  public let lastEvent: LockIsolated<Event>
 
-  public init() {}
+  let emitsLastEventWhenAttaching: Bool
+
+  public init(
+    initialEvent event: Event,
+    emitsLastEventWhenAttaching: Bool = true
+  ) {
+    lastEvent = LockIsolated(event)
+    self.emitsLastEventWhenAttaching = emitsLastEventWhenAttaching
+  }
 
   public func attach(_ listener: @escaping Listener) -> ObservationToken {
+    defer {
+      if emitsLastEventWhenAttaching {
+        listener(lastEvent.value)
+      }
+    }
+
     let token = ObservationToken()
     let key = ObjectIdentifier(token)
 
@@ -53,6 +68,7 @@ public final class EventEmitter<Event>: Sendable {
   }
 
   public func emit(_ event: Event, to token: ObservationToken? = nil) {
+    lastEvent.setValue(event)
     let listeners = listeners.value
 
     if let token {

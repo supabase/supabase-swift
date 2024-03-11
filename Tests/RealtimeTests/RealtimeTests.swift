@@ -17,25 +17,11 @@ final class RealtimeTests: XCTestCase {
   }
 
   func testConnectAndSubscribe() async {
-    var mock = WebSocketClient.mock
-    mock.status = .init(unfolding: { .open })
-    mock.connect = {}
-    mock.cancel = {}
-
-    mock.receive = {
-      .init {
-        RealtimeMessageV2.messagesSubscribed
-      }
-    }
-
-    let sentMessages: LockIsolated<[RealtimeMessageV2]> = .init([])
-    mock.send = { message in
-      sentMessages.withValue { $0.append(message) }
-    }
+    let mock = MockWebSocketClient()
 
     let realtime = RealtimeClientV2(
-      config: RealtimeClientV2.Configuration(url: url, apiKey: apiKey),
-      makeWebSocketClient: { _, _ in mock }
+      config: RealtimeClientV2.Configuration(url: url, apiKey: apiKey, logger: TestLogger()),
+      ws: mock
     )
 
     let channel = await realtime.channel("public:messages")
@@ -45,7 +31,12 @@ final class RealtimeTests: XCTestCase {
 
     let statusChange = await realtime.statusChange
 
-    await realtime.connect()
+    Task {
+      await realtime.connect()
+    }
+    await Task.megaYield()
+    mock.mockConnect(.open)
+
     await realtime.setAuth(accessToken)
 
     let status = await statusChange.prefix(3).collect()
@@ -57,13 +48,14 @@ final class RealtimeTests: XCTestCase {
     let heartbeatTask = await realtime.heartbeatTask
     XCTAssertNotNil(heartbeatTask)
 
-    await channel.subscribe()
+    let subscription = Task {
+      await channel.subscribe()
+    }
+    await Task.megaYield()
+    mock.mockReceive(.messagesSubscribed)
 
-    XCTAssertNoDifference(sentMessages.value, [.subscribeToMessages])
-  }
-
-  func testHeartbeat() {
-    // TODO: test heartbeat behavior
+    await subscription.value
+    XCTAssertNoDifference(mock.sentMessages.value, [.subscribeToMessages])
   }
 }
 
@@ -123,4 +115,10 @@ extension RealtimeMessageV2 {
       "status": "ok",
     ]
   )
+}
+
+struct TestLogger: SupabaseLogger {
+  func log(message: SupabaseLogMessage) {
+    print(message)
+  }
 }

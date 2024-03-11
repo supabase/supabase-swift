@@ -19,23 +19,23 @@ enum ConnectionStatus {
   case complete(Error?)
 }
 
-private actor LiveWebSocketClient {
-protocol WebSocketClient {
-  var status: AsyncStream<ConnectionStatus> { get }
-
-  func send(_ message: RealtimeMessageV2) async throws
+protocol WebSocketClient: Sendable {
+  func send(_ message: RealtimeMessageV2) async throws -> Void
   func receive() -> AsyncThrowingStream<RealtimeMessageV2, Error>
-  func connect()
+  func connect() -> AsyncStream<ConnectionStatus>
   func cancel()
 }
 
-final class DefaultWebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketClient {
+class DefaultWebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketClient,
+  @unchecked Sendable
+{
   private let realtimeURL: URL
   private let configuration: URLSessionConfiguration
   private let logger: (any SupabaseLogger)?
 
   struct MutableState {
     var task: URLSessionWebSocketTask?
+    var continuation: AsyncStream<ConnectionStatus>.Continuation?
   }
 
   let mutableState = LockIsolated(MutableState())
@@ -43,11 +43,6 @@ final class DefaultWebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSo
   init(realtimeURL: URL, configuration: URLSessionConfiguration, logger: (any SupabaseLogger)?) {
     self.realtimeURL = realtimeURL
     self.configuration = configuration
-
-    let (stream, continuation) = AsyncStream<ConnectionStatus>.makeStream()
-    status = stream
-    self.continuation = continuation
-
     self.logger = logger
   }
 
@@ -55,24 +50,24 @@ final class DefaultWebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSo
     cancel()
   }
 
-  let continuation: AsyncStream<ConnectionStatus>.Continuation
-  let status: AsyncStream<ConnectionStatus>
-
-  func connect() {
+  func connect() -> AsyncStream<ConnectionStatus> {
     mutableState.withValue { state in
       let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
       state.task = session.webSocketTask(with: realtimeURL)
       state.task?.resume()
+
+      let (stream, continuation) = AsyncStream<ConnectionStatus>.makeStream()
+      state.continuation = continuation
+      return stream
     }
   }
 
   func cancel() {
     mutableState.withValue { state in
       state.task?.cancel()
+      state.continuation?.finish()
       state = .init()
     }
-
-    continuation.finish()
   }
 
   func receive() -> AsyncThrowingStream<RealtimeMessageV2, Error> {
@@ -101,6 +96,8 @@ final class DefaultWebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSo
           continuation.finish(throwing: error)
         }
       }
+
+      continuation.finish()
     }
 
     return stream
@@ -121,7 +118,7 @@ final class DefaultWebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSo
     webSocketTask _: URLSessionWebSocketTask,
     didOpenWithProtocol _: String?
   ) {
-    continuation.yield(.open)
+    mutableState.continuation?.yield(.open)
   }
 
   func urlSession(
@@ -130,7 +127,7 @@ final class DefaultWebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSo
     didCloseWith _: URLSessionWebSocketTask.CloseCode,
     reason _: Data?
   ) {
-    continuation.yield(.close)
+    mutableState.continuation?.yield(.close)
   }
 
   func urlSession(
@@ -138,6 +135,6 @@ final class DefaultWebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSo
     task _: URLSessionTask,
     didCompleteWithError error: Error?
   ) {
-    continuation.yield(.complete(error))
+    mutableState.continuation?.yield(.complete(error))
   }
 }

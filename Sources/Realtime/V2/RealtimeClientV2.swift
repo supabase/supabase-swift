@@ -50,10 +50,18 @@ public actor RealtimeClientV2 {
     }
   }
 
-  public enum Status: Sendable {
+  public enum Status: Sendable, CustomStringConvertible {
     case disconnected
     case connecting
     case connected
+
+    public var description: String {
+      switch self {
+      case .disconnected: "Disconnected"
+      case .connecting: "Connecting"
+      case .connected: "Connected"
+      }
+    }
   }
 
   var accessToken: String?
@@ -66,26 +74,17 @@ public actor RealtimeClientV2 {
   public private(set) var subscriptions: [String: RealtimeChannelV2] = [:]
 
   let config: Configuration
-  lazy var ws: WebSocketClient = {
-    let sessionConfiguration = URLSessionConfiguration.default
-    sessionConfiguration.httpAdditionalHeaders = config.headers
-    return DefaultWebSocketClient(
-      realtimeURL: realtimeBaseURL,
-      configuration: sessionConfiguration,
-      logger: config.logger
-    )
-  }()
+  let ws: WebSocketClient
 
-  private let statusEventEmitter = EventEmitter<Status>()
+  private let statusEventEmitter = EventEmitter<Status>(initialEvent: .disconnected)
 
   public var statusChange: AsyncStream<Status> {
     statusEventEmitter.stream()
   }
 
-  public private(set) var status: Status = .disconnected {
-    didSet {
-      statusEventEmitter.emit(status)
-    }
+  public private(set) var status: Status {
+    get { statusEventEmitter.lastEvent.value }
+    set { statusEventEmitter.emit(newValue) }
   }
 
   public func onStatusChange(
@@ -101,7 +100,21 @@ public actor RealtimeClientV2 {
   }
 
   public init(config: Configuration) {
+    let sessionConfiguration = URLSessionConfiguration.default
+    sessionConfiguration.httpAdditionalHeaders = config.headers
+    let ws = DefaultWebSocketClient(
+      realtimeURL: config.realtimeWebSocketURL,
+      configuration: sessionConfiguration,
+      logger: config.logger
+    )
+
+    self.init(config: config, ws: ws)
+  }
+
+  init(config: Configuration, ws: WebSocketClient) {
     self.config = config
+    self.ws = ws
+
     if let customJWT = config.headers["Authorization"]?.split(separator: " ").last {
       accessToken = String(customJWT)
     } else {
@@ -112,10 +125,6 @@ public actor RealtimeClientV2 {
   public func connect() async {
     guard status != .connected else {
       return
-    }
-
-    if status == .connecting {
-
     }
 
     await connect(reconnect: false)
@@ -144,27 +153,29 @@ public actor RealtimeClientV2 {
 
       status = .connecting
 
-      ws.connect()
+      Task {
+        for await connectionStatus in ws.connect() {
+          switch connectionStatus {
+          case .open:
+            status = .connected
+            config.logger?.debug("Connected to realtime WebSocket")
+            listenForMessages()
+            startHeartbeating()
+            if reconnect {
+              await rejoinChannels()
+            }
 
-      for await connectionStatus in ws.status {
-        switch connectionStatus {
-        case .open:
-          status = .connected
-          config.logger?.debug("Connected to realtime WebSocket")
-          listenForMessages()
-          startHeartbeating()
-          if reconnect {
-            await rejoinChannels()
+          case .close, .complete:
+            config.logger?.debug(
+              "Error while trying to connect to realtime WebSocket. Trying again in \(config.reconnectDelay) seconds."
+            )
+            disconnect()
+            await connect(reconnect: true)
           }
-
-        case .close, .complete:
-          config.logger?.debug(
-            "Error while trying to connect to realtime WebSocket. Trying again in \(config.reconnectDelay) seconds."
-          )
-          disconnect()
-          await connect(reconnect: true)
         }
       }
+
+      _ = await statusChange.first { $0 == .connected }
     }
 
     await inFlightConnectionTask?.value
@@ -222,7 +233,7 @@ public actor RealtimeClientV2 {
       guard let self else { return }
 
       do {
-        for try await message in await ws.receive() {
+        for try await message in ws.receive() {
           await onMessage(message)
         }
       } catch {
@@ -321,10 +332,12 @@ public actor RealtimeClientV2 {
     ref += 1
     return ref
   }
+}
 
-  private var realtimeBaseURL: URL {
-    guard var components = URLComponents(url: config.url, resolvingAgainstBaseURL: false) else {
-      return config.url
+extension RealtimeClientV2.Configuration {
+  var realtimeBaseURL: URL {
+    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+      return url
     }
 
     if components.scheme == "https" {
@@ -334,20 +347,20 @@ public actor RealtimeClientV2 {
     }
 
     guard let url = components.url else {
-      return config.url
+      return url
     }
 
     return url
   }
 
-  private var realtimeWebSocketURL: URL {
+  var realtimeWebSocketURL: URL {
     guard var components = URLComponents(url: realtimeBaseURL, resolvingAgainstBaseURL: false)
     else {
       return realtimeBaseURL
     }
 
     components.queryItems = components.queryItems ?? []
-    components.queryItems!.append(URLQueryItem(name: "apikey", value: config.apiKey))
+    components.queryItems!.append(URLQueryItem(name: "apikey", value: apiKey))
     components.queryItems!.append(URLQueryItem(name: "vsn", value: "1.0.0"))
 
     components.path.append("/websocket")
@@ -361,40 +374,6 @@ public actor RealtimeClientV2 {
   }
 
   private var broadcastURL: URL {
-    config.url.appendingPathComponent("api/broadcast")
-  }
-}
-
-struct TimeoutError: Error {}
-
-func withThrowingTimeout<R: Sendable>(
-  seconds: TimeInterval,
-  body: @escaping @Sendable () async throws -> R
-) async throws -> R {
-  try await withThrowingTaskGroup(of: R.self) { group in
-    group.addTask {
-      try await body()
-    }
-
-    group.addTask {
-      try await Task.sleep(nanoseconds: UInt64(seconds) * NSEC_PER_SEC)
-      throw TimeoutError()
-    }
-
-    let result = try await group.next()!
-    group.cancelAll()
-    return result
-  }
-}
-
-extension Task where Success: Sendable, Failure == any Error {
-  init(
-    priority: TaskPriority? = nil,
-    timeout: TimeInterval,
-    operation: @escaping @Sendable () async throws -> Success
-  ) {
-    self = Task(priority: priority) {
-      try await withThrowingTimeout(seconds: timeout, body: operation)
-    }
+    url.appendingPathComponent("api/broadcast")
   }
 }
