@@ -23,8 +23,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-custom-dump",
       "state" : {
-        "revision" : "6ea3b1b6a4957806d72030a32360d4bcb155a0d2",
-        "version" : "1.2.0"
+        "revision" : "3ce83179e5f0c83ad54c305779c6b438e82aaf1d",
+        "version" : "1.2.1"
       }
     },
     {
