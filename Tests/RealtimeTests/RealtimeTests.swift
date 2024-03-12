@@ -16,6 +16,12 @@ final class RealtimeTests: XCTestCase {
     return "\(ref)"
   }
 
+  override func invokeTest() {
+    withMainSerialExecutor {
+      super.invokeTest()
+    }
+  }
+
   func testConnectAndSubscribe() async {
     let mock = MockWebSocketClient()
 
