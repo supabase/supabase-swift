@@ -3,6 +3,7 @@ import XCTest
 import ConcurrencyExtras
 import CustomDump
 @testable import Realtime
+import TestHelpers
 
 final class RealtimeTests: XCTestCase {
   let url = URL(string: "https://localhost:54321/realtime/v1")!

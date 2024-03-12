@@ -8,6 +8,7 @@
 import XCTest
 @_spi(Internal) import _Helpers
 import ConcurrencyExtras
+import TestHelpers
 
 @testable import Auth
 
