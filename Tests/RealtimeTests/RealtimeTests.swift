@@ -20,7 +20,7 @@ final class RealtimeTests: XCTestCase {
     let mock = MockWebSocketClient()
 
     let realtime = RealtimeClientV2(
-      config: RealtimeClientV2.Configuration(url: url, apiKey: apiKey, logger: TestLogger()),
+      config: RealtimeClientV2.Configuration(url: url, apiKey: apiKey),
       ws: mock
     )
 
@@ -115,10 +115,4 @@ extension RealtimeMessageV2 {
       "status": "ok",
     ]
   )
-}
-
-struct TestLogger: SupabaseLogger {
-  func log(message: SupabaseLogMessage) {
-    print(message)
-  }
 }
