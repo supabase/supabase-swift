@@ -22,12 +22,17 @@ final class UserStore {
       let channel = await supabase.realtimeV2.channel("public:users")
       let changes = await channel.postgresChange(AnyAction.self, table: "users")
 
-      let prenseces = await channel.presenceChange()
+      let presences = await channel.presenceChange()
 
       await channel.subscribe()
 
-      let userId = try await supabase.auth.session.user.id
-      try await channel.track(UserPresence(userId: userId, onlineAt: Date()))
+      Task {
+        let statusChange = await channel.statusChange
+        for await _ in statusChange.filter({ $0 == .subscribed }) {
+          let userId = try await supabase.auth.session.user.id
+          try await channel.track(UserPresence(userId: userId, onlineAt: Date()))
+        }
+      }
 
       Task {
         for await change in changes {
@@ -36,7 +41,7 @@ final class UserStore {
       }
 
       Task {
-        for await presence in prenseces {
+        for await presence in presences {
           let joins = try presence.decodeJoins(as: UserPresence.self)
           let leaves = try presence.decodeLeaves(as: UserPresence.self)
 
