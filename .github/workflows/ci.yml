@@ -39,7 +39,7 @@ jobs:
     name: Test Library (Linux)
     strategy:
       matrix:
-        swift-version: ["5.8", "5.9", "5.10"]
+        swift-version: ["5.9", "5.10"]
     steps:
       - uses: swift-actions/setup-swift@v2
         with:
