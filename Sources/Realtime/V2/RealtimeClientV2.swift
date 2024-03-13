@@ -137,6 +137,7 @@ public actor RealtimeClientV2 {
 
     inFlightConnectionTask = Task { [self] in
       defer { inFlightConnectionTask = nil }
+      
       if reconnect {
         try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.reconnectDelay))
 
@@ -165,12 +166,16 @@ public actor RealtimeClientV2 {
               await rejoinChannels()
             }
 
-          case .close, .complete:
-            config.logger?.debug(
-              "Error while trying to connect to realtime WebSocket. Trying again in \(config.reconnectDelay) seconds."
-            )
+          case .close:
+            config.logger?.debug("WebSocket connection closed. Trying again in \(config.reconnectDelay) seconds.")
             disconnect()
             await connect(reconnect: true)
+
+          case .complete(let error):
+            config.logger?.error(
+              "WebSocket connection error: \(error?.localizedDescription ?? "<none>")"
+            )
+            disconnect()
           }
         }
       }
@@ -234,6 +239,10 @@ public actor RealtimeClientV2 {
 
       do {
         for try await message in ws.receive() {
+          if Task.isCancelled {
+            return
+          }
+
           await onMessage(message)
         }
       } catch {
@@ -283,7 +292,7 @@ public actor RealtimeClientV2 {
   }
 
   public func disconnect() {
-    config.logger?.debug("Closing websocket connection")
+    config.logger?.debug("Closing WebSocket connection")
     ref = 0
     messageTask?.cancel()
     heartbeatTask?.cancel()

@@ -65,8 +65,6 @@ class DefaultWebSocketClient: NSObject, URLSessionWebSocketDelegate, WebSocketCl
   func cancel() {
     mutableState.withValue { state in
       state.task?.cancel()
-      state.continuation?.finish()
-      state = .init()
     }
   }
 
