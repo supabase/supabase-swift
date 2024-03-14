@@ -16,12 +16,21 @@ final class MockWebSocketClient: WebSocketClient {
     sentMessages.withValue {
       $0.append(message)
     }
+
+    if let callback = onCallback.value, let response = callback(message) {
+      mockReceive(response)
+    }
   }
 
   private let receiveContinuation =
     LockIsolated<AsyncThrowingStream<RealtimeMessageV2, any Error>.Continuation?>(nil)
   func mockReceive(_ message: RealtimeMessageV2) {
     receiveContinuation.value?.yield(message)
+  }
+
+  private let onCallback = LockIsolated<((RealtimeMessageV2) -> RealtimeMessageV2?)?>(nil)
+  func on(_ callback: @escaping (RealtimeMessageV2) -> RealtimeMessageV2?) {
+    onCallback.setValue(callback)
   }
 
   func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error> {
@@ -41,5 +50,5 @@ final class MockWebSocketClient: WebSocketClient {
     return stream
   }
 
-  func cancel() {}
+  func disconnect(closeCode _: URLSessionWebSocketTask.CloseCode) {}
 }

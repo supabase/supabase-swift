@@ -41,26 +41,33 @@ final class AppViewModel {
 @MainActor
 struct AppView: View {
   @Bindable var model: AppViewModel
+  let log = LogStore.shared
+
+  @State var logPresented = false
 
   @ViewBuilder
   var body: some View {
     if model.session != nil {
       NavigationSplitView {
         ChannelListView(channel: $model.selectedChannel)
+          .toolbar {
+            ToolbarItem {
+              Button("Log") {
+                logPresented = true
+              }
+            }
+          }
       } detail: {
         if let channel = model.selectedChannel {
           MessagesView(channel: channel).id(channel.id)
         }
       }
-      .overlay(alignment: .bottom) {
-        LabeledContent(
-          "Connection Status",
-          value: model.realtimeConnectionStatus?.description ?? "Unknown"
-        )
-        .padding()
-        .background(.regularMaterial)
-        .clipShape(Capsule())
-        .padding()
+      .sheet(isPresented: $logPresented) {
+        List {
+          ForEach(0 ..< log.messages.count, id: \.self) { i in
+            Text(log.messages[i].description)
+          }
+        }
       }
     } else {
       AuthView()

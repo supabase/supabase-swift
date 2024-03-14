@@ -64,17 +64,18 @@ public actor RealtimeClientV2 {
     }
   }
 
+  let config: Configuration
+  let ws: any WebSocketClient
+
   var accessToken: String?
   var ref = 0
   var pendingHeartbeatRef: Int?
+
   var heartbeatTask: Task<Void, Never>?
   var messageTask: Task<Void, Never>?
-  var inFlightConnectionTask: Task<Void, Never>?
+  var connectionTask: Task<Void, Never>?
 
   public private(set) var subscriptions: [String: RealtimeChannelV2] = [:]
-
-  let config: Configuration
-  let ws: any WebSocketClient
 
   private let statusEventEmitter = EventEmitter<Status>(initialEvent: .disconnected)
 
@@ -93,22 +94,8 @@ public actor RealtimeClientV2 {
     statusEventEmitter.attach(listener)
   }
 
-  deinit {
-    heartbeatTask?.cancel()
-    messageTask?.cancel()
-    subscriptions = [:]
-  }
-
   public init(config: Configuration) {
-    let sessionConfiguration = URLSessionConfiguration.default
-    sessionConfiguration.httpAdditionalHeaders = config.headers
-    let ws = DefaultWebSocketClient(
-      realtimeURL: config.realtimeWebSocketURL,
-      configuration: sessionConfiguration,
-      logger: config.logger
-    )
-
-    self.init(config: config, ws: ws)
+    self.init(config: config, ws: WebSocket(config: config))
   }
 
   init(config: Configuration, ws: any WebSocketClient) {
@@ -122,68 +109,86 @@ public actor RealtimeClientV2 {
     }
   }
 
-  public func connect() async {
-    guard status != .connected else {
-      return
-    }
+  deinit {
+    heartbeatTask?.cancel()
+    messageTask?.cancel()
+    subscriptions = [:]
+  }
 
+  public func connect() async {
     await connect(reconnect: false)
   }
 
   func connect(reconnect: Bool) async {
-    if let inFlightConnectionTask {
-      return await inFlightConnectionTask.value
-    }
+    if status == .disconnected {
+      connectionTask = Task {
+        if reconnect {
+          try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.reconnectDelay))
 
-    inFlightConnectionTask = Task { [self] in
-      defer { inFlightConnectionTask = nil }
-      
-      if reconnect {
-        try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.reconnectDelay))
+          if Task.isCancelled {
+            config.logger?.debug("Reconnect cancelled, returning")
+            return
+          }
+        }
 
-        if Task.isCancelled {
-          config.logger?.debug("reconnect cancelled, returning")
+        if status == .connected {
+          config.logger?.debug("WebsSocket already connected")
           return
         }
-      }
 
-      if status == .connected {
-        config.logger?.debug("Websocket already connected")
-        return
-      }
+        status = .connecting
 
-      status = .connecting
-
-      Task {
         for await connectionStatus in ws.connect() {
+          if Task.isCancelled {
+            break
+          }
+
           switch connectionStatus {
-          case .open:
-            status = .connected
-            config.logger?.debug("Connected to realtime WebSocket")
-            listenForMessages()
-            startHeartbeating()
-            if reconnect {
-              await rejoinChannels()
-            }
+          case .connected:
+            await onConnected(reconnect: reconnect)
 
-          case .close:
-            config.logger?.debug("WebSocket connection closed. Trying again in \(config.reconnectDelay) seconds.")
-            disconnect()
-            await connect(reconnect: true)
+          case .disconnected:
+            await onDisconnected()
 
-          case .complete(let error):
-            config.logger?.error(
-              "WebSocket connection error: \(error?.localizedDescription ?? "<none>")"
-            )
-            disconnect()
+          case let .error(error):
+            await onError(error)
           }
         }
       }
-
-      _ = await statusChange.first { @Sendable in $0 == .connected }
     }
 
-    await inFlightConnectionTask?.value
+    _ = await statusChange.first { @Sendable in $0 == .connected }
+  }
+
+  private func onConnected(reconnect: Bool) async {
+    status = .connected
+    config.logger?.debug("Connected to realtime WebSocket")
+    listenForMessages()
+    startHeartbeating()
+    if reconnect {
+      await rejoinChannels()
+    }
+  }
+
+  private func onDisconnected() async {
+    config.logger?
+      .debug(
+        "WebSocket disconnected. Trying again in \(config.reconnectDelay)"
+      )
+    await reconnect()
+  }
+
+  private func onError(_ error: (any Error)?) async {
+    config.logger?
+      .debug(
+        "WebSocket error \(error?.localizedDescription ?? "<none>"). Trying again in \(config.reconnectDelay)"
+      )
+    await reconnect()
+  }
+
+  private func reconnect() async {
+    disconnect()
+    await connect(reconnect: true)
   }
 
   public func channel(
@@ -222,14 +227,8 @@ public actor RealtimeClientV2 {
   }
 
   private func rejoinChannels() async {
-    await withTaskGroup(of: Void.self) { group in
-      for channel in subscriptions.values {
-        _ = group.addTaskUnlessCancelled {
-          await channel.subscribe()
-        }
-
-        await group.waitForAll()
-      }
+    for channel in subscriptions.values {
+      await channel.subscribe()
     }
   }
 
@@ -249,22 +248,19 @@ public actor RealtimeClientV2 {
         config.logger?.debug(
           "Error while listening for messages. Trying again in \(config.reconnectDelay) \(error)"
         )
-        await disconnect()
-        await connect(reconnect: true)
+        await reconnect()
       }
     }
   }
 
   private func startHeartbeating() {
-    heartbeatTask = Task { [weak self] in
-      guard let self else { return }
-
+    heartbeatTask = Task { [weak self, config] in
       while !Task.isCancelled {
         try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.heartbeatInterval))
         if Task.isCancelled {
           break
         }
-        await sendHeartbeat()
+        await self?.sendHeartbeat()
       }
     }
   }
@@ -272,9 +268,9 @@ public actor RealtimeClientV2 {
   private func sendHeartbeat() async {
     if pendingHeartbeatRef != nil {
       pendingHeartbeatRef = nil
-      config.logger?.debug("Heartbeat timeout. Trying to reconnect in \(config.reconnectDelay)")
-      disconnect()
-      await connect(reconnect: true)
+      config.logger?.debug("Heartbeat timeout")
+
+      await reconnect()
       return
     }
 
@@ -296,7 +292,8 @@ public actor RealtimeClientV2 {
     ref = 0
     messageTask?.cancel()
     heartbeatTask?.cancel()
-    ws.cancel()
+    connectionTask?.cancel()
+    ws.disconnect()
     status = .disconnected
   }
 

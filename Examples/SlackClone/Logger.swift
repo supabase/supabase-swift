@@ -13,11 +13,17 @@ extension Logger {
   static let main = Self(subsystem: "com.supabase.SlackClone", category: "app")
 }
 
-final class SupabaseLoggerImpl: SupabaseLogger, @unchecked Sendable {
+@Observable
+final class LogStore: SupabaseLogger {
   private let lock = NSLock()
   private var loggers: [String: Logger] = [:]
 
+  static let shared = LogStore()
+
+  var messages: [SupabaseLogMessage] = []
+
   func log(message: SupabaseLogMessage) {
+    messages.append(message)
     lock.withLock {
       if loggers[message.system] == nil {
         loggers[message.system] = Logger(
