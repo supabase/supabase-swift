@@ -79,6 +79,7 @@ let package = Package(
       dependencies: [
         "Auth",
         "_Helpers",
+        "TestHelpers",
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
       ],
@@ -115,6 +116,7 @@ let package = Package(
       name: "RealtimeTests",
       dependencies: [
         "Realtime",
+        "TestHelpers",
         .product(name: "CustomDump", package: "swift-custom-dump"),
       ]
     ),
@@ -132,6 +134,7 @@ let package = Package(
       ]
     ),
     .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
+    .target(name: "TestHelpers"),
   ]
 )
 

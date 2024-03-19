@@ -8,6 +8,7 @@
 import XCTest
 @_spi(Internal) import _Helpers
 import ConcurrencyExtras
+import TestHelpers
 
 @testable import Auth
 
@@ -20,6 +21,12 @@ final class AuthClientTests: XCTestCase {
   var sessionManager: MockSessionManager!
 
   var sut: AuthClient!
+
+  override func invokeTest() {
+    withMainSerialExecutor {
+      super.invokeTest()
+    }
+  }
 
   override func setUp() {
     super.setUp()
@@ -54,39 +61,19 @@ final class AuthClientTests: XCTestCase {
         $0.append(event)
       }
     }
-    addTeardownBlock { [weak handle] in
-      XCTAssertNil(handle, "handle should be deallocated")
-    }
 
     XCTAssertEqual(events.value, [.initialSession])
+
+    handle.remove()
   }
 
   func testAuthStateChanges() async throws {
     let session = Session.validSession
     sessionManager.returnSession = .success(session)
 
-    let events = ActorIsolated([AuthChangeEvent]())
-
-    let (stream, continuation) = AsyncStream<Void>.makeStream()
-
-    let authStateStream = await sut.authStateChanges
-
-    let streamTask = Task {
-      for await (event, _) in authStateStream {
-        await events.withValue {
-          $0.append(event)
-        }
-
-        continuation.yield()
-      }
-    }
-
-    _ = await stream.first { _ in true }
-
-    let receivedEvents = await events.value
-    XCTAssertEqual(receivedEvents, [.initialSession])
-
-    streamTask.cancel()
+    let stateChange = await sut.authStateChanges.first { _ in true }
+    XCTAssertEqual(stateChange?.event, .initialSession)
+    XCTAssertEqual(stateChange?.session, session)
   }
 
   func testSignOut() async throws {

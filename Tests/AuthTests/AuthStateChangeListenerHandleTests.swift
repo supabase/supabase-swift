@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 17/02/24.
 //
 
+@testable import _Helpers
 @testable import Auth
 import ConcurrencyExtras
 import Foundation
@@ -12,7 +13,7 @@ import XCTest
 
 final class AuthStateChangeListenerHandleTests: XCTestCase {
   func testRemove() {
-    let handle = AuthStateChangeListenerHandle()
+    let handle = ObservationToken()
 
     let onRemoveCallCount = LockIsolated(0)
     handle._onRemove.setValue {
@@ -28,7 +29,7 @@ final class AuthStateChangeListenerHandleTests: XCTestCase {
   }
 
   func testDeinit() {
-    var handle: AuthStateChangeListenerHandle? = AuthStateChangeListenerHandle()
+    var handle: ObservationToken? = ObservationToken()
 
     let onRemoveCallCount = LockIsolated(0)
     handle?._onRemove.setValue {

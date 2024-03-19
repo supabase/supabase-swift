@@ -33,19 +33,20 @@ public actor RealtimeChannelV2 {
   let logger: (any SupabaseLogger)?
 
   private let callbackManager = CallbackManager()
-  private let statusStream = SharedStream<Status>(initialElement: .unsubscribed)
+
+  private let statusEventEmitter = EventEmitter<Status>(initialEvent: .unsubscribed)
 
   private var clientChanges: [PostgresJoinConfig] = []
   private var joinRef: String?
   private var pushes: [String: PushV2] = [:]
 
   public private(set) var status: Status {
-    get { statusStream.lastElement }
-    set { statusStream.yield(newValue) }
+    get { statusEventEmitter.lastEvent.value }
+    set { statusEventEmitter.emit(newValue) }
   }
 
   public var statusChange: AsyncStream<Status> {
-    statusStream.makeStream()
+    statusEventEmitter.stream()
   }
 
   init(

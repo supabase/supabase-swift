@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 15/02/24.
 //
 
+import _Helpers
 @testable import Auth
 import ConcurrencyExtras
 import Foundation
@@ -13,7 +14,7 @@ final class MockEventEmitter: EventEmitter {
   private let emitter = DefaultEventEmitter.shared
 
   func attachListener(_ listener: @escaping AuthStateChangeListener)
-    -> AuthStateChangeListenerHandle
+    -> ObservationToken
   {
     emitter.attachListener(listener)
   }
@@ -26,12 +27,12 @@ final class MockEventEmitter: EventEmitter {
   func emit(
     _ event: AuthChangeEvent,
     session: Session?,
-    handle: AuthStateChangeListenerHandle? = nil
+    token: ObservationToken? = nil
   ) {
     _emitReceivedParams.withValue {
       $0.append((event, session))
     }
 
-    emitter.emit(event, session: session, handle: handle)
+    emitter.emit(event, session: session, token: token)
   }
 }
