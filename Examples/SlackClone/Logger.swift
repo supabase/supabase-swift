@@ -20,10 +20,14 @@ final class LogStore: SupabaseLogger {
 
   static let shared = LogStore()
 
+  @MainActor
   var messages: [SupabaseLogMessage] = []
 
   func log(message: SupabaseLogMessage) {
-    messages.append(message)
+    Task {
+      await add(message: message)
+    }
+
     lock.withLock {
       if loggers[message.system] == nil {
         loggers[message.system] = Logger(
@@ -41,5 +45,10 @@ final class LogStore: SupabaseLogger {
       case .warning: logger.notice("\(message, privacy: .public)")
       }
     }
+  }
+
+  @MainActor
+  private func add(message: SupabaseLogMessage) {
+    messages.insert(message, at: 0)
   }
 }
