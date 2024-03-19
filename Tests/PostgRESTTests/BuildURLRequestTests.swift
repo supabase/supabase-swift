@@ -51,6 +51,7 @@ final class BuildURLRequestTests: XCTestCase {
       url: url,
       schema: nil,
       headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
+      logger: nil,
       fetch: { request in
         guard let runningTestCase = await runningTestCase.value else {
           XCTFail("execute called without a runningTestCase set.")
@@ -123,6 +124,11 @@ final class BuildURLRequestTests: XCTestCase {
           .select()
           .contains("name", value: ["is:online", "faction:red"])
       },
+      TestCase(name: "test or filter with referenced table") { client in
+        await client.from("users")
+          .select("*, messages(*)")
+          .or("public.eq.true,recipient_id.eq.1", referencedTable: "messages")
+      },
       TestCase(name: "test upsert not ignoring duplicates") { client in
         try await client.from("users")
           .upsert(User(email: "johndoe@supabase.io"))
@@ -166,7 +172,7 @@ final class BuildURLRequestTests: XCTestCase {
   }
 
   func testSessionConfiguration() async {
-    let client = PostgrestClient(url: url, schema: nil)
+    let client = PostgrestClient(url: url, schema: nil, logger: nil)
     let clientInfoHeader = await client.configuration.headers["X-Client-Info"]
     XCTAssertNotNil(clientInfoHeader)
   }

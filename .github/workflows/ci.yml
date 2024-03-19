@@ -6,7 +6,7 @@ on:
       - main
   pull_request:
     branches:
-      - '*'
+      - "*"
   workflow_dispatch:
 
 concurrency:
@@ -37,40 +37,32 @@ jobs:
   library-linux:
     runs-on: ubuntu-latest
     name: Test Library (Linux)
+    strategy:
+      matrix:
+        swift-version: ["5.9", "5.10"]
     steps:
-      - uses: swift-actions/setup-swift@v1
+      - uses: swift-actions/setup-swift@v2
         with:
-          swift-version: "5.9"
-      - uses: actions/checkout@v3
-      - name: Run Tests
-        run: swift test
-
-  library-compatibility:
-    runs-on: ubuntu-latest
-    name: Test Library (Swift 5.8)
-    steps:
-      - uses: swift-actions/setup-swift@v1
-        with:
-          swift-version: "5.8"
+          swift-version: "${{ matrix.swift-version }}"
       - uses: actions/checkout@v3
       - name: Run Tests
         run: swift test
 
   library-windows:
-      runs-on: windows-latest
-      name: Test Library (Windows)
-      steps:
-        # We use BCNY's repo since they have newer builds of Swift
-        # which have fixed libcurl in Foundation.
-        - uses: compnerd/gha-setup-swift@main
-          with:
-            release-tag-name: "20231203.0"
-            github-repo: "thebrowsercompany/swift-build"
-            release-asset-name: installer-amd64.exe
-            github-token: ${{ secrets.GITHUB_TOKEN }}
-        - uses: actions/checkout@v3
-        - name: Run Tests
-          run: swift test
+    runs-on: windows-latest
+    name: Test Library (Windows)
+    steps:
+      # We use BCNY's repo since they have newer builds of Swift
+      # which have fixed libcurl in Foundation.
+      - uses: compnerd/gha-setup-swift@main
+        with:
+          release-tag-name: "20231203.0"
+          github-repo: "thebrowsercompany/swift-build"
+          release-asset-name: installer-amd64.exe
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v3
+      - name: Run Tests
+        run: swift test
 
   examples:
     runs-on: macos-14

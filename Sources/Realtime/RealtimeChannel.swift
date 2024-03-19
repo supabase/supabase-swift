@@ -351,7 +351,7 @@ public class RealtimeChannel {
   @discardableResult
   public func subscribe(
     timeout: TimeInterval? = nil,
-    callback: ((RealtimeSubscribeStates, Error?) -> Void)? = nil
+    callback: ((RealtimeSubscribeStates, (any Error)?) -> Void)? = nil
   ) -> RealtimeChannel {
     if socket?.isConnected == false {
       socket?.connect()

@@ -30,29 +30,30 @@ public actor RealtimeChannelV2 {
 
   let topic: String
   let config: RealtimeChannelConfig
-  let logger: SupabaseLogger?
+  let logger: (any SupabaseLogger)?
 
   private let callbackManager = CallbackManager()
-  private let statusStream = SharedStream<Status>(initialElement: .unsubscribed)
+
+  private let statusEventEmitter = EventEmitter<Status>(initialEvent: .unsubscribed)
 
   private var clientChanges: [PostgresJoinConfig] = []
   private var joinRef: String?
   private var pushes: [String: PushV2] = [:]
 
   public private(set) var status: Status {
-    get { statusStream.lastElement }
-    set { statusStream.yield(newValue) }
+    get { statusEventEmitter.lastEvent.value }
+    set { statusEventEmitter.emit(newValue) }
   }
 
   public var statusChange: AsyncStream<Status> {
-    statusStream.makeStream()
+    statusEventEmitter.stream()
   }
 
   init(
     topic: String,
     config: RealtimeChannelConfig,
     socket: RealtimeClientV2,
-    logger: SupabaseLogger?
+    logger: (any SupabaseLogger)?
   ) {
     self.socket = socket
     self.topic = topic
@@ -105,7 +106,7 @@ public actor RealtimeChannelV2 {
       )
     )
 
-    _ = await statusChange.first { $0 == .subscribed }
+    _ = await statusChange.first { @Sendable in $0 == .subscribed }
   }
 
   public func unsubscribe() async {
@@ -339,8 +340,8 @@ public actor RealtimeChannelV2 {
   }
 
   /// Listen for clients joining / leaving the channel using presences.
-  public func presenceChange() -> AsyncStream<PresenceAction> {
-    let (stream, continuation) = AsyncStream<PresenceAction>.makeStream()
+  public func presenceChange() -> AsyncStream<any PresenceAction> {
+    let (stream, continuation) = AsyncStream<any PresenceAction>.makeStream()
 
     let id = callbackManager.addPresenceCallback {
       continuation.yield($0)

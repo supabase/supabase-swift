@@ -1,62 +1,61 @@
 import ConcurrencyExtras
 import Foundation
+@_spi(Internal) import _Helpers
 
-struct EventEmitter: Sendable {
-  var attachListener: @Sendable () -> (
-    id: UUID,
-    stream: AsyncStream<(event: AuthChangeEvent, session: Session?)>
+protocol EventEmitter: Sendable {
+  func attachListener(
+    _ listener: @escaping AuthStateChangeListener
+  ) -> ObservationToken
+
+  func emit(
+    _ event: AuthChangeEvent,
+    session: Session?,
+    token: ObservationToken?
   )
-  var emit: @Sendable (_ event: AuthChangeEvent, _ session: Session?, _ id: UUID?) -> Void
 }
 
 extension EventEmitter {
-  func emit(_ event: AuthChangeEvent, session: Session?) {
-    emit(event, session, nil)
+  func emit(
+    _ event: AuthChangeEvent,
+    session: Session?
+  ) {
+    emit(event, session: session, token: nil)
   }
 }
 
-extension EventEmitter {
-  static var live: Self = {
-    let continuations = LockIsolated(
-      [UUID: AsyncStream<(event: AuthChangeEvent, session: Session?)>.Continuation]()
+final class DefaultEventEmitter: EventEmitter {
+  static let shared = DefaultEventEmitter()
+
+  private init() {}
+
+  let emitter = _Helpers.EventEmitter<(AuthChangeEvent, Session?)?>(
+    initialEvent: nil,
+    emitsLastEventWhenAttaching: false
+  )
+
+  func attachListener(
+    _ listener: @escaping AuthStateChangeListener
+  ) -> ObservationToken {
+    emitter.attach { event in
+      guard let event else { return }
+      listener(event.0, event.1)
+    }
+  }
+
+  func emit(
+    _ event: AuthChangeEvent,
+    session: Session?,
+    token: ObservationToken? = nil
+  ) {
+    NotificationCenter.default.post(
+      name: AuthClient.didChangeAuthStateNotification,
+      object: nil,
+      userInfo: [
+        AuthClient.authChangeEventInfoKey: event,
+        AuthClient.authChangeSessionInfoKey: session as Any,
+      ]
     )
 
-    return Self(
-      attachListener: {
-        let id = UUID()
-
-        let (stream, continuation) = AsyncStream<(event: AuthChangeEvent, session: Session?)>
-          .makeStream()
-
-        continuation.onTermination = { [id] _ in
-          continuations.withValue {
-            $0[id] = nil
-          }
-        }
-
-        continuations.withValue {
-          $0[id] = continuation
-        }
-
-        return (id, stream)
-      },
-      emit: { event, session, id in
-        NotificationCenter.default.post(
-          name: AuthClient.didChangeAuthStateNotification,
-          object: nil,
-          userInfo: [
-            AuthClient.authChangeEventInfoKey: event,
-            AuthClient.authChangeSessionInfoKey: session as Any,
-          ]
-        )
-        if let id {
-          continuations.value[id]?.yield((event, session))
-        } else {
-          for continuation in continuations.value.values {
-            continuation.yield((event, session))
-          }
-        }
-      }
-    )
-  }()
+    emitter.emit((event, session), to: token)
+  }
 }

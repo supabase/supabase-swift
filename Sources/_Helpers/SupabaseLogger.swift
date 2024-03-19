@@ -16,7 +16,7 @@ public enum SupabaseLogLevel: Int, Codable, CustomStringConvertible, Sendable {
   }
 }
 
-public struct SupabaseLogMessage: Codable, CustomStringConvertible {
+public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
   public let system: String
   public let level: SupabaseLogLevel
   public let message: String

@@ -1,4 +1,4 @@
-// swift-tools-version:5.8
+// swift-tools-version:5.9
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import Foundation
@@ -8,7 +8,7 @@ var dependencies: [Package.Dependency] = [
   .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
   .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
   .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.0.0"),
-  .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "3.0.0"),
+  .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "4.0.0"),
   .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
 ]
 
@@ -79,6 +79,7 @@ let package = Package(
       dependencies: [
         "Auth",
         "_Helpers",
+        "TestHelpers",
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
       ],
@@ -115,6 +116,7 @@ let package = Package(
       name: "RealtimeTests",
       dependencies: [
         "Realtime",
+        "TestHelpers",
         .product(name: "CustomDump", package: "swift-custom-dump"),
       ]
     ),
@@ -132,11 +134,13 @@ let package = Package(
       ]
     ),
     .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
+    .target(name: "TestHelpers"),
   ]
 )
 
 for target in package.targets where !target.isTest {
   target.swiftSettings = [
-    .enableUpcomingFeature("StrictConcurrency=complete"),
+    .enableUpcomingFeature("ExistentialAny"),
+    .enableExperimentalFeature("StrictConcurrency"),
   ]
 }

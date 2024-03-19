@@ -25,7 +25,7 @@ public actor RealtimeClientV2 {
     var timeoutInterval: TimeInterval
     var disconnectOnSessionLoss: Bool
     var connectOnSubscribe: Bool
-    var logger: SupabaseLogger?
+    var logger: (any SupabaseLogger)?
 
     public init(
       url: URL,
@@ -36,7 +36,7 @@ public actor RealtimeClientV2 {
       timeoutInterval: TimeInterval = 10,
       disconnectOnSessionLoss: Bool = true,
       connectOnSubscribe: Bool = true,
-      logger: SupabaseLogger? = nil
+      logger: (any SupabaseLogger)? = nil
     ) {
       self.url = url
       self.apiKey = apiKey
@@ -50,42 +50,57 @@ public actor RealtimeClientV2 {
     }
   }
 
-  public enum Status: Sendable {
+  public enum Status: Sendable, CustomStringConvertible {
     case disconnected
     case connecting
     case connected
+
+    public var description: String {
+      switch self {
+      case .disconnected: "Disconnected"
+      case .connecting: "Connecting"
+      case .connected: "Connected"
+      }
+    }
   }
+
+  let config: Configuration
+  let ws: any WebSocketClient
 
   var accessToken: String?
   var ref = 0
   var pendingHeartbeatRef: Int?
+
   var heartbeatTask: Task<Void, Never>?
   var messageTask: Task<Void, Never>?
-  var inFlightConnectionTask: Task<Void, Never>?
+  var connectionTask: Task<Void, Never>?
 
   public private(set) var subscriptions: [String: RealtimeChannelV2] = [:]
-  var ws: WebSocketClient?
 
-  let config: Configuration
-  let makeWebSocketClient: (_ url: URL, _ headers: [String: String]) -> WebSocketClient
-
-  private let statusStream = SharedStream<Status>(initialElement: .disconnected)
+  private let statusEventEmitter = EventEmitter<Status>(initialEvent: .disconnected)
 
   public var statusChange: AsyncStream<Status> {
-    statusStream.makeStream()
+    statusEventEmitter.stream()
   }
 
   public private(set) var status: Status {
-    get { statusStream.lastElement }
-    set { statusStream.yield(newValue) }
+    get { statusEventEmitter.lastEvent.value }
+    set { statusEventEmitter.emit(newValue) }
   }
 
-  init(
-    config: Configuration,
-    makeWebSocketClient: @escaping (_ url: URL, _ headers: [String: String]) -> WebSocketClient
-  ) {
+  public func onStatusChange(
+    _ listener: @escaping @Sendable (Status) -> Void
+  ) -> ObservationToken {
+    statusEventEmitter.attach(listener)
+  }
+
+  public init(config: Configuration) {
+    self.init(config: config, ws: WebSocket(config: config))
+  }
+
+  init(config: Configuration, ws: any WebSocketClient) {
     self.config = config
-    self.makeWebSocketClient = makeWebSocketClient
+    self.ws = ws
 
     if let customJWT = config.headers["Authorization"]?.split(separator: " ").last {
       accessToken = String(customJWT)
@@ -98,22 +113,6 @@ public actor RealtimeClientV2 {
     heartbeatTask?.cancel()
     messageTask?.cancel()
     subscriptions = [:]
-    ws?.cancel()
-  }
-
-  public init(config: Configuration) {
-    self.init(
-      config: config,
-      makeWebSocketClient: { url, headers in
-        let configuration = URLSessionConfiguration.default
-        configuration.httpAdditionalHeaders = headers
-        return WebSocketClient(
-          realtimeURL: url,
-          configuration: configuration,
-          logger: config.logger
-        )
-      }
-    )
   }
 
   public func connect() async {
@@ -121,56 +120,75 @@ public actor RealtimeClientV2 {
   }
 
   func connect(reconnect: Bool) async {
-    if let inFlightConnectionTask {
-      return await inFlightConnectionTask.value
-    }
+    if status == .disconnected {
+      connectionTask = Task {
+        if reconnect {
+          try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.reconnectDelay))
 
-    inFlightConnectionTask = Task { [self] in
-      defer { inFlightConnectionTask = nil }
-      if reconnect {
-        try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.reconnectDelay))
+          if Task.isCancelled {
+            config.logger?.debug("Reconnect cancelled, returning")
+            return
+          }
+        }
 
-        if Task.isCancelled {
-          config.logger?.debug("reconnect cancelled, returning")
+        if status == .connected {
+          config.logger?.debug("WebsSocket already connected")
           return
         }
-      }
 
-      if status == .connected {
-        config.logger?.debug("Websocket already connected")
-        return
-      }
+        status = .connecting
 
-      status = .connecting
+        for await connectionStatus in ws.connect() {
+          if Task.isCancelled {
+            break
+          }
 
-      let realtimeURL = realtimeWebSocketURL
-      let ws = makeWebSocketClient(realtimeURL, config.headers)
-      self.ws = ws
+          switch connectionStatus {
+          case .connected:
+            await onConnected(reconnect: reconnect)
 
-      await ws.connect()
+          case .disconnected:
+            await onDisconnected()
 
-      let connectionStatus = await ws.status.first { _ in true }
-
-      switch connectionStatus {
-      case .open:
-        status = .connected
-        config.logger?.debug("Connected to realtime websocket")
-        listenForMessages()
-        startHeartbeating()
-        if reconnect {
-          await rejoinChannels()
+          case let .error(error):
+            await onError(error)
+          }
         }
-
-      case .close, .error, nil:
-        config.logger?.debug(
-          "Error while trying to connect to realtime websocket. Trying again in \(config.reconnectDelay) seconds."
-        )
-        disconnect()
-        await connect(reconnect: true)
       }
     }
 
-    await inFlightConnectionTask?.value
+    _ = await statusChange.first { @Sendable in $0 == .connected }
+  }
+
+  private func onConnected(reconnect: Bool) async {
+    status = .connected
+    config.logger?.debug("Connected to realtime WebSocket")
+    listenForMessages()
+    startHeartbeating()
+    if reconnect {
+      await rejoinChannels()
+    }
+  }
+
+  private func onDisconnected() async {
+    config.logger?
+      .debug(
+        "WebSocket disconnected. Trying again in \(config.reconnectDelay)"
+      )
+    await reconnect()
+  }
+
+  private func onError(_ error: (any Error)?) async {
+    config.logger?
+      .debug(
+        "WebSocket error \(error?.localizedDescription ?? "<none>"). Trying again in \(config.reconnectDelay)"
+      )
+    await reconnect()
+  }
+
+  private func reconnect() async {
+    disconnect()
+    await connect(reconnect: true)
   }
 
   public func channel(
@@ -209,45 +227,40 @@ public actor RealtimeClientV2 {
   }
 
   private func rejoinChannels() async {
-    await withTaskGroup(of: Void.self) { group in
-      for channel in subscriptions.values {
-        _ = group.addTaskUnlessCancelled {
-          await channel.subscribe()
-        }
-
-        await group.waitForAll()
-      }
+    for channel in subscriptions.values {
+      await channel.subscribe()
     }
   }
 
   private func listenForMessages() {
     messageTask = Task { [weak self] in
-      guard let self, let ws = await ws else { return }
+      guard let self else { return }
 
       do {
         for try await message in ws.receive() {
+          if Task.isCancelled {
+            return
+          }
+
           await onMessage(message)
         }
       } catch {
         config.logger?.debug(
           "Error while listening for messages. Trying again in \(config.reconnectDelay) \(error)"
         )
-        await disconnect()
-        await connect(reconnect: true)
+        await reconnect()
       }
     }
   }
 
   private func startHeartbeating() {
-    heartbeatTask = Task { [weak self] in
-      guard let self else { return }
-
+    heartbeatTask = Task { [weak self, config] in
       while !Task.isCancelled {
         try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(config.heartbeatInterval))
         if Task.isCancelled {
           break
         }
-        await sendHeartbeat()
+        await self?.sendHeartbeat()
       }
     }
   }
@@ -255,9 +268,9 @@ public actor RealtimeClientV2 {
   private func sendHeartbeat() async {
     if pendingHeartbeatRef != nil {
       pendingHeartbeatRef = nil
-      config.logger?.debug("Heartbeat timeout. Trying to reconnect in \(config.reconnectDelay)")
-      disconnect()
-      await connect(reconnect: true)
+      config.logger?.debug("Heartbeat timeout")
+
+      await reconnect()
       return
     }
 
@@ -275,12 +288,12 @@ public actor RealtimeClientV2 {
   }
 
   public func disconnect() {
-    config.logger?.debug("Closing websocket connection")
+    config.logger?.debug("Closing WebSocket connection")
     ref = 0
     messageTask?.cancel()
     heartbeatTask?.cancel()
-    ws?.cancel()
-    ws = nil
+    connectionTask?.cancel()
+    ws.disconnect()
     status = .disconnected
   }
 
@@ -309,7 +322,7 @@ public actor RealtimeClientV2 {
 
   func send(_ message: RealtimeMessageV2) async {
     do {
-      try await ws?.send(message)
+      try await ws.send(message)
     } catch {
       config.logger?.debug("""
       Failed to send message:
@@ -325,10 +338,12 @@ public actor RealtimeClientV2 {
     ref += 1
     return ref
   }
+}
 
-  private var realtimeBaseURL: URL {
-    guard var components = URLComponents(url: config.url, resolvingAgainstBaseURL: false) else {
-      return config.url
+extension RealtimeClientV2.Configuration {
+  var realtimeBaseURL: URL {
+    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+      return url
     }
 
     if components.scheme == "https" {
@@ -338,20 +353,20 @@ public actor RealtimeClientV2 {
     }
 
     guard let url = components.url else {
-      return config.url
+      return url
     }
 
     return url
   }
 
-  private var realtimeWebSocketURL: URL {
+  var realtimeWebSocketURL: URL {
     guard var components = URLComponents(url: realtimeBaseURL, resolvingAgainstBaseURL: false)
     else {
       return realtimeBaseURL
     }
 
     components.queryItems = components.queryItems ?? []
-    components.queryItems!.append(URLQueryItem(name: "apikey", value: config.apiKey))
+    components.queryItems!.append(URLQueryItem(name: "apikey", value: apiKey))
     components.queryItems!.append(URLQueryItem(name: "vsn", value: "1.0.0"))
 
     components.path.append("/websocket")
@@ -365,40 +380,6 @@ public actor RealtimeClientV2 {
   }
 
   private var broadcastURL: URL {
-    config.url.appendingPathComponent("api/broadcast")
-  }
-}
-
-struct TimeoutError: Error {}
-
-func withThrowingTimeout<R>(
-  seconds: TimeInterval,
-  body: @escaping @Sendable () async throws -> R
-) async throws -> R {
-  try await withThrowingTaskGroup(of: R.self) { group in
-    group.addTask {
-      try await body()
-    }
-
-    group.addTask {
-      try await Task.sleep(nanoseconds: UInt64(seconds) * NSEC_PER_SEC)
-      throw TimeoutError()
-    }
-
-    let result = try await group.next()!
-    group.cancelAll()
-    return result
-  }
-}
-
-extension Task where Success: Sendable, Failure == Error {
-  init(
-    priority: TaskPriority? = nil,
-    timeout: TimeInterval,
-    operation: @escaping @Sendable () async throws -> Success
-  ) {
-    self = Task(priority: priority) {
-      try await withThrowingTimeout(seconds: timeout, body: operation)
-    }
+    url.appendingPathComponent("api/broadcast")
   }
 }

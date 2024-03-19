@@ -40,7 +40,7 @@ public typealias PayloadClosure = () -> Payload?
 struct StateChangeCallbacks {
   var open: LockIsolated<[(ref: String, callback: Delegated<URLResponse?, Void>)]> = .init([])
   var close: LockIsolated<[(ref: String, callback: Delegated<(Int, String?), Void>)]> = .init([])
-  var error: LockIsolated<[(ref: String, callback: Delegated<(Error, URLResponse?), Void>)]> =
+  var error: LockIsolated<[(ref: String, callback: Delegated<(any Error, URLResponse?), Void>)]> =
     .init([])
   var message: LockIsolated<[(ref: String, callback: Delegated<RealtimeMessage, Void>)]> = .init([])
 }
@@ -91,7 +91,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   /// The WebSocket transport. Default behavior is to provide a
   /// URLSessionWebsocketTask. See README for alternatives.
-  private let transport: (URL) -> PhoenixTransport
+  private let transport: (URL) -> any PhoenixTransport
 
   /// Phoenix serializer version, defaults to "2.0.0"
   public let vsn: String
@@ -174,7 +174,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   var closeStatus: CloseStatus = .unknown
 
   /// The connection to the server
-  var connection: PhoenixTransport? = nil
+  var connection: (any PhoenixTransport)? = nil
 
   /// The HTTPClient to perform HTTP requests.
   let http: HTTPClient
@@ -221,7 +221,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public init(
     endPoint: String,
     headers: [String: String] = [:],
-    transport: @escaping ((URL) -> PhoenixTransport),
+    transport: @escaping ((URL) -> any PhoenixTransport),
     paramsClosure: PayloadClosure? = nil,
     vsn: String = Defaults.vsn
   ) {
@@ -543,8 +543,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
   ///
   /// - parameter callback: Called when the Socket errors
   @discardableResult
-  public func onError(callback: @escaping ((Error, URLResponse?)) -> Void) -> String {
-    var delegated = Delegated<(Error, URLResponse?), Void>()
+  public func onError(callback: @escaping ((any Error, URLResponse?)) -> Void) -> String {
+    var delegated = Delegated<(any Error, URLResponse?), Void>()
     delegated.manuallyDelegate(with: callback)
 
     return stateChangeCallbacks.error.withValue { [delegated] in
@@ -566,9 +566,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
   @discardableResult
   public func delegateOnError<T: AnyObject>(
     to owner: T,
-    callback: @escaping ((T, (Error, URLResponse?)) -> Void)
+    callback: @escaping ((T, (any Error, URLResponse?)) -> Void)
   ) -> String {
-    var delegated = Delegated<(Error, URLResponse?), Void>()
+    var delegated = Delegated<(any Error, URLResponse?), Void>()
     delegated.delegate(to: owner, with: callback)
 
     return stateChangeCallbacks.error.withValue { [delegated] in
@@ -807,7 +807,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     stateChangeCallbacks.close.value.forEach { $0.callback.call((code, reason)) }
   }
 
-  func onConnectionError(_ error: Error, response: URLResponse?) {
+  func onConnectionError(_ error: any Error, response: URLResponse?) {
     logItems("transport", error, response ?? "")
 
     // Send an error to all channels
@@ -987,7 +987,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     onConnectionOpen(response: response)
   }
 
-  public func onError(error: Error, response: URLResponse?) {
+  public func onError(error: any Error, response: URLResponse?) {
     onConnectionError(error, response: response)
   }
 

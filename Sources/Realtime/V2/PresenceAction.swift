@@ -37,7 +37,7 @@ extension PresenceV2: Codable {
     }
   }
 
-  public init(from decoder: Decoder) throws {
+  public init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
 
     let json = try container.decode(JSONObject.self)
@@ -71,7 +71,7 @@ extension PresenceV2: Codable {
     self = PresenceV2(ref: presenceRef, state: meta)
   }
 
-  public func encode(to encoder: Encoder) throws {
+  public func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: _StringCodingKey.self)
     try container.encode(ref, forKey: _StringCodingKey("phx_ref"))
     try container.encode(state, forKey: _StringCodingKey("state"))

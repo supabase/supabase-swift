@@ -22,26 +22,6 @@ extension CodeVerifierStorage {
   )
 }
 
-extension SessionManager {
-  static let mock = Self(
-    session: unimplemented("SessionManager.session"),
-    update: unimplemented("SessionManager.update"),
-    remove: unimplemented("SessionManager.remove")
-  )
-}
-
-extension EventEmitter {
-  static let mock = Self(
-    attachListener: unimplemented("EventEmitter.attachListener"),
-    emit: unimplemented("EventEmitter.emit")
-  )
-
-  static let noop = Self(
-    attachListener: { (UUID(), AsyncStream.makeStream().stream) },
-    emit: { _, _, _ in }
-  )
-}
-
 extension SessionStorage {
   static let mock = Self(
     getSession: unimplemented("SessionStorage.getSession"),
@@ -108,10 +88,14 @@ extension Dependencies {
   }()
 
   static let mock = Dependencies(
-    configuration: AuthClient.Configuration(url: clientURL, localStorage: Self.localStorage),
-    sessionManager: .mock,
+    configuration: AuthClient.Configuration(
+      url: clientURL,
+      localStorage: Self.localStorage,
+      logger: nil
+    ),
+    sessionManager: MockSessionManager(),
     api: .mock,
-    eventEmitter: .mock,
+    eventEmitter: MockEventEmitter(),
     sessionStorage: .mock,
     sessionRefresher: .mock,
     codeVerifierStorage: .mock,

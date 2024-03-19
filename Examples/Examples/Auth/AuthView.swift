@@ -12,14 +12,16 @@ struct AuthView: View {
     case emailAndPassword
     case magicLink
     case signInWithApple
-    case googleSignIn
+    case googleSignInWebFlow
+    case googleSignInSDKFlow
 
     var title: String {
       switch self {
       case .emailAndPassword: "Auth with Email & Password"
       case .magicLink: "Auth with Magic Link"
       case .signInWithApple: "Sign in with Apple"
-      case .googleSignIn: "Google Sign in"
+      case .googleSignInWebFlow: "Google Sign in (Web Flow)"
+      case .googleSignInSDKFlow: "Google Sign in (GIDSignIn SDK Flow)"
       }
     }
   }
@@ -44,7 +46,8 @@ extension AuthView.Option: View {
     case .emailAndPassword: AuthWithEmailAndPassword()
     case .magicLink: AuthWithMagicLink()
     case .signInWithApple: SignInWithApple()
-    case .googleSignIn: GoogleSignIn()
+    case .googleSignInWebFlow: GoogleSignInWithWebFlow()
+    case .googleSignInSDKFlow: GoogleSignInSDKFlow()
     }
   }
 }

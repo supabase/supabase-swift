@@ -299,7 +299,7 @@ enum VerifyOTPParams: Encodable {
   case email(VerifyEmailOTPParams)
   case mobile(VerifyMobileOTPParams)
 
-  func encode(to encoder: Encoder) throws {
+  func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     switch self {
     case let .email(value):
@@ -342,7 +342,7 @@ public enum AuthResponse: Codable, Hashable, Sendable {
   case session(Session)
   case user(User)
 
-  public init(from decoder: Decoder) throws {
+  public init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
     if let value = try? container.decode(Session.self) {
       self = .session(value)
@@ -356,7 +356,7 @@ public enum AuthResponse: Codable, Hashable, Sendable {
     }
   }
 
-  public func encode(to encoder: Encoder) throws {
+  public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     switch self {
     case let .session(value): try container.encode(value)

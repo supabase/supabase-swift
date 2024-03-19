@@ -15,16 +15,17 @@ public actor AuthClient {
   let persistentLogger = Logging.Logger(label: Bundle.main.bundleIdentifier!)
 
   /// FetchHandler is a type alias for asynchronous network request handling.
-  public typealias FetchHandler =
-    @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
+  public typealias FetchHandler = @Sendable (
+    _ request: URLRequest
+  ) async throws -> (Data, URLResponse)
 
   /// Configuration struct represents the client configuration.
   public struct Configuration: Sendable {
     public let url: URL
     public var headers: [String: String]
     public let flowType: AuthFlowType
-    public let localStorage: AuthLocalStorage
-    public let logger: SupabaseLogger?
+    public let localStorage: any AuthLocalStorage
+    public let logger: (any SupabaseLogger)?
     public let encoder: JSONEncoder
     public let decoder: JSONDecoder
     public let fetch: FetchHandler
@@ -44,8 +45,8 @@ public actor AuthClient {
       url: URL,
       headers: [String: String] = [:],
       flowType: AuthFlowType = Configuration.defaultFlowType,
-      localStorage: AuthLocalStorage,
-      logger: SupabaseLogger? = nil,
+      localStorage: any AuthLocalStorage,
+      logger: (any SupabaseLogger)? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -71,7 +72,7 @@ public actor AuthClient {
     Dependencies.current.value!.api
   }
 
-  private var sessionManager: SessionManager {
+  private var sessionManager: any SessionManager {
     Dependencies.current.value!.sessionManager
   }
 
@@ -79,7 +80,7 @@ public actor AuthClient {
     Dependencies.current.value!.codeVerifierStorage
   }
 
-  private var eventEmitter: EventEmitter {
+  private var eventEmitter: any EventEmitter {
     Dependencies.current.value!.eventEmitter
   }
 
@@ -87,7 +88,7 @@ public actor AuthClient {
     Dependencies.current.value!.currentDate
   }
 
-  private var logger: SupabaseLogger? {
+  private var logger: (any SupabaseLogger)? {
     Dependencies.current.value!.logger
   }
 
@@ -123,8 +124,8 @@ public actor AuthClient {
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-    localStorage: AuthLocalStorage,
-    logger: SupabaseLogger? = nil,
+    localStorage: any AuthLocalStorage,
+    logger: (any SupabaseLogger)? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
@@ -155,10 +156,10 @@ public actor AuthClient {
 
     self.init(
       configuration: configuration,
-      sessionManager: .live,
+      sessionManager: DefaultSessionManager.shared,
       codeVerifierStorage: .live,
       api: api,
-      eventEmitter: .live,
+      eventEmitter: DefaultEventEmitter.shared,
       sessionStorage: .live,
       logger: configuration.logger
     )
@@ -167,12 +168,12 @@ public actor AuthClient {
   /// This internal initializer is here only for easy injecting mock instances when testing.
   init(
     configuration: Configuration,
-    sessionManager: SessionManager,
+    sessionManager: any SessionManager,
     codeVerifierStorage: CodeVerifierStorage,
     api: APIClient,
-    eventEmitter: EventEmitter,
+    eventEmitter: any EventEmitter,
     sessionStorage: SessionStorage,
-    logger: SupabaseLogger?
+    logger: (any SupabaseLogger)?
   ) {
     mfa = AuthMFA()
     admin = AuthAdmin()
@@ -196,18 +197,41 @@ public actor AuthClient {
   }
 
   /// Listen for auth state changes.
+  /// - Parameter listener: Block that executes when a new event is emitted.
+  /// - Returns: A handle that can be used to manually unsubscribe.
+  ///
+  /// - Note: This method blocks execution until the ``AuthChangeEvent/initialSession`` event is
+  /// emitted. Although this operation is usually fast, in case of the current stored session being
+  /// invalid, a call to the endpoint is necessary for refreshing the session.
+  @discardableResult
+  public func onAuthStateChange(
+    _ listener: @escaping AuthStateChangeListener
+  ) async -> some AuthStateChangeListenerRegistration {
+    let token = eventEmitter.attachListener(listener)
+    await emitInitialSession(forToken: token)
+    return token
+  }
+
+  /// Listen for auth state changes.
   ///
   /// An `.initialSession` is always emitted when this method is called.
   public var authStateChanges: AsyncStream<(
     event: AuthChangeEvent,
     session: Session?
   )> {
-    let (id, stream) = eventEmitter.attachListener()
-    logger?.debug("auth state change listener with id '\(id.uuidString)' attached.")
+    let (stream, continuation) = AsyncStream<(
+      event: AuthChangeEvent,
+      session: Session?
+    )>.makeStream()
 
-    Task { [id] in
-      await emitInitialSession(forStreamWithID: id)
-      logger?.debug("initial session for listener with id '\(id.uuidString)' emitted.")
+    Task {
+      let handle = await onAuthStateChange { event, session in
+        continuation.yield((event, session))
+      }
+
+      continuation.onTermination = { _ in
+        handle.remove()
+      }
     }
 
     return stream
@@ -795,6 +819,13 @@ public actor AuthClient {
     .decoded(decoder: configuration.decoder)
   }
 
+  /// Sends a re-authentication OTP to the user's email or phone number.
+  public func reauthenticate() async throws {
+    try await api.authorizedExecute(
+      Request(path: "/reauthenticate", method: .get)
+    )
+  }
+
   /// Gets the current user details if there is an existing session.
   /// - Parameter jwt: Takes in an optional access token jwt. If no jwt is provided, user() will
   /// attempt to get the jwt from the current session.
@@ -918,13 +949,13 @@ public actor AuthClient {
     return session
   }
 
-  private func emitInitialSession(forStreamWithID id: UUID) async {
+  private func emitInitialSession(forToken token: ObservationToken) async {
       do {
           let session = try await session
-          eventEmitter.emit(.initialSession, session, id)
+		  eventEmitter.emit(.initialSession, session: session, token: token)
       } catch {
           persistentLogger.error("No initial session found: \(error.localizedDescription)")
-          eventEmitter.emit(.initialSession, nil, id)
+          eventEmitter.emit(.initialSession, session: nil)
       }
   }
 

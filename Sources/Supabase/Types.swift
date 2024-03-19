@@ -36,7 +36,7 @@ public struct SupabaseClientOptions: Sendable {
 
   public struct AuthOptions: Sendable {
     /// A storage provider. Used to store the logged-in session.
-    public let storage: AuthLocalStorage
+    public let storage: any AuthLocalStorage
 
     /// OAuth flow to use - defaults to PKCE flow. PKCE is recommended for mobile and server-side
     /// applications.
@@ -49,7 +49,7 @@ public struct SupabaseClientOptions: Sendable {
     public let decoder: JSONDecoder
 
     public init(
-      storage: AuthLocalStorage,
+      storage: any AuthLocalStorage,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
@@ -69,12 +69,12 @@ public struct SupabaseClientOptions: Sendable {
     public let session: URLSession
 
     /// The logger  to use across all Supabase sub-packages.
-    public let logger: SupabaseLogger?
+    public let logger: (any SupabaseLogger)?
 
     public init(
       headers: [String: String] = [:],
       session: URLSession = .shared,
-      logger: SupabaseLogger? = nil
+      logger: (any SupabaseLogger)? = nil
     ) {
       self.headers = headers
       self.session = session
