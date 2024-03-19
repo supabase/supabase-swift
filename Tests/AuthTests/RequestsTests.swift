@@ -344,6 +344,16 @@ final class RequestsTests: XCTestCase {
     }
   }
 
+  func testReauthenticate() async {
+    sessionManager.returnSession = .success(.validSession)
+
+    let sut = makeSUT()
+
+    await assert {
+      try await sut.reauthenticate()
+    }
+  }
+
   private func assert(_ block: () async throws -> Void) async {
     do {
       try await block()

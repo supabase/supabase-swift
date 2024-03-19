@@ -15,10 +15,16 @@ struct HomeView: View {
   var body: some View {
     TodoListView()
       .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
+        ToolbarItemGroup(placement: .cancellationAction) {
           Button("Sign out") {
             Task {
               try! await supabase.auth.signOut()
+            }
+          }
+
+          Button("Reauthenticate") {
+            Task {
+              try! await supabase.auth.reauthenticate()
             }
           }
         }
