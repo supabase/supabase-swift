@@ -811,6 +811,13 @@ public actor AuthClient {
     .decoded(decoder: configuration.decoder)
   }
 
+  /// Sends a re-authentication OTP to the user's email or phone number.
+  public func reauthenticate() async throws {
+    try await api.authorizedExecute(
+      Request(path: "/reauthenticate", method: .get)
+    )
+  }
+
   /// Gets the current user details if there is an existing session.
   /// - Parameter jwt: Takes in an optional access token jwt. If no jwt is provided, user() will
   /// attempt to get the jwt from the current session.

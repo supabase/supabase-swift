@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/openid/AppAuth-iOS.git",
       "state" : {
-        "revision" : "269c90515328c24f90b2ed17a67c8a796b485448",
-        "version" : "1.7.2"
+        "revision" : "7e2c09cbeb3bb799f26c268dbedb26325ea722a9",
+        "version" : "1.7.3"
       }
     },
     {
@@ -95,8 +95,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-custom-dump",
       "state" : {
-        "revision" : "3ce83179e5f0c83ad54c305779c6b438e82aaf1d",
-        "version" : "1.2.1"
+        "revision" : "f01efb26f3a192a0e88dcdb7c3c391ec2fc25d9c",
+        "version" : "1.3.0"
       }
     },
     {

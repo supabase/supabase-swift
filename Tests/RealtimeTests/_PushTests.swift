@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 03/01/24.
 //
 
+import ConcurrencyExtras
 @testable import Realtime
 import XCTest
 
@@ -13,6 +14,12 @@ final class _PushTests: XCTestCase {
     url: URL(string: "https://localhost:54321/v1/realtime")!,
     apiKey: "apikey"
   ))
+
+  override func invokeTest() {
+    withMainSerialExecutor {
+      super.invokeTest()
+    }
+  }
 
   func testPushWithoutAck() async {
     let channel = RealtimeChannelV2(
@@ -64,7 +71,6 @@ final class _PushTests: XCTestCase {
       await push.send()
     }
     await Task.megaYield()
-
     await push.didReceive(status: .ok)
 
     let status = await task.value
