@@ -813,7 +813,7 @@ public actor AuthClient {
 
   /// Sends a re-authentication OTP to the user's email or phone number.
   public func reauthenticate() async throws {
-      try await api.authorizedExecute(
+    try await api.authorizedExecute(
       Request(path: "/reauthenticate", method: .get)
     )
   }
