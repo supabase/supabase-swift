@@ -13,8 +13,8 @@ struct ProfileView: View {
 
   @State var user: User?
 
-  var providers: [Provider] {
-    Provider.allCases
+  var identities: [UserIdentity] {
+    user?.identities ?? []
   }
 
   var body: some View {
@@ -29,6 +29,20 @@ struct ProfileView: View {
         Button("Reauthenticate") {
           Task {
             try! await supabase.auth.reauthenticate()
+          }
+        }
+
+        Menu("Unlink identity") {
+          ForEach(identities) { identity in
+            Button(identity.provider) {
+              Task {
+                do {
+                  try await supabase.auth.unlinkIdentity(identity)
+                } catch {
+                  debug("Fail to unlink identity: \(error)")
+                }
+              }
+            }
           }
         }
 
