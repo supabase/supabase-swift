@@ -14,23 +14,18 @@ struct HomeView: View {
   @State private var mfaStatus: MFAStatus?
 
   var body: some View {
-    NavigationStack {
-      BucketList()
-        .navigationDestination(for: Bucket.self, destination: BucketDetailView.init)
-    }
-    .toolbar {
-      ToolbarItemGroup(placement: .cancellationAction) {
-        Button("Sign out") {
-          Task {
-            try! await supabase.auth.signOut()
-          }
+    TabView {
+      ProfileView()
+        .tabItem {
+          Label("Profile", systemImage: "person.circle")
         }
 
-        Button("Reauthenticate") {
-          Task {
-            try! await supabase.auth.reauthenticate()
-          }
-        }
+      NavigationStack {
+        BucketList()
+          .navigationDestination(for: Bucket.self, destination: BucketDetailView.init)
+      }
+      .tabItem {
+        Label("Storage", systemImage: "externaldrive")
       }
     }
     .task {

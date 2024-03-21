@@ -823,20 +823,43 @@ public actor AuthClient {
     eventEmitter.emit(.userUpdated, session: session)
     return updatedUser
   }
-  
+
   /// Gets all the identities linked to a user.
   public func userIdentities() async throws -> [UserIdentity] {
     try await user().identities ?? []
   }
 
-  public func linkIdentity(provider: Provider) async throws {
-    let url = try getURLForProvider(url: configuration.url.appendingPathComponent("user/identities/authorize"), provider: provider)
+  /// Gets an URL that can be used for manual linking identity.
+  /// - Parameters:
+  ///   - provider: The provider you want to link the user with.
+  ///   - scopes: The scopes to request from the OAuth provider.
+  ///   - redirectTo: The redirect URL to use, specify a configured deep link.
+  ///   - queryParams: Additional query parameters to use.
+  /// - Returns: A URL that you can you to initiate the OAuth flow.
+  public func getURLForLinkIdentity(
+    provider: Provider,
+    scopes: String? = nil,
+    redirectTo: URL? = nil,
+    queryParams: [(name: String, value: String?)] = []
+  ) async throws -> URL {
+    try getURLForProvider(
+      url: configuration.url.appendingPathComponent("user/identities/authorize"),
+      provider: provider,
+      scopes: scopes,
+      redirectTo: redirectTo,
+      queryParams: queryParams
+    )
+  }
 
-    var request = URLRequest(url: url)
-    request.httpMethod = "GET"
-    request.allHTTPHeaderFields = configuration.headers
-
-    let (data, response) = try await configuration.fetch(request)
+  /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
+  /// with that identity once it's unlinked.
+  public func unlinkIdentity(_ identity: UserIdentity) async throws {
+    try await api.authorizedExecute(
+      Request(
+        path: "/user/identities/\(identity.id)",
+        method: .delete
+      )
+    )
   }
 
   /// Sends a reset request to an email address.
@@ -989,7 +1012,6 @@ public actor AuthClient {
 
     return url
   }
-
 }
 
 extension AuthClient {

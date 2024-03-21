@@ -216,7 +216,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   }
 }
 
-public enum Provider: String, Codable, CaseIterable, Sendable {
+public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {
   case apple
   case azure
   case bitbucket
@@ -234,6 +234,8 @@ public enum Provider: String, Codable, CaseIterable, Sendable {
   case twitch
   case twitter
   case workos
+
+  public var id: RawValue { rawValue }
 }
 
 public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
