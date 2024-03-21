@@ -354,6 +354,26 @@ final class RequestsTests: XCTestCase {
     }
   }
 
+  func testUnlinkIdentity() async {
+    sessionManager.returnSession = .success(.validSession)
+
+    let sut = makeSUT()
+
+    await assert {
+      try await sut.unlinkIdentity(
+        UserIdentity(
+          id: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+          userId: UUID(),
+          identityData: [:],
+          provider: "email",
+          createdAt: Date(),
+          lastSignInAt: Date(),
+          updatedAt: Date()
+        )
+      )
+    }
+  }
+
   private func assert(_ block: () async throws -> Void) async {
     do {
       try await block()
