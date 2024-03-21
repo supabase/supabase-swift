@@ -5,8 +5,8 @@ import Foundation
 #endif
 
 public struct StorageHTTPSession: Sendable {
-  public let fetch: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
-  public let upload:
+  public var fetch: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
+  public var upload:
     @Sendable (_ request: URLRequest, _ data: Data) async throws -> (Data, URLResponse)
 
   public init(
@@ -19,10 +19,10 @@ public struct StorageHTTPSession: Sendable {
     self.upload = upload
   }
 
-  public init() {
+  public init(session: URLSession = .shared) {
     self.init(
-      fetch: { try await URLSession.shared.data(for: $0) },
-      upload: { try await URLSession.shared.upload(for: $0, from: $1) }
+      fetch: { try await session.data(for: $0) },
+      upload: { try await session.upload(for: $0, from: $1) }
     )
   }
 }

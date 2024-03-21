@@ -121,7 +121,14 @@ let package = Package(
       ]
     ),
     .target(name: "Storage", dependencies: ["_Helpers"]),
-    .testTarget(name: "StorageTests", dependencies: ["Storage"]),
+    .testTarget(
+      name: "StorageTests",
+      dependencies: [
+        "Storage",
+        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "CustomDump", package: "swift-custom-dump"),
+      ]
+    ),
     .target(
       name: "Supabase",
       dependencies: [

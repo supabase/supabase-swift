@@ -12,12 +12,10 @@ struct RootView: View {
   @Environment(AuthController.self) var auth
 
   var body: some View {
-    NavigationStack {
-      if auth.session == nil {
-        AuthView()
-      } else {
-        HomeView()
-      }
+    if auth.session == nil {
+      AuthView()
+    } else {
+      HomeView()
     }
   }
 }

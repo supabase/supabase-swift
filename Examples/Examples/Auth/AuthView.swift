@@ -27,16 +27,18 @@ struct AuthView: View {
   }
 
   var body: some View {
-    List {
-      ForEach(Option.allCases, id: \.self) { option in
-        NavigationLink(option.title, value: option)
+    NavigationStack {
+      List {
+        ForEach(Option.allCases, id: \.self) { option in
+          NavigationLink(option.title, value: option)
+        }
       }
+      .navigationDestination(for: Option.self) { options in
+        options
+          .navigationTitle(options.title)
+      }
+      .navigationBarTitleDisplayMode(.inline)
     }
-    .navigationDestination(for: Option.self) { options in
-      options
-        .navigationTitle(options.title)
-    }
-    .navigationBarTitleDisplayMode(.inline)
   }
 }
 

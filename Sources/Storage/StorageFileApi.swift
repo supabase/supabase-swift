@@ -24,12 +24,16 @@ public class StorageFileApi: StorageApi {
     super.init(configuration: configuration)
   }
 
-  struct UploadResponse: Decodable {
+  private struct UploadResponse: Decodable {
     let Key: String
   }
 
-  struct MoveResponse: Decodable {
+  private struct MoveResponse: Decodable {
     let message: String
+  }
+
+  private struct SignedURLResponse: Decodable {
+    let signedURL: URL
   }
 
   func uploadOrUpdate(
@@ -159,10 +163,6 @@ public class StorageFileApi: StorageApi {
       let transform: TransformOptions?
     }
 
-    struct Response: Decodable {
-      var signedURL: URL
-    }
-
     let encoder = JSONEncoder()
 
     let response = try await execute(
@@ -174,30 +174,9 @@ public class StorageFileApi: StorageApi {
         )
       )
     )
-    .decoded(as: Response.self, decoder: configuration.decoder)
+    .decoded(as: SignedURLResponse.self, decoder: configuration.decoder)
 
-    guard
-      let signedURLComponents = URLComponents(
-        url: response.signedURL,
-        resolvingAgainstBaseURL: false
-      ),
-      var baseURLComponents = URLComponents(url: configuration.url, resolvingAgainstBaseURL: false)
-    else {
-      throw URLError(.badURL)
-    }
-
-    baseURLComponents.path += signedURLComponents.path
-    baseURLComponents.queryItems = signedURLComponents.queryItems ?? []
-
-    if let download {
-      baseURLComponents.queryItems!.append(URLQueryItem(name: "download", value: download))
-    }
-
-    guard let signedURL = baseURLComponents.url else {
-      throw URLError(.badURL)
-    }
-
-    return signedURL
+    return try makeSignedURL(response.signedURL, download: download)
   }
 
   /// Create signed url to download file without requiring permissions. This URL can be valid for a
@@ -221,6 +200,77 @@ public class StorageFileApi: StorageApi {
       download: download ? "" : nil,
       transform: transform
     )
+  }
+
+  /// Creates multiple signed URLs. Use a signed URL to share a file for a fixed amount of time.
+  /// - Parameters:
+  ///   - paths: The file paths to be downloaded, including the current file names. For example
+  /// `["folder/image.png", "folder2/image2.png"]`.
+  ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs
+  /// which are valid for one minute.
+  ///   - download: Trigger a download with the specified file name.
+  public func createSignedURLs(
+    paths: [String],
+    expiresIn: Int,
+    download: String? = nil
+  ) async throws -> [URL] {
+    struct Params: Encodable {
+      let expiresIn: Int
+      let paths: [String]
+    }
+
+    let response = try await execute(
+      Request(
+        path: "/object/sign/\(bucketId)",
+        method: .post,
+        body: configuration.encoder.encode(
+          Params(expiresIn: expiresIn, paths: paths)
+        )
+      )
+    )
+    .decoded(as: [SignedURLResponse].self, decoder: configuration.decoder)
+
+    return try response.map { try makeSignedURL($0.signedURL, download: download) }
+  }
+
+  /// Creates multiple signed URLs. Use a signed URL to share a file for a fixed amount of time.
+  /// - Parameters:
+  ///   - paths: The file paths to be downloaded, including the current file names. For example
+  /// `["folder/image.png", "folder2/image2.png"]`.
+  ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs
+  /// which are valid for one minute.
+  ///   - download: Trigger a download with the default file name.
+  public func createSignedURLs(
+    paths: [String],
+    expiresIn: Int,
+    download: Bool
+  ) async throws -> [URL] {
+    try await createSignedURLs(paths: paths, expiresIn: expiresIn, download: download ? "" : nil)
+  }
+
+  private func makeSignedURL(_ signedURL: URL, download: String?) throws -> URL {
+    guard
+      let signedURLComponents = URLComponents(
+        url: signedURL,
+        resolvingAgainstBaseURL: false
+      ),
+      var baseURLComponents = URLComponents(url: configuration.url, resolvingAgainstBaseURL: false)
+    else {
+      throw URLError(.badURL)
+    }
+
+    baseURLComponents.path += signedURLComponents.path
+    baseURLComponents.queryItems = signedURLComponents.queryItems ?? []
+
+    if let download {
+      baseURLComponents.queryItems!.append(URLQueryItem(name: "download", value: download))
+    }
+
+    guard let signedURL = baseURLComponents.url else {
+      throw URLError(.badURL)
+    }
+
+    return signedURL
   }
 
   /// Deletes files within the same bucket

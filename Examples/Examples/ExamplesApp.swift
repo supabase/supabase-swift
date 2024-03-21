@@ -22,8 +22,11 @@ struct ExamplesApp: App {
 let supabase = SupabaseClient(
   supabaseURL: Secrets.supabaseURL,
   supabaseKey: Secrets.supabaseAnonKey,
-  options: .init(auth: .init(storage: KeychainLocalStorage(
-    service: "supabase.gotrue.swift",
-    accessGroup: nil
-  )))
+  options: .init(global: .init(logger: ConsoleLogger()))
 )
+
+struct ConsoleLogger: SupabaseLogger {
+  func log(message: SupabaseLogMessage) {
+    print(message)
+  }
+}

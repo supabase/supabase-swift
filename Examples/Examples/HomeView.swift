@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 23/12/22.
 //
 
+import Supabase
 import SwiftUI
 
 struct HomeView: View {
@@ -13,28 +14,31 @@ struct HomeView: View {
   @State private var mfaStatus: MFAStatus?
 
   var body: some View {
-    TodoListView()
-      .toolbar {
-        ToolbarItemGroup(placement: .cancellationAction) {
-          Button("Sign out") {
-            Task {
-              try! await supabase.auth.signOut()
-            }
+    NavigationStack {
+      BucketList()
+        .navigationDestination(for: Bucket.self, destination: BucketDetailView.init)
+    }
+    .toolbar {
+      ToolbarItemGroup(placement: .cancellationAction) {
+        Button("Sign out") {
+          Task {
+            try! await supabase.auth.signOut()
           }
+        }
 
-          Button("Reauthenticate") {
-            Task {
-              try! await supabase.auth.reauthenticate()
-            }
+        Button("Reauthenticate") {
+          Task {
+            try! await supabase.auth.reauthenticate()
           }
         }
       }
-      .task {
+    }
+    .task {
 //        mfaStatus = await verifyMFAStatus()
-      }
-      .sheet(unwrapping: $mfaStatus) { $mfaStatus in
-        MFAFlow(status: mfaStatus)
-      }
+    }
+    .sheet(unwrapping: $mfaStatus) { $mfaStatus in
+      MFAFlow(status: mfaStatus)
+    }
   }
 
   private func verifyMFAStatus() async -> MFAStatus? {

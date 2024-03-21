@@ -1,6 +1,6 @@
 import Foundation
 
-public struct BucketOptions {
+public struct BucketOptions: Sendable {
   public let `public`: Bool
   public let fileSizeLimit: Int?
   public let allowedMimeTypes: [String]?

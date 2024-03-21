@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Bucket: Identifiable, Hashable, Codable {
+public struct Bucket: Identifiable, Hashable, Codable, Sendable {
   public var id: String
   public var name: String
   public var owner: String
