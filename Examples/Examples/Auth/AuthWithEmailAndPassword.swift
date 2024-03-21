@@ -46,10 +46,6 @@ struct AuthWithEmailAndPassword: View {
         }
       }
 
-      if case let .result(.failure(error)) = actionState {
-        ErrorText(error)
-      }
-
       switch actionState {
       case .idle:
         EmptyView()
@@ -86,6 +82,7 @@ struct AuthWithEmailAndPassword: View {
     .animation(.default, value: mode)
   }
 
+  @MainActor
   func primaryActionButtonTapped() async {
     do {
       actionState = .inFlight
@@ -110,6 +107,7 @@ struct AuthWithEmailAndPassword: View {
     }
   }
 
+  @MainActor
   private func onOpenURL(_ url: URL) async {
     do {
       try await supabase.auth.session(from: url)
@@ -118,6 +116,7 @@ struct AuthWithEmailAndPassword: View {
     }
   }
 
+  @MainActor
   private func resendConfirmationButtonTapped() async {
     do {
       try await supabase.auth.resend(email: email, type: .signup)

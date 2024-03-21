@@ -1,7 +1,7 @@
 import _Helpers
 import Foundation
 
-public struct FileObject: Identifiable, Codable {
+public struct FileObject: Identifiable, Hashable, Codable, Sendable {
   public var name: String
   public var bucketId: String?
   public var owner: String?
@@ -13,8 +13,15 @@ public struct FileObject: Identifiable, Codable {
   public var buckets: Bucket?
 
   public init(
-    name: String, bucketId: String? = nil, owner: String? = nil, id: String, updatedAt: Date,
-    createdAt: Date, lastAccessedAt: Date, metadata: [String: AnyJSON], buckets: Bucket? = nil
+    name: String,
+    bucketId: String? = nil,
+    owner: String? = nil,
+    id: String,
+    updatedAt: Date,
+    createdAt: Date,
+    lastAccessedAt: Date,
+    metadata: [String: AnyJSON],
+    buckets: Bucket? = nil
   ) {
     self.name = name
     self.bucketId = bucketId

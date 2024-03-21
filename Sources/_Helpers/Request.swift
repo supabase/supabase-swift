@@ -21,7 +21,11 @@ public struct HTTPClient: Sendable {
     let urlRequest = try request.urlRequest(withBaseURL: baseURL)
     logger?
       .verbose(
-        "Request [\(id)]: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")"
+        """
+        Request [\(id)]: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString
+          .removingPercentEncoding ?? "")
+        Body: \(stringfy(urlRequest.httpBody))
+        """
       )
 
     do {
@@ -37,13 +41,36 @@ public struct HTTPClient: Sendable {
 
       logger?
         .verbose(
-          "Response [\(id)]: Status code: \(httpResponse.statusCode) Content-Length: \(httpResponse.expectedContentLength)"
+          """
+          Response [\(id)]: Status code: \(httpResponse.statusCode) Content-Length: \(
+            httpResponse
+              .expectedContentLength
+          )
+          Body: \(stringfy(data))
+          """
         )
 
       return Response(data: data, response: httpResponse)
     } catch {
       logger?.error("Response [\(id)]: Failure \(error)")
       throw error
+    }
+  }
+
+  private func stringfy(_ data: Data?) -> String {
+    guard let data else {
+      return "<none>"
+    }
+
+    do {
+      let object = try JSONSerialization.jsonObject(with: data, options: [])
+      let prettyData = try JSONSerialization.data(
+        withJSONObject: object,
+        options: [.prettyPrinted, .sortedKeys]
+      )
+      return String(data: prettyData, encoding: .utf8) ?? "<failed>"
+    } catch {
+      return "<failed>"
     }
   }
 }

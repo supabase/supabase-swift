@@ -5,8 +5,8 @@ import Foundation
 #endif
 
 public struct StorageHTTPSession: Sendable {
-  public let fetch: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
-  public let upload:
+  public var fetch: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
+  public var upload:
     @Sendable (_ request: URLRequest, _ data: Data) async throws -> (Data, URLResponse)
 
   public init(

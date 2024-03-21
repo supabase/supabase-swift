@@ -29,6 +29,10 @@
 		7962989D2AEBC6F9000AA957 /* SVGView in Frameworks */ = {isa = PBXBuildFile; productRef = 7962989C2AEBC6F9000AA957 /* SVGView */; };
 		79719ECE2ADF26C400737804 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79719ECD2ADF26C400737804 /* Supabase */; };
 		797D664A2B46A1D8007592ED /* Dependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797D66492B46A1D8007592ED /* Dependencies.swift */; };
+		797EFB662BABD82A00098D6B /* BucketList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797EFB652BABD82A00098D6B /* BucketList.swift */; };
+		797EFB682BABD90500098D6B /* Stringfy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797EFB672BABD90500098D6B /* Stringfy.swift */; };
+		797EFB6A2BABDF3800098D6B /* BucketDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797EFB692BABDF3800098D6B /* BucketDetailView.swift */; };
+		797EFB6C2BABE1B800098D6B /* FileObjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797EFB6B2BABE1B800098D6B /* FileObjectDetailView.swift */; };
 		7993B8A92B3C673A009B610B /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993B8A82B3C673A009B610B /* AuthView.swift */; };
 		7993B8AB2B3C67E0009B610B /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993B8AA2B3C67E0009B610B /* Toast.swift */; };
 		79AF047F2B2CE207008761AD /* AuthWithEmailAndPassword.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */; };
@@ -87,6 +91,10 @@
 		796298982AEBBA77000AA957 /* MFAFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MFAFlow.swift; sourceTree = "<group>"; };
 		7962989A2AEBBD9F000AA957 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		797D66492B46A1D8007592ED /* Dependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dependencies.swift; sourceTree = "<group>"; };
+		797EFB652BABD82A00098D6B /* BucketList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BucketList.swift; sourceTree = "<group>"; };
+		797EFB672BABD90500098D6B /* Stringfy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stringfy.swift; sourceTree = "<group>"; };
+		797EFB692BABDF3800098D6B /* BucketDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BucketDetailView.swift; sourceTree = "<group>"; };
+		797EFB6B2BABE1B800098D6B /* FileObjectDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileObjectDetailView.swift; sourceTree = "<group>"; };
 		7993B8A82B3C673A009B610B /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		7993B8AA2B3C67E0009B610B /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
 		7993B8AC2B3C97B6009B610B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -182,6 +190,7 @@
 		793895C82954ABFF0044F2B8 /* Examples */ = {
 			isa = PBXGroup;
 			children = (
+				797EFB642BABD7FF00098D6B /* Storage */,
 				79AF04822B2CE3BD008761AD /* Auth */,
 				7962989A2AEBBD9F000AA957 /* Info.plist */,
 				793895CD2954AC000044F2B8 /* Assets.xcassets */,
@@ -201,6 +210,7 @@
 				793E03082B2CED5D00AC7DED /* Contants.swift */,
 				793E030A2B2CEDDA00AC7DED /* ActionState.swift */,
 				79E2B55B2B97A2310042CD21 /* UIApplicationExtensions.swift */,
+				797EFB672BABD90500098D6B /* Stringfy.swift */,
 			);
 			path = Examples;
 			sourceTree = "<group>";
@@ -218,6 +228,16 @@
 			children = (
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		797EFB642BABD7FF00098D6B /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				797EFB652BABD82A00098D6B /* BucketList.swift */,
+				797EFB692BABDF3800098D6B /* BucketDetailView.swift */,
+				797EFB6B2BABE1B800098D6B /* FileObjectDetailView.swift */,
+			);
+			path = Storage;
 			sourceTree = "<group>";
 		};
 		79AF04822B2CE3BD008761AD /* Auth */ = {
@@ -452,6 +472,7 @@
 				7956406A2955AFBD0088A06F /* ErrorText.swift in Sources */,
 				79AF04812B2CE261008761AD /* AuthView.swift in Sources */,
 				794EF1242955F3DE008C9526 /* TodoListRow.swift in Sources */,
+				797EFB662BABD82A00098D6B /* BucketList.swift in Sources */,
 				79E2B55C2B97A2310042CD21 /* UIApplicationExtensions.swift in Sources */,
 				794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */,
 				7956405E2954ADE00088A06F /* Secrets.swift in Sources */,
@@ -462,6 +483,9 @@
 				795640622955AD2B0088A06F /* HomeView.swift in Sources */,
 				7940E3152B36187A0089BEE1 /* GoogleSignInWithWebFlow.swift in Sources */,
 				793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */,
+				797EFB682BABD90500098D6B /* Stringfy.swift in Sources */,
+				797EFB6C2BABE1B800098D6B /* FileObjectDetailView.swift in Sources */,
+				797EFB6A2BABDF3800098D6B /* BucketDetailView.swift in Sources */,
 				793E030D2B2DAB5700AC7DED /* SignInWithApple.swift in Sources */,
 				793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */,
 			);
