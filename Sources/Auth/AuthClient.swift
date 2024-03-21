@@ -835,7 +835,7 @@ public actor AuthClient {
   ///   - scopes: The scopes to request from the OAuth provider.
   ///   - redirectTo: The redirect URL to use, specify a configured deep link.
   ///   - queryParams: Additional query parameters to use.
-  /// - Returns: A URL that you can you to initiate the OAuth flow.
+  /// - Returns: A URL that you can use to initiate the OAuth flow.
   public func getURLForLinkIdentity(
     provider: Provider,
     scopes: String? = nil,
