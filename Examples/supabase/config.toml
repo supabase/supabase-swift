@@ -40,14 +40,19 @@ file_size_limit = "50MiB"
 [auth]
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://localhost:3000"
+site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://localhost:3000"]
+additional_redirect_urls = [
+    "http://127.0.0.1:3000",
+    "com.supabase.swift-examples://",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 seconds (one
 # week).
 jwt_expiry = 3600
 # Allow/disallow new user signups to your project.
 enable_signup = true
+# Allow/disallow testing manual linking of accounts
+enable_manual_linking = true
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
@@ -63,9 +68,15 @@ enable_confirmations = false
 [auth.external.apple]
 enabled = false
 client_id = ""
-secret = ""
+# DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
+secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
 # Overrides the default auth redirectUrl.
 redirect_uri = ""
 # Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
 # or any other third-party OIDC providers.
 url = ""
+
+[auth.external.github]
+enabled = true
+client_id = "12d1131cd3582f942c71"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET)"

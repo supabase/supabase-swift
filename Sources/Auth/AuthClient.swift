@@ -480,45 +480,13 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
   ) throws -> URL {
-    guard
-      var components = URLComponents(
-        url: configuration.url.appendingPathComponent("authorize"), resolvingAgainstBaseURL: false
-      )
-    else {
-      throw URLError(.badURL)
-    }
-
-    var queryItems: [URLQueryItem] = [
-      URLQueryItem(name: "provider", value: provider.rawValue),
-    ]
-
-    if let scopes {
-      queryItems.append(URLQueryItem(name: "scopes", value: scopes))
-    }
-
-    if let redirectTo {
-      queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
-    }
-
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
-
-    if let codeChallenge {
-      queryItems.append(URLQueryItem(name: "code_challenge", value: codeChallenge))
-    }
-
-    if let codeChallengeMethod {
-      queryItems.append(URLQueryItem(name: "code_challenge_method", value: codeChallengeMethod))
-    }
-
-    queryItems.append(contentsOf: queryParams.map(URLQueryItem.init))
-
-    components.queryItems = queryItems
-
-    guard let url = components.url else {
-      throw URLError(.badURL)
-    }
-
-    return url
+    try getURLForProvider(
+      url: configuration.url.appendingPathComponent("authorize"),
+      provider: provider,
+      scopes: scopes,
+      redirectTo: redirectTo,
+      queryParams: queryParams
+    )
   }
 
   /// Gets the session data from a OAuth2 callback URL.
@@ -856,6 +824,44 @@ public actor AuthClient {
     return updatedUser
   }
 
+  /// Gets all the identities linked to a user.
+  public func userIdentities() async throws -> [UserIdentity] {
+    try await user().identities ?? []
+  }
+
+  /// Gets an URL that can be used for manual linking identity.
+  /// - Parameters:
+  ///   - provider: The provider you want to link the user with.
+  ///   - scopes: The scopes to request from the OAuth provider.
+  ///   - redirectTo: The redirect URL to use, specify a configured deep link.
+  ///   - queryParams: Additional query parameters to use.
+  /// - Returns: A URL that you can use to initiate the OAuth flow.
+  public func getURLForLinkIdentity(
+    provider: Provider,
+    scopes: String? = nil,
+    redirectTo: URL? = nil,
+    queryParams: [(name: String, value: String?)] = []
+  ) throws -> URL {
+    try getURLForProvider(
+      url: configuration.url.appendingPathComponent("user/identities/authorize"),
+      provider: provider,
+      scopes: scopes,
+      redirectTo: redirectTo,
+      queryParams: queryParams
+    )
+  }
+
+  /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
+  /// with that identity once it's unlinked.
+  public func unlinkIdentity(_ identity: UserIdentity) async throws {
+    try await api.authorizedExecute(
+      Request(
+        path: "/user/identities/\(identity.identityId)",
+        method: .delete
+      )
+    )
+  }
+
   /// Sends a reset request to an email address.
   public func resetPasswordForEmail(
     _ email: String,
@@ -957,6 +963,54 @@ public actor AuthClient {
     let fragments = extractParams(from: url)
     let currentCodeVerifier = try? codeVerifierStorage.getCodeVerifier()
     return fragments.contains(where: { $0.name == "code" }) && currentCodeVerifier != nil
+  }
+
+  private func getURLForProvider(
+    url: URL,
+    provider: Provider,
+    scopes: String? = nil,
+    redirectTo: URL? = nil,
+    queryParams: [(name: String, value: String?)] = []
+  ) throws -> URL {
+    guard
+      var components = URLComponents(
+        url: url, resolvingAgainstBaseURL: false
+      )
+    else {
+      throw URLError(.badURL)
+    }
+
+    var queryItems: [URLQueryItem] = [
+      URLQueryItem(name: "provider", value: provider.rawValue),
+    ]
+
+    if let scopes {
+      queryItems.append(URLQueryItem(name: "scopes", value: scopes))
+    }
+
+    if let redirectTo {
+      queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
+    }
+
+    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+
+    if let codeChallenge {
+      queryItems.append(URLQueryItem(name: "code_challenge", value: codeChallenge))
+    }
+
+    if let codeChallengeMethod {
+      queryItems.append(URLQueryItem(name: "code_challenge_method", value: codeChallengeMethod))
+    }
+
+    queryItems.append(contentsOf: queryParams.map(URLQueryItem.init))
+
+    components.queryItems = queryItems
+
+    guard let url = components.url else {
+      throw URLError(.badURL)
+    }
+
+    return url
   }
 }
 

@@ -43,7 +43,7 @@ struct BucketList: View {
     .task {
       await load()
     }
-    .navigationTitle("Bucket list")
+    .navigationTitle("All buckets")
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
         Button("Add") {

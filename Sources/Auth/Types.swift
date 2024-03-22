@@ -190,6 +190,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
 
 public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   public var id: String
+  public var identityId: UUID
   public var userId: UUID
   public var identityData: [String: AnyJSON]?
   public var provider: String
@@ -199,6 +200,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
 
   public init(
     id: String,
+    identityId: UUID,
     userId: UUID,
     identityData: [String: AnyJSON],
     provider: String,
@@ -207,6 +209,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     updatedAt: Date
   ) {
     self.id = id
+    self.identityId = identityId
     self.userId = userId
     self.identityData = identityData
     self.provider = provider
@@ -216,7 +219,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   }
 }
 
-public enum Provider: String, Codable, CaseIterable, Sendable {
+public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {
   case apple
   case azure
   case bitbucket
@@ -234,6 +237,8 @@ public enum Provider: String, Codable, CaseIterable, Sendable {
   case twitch
   case twitter
   case workos
+
+  public var id: RawValue { rawValue }
 }
 
 public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
