@@ -162,6 +162,11 @@ final class BuildURLRequestTests: XCTestCase {
           .from("objects")
           .select()
       },
+      TestCase(name: "select after an insert") { client in
+        try await client.from("users")
+          .insert(User(email: "johndoe@supabase.io"))
+          .select("id,email")
+      }
     ]
 
     for testCase in testCases {
