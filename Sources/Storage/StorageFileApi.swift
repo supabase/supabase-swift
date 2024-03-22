@@ -376,6 +376,92 @@ public class StorageFileApi: StorageApi {
   ) throws -> URL {
     try getPublicURL(path: path, download: download ? "" : nil, options: options)
   }
+
+  /// Creates a signed upload URL.
+  /// - Parameter path: The file path, including the current file name. For example
+  /// `folder/image.png`.
+  /// - Returns: A URL that can be used to upload files to the bucket without further
+  /// authentication.
+  ///
+  /// - Note: Signed upload URLs can be used to upload files to the bucket without further
+  /// authentication. They are valid for 2 hours.
+  public func createSignedUploadURL(path: String) async throws -> SignedUploadURL {
+    struct Response: Decodable {
+      let url: String
+    }
+
+    let response = try await execute(
+      Request(path: "/object/upload/sign/\(bucketId)/\(path)", method: .get)
+    )
+    .decoded(as: Response.self, decoder: configuration.decoder)
+
+    guard var components = URLComponents(
+      url: configuration.url.appendingPathComponent(response.url),
+      resolvingAgainstBaseURL: false
+    ) else {
+      throw URLError(.badURL)
+    }
+
+    guard let token = components.queryItems?.first(where: { $0.name == "token" })?.value else {
+      throw StorageError(statusCode: nil, message: "No token returned by API", error: nil)
+    }
+
+    guard let url = components.url else {
+      throw URLError(.badURL)
+    }
+
+    return SignedUploadURL(
+      signedURL: url,
+      path: path,
+      token: token
+    )
+  }
+
+  /// Upload a file with a token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
+  /// - Parameters:
+  ///   - path: The file path, including the file name. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
+  ///   - token: The token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
+  ///   - file: The Data to be stored in the bucket.
+  ///   - options: HTTP headers, for example `cacheControl`.
+  /// - Returns: A key pointing to stored location.
+  @discardableResult
+  public func uploadToSignedURL(
+    path: String,
+    token: String,
+    file: Data,
+    options: FileOptions = FileOptions()
+  ) async throws -> String {
+    let contentType = options.contentType
+    var headers = [
+      "x-upsert": "\(options.upsert)",
+    ]
+    headers["duplex"] = options.duplex
+
+    let fileName = fileName(fromPath: path)
+
+    let form = FormData()
+    form.append(file: File(
+      name: fileName,
+      data: file,
+      fileName: fileName,
+      contentType: contentType
+    ))
+
+    return try await execute(
+      Request(
+        path: "/object/upload/sign/\(bucketId)/\(path)",
+        method: .put,
+        query: [
+          URLQueryItem(name: "token", value: token),
+        ],
+        formData: form,
+        options: options,
+        headers: headers
+      )
+    )
+    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
+    .Key
+  }
 }
 
 private func fileName(fromPath path: String) -> String {

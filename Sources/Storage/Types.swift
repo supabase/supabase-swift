@@ -1,3 +1,5 @@
+import Foundation
+
 public struct SearchOptions: Encodable, Sendable {
   var prefix: String
 
@@ -66,4 +68,27 @@ public struct FileOptions: Sendable {
     self.upsert = upsert
     self.duplex = duplex
   }
+}
+
+public struct SignedURL: Decodable, Sendable {
+  /// An optional error message.
+  public var error: String?
+
+  /// The signed url.
+  public var signedURL: URL
+
+  /// The path of the file.
+  public var path: String
+
+  public init(error: String? = nil, signedURL: URL, path: String) {
+    self.error = error
+    self.signedURL = signedURL
+    self.path = path
+  }
+}
+
+public struct SignedUploadURL: Sendable {
+  public let signedURL: URL
+  public let path: String
+  public let token: String
 }
