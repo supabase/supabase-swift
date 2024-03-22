@@ -59,7 +59,8 @@ final class RequestsTests: XCTestCase {
     await assert {
       try await sut.signIn(
         email: "example@mail.com",
-        password: "the.pass"
+        password: "the.pass",
+        captchaToken: "dummy-captcha"
       )
     }
   }
@@ -70,7 +71,8 @@ final class RequestsTests: XCTestCase {
     await assert {
       try await sut.signIn(
         phone: "+1 202-918-2132",
-        password: "the.pass"
+        password: "the.pass",
+        captchaToken: "dummy-captcha"
       )
     }
   }

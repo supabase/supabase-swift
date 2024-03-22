@@ -310,14 +310,18 @@ public actor AuthClient {
 
   /// Log in an existing user with an email and password.
   @discardableResult
-  public func signIn(email: String, password: String) async throws -> Session {
+  public func signIn(email: String, password: String, captchaToken: String? = nil) async throws -> Session {
     try await _signIn(
       request: .init(
         path: "/token",
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "password")],
         body: configuration.encoder.encode(
-          UserCredentials(email: email, password: password)
+          UserCredentials(
+            email: email,
+            password: password,
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+          )
         )
       )
     )
@@ -325,14 +329,18 @@ public actor AuthClient {
 
   /// Log in an existing user with a phone and password.
   @discardableResult
-  public func signIn(phone: String, password: String) async throws -> Session {
+  public func signIn(phone: String, password: String, captchaToken: String? = nil) async throws -> Session {
     try await _signIn(
       request: .init(
         path: "/token",
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "password")],
         body: configuration.encoder.encode(
-          UserCredentials(password: password, phone: phone)
+          UserCredentials(
+            password: password,
+            phone: phone,
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+          )
         )
       )
     )
