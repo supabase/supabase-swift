@@ -53,13 +53,13 @@ struct UserIdentityList: View {
       }
     }
     .id(id)
-    .toolbar {
-      ToolbarItem(placement: .primaryAction) {
-        Menu("Add") {
-          ForEach(providers) { provider in
-            Button(provider.rawValue) {
-              Task {
-                #if swift(>=5.10)
+    #if swift(>=5.10)
+      .toolbar {
+        ToolbarItem(placement: .primaryAction) {
+          Menu("Add") {
+            ForEach(providers) { provider in
+              Button(provider.rawValue) {
+                Task {
                   do {
                     if #available(iOS 17.4, *) {
                       let url = try await supabase.auth.getURLForLinkIdentity(provider: provider)
@@ -80,13 +80,13 @@ struct UserIdentityList: View {
                   } catch {
                     self.error = error
                   }
-                #endif
+                }
               }
             }
           }
         }
       }
-    }
+    #endif
   }
 }
 
