@@ -59,25 +59,28 @@ struct UserIdentityList: View {
           ForEach(providers) { provider in
             Button(provider.rawValue) {
               Task {
-                do {
-                  if #available(iOS 17.4, *) {
-                    let url = try await supabase.auth.getURLForLinkIdentity(provider: provider)
-                    let accessToken = try await supabase.auth.session.accessToken
+                #if swift(>=5.10)
+                  do {
+                    if #available(iOS 17.4, *) {
+                      let url = try await supabase.auth.getURLForLinkIdentity(provider: provider)
+                      let accessToken = try await supabase.auth.session.accessToken
 
-                    let callbackURL = try await webAuthenticationSession.authenticate(
-                      using: url,
-                      callback: .customScheme(Constants.redirectToURL.scheme!),
-                      preferredBrowserSession: .shared,
-                      additionalHeaderFields: ["Authorization": "Bearer \(accessToken)"]
-                    )
+                      let callbackURL = try await webAuthenticationSession.authenticate(
+                        using: url,
+                        callback: .customScheme(Constants.redirectToURL.scheme!),
+                        preferredBrowserSession: .shared,
+                        additionalHeaderFields: ["Authorization": "Bearer \(accessToken)"]
+                      )
 
-                    debug("\(callbackURL)")
-                  } else {
-                    // Fallback on earlier versions
+                      debug("\(callbackURL)")
+                    } else {
+                      // Fallback on earlier versions
+                    }
+
+                  } catch {
+                    self.error = error
                   }
-                } catch {
-                  self.error = error
-                }
+                #endif
               }
             }
           }
