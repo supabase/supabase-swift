@@ -20,6 +20,12 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     .joined(separator: "")
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: "select", value: cleanedColumns))
+
+      if $0.request.headers["Prefer"] != nil {
+        $0.request.headers["Prefer", default: ""] += ","
+      }
+
+      $0.request.headers["Prefer", default: ""] += "return=representation"
     }
     return self
   }
