@@ -20,17 +20,20 @@ public struct UserCredentials: Codable, Hashable, Sendable {
   public var password: String?
   public var phone: String?
   public var refreshToken: String?
+  public var gotrueMetaSecurity: AuthMetaSecurity?
 
   public init(
     email: String? = nil,
     password: String? = nil,
     phone: String? = nil,
-    refreshToken: String? = nil
+    refreshToken: String? = nil,
+    gotrueMetaSecurity: AuthMetaSecurity? = nil
   ) {
     self.email = email
     self.password = password
     self.phone = phone
     self.refreshToken = refreshToken
+    self.gotrueMetaSecurity = gotrueMetaSecurity
   }
 }
 
