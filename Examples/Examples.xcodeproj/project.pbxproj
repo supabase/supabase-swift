@@ -15,6 +15,7 @@
 		793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E030A2B2CEDDA00AC7DED /* ActionState.swift */; };
 		793E030D2B2DAB5700AC7DED /* SignInWithApple.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */; };
 		7940E3152B36187A0089BEE1 /* GoogleSignInWithWebFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7940E3142B36187A0089BEE1 /* GoogleSignInWithWebFlow.swift */; };
+		794C61D62BAD1E12000E6B0F /* UserIdentityList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794C61D52BAD1E12000E6B0F /* UserIdentityList.swift */; };
 		794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1212955F26A008C9526 /* AddTodoListView.swift */; };
 		794EF1242955F3DE008C9526 /* TodoListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1232955F3DE008C9526 /* TodoListRow.swift */; };
 		7956405E2954ADE00088A06F /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405D2954ADE00088A06F /* Secrets.swift */; };
@@ -82,6 +83,7 @@
 		793E030A2B2CEDDA00AC7DED /* ActionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionState.swift; sourceTree = "<group>"; };
 		793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInWithApple.swift; sourceTree = "<group>"; };
 		7940E3142B36187A0089BEE1 /* GoogleSignInWithWebFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignInWithWebFlow.swift; sourceTree = "<group>"; };
+		794C61D52BAD1E12000E6B0F /* UserIdentityList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserIdentityList.swift; sourceTree = "<group>"; };
 		794EF1212955F26A008C9526 /* AddTodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTodoListView.swift; sourceTree = "<group>"; };
 		794EF1232955F3DE008C9526 /* TodoListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListRow.swift; sourceTree = "<group>"; };
 		7956405D2954ADE00088A06F /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
@@ -264,6 +266,7 @@
 			isa = PBXGroup;
 			children = (
 				79B1C80B2BABFF8000D991AA /* ProfileView.swift */,
+				794C61D52BAD1E12000E6B0F /* UserIdentityList.swift */,
 			);
 			path = Profile;
 			sourceTree = "<group>";
@@ -483,6 +486,7 @@
 				79B1C80E2BAC017C00D991AA /* AnyJSONView.swift in Sources */,
 				79E2B5552B9788BF0042CD21 /* GoogleSignInSDKFlow.swift in Sources */,
 				793E03092B2CED5D00AC7DED /* Contants.swift in Sources */,
+				794C61D62BAD1E12000E6B0F /* UserIdentityList.swift in Sources */,
 				793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */,
 				7956406A2955AFBD0088A06F /* ErrorText.swift in Sources */,
 				79AF04812B2CE261008761AD /* AuthView.swift in Sources */,

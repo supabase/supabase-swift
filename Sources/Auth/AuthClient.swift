@@ -841,7 +841,7 @@ public actor AuthClient {
     scopes: String? = nil,
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
-  ) async throws -> URL {
+  ) throws -> URL {
     try getURLForProvider(
       url: configuration.url.appendingPathComponent("user/identities/authorize"),
       provider: provider,
@@ -856,7 +856,7 @@ public actor AuthClient {
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
     try await api.authorizedExecute(
       Request(
-        path: "/user/identities/\(identity.id)",
+        path: "/user/identities/\(identity.identityId)",
         method: .delete
       )
     )

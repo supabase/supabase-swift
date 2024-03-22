@@ -362,7 +362,8 @@ final class RequestsTests: XCTestCase {
     await assert {
       try await sut.unlinkIdentity(
         UserIdentity(
-          id: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+          id: "5923044",
+          identityId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           userId: UUID(),
           identityData: [:],
           provider: "email",

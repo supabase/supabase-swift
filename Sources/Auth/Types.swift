@@ -190,6 +190,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
 
 public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   public var id: String
+  public var identityId: UUID
   public var userId: UUID
   public var identityData: [String: AnyJSON]?
   public var provider: String
@@ -199,6 +200,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
 
   public init(
     id: String,
+    identityId: UUID,
     userId: UUID,
     identityData: [String: AnyJSON],
     provider: String,
@@ -207,6 +209,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     updatedAt: Date
   ) {
     self.id = id
+    self.identityId = identityId
     self.userId = userId
     self.identityData = identityData
     self.provider = provider

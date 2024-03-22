@@ -9,8 +9,6 @@ import Supabase
 import SwiftUI
 
 struct ProfileView: View {
-  @Environment(\.webAuthenticationSession) var webAuthenticationSession
-
   @State var user: User?
 
   var identities: [UserIdentity] {
@@ -24,6 +22,11 @@ struct ProfileView: View {
           Section {
             AnyJSONView(value: user)
           }
+        }
+
+        NavigationLink("Identities") {
+          UserIdentityList()
+            .navigationTitle("Identities")
         }
 
         Button("Reauthenticate") {
