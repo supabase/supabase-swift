@@ -387,18 +387,17 @@ public class StorageFileApi: StorageApi {
   /// authentication. They are valid for 2 hours.
   public func createSignedUploadURL(path: String) async throws -> SignedUploadURL {
     struct Response: Decodable {
-      let url: String
+      let url: URL
     }
 
     let response = try await execute(
-      Request(path: "/object/upload/sign/\(bucketId)/\(path)", method: .get)
+      Request(path: "/object/upload/sign/\(bucketId)/\(path)", method: .post)
     )
     .decoded(as: Response.self, decoder: configuration.decoder)
 
-    guard var components = URLComponents(
-      url: configuration.url.appendingPathComponent(response.url),
-      resolvingAgainstBaseURL: false
-    ) else {
+    let signedURL = try makeSignedURL(response.url, download: nil)
+
+    guard let components = URLComponents(url: signedURL, resolvingAgainstBaseURL: false) else {
       throw URLError(.badURL)
     }
 
@@ -419,7 +418,8 @@ public class StorageFileApi: StorageApi {
 
   /// Upload a file with a token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
   /// - Parameters:
-  ///   - path: The file path, including the file name. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
+  ///   - path: The file path, including the file name. Should be of the format
+  /// `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
   ///   - token: The token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
   ///   - file: The Data to be stored in the bucket.
   ///   - options: HTTP headers, for example `cacheControl`.

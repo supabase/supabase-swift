@@ -14,6 +14,8 @@ struct BucketDetailView: View {
   @State private var fileObjects = ActionState<[FileObject], Error>.idle
   @State private var presentBucketDetails = false
 
+  @State private var lastActionResult: (action: String, result: Any)?
+
   var body: some View {
     Group {
       switch fileObjects {
@@ -23,8 +25,29 @@ struct BucketDetailView: View {
         ProgressView()
       case let .result(.success(files)):
         List {
-          ForEach(files) { file in
-            NavigationLink(file.name, value: file)
+          Section("Actions") {
+            Button("createSignedUploadURL") {
+              Task {
+                do {
+                  let response = try await supabase.storage.from(bucket.id)
+                    .createSignedUploadURL(path: "\(UUID().uuidString).txt")
+                  lastActionResult = ("createSignedUploadURL", response)
+                } catch {}
+              }
+            }
+          }
+
+          if let lastActionResult {
+            Section("Last action result") {
+              Text(lastActionResult.action)
+              Text(stringfy(lastActionResult.result))
+            }
+          }
+
+          Section("Objects") {
+            ForEach(files) { file in
+              NavigationLink(file.name, value: file)
+            }
           }
         }
       case let .result(.failure(error)):
@@ -37,7 +60,7 @@ struct BucketDetailView: View {
       }
     }
     .task { await load() }
-    .navigationTitle("Objects")
+    .navigationTitle(bucket.name)
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
         Button {
@@ -48,11 +71,8 @@ struct BucketDetailView: View {
       }
     }
     .popover(isPresented: $presentBucketDetails) {
-      ScrollView {
-        Text(stringfy(bucket))
-          .monospaced()
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding()
+      List {
+        AnyJSONView(rendering: bucket)
       }
     }
     .navigationDestination(for: FileObject.self) {
