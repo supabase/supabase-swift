@@ -148,7 +148,7 @@ public actor AuthClient {
       codeVerifierStorage: .live,
       api: api,
       eventEmitter: .live,
-      sessionStorage: .live(localStorage: configuration.localStorage),
+      sessionStorage: .live,
       logger: configuration.logger
     )
   }

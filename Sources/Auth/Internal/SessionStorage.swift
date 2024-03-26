@@ -30,8 +30,10 @@ struct SessionStorage: Sendable {
 }
 
 extension SessionStorage {
-  static func live(localStorage: any AuthLocalStorage) -> Self {
-    Self(
+  static let live: Self = {
+    @Dependency(\.configuration.localStorage) var localStorage: any AuthLocalStorage
+
+    return Self(
       getSession: {
         try localStorage.retrieve(key: "supabase.session").flatMap {
           try AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0)
@@ -47,5 +49,5 @@ extension SessionStorage {
         try localStorage.remove(key: "supabase.session")
       }
     )
-  }
+  }()
 }
