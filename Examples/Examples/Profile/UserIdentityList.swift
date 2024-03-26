@@ -62,7 +62,7 @@ struct UserIdentityList: View {
                 Task {
                   do {
                     if #available(iOS 17.4, *) {
-                      let url = try await supabase.auth.getURLForLinkIdentity(provider: provider)
+                      let url = try await supabase.auth._getURLForLinkIdentity(provider: provider)
                       let accessToken = try await supabase.auth.session.accessToken
 
                       let callbackURL = try await webAuthenticationSession.authenticate(
