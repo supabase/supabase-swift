@@ -9,13 +9,11 @@ import Foundation
 @_spi(Internal) import _Helpers
 
 public actor AuthAdmin {
-  private var configuration: AuthClient.Configuration {
-    Dependencies.current.value!.configuration
-  }
+  @Dependency(\.configuration)
+  private var configuration: AuthClient.Configuration
 
-  private var api: APIClient {
-    Dependencies.current.value!.api
-  }
+  @Dependency(\.api)
+  private var api: APIClient
 
   /// Delete a user. Requires `service_role` key.
   /// - Parameter id: The id of the user you want to delete.

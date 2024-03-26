@@ -166,7 +166,7 @@ final class BuildURLRequestTests: XCTestCase {
         try await client.from("users")
           .insert(User(email: "johndoe@supabase.io"))
           .select("id,email")
-      }
+      },
     ]
 
     for testCase in testCases {

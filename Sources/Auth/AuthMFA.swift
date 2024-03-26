@@ -3,21 +3,17 @@ import Foundation
 
 /// Contains the full multi-factor authentication API.
 public actor AuthMFA {
-  private var api: APIClient {
-    Dependencies.current.value!.api
-  }
+  @Dependency(\.api)
+  private var api: APIClient
 
-  private var sessionManager: any SessionManager {
-    Dependencies.current.value!.sessionManager
-  }
+  @Dependency(\.configuration)
+  private var configuration: AuthClient.Configuration
 
-  private var configuration: AuthClient.Configuration {
-    Dependencies.current.value!.configuration
-  }
+  @Dependency(\.sessionManager)
+  private var sessionManager: SessionManager
 
-  private var eventEmitter: any EventEmitter {
-    Dependencies.current.value!.eventEmitter
-  }
+  @Dependency(\.eventEmitter)
+  private var eventEmitter: EventEmitter
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
   /// creates a new `unverified` factor.

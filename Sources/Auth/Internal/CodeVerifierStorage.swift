@@ -8,10 +8,8 @@ struct CodeVerifierStorage: Sendable {
 }
 
 extension CodeVerifierStorage {
-  static var live: Self = {
-    var localStorage: any AuthLocalStorage {
-      Dependencies.current.value!.configuration.localStorage
-    }
+  static let live: Self = {
+    @Dependency(\.configuration.localStorage) var localStorage
 
     let key = "supabase.code-verifier"
 

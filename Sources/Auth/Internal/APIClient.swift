@@ -6,12 +6,11 @@ struct APIClient: Sendable {
 }
 
 extension APIClient {
-  static func live(http: HTTPClient) -> Self {
-    var configuration: AuthClient.Configuration {
-      Dependencies.current.value!.configuration
-    }
-
-    return APIClient(
+  static func live(
+    configuration: AuthClient.Configuration,
+    http: HTTPClient
+  ) -> Self {
+    APIClient(
       execute: { request in
         var request = request
         request.headers.merge(configuration.headers) { r, _ in r }
@@ -45,7 +44,9 @@ extension APIClient {
 extension APIClient {
   @discardableResult
   func authorizedExecute(_ request: Request) async throws -> Response {
-    let session = try await Dependencies.current.value!.sessionManager.session()
+    @Dependency(\.sessionManager) var sessionManager
+
+    let session = try await sessionManager.session()
 
     var request = request
     request.headers["Authorization"] = "Bearer \(session.accessToken)"

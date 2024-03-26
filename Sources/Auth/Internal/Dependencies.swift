@@ -3,15 +3,42 @@ import ConcurrencyExtras
 import Foundation
 
 struct Dependencies: Sendable {
-  static let current = LockIsolated(Dependencies?.none)
-
   var configuration: AuthClient.Configuration
-  var sessionManager: any SessionManager
+  var sessionManager: SessionManager
   var api: APIClient
-  var eventEmitter: any EventEmitter
+  var eventEmitter: EventEmitter
   var sessionStorage: SessionStorage
   var sessionRefresher: SessionRefresher
   var codeVerifierStorage: CodeVerifierStorage
   var currentDate: @Sendable () -> Date = { Date() }
   var logger: (any SupabaseLogger)?
+}
+
+private let _Current = LockIsolated<Dependencies?>(nil)
+var Current: Dependencies {
+  get {
+    guard let instance = _Current.value else {
+      fatalError("Current should be set before usage.")
+    }
+
+    return instance
+  }
+  set {
+    _Current.withValue { Current in
+      Current = newValue
+    }
+  }
+}
+
+@propertyWrapper
+struct Dependency<Value> {
+  var wrappedValue: Value {
+    Current[keyPath: keyPath]
+  }
+
+  let keyPath: KeyPath<Dependencies, Value>
+
+  init(_ keyPath: KeyPath<Dependencies, Value>) {
+    self.keyPath = keyPath
+  }
 }

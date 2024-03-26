@@ -44,10 +44,6 @@ extension SessionRefresher {
   static let mock = Self(refreshSession: unimplemented("SessionRefresher.refreshSession"))
 }
 
-extension APIClient {
-  static let mock = APIClient(execute: unimplemented("APIClient.execute"))
-}
-
 struct InsecureMockLocalStorage: AuthLocalStorage {
   private let defaults: UserDefaults
 
@@ -93,26 +89,14 @@ extension Dependencies {
       localStorage: Self.localStorage,
       logger: nil
     ),
-    sessionManager: MockSessionManager(),
+    sessionManager: .mock,
     api: .mock,
-    eventEmitter: MockEventEmitter(),
+    eventEmitter: .mock,
     sessionStorage: .mock,
     sessionRefresher: .mock,
     codeVerifierStorage: .mock,
     logger: nil
   )
-}
-
-func withDependencies(
-  _ mutation: (inout Dependencies) throws -> Void,
-  operation: () async throws -> Void
-) async rethrows {
-  let current = Dependencies.current.value ?? .mock
-  var copy = current
-  try mutation(&copy)
-  Dependencies.current.withValue { [copy] in $0 = copy }
-  defer { Dependencies.current.setValue(current) }
-  try await operation()
 }
 
 extension Session {
