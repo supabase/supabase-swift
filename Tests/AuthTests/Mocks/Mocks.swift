@@ -44,75 +44,21 @@ extension SessionRefresher {
   static let mock = Self(refreshSession: unimplemented("SessionRefresher.refreshSession"))
 }
 
-extension APIClient {
-  static let mock = APIClient(execute: unimplemented("APIClient.execute"))
-}
-
-struct InsecureMockLocalStorage: AuthLocalStorage {
-  private let defaults: UserDefaults
-
-  init(service: String, accessGroup _: String?) {
-    guard let defaults = UserDefaults(suiteName: service) else {
-      fatalError("Unable to create defautls for service: \(service)")
-    }
-
-    self.defaults = defaults
-  }
-
-  func store(key: String, value: Data) throws {
-    print("[WARN] YOU ARE YOU WRITING TO INSECURE LOCAL STORAGE")
-    defaults.set(value, forKey: key)
-  }
-
-  func retrieve(key: String) throws -> Data? {
-    print("[WARN] YOU ARE READING FROM INSECURE LOCAL STORAGE")
-    return defaults.data(forKey: key)
-  }
-
-  func remove(key: String) throws {
-    print("[WARN] YOU ARE REMOVING A KEY FROM INSECURE LOCAL STORAGE")
-    defaults.removeObject(forKey: key)
-  }
-}
-
 extension Dependencies {
-  static let localStorage: some AuthLocalStorage = {
-    #if !os(Linux) && !os(Windows)
-      KeychainLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
-    #elseif os(Windows)
-      WinCredLocalStorage(service: "supabase.gotrue.swift")
-    #else
-      // Only use an insecure mock when needed for testing
-      InsecureMockLocalStorage(service: "supabase.gotrue.swift", accessGroup: nil)
-    #endif
-  }()
-
   static let mock = Dependencies(
     configuration: AuthClient.Configuration(
       url: clientURL,
-      localStorage: Self.localStorage,
+      localStorage: InMemoryLocalStorage(),
       logger: nil
     ),
-    sessionManager: MockSessionManager(),
+    sessionManager: .mock,
     api: .mock,
-    eventEmitter: MockEventEmitter(),
+    eventEmitter: .mock,
     sessionStorage: .mock,
     sessionRefresher: .mock,
     codeVerifierStorage: .mock,
     logger: nil
   )
-}
-
-func withDependencies(
-  _ mutation: (inout Dependencies) throws -> Void,
-  operation: () async throws -> Void
-) async rethrows {
-  let current = Dependencies.current.value ?? .mock
-  var copy = current
-  try mutation(&copy)
-  Dependencies.current.withValue { [copy] in $0 = copy }
-  defer { Dependencies.current.setValue(current) }
-  try await operation()
 }
 
 extension Session {

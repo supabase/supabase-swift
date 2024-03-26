@@ -6,7 +6,7 @@
 //
 
 import XCTest
-@_spi(Internal) import _Helpers
+@_spi(Internal) @testable import _Helpers
 import ConcurrencyExtras
 import TestHelpers
 
@@ -17,9 +17,10 @@ import TestHelpers
 #endif
 
 final class AuthClientTests: XCTestCase {
-  var eventEmitter: MockEventEmitter!
-  var sessionManager: MockSessionManager!
+  var eventEmitter: Auth.EventEmitter!
+  var sessionManager: SessionManager!
 
+  var api: APIClient!
   var sut: AuthClient!
 
   override func invokeTest() {
@@ -31,9 +32,9 @@ final class AuthClientTests: XCTestCase {
   override func setUp() {
     super.setUp()
 
-    eventEmitter = MockEventEmitter()
-    sessionManager = MockSessionManager()
-    sut = makeSUT()
+    eventEmitter = .mock
+    sessionManager = .mock
+    api = .mock
   }
 
   override func tearDown() {
@@ -51,8 +52,11 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testOnAuthStateChanges() async {
+    eventEmitter = .live
     let session = Session.validSession
-    sessionManager.returnSession = .success(session)
+    sessionManager.session = { @Sendable _ in session }
+
+    sut = makeSUT()
 
     let events = LockIsolated([AuthChangeEvent]())
 
@@ -68,8 +72,11 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testAuthStateChanges() async throws {
+    eventEmitter = .live
     let session = Session.validSession
-    sessionManager.returnSession = .success(session)
+    sessionManager.session = { @Sendable _ in session }
+
+    sut = makeSUT()
 
     let stateChange = await sut.authStateChanges.first { _ in true }
     XCTAssertEqual(stateChange?.event, .initialSession)
@@ -77,91 +84,121 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOut() async throws {
-    sessionManager.returnSession = .success(.validSession)
+    let emitReceivedEvents = LockIsolated<[AuthChangeEvent]>([])
 
-    try await withDependencies {
-      $0.api.execute = { _ in .stub() }
-    } operation: {
-      try await sut.signOut()
-
-      do {
-        _ = try await sut.session
-      } catch AuthError.sessionNotFound {
-      } catch {
-        XCTFail("Unexpected error.")
+    eventEmitter.emit = { @Sendable event, _, _ in
+      emitReceivedEvents.withValue {
+        $0.append(event)
       }
-
-      XCTAssertEqual(eventEmitter.emitReceivedParams.map(\.0), [.signedOut])
     }
+    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.remove = { @Sendable in }
+    api.execute = { @Sendable _ in .stub() }
+
+    sut = makeSUT()
+
+    try await sut.signOut()
+
+    do {
+      _ = try await sut.session
+    } catch AuthError.sessionNotFound {
+    } catch {
+      XCTFail("Unexpected error.")
+    }
+
+    XCTAssertEqual(emitReceivedEvents.value, [.signedOut])
   }
 
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
-    sessionManager.returnSession = .success(.validSession)
+    let removeCalled = LockIsolated(false)
+    sessionManager.remove = { @Sendable in removeCalled.setValue(true) }
+    sessionManager.session = { @Sendable _ in .validSession }
+    api.execute = { @Sendable _ in .stub() }
 
-    try await withDependencies {
-      $0.api.execute = { _ in .stub() }
-    } operation: {
-      try await sut.signOut(scope: .others)
+    sut = makeSUT()
 
-      XCTAssertFalse(sessionManager.removeCalled)
-    }
+    try await sut.signOut(scope: .others)
+
+    XCTAssertFalse(removeCalled.value)
   }
 
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
-    sessionManager.returnSession = .success(.validSession)
+    let emitReceivedEvents = LockIsolated<[(AuthChangeEvent, Session?)]>([])
 
-    await withDependencies {
-      $0.api.execute = { _ in throw AuthError.api(AuthError.APIError(code: 404)) }
-    } operation: {
-      do {
-        try await sut.signOut()
-      } catch AuthError.api {
-      } catch {
-        XCTFail("Unexpected error: \(error)")
+    eventEmitter.emit = { @Sendable event, session, _ in
+      emitReceivedEvents.withValue {
+        $0.append((event, session))
       }
-
-      let emitedParams = eventEmitter.emitReceivedParams
-      let emitedEvents = emitedParams.map(\.0)
-      let emitedSessions = emitedParams.map(\.1)
-
-      XCTAssertEqual(emitedEvents, [.signedOut])
-      XCTAssertEqual(emitedSessions.count, 1)
-      XCTAssertNil(emitedSessions[0])
-
-      XCTAssertEqual(sessionManager.removeCallCount, 1)
     }
+
+    let removeCallCount = LockIsolated(0)
+    sessionManager.remove = { @Sendable in
+      removeCallCount.withValue { $0 += 1 }
+    }
+    sessionManager.session = { @Sendable _ in .validSession }
+    api.execute = { @Sendable _ in throw AuthError.api(AuthError.APIError(code: 404)) }
+
+    sut = makeSUT()
+
+    do {
+      try await sut.signOut()
+    } catch AuthError.api {
+    } catch {
+      XCTFail("Unexpected error: \(error)")
+    }
+
+    let emitedParams = emitReceivedEvents.value
+    let emitedEvents = emitedParams.map(\.0)
+    let emitedSessions = emitedParams.map(\.1)
+
+    XCTAssertEqual(emitedEvents, [.signedOut])
+    XCTAssertEqual(emitedSessions.count, 1)
+    XCTAssertNil(emitedSessions[0])
+
+    XCTAssertEqual(removeCallCount.value, 1)
   }
 
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
-    sessionManager.returnSession = .success(.validSession)
+    let emitReceivedEvents = LockIsolated<[(AuthChangeEvent, Session?)]>([])
 
-    await withDependencies {
-      $0.api.execute = { _ in throw AuthError.api(AuthError.APIError(code: 401)) }
-    } operation: {
-      do {
-        try await sut.signOut()
-      } catch AuthError.api {
-      } catch {
-        XCTFail("Unexpected error: \(error)")
+    eventEmitter.emit = { @Sendable event, session, _ in
+      emitReceivedEvents.withValue {
+        $0.append((event, session))
       }
-
-      let emitedParams = eventEmitter.emitReceivedParams
-      let emitedEvents = emitedParams.map(\.0)
-      let emitedSessions = emitedParams.map(\.1)
-
-      XCTAssertEqual(emitedEvents, [.signedOut])
-      XCTAssertEqual(emitedSessions.count, 1)
-      XCTAssertNil(emitedSessions[0])
-
-      XCTAssertEqual(sessionManager.removeCallCount, 1)
     }
+
+    let removeCallCount = LockIsolated(0)
+    sessionManager.remove = { @Sendable in
+      removeCallCount.withValue { $0 += 1 }
+    }
+    sessionManager.session = { @Sendable _ in .validSession }
+    api.execute = { @Sendable _ in throw AuthError.api(AuthError.APIError(code: 401)) }
+
+    sut = makeSUT()
+
+    do {
+      try await sut.signOut()
+    } catch AuthError.api {
+    } catch {
+      XCTFail("Unexpected error: \(error)")
+    }
+
+    let emitedParams = emitReceivedEvents.value
+    let emitedEvents = emitedParams.map(\.0)
+    let emitedSessions = emitedParams.map(\.1)
+
+    XCTAssertEqual(emitedEvents, [.signedOut])
+    XCTAssertEqual(emitedSessions.count, 1)
+    XCTAssertNil(emitedSessions[0])
+
+    XCTAssertEqual(removeCallCount.value, 1)
   }
 
   private func makeSUT() -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["Apikey": "dummy.api.key"],
-      localStorage: Dependencies.localStorage,
+      localStorage: InMemoryLocalStorage(),
       logger: nil
     )
 
@@ -169,7 +206,7 @@ final class AuthClientTests: XCTestCase {
       configuration: configuration,
       sessionManager: sessionManager,
       codeVerifierStorage: .mock,
-      api: .mock,
+      api: api,
       eventEmitter: eventEmitter,
       sessionStorage: .mock,
       logger: nil

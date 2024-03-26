@@ -56,33 +56,26 @@ public actor AuthClient {
     }
   }
 
-  private var configuration: Configuration {
-    Dependencies.current.value!.configuration
-  }
+  @Dependency(\.configuration)
+  private var configuration: Configuration
 
-  private var api: APIClient {
-    Dependencies.current.value!.api
-  }
+  @Dependency(\.api)
+  private var api: APIClient
 
-  private var sessionManager: any SessionManager {
-    Dependencies.current.value!.sessionManager
-  }
+  @Dependency(\.eventEmitter)
+  private var eventEmitter: EventEmitter
 
-  private var codeVerifierStorage: CodeVerifierStorage {
-    Dependencies.current.value!.codeVerifierStorage
-  }
+  @Dependency(\.sessionManager)
+  private var sessionManager: SessionManager
 
-  private var eventEmitter: any EventEmitter {
-    Dependencies.current.value!.eventEmitter
-  }
+  @Dependency(\.codeVerifierStorage)
+  private var codeVerifierStorage: CodeVerifierStorage
 
-  private var currentDate: @Sendable () -> Date {
-    Dependencies.current.value!.currentDate
-  }
+  @Dependency(\.currentDate)
+  private var currentDate: @Sendable () -> Date
 
-  private var logger: (any SupabaseLogger)? {
-    Dependencies.current.value!.logger
-  }
+  @Dependency(\.logger)
+  private var logger: (any SupabaseLogger)?
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -141,17 +134,20 @@ public actor AuthClient {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    let api = APIClient.live(http: HTTPClient(
-      logger: configuration.logger,
-      fetchHandler: configuration.fetch
-    ))
+    let api = APIClient.live(
+      configuration: configuration,
+      http: HTTPClient(
+        logger: configuration.logger,
+        fetchHandler: configuration.fetch
+      )
+    )
 
     self.init(
       configuration: configuration,
-      sessionManager: DefaultSessionManager.shared,
+      sessionManager: .live,
       codeVerifierStorage: .live,
       api: api,
-      eventEmitter: DefaultEventEmitter.shared,
+      eventEmitter: .live,
       sessionStorage: .live,
       logger: configuration.logger
     )
@@ -160,31 +156,29 @@ public actor AuthClient {
   /// This internal initializer is here only for easy injecting mock instances when testing.
   init(
     configuration: Configuration,
-    sessionManager: any SessionManager,
+    sessionManager: SessionManager,
     codeVerifierStorage: CodeVerifierStorage,
     api: APIClient,
-    eventEmitter: any EventEmitter,
+    eventEmitter: EventEmitter,
     sessionStorage: SessionStorage,
     logger: (any SupabaseLogger)?
   ) {
     mfa = AuthMFA()
     admin = AuthAdmin()
 
-    Dependencies.current.setValue(
-      Dependencies(
-        configuration: configuration,
-        sessionManager: sessionManager,
-        api: api,
-        eventEmitter: eventEmitter,
-        sessionStorage: sessionStorage,
-        sessionRefresher: SessionRefresher(
-          refreshSession: { [weak self] in
-            try await self?.refreshSession(refreshToken: $0) ?? .empty
-          }
-        ),
-        codeVerifierStorage: codeVerifierStorage,
-        logger: logger
-      )
+    Current = Dependencies(
+      configuration: configuration,
+      sessionManager: sessionManager,
+      api: api,
+      eventEmitter: eventEmitter,
+      sessionStorage: sessionStorage,
+      sessionRefresher: SessionRefresher(
+        refreshSession: { [weak self] in
+          try await self?.refreshSession(refreshToken: $0) ?? .empty
+        }
+      ),
+      codeVerifierStorage: codeVerifierStorage,
+      logger: logger
     )
   }
 
@@ -310,7 +304,11 @@ public actor AuthClient {
 
   /// Log in an existing user with an email and password.
   @discardableResult
-  public func signIn(email: String, password: String, captchaToken: String? = nil) async throws -> Session {
+  public func signIn(
+    email: String,
+    password: String,
+    captchaToken: String? = nil
+  ) async throws -> Session {
     try await _signIn(
       request: .init(
         path: "/token",
@@ -329,7 +327,11 @@ public actor AuthClient {
 
   /// Log in an existing user with a phone and password.
   @discardableResult
-  public func signIn(phone: String, password: String, captchaToken: String? = nil) async throws -> Session {
+  public func signIn(
+    phone: String,
+    password: String,
+    captchaToken: String? = nil
+  ) async throws -> Session {
     try await _signIn(
       request: .init(
         path: "/token",
@@ -931,7 +933,7 @@ public actor AuthClient {
 
   private func emitInitialSession(forToken token: ObservationToken) async {
     let session = try? await session
-    eventEmitter.emit(.initialSession, session: session, token: token)
+    eventEmitter.emit(.initialSession, session, token)
   }
 
   private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {

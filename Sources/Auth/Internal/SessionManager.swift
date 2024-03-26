@@ -5,32 +5,38 @@ struct SessionRefresher: Sendable {
   var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
 }
 
-protocol SessionManager: Sendable {
-  func session(shouldValidateExpiration: Bool) async throws -> Session
-  func update(_ session: Session) async throws -> Void
-  func remove() async
+struct SessionManager: Sendable {
+  var session: @Sendable (_ shouldValidateExpiration: Bool) async throws -> Session
+  var update: @Sendable (_ session: Session) async throws -> Void
+  var remove: @Sendable () async -> Void
 }
 
 extension SessionManager {
-  func session() async throws -> Session {
-    try await session(shouldValidateExpiration: true)
+  func session(shouldValidateExpiration: Bool = true) async throws -> Session {
+    try await session(shouldValidateExpiration)
   }
 }
 
-actor DefaultSessionManager: SessionManager {
-  static let shared = DefaultSessionManager()
+extension SessionManager {
+  static let live: SessionManager = {
+    let manager = _DefaultSessionManager()
 
-  private init() {}
+    return SessionManager(
+      session: { try await manager.session(shouldValidateExpiration: $0) },
+      update: { try await manager.update($0) },
+      remove: { await manager.remove() }
+    )
+  }()
+}
 
+private actor _DefaultSessionManager {
   private var task: Task<Session, any Error>?
 
-  private var storage: SessionStorage {
-    Dependencies.current.value!.sessionStorage
-  }
+  @Dependency(\.sessionStorage)
+  private var storage: SessionStorage
 
-  private var sessionRefresher: SessionRefresher {
-    Dependencies.current.value!.sessionRefresher
-  }
+  @Dependency(\.sessionRefresher)
+  private var sessionRefresher: SessionRefresher
 
   func session(shouldValidateExpiration: Bool) async throws -> Session {
     if let task {
