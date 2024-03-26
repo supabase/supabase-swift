@@ -194,15 +194,11 @@ final class AuthClientTests: XCTestCase {
     XCTAssertEqual(removeCallCount.value, 1)
   }
 
-  func testSignUpWithSessionResponse() async throws {
-    sut = makeSUT()
-  }
-
   private func makeSUT() -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["Apikey": "dummy.api.key"],
-      localStorage: Dependencies.localStorage,
+      localStorage: InMemoryLocalStorage(),
       logger: nil
     )
 
