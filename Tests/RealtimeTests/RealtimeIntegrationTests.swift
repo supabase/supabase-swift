@@ -178,23 +178,29 @@ final class RealtimeIntegrationTests: XCTestCase {
     }
 
     let key = try await (
-      db.from("store")
+      db.from("key_value_storage")
         .insert(["key": AnyJSON.string(UUID().uuidString), "value": "value1"]).select().single()
         .execute().value as Entry
     ).key
-    try await db.from("store").update(["value": "value2"]).eq("key", value: key).execute()
-    try await db.from("store").delete().eq("key", value: key).execute()
+    try await db.from("key_value_storage").update(["value": "value2"]).eq("key", value: key)
+      .execute()
+    try await db.from("key_value_storage").delete().eq("key", value: key).execute()
 
-    let insertedEntries = try await receivedInsertActions.value.map { try $0.decodeRecord(
-      as: Entry.self,
-      decoder: JSONDecoder()
-    ) }
-    let updatedEntries = try await receivedUpdateActions.value.map { try $0.decodeRecord(
-      as: Entry.self,
-      decoder: JSONDecoder()
-    ) }
-    let deletedEntryIds = await receivedDeleteActions.value
-      .compactMap { $0.oldRecord["key"]?.stringValue }
+    let insertedEntries = try await receivedInsertActions.value.map {
+      try $0.decodeRecord(
+        as: Entry.self,
+        decoder: JSONDecoder()
+      )
+    }
+    let updatedEntries = try await receivedUpdateActions.value.map {
+      try $0.decodeRecord(
+        as: Entry.self,
+        decoder: JSONDecoder()
+      )
+    }
+    let deletedEntryIds = await receivedDeleteActions.value.compactMap {
+      $0.oldRecord["key"]?.stringValue
+    }
 
     XCTAssertNoDifference(insertedEntries, [Entry(key: key, value: "value1")])
     XCTAssertNoDifference(updatedEntries, [Entry(key: key, value: "value2")])
