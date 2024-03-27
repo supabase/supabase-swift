@@ -1,5 +1,6 @@
 import Foundation
 @_spi(Internal) import _Helpers
+import ConcurrencyExtras
 
 public typealias PostgrestError = _Helpers.PostgrestError
 
@@ -8,7 +9,7 @@ public typealias PostgrestError = _Helpers.PostgrestError
 #endif
 
 /// PostgREST client.
-public actor PostgrestClient {
+public final class PostgrestClient: Sendable {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
     Data, URLResponse
   )
@@ -52,14 +53,16 @@ public actor PostgrestClient {
     }
   }
 
-  public private(set) var configuration: Configuration
+  let _configuration: LockIsolated<Configuration>
+  public var configuration: Configuration { _configuration.value }
 
   /// Creates a PostgREST client with the specified configuration.
   /// - Parameter configuration: The configuration for the client.
   public init(configuration: Configuration) {
-    var configuration = configuration
-    configuration.headers.merge(Configuration.defaultHeaders) { l, _ in l }
-    self.configuration = configuration
+    _configuration = LockIsolated(configuration)
+    _configuration.withValue {
+      $0.headers.merge(Configuration.defaultHeaders) { l, _ in l }
+    }
   }
 
   /// Creates a PostgREST client with the specified parameters.
@@ -71,7 +74,7 @@ public actor PostgrestClient {
   ///   - session: The URLSession to use for requests.
   ///   - encoder: The JSONEncoder to use for encoding.
   ///   - decoder: The JSONDecoder to use for decoding.
-  public init(
+  public convenience init(
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
@@ -99,9 +102,9 @@ public actor PostgrestClient {
   @discardableResult
   public func setAuth(_ token: String?) -> PostgrestClient {
     if let token {
-      configuration.headers["Authorization"] = "Bearer \(token)"
+      _configuration.withValue { $0.headers["Authorization"] = "Bearer \(token)" }
     } else {
-      configuration.headers.removeValue(forKey: "Authorization")
+      _ = _configuration.withValue { $0.headers.removeValue(forKey: "Authorization") }
     }
     return self
   }

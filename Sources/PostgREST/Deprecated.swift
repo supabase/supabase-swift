@@ -59,7 +59,7 @@ extension PostgrestClient {
     deprecated,
     message: "Replace usages of this initializer with new init(url:schema:headers:logger:fetch:encoder:decoder:)"
   )
-  public init(
+  public convenience init(
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
