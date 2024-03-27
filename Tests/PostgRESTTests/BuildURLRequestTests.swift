@@ -77,16 +77,16 @@ final class BuildURLRequestTests: XCTestCase {
 
     let testCases: [TestCase] = [
       TestCase(name: "select all users where email ends with '@supabase.co'") { client in
-        await client.from("users")
+        client.from("users")
           .select()
           .like("email", value: "%@supabase.co")
       },
       TestCase(name: "insert new user") { client in
-        try await client.from("users")
+        try client.from("users")
           .insert(User(email: "johndoe@supabase.io"))
       },
       TestCase(name: "bulk insert users") { client in
-        try await client.from("users")
+        try client.from("users")
           .insert(
             [
               User(email: "johndoe@supabase.io"),
@@ -95,16 +95,16 @@ final class BuildURLRequestTests: XCTestCase {
           )
       },
       TestCase(name: "call rpc") { client in
-        try await client.rpc("test_fcn", params: ["KEY": "VALUE"])
+        try client.rpc("test_fcn", params: ["KEY": "VALUE"])
       },
       TestCase(name: "call rpc without parameter") { client in
-        try await client.rpc("test_fcn")
+        try client.rpc("test_fcn")
       },
       TestCase(name: "call rpc with filter") { client in
-        try await client.rpc("test_fcn").eq("id", value: 1)
+        try client.rpc("test_fcn").eq("id", value: 1)
       },
       TestCase(name: "test all filters and count") { client in
-        var query = await client.from("todos").select()
+        var query = client.from("todos").select()
 
         for op in PostgrestFilterBuilder.Operator.allCases {
           query = query.filter("column", operator: op, value: "Some value")
@@ -113,28 +113,28 @@ final class BuildURLRequestTests: XCTestCase {
         return query
       },
       TestCase(name: "test in filter") { client in
-        await client.from("todos").select().in("id", value: [1, 2, 3])
+        client.from("todos").select().in("id", value: [1, 2, 3])
       },
       TestCase(name: "test contains filter with dictionary") { client in
-        await client.from("users").select("name")
+        client.from("users").select("name")
           .contains("address", value: ["postcode": 90210])
       },
       TestCase(name: "test contains filter with array") { client in
-        await client.from("users")
+        client.from("users")
           .select()
           .contains("name", value: ["is:online", "faction:red"])
       },
       TestCase(name: "test or filter with referenced table") { client in
-        await client.from("users")
+        client.from("users")
           .select("*, messages(*)")
           .or("public.eq.true,recipient_id.eq.1", referencedTable: "messages")
       },
       TestCase(name: "test upsert not ignoring duplicates") { client in
-        try await client.from("users")
+        try client.from("users")
           .upsert(User(email: "johndoe@supabase.io"))
       },
       TestCase(name: "bulk upsert") { client in
-        try await client.from("users")
+        try client.from("users")
           .upsert(
             [
               User(email: "johndoe@supabase.io"),
@@ -143,27 +143,27 @@ final class BuildURLRequestTests: XCTestCase {
           )
       },
       TestCase(name: "test upsert ignoring duplicates") { client in
-        try await client.from("users")
+        try client.from("users")
           .upsert(User(email: "johndoe@supabase.io"), ignoreDuplicates: true)
       },
       TestCase(name: "query with + character") { client in
-        await client.from("users")
+        client.from("users")
           .select()
           .eq("id", value: "Cigányka-ér (0+400 cskm) vízrajzi állomás")
       },
       TestCase(name: "query with timestampz") { client in
-        await client.from("tasks")
+        client.from("tasks")
           .select()
           .gt("received_at", value: "2023-03-23T15:50:30.511743+00:00")
           .order("received_at")
       },
       TestCase(name: "query non-default schema") { client in
-        await client.schema("storage")
+        client.schema("storage")
           .from("objects")
           .select()
       },
       TestCase(name: "select after an insert") { client in
-        try await client.from("users")
+        try client.from("users")
           .insert(User(email: "johndoe@supabase.io"))
           .select("id,email")
       },
@@ -176,9 +176,9 @@ final class BuildURLRequestTests: XCTestCase {
     }
   }
 
-  func testSessionConfiguration() async {
+  func testSessionConfiguration() {
     let client = PostgrestClient(url: url, schema: nil, logger: nil)
-    let clientInfoHeader = await client.configuration.headers["X-Client-Info"]
+    let clientInfoHeader = client.configuration.headers["X-Client-Info"]
     XCTAssertNotNil(clientInfoHeader)
   }
 }
