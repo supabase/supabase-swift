@@ -1,17 +1,16 @@
 //
-//  AuthStateChangeListenerHandleTests.swift
+//  ObservationTokenTests.swift
 //
 //
 //  Created by Guilherme Souza on 17/02/24.
 //
 
 @testable import _Helpers
-@testable import Auth
 import ConcurrencyExtras
 import Foundation
 import XCTest
 
-final class AuthStateChangeListenerHandleTests: XCTestCase {
+final class ObservationTokenTests: XCTestCase {
   func testRemove() {
     let handle = ObservationToken()
 
