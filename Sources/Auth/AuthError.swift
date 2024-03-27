@@ -1,6 +1,6 @@
 import Foundation
 
-public enum AuthError: LocalizedError, Sendable {
+public enum AuthError: LocalizedError, Sendable, Equatable {
   case missingExpClaim
   case malformedJWT
   case sessionNotFound
@@ -8,7 +8,7 @@ public enum AuthError: LocalizedError, Sendable {
   case pkce(PKCEFailureReason)
   case invalidImplicitGrantFlowURL
 
-  public struct APIError: Error, Decodable, Sendable {
+  public struct APIError: Error, Decodable, Sendable, Equatable {
     /// A basic message describing the problem with the request. Usually missing if
     /// ``AuthError/APIError/error`` is present.
     public var msg: String?

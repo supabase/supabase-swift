@@ -82,6 +82,7 @@ let package = Package(
         "TestHelpers",
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "CustomDump", package: "swift-custom-dump"),
       ],
       exclude: [
         "__Snapshots__",
