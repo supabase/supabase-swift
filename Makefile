@@ -3,7 +3,6 @@ PLATFORM_MACOS = macOS
 PLATFORM_MAC_CATALYST = macOS,variant=Mac Catalyst
 PLATFORM_TVOS = tvOS Simulator,name=Apple TV
 PLATFORM_WATCHOS = watchOS Simulator,name=Apple Watch Series 9 (41mm)
-EXAMPLE = Examples
 
 test-all: test-library test-linux
 
@@ -45,11 +44,12 @@ test-docs:
 
 build-examples:
 	for scheme in Examples UserManagement SlackClone; do \
-		xcodebuild build \
-			-skipMacroValidation \
-			-workspace supabase-swift.xcworkspace \
-			-scheme "$$scheme" \
-			-destination platform="$(PLATFORM_IOS)" || exit 1; \
+		set -o pipefail && \
+			xcodebuild build \
+				-skipMacroValidation \
+				-workspace supabase-swift.xcworkspace \
+				-scheme "$$scheme" \
+				-destination platform="$(PLATFORM_IOS)" | xcpretty; \
 	done
 
 format:
