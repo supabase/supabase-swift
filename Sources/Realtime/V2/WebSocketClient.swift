@@ -38,8 +38,9 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
   private let logger: (any SupabaseLogger)?
 
   struct MutableState {
-    var task: URLSessionWebSocketTask?
     var continuation: AsyncStream<ConnectionStatus>.Continuation?
+    var task: URLSessionWebSocketTask?
+    var stream: SocketStream?
   }
 
   let mutableState = LockIsolated(MutableState())
@@ -56,8 +57,10 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
   func connect() -> AsyncStream<ConnectionStatus> {
     mutableState.withValue { state in
       let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-      state.task = session.webSocketTask(with: realtimeURL)
-      state.task?.resume()
+      let task = session.webSocketTask(with: realtimeURL)
+      state.task = task
+      state.stream = SocketStream(task: task)
+      task.resume()
 
       let (stream, continuation) = AsyncStream<ConnectionStatus>.makeStream()
       state.continuation = continuation
@@ -67,41 +70,40 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
 
   func disconnect(closeCode: URLSessionWebSocketTask.CloseCode) {
     mutableState.withValue { state in
-      state.task?.cancel(with: closeCode, reason: nil)
+      state.stream?.cancel(with: closeCode)
     }
   }
 
   func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error> {
-    let (stream, continuation) = AsyncThrowingStream<RealtimeMessageV2, any Error>.makeStream()
-
-    Task {
-      while let message = try await mutableState.task?.receive() {
-        do {
-          switch message {
-          case let .string(stringMessage):
-            logger?.verbose("Received message: \(stringMessage)")
-
-            guard let data = stringMessage.data(using: .utf8) else {
-              throw RealtimeError("Expected a UTF8 encoded message.")
-            }
-
-            let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
-            continuation.yield(message)
-
-          case .data:
-            fallthrough
-          default:
-            throw RealtimeError("Unsupported message type.")
-          }
-        } catch {
-          continuation.finish(throwing: error)
-        }
+    mutableState.withValue { mutableState in
+      guard let stream = mutableState.stream else {
+        return .finished(
+          throwing: RealtimeError(
+            "receive() called before connect(). Make sure to call `connect()` before calling `receive()`."
+          )
+        )
       }
 
-      continuation.finish()
-    }
+      return stream.map { message in
+        switch message {
+        case let .string(stringMessage):
+          self.logger?.verbose("Received message: \(stringMessage)")
 
-    return stream
+          guard let data = stringMessage.data(using: .utf8) else {
+            throw RealtimeError("Expected a UTF8 encoded message.")
+          }
+
+          let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
+          return message
+
+        case .data:
+          fallthrough
+        default:
+          throw RealtimeError("Unsupported message type.")
+        }
+      }
+      .eraseToThrowingStream()
+    }
   }
 
   func send(_ message: RealtimeMessageV2) async throws {
@@ -142,5 +144,56 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
     didCompleteWithError error: (any Error)?
   ) {
     mutableState.continuation?.yield(.error(error))
+  }
+}
+
+typealias WebSocketStream = AsyncThrowingStream<URLSessionWebSocketTask.Message, any Error>
+
+final class SocketStream: AsyncSequence {
+  typealias AsyncIterator = WebSocketStream.Iterator
+  typealias Element = URLSessionWebSocketTask.Message
+
+  private var continuation: WebSocketStream.Continuation?
+  private let task: URLSessionWebSocketTask
+
+  private lazy var stream: WebSocketStream = WebSocketStream { continuation in
+    self.continuation = continuation
+    waitForNextValue()
+  }
+
+  private func waitForNextValue() {
+    guard task.closeCode == .invalid else {
+      continuation?.finish()
+      return
+    }
+
+    task.receive { [weak self] result in
+      guard let continuation = self?.continuation else { return }
+
+      do {
+        let message = try result.get()
+        continuation.yield(message)
+        self?.waitForNextValue()
+      } catch {
+        continuation.finish(throwing: error)
+      }
+    }
+  }
+
+  init(task: URLSessionWebSocketTask) {
+    self.task = task
+  }
+
+  deinit {
+    continuation?.finish()
+  }
+
+  func makeAsyncIterator() -> WebSocketStream.Iterator {
+    stream.makeAsyncIterator()
+  }
+
+  func cancel(with closeCode: URLSessionWebSocketTask.CloseCode = .goingAway) {
+    task.cancel(with: closeCode, reason: nil)
+    continuation?.finish()
   }
 }
