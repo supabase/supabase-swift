@@ -457,6 +457,76 @@ public actor AuthClient {
     )
   }
 
+  /// Attempts a single-sign on using an enterprise Identity Provider.
+  /// - Parameters:
+  ///   - domain: The email domain to use for signing in.
+  ///   - redirectTo: The URL to redirect the user to after they sign in with the third-party
+  /// provider.
+  ///   - captchaToken: The captcha token to be used for captcha verification.
+  /// - Returns: A URL that you can use to initiate the provider's authentication flow.
+  public func signInWithSSO(
+    domain: String,
+    redirectTo: URL? = nil,
+    captchaToken: String? = nil
+  ) async throws -> SSOResponse {
+    await sessionManager.remove()
+
+    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+
+    return try await api.execute(
+      Request(
+        path: "/sso",
+        method: .post,
+        body: configuration.encoder.encode(
+          SignInWithSSORequest(
+            providerId: nil,
+            domain: domain,
+            redirectTo: redirectTo,
+            gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
+            codeChallenge: codeChallenge,
+            codeChallengeMethod: codeChallengeMethod
+          )
+        )
+      )
+    )
+    .decoded(decoder: configuration.decoder)
+  }
+
+  /// Attempts a single-sign on using an enterprise Identity Provider.
+  /// - Parameters:
+  ///   - providerId: The ID of the SSO provider to use for signing in.
+  ///   - redirectTo: The URL to redirect the user to after they sign in with the third-party
+  /// provider.
+  ///   - captchaToken: The captcha token to be used for captcha verification.
+  /// - Returns: A URL that you can use to initiate the provider's authentication flow.
+  public func signInWithSSO(
+    providerId: String,
+    redirectTo: URL? = nil,
+    captchaToken: String? = nil
+  ) async throws -> SSOResponse {
+    await sessionManager.remove()
+
+    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+
+    return try await api.execute(
+      Request(
+        path: "/sso",
+        method: .post,
+        body: configuration.encoder.encode(
+          SignInWithSSORequest(
+            providerId: providerId,
+            domain: nil,
+            redirectTo: redirectTo,
+            gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
+            codeChallenge: codeChallenge,
+            codeChallengeMethod: codeChallengeMethod
+          )
+        )
+      )
+    )
+    .decoded(decoder: configuration.decoder)
+  }
+
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
   public func exchangeCodeForSession(authCode: String) async throws -> Session {
     guard let codeVerifier = try codeVerifierStorage.getCodeVerifier() else {
@@ -945,29 +1015,29 @@ public actor AuthClient {
   }
 
   private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {
-    if configuration.flowType == .pkce {
-      let codeVerifier = PKCE.generateCodeVerifier()
-
-      do {
-        try codeVerifierStorage.storeCodeVerifier(codeVerifier)
-      } catch {
-        assertionFailure(
-          """
-          An error occurred while storing the code verifier,
-          PKCE flow may not work as expected.
-
-          Error: \(error.localizedDescription)
-          """
-        )
-      }
-
-      let codeChallenge = PKCE.generateCodeChallenge(from: codeVerifier)
-      let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
-
-      return (codeChallenge, codeChallengeMethod)
+    guard configuration.flowType == .pkce else {
+      return (nil, nil)
     }
 
-    return (nil, nil)
+    let codeVerifier = PKCE.generateCodeVerifier()
+
+    do {
+      try codeVerifierStorage.storeCodeVerifier(codeVerifier)
+    } catch {
+      assertionFailure(
+        """
+        An error occurred while storing the code verifier,
+        PKCE flow may not work as expected.
+
+        Error: \(error.localizedDescription)
+        """
+      )
+    }
+
+    let codeChallenge = PKCE.generateCodeChallenge(from: codeVerifier)
+    let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
+
+    return (codeChallenge, codeChallengeMethod)
   }
 
   private func isImplicitGrantFlow(url: URL) -> Bool {
