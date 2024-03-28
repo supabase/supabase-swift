@@ -13,6 +13,7 @@ test-library:
 			-skipMacroValidation \
 			-workspace supabase-swift.xcworkspace \
 			-scheme Supabase \
+			-derivedDataPath /tmp/derived-data \
 			-destination platform="$$platform" || exit 1; \
 	done;
 
