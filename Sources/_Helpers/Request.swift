@@ -17,19 +17,22 @@ public struct HTTPClient: Sendable {
   }
 
   public func fetch(_ request: Request, baseURL: URL) async throws -> Response {
+    try await rawFetch(request.urlRequest(withBaseURL: baseURL))
+  }
+
+  public func rawFetch(_ request: URLRequest) async throws -> Response {
     let id = UUID().uuidString
-    let urlRequest = try request.urlRequest(withBaseURL: baseURL)
     logger?
       .verbose(
         """
-        Request [\(id)]: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString
+        Request [\(id)]: \(request.httpMethod ?? "") \(request.url?.absoluteString
           .removingPercentEncoding ?? "")
-        Body: \(stringfy(urlRequest.httpBody))
+        Body: \(stringfy(request.httpBody))
         """
       )
 
     do {
-      let (data, response) = try await fetchHandler(urlRequest)
+      let (data, response) = try await fetchHandler(request)
 
       guard let httpResponse = response as? HTTPURLResponse else {
         logger?
@@ -70,7 +73,7 @@ public struct HTTPClient: Sendable {
       )
       return String(data: prettyData, encoding: .utf8) ?? "<failed>"
     } catch {
-      return "<failed>"
+      return String(data: data, encoding: .utf8) ?? "<failed>"
     }
   }
 }

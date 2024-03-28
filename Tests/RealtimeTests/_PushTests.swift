@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 @testable import Realtime
+import TestHelpers
 import XCTest
 
 final class _PushTests: XCTestCase {

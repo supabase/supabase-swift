@@ -65,6 +65,12 @@ extension AnyJSON {
   }
 }
 
+extension AnyJSONView {
+  init(rendering value: some Codable) {
+    self.init(value: try! AnyJSON(value))
+  }
+}
+
 #Preview {
   NavigationStack {
     AnyJSONView(

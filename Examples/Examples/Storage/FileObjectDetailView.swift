@@ -18,11 +18,7 @@ struct FileObjectDetailView: View {
   var body: some View {
     List {
       Section {
-        DisclosureGroup("Raw details") {
-          Text(stringfy(fileObject))
-            .monospaced()
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        AnyJSONView(value: try! AnyJSON(fileObject))
       }
 
       Section("Actions") {

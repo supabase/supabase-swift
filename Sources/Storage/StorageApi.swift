@@ -21,11 +21,17 @@ public class StorageApi: @unchecked Sendable {
 
   @discardableResult
   func execute(_ request: Request) async throws -> Response {
+    try await execute(request.urlRequest(withBaseURL: configuration.url))
+  }
+
+  func execute(_ request: URLRequest) async throws -> Response {
     var request = request
-    request.headers.merge(configuration.headers) { request, _ in request }
 
-    let response = try await http.fetch(request, baseURL: configuration.url)
+    for (key, value) in configuration.headers {
+      request.setValue(value, forHTTPHeaderField: key)
+    }
 
+    let response = try await http.rawFetch(request)
     guard (200 ..< 300).contains(response.statusCode) else {
       let error = try configuration.decoder.decode(StorageError.self, from: response.data)
       throw error
@@ -37,7 +43,11 @@ public class StorageApi: @unchecked Sendable {
 
 extension Request {
   init(
-    path: String, method: Method, formData: FormData, options: FileOptions,
+    path: String,
+    method: Method,
+    query: [URLQueryItem] = [],
+    formData: FormData,
+    options: FileOptions,
     headers: [String: String] = [:]
   ) {
     var headers = headers
@@ -50,6 +60,7 @@ extension Request {
     self.init(
       path: path,
       method: method,
+      query: query,
       headers: headers,
       body: formData.data
     )
