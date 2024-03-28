@@ -1,6 +1,9 @@
 import _Helpers
 import Foundation
 
+public typealias SupabaseLogger = _Helpers.SupabaseLogger
+public typealias SupabaseLogMessage = _Helpers.SupabaseLogMessage
+
 public struct StorageClientConfiguration {
   public let url: URL
   public var headers: [String: String]

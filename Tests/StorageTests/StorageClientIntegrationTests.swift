@@ -10,7 +10,7 @@ import XCTest
 
 final class StorageClientIntegrationTests: XCTestCase {
   static var apiKey: String {
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU"
   }
 
   static var supabaseURL: String {
@@ -146,6 +146,18 @@ final class StorageClientIntegrationTests: XCTestCase {
       path: "README.md",
       file: dataToUpdate ?? Data()
     )
+  }
+
+  func testCreateAndUploadToSignedUploadURL() async throws {
+    let path = "README-\(UUID().uuidString).md"
+    let url = try await storage.from(bucketId).createSignedUploadURL(path: path)
+    let key = try await storage.from(bucketId).uploadToSignedURL(
+      path: url.path,
+      token: url.token,
+      file: uploadData ?? Data()
+    )
+
+    XCTAssertEqual(key, "\(bucketId)/\(path)")
   }
 
   private func uploadTestData() async throws {
