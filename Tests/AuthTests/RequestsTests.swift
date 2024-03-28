@@ -375,6 +375,30 @@ final class RequestsTests: XCTestCase {
     }
   }
 
+  func testSignInWithSSOUsingDomain() async {
+    let sut = makeSUT()
+
+    await assert {
+      _ = try await sut.signInWithSSO(
+        domain: "supabase.com",
+        redirectTo: URL(string: "https://supabase.com"),
+        captchaToken: "captcha-token"
+      )
+    }
+  }
+
+  func testSignInWithSSOUsingProviderId() async {
+    let sut = makeSUT()
+
+    await assert {
+      _ = try await sut.signInWithSSO(
+        providerId: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+        redirectTo: URL(string: "https://supabase.com"),
+        captchaToken: "captcha-token"
+      )
+    }
+  }
+
   private func assert(_ block: () async throws -> Void) async {
     do {
       try await block()
