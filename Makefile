@@ -3,17 +3,18 @@ PLATFORM_MACOS = macOS
 PLATFORM_MAC_CATALYST = macOS,variant=Mac Catalyst
 PLATFORM_TVOS = tvOS Simulator,name=Apple TV
 PLATFORM_WATCHOS = watchOS Simulator,name=Apple Watch Series 9 (41mm)
-EXAMPLE = Examples
 
 test-all: test-library test-linux
 
 test-library:
 	for platform in "$(PLATFORM_IOS)" "$(PLATFORM_MACOS)" "$(PLATFORM_MAC_CATALYST)" "$(PLATFORM_TVOS)" "$(PLATFORM_WATCHOS)"; do \
-		xcodebuild test \
-			-skipMacroValidation \
-			-workspace supabase-swift.xcworkspace \
-			-scheme Supabase \
-			-destination platform="$$platform" || exit 1; \
+		set -o pipefail && \
+			xcodebuild test \
+				-skipMacroValidation \
+				-workspace supabase-swift.xcworkspace \
+				-scheme Supabase \
+				-derivedDataPath /tmp/derived-data \
+				-destination platform="$$platform" | xcpretty; \
 	done;
 
 test-linux:
@@ -43,11 +44,12 @@ test-docs:
 
 build-examples:
 	for scheme in Examples UserManagement SlackClone; do \
-		xcodebuild build \
-			-skipMacroValidation \
-			-workspace supabase-swift.xcworkspace \
-			-scheme "$$scheme" \
-			-destination platform="$(PLATFORM_IOS)" || exit 1; \
+		set -o pipefail && \
+			xcodebuild build \
+				-skipMacroValidation \
+				-workspace supabase-swift.xcworkspace \
+				-scheme "$$scheme" \
+				-destination platform="$(PLATFORM_IOS)" | xcpretty; \
 	done
 
 format:
