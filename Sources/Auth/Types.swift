@@ -297,6 +297,7 @@ struct OTPParams: Codable, Hashable, Sendable {
   var email: String?
   var phone: String?
   var createUser: Bool
+  var channel: MessagingChannel?
   var data: [String: AnyJSON]?
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
@@ -657,4 +658,9 @@ public struct WeakPassword: Codable, Hashable, Sendable {
 
 struct DeleteUserRequest: Encodable {
   let shouldSoftDelete: Bool
+}
+
+public enum MessagingChannel: String, Codable, Sendable {
+  case sms
+  case whatsapp
 }

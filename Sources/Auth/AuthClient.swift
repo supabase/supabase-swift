@@ -425,11 +425,16 @@ public actor AuthClient {
   ///
   /// - Parameters:
   ///   - phone: User's phone with international prefix.
+  ///   - channel: Messaging channel to use (e.g `whatsapp` or `sms`), defaults to `sms`.
   ///   - shouldCreateUser: Creates a new user, defaults to `true`.
   ///   - data: User's metadata.
   ///   - captchaToken: Captcha verification token.
+  ///
+  /// - Note: You need to configure a WhatsApp sender on Twillo if you are using phone sign in with
+  /// the `whatsapp` channel.
   public func signInWithOTP(
     phone: String,
+    channel: MessagingChannel = .sms,
     shouldCreateUser: Bool = true,
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
@@ -443,6 +448,7 @@ public actor AuthClient {
           OTPParams(
             phone: phone,
             createUser: shouldCreateUser,
+            channel: channel,
             data: data,
             gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
           )
