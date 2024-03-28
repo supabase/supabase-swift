@@ -39,7 +39,6 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
 
   struct MutableState {
     var continuation: AsyncStream<ConnectionStatus>.Continuation?
-    var task: URLSessionWebSocketTask?
     var stream: SocketStream?
   }
 
@@ -58,7 +57,6 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
     mutableState.withValue { state in
       let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
       let task = session.webSocketTask(with: realtimeURL)
-      state.task = task
       state.stream = SocketStream(task: task)
       task.resume()
 
@@ -111,7 +109,7 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
     let string = String(decoding: data, as: UTF8.self)
 
     logger?.verbose("Sending message: \(string)")
-    try await mutableState.task?.send(.string(string))
+    try await mutableState.stream?.send(.string(string))
   }
 
   // MARK: - URLSessionWebSocketDelegate
@@ -149,26 +147,42 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
 
 typealias WebSocketStream = AsyncThrowingStream<URLSessionWebSocketTask.Message, any Error>
 
-final class SocketStream: AsyncSequence {
+final class SocketStream: AsyncSequence, Sendable {
   typealias AsyncIterator = WebSocketStream.Iterator
   typealias Element = URLSessionWebSocketTask.Message
 
-  private var continuation: WebSocketStream.Continuation?
-  private let task: URLSessionWebSocketTask
+  struct MutableState {
+    var continuation: WebSocketStream.Continuation?
+    var stream: WebSocketStream?
+  }
 
-  private lazy var stream: WebSocketStream = WebSocketStream { continuation in
-    self.continuation = continuation
-    waitForNextValue()
+  private let task: URLSessionWebSocketTask
+  private let mutableState = LockIsolated(MutableState())
+
+  private func makeStreamIfNeeded() -> WebSocketStream {
+    mutableState.withValue { state in
+      if let stream = state.stream {
+        return stream
+      }
+
+      let stream = WebSocketStream { continuation in
+        state.continuation = continuation
+        waitForNextValue()
+      }
+
+      state.stream = stream
+      return stream
+    }
   }
 
   private func waitForNextValue() {
     guard task.closeCode == .invalid else {
-      continuation?.finish()
+      mutableState.continuation?.finish()
       return
     }
 
     task.receive { [weak self] result in
-      guard let continuation = self?.continuation else { return }
+      guard let continuation = self?.mutableState.continuation else { return }
 
       do {
         let message = try result.get()
@@ -185,15 +199,19 @@ final class SocketStream: AsyncSequence {
   }
 
   deinit {
-    continuation?.finish()
+    mutableState.continuation?.finish()
   }
 
   func makeAsyncIterator() -> WebSocketStream.Iterator {
-    stream.makeAsyncIterator()
+    makeStreamIfNeeded().makeAsyncIterator()
   }
 
   func cancel(with closeCode: URLSessionWebSocketTask.CloseCode = .goingAway) {
     task.cancel(with: closeCode, reason: nil)
-    continuation?.finish()
+    mutableState.continuation?.finish()
+  }
+
+  func send(_ message: URLSessionWebSocketTask.Message) async throws {
+    try await task.send(message)
   }
 }
