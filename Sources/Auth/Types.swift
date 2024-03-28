@@ -664,3 +664,18 @@ public enum MessagingChannel: String, Codable, Sendable {
   case sms
   case whatsapp
 }
+
+struct SignInWithSSORequest: Encodable {
+  let providerId: String?
+  let domain: String?
+  let redirectTo: URL?
+  let gotrueMetaSecurity: AuthMetaSecurity?
+  let codeChallenge: String?
+  let codeChallengeMethod: String?
+}
+
+public struct SSOResponse: Codable, Hashable, Sendable {
+  /// URL to open in a browser which will complete the sign-in flow by taking the user to the
+  /// identity provider's authentication flow.
+  public let url: URL
+}
