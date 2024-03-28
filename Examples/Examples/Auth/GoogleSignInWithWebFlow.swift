@@ -19,17 +19,14 @@ struct GoogleSignInWithWebFlow: View {
     }
   }
 
+  @MainActor
   private func signInWithGoogleButtonTapped() async {
     do {
-      let url = try await supabase.auth.getOAuthSignInURL(
-        provider: .google,
-        redirectTo: Constants.redirectToURL
-      )
-      let urlWithToken = try await webAuthenticationSession.authenticate(
-        using: url,
-        callbackURLScheme: Constants.redirectToURL.scheme!
-      )
-      try await supabase.auth.session(from: urlWithToken)
+      let contextProvider = DefaultPresentationContextProvider()
+
+      try await supabase.auth.signInWithOAuth(provider: .google) {
+        $0.presentationContextProvider = contextProvider
+      }
     } catch {
       print("failed to sign in with Google: \(error)")
     }
@@ -38,4 +35,22 @@ struct GoogleSignInWithWebFlow: View {
 
 #Preview {
   GoogleSignInWithWebFlow()
+}
+
+final class DefaultPresentationContextProvider: NSObject,
+  ASWebAuthenticationPresentationContextProviding, Sendable
+{
+  func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
+    if Thread.isMainThread {
+      return MainActor.assumeIsolated {
+        ASPresentationAnchor()
+      }
+    } else {
+      return DispatchQueue.main.sync {
+        MainActor.assumeIsolated {
+          ASPresentationAnchor()
+        }
+      }
+    }
+  }
 }

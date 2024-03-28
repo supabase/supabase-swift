@@ -7,6 +7,8 @@ public enum AuthError: LocalizedError, Sendable, Equatable {
   case api(APIError)
   case pkce(PKCEFailureReason)
   case invalidImplicitGrantFlowURL
+  case missingURL
+  case invalidRedirectScheme
 
   public struct APIError: Error, Decodable, Sendable, Equatable {
     /// A basic message describing the problem with the request. Usually missing if
@@ -49,8 +51,9 @@ public enum AuthError: LocalizedError, Sendable, Equatable {
     case .sessionNotFound: return "Unable to get a valid session."
     case .pkce(.codeVerifierNotFound): return "A code verifier wasn't found in PKCE flow."
     case .pkce(.invalidPKCEFlowURL): return "Not a valid PKCE flow url."
-    case .invalidImplicitGrantFlowURL:
-      return "Not a valid implicit grant flow url."
+    case .invalidImplicitGrantFlowURL: return "Not a valid implicit grant flow url."
+    case .missingURL: return "Missing URL."
+    case .invalidRedirectScheme: return "Invalid redirect scheme."
     }
   }
 }

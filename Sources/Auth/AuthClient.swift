@@ -1,5 +1,6 @@
 import _Helpers
 import Foundation
+import AuthenticationServices
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -16,6 +17,7 @@ public actor AuthClient {
     public let url: URL
     public var headers: [String: String]
     public let flowType: AuthFlowType
+    public let redirectToURL: URL?
     public let localStorage: any AuthLocalStorage
     public let logger: (any SupabaseLogger)?
     public let encoder: JSONEncoder
@@ -28,6 +30,7 @@ public actor AuthClient {
     ///   - url: The base URL of the Auth server.
     ///   - headers: Custom headers to be included in requests.
     ///   - flowType: The authentication flow type.
+    ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
     ///   - localStorage: The storage mechanism for local data.
     ///   - logger: The logger to use.
     ///   - encoder: The JSON encoder to use for encoding requests.
@@ -37,6 +40,7 @@ public actor AuthClient {
       url: URL,
       headers: [String: String] = [:],
       flowType: AuthFlowType = Configuration.defaultFlowType,
+      redirectToURL: URL? = nil,
       localStorage: any AuthLocalStorage,
       logger: (any SupabaseLogger)? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
@@ -48,6 +52,7 @@ public actor AuthClient {
       self.url = url
       self.headers = headers
       self.flowType = flowType
+      self.redirectToURL = redirectToURL
       self.localStorage = localStorage
       self.logger = logger
       self.encoder = encoder
@@ -100,6 +105,7 @@ public actor AuthClient {
   ///   - url: The base URL of the Auth server.
   ///   - headers: Custom headers to be included in requests.
   ///   - flowType: The authentication flow type..
+  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
   ///   - localStorage: The storage mechanism for local data..
   ///   - logger: The logger to use.
   ///   - encoder: The JSON encoder to use for encoding requests.
@@ -109,6 +115,7 @@ public actor AuthClient {
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
+    redirectToURL: URL? = nil,
     localStorage: any AuthLocalStorage,
     logger: (any SupabaseLogger)? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
@@ -120,6 +127,7 @@ public actor AuthClient {
         url: url,
         headers: headers,
         flowType: flowType,
+        redirectToURL: redirectToURL,
         localStorage: localStorage,
         logger: logger,
         encoder: encoder,
@@ -243,7 +251,10 @@ public actor AuthClient {
         path: "/signup",
         method: .post,
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
+          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
+            name: "redirect_to",
+            value: $0.absoluteString
+          ) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           SignUpRequest(
@@ -428,7 +439,10 @@ public actor AuthClient {
         path: "/otp",
         method: .post,
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
+          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
+            name: "redirect_to",
+            value: $0.absoluteString
+          ) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           OTPParams(
@@ -504,7 +518,7 @@ public actor AuthClient {
           SignInWithSSORequest(
             providerId: nil,
             domain: domain,
-            redirectTo: redirectTo,
+            redirectTo: redirectTo ?? configuration.redirectToURL,
             gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod
@@ -539,7 +553,7 @@ public actor AuthClient {
           SignInWithSSORequest(
             providerId: providerId,
             domain: nil,
-            redirectTo: redirectTo,
+            redirectTo: redirectTo ?? configuration.redirectToURL,
             gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod
@@ -593,6 +607,49 @@ public actor AuthClient {
       redirectTo: redirectTo,
       queryParams: queryParams
     )
+  }
+
+  @discardableResult
+  public func signInWithOAuth(
+    provider: Provider,
+    redirectTo: URL? = nil,
+    scopes: String? = nil,
+    queryParams: [(name: String, value: String?)] = [],
+    configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void = { _ in }
+  ) async throws -> Session {
+    guard let redirectTo = (redirectTo ?? configuration.redirectToURL),
+          let callbackScheme = redirectTo.scheme
+    else {
+      throw AuthError.invalidRedirectScheme
+    }
+
+    let url = try getOAuthSignInURL(
+      provider: provider,
+      scopes: scopes,
+      redirectTo: redirectTo,
+      queryParams: queryParams
+    )
+
+    let resultURL: URL = try await withCheckedThrowingContinuation { continuation in
+      let session = ASWebAuthenticationSession(
+        url: url,
+        callbackURLScheme: callbackScheme
+      ) { url, error in
+        if let error {
+          continuation.resume(throwing: error)
+        } else if let url {
+          continuation.resume(returning: url)
+        } else {
+          fatalError()
+        }
+      }
+
+      configure(session)
+
+      session.start()
+    }
+
+    return try await session(from: resultURL)
   }
 
   /// Gets the session data from a OAuth2 callback URL.
@@ -756,7 +813,10 @@ public actor AuthClient {
         path: "/verify",
         method: .post,
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
+          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
+            name: "redirect_to",
+            value: $0.absoluteString
+          ) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           VerifyOTPParams.email(
@@ -840,7 +900,10 @@ public actor AuthClient {
         path: "/resend",
         method: .post,
         query: [
-          emailRedirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
+          (emailRedirectTo ?? configuration.redirectToURL).map { URLQueryItem(
+            name: "redirect_to",
+            value: $0.absoluteString
+          ) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           ResendEmailParams(
@@ -983,7 +1046,10 @@ public actor AuthClient {
         path: "/recover",
         method: .post,
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
+          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
+            name: "redirect_to",
+            value: $0.absoluteString
+          ) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           RecoverParams(
@@ -1084,7 +1150,7 @@ public actor AuthClient {
       queryItems.append(URLQueryItem(name: "scopes", value: scopes))
     }
 
-    if let redirectTo {
+    if let redirectTo = redirectTo ?? configuration.redirectToURL {
       queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
     }
 
