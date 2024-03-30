@@ -220,6 +220,44 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     self.lastSignInAt = lastSignInAt
     self.updatedAt = updatedAt
   }
+  
+  enum CodingKeys: CodingKey {
+    case id
+    case identityId
+    case userId
+    case identityData
+    case provider
+    case createdAt
+    case lastSignInAt
+    case updatedAt
+  }
+  
+  public init(from decoder: any Decoder) throws {
+    let container: KeyedDecodingContainer<UserIdentity.CodingKeys> = try decoder.container(keyedBy: UserIdentity.CodingKeys.self)
+    
+    self.id = try container.decode(String.self, forKey: UserIdentity.CodingKeys.id)
+    self.identityId = try container.decodeIfPresent(UUID.self, forKey: UserIdentity.CodingKeys.identityId) ?? UUID(uuid: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
+    self.userId = try container.decode(UUID.self, forKey: UserIdentity.CodingKeys.userId)
+    self.identityData = try container.decodeIfPresent([String : AnyJSON].self, forKey: UserIdentity.CodingKeys.identityData)
+    self.provider = try container.decode(String.self, forKey: UserIdentity.CodingKeys.provider)
+    self.createdAt = try container.decode(Date.self, forKey: UserIdentity.CodingKeys.createdAt)
+    self.lastSignInAt = try container.decode(Date.self, forKey: UserIdentity.CodingKeys.lastSignInAt)
+    self.updatedAt = try container.decode(Date.self, forKey: UserIdentity.CodingKeys.updatedAt)
+    
+  }
+  
+  public func encode(to encoder: any Encoder) throws {
+    var container: KeyedEncodingContainer<UserIdentity.CodingKeys> = encoder.container(keyedBy: UserIdentity.CodingKeys.self)
+    
+    try container.encode(self.id, forKey: UserIdentity.CodingKeys.id)
+    try container.encode(self.identityId, forKey: UserIdentity.CodingKeys.identityId)
+    try container.encode(self.userId, forKey: UserIdentity.CodingKeys.userId)
+    try container.encodeIfPresent(self.identityData, forKey: UserIdentity.CodingKeys.identityData)
+    try container.encode(self.provider, forKey: UserIdentity.CodingKeys.provider)
+    try container.encode(self.createdAt, forKey: UserIdentity.CodingKeys.createdAt)
+    try container.encode(self.lastSignInAt, forKey: UserIdentity.CodingKeys.lastSignInAt)
+    try container.encode(self.updatedAt, forKey: UserIdentity.CodingKeys.updatedAt)
+  }
 }
 
 public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {
