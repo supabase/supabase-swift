@@ -399,6 +399,17 @@ final class RequestsTests: XCTestCase {
     }
   }
 
+  func testSignInAnonymously() async {
+    let sut = makeSUT()
+
+    await assert {
+      try await sut.signInAnonymously(
+        data: ["custom_key": .string("custom_value")],
+        captchaToken: "captcha-token"
+      )
+    }
+  }
+
   private func assert(_ block: () async throws -> Void) async {
     do {
       try await block()

@@ -395,10 +395,8 @@ public actor AuthClient {
       decoder: configuration.decoder
     )
 
-    if session.user.emailConfirmedAt != nil || session.user.confirmedAt != nil {
-      try await sessionManager.update(session)
-      eventEmitter.emit(.signedIn, session: session)
-    }
+    try await sessionManager.update(session)
+    eventEmitter.emit(.signedIn, session: session)
 
     return session
   }
