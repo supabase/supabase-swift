@@ -529,34 +529,31 @@ public actor AuthClient {
 
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
   public func exchangeCodeForSession(authCode: String) async throws -> Session {
-    guard let codeVerifier = try codeVerifierStorage.getCodeVerifier() else {
+    guard let codeVerifier = codeVerifierStorage.get() else {
       throw AuthError.pkce(.codeVerifierNotFound)
     }
-    do {
-      let session: Session = try await api.execute(
-        .init(
-          path: "/token",
-          method: .post,
-          query: [URLQueryItem(name: "grant_type", value: "pkce")],
-          body: configuration.encoder.encode(
-            [
-              "auth_code": authCode,
-              "code_verifier": codeVerifier,
-            ]
-          )
+
+    let session: Session = try await api.execute(
+      .init(
+        path: "/token",
+        method: .post,
+        query: [URLQueryItem(name: "grant_type", value: "pkce")],
+        body: configuration.encoder.encode(
+          [
+            "auth_code": authCode,
+            "code_verifier": codeVerifier,
+          ]
         )
       )
-      .decoded(decoder: configuration.decoder)
+    )
+    .decoded(decoder: configuration.decoder)
 
-      try codeVerifierStorage.deleteCodeVerifier()
+    codeVerifierStorage.set(nil)
 
-      try await sessionManager.update(session)
-      eventEmitter.emit(.signedIn, session: session)
+    try await sessionManager.update(session)
+    eventEmitter.emit(.signedIn, session: session)
 
-      return session
-    } catch {
-      throw error
-    }
+    return session
   }
 
   /// Log in an existing user via a third-party provider.
@@ -1020,19 +1017,7 @@ public actor AuthClient {
     }
 
     let codeVerifier = PKCE.generateCodeVerifier()
-
-    do {
-      try codeVerifierStorage.storeCodeVerifier(codeVerifier)
-    } catch {
-      assertionFailure(
-        """
-        An error occurred while storing the code verifier,
-        PKCE flow may not work as expected.
-
-        Error: \(error.localizedDescription)
-        """
-      )
-    }
+    codeVerifierStorage.set(codeVerifier)
 
     let codeChallenge = PKCE.generateCodeChallenge(from: codeVerifier)
     let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
@@ -1049,7 +1034,7 @@ public actor AuthClient {
 
   private func isPKCEFlow(url: URL) -> Bool {
     let fragments = extractParams(from: url)
-    let currentCodeVerifier = try? codeVerifierStorage.getCodeVerifier()
+    let currentCodeVerifier = codeVerifierStorage.get()
     return fragments.contains(where: { $0.name == "code" }) && currentCodeVerifier != nil
   }
 
