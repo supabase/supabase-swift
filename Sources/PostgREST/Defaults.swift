@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 14/12/23.
 //
 
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 let version = _Helpers.version
 

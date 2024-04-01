@@ -4,23 +4,22 @@ import Foundation
   import FoundationNetworking
 #endif
 
-@_spi(Internal)
-public struct HTTPClient: Sendable {
+package struct HTTPClient: Sendable {
   public typealias FetchHandler = @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
   let logger: (any SupabaseLogger)?
   let fetchHandler: FetchHandler
 
-  public init(logger: (any SupabaseLogger)?, fetchHandler: @escaping FetchHandler) {
+  package init(logger: (any SupabaseLogger)?, fetchHandler: @escaping FetchHandler) {
     self.logger = logger
     self.fetchHandler = fetchHandler
   }
 
-  public func fetch(_ request: Request, baseURL: URL) async throws -> Response {
+  package func fetch(_ request: Request, baseURL: URL) async throws -> Response {
     try await rawFetch(request.urlRequest(withBaseURL: baseURL))
   }
 
-  public func rawFetch(_ request: URLRequest) async throws -> Response {
+  package func rawFetch(_ request: URLRequest) async throws -> Response {
     let id = UUID().uuidString
     logger?
       .verbose(
@@ -78,15 +77,14 @@ public struct HTTPClient: Sendable {
   }
 }
 
-@_spi(Internal)
-public struct Request: Sendable {
+package struct Request: Sendable {
   public var path: String
   public var method: Method
   public var query: [URLQueryItem]
   public var headers: [String: String]
   public var body: Data?
 
-  public enum Method: String, Sendable {
+  package enum Method: String, Sendable {
     case get = "GET"
     case post = "POST"
     case put = "PUT"
@@ -95,7 +93,7 @@ public struct Request: Sendable {
     case head = "HEAD"
   }
 
-  public init(
+  package init(
     path: String,
     method: Method,
     query: [URLQueryItem] = [],
@@ -109,7 +107,7 @@ public struct Request: Sendable {
     self.body = body
   }
 
-  public func urlRequest(withBaseURL baseURL: URL) throws -> URLRequest {
+  package func urlRequest(withBaseURL baseURL: URL) throws -> URLRequest {
     var url = baseURL.appendingPathComponent(path)
     if !query.isEmpty {
       guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
@@ -184,21 +182,20 @@ extension CharacterSet {
   }()
 }
 
-@_spi(Internal)
-public struct Response: Sendable {
-  public let data: Data
-  public let response: HTTPURLResponse
+package struct Response: Sendable {
+  package let data: Data
+  package let response: HTTPURLResponse
 
   public var statusCode: Int {
     response.statusCode
   }
 
-  public init(data: Data, response: HTTPURLResponse) {
+  package init(data: Data, response: HTTPURLResponse) {
     self.data = data
     self.response = response
   }
 
-  public func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder) throws -> T {
+  package func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder) throws -> T {
     try decoder.decode(T.self, from: data)
   }
 }

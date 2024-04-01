@@ -1,7 +1,7 @@
+import _Helpers
 import ConcurrencyExtras
-import XCTest
-@_spi(Internal) import _Helpers
 @testable import Functions
+import XCTest
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 struct PostgresActionData: Codable {
   var type: String

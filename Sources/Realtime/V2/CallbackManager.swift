@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 24/12/23.
 //
 
-import Foundation
-@_spi(Internal) import _Helpers
+import _Helpers
 import ConcurrencyExtras
+import Foundation
 
 final class CallbackManager: @unchecked Sendable {
   struct MutableState {

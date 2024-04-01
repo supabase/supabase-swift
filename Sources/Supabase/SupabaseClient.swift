@@ -1,7 +1,7 @@
+import _Helpers
+@_exported import Auth
 import ConcurrencyExtras
 import Foundation
-@_spi(Internal) import _Helpers
-@_exported import Auth
 @_exported import Functions
 @_exported import PostgREST
 @_exported import Realtime

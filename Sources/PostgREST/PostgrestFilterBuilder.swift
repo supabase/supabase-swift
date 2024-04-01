@@ -1,5 +1,5 @@
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 public class PostgrestFilterBuilder: PostgrestTransformBuilder {
   public enum Operator: String, CaseIterable, Sendable {

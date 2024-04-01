@@ -1,5 +1,5 @@
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 struct SessionRefresher: Sendable {
   var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session

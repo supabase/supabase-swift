@@ -1,5 +1,5 @@
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 public final class PostgrestQueryBuilder: PostgrestBuilder {
   /// Performs a vertical filtering with SELECT.

@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 24/10/23.
 //
 
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 /// A locally stored ``Session``, it contains metadata such as `expirationDate`.
 struct StoredSession: Codable {

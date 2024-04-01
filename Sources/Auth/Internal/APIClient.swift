@@ -1,5 +1,5 @@
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 struct APIClient: Sendable {
   var execute: @Sendable (_ request: Request) async throws -> Response

@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 25/01/24.
 //
 
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 public actor AuthAdmin {
   @Dependency(\.configuration)

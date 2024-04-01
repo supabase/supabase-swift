@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
+import _Helpers
+import ConcurrencyExtras
 import XCTest
 import XCTestDynamicOverlay
-@_spi(Internal) import _Helpers
-import ConcurrencyExtras
 
 @testable import Auth
 

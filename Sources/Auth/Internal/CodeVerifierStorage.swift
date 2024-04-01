@@ -1,6 +1,6 @@
+import _Helpers
 import ConcurrencyExtras
 import Foundation
-@_spi(Internal) import _Helpers
 
 struct CodeVerifierStorage: Sendable {
   var get: @Sendable () -> String?

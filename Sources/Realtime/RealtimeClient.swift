@@ -18,9 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import Foundation
-@_spi(Internal) import _Helpers
+import _Helpers
 import ConcurrencyExtras
+import Foundation
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

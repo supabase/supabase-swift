@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
-import XCTest
-@_spi(Internal) @testable import _Helpers
+@testable import _Helpers
 import ConcurrencyExtras
 import TestHelpers
+import XCTest
 
 @testable import Auth
 

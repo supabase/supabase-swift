@@ -1,5 +1,5 @@
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 /// Contains the full multi-factor authentication API.
 public actor AuthMFA {

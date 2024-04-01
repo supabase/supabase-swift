@@ -1,6 +1,6 @@
-import Foundation
-@_spi(Internal) import _Helpers
+import _Helpers
 import ConcurrencyExtras
+import Foundation
 
 public typealias PostgrestError = _Helpers.PostgrestError
 
