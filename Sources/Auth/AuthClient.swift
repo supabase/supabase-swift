@@ -1,6 +1,6 @@
 import _Helpers
-import Foundation
 import AuthenticationServices
+import Foundation
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
