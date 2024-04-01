@@ -220,6 +220,44 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     self.lastSignInAt = lastSignInAt
     self.updatedAt = updatedAt
   }
+
+  private enum CodingKeys: CodingKey {
+    case id
+    case identityId
+    case userId
+    case identityData
+    case provider
+    case createdAt
+    case lastSignInAt
+    case updatedAt
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+
+    id = try container.decode(String.self, forKey: .id)
+    identityId = try container.decodeIfPresent(UUID.self, forKey: .identityId)
+      ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    userId = try container.decode(UUID.self, forKey: .userId)
+    identityData = try container.decodeIfPresent([String: AnyJSON].self, forKey: .identityData)
+    provider = try container.decode(String.self, forKey: .provider)
+    createdAt = try container.decode(Date.self, forKey: .createdAt)
+    lastSignInAt = try container.decode(Date.self, forKey: .lastSignInAt)
+    updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+
+    try container.encode(id, forKey: .id)
+    try container.encode(identityId, forKey: .identityId)
+    try container.encode(userId, forKey: .userId)
+    try container.encodeIfPresent(identityData, forKey: .identityData)
+    try container.encode(provider, forKey: .provider)
+    try container.encode(createdAt, forKey: .createdAt)
+    try container.encode(lastSignInAt, forKey: .lastSignInAt)
+    try container.encode(updatedAt, forKey: .updatedAt)
+  }
 }
 
 public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {

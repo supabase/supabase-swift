@@ -19,7 +19,9 @@ struct StoredSession: Codable {
 
   init(session: Session, expirationDate: Date? = nil) {
     self.session = session
-    self.expirationDate = expirationDate ?? Date().addingTimeInterval(session.expiresIn)
+    self.expirationDate = expirationDate
+      ?? session.expiresAt.map(Date.init(timeIntervalSince1970:))
+      ?? Date().addingTimeInterval(session.expiresIn)
   }
 }
 
