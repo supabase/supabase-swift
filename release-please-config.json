@@ -7,7 +7,7 @@
       "bump-patch-for-minor-pre-major": false,
       "draft": false,
       "prerelease": false,
-      "extra_files": [
+      "extra-files": [
         "Sources/_Helpers/Version.swift"
       ]
     }
