@@ -31,6 +31,7 @@ final class AuthClientTests: XCTestCase {
 
   override func setUp() {
     super.setUp()
+    Current = .mock
 
     eventEmitter = .mock
     sessionManager = .mock
