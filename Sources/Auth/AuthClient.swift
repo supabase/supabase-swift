@@ -362,6 +362,31 @@ public actor AuthClient {
     )
   }
 
+  /// Creates a new anonymous user.
+  /// - Parameters:
+  ///   - data: A custom data object to store the user's metadata. This maps to the
+  /// `auth.users.raw_user_meta_data` column. The `data` should be a JSON object that includes
+  /// user-specific info, such as their first and last name.
+  ///   - captchaToken: Verification token received when the user completes the captcha.
+  @discardableResult
+  public func signInAnonymously(
+    data: [String: AnyJSON]? = nil,
+    captchaToken: String? = nil
+  ) async throws -> Session {
+    try await _signIn(
+      request: Request(
+        path: "/signup",
+        method: .post,
+        body: configuration.encoder.encode(
+          SignUpRequest(
+            data: data,
+            gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) }
+          )
+        )
+      )
+    )
+  }
+
   private func _signIn(request: Request) async throws -> Session {
     await sessionManager.remove()
 
@@ -370,10 +395,8 @@ public actor AuthClient {
       decoder: configuration.decoder
     )
 
-    if session.user.emailConfirmedAt != nil || session.user.confirmedAt != nil {
-      try await sessionManager.update(session)
-      eventEmitter.emit(.signedIn, session: session)
-    }
+    try await sessionManager.update(session)
+    eventEmitter.emit(.signedIn, session: session)
 
     return session
   }
