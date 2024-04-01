@@ -160,7 +160,7 @@ final class RequestsTests: XCTestCase {
 
       Current.sessionManager = .live
       Current.sessionStorage.storeSession = { _ in }
-      Current.codeVerifierStorage.getCodeVerifier = { nil }
+      Current.codeVerifierStorage.get = { nil }
       Current.currentDate = { currentDate }
 
       let url = URL(
@@ -184,7 +184,7 @@ final class RequestsTests: XCTestCase {
   func testSessionFromURLWithMissingComponent() async {
     let sut = makeSUT()
 
-    Current.codeVerifierStorage.getCodeVerifier = { nil }
+    Current.codeVerifierStorage.get = { nil }
 
     let url = URL(
       string:

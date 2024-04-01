@@ -16,9 +16,8 @@ let clientURL = URL(string: "http://localhost:54321/auth/v1")!
 
 extension CodeVerifierStorage {
   static let mock = Self(
-    getCodeVerifier: unimplemented("CodeVerifierStorage.getCodeVerifier"),
-    storeCodeVerifier: unimplemented("CodeVerifierStorage.storeCodeVerifier"),
-    deleteCodeVerifier: unimplemented("CodeVerifierStorage.deleteCodeVerifier")
+    get: unimplemented("CodeVerifierStorage.get"),
+    set: unimplemented("CodeVerifierStorage.set")
   )
 }
 

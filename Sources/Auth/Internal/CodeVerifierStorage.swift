@@ -1,30 +1,19 @@
+import ConcurrencyExtras
 import Foundation
 @_spi(Internal) import _Helpers
 
 struct CodeVerifierStorage: Sendable {
-  var getCodeVerifier: @Sendable () throws -> String?
-  var storeCodeVerifier: @Sendable (_ code: String) throws -> Void
-  var deleteCodeVerifier: @Sendable () throws -> Void
+  var get: @Sendable () -> String?
+  var set: @Sendable (_ code: String?) -> Void
 }
 
 extension CodeVerifierStorage {
   static let live: Self = {
-    @Dependency(\.configuration.localStorage) var localStorage
-
-    let key = "supabase.code-verifier"
+    let code = LockIsolated(String?.none)
 
     return Self(
-      getCodeVerifier: {
-        try localStorage.retrieve(key: key).flatMap {
-          String(data: $0, encoding: .utf8)
-        }
-      },
-      storeCodeVerifier: { code in
-        try localStorage.store(key: key, value: Data(code.utf8))
-      },
-      deleteCodeVerifier: {
-        try localStorage.remove(key: key)
-      }
+      get: { code.value },
+      set: { code.setValue($0) }
     )
   }()
 }
