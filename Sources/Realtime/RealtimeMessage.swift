@@ -18,8 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 /// Data that is received from the Server.
 public struct RealtimeMessage {

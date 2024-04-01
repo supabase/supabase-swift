@@ -1,4 +1,4 @@
-@_spi(Internal) import _Helpers
+import _Helpers
 import Foundation
 
 public class PostgrestTransformBuilder: PostgrestBuilder {

@@ -5,11 +5,11 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
+import _Helpers
 import ConcurrencyExtras
 import CustomDump
 @testable import Realtime
 import XCTest
-@_spi(Internal) import _Helpers
 
 final class CallbackManagerTests: XCTestCase {
   func testIntegration() {

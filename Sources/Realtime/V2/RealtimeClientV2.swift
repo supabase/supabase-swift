@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
+import _Helpers
 import ConcurrencyExtras
 import Foundation
-@_spi(Internal) import _Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

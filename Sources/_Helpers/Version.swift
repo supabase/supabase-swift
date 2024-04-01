@@ -1,1 +1,1 @@
-@_spi(Internal) public let version = "2.5.1"
+package let version = "2.5.1"

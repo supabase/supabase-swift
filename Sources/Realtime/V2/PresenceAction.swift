@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 24/12/23.
 //
 
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 public struct PresenceV2: Hashable, Sendable {
   /// The presence reference of the object.

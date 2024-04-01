@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 02/01/24.
 //
 
+import _Helpers
 import Foundation
-@_spi(Internal) import _Helpers
 
 actor PushV2 {
   private weak var channel: RealtimeChannelV2?

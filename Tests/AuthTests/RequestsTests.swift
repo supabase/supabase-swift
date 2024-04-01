@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 07/10/23.
 //
 
+import _Helpers
 import SnapshotTesting
 import XCTest
-@_spi(Internal) import _Helpers
 
 @testable import Auth
 

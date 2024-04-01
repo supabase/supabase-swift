@@ -18,10 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+import _Helpers
+import ConcurrencyExtras
 import Foundation
 import Swift
-@_spi(Internal) import _Helpers
-import ConcurrencyExtras
 
 /// Container class of bindings to the channel
 struct Binding {

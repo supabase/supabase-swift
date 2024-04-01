@@ -1,9 +1,9 @@
-import XCTest
-@_spi(Internal) import _Helpers
+import _Helpers
 import ConcurrencyExtras
 import CustomDump
 @testable import Realtime
 import TestHelpers
+import XCTest
 
 final class RealtimeTests: XCTestCase {
   let url = URL(string: "https://localhost:54321/realtime/v1")!
