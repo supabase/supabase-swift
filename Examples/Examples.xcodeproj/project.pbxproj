@@ -47,6 +47,7 @@
 		79BD76772B59C3E300CA3D68 /* UserStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD76762B59C3E300CA3D68 /* UserStore.swift */; };
 		79BD76792B59C53900CA3D68 /* ChannelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD76782B59C53900CA3D68 /* ChannelStore.swift */; };
 		79BD767B2B59C61300CA3D68 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BD767A2B59C61300CA3D68 /* MessageStore.swift */; };
+		79C9B8E52BBB16C0003AD942 /* SignInAnonymously.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C9B8E42BBB16C0003AD942 /* SignInAnonymously.swift */; };
 		79D884CA2B3C18830009EA4A /* SlackCloneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884C92B3C18830009EA4A /* SlackCloneApp.swift */; };
 		79D884CC2B3C18830009EA4A /* AppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884CB2B3C18830009EA4A /* AppView.swift */; };
 		79D884CE2B3C18840009EA4A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79D884CD2B3C18840009EA4A /* Assets.xcassets */; };
@@ -112,6 +113,7 @@
 		79BD76762B59C3E300CA3D68 /* UserStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStore.swift; sourceTree = "<group>"; };
 		79BD76782B59C53900CA3D68 /* ChannelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelStore.swift; sourceTree = "<group>"; };
 		79BD767A2B59C61300CA3D68 /* MessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
+		79C9B8E42BBB16C0003AD942 /* SignInAnonymously.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInAnonymously.swift; sourceTree = "<group>"; };
 		79D884C72B3C18830009EA4A /* SlackClone.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SlackClone.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		79D884C92B3C18830009EA4A /* SlackCloneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackCloneApp.swift; sourceTree = "<group>"; };
 		79D884CB2B3C18830009EA4A /* AppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppView.swift; sourceTree = "<group>"; };
@@ -258,6 +260,7 @@
 				793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */,
 				7940E3142B36187A0089BEE1 /* GoogleSignInWithWebFlow.swift */,
 				79E2B5542B9788BF0042CD21 /* GoogleSignInSDKFlow.swift */,
+				79C9B8E42BBB16C0003AD942 /* SignInAnonymously.swift */,
 			);
 			path = Auth;
 			sourceTree = "<group>";
@@ -505,6 +508,7 @@
 				793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */,
 				797EFB682BABD90500098D6B /* Stringfy.swift in Sources */,
 				797EFB6C2BABE1B800098D6B /* FileObjectDetailView.swift in Sources */,
+				79C9B8E52BBB16C0003AD942 /* SignInAnonymously.swift in Sources */,
 				797EFB6A2BABDF3800098D6B /* BucketDetailView.swift in Sources */,
 				793E030D2B2DAB5700AC7DED /* SignInWithApple.swift in Sources */,
 				793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */,

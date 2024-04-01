@@ -77,6 +77,6 @@ redirect_uri = ""
 url = ""
 
 [auth.external.github]
-enabled = true
+enabled = false
 client_id = "12d1131cd3582f942c71"
 secret = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET)"

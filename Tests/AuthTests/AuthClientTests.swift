@@ -195,6 +195,22 @@ final class AuthClientTests: XCTestCase {
     XCTAssertEqual(removeCallCount.value, 1)
   }
 
+  func testSignInAnonymously() async throws {
+    let emitReceivedEvents = LockIsolated<[(AuthChangeEvent, Session?)]>([])
+
+    eventEmitter.emit = { @Sendable event, session, _ in
+      emitReceivedEvents.withValue {
+        $0.append((event, session))
+      }
+    }
+
+//    api.execute = { @Sendable _ in
+//        .stub("", code: 200)
+//    }
+
+    let sut = makeSUT()
+  }
+
   private func makeSUT() -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: clientURL,

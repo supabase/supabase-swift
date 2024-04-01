@@ -14,6 +14,7 @@ struct AuthView: View {
     case signInWithApple
     case googleSignInWebFlow
     case googleSignInSDKFlow
+    case signInAnonymously
 
     var title: String {
       switch self {
@@ -22,6 +23,7 @@ struct AuthView: View {
       case .signInWithApple: "Sign in with Apple"
       case .googleSignInWebFlow: "Google Sign in (Web Flow)"
       case .googleSignInSDKFlow: "Google Sign in (GIDSignIn SDK Flow)"
+      case .signInAnonymously: "Sign in Anonymously"
       }
     }
   }
@@ -50,6 +52,7 @@ extension AuthView.Option: View {
     case .signInWithApple: SignInWithApple()
     case .googleSignInWebFlow: GoogleSignInWithWebFlow()
     case .googleSignInSDKFlow: GoogleSignInSDKFlow()
+    case .signInAnonymously: SignInAnonymously()
     }
   }
 }
