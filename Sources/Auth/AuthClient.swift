@@ -609,6 +609,7 @@ public final class AuthClient: @unchecked Sendable {
     )
   }
 
+  @available(watchOS 6.2, tvOS 16.0, *)
   @discardableResult
   public func signInWithOAuth(
     provider: Provider,
@@ -1195,7 +1196,7 @@ extension AuthClient {
   import SwiftUI
 
   extension AuthClient {
-    @available(iOS 16.4, *)
+    @available(iOS 16.4, macOS 13.3, watchOS 9.4, tvOS 16.4, *)
     @discardableResult
     public func signInWithOAuth(
       provider: Provider,
