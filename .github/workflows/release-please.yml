@@ -16,3 +16,4 @@ jobs:
       - uses: google-github-actions/release-please-action@v4
         with:
           release-type: simple
+          extra-files: ["Sources/_Helpers/Version.swift"]
