@@ -31,14 +31,14 @@ var Current: Dependencies {
 }
 
 @propertyWrapper
-struct Dependency<Value> {
+struct Dependency<Value: Sendable>: Sendable {
   var wrappedValue: Value {
-    Current[keyPath: keyPath]
+    Current[keyPath: keyPath.value]
   }
 
-  let keyPath: KeyPath<Dependencies, Value>
+  let keyPath: UncheckedSendable<KeyPath<Dependencies, Value>>
 
   init(_ keyPath: KeyPath<Dependencies, Value>) {
-    self.keyPath = keyPath
+    self.keyPath = UncheckedSendable(keyPath)
   }
 }

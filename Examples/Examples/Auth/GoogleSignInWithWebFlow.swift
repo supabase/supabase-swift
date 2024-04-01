@@ -22,11 +22,7 @@ struct GoogleSignInWithWebFlow: View {
   @MainActor
   private func signInWithGoogleButtonTapped() async {
     do {
-      let contextProvider = DefaultPresentationContextProvider()
-
-      try await supabase.auth.signInWithOAuth(provider: .google) {
-        $0.presentationContextProvider = contextProvider
-      }
+      try await supabase.auth.signInWithOAuth(provider: .google, using: webAuthenticationSession)
     } catch {
       print("failed to sign in with Google: \(error)")
     }
@@ -35,22 +31,4 @@ struct GoogleSignInWithWebFlow: View {
 
 #Preview {
   GoogleSignInWithWebFlow()
-}
-
-final class DefaultPresentationContextProvider: NSObject,
-  ASWebAuthenticationPresentationContextProviding, Sendable
-{
-  func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-    if Thread.isMainThread {
-      return MainActor.assumeIsolated {
-        ASPresentationAnchor()
-      }
-    } else {
-      return DispatchQueue.main.sync {
-        MainActor.assumeIsolated {
-          ASPresentationAnchor()
-        }
-      }
-    }
-  }
 }

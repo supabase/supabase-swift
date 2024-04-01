@@ -6,7 +6,7 @@ import AuthenticationServices
   import FoundationNetworking
 #endif
 
-public actor AuthClient {
+public final class AuthClient: Sendable {
   /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler = @Sendable (
     _ request: URLRequest
@@ -111,7 +111,7 @@ public actor AuthClient {
   ///   - encoder: The JSON encoder to use for encoding requests.
   ///   - decoder: The JSON decoder to use for decoding responses.
   ///   - fetch: The asynchronous fetch handler for network requests.
-  public init(
+  public convenience init(
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
@@ -141,7 +141,7 @@ public actor AuthClient {
   ///
   /// - Parameters:
   ///   - configuration: The client configuration.
-  public init(configuration: Configuration) {
+  public convenience init(configuration: Configuration) {
     let api = APIClient.live(
       configuration: configuration,
       http: HTTPClient(
@@ -1190,3 +1190,41 @@ extension AuthClient {
   /// ``AuthClient/didChangeAuthStateNotification`` notification.
   public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
 }
+
+#if canImport(SwiftUI)
+  import SwiftUI
+
+  extension AuthClient {
+    @available(iOS 16.4, *)
+    @discardableResult
+    public func signInWithOAuth(
+      provider: Provider,
+      using webAuthenticationSession: WebAuthenticationSession,
+      preferredBrowserSession: WebAuthenticationSession.BrowserSession? = nil,
+      redirectTo: URL? = nil,
+      scopes: String? = nil,
+      queryParams: [(name: String, value: String?)] = []
+    ) async throws -> Session {
+      guard let redirectTo = (redirectTo ?? configuration.redirectToURL),
+            let callbackScheme = redirectTo.scheme
+      else {
+        throw AuthError.invalidRedirectScheme
+      }
+
+      let url = try getOAuthSignInURL(
+        provider: provider,
+        scopes: scopes,
+        redirectTo: redirectTo,
+        queryParams: queryParams
+      )
+
+      let resultURL = try await webAuthenticationSession.authenticate(
+        using: url,
+        callbackURLScheme: callbackScheme,
+        preferredBrowserSession: preferredBrowserSession
+      )
+
+      return try await session(from: resultURL)
+    }
+  }
+#endif
