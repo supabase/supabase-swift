@@ -9,7 +9,8 @@
       "release-type": "simple",
       "extra-files": [
         "Sources/_Helpers/Version.swift"
-      ]
+      ],
+      "bootstrap-sha": "60bd77ac56a40c89bd0de75c5be221187cf7f493"
     }
   },
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
