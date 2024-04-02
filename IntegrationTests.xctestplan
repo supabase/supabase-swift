@@ -15,15 +15,8 @@
     {
       "target" : {
         "containerPath" : "container:",
-        "identifier" : "AuthIntegrationTests",
-        "name" : "AuthIntegrationTests"
-      }
-    },
-    {
-      "target" : {
-        "containerPath" : "container:",
-        "identifier" : "PostgRESTIntegrationTests",
-        "name" : "PostgRESTIntegrationTests"
+        "identifier" : "IntegrationTests",
+        "name" : "IntegrationTests"
       }
     }
   ],

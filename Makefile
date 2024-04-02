@@ -34,7 +34,6 @@ test-integration:
 		-workspace supabase-swift.xcworkspace \
 		-scheme Supabase \
 		-testPlan IntegrationTests \
-		-derivedDataPath /tmp/derived-data \
 		-destination platform="$(PLATFORM_IOS)"
 
 
