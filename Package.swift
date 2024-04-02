@@ -70,19 +70,20 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
       ]
     ),
-    .target(
-      name: "Auth",
-      dependencies: goTrueDependencies
-    ),
     .testTarget(
-      name: "AuthIntegrationTests",
+      name: "IntegrationTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "_Helpers",
         "Auth",
         "TestHelpers",
+        "PostgREST",
       ]
+    ),
+    .target(
+      name: "Auth",
+      dependencies: goTrueDependencies
     ),
     .testTarget(
       name: "AuthTests",
@@ -115,7 +116,6 @@ let package = Package(
       ],
       exclude: ["__Snapshots__"]
     ),
-    .testTarget(name: "PostgRESTIntegrationTests", dependencies: ["PostgREST"]),
     .target(
       name: "Realtime",
       dependencies: [

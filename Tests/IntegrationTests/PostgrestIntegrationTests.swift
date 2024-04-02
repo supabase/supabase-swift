@@ -36,21 +36,15 @@ struct User: Codable, Hashable {
 @available(iOS 15.0.0, macOS 12.0.0, tvOS 13.0, *)
 final class IntegrationTests: XCTestCase {
   let client = PostgrestClient(
-    url: URL(string: "http://localhost:54321/rest/v1")!,
+    url: URL(string: "\(Secrets.baseURL)/rest/v1")!,
     headers: [
-      "Apikey":
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+      "Apikey": Secrets.anonKey,
     ],
     logger: nil
   )
 
   override func setUp() async throws {
     try await super.setUp()
-
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
 
     // Run fresh test by deleting all data. Delete without a where clause isn't supported, so have
     // to do this `neq` trick to delete all data.

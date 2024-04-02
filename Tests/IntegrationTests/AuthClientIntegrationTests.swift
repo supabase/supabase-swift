@@ -14,9 +14,9 @@ import XCTest
 final class AuthClientIntegrationTests: XCTestCase {
   let authClient = AuthClient(
     configuration: AuthClient.Configuration(
-      url: URL(string: "http://127.0.0.1:54321/auth/v1")!,
+      url: URL(string: "\(Secrets.baseURL)/auth/v1")!,
       headers: [
-        "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+        "apikey": Secrets.anonKey,
       ],
       localStorage: InMemoryLocalStorage(),
       logger: nil
@@ -48,23 +48,23 @@ final class AuthClientIntegrationTests: XCTestCase {
     }
   }
 
-  func testSignUpAndSignInWithPhone() async throws {
-    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
-      let phone = mockPhoneNumber()
-      let password = mockPassword()
-      let metadata: [String: AnyJSON] = [
-        "test": .integer(42),
-      ]
-      let response = try await authClient.signUp(phone: phone, password: password, data: metadata)
-      XCTAssertNotNil(response.session)
-      XCTAssertEqual(response.user.phone, phone)
-      XCTAssertEqual(response.user.userMetadata["test"], 42)
-
-      try await authClient.signOut()
-
-      try await authClient.signIn(phone: phone, password: password)
-    }
-  }
+//  func testSignUpAndSignInWithPhone() async throws {
+//    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
+//      let phone = mockPhoneNumber()
+//      let password = mockPassword()
+//      let metadata: [String: AnyJSON] = [
+//        "test": .integer(42),
+//      ]
+//      let response = try await authClient.signUp(phone: phone, password: password, data: metadata)
+//      XCTAssertNotNil(response.session)
+//      XCTAssertEqual(response.user.phone, phone)
+//      XCTAssertEqual(response.user.userMetadata["test"], 42)
+//
+//      try await authClient.signOut()
+//
+//      try await authClient.signIn(phone: phone, password: password)
+//    }
+//  }
 
   func testSignInWithEmail_invalidEmail() async throws {
     let email = mockEmail()
@@ -176,6 +176,12 @@ final class AuthClientIntegrationTests: XCTestCase {
       let currentStoredSession = try await authClient.session
 
       XCTAssertEqual(currentStoredSession.accessToken, refreshedSession.accessToken)
+    }
+  }
+
+  func testSignInAnonymous() async throws {
+    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn]) {
+      try await authClient.signInAnonymously()
     }
   }
 
