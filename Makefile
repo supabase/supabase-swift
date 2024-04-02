@@ -21,7 +21,7 @@ define SECRETS
 import Foundation
 
 enum Secrets {
-	static let baseURL = URL(string: "$(SUPABASE_URL)")!
+	static let baseURL = "$(SUPABASE_URL)"
 	static let anonKey = "$(SUPABASE_ANON_KEY)"
 	static let serviceKey = "$(SUPABASE_SERVICE_KEY)"
 }
