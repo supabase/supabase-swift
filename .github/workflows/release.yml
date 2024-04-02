@@ -1,7 +1,8 @@
 on:
   push:
     branches:
-      - chore/release-please
+      - main
+      - release/*
 
 permissions:
   contents: write
