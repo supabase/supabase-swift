@@ -6,10 +6,10 @@
 //
 
 import _Helpers
-import SnapshotTesting
-import XCTest
-
 @testable import Auth
+import SnapshotTesting
+import TestHelpers
+import XCTest
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

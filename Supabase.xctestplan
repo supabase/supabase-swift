@@ -22,13 +22,6 @@
     {
       "target" : {
         "containerPath" : "container:",
-        "identifier" : "PostgRESTIntegrationTests",
-        "name" : "PostgRESTIntegrationTests"
-      }
-    },
-    {
-      "target" : {
-        "containerPath" : "container:",
         "identifier" : "PostgRESTTests",
         "name" : "PostgRESTTests"
       }

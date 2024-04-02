@@ -8,6 +8,7 @@
 import _Helpers
 import ConcurrencyExtras
 import Foundation
+import TestHelpers
 import XCTestDynamicOverlay
 
 @testable import Auth
@@ -78,24 +79,4 @@ extension Session {
     refreshToken: "refreshtoken",
     user: User(fromMockNamed: "user")
   )
-}
-
-final class InMemoryLocalStorage: AuthLocalStorage, @unchecked Sendable {
-  let storage = LockIsolated([String: Data]())
-
-  func store(key: String, value: Data) throws {
-    storage.withValue {
-      $0[key] = value
-    }
-  }
-
-  func retrieve(key: String) throws -> Data? {
-    storage.value[key]
-  }
-
-  func remove(key: String) throws {
-    storage.withValue {
-      $0[key] = nil
-    }
-  }
 }

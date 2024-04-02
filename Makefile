@@ -17,6 +17,16 @@ test-library:
 				-destination platform="$$platform" | xcpretty; \
 	done;
 
+test-integration:
+	xcodebuild test \
+		-skipMacroValidation \
+		-workspace supabase-swift.xcworkspace \
+		-scheme Supabase \
+		-testPlan IntegrationTests \
+		-derivedDataPath /tmp/derived-data \
+		-destination platform="$(PLATFORM_IOS)"
+
+
 test-linux:
 	docker build -t supabase-swift .
 	docker run supabase-swift

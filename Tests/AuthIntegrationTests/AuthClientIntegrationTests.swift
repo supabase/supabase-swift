@@ -8,6 +8,7 @@
 @testable import Auth
 import ConcurrencyExtras
 import CustomDump
+import TestHelpers
 import XCTest
 
 final class AuthClientIntegrationTests: XCTestCase {

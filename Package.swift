@@ -75,14 +75,24 @@ let package = Package(
       dependencies: goTrueDependencies
     ),
     .testTarget(
+      name: "AuthIntegrationTests",
+      dependencies: [
+        .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        "_Helpers",
+        "Auth",
+        "TestHelpers",
+      ]
+    ),
+    .testTarget(
       name: "AuthTests",
       dependencies: [
-        "Auth",
-        "_Helpers",
-        "TestHelpers",
+        .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
-        .product(name: "CustomDump", package: "swift-custom-dump"),
+        "_Helpers",
+        "Auth",
+        "TestHelpers",
       ],
       exclude: [
         "__Snapshots__",
@@ -142,7 +152,13 @@ let package = Package(
       ]
     ),
     .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
-    .target(name: "TestHelpers"),
+    .target(
+      name: "TestHelpers",
+      dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        "Auth",
+      ]
+    ),
   ]
 )
 

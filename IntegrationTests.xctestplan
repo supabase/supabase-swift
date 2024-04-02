@@ -1,0 +1,31 @@
+{
+  "configurations" : [
+    {
+      "id" : "EFD3DB79-4307-4515-8158-5E17BF4577D4",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "AuthIntegrationTests",
+        "name" : "AuthIntegrationTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "PostgRESTIntegrationTests",
+        "name" : "PostgRESTIntegrationTests"
+      }
+    }
+  ],
+  "version" : 1
+}
