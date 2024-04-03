@@ -5,7 +5,7 @@ PLATFORM_TVOS = tvOS Simulator,name=Apple TV
 PLATFORM_WATCHOS = watchOS Simulator,name=Apple Watch Series 9 (41mm)
 
 set-env:
-	@source setenv.sh > Tests/IntegrationTests/Environment.swift
+	@source scripts/setenv.sh > Tests/IntegrationTests/Environment.swift
 
 test-all: test-library test-linux
 
