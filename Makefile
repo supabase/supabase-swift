@@ -10,7 +10,14 @@ PLATFORM ?= iOS Simulator,name=iPhone 15 Pro
 set-env:
 	@source scripts/setenv.sh > Tests/IntegrationTests/Environment.swift
 
-test-all: test-library test-linux
+test-all: set-env
+	set -o pipefail && \
+			xcodebuild test \
+				-skipMacroValidation \
+				-workspace supabase-swift.xcworkspace \
+				-scheme "$(SCHEME)" \
+				-testPlan AllTests \
+				-destination platform="$(PLATFORM)" | xcpretty
 
 test-library: set-env
 	set -o pipefail && \
