@@ -1,0 +1,24 @@
+{
+  "configurations" : [
+    {
+      "id" : "45505B3F-281D-4398-B92C-A63746C756E0",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "SupabaseTests",
+        "name" : "SupabaseTests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -16,4 +16,16 @@
    <FileRef
       location = "group:Auth.xctestplan">
    </FileRef>
+   <FileRef
+      location = "group:Functions.xctestplan">
+   </FileRef>
+   <FileRef
+      location = "group:PostgREST.xctestplan">
+   </FileRef>
+   <FileRef
+      location = "group:Realtime.xctestplan">
+   </FileRef>
+   <FileRef
+      location = "group:Storage.xctestplan">
+   </FileRef>
 </Workspace>

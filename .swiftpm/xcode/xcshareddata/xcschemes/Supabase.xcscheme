@@ -29,11 +29,11 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            reference = "container:AllTests.xctestplan"
-            default = "YES">
+            reference = "container:IntegrationTests.xctestplan">
          </TestPlanReference>
          <TestPlanReference
-            reference = "container:IntegrationTests.xctestplan">
+            reference = "container:Supabase.xctestplan"
+            default = "YES">
          </TestPlanReference>
       </TestPlans>
    </TestAction>
