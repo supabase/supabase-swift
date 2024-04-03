@@ -36,10 +36,9 @@ struct User: Codable, Hashable {
 @available(iOS 15.0.0, macOS 12.0.0, tvOS 13.0, *)
 final class IntegrationTests: XCTestCase {
   let client = PostgrestClient(
-    url: URL(string: "http://localhost:54321/rest/v1")!,
+    url: URL(string: "\(Environment.SUPABASE_URL)/rest/v1")!,
     headers: [
-      "Apikey":
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+      "Apikey": Environment.SUPABASE_ANON_KEY,
     ],
     logger: nil
   )

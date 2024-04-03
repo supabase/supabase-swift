@@ -4,9 +4,12 @@ PLATFORM_MAC_CATALYST = macOS,variant=Mac Catalyst
 PLATFORM_TVOS = tvOS Simulator,name=Apple TV
 PLATFORM_WATCHOS = watchOS Simulator,name=Apple Watch Series 9 (41mm)
 
+set-env:
+	@source scripts/setenv.sh > Tests/IntegrationTests/Environment.swift
+
 test-all: test-library test-linux
 
-test-library:
+test-library: set-env
 	for platform in "$(PLATFORM_IOS)" "$(PLATFORM_MACOS)" "$(PLATFORM_MAC_CATALYST)" "$(PLATFORM_TVOS)" "$(PLATFORM_WATCHOS)"; do \
 		set -o pipefail && \
 			xcodebuild test \
@@ -16,6 +19,16 @@ test-library:
 				-derivedDataPath /tmp/derived-data \
 				-destination platform="$$platform" | xcpretty; \
 	done;
+
+test-integration: set-env
+	@set -o pipefail && \
+		xcodebuild test \
+			-skipMacroValidation \
+			-workspace supabase-swift.xcworkspace \
+			-scheme Supabase \
+			-testPlan IntegrationTests \
+			-destination platform="$(PLATFORM_IOS)" | xcpretty
+
 
 test-linux:
 	docker build -t supabase-swift .

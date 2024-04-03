@@ -15,6 +15,7 @@ const ALLOWED_CONVENTIONAL_COMMIT_PREFIXES = [
   "docs",
   "chore",
   "style",
+  "test",
 ];
 
 const object = process.argv[2];
@@ -71,12 +72,6 @@ validate.forEach((payload) => {
           `PR (or a commit in it) is using a disallowed conventional commit prefix ("${groups.prefix}"). Only ${ALLOWED_CONVENTIONAL_COMMIT_PREFIXES.join(", ")} are allowed. Make sure the prefix is lowercase!`,
         );
         failed = true;
-      }
-
-      if (groups.package && groups.prefix !== "chore") {
-        console.warn(
-          "Avoid using package specifications in PR titles or commits except for the `chore` prefix.",
-        );
       }
     } else {
       console.error(
