@@ -5,12 +5,14 @@ on:
     paths:
       - "Sources/Auth/**"
       - "Tests/Auth/**"
+      - ".github/workflows/auth.yml"
   push:
     branches:
       - main
     paths:
       - "Sources/Auth/**"
       - "Tests/Auth/**"
+      - ".github/workflows/auth.yml"
 
 concurrency:
   group: ci-${{ github.ref }}
