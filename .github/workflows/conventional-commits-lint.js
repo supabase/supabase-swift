@@ -15,6 +15,7 @@ const ALLOWED_CONVENTIONAL_COMMIT_PREFIXES = [
   "docs",
   "chore",
   "style",
+  "test",
 ];
 
 const object = process.argv[2];
