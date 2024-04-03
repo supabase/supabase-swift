@@ -73,12 +73,6 @@ validate.forEach((payload) => {
         );
         failed = true;
       }
-
-      if (groups.package && groups.prefix !== "chore") {
-        console.warn(
-          "Avoid using package specifications in PR titles or commits except for the `chore` prefix.",
-        );
-      }
     } else {
       console.error(
         "PR or commit title must match conventional commit structure.",
