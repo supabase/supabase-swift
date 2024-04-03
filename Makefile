@@ -4,9 +4,12 @@ PLATFORM_MAC_CATALYST = macOS,variant=Mac Catalyst
 PLATFORM_TVOS = tvOS Simulator,name=Apple TV
 PLATFORM_WATCHOS = watchOS Simulator,name=Apple Watch Series 9 (41mm)
 
+set-env:
+	@source setenv.sh > Tests/IntegrationTests/Environment.swift
+
 test-all: test-library test-linux
 
-test-library:
+test-library: set-env
 	for platform in "$(PLATFORM_IOS)" "$(PLATFORM_MACOS)" "$(PLATFORM_MAC_CATALYST)" "$(PLATFORM_TVOS)" "$(PLATFORM_WATCHOS)"; do \
 		set -o pipefail && \
 			xcodebuild test \
@@ -17,8 +20,7 @@ test-library:
 				-destination platform="$$platform" | xcpretty; \
 	done;
 
-test-integration:
-	@source setenv.sh .env.integration-tests > Tests/IntegrationTests/Environment.swift
+test-integration: set-env
 	@set -o pipefail && \
 		xcodebuild test \
 			-skipMacroValidation \
