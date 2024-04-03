@@ -29,12 +29,13 @@ endef
 export SECRETS
 test-integration:
 	@echo "$$SECRETS" > Tests/IntegrationTests/Secrets.swift
-	@xcodebuild test \
-		-skipMacroValidation \
-		-workspace supabase-swift.xcworkspace \
-		-scheme Supabase \
-		-testPlan IntegrationTests \
-		-destination platform="$(PLATFORM_IOS)"
+	@set -o pipefail && \
+		xcodebuild test \
+			-skipMacroValidation \
+			-workspace supabase-swift.xcworkspace \
+			-scheme Supabase \
+			-testPlan IntegrationTests \
+			-destination platform="$(PLATFORM_IOS)" | xcpretty
 
 
 test-linux:
