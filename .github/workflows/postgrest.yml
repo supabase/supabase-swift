@@ -15,7 +15,7 @@ on:
       - ".github/workflows/postgrest.yml"
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: postgrest-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

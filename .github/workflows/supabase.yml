@@ -15,7 +15,7 @@ on:
       - ".github/workflows/supabase.yml"
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: supabase-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

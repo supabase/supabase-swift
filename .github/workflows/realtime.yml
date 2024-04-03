@@ -15,7 +15,7 @@ on:
       - ".github/workflows/realtime.yml"
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: realtime-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

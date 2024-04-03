@@ -15,7 +15,7 @@ on:
       - ".github/workflows/storage.yml"
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: storage-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

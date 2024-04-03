@@ -15,7 +15,7 @@ on:
       - ".github/workflows/functions.yml"
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: functions-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
