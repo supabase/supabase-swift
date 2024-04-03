@@ -1,7 +1,7 @@
 {
   "configurations" : [
     {
-      "id" : "45505B3F-281D-4398-B92C-A63746C756E0",
+      "id" : "6C13CD34-2158-4CD9-A3C5-F634B9026E15",
       "name" : "Configuration 1",
       "options" : {
 
@@ -15,8 +15,8 @@
     {
       "target" : {
         "containerPath" : "container:",
-        "identifier" : "SupabaseTests",
-        "name" : "SupabaseTests"
+        "identifier" : "RealtimeTests",
+        "name" : "RealtimeTests"
       }
     }
   ],

@@ -4,21 +4,29 @@ PLATFORM_MAC_CATALYST = macOS,variant=Mac Catalyst
 PLATFORM_TVOS = tvOS Simulator,name=Apple TV
 PLATFORM_WATCHOS = watchOS Simulator,name=Apple Watch Series 9 (41mm)
 
+SCHEME ?= Supabase
+PLATFORM ?= iOS Simulator,name=iPhone 15 Pro
+
 set-env:
 	@source scripts/setenv.sh > Tests/IntegrationTests/Environment.swift
 
-test-all: test-library test-linux
-
-test-library: set-env
-	for platform in "$(PLATFORM_IOS)" "$(PLATFORM_MACOS)" "$(PLATFORM_MAC_CATALYST)" "$(PLATFORM_TVOS)" "$(PLATFORM_WATCHOS)"; do \
-		set -o pipefail && \
+test-all: set-env
+	set -o pipefail && \
 			xcodebuild test \
 				-skipMacroValidation \
 				-workspace supabase-swift.xcworkspace \
-				-scheme Supabase \
+				-scheme "$(SCHEME)" \
+				-testPlan AllTests \
+				-destination platform="$(PLATFORM)" | xcpretty
+
+test-library: set-env
+	set -o pipefail && \
+			xcodebuild test \
+				-skipMacroValidation \
+				-workspace supabase-swift.xcworkspace \
+				-scheme "$(SCHEME)" \
 				-derivedDataPath /tmp/derived-data \
-				-destination platform="$$platform" | xcpretty; \
-	done;
+				-destination platform="$(PLATFORM)" | xcpretty
 
 test-integration: set-env
 	@set -o pipefail && \

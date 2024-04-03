@@ -1,0 +1,42 @@
+name: Auth
+
+on:
+  pull_request:
+    paths:
+      - "Sources/Auth/**"
+      - "Tests/Auth/**"
+      - ".github/workflows/auth.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "Sources/Auth/**"
+      - "Tests/Auth/**"
+      - ".github/workflows/auth.yml"
+
+concurrency:
+  group: auth-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test Auth
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - macOS
+          - macOS,variant=Mac Catalyst
+          - iOS Simulator,name=iPhone 15 Pro
+          - tvOS Simulator,name=Apple TV
+          - watchOS Simulator,name=Apple Watch Series 9 (41mm)
+          - visionOS Simulator,name=Any visionOS Simulator Device
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Select Xcode 15.3
+        run: sudo xcode-select -s /Applications/Xcode_15.3.app
+      - name: Run tests
+        run: PLATFORM="${{ matrix.platform }}" SCHEME=Auth make test-library

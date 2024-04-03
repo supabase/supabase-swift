@@ -1,22 +1,22 @@
 {
   "configurations" : [
     {
-      "id" : "45505B3F-281D-4398-B92C-A63746C756E0",
-      "name" : "Configuration 1",
+      "id" : "CB7AE2C5-B36E-4571-9927-9EE60FC5BB1A",
+      "name" : "Test Scheme Action",
       "options" : {
 
       }
     }
   ],
   "defaultOptions" : {
-
+    "codeCoverage" : false
   },
   "testTargets" : [
     {
       "target" : {
         "containerPath" : "container:",
-        "identifier" : "SupabaseTests",
-        "name" : "SupabaseTests"
+        "identifier" : "AuthTests",
+        "name" : "AuthTests"
       }
     }
   ],

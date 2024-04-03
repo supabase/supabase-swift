@@ -1,7 +1,7 @@
 {
   "configurations" : [
     {
-      "id" : "45505B3F-281D-4398-B92C-A63746C756E0",
+      "id" : "B9D59B72-C47A-432C-80B7-898C5D95FC0D",
       "name" : "Configuration 1",
       "options" : {
 
@@ -15,8 +15,8 @@
     {
       "target" : {
         "containerPath" : "container:",
-        "identifier" : "SupabaseTests",
-        "name" : "SupabaseTests"
+        "identifier" : "PostgRESTTests",
+        "name" : "PostgRESTTests"
       }
     }
   ],

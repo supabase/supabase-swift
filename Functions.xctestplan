@@ -1,22 +1,21 @@
 {
   "configurations" : [
     {
-      "id" : "45505B3F-281D-4398-B92C-A63746C756E0",
-      "name" : "Configuration 1",
+      "id" : "C2968060-7062-4A69-B936-4DF46F4A933D",
+      "name" : "Test Scheme Action",
       "options" : {
 
       }
     }
   ],
   "defaultOptions" : {
-
   },
   "testTargets" : [
     {
       "target" : {
         "containerPath" : "container:",
-        "identifier" : "SupabaseTests",
-        "name" : "SupabaseTests"
+        "identifier" : "FunctionsTests",
+        "name" : "FunctionsTests"
       }
     }
   ],

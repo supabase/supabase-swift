@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "1510"
+   LastUpgradeVersion = "1530"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
-      buildImplicitDependencies = "YES">
+      buildImplicitDependencies = "YES"
+      buildArchitectures = "Automatic">
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"
@@ -14,9 +15,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "Storage"
-               BuildableName = "Storage"
-               BlueprintName = "Storage"
+               BlueprintIdentifier = "Auth"
+               BuildableName = "Auth"
+               BlueprintName = "Auth"
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
@@ -29,7 +30,7 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            reference = "container:Storage.xctestplan"
+            reference = "container:Auth.xctestplan"
             default = "YES">
          </TestPlanReference>
       </TestPlans>
@@ -54,9 +55,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "Storage"
-            BuildableName = "Storage"
-            BlueprintName = "Storage"
+            BlueprintIdentifier = "Auth"
+            BuildableName = "Auth"
+            BlueprintName = "Auth"
             ReferencedContainer = "container:">
          </BuildableReference>
       </MacroExpansion>
