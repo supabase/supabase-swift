@@ -95,5 +95,8 @@ iOSInjectionProject/
 /*.xcodeproj
 # /.swiftpm
 
-Secrets.swift
+
+# Environment
 .env
+Secrets.swift
+Tests/IntegrationTests/Environment.swift

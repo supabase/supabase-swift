@@ -14,9 +14,9 @@ import XCTest
 final class AuthClientIntegrationTests: XCTestCase {
   let authClient = AuthClient(
     configuration: AuthClient.Configuration(
-      url: URL(string: "\(Secrets.baseURL)/auth/v1")!,
+      url: URL(string: "\(Environment.SUPABASE_URL)/auth/v1")!,
       headers: [
-        "apikey": Secrets.anonKey,
+        "apikey": Environment.SUPABASE_ANON_KEY,
       ],
       localStorage: InMemoryLocalStorage(),
       logger: nil
@@ -70,9 +70,10 @@ final class AuthClientIntegrationTests: XCTestCase {
     let email = mockEmail()
     let password = mockPassword()
 
-    await XCTAssertThrowsError(
+    do {
       try await authClient.signIn(email: email, password: password)
-    ) { error in
+      XCTFail("Expect failure")
+    } catch {
       if let error = error as? AuthError {
         XCTAssertEqual(error.localizedDescription, "Invalid login credentials")
       } else {
@@ -151,7 +152,10 @@ final class AuthClientIntegrationTests: XCTestCase {
       .user.identities
     let identity = try XCTUnwrap(identities?.first)
 
-    await XCTAssertThrowsError(try await authClient.unlinkIdentity(identity)) { error in
+    do {
+      try await authClient.unlinkIdentity(identity)
+      XCTFail("Expect failure")
+    } catch {
       if let error = error as? AuthError {
         XCTAssertEqual(
           error.localizedDescription,
@@ -266,19 +270,5 @@ final class AuthClientIntegrationTests: XCTestCase {
     XCTAssertNoDifference(events, receivedEvents.value)
 
     token.remove()
-  }
-
-  private func XCTAssertThrowsError(
-    _ expression: @autoclosure () async throws -> some Any,
-    file: StaticString = #filePath,
-    line: UInt = #line,
-    _ errorHandler: (_ error: any Error) -> Void = { _ in }
-  ) async {
-    do {
-      _ = try await expression()
-      XCTFail("Expect failure", file: file, line: line)
-    } catch {
-      errorHandler(error)
-    }
   }
 }

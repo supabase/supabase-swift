@@ -17,18 +17,8 @@ test-library:
 				-destination platform="$$platform" | xcpretty; \
 	done;
 
-define SECRETS
-import Foundation
-
-enum Secrets {
-	static let baseURL = "$(SUPABASE_URL)"
-	static let anonKey = "$(SUPABASE_ANON_KEY)"
-	static let serviceKey = "$(SUPABASE_SERVICE_KEY)"
-}
-endef
-export SECRETS
 test-integration:
-	@echo "$$SECRETS" > Tests/IntegrationTests/Secrets.swift
+	@source setenv.sh .env.integration-tests > Tests/IntegrationTests/Environment.swift
 	@set -o pipefail && \
 		xcodebuild test \
 			-skipMacroValidation \
