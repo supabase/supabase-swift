@@ -8,9 +8,12 @@
       location = "container:Examples/Examples.xcodeproj">
    </FileRef>
    <FileRef
-      location = "group:Supabase.xctestplan">
+      location = "group:/Users/guilherme/src/github.com/supabase-community/supabase-swift/AllTests.xctestplan">
    </FileRef>
    <FileRef
       location = "group:IntegrationTests.xctestplan">
+   </FileRef>
+   <FileRef
+      location = "group:Auth.xctestplan">
    </FileRef>
 </Workspace>
