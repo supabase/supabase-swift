@@ -79,6 +79,7 @@ let package = Package(
         "Auth",
         "TestHelpers",
         "PostgREST",
+        "Realtime",
       ]
     ),
     .target(

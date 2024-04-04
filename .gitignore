@@ -97,6 +97,6 @@ iOSInjectionProject/
 
 
 # Environment
-.env.local
+.env
 Secrets.swift
-Tests/IntegrationTests/Environment.swift
+DotEnv.swift

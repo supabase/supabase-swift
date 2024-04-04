@@ -148,12 +148,6 @@ final class RealtimeTests: XCTestCase {
   }
 }
 
-extension AsyncSequence {
-  func collect() async rethrows -> [Element] {
-    try await reduce(into: [Element]()) { $0.append($1) }
-  }
-}
-
 extension RealtimeMessageV2 {
   static let subscribeToMessages = Self(
     joinRef: "1",

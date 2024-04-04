@@ -9,22 +9,31 @@ import ConcurrencyExtras
 import CustomDump
 import PostgREST
 @testable import Realtime
+import Supabase
+import TestHelpers
 import XCTest
+
+struct Logger: SupabaseLogger {
+  func log(message: SupabaseLogMessage) {
+    print(message.description)
+  }
+}
 
 final class RealtimeIntegrationTests: XCTestCase {
   let realtime = RealtimeClientV2(
     config: RealtimeClientV2.Configuration(
-      url: URL(string: "http://localhost:54321/realtime/v1")!,
-      apiKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+      url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
+      apiKey: DotEnv.SUPABASE_ANON_KEY,
+      logger: Logger()
     )
   )
 
   let db = PostgrestClient(
-    url: URL(string: "http://localhost:54321/rest/v1")!,
+    url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
     headers: [
-      "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU",
+      "apikey": DotEnv.SUPABASE_ANON_KEY,
     ],
-    logger: nil
+    logger: Logger()
   )
 
   func testBroadcast() async throws {
