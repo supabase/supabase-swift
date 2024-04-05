@@ -51,11 +51,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   public func execute(
     options: FetchOptions = FetchOptions()
   ) async throws -> PostgrestResponse<Void> {
-    mutableState.withValue {
-      $0.fetchOptions = options
-    }
-
-    return try await execute { _ in () }
+    try await execute(options: options) { _ in () }
   }
 
   /// Executes the request and returns a response of the specified type.
@@ -66,11 +62,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   public func execute<T: Decodable>(
     options: FetchOptions = FetchOptions()
   ) async throws -> PostgrestResponse<T> {
-    mutableState.withValue {
-      $0.fetchOptions = options
-    }
-
-    return try await execute { [configuration] data in
+    try await execute(options: options) { [configuration] data in
       do {
         return try configuration.decoder.decode(T.self, from: data)
       } catch {
@@ -80,8 +72,13 @@ public class PostgrestBuilder: @unchecked Sendable {
     }
   }
 
-  private func execute<T>(decode: (Data) throws -> T) async throws -> PostgrestResponse<T> {
+  private func execute<T>(
+    options: FetchOptions,
+    decode: (Data) throws -> T
+  ) async throws -> PostgrestResponse<T> {
     mutableState.withValue {
+      $0.fetchOptions = options
+
       if $0.fetchOptions.head {
         $0.request.method = .head
       }

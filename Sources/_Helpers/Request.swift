@@ -186,7 +186,7 @@ package struct Response: Sendable {
   package let data: Data
   package let response: HTTPURLResponse
 
-  public var statusCode: Int {
+  package var statusCode: Int {
     response.statusCode
   }
 
