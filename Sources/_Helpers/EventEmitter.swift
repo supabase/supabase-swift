@@ -30,7 +30,7 @@ public final class ObservationToken: Sendable {
 package final class EventEmitter<Event: Sendable>: Sendable {
   public typealias Listener = @Sendable (Event) -> Void
 
-  let listeners = LockIsolated<[ObjectIdentifier: Listener]>([:])
+  private let listeners = LockIsolated<[ObjectIdentifier: Listener]>([:])
   public let lastEvent: LockIsolated<Event>
 
   let emitsLastEventWhenAttaching: Bool

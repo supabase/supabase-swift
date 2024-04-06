@@ -16,7 +16,7 @@ final class CallbackManager: @unchecked Sendable {
     var callbacks: [RealtimeCallback] = []
   }
 
-  let mutableState = LockIsolated(MutableState())
+  private let mutableState = LockIsolated(MutableState())
 
   @discardableResult
   func addBroadcastCallback(
