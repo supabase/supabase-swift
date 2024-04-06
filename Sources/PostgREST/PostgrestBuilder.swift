@@ -76,7 +76,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     options: FetchOptions,
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    mutableState.withValue {
+    let request = mutableState.withValue {
       $0.fetchOptions = options
 
       if $0.fetchOptions.head {
@@ -103,9 +103,11 @@ public class PostgrestBuilder: @unchecked Sendable {
           $0.request.headers["Content-Profile"] = schema
         }
       }
+
+      return $0.request
     }
 
-    let response = try await http.fetch(mutableState.value.request, baseURL: configuration.url)
+    let response = try await http.fetch(request, baseURL: configuration.url)
 
     guard 200 ..< 300 ~= response.statusCode else {
       let error = try configuration.decoder.decode(PostgrestError.self, from: response.data)
