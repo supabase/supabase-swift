@@ -28,7 +28,7 @@ test-library: dot-env
 				-derivedDataPath /tmp/derived-data \
 				-destination platform="$(PLATFORM)" | xcpretty
 
-test-integration: set-env
+test-integration: dot-env
 	@set -o pipefail && \
 		xcodebuild test \
 			-skipMacroValidation \
