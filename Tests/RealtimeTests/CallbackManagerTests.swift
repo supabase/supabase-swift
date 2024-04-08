@@ -184,7 +184,7 @@ final class CallbackManagerTests: XCTestCase {
 
     let jsonObject = try JSONObject(message)
 
-    let receivedMessage = LockIsolated(JSONObject?.none)
+    let receivedMessage = LockIsolated<JSONObject?>(nil)
     callbackManager.addBroadcastCallback(event: event) {
       receivedMessage.setValue($0)
     }
