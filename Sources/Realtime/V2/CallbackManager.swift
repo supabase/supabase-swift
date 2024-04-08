@@ -16,7 +16,15 @@ final class CallbackManager: @unchecked Sendable {
     var callbacks: [RealtimeCallback] = []
   }
 
-  let mutableState = LockIsolated(MutableState())
+  private let mutableState = LockIsolated(MutableState())
+
+  var serverChanges: [PostgresJoinConfig] {
+    mutableState.serverChanges
+  }
+
+  var callbacks: [RealtimeCallback] {
+    mutableState.callbacks
+  }
 
   @discardableResult
   func addBroadcastCallback(

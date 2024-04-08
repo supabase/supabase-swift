@@ -36,14 +36,14 @@ final class CallbackManagerTests: XCTestCase {
 
     XCTAssertEqual(callbackManager.addPresenceCallback { _ in }, 3)
 
-    XCTAssertEqual(callbackManager.mutableState.value.callbacks.count, 3)
+    XCTAssertEqual(callbackManager.callbacks.count, 3)
 
     callbackManager.removeCallback(id: 2)
     callbackManager.removeCallback(id: 3)
 
-    XCTAssertEqual(callbackManager.mutableState.value.callbacks.count, 1)
+    XCTAssertEqual(callbackManager.callbacks.count, 1)
     XCTAssertFalse(
-      callbackManager.mutableState.value.callbacks
+      callbackManager.callbacks
         .contains(where: { $0.id == 2 || $0.id == 3 })
     )
   }
@@ -62,7 +62,7 @@ final class CallbackManagerTests: XCTestCase {
 
     callbackManager.setServerChanges(changes: changes)
 
-    XCTAssertEqual(callbackManager.mutableState.value.serverChanges, changes)
+    XCTAssertEqual(callbackManager.serverChanges, changes)
   }
 
   func testTriggerPostgresChanges() {

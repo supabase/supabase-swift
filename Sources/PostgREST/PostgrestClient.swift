@@ -53,7 +53,7 @@ public final class PostgrestClient: Sendable {
     }
   }
 
-  let _configuration: LockIsolated<Configuration>
+  private let _configuration: LockIsolated<Configuration>
   public var configuration: Configuration { _configuration.value }
 
   /// Creates a PostgREST client with the specified configuration.

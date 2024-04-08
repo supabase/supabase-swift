@@ -42,7 +42,7 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
     var stream: SocketStream?
   }
 
-  let mutableState = LockIsolated(MutableState())
+  private let mutableState = LockIsolated(MutableState())
 
   init(config: RealtimeClientV2.Configuration) {
     realtimeURL = config.realtimeWebSocketURL
