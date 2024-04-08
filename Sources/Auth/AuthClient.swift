@@ -9,7 +9,11 @@ import Foundation
   import FoundationNetworking
 #endif
 
-public final class AuthClient: @unchecked Sendable {
+#if canImport(UIKit)
+  import UIKit
+#endif
+
+public final class AuthClient: Sendable {
   /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler = @Sendable (
     _ request: URLRequest
@@ -27,6 +31,9 @@ public final class AuthClient: @unchecked Sendable {
     public let decoder: JSONDecoder
     public let fetch: FetchHandler
 
+    /// Whether the client should auto refresh token in background.
+    public let autoRefreshToken: Bool
+
     /// Initializes a AuthClient Configuration with optional parameters.
     ///
     /// - Parameters:
@@ -39,6 +46,8 @@ public final class AuthClient: @unchecked Sendable {
     ///   - encoder: The JSON encoder to use for encoding requests.
     ///   - decoder: The JSON decoder to use for decoding responses.
     ///   - fetch: The asynchronous fetch handler for network requests.
+    ///   - autoRefreshToken: Whether the client should auto refresh token in background, defaults
+    /// to true.
     public init(
       url: URL,
       headers: [String: String] = [:],
@@ -48,7 +57,8 @@ public final class AuthClient: @unchecked Sendable {
       logger: (any SupabaseLogger)? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      autoRefreshToken: Bool = true
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
 
@@ -61,6 +71,7 @@ public final class AuthClient: @unchecked Sendable {
       self.encoder = encoder
       self.decoder = decoder
       self.fetch = fetch
+      self.autoRefreshToken = autoRefreshToken
     }
   }
 
@@ -102,6 +113,8 @@ public final class AuthClient: @unchecked Sendable {
   /// key in the client.
   public let admin: AuthAdmin
 
+  private var autoRefreshToken: AutoRefreshToken?
+
   /// Initializes a AuthClient with optional parameters.
   ///
   /// - Parameters:
@@ -114,6 +127,7 @@ public final class AuthClient: @unchecked Sendable {
   ///   - encoder: The JSON encoder to use for encoding requests.
   ///   - decoder: The JSON decoder to use for decoding responses.
   ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - autoRefreshToken: Whether the client should auto refresh token in background, defaults to
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
@@ -123,7 +137,8 @@ public final class AuthClient: @unchecked Sendable {
     logger: (any SupabaseLogger)? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    autoRefreshToken: Bool = true
   ) {
     self.init(
       configuration: Configuration(
@@ -135,7 +150,8 @@ public final class AuthClient: @unchecked Sendable {
         logger: logger,
         encoder: encoder,
         decoder: decoder,
-        fetch: fetch
+        fetch: fetch,
+        autoRefreshToken: autoRefreshToken
       )
     )
   }
@@ -177,6 +193,10 @@ public final class AuthClient: @unchecked Sendable {
     mfa = AuthMFA()
     admin = AuthAdmin()
 
+    if configuration.autoRefreshToken {
+      autoRefreshToken = AutoRefreshToken()
+    }
+
     Current = Dependencies(
       configuration: configuration,
       sessionManager: sessionManager,
@@ -191,6 +211,33 @@ public final class AuthClient: @unchecked Sendable {
       codeVerifierStorage: codeVerifierStorage,
       logger: logger
     )
+
+    NotificationCenter.default.addObserver(
+      forName: UIApplication.willResignActiveNotification,
+      object: nil,
+      queue: nil
+    ) { [weak self] _ in
+      self?.appDidEnterBackground()
+    }
+    NotificationCenter.default.addObserver(
+      forName: UIApplication.didBecomeActiveNotification,
+      object: nil,
+      queue: nil
+    ) { [weak self] _ in
+      self?.appDidBecomeActive()
+    }
+  }
+
+  private func appDidEnterBackground() {
+    Task {
+      await autoRefreshToken?.stop()
+    }
+  }
+
+  private func appDidBecomeActive() {
+    Task {
+      await autoRefreshToken?.start()
+    }
   }
 
   /// Listen for auth state changes.
@@ -1179,7 +1226,6 @@ public final class AuthClient: @unchecked Sendable {
       .user.confirmedAt != nil
     {
       try await sessionManager.update(session)
-      eventEmitter.emit(.tokenRefreshed, session: session)
     }
 
     return session

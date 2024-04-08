@@ -9,6 +9,7 @@ struct SessionManager: Sendable {
   var session: @Sendable (_ shouldValidateExpiration: Bool) async throws -> Session
   var update: @Sendable (_ session: Session) async throws -> Void
   var remove: @Sendable () async -> Void
+  var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
 }
 
 extension SessionManager {
@@ -24,7 +25,8 @@ extension SessionManager {
     return SessionManager(
       session: { try await manager.session(shouldValidateExpiration: $0) },
       update: { try await manager.update($0) },
-      remove: { await manager.remove() }
+      remove: { await manager.remove() },
+      refreshSession: { try await manager.refreshSession($0) }
     )
   }()
 }
@@ -37,6 +39,9 @@ private actor _DefaultSessionManager {
 
   @Dependency(\.sessionRefresher)
   private var sessionRefresher: SessionRefresher
+
+  @Dependency(\.eventEmitter)
+  private var eventEmitter: EventEmitter
 
   func session(shouldValidateExpiration: Bool) async throws -> Session {
     if let task {
@@ -54,9 +59,7 @@ private actor _DefaultSessionManager {
     task = Task {
       defer { task = nil }
 
-      let session = try await sessionRefresher.refreshSession(currentSession.session.refreshToken)
-      try update(session)
-      return session
+      return try await refreshSession(currentSession.session.refreshToken)
     }
 
     return try await task!.value
@@ -64,9 +67,17 @@ private actor _DefaultSessionManager {
 
   func update(_ session: Session) throws {
     try storage.storeSession(StoredSession(session: session))
+    eventEmitter.emit(.tokenRefreshed, session: session)
   }
 
   func remove() {
     try? storage.deleteSession()
+  }
+
+  @discardableResult
+  func refreshSession(_ refreshToken: String) async throws -> Session {
+    let session = try await sessionRefresher.refreshSession(refreshToken)
+    try update(session)
+    return session
   }
 }
