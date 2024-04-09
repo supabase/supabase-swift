@@ -7,8 +7,19 @@ PLATFORM_WATCHOS = watchOS Simulator,name=Apple Watch Series 9 (41mm)
 SCHEME ?= Supabase
 PLATFORM ?= iOS Simulator,name=iPhone 15 Pro
 
+export SECRETS
+define SECRETS
+enum DotEnv {
+  static let SUPABASE_URL = "$(SUPABASE_URL)"
+  static let SUPABASE_ANON_KEY = "$(SUPABASE_ANON_KEY)"
+}
+endef
+
+load-env:
+	@. ./scripts/load_env.sh
+
 dot-env:
-	@./scripts/dotenv.sh > Tests/IntegrationTests/DotEnv.swift
+	@echo "$$SECRETS" > Tests/IntegrationTests/DotEnv.swift
 
 test-all: dot-env
 	set -o pipefail && \
@@ -29,7 +40,7 @@ test-library: dot-env
 				-destination platform="$(PLATFORM)" | xcpretty
 
 test-integration: dot-env
-	@set -o pipefail && \
+	set -o pipefail && \
 		xcodebuild test \
 			-skipMacroValidation \
 			-workspace supabase-swift.xcworkspace \
