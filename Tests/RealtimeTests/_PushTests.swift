@@ -11,15 +11,25 @@ import TestHelpers
 import XCTest
 
 final class _PushTests: XCTestCase {
-  let socket = RealtimeClientV2(config: RealtimeClientV2.Configuration(
-    url: URL(string: "https://localhost:54321/v1/realtime")!,
-    apiKey: "apikey"
-  ))
+  var ws: MockWebSocketClient!
+  var socket: RealtimeClientV2!
 
   override func invokeTest() {
     withMainSerialExecutor {
       super.invokeTest()
     }
+  }
+  override func setUp() {
+    super.setUp()
+
+    ws = MockWebSocketClient()
+    socket = RealtimeClientV2(
+      config: RealtimeClientV2.Configuration(
+        url: URL(string: "https://localhost:54321/v1/realtime")!,
+        apiKey: "apikey"
+      ),
+      ws: ws
+    )
   }
 
   func testPushWithoutAck() async {
