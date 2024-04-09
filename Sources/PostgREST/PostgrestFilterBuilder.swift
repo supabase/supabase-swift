@@ -200,9 +200,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
 
   public func textSearch(
     _ column: String,
-    range: any URLQueryRepresentable
+    value: any URLQueryRepresentable
   ) -> PostgrestFilterBuilder {
-    let queryValue = range.queryValue
+    let queryValue = value.queryValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "adj.\(queryValue)"))
     }
@@ -210,7 +210,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
   }
 
   public func textSearch(
-    _ column: String, query: any URLQueryRepresentable, config: String? = nil,
+    _ column: String,
+    query: any URLQueryRepresentable,
+    config: String? = nil,
     type: TextSearchType? = nil
   ) -> PostgrestFilterBuilder {
     let queryValue = query.queryValue
