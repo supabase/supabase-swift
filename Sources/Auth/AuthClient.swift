@@ -675,7 +675,7 @@ public final class AuthClient: @unchecked Sendable {
       queryParams: queryParams
     ) { @MainActor url in
       try await withCheckedThrowingContinuation { continuation in
-        guard let callbackScheme = url.scheme else {
+        guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
           continuation.resume(throwing: AuthError.invalidRedirectScheme)
           return
         }
