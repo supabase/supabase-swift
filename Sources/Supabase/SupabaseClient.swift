@@ -31,7 +31,16 @@ public final class SupabaseClient: @unchecked Sendable {
   public let auth: AuthClient
 
   /// Database client for Supabase.
-  public private(set) lazy var database = PostgrestClient(
+  @available(
+    *,
+    deprecated,
+    message: "Direct access to database is deprecated, please use one of the available methods such as, SupabaseClient.from(_:), SupabaseClient.rpc(_:params:), or SupabaseClient.schema(_:)."
+  )
+  public var database: PostgrestClient {
+    rest
+  }
+
+  private lazy var rest = PostgrestClient(
     url: databaseURL,
     schema: options.db.schema,
     headers: defaultHeaders,
@@ -143,6 +152,80 @@ public final class SupabaseClient: @unchecked Sendable {
     )
 
     listenForAuthEvents()
+  }
+
+  /// Performs a query on a table or a view.
+  /// - Parameter table: The table or view name to query.
+  /// - Returns: A PostgrestQueryBuilder instance.
+  public func from(_ table: String) -> PostgrestQueryBuilder {
+    rest.from(table)
+  }
+
+  /// Performs a function call.
+  /// - Parameters:
+  ///   - fn: The function name to call.
+  ///   - params: The parameters to pass to the function call.
+  ///   - count: Count algorithm to use to count rows returned by the function.
+  ///             Only applicable for set-returning functions.
+  /// - Returns: A PostgrestFilterBuilder instance.
+  /// - Throws: An error if the function call fails.
+  public func rpc(
+    _ fn: String,
+    params: some Encodable & Sendable,
+    count: CountOption? = nil
+  ) throws -> PostgrestFilterBuilder {
+    try rest.rpc(fn, params: params, count: count)
+  }
+
+  /// Performs a function call.
+  /// - Parameters:
+  ///   - fn: The function name to call.
+  ///   - count: Count algorithm to use to count rows returned by the function.
+  ///            Only applicable for set-returning functions.
+  /// - Returns: A PostgrestFilterBuilder instance.
+  /// - Throws: An error if the function call fails.
+  public func rpc(
+    _ fn: String,
+    count: CountOption? = nil
+  ) throws -> PostgrestFilterBuilder {
+    try rest.rpc(fn, count: count)
+  }
+
+  /// Select a schema to query or perform an function (rpc) call.
+  ///
+  /// The schema needs to be on the list of exposed schemas inside Supabase.
+  /// - Parameter schema: The schema to query.
+  public func schema(_ schema: String) -> PostgrestClient {
+    rest.schema(schema)
+  }
+
+  /// Returns all Realtime channels.
+  public var channels: [RealtimeChannelV2] {
+    get async {
+      await Array(realtimeV2.subscriptions.values)
+    }
+  }
+
+  /// Creates a Realtime channel with Broadcast, Presence, and Postgres Changes.
+  /// - Parameters:
+  ///   - name: The name of the Realtime channel.
+  ///   - options: The options to pass to the Realtime channel.
+  public func channel(
+    _ name: String,
+    options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+  ) async -> RealtimeChannelV2 {
+    await realtimeV2.channel(name, options: options)
+  }
+
+  /// Unsubscribes and removes Realtime channel from Realtime client.
+  /// - Parameter channel: The Realtime channel to remove.
+  public func removeChannel(_ channel: RealtimeChannelV2) async {
+    await realtimeV2.removeChannel(channel)
+  }
+
+  /// Unsubscribes and removes all Realtime channels from Realtime client.
+  public func removeAllChannels() async {
+    await realtimeV2.removeAllChannels()
   }
 
   deinit {

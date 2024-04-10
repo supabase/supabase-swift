@@ -226,6 +226,12 @@ public actor RealtimeClientV2 {
     }
   }
 
+  public func removeAllChannels() async {
+    for channel in subscriptions.values {
+      await removeChannel(channel)
+    }
+  }
+
   private func rejoinChannels() async {
     for channel in subscriptions.values {
       await channel.subscribe()

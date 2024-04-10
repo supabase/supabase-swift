@@ -78,3 +78,13 @@ extension PostgrestClient {
     )
   }
 }
+
+extension PostgrestFilterBuilder {
+  @available(*, deprecated, renamed: "textSearch(_:value:)")
+  public func textSearch(
+    _ column: String,
+    range: any URLQueryRepresentable
+  ) -> PostgrestFilterBuilder {
+    textSearch(column, value: range)
+  }
+}
