@@ -46,7 +46,7 @@ struct SignInWithOAuth: View {
 }
 
 final class SignInWithOAuthViewController: UIViewController, UIPickerViewDataSource,
-  UIPickerViewDelegate, ASWebAuthenticationPresentationContextProviding
+  UIPickerViewDelegate
 {
   let providers = Provider.allCases
   var provider = Provider.allCases[0]
@@ -88,10 +88,7 @@ final class SignInWithOAuthViewController: UIViewController, UIPickerViewDataSou
       do {
         try await supabase.auth.signInWithOAuth(
           provider: provider,
-          redirectTo: Constants.redirectToURL,
-          configure: { session in
-            session.presentationContextProvider = self
-          }
+          redirectTo: Constants.redirectToURL
         )
       } catch {
         debug("Failed to sign-in with OAuth flow: \(error)")
@@ -113,10 +110,6 @@ final class SignInWithOAuthViewController: UIViewController, UIPickerViewDataSou
 
   func pickerView(_: UIPickerView, didSelectRow row: Int, inComponent _: Int) {
     provider = providers[row]
-  }
-
-  func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-    view.window ?? UIWindow()
   }
 }
 
