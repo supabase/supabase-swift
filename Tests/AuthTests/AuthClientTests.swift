@@ -324,6 +324,7 @@ final class AuthClientTests: XCTestCase {
     XCTAssertEqual(emitReceivedEvents.value.map(\.0), [.signedIn])
   }
 
+  @available(watchOS 6.2, tvOS 16.0, *)
   func testSignInWithOAuthWithInvalidRedirecTo() async {
     let sut = makeSUT()
 
