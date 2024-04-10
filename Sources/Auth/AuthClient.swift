@@ -626,7 +626,7 @@ public final class AuthClient: @unchecked Sendable {
     redirectTo: URL? = nil,
     scopes: String? = nil,
     queryParams: [(name: String, value: String?)] = [],
-    launchFlow: @Sendable (_ url: URL) async throws -> URL
+    launchFlow: @MainActor @Sendable (_ url: URL) async throws -> URL
   ) async throws -> Session {
     guard let redirectTo = (redirectTo ?? configuration.redirectToURL) else {
       throw AuthError.invalidRedirectScheme

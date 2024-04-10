@@ -22,7 +22,12 @@ struct GoogleSignInWithWebFlow: View {
   @MainActor
   private func signInWithGoogleButtonTapped() async {
     do {
-      try await supabase.auth.signInWithOAuth(provider: .google, using: webAuthenticationSession)
+      try await supabase.auth.signInWithOAuth(provider: .google) { url in
+        try await webAuthenticationSession.authenticate(
+          using: url,
+          callbackURLScheme: url.scheme!
+        )
+      }
     } catch {
       print("failed to sign in with Google: \(error)")
     }
