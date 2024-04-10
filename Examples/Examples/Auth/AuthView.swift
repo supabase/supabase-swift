@@ -12,7 +12,8 @@ struct AuthView: View {
     case emailAndPassword
     case magicLink
     case signInWithApple
-    case googleSignInWebFlow
+    case signInWithOAuth
+    case signInWithOAuthUsingUIKit
     case googleSignInSDKFlow
     case signInAnonymously
 
@@ -21,7 +22,8 @@ struct AuthView: View {
       case .emailAndPassword: "Auth with Email & Password"
       case .magicLink: "Auth with Magic Link"
       case .signInWithApple: "Sign in with Apple"
-      case .googleSignInWebFlow: "Google Sign in (Web Flow)"
+      case .signInWithOAuth: "Sign in with OAuth flow"
+      case .signInWithOAuthUsingUIKit: "Sign in with OAuth flow (UIKit)"
       case .googleSignInSDKFlow: "Google Sign in (GIDSignIn SDK Flow)"
       case .signInAnonymously: "Sign in Anonymously"
       }
@@ -50,7 +52,9 @@ extension AuthView.Option: View {
     case .emailAndPassword: AuthWithEmailAndPassword()
     case .magicLink: AuthWithMagicLink()
     case .signInWithApple: SignInWithApple()
-    case .googleSignInWebFlow: GoogleSignInWithWebFlow()
+    case .signInWithOAuth: SignInWithOAuth()
+    case .signInWithOAuthUsingUIKit: UIViewControllerWrapper(SignInWithOAuthViewController())
+      .edgesIgnoringSafeArea(.all)
     case .googleSignInSDKFlow: GoogleSignInSDKFlow()
     case .signInAnonymously: SignInAnonymously()
     }

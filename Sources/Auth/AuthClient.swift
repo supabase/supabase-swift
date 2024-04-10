@@ -594,14 +594,18 @@ public final class AuthClient: @unchecked Sendable {
   }
 
   /// Log in an existing user via a third-party provider.
+  @available(
+    *,
+    deprecated,
+    message: "Use `signInWithOAuth` method to implement sign-in with third-party provider. Use parameter `launchFlow` to customize how the OAuth flow is launched in your application."
+  )
   public func getOAuthSignInURL(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
   ) throws -> URL {
-    try getURLForProvider(
-      url: configuration.url.appendingPathComponent("authorize"),
+    try _getOAuthSignInURL(
       provider: provider,
       scopes: scopes,
       redirectTo: redirectTo,
@@ -632,7 +636,7 @@ public final class AuthClient: @unchecked Sendable {
       throw AuthError.invalidRedirectScheme
     }
 
-    let url = try getOAuthSignInURL(
+    let url = try _getOAuthSignInURL(
       provider: provider,
       scopes: scopes,
       redirectTo: redirectTo,
@@ -644,7 +648,7 @@ public final class AuthClient: @unchecked Sendable {
     return try await session(from: resultURL)
   }
 
-  /// Sign-in an existing user via a third-party provider.
+  /// Sign-in an existing user via a third-party provider using ``ASWebAuthenticationSession``.
   ///
   /// - Parameters:
   ///   - provider: The third-party provider.
@@ -1217,6 +1221,21 @@ public final class AuthClient: @unchecked Sendable {
     }
 
     return url
+  }
+
+  private func _getOAuthSignInURL(
+    provider: Provider,
+    scopes: String? = nil,
+    redirectTo: URL? = nil,
+    queryParams: [(name: String, value: String?)] = []
+  ) throws -> URL {
+    try getURLForProvider(
+      url: configuration.url.appendingPathComponent("authorize"),
+      provider: provider,
+      scopes: scopes,
+      redirectTo: redirectTo,
+      queryParams: queryParams
+    )
   }
 }
 
