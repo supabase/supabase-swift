@@ -609,18 +609,15 @@ public final class AuthClient: @unchecked Sendable {
     )
   }
 
-  @available(watchOS 6.2, tvOS 16.0, *)
   @discardableResult
   public func signInWithOAuth(
     provider: Provider,
     redirectTo: URL? = nil,
     scopes: String? = nil,
     queryParams: [(name: String, value: String?)] = [],
-    configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void = { _ in }
+    launchFlow: @MainActor @Sendable (_ url: URL) async throws -> URL
   ) async throws -> Session {
-    guard let redirectTo = (redirectTo ?? configuration.redirectToURL),
-          let callbackScheme = redirectTo.scheme
-    else {
+    guard let redirectTo = (redirectTo ?? configuration.redirectToURL) else {
       throw AuthError.invalidRedirectScheme
     }
 
@@ -631,24 +628,7 @@ public final class AuthClient: @unchecked Sendable {
       queryParams: queryParams
     )
 
-    let resultURL: URL = try await withCheckedThrowingContinuation { continuation in
-      let session = ASWebAuthenticationSession(
-        url: url,
-        callbackURLScheme: callbackScheme
-      ) { url, error in
-        if let error {
-          continuation.resume(throwing: error)
-        } else if let url {
-          continuation.resume(returning: url)
-        } else {
-          fatalError()
-        }
-      }
-
-      configure(session)
-
-      session.start()
-    }
+    let resultURL = try await launchFlow(url)
 
     return try await session(from: resultURL)
   }
@@ -1192,6 +1172,49 @@ extension AuthClient {
   public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
 }
 
+extension AuthClient {
+  @available(watchOS 6.2, tvOS 16.0, *)
+  @discardableResult
+  public func signInWithOAuth(
+    provider: Provider,
+    redirectTo: URL? = nil,
+    scopes: String? = nil,
+    queryParams: [(name: String, value: String?)] = [],
+    configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void
+  ) async throws -> Session {
+    try await signInWithOAuth(
+      provider: provider,
+      redirectTo: redirectTo,
+      scopes: scopes,
+      queryParams: queryParams
+    ) { url in
+      try await withCheckedThrowingContinuation { continuation in
+        guard let callbackScheme = url.scheme else {
+          continuation.resume(throwing: AuthError.invalidRedirectScheme)
+          return
+        }
+
+        let session = ASWebAuthenticationSession(
+          url: url,
+          callbackURLScheme: callbackScheme
+        ) { url, error in
+          if let error {
+            continuation.resume(throwing: error)
+          } else if let url {
+            continuation.resume(returning: url)
+          } else {
+            fatalError()
+          }
+        }
+
+        configure(session)
+
+        session.start()
+      }
+    }
+  }
+}
+
 #if canImport(SwiftUI)
   import SwiftUI
 
@@ -1206,26 +1229,22 @@ extension AuthClient {
       scopes: String? = nil,
       queryParams: [(name: String, value: String?)] = []
     ) async throws -> Session {
-      guard let redirectTo = (redirectTo ?? configuration.redirectToURL),
-            let callbackScheme = redirectTo.scheme
-      else {
-        throw AuthError.invalidRedirectScheme
-      }
-
-      let url = try getOAuthSignInURL(
+      try await signInWithOAuth(
         provider: provider,
-        scopes: scopes,
         redirectTo: redirectTo,
+        scopes: scopes,
         queryParams: queryParams
-      )
+      ) { url in
+        guard let callbackScheme = url.scheme else {
+          throw AuthError.invalidRedirectScheme
+        }
 
-      let resultURL = try await webAuthenticationSession.authenticate(
-        using: url,
-        callbackURLScheme: callbackScheme,
-        preferredBrowserSession: preferredBrowserSession
-      )
-
-      return try await session(from: resultURL)
+        return try await webAuthenticationSession.authenticate(
+          using: url,
+          callbackURLScheme: callbackScheme,
+          preferredBrowserSession: preferredBrowserSession
+        )
+      }
     }
   }
 #endif
