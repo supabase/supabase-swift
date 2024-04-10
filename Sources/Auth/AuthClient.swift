@@ -672,7 +672,7 @@ public final class AuthClient: @unchecked Sendable {
     redirectTo: URL? = nil,
     scopes: String? = nil,
     queryParams: [(name: String, value: String?)] = [],
-    configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void
+    configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void = { _ in }
   ) async throws -> Session {
     try await signInWithOAuth(
       provider: provider,
@@ -686,6 +686,8 @@ public final class AuthClient: @unchecked Sendable {
           return
         }
 
+        var presentationContextProvider: DefaultPresentationContextProvider?
+
         let session = ASWebAuthenticationSession(
           url: url,
           callbackURLScheme: callbackScheme
@@ -697,9 +699,17 @@ public final class AuthClient: @unchecked Sendable {
           } else {
             continuation.resume(throwing: AuthError.missingURL)
           }
+
+          // Keep a strong reference to presentationContextProvider until the flow completes.
+          _ = presentationContextProvider
         }
 
         configure(session)
+
+        if session.presentationContextProvider == nil {
+          presentationContextProvider = DefaultPresentationContextProvider()
+          session.presentationContextProvider = presentationContextProvider
+        }
 
         session.start()
       }
@@ -1243,4 +1253,13 @@ extension AuthClient {
   /// A user info key to retrieve the ``Session`` value for a
   /// ``AuthClient/didChangeAuthStateNotification`` notification.
   public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
+}
+
+@MainActor
+final class DefaultPresentationContextProvider: NSObject,
+  ASWebAuthenticationPresentationContextProviding
+{
+  func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
+    ASPresentationAnchor()
+  }
 }
