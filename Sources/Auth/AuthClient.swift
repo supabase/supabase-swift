@@ -593,19 +593,23 @@ public final class AuthClient: @unchecked Sendable {
     return session
   }
 
-  /// Log in an existing user via a third-party provider.
-  @available(
-    *,
-    deprecated,
-    message: "Use `signInWithOAuth` method to implement sign-in with third-party provider. Use parameter `launchFlow` to customize how the OAuth flow is launched in your application."
-  )
+  /// Get a URL which you can use to start an OAuth flow for a third-party provider.
+  ///
+  /// Use this method if you want to have full control over the OAuth flow implementation, once you
+  /// have result URL with a OAuth token, use method ``session(from:)`` to load the session
+  /// into the client.
+  ///
+  /// If that isn't the case, you should consider using
+  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
+  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)``.
   public func getOAuthSignInURL(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
   ) throws -> URL {
-    try _getOAuthSignInURL(
+    try getURLForProvider(
+      url: configuration.url.appendingPathComponent("authorize"),
       provider: provider,
       scopes: scopes,
       redirectTo: redirectTo,
@@ -636,7 +640,7 @@ public final class AuthClient: @unchecked Sendable {
       throw AuthError.invalidRedirectScheme
     }
 
-    let url = try _getOAuthSignInURL(
+    let url = try getOAuthSignInURL(
       provider: provider,
       scopes: scopes,
       redirectTo: redirectTo,
@@ -659,6 +663,8 @@ public final class AuthClient: @unchecked Sendable {
   /// ``ASWebAuthenticationSession`` object.
   ///
   /// - Note: This method support the PKCE flow.
+  /// - Warning: Do not call `start()` on the `ASWebAuthenticationSession` object inside the
+  /// `configure` closure, as the method implementation calls it already.
   @available(watchOS 6.2, tvOS 16.0, *)
   @discardableResult
   public func signInWithOAuth(
@@ -1221,21 +1227,6 @@ public final class AuthClient: @unchecked Sendable {
     }
 
     return url
-  }
-
-  private func _getOAuthSignInURL(
-    provider: Provider,
-    scopes: String? = nil,
-    redirectTo: URL? = nil,
-    queryParams: [(name: String, value: String?)] = []
-  ) throws -> URL {
-    try getURLForProvider(
-      url: configuration.url.appendingPathComponent("authorize"),
-      provider: provider,
-      scopes: scopes,
-      redirectTo: redirectTo,
-      queryParams: queryParams
-    )
   }
 }
 
