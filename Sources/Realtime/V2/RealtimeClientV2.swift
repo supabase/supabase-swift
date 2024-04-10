@@ -15,6 +15,8 @@ import Foundation
   let NSEC_PER_SEC: UInt64 = 1000000000
 #endif
 
+public typealias JSONObject = _Helpers.JSONObject
+
 public actor RealtimeClientV2 {
   public struct Configuration: Sendable {
     var url: URL

@@ -79,6 +79,7 @@ let package = Package(
         "Auth",
         "TestHelpers",
         "PostgREST",
+        "Realtime",
       ]
     ),
     .target(
@@ -127,6 +128,7 @@ let package = Package(
       name: "RealtimeTests",
       dependencies: [
         "Realtime",
+        "PostgREST",
         "TestHelpers",
         .product(name: "CustomDump", package: "swift-custom-dump"),
       ]

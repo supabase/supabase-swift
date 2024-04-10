@@ -14,9 +14,9 @@ import XCTest
 final class AuthClientIntegrationTests: XCTestCase {
   let authClient = AuthClient(
     configuration: AuthClient.Configuration(
-      url: URL(string: "\(Environment.SUPABASE_URL)/auth/v1")!,
+      url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
       headers: [
-        "apikey": Environment.SUPABASE_ANON_KEY,
+        "apikey": DotEnv.SUPABASE_ANON_KEY,
       ],
       localStorage: InMemoryLocalStorage(),
       logger: nil
