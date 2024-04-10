@@ -19,6 +19,7 @@ final class _PushTests: XCTestCase {
       super.invokeTest()
     }
   }
+
   override func setUp() {
     super.setUp()
 
