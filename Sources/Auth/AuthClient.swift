@@ -609,13 +609,24 @@ public final class AuthClient: @unchecked Sendable {
     )
   }
 
+  /// Sign-in an existing user via a third-party provider.
+  ///
+  /// - Parameters:
+  ///   - provider: The third-party provider.
+  ///   - redirectTo: A URL to send the user to after they are confirmed.
+  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
+  ///   - queryParams: Additional query params.
+  ///   - launchFlow: A launch closure that you can use to implement the authentication flow. Use
+  /// the `url` to initiate the flow and return a `URL` that contains the OAuth result.
+  ///
+  /// - Note: This method support the PKCE flow.
   @discardableResult
   public func signInWithOAuth(
     provider: Provider,
     redirectTo: URL? = nil,
     scopes: String? = nil,
     queryParams: [(name: String, value: String?)] = [],
-    launchFlow: @MainActor @Sendable (_ url: URL) async throws -> URL
+    launchFlow: @Sendable (_ url: URL) async throws -> URL
   ) async throws -> Session {
     guard let redirectTo = (redirectTo ?? configuration.redirectToURL) else {
       throw AuthError.invalidRedirectScheme
@@ -631,6 +642,58 @@ public final class AuthClient: @unchecked Sendable {
     let resultURL = try await launchFlow(url)
 
     return try await session(from: resultURL)
+  }
+
+  /// Sign-in an existing user via a third-party provider.
+  ///
+  /// - Parameters:
+  ///   - provider: The third-party provider.
+  ///   - redirectTo: A URL to send the user to after they are confirmed.
+  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
+  ///   - queryParams: Additional query params.
+  ///   - configure: A configuration closure that you can use to customize the internal
+  /// ``ASWebAuthenticationSession`` object.
+  ///
+  /// - Note: This method support the PKCE flow.
+  @available(watchOS 6.2, tvOS 16.0, *)
+  @discardableResult
+  public func signInWithOAuth(
+    provider: Provider,
+    redirectTo: URL? = nil,
+    scopes: String? = nil,
+    queryParams: [(name: String, value: String?)] = [],
+    configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void
+  ) async throws -> Session {
+    try await signInWithOAuth(
+      provider: provider,
+      redirectTo: redirectTo,
+      scopes: scopes,
+      queryParams: queryParams
+    ) { @MainActor url in
+      try await withCheckedThrowingContinuation { continuation in
+        guard let callbackScheme = url.scheme else {
+          continuation.resume(throwing: AuthError.invalidRedirectScheme)
+          return
+        }
+
+        let session = ASWebAuthenticationSession(
+          url: url,
+          callbackURLScheme: callbackScheme
+        ) { url, error in
+          if let error {
+            continuation.resume(throwing: error)
+          } else if let url {
+            continuation.resume(returning: url)
+          } else {
+            continuation.resume(throwing: AuthError.missingURL)
+          }
+        }
+
+        configure(session)
+
+        session.start()
+      }
+    }
   }
 
   /// Gets the session data from a OAuth2 callback URL.
@@ -1171,80 +1234,3 @@ extension AuthClient {
   /// ``AuthClient/didChangeAuthStateNotification`` notification.
   public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
 }
-
-extension AuthClient {
-  @available(watchOS 6.2, tvOS 16.0, *)
-  @discardableResult
-  public func signInWithOAuth(
-    provider: Provider,
-    redirectTo: URL? = nil,
-    scopes: String? = nil,
-    queryParams: [(name: String, value: String?)] = [],
-    configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void
-  ) async throws -> Session {
-    try await signInWithOAuth(
-      provider: provider,
-      redirectTo: redirectTo,
-      scopes: scopes,
-      queryParams: queryParams
-    ) { url in
-      try await withCheckedThrowingContinuation { continuation in
-        guard let callbackScheme = url.scheme else {
-          continuation.resume(throwing: AuthError.invalidRedirectScheme)
-          return
-        }
-
-        let session = ASWebAuthenticationSession(
-          url: url,
-          callbackURLScheme: callbackScheme
-        ) { url, error in
-          if let error {
-            continuation.resume(throwing: error)
-          } else if let url {
-            continuation.resume(returning: url)
-          } else {
-            fatalError()
-          }
-        }
-
-        configure(session)
-
-        session.start()
-      }
-    }
-  }
-}
-
-#if canImport(SwiftUI)
-  import SwiftUI
-
-  extension AuthClient {
-    @available(iOS 16.4, macOS 13.3, watchOS 9.4, tvOS 16.4, *)
-    @discardableResult
-    public func signInWithOAuth(
-      provider: Provider,
-      using webAuthenticationSession: WebAuthenticationSession,
-      preferredBrowserSession: WebAuthenticationSession.BrowserSession? = nil,
-      redirectTo: URL? = nil,
-      scopes: String? = nil,
-      queryParams: [(name: String, value: String?)] = []
-    ) async throws -> Session {
-      try await signInWithOAuth(
-        provider: provider,
-        redirectTo: redirectTo,
-        scopes: scopes,
-        queryParams: queryParams
-      ) { url in
-        guard let callbackScheme = url.scheme else {
-          throw AuthError.invalidRedirectScheme
-        }
-
-        return try await webAuthenticationSession.authenticate(
-          using: url,
-          callbackURLScheme: callbackScheme,
-          preferredBrowserSession: preferredBrowserSession
-        )
-      }
-    }
-  }
-#endif
