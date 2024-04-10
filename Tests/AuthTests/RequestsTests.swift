@@ -125,7 +125,7 @@ final class RequestsTests: XCTestCase {
 
   func testGetOAuthSignInURL() async throws {
     let sut = makeSUT()
-    let url = try await sut.getOAuthSignInURL(
+    let url = try sut.getOAuthSignInURL(
       provider: .github, scopes: "read,write",
       redirectTo: URL(string: "https://dummy-url.com/redirect")!,
       queryParams: [("extra_key", "extra_value")]
@@ -146,40 +146,36 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  #if !os(Windows) && !os(Linux)
-    // For some reason this crashes the testing bundle
-    // on Linux and Windows, skipping it.
-    func testSessionFromURL() async throws {
-      let sut = makeSUT(fetch: { request in
-        let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
-        XCTAssertEqual(authorizationHeader, "bearer accesstoken")
-        return (json(named: "user"), HTTPURLResponse())
-      })
+  func testSessionFromURL() async throws {
+    let sut = makeSUT(fetch: { request in
+      let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
+      XCTAssertEqual(authorizationHeader, "bearer accesstoken")
+      return (json(named: "user"), HTTPURLResponse())
+    })
 
-      let currentDate = Date()
+    let currentDate = Date()
 
-      Current.sessionManager = .live
-      Current.sessionStorage.storeSession = { _ in }
-      Current.codeVerifierStorage.get = { nil }
-      Current.currentDate = { currentDate }
+    Current.sessionManager = .live
+    Current.sessionStorage.storeSession = { _ in }
+    Current.codeVerifierStorage.get = { nil }
+    Current.currentDate = { currentDate }
 
-      let url = URL(
-        string:
-        "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
-      )!
+    let url = URL(
+      string:
+      "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
+    )!
 
-      let session = try await sut.session(from: url)
-      let expectedSession = Session(
-        accessToken: "accesstoken",
-        tokenType: "bearer",
-        expiresIn: 60,
-        expiresAt: currentDate.addingTimeInterval(60).timeIntervalSince1970,
-        refreshToken: "refreshtoken",
-        user: User(fromMockNamed: "user")
-      )
-      XCTAssertEqual(session, expectedSession)
-    }
-  #endif
+    let session = try await sut.session(from: url)
+    let expectedSession = Session(
+      accessToken: "accesstoken",
+      tokenType: "bearer",
+      expiresIn: 60,
+      expiresAt: currentDate.addingTimeInterval(60).timeIntervalSince1970,
+      refreshToken: "refreshtoken",
+      user: User(fromMockNamed: "user")
+    )
+    XCTAssertEqual(session, expectedSession)
+  }
 
   func testSessionFromURLWithMissingComponent() async {
     let sut = makeSUT()
