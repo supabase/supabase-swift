@@ -3,10 +3,6 @@ import Auth
 import Foundation
 import PostgREST
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 public struct SupabaseClientOptions: Sendable {
   public let db: DatabaseOptions
   public let auth: AuthOptions
@@ -52,7 +48,7 @@ public struct SupabaseClientOptions: Sendable {
     public let decoder: JSONDecoder
 
     public init(
-      storage: any AuthLocalStorage,
+      storage: any AuthLocalStorage = AuthClient.Configuration.defaultLocalStorage,
       redirectToURL: URL? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
@@ -89,43 +85,11 @@ public struct SupabaseClientOptions: Sendable {
 
   public init(
     db: DatabaseOptions = .init(),
-    auth: AuthOptions,
+    auth: AuthOptions = .init(),
     global: GlobalOptions = .init()
   ) {
     self.db = db
     self.auth = auth
     self.global = global
   }
-}
-
-extension SupabaseClientOptions {
-  #if !os(Linux)
-    public init(
-      db: DatabaseOptions = .init(),
-      global: GlobalOptions = .init()
-    ) {
-      self.db = db
-      auth = .init()
-      self.global = global
-    }
-  #endif
-}
-
-extension SupabaseClientOptions.AuthOptions {
-  #if !os(Linux)
-    public init(
-      redirectToURL: URL? = nil,
-      flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
-    ) {
-      self.init(
-        storage: AuthClient.Configuration.defaultLocalStorage,
-        redirectToURL: redirectToURL,
-        flowType: flowType,
-        encoder: encoder,
-        decoder: decoder
-      )
-    }
-  #endif
 }

@@ -7,10 +7,6 @@
 
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 extension PostgrestClient.Configuration {
   /// Initializes a new configuration for the PostgREST client.
   /// - Parameters:

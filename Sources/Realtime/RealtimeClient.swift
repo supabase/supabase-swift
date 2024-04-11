@@ -22,10 +22,6 @@ import _Helpers
 import ConcurrencyExtras
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 public enum SocketError: Error {
   case abnormalClosureError
 }

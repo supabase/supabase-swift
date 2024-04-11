@@ -1,9 +1,5 @@
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 public struct PostgrestResponse<T: Sendable>: Sendable {
   public let data: Data
   public let response: HTTPURLResponse

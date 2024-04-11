@@ -3,10 +3,6 @@ import ConcurrencyExtras
 @testable import Functions
 import XCTest
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 final class FunctionsClientTests: XCTestCase {
   let url = URL(string: "http://localhost:5432/functions/v1")!
   let apiKey = "supabase.anon.key"

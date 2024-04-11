@@ -10,10 +10,6 @@ import Foundation
 @testable import Realtime
 import XCTestDynamicOverlay
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 final class MockWebSocketClient: WebSocketClient {
   let sentMessages = LockIsolated<[RealtimeMessageV2]>([])
   func send(_ message: RealtimeMessageV2) async throws {

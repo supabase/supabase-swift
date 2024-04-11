@@ -7,10 +7,6 @@ import Foundation
 @_exported import Realtime
 @_exported import Storage
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 public typealias SupabaseLogger = _Helpers.SupabaseLogger
 public typealias SupabaseLogLevel = _Helpers.SupabaseLogLevel
 public typealias SupabaseLogMessage = _Helpers.SupabaseLogMessage
@@ -80,34 +76,13 @@ public final class SupabaseClient: @unchecked Sendable {
     options.global.session
   }
 
-  #if !os(Linux)
-    /// Create a new client.
-    /// - Parameters:
-    ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
-    /// your project dashboard.
-    ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
-    /// your project dashboard.
-    public convenience init(supabaseURL: URL, supabaseKey: String) {
-      self.init(
-        supabaseURL: supabaseURL,
-        supabaseKey: supabaseKey,
-        options: SupabaseClientOptions()
-      )
-    }
-  #endif
-
   /// Create a new client.
   /// - Parameters:
   ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
   /// your project dashboard.
   ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
   /// your project dashboard.
-  ///   - options: Custom options to configure client's behavior.
-  public init(
-    supabaseURL: URL,
-    supabaseKey: String,
-    options: SupabaseClientOptions
-  ) {
+  public init(supabaseURL: URL, supabaseKey: String, options: SupabaseClientOptions = .init()) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options

@@ -1,9 +1,5 @@
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 public struct StorageHTTPSession: Sendable {
   public var fetch: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
   public var upload:

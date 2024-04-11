@@ -1,10 +1,6 @@
 import _Helpers
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 let DEFAULT_SEARCH_OPTIONS = SearchOptions(
   limit: 100,
   offset: 0,

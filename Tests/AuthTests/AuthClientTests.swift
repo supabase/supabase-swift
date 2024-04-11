@@ -12,9 +12,6 @@ import CustomDump
 import TestHelpers
 import XCTest
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
 
 final class AuthClientTests: XCTestCase {
   var eventEmitter: Auth.EventEmitter!

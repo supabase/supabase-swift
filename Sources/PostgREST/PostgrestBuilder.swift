@@ -2,10 +2,6 @@ import _Helpers
 import ConcurrencyExtras
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 /// The builder class for creating and executing requests to a PostgREST server.
 public class PostgrestBuilder: @unchecked Sendable {
   /// The configuration for the PostgREST client.

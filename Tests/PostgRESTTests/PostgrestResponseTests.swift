@@ -2,10 +2,6 @@ import XCTest
 
 @testable import PostgREST
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 class PostgrestResponseTests: XCTestCase {
   func testInit() {
     // Prepare data and response

@@ -9,12 +9,6 @@ import _Helpers
 import ConcurrencyExtras
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-
-  let NSEC_PER_SEC: UInt64 = 1000000000
-#endif
-
 public typealias JSONObject = _Helpers.JSONObject
 
 public actor RealtimeClientV2 {

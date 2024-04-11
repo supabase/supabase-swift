@@ -2,10 +2,6 @@ import _Helpers
 import AuthenticationServices
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 public final class AuthClient: @unchecked Sendable {
   /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler = @Sendable (

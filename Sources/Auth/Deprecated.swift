@@ -8,10 +8,6 @@
 import _Helpers
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 @available(*, deprecated, renamed: "AuthClient")
 public typealias GoTrueClient = AuthClient
 

@@ -11,10 +11,6 @@ import SnapshotTesting
 import TestHelpers
 import XCTest
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 struct UnimplementedError: Error {}
 
 final class RequestsTests: XCTestCase {

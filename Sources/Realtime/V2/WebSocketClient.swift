@@ -9,10 +9,6 @@ import _Helpers
 import ConcurrencyExtras
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 enum ConnectionStatus {
   case connected
   case disconnected(reason: String, code: URLSessionWebSocketTask.CloseCode)
