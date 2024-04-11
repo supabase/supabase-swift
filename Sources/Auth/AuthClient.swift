@@ -686,7 +686,9 @@ public final class AuthClient: @unchecked Sendable {
           return
         }
 
-        var presentationContextProvider: DefaultPresentationContextProvider?
+        #if !os(tvOS) && !os(watchOS)
+          var presentationContextProvider: DefaultPresentationContextProvider?
+        #endif
 
         let session = ASWebAuthenticationSession(
           url: url,
@@ -700,16 +702,20 @@ public final class AuthClient: @unchecked Sendable {
             continuation.resume(throwing: AuthError.missingURL)
           }
 
-          // Keep a strong reference to presentationContextProvider until the flow completes.
-          _ = presentationContextProvider
+          #if !os(tvOS) && !os(watchOS)
+            // Keep a strong reference to presentationContextProvider until the flow completes.
+            _ = presentationContextProvider
+          #endif
         }
 
         configure(session)
 
-        if session.presentationContextProvider == nil {
-          presentationContextProvider = DefaultPresentationContextProvider()
-          session.presentationContextProvider = presentationContextProvider
-        }
+        #if !os(tvOS) && !os(watchOS)
+          if session.presentationContextProvider == nil {
+            presentationContextProvider = DefaultPresentationContextProvider()
+            session.presentationContextProvider = presentationContextProvider
+          }
+        #endif
 
         session.start()
       }
@@ -1255,11 +1261,13 @@ extension AuthClient {
   public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
 }
 
-@MainActor
-final class DefaultPresentationContextProvider: NSObject,
-  ASWebAuthenticationPresentationContextProviding
-{
-  func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-    ASPresentationAnchor()
+#if !os(tvOS) && !os(watchOS)
+  @MainActor
+  final class DefaultPresentationContextProvider: NSObject,
+    ASWebAuthenticationPresentationContextProviding
+  {
+    func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
+      ASPresentationAnchor()
+    }
   }
-}
+#endif
