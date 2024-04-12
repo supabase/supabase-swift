@@ -75,10 +75,10 @@ public enum AnyAction: PostgresAction, HasRawMessage {
 
   var wrappedAction: any PostgresAction & HasRawMessage {
     switch self {
-    case let .insert(action): return action
-    case let .update(action): return action
-    case let .delete(action): return action
-    case let .select(action): return action
+    case let .insert(action): action
+    case let .update(action): action
+    case let .delete(action): action
+    case let .select(action): action
     }
   }
 

@@ -101,8 +101,8 @@ public enum ChannelEvent {
 
   static func isLifecyleEvent(_ event: String) -> Bool {
     switch event {
-    case join, leave, reply, error, close: return true
-    default: return false
+    case join, leave, reply, error, close: true
+    default: false
     }
   }
 }

@@ -413,8 +413,8 @@ public enum AuthResponse: Codable, Hashable, Sendable {
 
   public var user: User {
     switch self {
-    case let .session(session): return session.user
-    case let .user(user): return user
+    case let .session(session): session.user
+    case let .user(user): user
     }
   }
 

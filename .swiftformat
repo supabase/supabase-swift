@@ -1,4 +1,4 @@
---swiftversion 5.7
+--swiftversion 5.9
 --binarygrouping none
 --decimalgrouping none
 --hexgrouping none
@@ -9,4 +9,3 @@
 --wrapcollections before-first 
 --wrapparameters before-first
 --extensionacl on-declarations
---maxwidth 100

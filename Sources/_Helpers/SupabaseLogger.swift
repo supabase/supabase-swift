@@ -8,10 +8,10 @@ public enum SupabaseLogLevel: Int, Codable, CustomStringConvertible, Sendable {
 
   public var description: String {
     switch self {
-    case .verbose: return "verbose"
-    case .debug: return "debug"
-    case .warning: return "warning"
-    case .error: return "error"
+    case .verbose: "verbose"
+    case .debug: "debug"
+    case .warning: "warning"
+    case .error: "error"
     }
   }
 }

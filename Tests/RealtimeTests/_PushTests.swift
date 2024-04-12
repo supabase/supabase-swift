@@ -58,7 +58,7 @@ final class _PushTests: XCTestCase {
     XCTAssertEqual(status, .ok)
   }
 
-// FIXME: Flaky test, it fails some time due the task scheduling, even tho we're using withMainSerialExecutor.
+  // FIXME: Flaky test, it fails some time due the task scheduling, even tho we're using withMainSerialExecutor.
 //  func testPushWithAck() async {
 //    let channel = RealtimeChannelV2(
 //      topic: "realtime:users",
