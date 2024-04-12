@@ -79,12 +79,147 @@ extension PostgrestClient {
   }
 }
 
-extension PostgrestFilterBuilder {
-  @available(*, deprecated, renamed: "textSearch(_:value:)")
-  public func textSearch(
-    _ column: String,
-    range: any URLQueryRepresentable
+extension PostgrestQueryBuilder {
+  @available(
+    *,
+    deprecated,
+    renamed: "insert(_:count:)",
+    message: "If you want to return the inserted value, append a select() call to the query."
+  )
+  public func insert(
+    _ values: some Encodable & Sendable,
+    returning: PostgrestReturningOptions?,
+    count: CountOption? = nil
+  ) throws -> PostgrestFilterBuilder {
+    try mutableState.withValue {
+      $0.request.method = .post
+      var prefersHeaders: [String] = []
+      if let returning {
+        prefersHeaders.append("return=\(returning.rawValue)")
+      }
+      $0.request.body = try configuration.encoder.encode(values)
+      if let count {
+        prefersHeaders.append("count=\(count.rawValue)")
+      }
+      if let prefer = $0.request.headers["Prefer"] {
+        prefersHeaders.insert(prefer, at: 0)
+      }
+      if !prefersHeaders.isEmpty {
+        $0.request.headers["Prefer"] = prefersHeaders.joined(separator: ",")
+      }
+      if let body = $0.request.body,
+         let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
+      {
+        let allKeys = jsonObject.flatMap(\.keys)
+        let uniqueKeys = Set(allKeys).sorted()
+        $0.request.query.append(URLQueryItem(
+          name: "columns",
+          value: uniqueKeys.joined(separator: ",")
+        ))
+      }
+    }
+
+    return PostgrestFilterBuilder(self)
+  }
+
+  @available(
+    *,
+    deprecated,
+    renamed: "upsert(_:onConflict:count:ignoreDuplicates:)",
+    message: "If you want to return the upserted value, append a select() call to the query."
+  )
+  public func upsert(
+    _ values: some Encodable & Sendable,
+    onConflict: String? = nil,
+    returning: PostgrestReturningOptions = .representation,
+    count: CountOption? = nil,
+    ignoreDuplicates: Bool = false
+  ) throws -> PostgrestFilterBuilder {
+    try mutableState.withValue {
+      $0.request.method = .post
+      var prefersHeaders = [
+        "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates",
+        "return=\(returning.rawValue)",
+      ]
+      if let onConflict {
+        $0.request.query.append(URLQueryItem(name: "on_conflict", value: onConflict))
+      }
+      $0.request.body = try configuration.encoder.encode(values)
+      if let count {
+        prefersHeaders.append("count=\(count.rawValue)")
+      }
+      if let prefer = $0.request.headers["Prefer"] {
+        prefersHeaders.insert(prefer, at: 0)
+      }
+      if !prefersHeaders.isEmpty {
+        $0.request.headers["Prefer"] = prefersHeaders.joined(separator: ",")
+      }
+
+      if let body = $0.request.body,
+         let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
+      {
+        let allKeys = jsonObject.flatMap(\.keys)
+        let uniqueKeys = Set(allKeys).sorted()
+        $0.request.query.append(URLQueryItem(
+          name: "columns",
+          value: uniqueKeys.joined(separator: ",")
+        ))
+      }
+    }
+    return PostgrestFilterBuilder(self)
+  }
+
+  @available(
+    *,
+    deprecated,
+    renamed: "update(_:count:)",
+    message: "If you want to return the updated value, append a select() call to the query."
+  )
+  public func update(
+    _ values: some Encodable & Sendable,
+    returning: PostgrestReturningOptions = .representation,
+    count: CountOption? = nil
+  ) throws -> PostgrestFilterBuilder {
+    try mutableState.withValue {
+      $0.request.method = .patch
+      var preferHeaders = ["return=\(returning.rawValue)"]
+      $0.request.body = try configuration.encoder.encode(values)
+      if let count {
+        preferHeaders.append("count=\(count.rawValue)")
+      }
+      if let prefer = $0.request.headers["Prefer"] {
+        preferHeaders.insert(prefer, at: 0)
+      }
+      if !preferHeaders.isEmpty {
+        $0.request.headers["Prefer"] = preferHeaders.joined(separator: ",")
+      }
+    }
+    return PostgrestFilterBuilder(self)
+  }
+
+  @available(
+    *,
+    deprecated,
+    renamed: "delete(count:)",
+    message: "If you want to return the deleted values, append a select() call to the query."
+  )
+  public func delete(
+    returning: PostgrestReturningOptions = .representation,
+    count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
-    textSearch(column, value: range)
+    mutableState.withValue {
+      $0.request.method = .delete
+      var preferHeaders = ["return=\(returning.rawValue)"]
+      if let count {
+        preferHeaders.append("count=\(count.rawValue)")
+      }
+      if let prefer = $0.request.headers["Prefer"] {
+        preferHeaders.insert(prefer, at: 0)
+      }
+      if !preferHeaders.isEmpty {
+        $0.request.headers["Prefer"] = preferHeaders.joined(separator: ",")
+      }
+    }
+    return PostgrestFilterBuilder(self)
   }
 }

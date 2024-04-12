@@ -26,13 +26,13 @@ public final class PostgrestClient: Sendable {
 
     let logger: (any SupabaseLogger)?
 
-    /// Initializes a new configuration for the PostgREST client.
+    /// Creates a PostgREST client.
     /// - Parameters:
-    ///   - url: The URL of the PostgREST server.
-    ///   - schema: The schema to use.
-    ///   - headers: The headers to include in requests.
+    ///   - url: URL of the PostgREST endpoint.
+    ///   - schema: Postgres schema to switch to.
+    ///   - headers: Custom headers.
     ///   - logger: The logger to use.
-    ///   - fetch: The fetch handler to use for requests.
+    ///   - fetch: Custom fetch.
     ///   - encoder: The JSONEncoder to use for encoding.
     ///   - decoder: The JSONDecoder to use for decoding.
     public init(
@@ -68,11 +68,11 @@ public final class PostgrestClient: Sendable {
 
   /// Creates a PostgREST client with the specified parameters.
   /// - Parameters:
-  ///   - url: The URL of the PostgREST server.
-  ///   - schema: The schema to use.
-  ///   - headers: The headers to include in requests.
+  ///   - url: URL of the PostgREST endpoint.
+  ///   - schema: Postgres schema to switch to.
+  ///   - headers: Custom headers.
   ///   - logger: The logger to use.
-  ///   - session: The URLSession to use for requests.
+  ///   - fetch: Custom fetch.
   ///   - encoder: The JSONEncoder to use for encoding.
   ///   - decoder: The JSONDecoder to use for decoding.
   public convenience init(
@@ -110,9 +110,8 @@ public final class PostgrestClient: Sendable {
     return self
   }
 
-  /// Performs a query on a table or a view.
+  /// Perform a query on a table or a view.
   /// - Parameter table: The table or view name to query.
-  /// - Returns: A PostgrestQueryBuilder instance.
   public func from(_ table: String) -> PostgrestQueryBuilder {
     PostgrestQueryBuilder(
       configuration: configuration,
@@ -120,14 +119,11 @@ public final class PostgrestClient: Sendable {
     )
   }
 
-  /// Performs a function call.
+  /// Perform a function call.
   /// - Parameters:
   ///   - fn: The function name to call.
   ///   - params: The parameters to pass to the function call.
-  ///   - count: Count algorithm to use to count rows returned by the function.
-  ///             Only applicable for set-returning functions.
-  /// - Returns: A PostgrestFilterBuilder instance.
-  /// - Throws: An error if the function call fails.
+  ///   - count: Count algorithm to use to count rows returned by the function. Only applicable for [set-returning functions](https://www.postgresql.org/docs/current/functions-srf.html).
   public func rpc(
     _ fn: String,
     params: some Encodable & Sendable,
@@ -139,13 +135,10 @@ public final class PostgrestClient: Sendable {
     ).rpc(params: params, count: count)
   }
 
-  /// Performs a function call.
+  /// Perform a function call.
   /// - Parameters:
   ///   - fn: The function name to call.
-  ///   - count: Count algorithm to use to count rows returned by the function.
-  ///            Only applicable for set-returning functions.
-  /// - Returns: A PostgrestFilterBuilder instance.
-  /// - Throws: An error if the function call fails.
+  ///   - count: Count algorithm to use to count rows returned by the function. Only applicable for [set-returning functions](https://www.postgresql.org/docs/current/functions-srf.html).
   public func rpc(
     _ fn: String,
     count: CountOption? = nil

@@ -36,14 +36,22 @@ public struct PostgrestResponse<T: Sendable>: Sendable {
 
 /// Returns count as part of the response when specified.
 public enum CountOption: String, Sendable {
+  /// Exact but slow count algorithm. Performs a `COUNT(*)` under the hood.
   case exact
+  /// Approximated but fast count algorithm. Uses the Postgres statistics under the hood.
   case planned
+  /// Uses exact count for low numbers and planned count for high numbers.
   case estimated
 }
 
 /// Enum of options representing the ways PostgREST can return values from the server.
 ///
 /// https://postgrest.org/en/v9.0/api.html?highlight=PREFER#insertions-updates
+@available(
+  *,
+  deprecated,
+  message: "This enum is going to be removed, please use select() on the insert/update/delete result to return the resulting object."
+)
 public enum PostgrestReturningOptions: String, Sendable {
   /// Returns nothing from the server
   case minimal

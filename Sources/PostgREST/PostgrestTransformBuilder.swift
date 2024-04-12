@@ -2,7 +2,10 @@ import _Helpers
 import Foundation
 
 public class PostgrestTransformBuilder: PostgrestBuilder {
-  /// Performs a vertical filtering with SELECT.
+  /// Perform a SELECT on the query result.
+  ///
+  /// By default, `.insert()`, `.update()`, `.upsert()`, and `.delete()` do not return modified rows. By calling this method, modified rows are returned in `value`.
+  ///
   /// - Parameters:
   ///   - columns: The columns to retrieve, separated by commas.
   public func select(_ columns: String = "*") -> PostgrestTransformBuilder {
@@ -30,12 +33,16 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     return self
   }
 
-  /// Orders the result with the specified `column`.
+  /// Order the query result by `column`.
+  ///
+  /// You can call this method multiple times to order by multiple columns.
+  /// You can order referenced tables, but it only affects the ordering of theparent table if you use `!inner` in the query.
+  ///
   /// - Parameters:
-  ///   - column: The column to order on.
+  ///   - column: The column to order by.
   ///   - ascending: If `true`, the result will be in ascending order.
-  ///   - nullsFirst: If `true`, `null`s appear first.
-  ///   - referencedTable: The foreign table to use (if `column` is a foreign column).
+  ///   - nullsFirst: If `true`, `null`s appear first. If `false`, `null`s appear last.
+  ///   - referencedTable: Set this to order a referenced table by its columns.
   public func order(
     _ column: String,
     ascending: Bool = true,
@@ -63,10 +70,10 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     return self
   }
 
-  /// Limits the result with the specified `count`.
+  /// Limits the query result by `count`.
   /// - Parameters:
-  ///   - count: The maximum no. of rows to limit to.
-  ///   - referencedTable: The foreign table to use (for foreign columns).
+  ///   - count: The maximum number of rows to return.
+  ///   - referencedTable: Set this to limit rows of referenced tables instead of the parent table.
   public func limit(_ count: Int, referencedTable: String? = nil) -> PostgrestTransformBuilder {
     mutableState.withValue {
       let key = referencedTable.map { "\($0).limit" } ?? "limit"
@@ -79,14 +86,19 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     return self
   }
 
-  /// Limits the result to rows within the specified range, inclusive.
+  /// Limit the query result by starting at an offset (`from`) and ending at the offset (`from + to`).
+  ///
+  /// Only records within this range are returned.
+  /// This respects the query order and if there is no order clause the range could behave unexpectedly.
+  /// The `from` and `to` values are 0-based and inclusive: `range(from: 1, to: 3)` will include the second, third and fourth rows of the query.
+  ///
   /// - Parameters:
-  ///   - lowerBounds: The starting index from which to limit the result, inclusive.
-  ///   - upperBounds: The last index to which to limit the result, inclusive.
-  ///   - referencedTable: The foreign table to use (for foreign columns).
+  ///   - from: The starting index from which to limit the result.
+  ///   - to: The last index to which to limit the result.
+  ///   - referencedTable: Set this to limit rows of referenced tables instead of the parent table.
   public func range(
-    from lowerBounds: Int,
-    to upperBounds: Int,
+    from: Int,
+    to: Int,
     referencedTable: String? = nil
   ) -> PostgrestTransformBuilder {
     let keyOffset = referencedTable.map { "\($0).offset" } ?? "offset"
@@ -94,21 +106,21 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
 
     mutableState.withValue {
       if let index = $0.request.query.firstIndex(where: { $0.name == keyOffset }) {
-        $0.request.query[index] = URLQueryItem(name: keyOffset, value: "\(lowerBounds)")
+        $0.request.query[index] = URLQueryItem(name: keyOffset, value: "\(from)")
       } else {
-        $0.request.query.append(URLQueryItem(name: keyOffset, value: "\(lowerBounds)"))
+        $0.request.query.append(URLQueryItem(name: keyOffset, value: "\(from)"))
       }
 
       // Range is inclusive, so add 1
       if let index = $0.request.query.firstIndex(where: { $0.name == keyLimit }) {
         $0.request.query[index] = URLQueryItem(
           name: keyLimit,
-          value: "\(upperBounds - lowerBounds + 1)"
+          value: "\(to - from + 1)"
         )
       } else {
         $0.request.query.append(URLQueryItem(
           name: keyLimit,
-          value: "\(upperBounds - lowerBounds + 1)"
+          value: "\(to - from + 1)"
         ))
       }
     }
@@ -116,8 +128,9 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     return self
   }
 
-  /// Retrieves only one row from the result. Result must be one row (e.g. using `limit`), otherwise
-  /// this will result in an error.
+  /// Return `value` as a single object instead of an array of objects.
+  ///
+  /// Query result must be one row (e.g. using `.limit(1)`), otherwise this returns an error.
   public func single() -> PostgrestTransformBuilder {
     mutableState.withValue {
       $0.request.headers["Accept"] = "application/vnd.pgrst.object+json"
@@ -125,7 +138,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     return self
   }
 
-  /// Set the response type to CSV.
+  ///  Return `value` as a string in CSV format.
   public func csv() -> PostgrestTransformBuilder {
     mutableState.withValue {
       $0.request.headers["Accept"] = "text/csv"

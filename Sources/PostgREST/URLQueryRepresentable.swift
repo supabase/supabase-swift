@@ -32,6 +32,16 @@ extension Array: URLQueryRepresentable where Element: URLQueryRepresentable {
   }
 }
 
+extension Optional: URLQueryRepresentable where Wrapped: URLQueryRepresentable {
+  public var queryValue: String {
+    if let value = self {
+      return value.queryValue
+    }
+
+    return "NULL"
+  }
+}
+
 extension Dictionary: URLQueryRepresentable
   where
   Key: URLQueryRepresentable,

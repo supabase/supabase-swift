@@ -453,7 +453,7 @@ public actor RealtimeChannelV2 {
 
   /// Listen for broadcast messages sent by other clients within the same channel under a specific
   /// `event`.
-  public func broadcast(event: String) -> AsyncStream<JSONObject> {
+  public func broadcastStream(event: String) -> AsyncStream<JSONObject> {
     let (stream, continuation) = AsyncStream<JSONObject>.makeStream()
 
     let id = callbackManager.addBroadcastCallback(event: event) {
@@ -468,6 +468,13 @@ public actor RealtimeChannelV2 {
     }
 
     return stream
+  }
+
+  /// Listen for broadcast messages sent by other clients within the same channel under a specific
+  /// `event`.
+  @available(*, deprecated, renamed: "broadcastStream(event:)")
+  public func broadcast(event: String) -> AsyncStream<JSONObject> {
+    broadcastStream(event: event)
   }
 
   @discardableResult
