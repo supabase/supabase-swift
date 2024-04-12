@@ -22,7 +22,12 @@ struct ExamplesApp: App {
 let supabase = SupabaseClient(
   supabaseURL: Secrets.supabaseURL,
   supabaseKey: Secrets.supabaseAnonKey,
-  options: .init(global: .init(logger: ConsoleLogger()))
+  options: .init(
+    auth: .init(redirectToURL: Constants.redirectToURL),
+    global: .init(
+      logger: ConsoleLogger()
+    )
+  )
 )
 
 struct ConsoleLogger: SupabaseLogger {

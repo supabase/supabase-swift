@@ -1,11 +1,12 @@
 import _Helpers
+import AuthenticationServices
 import Foundation
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-public actor AuthClient {
+public final class AuthClient: @unchecked Sendable {
   /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler = @Sendable (
     _ request: URLRequest
@@ -16,6 +17,7 @@ public actor AuthClient {
     public let url: URL
     public var headers: [String: String]
     public let flowType: AuthFlowType
+    public let redirectToURL: URL?
     public let localStorage: any AuthLocalStorage
     public let logger: (any SupabaseLogger)?
     public let encoder: JSONEncoder
@@ -28,6 +30,7 @@ public actor AuthClient {
     ///   - url: The base URL of the Auth server.
     ///   - headers: Custom headers to be included in requests.
     ///   - flowType: The authentication flow type.
+    ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
     ///   - localStorage: The storage mechanism for local data.
     ///   - logger: The logger to use.
     ///   - encoder: The JSON encoder to use for encoding requests.
@@ -37,6 +40,7 @@ public actor AuthClient {
       url: URL,
       headers: [String: String] = [:],
       flowType: AuthFlowType = Configuration.defaultFlowType,
+      redirectToURL: URL? = nil,
       localStorage: any AuthLocalStorage,
       logger: (any SupabaseLogger)? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
@@ -48,6 +52,7 @@ public actor AuthClient {
       self.url = url
       self.headers = headers
       self.flowType = flowType
+      self.redirectToURL = redirectToURL
       self.localStorage = localStorage
       self.logger = logger
       self.encoder = encoder
@@ -100,15 +105,17 @@ public actor AuthClient {
   ///   - url: The base URL of the Auth server.
   ///   - headers: Custom headers to be included in requests.
   ///   - flowType: The authentication flow type..
+  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
   ///   - localStorage: The storage mechanism for local data..
   ///   - logger: The logger to use.
   ///   - encoder: The JSON encoder to use for encoding requests.
   ///   - decoder: The JSON decoder to use for decoding responses.
   ///   - fetch: The asynchronous fetch handler for network requests.
-  public init(
+  public convenience init(
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
+    redirectToURL: URL? = nil,
     localStorage: any AuthLocalStorage,
     logger: (any SupabaseLogger)? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
@@ -120,6 +127,7 @@ public actor AuthClient {
         url: url,
         headers: headers,
         flowType: flowType,
+        redirectToURL: redirectToURL,
         localStorage: localStorage,
         logger: logger,
         encoder: encoder,
@@ -133,7 +141,7 @@ public actor AuthClient {
   ///
   /// - Parameters:
   ///   - configuration: The client configuration.
-  public init(configuration: Configuration) {
+  public convenience init(configuration: Configuration) {
     let api = APIClient.live(
       configuration: configuration,
       http: HTTPClient(
@@ -243,7 +251,10 @@ public actor AuthClient {
         path: "/signup",
         method: .post,
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
+          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
+            name: "redirect_to",
+            value: $0.absoluteString
+          ) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           SignUpRequest(
@@ -428,7 +439,10 @@ public actor AuthClient {
         path: "/otp",
         method: .post,
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
+          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
+            name: "redirect_to",
+            value: $0.absoluteString
+          ) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           OTPParams(
@@ -504,7 +518,7 @@ public actor AuthClient {
           SignInWithSSORequest(
             providerId: nil,
             domain: domain,
-            redirectTo: redirectTo,
+            redirectTo: redirectTo ?? configuration.redirectToURL,
             gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod
@@ -539,7 +553,7 @@ public actor AuthClient {
           SignInWithSSORequest(
             providerId: providerId,
             domain: nil,
-            redirectTo: redirectTo,
+            redirectTo: redirectTo ?? configuration.redirectToURL,
             gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod
@@ -579,7 +593,15 @@ public actor AuthClient {
     return session
   }
 
-  /// Log in an existing user via a third-party provider.
+  /// Get a URL which you can use to start an OAuth flow for a third-party provider.
+  ///
+  /// Use this method if you want to have full control over the OAuth flow implementation, once you
+  /// have result URL with a OAuth token, use method ``session(from:)`` to load the session
+  /// into the client.
+  ///
+  /// If that isn't the case, you should consider using
+  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
+  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)``.
   public func getOAuthSignInURL(
     provider: Provider,
     scopes: String? = nil,
@@ -593,6 +615,111 @@ public actor AuthClient {
       redirectTo: redirectTo,
       queryParams: queryParams
     )
+  }
+
+  /// Sign-in an existing user via a third-party provider.
+  ///
+  /// - Parameters:
+  ///   - provider: The third-party provider.
+  ///   - redirectTo: A URL to send the user to after they are confirmed.
+  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
+  ///   - queryParams: Additional query params.
+  ///   - launchFlow: A launch closure that you can use to implement the authentication flow. Use
+  /// the `url` to initiate the flow and return a `URL` that contains the OAuth result.
+  ///
+  /// - Note: This method support the PKCE flow.
+  @discardableResult
+  public func signInWithOAuth(
+    provider: Provider,
+    redirectTo: URL? = nil,
+    scopes: String? = nil,
+    queryParams: [(name: String, value: String?)] = [],
+    launchFlow: @MainActor @Sendable (_ url: URL) async throws -> URL
+  ) async throws -> Session {
+    guard let redirectTo = (redirectTo ?? configuration.redirectToURL) else {
+      throw AuthError.invalidRedirectScheme
+    }
+
+    let url = try getOAuthSignInURL(
+      provider: provider,
+      scopes: scopes,
+      redirectTo: redirectTo,
+      queryParams: queryParams
+    )
+
+    let resultURL = try await launchFlow(url)
+
+    return try await session(from: resultURL)
+  }
+
+  /// Sign-in an existing user via a third-party provider using ``ASWebAuthenticationSession``.
+  ///
+  /// - Parameters:
+  ///   - provider: The third-party provider.
+  ///   - redirectTo: A URL to send the user to after they are confirmed.
+  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
+  ///   - queryParams: Additional query params.
+  ///   - configure: A configuration closure that you can use to customize the internal
+  /// ``ASWebAuthenticationSession`` object.
+  ///
+  /// - Note: This method support the PKCE flow.
+  /// - Warning: Do not call `start()` on the `ASWebAuthenticationSession` object inside the
+  /// `configure` closure, as the method implementation calls it already.
+  @available(watchOS 6.2, tvOS 16.0, *)
+  @discardableResult
+  public func signInWithOAuth(
+    provider: Provider,
+    redirectTo: URL? = nil,
+    scopes: String? = nil,
+    queryParams: [(name: String, value: String?)] = [],
+    configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void = { _ in }
+  ) async throws -> Session {
+    try await signInWithOAuth(
+      provider: provider,
+      redirectTo: redirectTo,
+      scopes: scopes,
+      queryParams: queryParams
+    ) { @MainActor url in
+      try await withCheckedThrowingContinuation { continuation in
+        guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
+          continuation.resume(throwing: AuthError.invalidRedirectScheme)
+          return
+        }
+
+        #if !os(tvOS) && !os(watchOS)
+          var presentationContextProvider: DefaultPresentationContextProvider?
+        #endif
+
+        let session = ASWebAuthenticationSession(
+          url: url,
+          callbackURLScheme: callbackScheme
+        ) { url, error in
+          if let error {
+            continuation.resume(throwing: error)
+          } else if let url {
+            continuation.resume(returning: url)
+          } else {
+            continuation.resume(throwing: AuthError.missingURL)
+          }
+
+          #if !os(tvOS) && !os(watchOS)
+            // Keep a strong reference to presentationContextProvider until the flow completes.
+            _ = presentationContextProvider
+          #endif
+        }
+
+        configure(session)
+
+        #if !os(tvOS) && !os(watchOS)
+          if session.presentationContextProvider == nil {
+            presentationContextProvider = DefaultPresentationContextProvider()
+            session.presentationContextProvider = presentationContextProvider
+          }
+        #endif
+
+        session.start()
+      }
+    }
   }
 
   /// Gets the session data from a OAuth2 callback URL.
@@ -756,7 +883,10 @@ public actor AuthClient {
         path: "/verify",
         method: .post,
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
+          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
+            name: "redirect_to",
+            value: $0.absoluteString
+          ) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           VerifyOTPParams.email(
@@ -840,7 +970,10 @@ public actor AuthClient {
         path: "/resend",
         method: .post,
         query: [
-          emailRedirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
+          (emailRedirectTo ?? configuration.redirectToURL).map { URLQueryItem(
+            name: "redirect_to",
+            value: $0.absoluteString
+          ) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           ResendEmailParams(
@@ -983,7 +1116,10 @@ public actor AuthClient {
         path: "/recover",
         method: .post,
         query: [
-          redirectTo.map { URLQueryItem(name: "redirect_to", value: $0.absoluteString) },
+          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
+            name: "redirect_to",
+            value: $0.absoluteString
+          ) },
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           RecoverParams(
@@ -1084,7 +1220,7 @@ public actor AuthClient {
       queryItems.append(URLQueryItem(name: "scopes", value: scopes))
     }
 
-    if let redirectTo {
+    if let redirectTo = redirectTo ?? configuration.redirectToURL {
       queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
     }
 
@@ -1124,3 +1260,14 @@ extension AuthClient {
   /// ``AuthClient/didChangeAuthStateNotification`` notification.
   public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
 }
+
+#if !os(tvOS) && !os(watchOS)
+  @MainActor
+  final class DefaultPresentationContextProvider: NSObject,
+    ASWebAuthenticationPresentationContextProviding
+  {
+    func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
+      ASPresentationAnchor()
+    }
+  }
+#endif

@@ -14,7 +14,8 @@
 		793E03092B2CED5D00AC7DED /* Contants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E03082B2CED5D00AC7DED /* Contants.swift */; };
 		793E030B2B2CEDDA00AC7DED /* ActionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E030A2B2CEDDA00AC7DED /* ActionState.swift */; };
 		793E030D2B2DAB5700AC7DED /* SignInWithApple.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */; };
-		7940E3152B36187A0089BEE1 /* GoogleSignInWithWebFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7940E3142B36187A0089BEE1 /* GoogleSignInWithWebFlow.swift */; };
+		79401F332BC6FEAE004C9C0F /* SignInWithOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79401F322BC6FEAE004C9C0F /* SignInWithOAuth.swift */; };
+		79401F352BC708C8004C9C0F /* UIViewControllerWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79401F342BC708C8004C9C0F /* UIViewControllerWrapper.swift */; };
 		794C61D62BAD1E12000E6B0F /* UserIdentityList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794C61D52BAD1E12000E6B0F /* UserIdentityList.swift */; };
 		794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1212955F26A008C9526 /* AddTodoListView.swift */; };
 		794EF1242955F3DE008C9526 /* TodoListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1232955F3DE008C9526 /* TodoListRow.swift */; };
@@ -83,7 +84,8 @@
 		793E03082B2CED5D00AC7DED /* Contants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contants.swift; sourceTree = "<group>"; };
 		793E030A2B2CEDDA00AC7DED /* ActionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionState.swift; sourceTree = "<group>"; };
 		793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInWithApple.swift; sourceTree = "<group>"; };
-		7940E3142B36187A0089BEE1 /* GoogleSignInWithWebFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignInWithWebFlow.swift; sourceTree = "<group>"; };
+		79401F322BC6FEAE004C9C0F /* SignInWithOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInWithOAuth.swift; sourceTree = "<group>"; };
+		79401F342BC708C8004C9C0F /* UIViewControllerWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewControllerWrapper.swift; sourceTree = "<group>"; };
 		794C61D52BAD1E12000E6B0F /* UserIdentityList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserIdentityList.swift; sourceTree = "<group>"; };
 		794EF1212955F26A008C9526 /* AddTodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTodoListView.swift; sourceTree = "<group>"; };
 		794EF1232955F3DE008C9526 /* TodoListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListRow.swift; sourceTree = "<group>"; };
@@ -221,6 +223,7 @@
 				79E2B55B2B97A2310042CD21 /* UIApplicationExtensions.swift */,
 				797EFB672BABD90500098D6B /* Stringfy.swift */,
 				79B1C80D2BAC017C00D991AA /* AnyJSONView.swift */,
+				79401F342BC708C8004C9C0F /* UIViewControllerWrapper.swift */,
 			);
 			path = Examples;
 			sourceTree = "<group>";
@@ -258,9 +261,9 @@
 				79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */,
 				79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */,
 				793E030C2B2DAB5700AC7DED /* SignInWithApple.swift */,
-				7940E3142B36187A0089BEE1 /* GoogleSignInWithWebFlow.swift */,
 				79E2B5542B9788BF0042CD21 /* GoogleSignInSDKFlow.swift */,
 				79C9B8E42BBB16C0003AD942 /* SignInAnonymously.swift */,
+				79401F322BC6FEAE004C9C0F /* SignInWithOAuth.swift */,
 			);
 			path = Auth;
 			sourceTree = "<group>";
@@ -486,6 +489,8 @@
 				796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */,
 				79AF04862B2CE586008761AD /* Debug.swift in Sources */,
 				79AF04842B2CE408008761AD /* AuthWithMagicLink.swift in Sources */,
+				79401F352BC708C8004C9C0F /* UIViewControllerWrapper.swift in Sources */,
+				79401F332BC6FEAE004C9C0F /* SignInWithOAuth.swift in Sources */,
 				79B1C80E2BAC017C00D991AA /* AnyJSONView.swift in Sources */,
 				79E2B5552B9788BF0042CD21 /* GoogleSignInSDKFlow.swift in Sources */,
 				793E03092B2CED5D00AC7DED /* Contants.swift in Sources */,
@@ -504,7 +509,6 @@
 				795640602954AE140088A06F /* AuthController.swift in Sources */,
 				79AF047F2B2CE207008761AD /* AuthWithEmailAndPassword.swift in Sources */,
 				795640622955AD2B0088A06F /* HomeView.swift in Sources */,
-				7940E3152B36187A0089BEE1 /* GoogleSignInWithWebFlow.swift in Sources */,
 				793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */,
 				797EFB682BABD90500098D6B /* Stringfy.swift in Sources */,
 				797EFB6C2BABE1B800098D6B /* FileObjectDetailView.swift in Sources */,

@@ -126,6 +126,7 @@ public final class SupabaseClient: @unchecked Sendable {
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       headers: defaultHeaders,
       flowType: options.auth.flowType,
+      redirectToURL: options.auth.redirectToURL,
       localStorage: options.auth.storage,
       logger: options.global.logger,
       encoder: options.auth.encoder,
@@ -256,7 +257,7 @@ public final class SupabaseClient: @unchecked Sendable {
   private func listenForAuthEvents() {
     listenForAuthEventsTask.setValue(
       Task {
-        for await (event, session) in await auth.authStateChanges {
+        for await (event, session) in auth.authStateChanges {
           await handleTokenChanged(event: event, session: session)
         }
       }
