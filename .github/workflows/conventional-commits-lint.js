@@ -57,13 +57,6 @@ validate.forEach((payload) => {
     const { groups } = match
 
     if (groups) {
-      if (groups.breaking) {
-        console.error(
-          `PRs are not allowed to declare breaking changes at this stage of the project. Please remove the ! in your PR title or commit message and adjust the functionality to be backward compatible.`,
-        );
-        failed = true;
-      }
-
       if (
         !ALLOWED_CONVENTIONAL_COMMIT_PREFIXES.find(
           (prefix) => prefix === groups.prefix,
@@ -86,13 +79,6 @@ validate.forEach((payload) => {
     if (payload.content.match(RELEASE_AS_DIRECTIVE)) {
       console.error(
         "PR descriptions or commit messages must not contain Release-As conventional commit directives.",
-      );
-      failed = true;
-    }
-
-    if (payload.content.match(BREAKING_CHANGE_DIRECTIVE)) {
-      console.error(
-        "PR descriptions or commit messages must not contain a BREAKING CHANGE conventional commit directive. Please adjust the functionality to be backward compatible.",
       );
       failed = true;
     }
