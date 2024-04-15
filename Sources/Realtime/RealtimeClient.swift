@@ -274,9 +274,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// - return: The socket protocol, wss or ws
   public var websocketProtocol: String {
     switch endPointUrl.scheme {
-    case "https": return "wss"
-    case "http": return "ws"
-    default: return endPointUrl.scheme ?? ""
+    case "https": "wss"
+    case "http": "ws"
+    default: endPointUrl.scheme ?? ""
     }
   }
 
@@ -734,10 +734,10 @@ public class RealtimeClient: PhoenixTransportDelegate {
     let callback: (() throws -> Void) = { [weak self] in
       guard let self else { return }
       let body: [Any?] = [joinRef, ref, topic, event, payload]
-      let data = self.encode(body)
+      let data = encode(body)
 
-      self.logItems("push", "Sending \(String(data: data, encoding: String.Encoding.utf8) ?? "")")
-      self.connection?.send(data: data)
+      logItems("push", "Sending \(String(data: data, encoding: String.Encoding.utf8) ?? "")")
+      connection?.send(data: data)
     }
 
     /// If the socket is connected, then execute the callback immediately.
@@ -1063,9 +1063,9 @@ extension RealtimeClient {
     var shouldReconnect: Bool {
       switch self {
       case .unknown, .abnormal:
-        return true
+        true
       case .clean, .temporary:
-        return false
+        false
       }
     }
   }

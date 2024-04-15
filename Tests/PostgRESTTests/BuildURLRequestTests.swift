@@ -79,7 +79,7 @@ final class BuildURLRequestTests: XCTestCase {
       TestCase(name: "select all users where email ends with '@supabase.co'") { client in
         client.from("users")
           .select()
-          .like("email", value: "%@supabase.co")
+          .like("email", pattern: "%@supabase.co")
       },
       TestCase(name: "insert new user") { client in
         try client.from("users")
@@ -107,13 +107,13 @@ final class BuildURLRequestTests: XCTestCase {
         var query = client.from("todos").select()
 
         for op in PostgrestFilterBuilder.Operator.allCases {
-          query = query.filter("column", operator: op, value: "Some value")
+          query = query.filter("column", operator: op.rawValue, value: "Some value")
         }
 
         return query
       },
       TestCase(name: "test in filter") { client in
-        client.from("todos").select().in("id", value: [1, 2, 3])
+        client.from("todos").select().in("id", values: [1, 2, 3])
       },
       TestCase(name: "test contains filter with dictionary") { client in
         client.from("users").select("name")
@@ -166,6 +166,11 @@ final class BuildURLRequestTests: XCTestCase {
         try client.from("users")
           .insert(User(email: "johndoe@supabase.io"))
           .select("id,email")
+      },
+      TestCase(name: "query if nil value") { client in
+        client.from("users")
+          .select()
+          .is("email", value: String?.none)
       },
     ]
 

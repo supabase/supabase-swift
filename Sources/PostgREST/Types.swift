@@ -36,8 +36,11 @@ public struct PostgrestResponse<T: Sendable>: Sendable {
 
 /// Returns count as part of the response when specified.
 public enum CountOption: String, Sendable {
+  /// Exact but slow count algorithm. Performs a `COUNT(*)` under the hood.
   case exact
+  /// Approximated but fast count algorithm. Uses the Postgres statistics under the hood.
   case planned
+  /// Uses exact count for low numbers and planned count for high numbers.
   case estimated
 }
 

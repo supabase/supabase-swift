@@ -26,13 +26,13 @@ public enum AnyJSON: Sendable, Codable, Hashable {
   /// `AnyJSON` instances.
   public var value: Any {
     switch self {
-    case .null: return NSNull()
-    case let .string(string): return string
-    case let .integer(val): return val
-    case let .double(val): return val
-    case let .object(dictionary): return dictionary.mapValues(\.value)
-    case let .array(array): return array.map(\.value)
-    case let .bool(bool): return bool
+    case .null: NSNull()
+    case let .string(string): string
+    case let .integer(val): val
+    case let .double(val): val
+    case let .object(dictionary): dictionary.mapValues(\.value)
+    case let .array(array): array.map(\.value)
+    case let .bool(bool): bool
     }
   }
 

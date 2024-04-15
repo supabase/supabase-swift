@@ -25,26 +25,26 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
 
   public var eventType: EventType? {
     switch event {
-    case ChannelEvent.system where payload["status"]?.stringValue == "ok": return .system
+    case ChannelEvent.system where payload["status"]?.stringValue == "ok": .system
     case ChannelEvent.postgresChanges:
-      return .postgresChanges
+      .postgresChanges
     case ChannelEvent.broadcast:
-      return .broadcast
+      .broadcast
     case ChannelEvent.close:
-      return .close
+      .close
     case ChannelEvent.error:
-      return .error
+      .error
     case ChannelEvent.presenceDiff:
-      return .presenceDiff
+      .presenceDiff
     case ChannelEvent.presenceState:
-      return .presenceState
+      .presenceState
     case ChannelEvent.system
       where payload["message"]?.stringValue?.contains("access token has expired") == true:
-      return .tokenExpired
+      .tokenExpired
     case ChannelEvent.reply:
-      return .reply
+      .reply
     default:
-      return nil
+      nil
     }
   }
 

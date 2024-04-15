@@ -11,9 +11,9 @@ public enum FunctionsError: Error, LocalizedError {
   public var errorDescription: String? {
     switch self {
     case .relayError:
-      return "Relay Error invoking the Edge Function"
+      "Relay Error invoking the Edge Function"
     case let .httpError(code, _):
-      return "Edge Function returned a non-2xx status code: \(code)"
+      "Edge Function returned a non-2xx status code: \(code)"
     }
   }
 }

@@ -58,9 +58,9 @@ extension AnyJSON {
   var isPrimitive: Bool {
     switch self {
     case .null, .bool, .integer, .double, .string:
-      return true
+      true
     case .object, .array:
-      return false
+      false
     }
   }
 }

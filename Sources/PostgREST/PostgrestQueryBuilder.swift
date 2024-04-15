@@ -2,12 +2,11 @@ import _Helpers
 import Foundation
 
 public final class PostgrestQueryBuilder: PostgrestBuilder {
-  /// Performs a vertical filtering with SELECT.
+  /// Perform a SELECT query on the table or view.
   /// - Parameters:
-  ///   - columns: The columns to retrieve, separated by commas.
-  ///   - head: When set to true, select will void data.
-  ///   - count: Count algorithm to use to count rows in a table.
-  /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
+  ///   - columns: The columns to retrieve, separated by commas. Columns can be renamed when returned with `customName:columnName`
+  ///   - head: When set to `true`, `data` will not be returned. Useful if you only need the count.
+  ///   - count: Count algorithm to use to count rows in the table or view.
   public func select(
     _ columns: String = "*",
     head: Bool = false,
@@ -41,13 +40,13 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     return PostgrestFilterBuilder(self)
   }
 
-  /// Performs an INSERT into the table.
+  /// Performs an INSERT into the table or view.
+  ///
+  /// By default, inserted rows are not returned. To return it, chain the call with `.select()`.
+  ///
   /// - Parameters:
-  ///   - values: The values to insert.
-  ///   - returning: The returning options for the query.
-  ///   - count: Count algorithm to use to count rows in a table.
-  /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
-  /// - Throws: An error if the insert fails.
+  ///   - values: The values to insert. Pass an object to insert a single row or an array to insert multiple rows.
+  ///   - count: Count algorithm to use to count inserted rows.
   public func insert(
     _ values: some Encodable & Sendable,
     returning: PostgrestReturningOptions? = nil,
@@ -84,15 +83,17 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     return PostgrestFilterBuilder(self)
   }
 
-  /// Performs an UPSERT into the table.
+  /// Perform an UPDATE on the table or view.
+  ///
+  /// Depending on the column(s) passed to `onConflict`, `.upsert()` allows you to perform the equivalent of `.insert()` if a row with the corresponding `onConflict` columns doesn't exist, or if it does exist, perform an alternative action depending on `ignoreDuplicates`.
+  ///
+  /// By default, upserted rows are not returned. To return it, chain the call with `.select()`.
+  ///
   /// - Parameters:
-  ///   - values: The values to insert.
-  ///   - onConflict: The column(s) with a unique constraint to perform the UPSERT.
-  ///   - returning: The returning options for the query.
-  ///   - count: Count algorithm to use to count rows in a table.
-  ///   - ignoreDuplicates: Specifies if duplicate rows should be ignored and not inserted.
-  /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
-  /// - Throws: An error if the upsert fails.
+  ///   - values: The values to upsert with. Pass an object to upsert a single row or an array to upsert multiple rows.
+  ///   - onConflict: Comma-separated UNIQUE column(s) to specify how duplicate rows are determined. Two rows are duplicates if all the `onConflict` columns are equal.
+  ///   - count: Count algorithm to use to count upserted rows.
+  ///   - ignoreDuplicates: If `true`, duplicate rows are ignored. If `false`, duplicate rows are merged with existing rows.
   public func upsert(
     _ values: some Encodable & Sendable,
     onConflict: String? = nil,
@@ -134,13 +135,13 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     return PostgrestFilterBuilder(self)
   }
 
-  /// Performs an UPDATE on the table.
+  /// Perform an UPDATE on the table or view.
+  ///
+  /// By default, updated rows are not returned. To return it, chain the call with `.select()` after filters.
+  ///
   /// - Parameters:
-  ///   - values: The values to update.
-  ///   - returning: The returning options for the query.
+  ///   - values: The values to update with.
   ///   - count: Count algorithm to use to count rows in a table.
-  /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
-  /// - Throws: An error if the update fails.
   public func update(
     _ values: some Encodable & Sendable,
     returning: PostgrestReturningOptions = .representation,
@@ -163,11 +164,12 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
     return PostgrestFilterBuilder(self)
   }
 
-  /// Performs a DELETE on the table.
+  /// Perform a DELETE on the table or view.
+  ///
+  /// By default, deleted rows are not returned. To return it, chain the call with `.select()` after filters.
+  ///
   /// - Parameters:
-  ///   - returning: The returning options for the query.
-  ///   - count: Count algorithm to use to count rows in a table.
-  /// - Returns: A `PostgrestFilterBuilder` instance for further filtering or operations.
+  ///   - count: Count algorithm to use to count deleted rows.
   public func delete(
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil

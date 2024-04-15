@@ -921,14 +921,12 @@ public class RealtimeChannel {
 
     let handledMessage = message
 
-    let bindings: [Binding]
-
-    if ["insert", "update", "delete"].contains(typeLower) {
-      bindings = self.bindings.value["postgres_changes", default: []].filter { bind in
+    let bindings: [Binding] = if ["insert", "update", "delete"].contains(typeLower) {
+      self.bindings.value["postgres_changes", default: []].filter { bind in
         bind.filter["event"] == "*" || bind.filter["event"] == typeLower
       }
     } else {
-      bindings = self.bindings.value[typeLower, default: []].filter { bind in
+      self.bindings.value[typeLower, default: []].filter { bind in
         if ["broadcast", "presence", "postgres_changes"].contains(typeLower) {
           let bindEvent = bind.filter["event"]?.lowercased()
 
