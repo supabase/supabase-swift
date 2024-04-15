@@ -47,11 +47,6 @@ public enum CountOption: String, Sendable {
 /// Enum of options representing the ways PostgREST can return values from the server.
 ///
 /// https://postgrest.org/en/v9.0/api.html?highlight=PREFER#insertions-updates
-@available(
-  *,
-  deprecated,
-  message: "This enum is going to be removed, please use select() on the insert/update/delete result to return the resulting object."
-)
 public enum PostgrestReturningOptions: String, Sendable {
   /// Returns nothing from the server
   case minimal

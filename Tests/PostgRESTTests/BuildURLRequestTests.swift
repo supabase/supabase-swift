@@ -171,7 +171,7 @@ final class BuildURLRequestTests: XCTestCase {
         client.from("users")
           .select()
           .is("email", value: String?.none)
-      }
+      },
     ]
 
     for testCase in testCases {

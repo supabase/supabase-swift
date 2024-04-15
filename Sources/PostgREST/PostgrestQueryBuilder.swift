@@ -49,12 +49,16 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   ///   - count: Count algorithm to use to count inserted rows.
   public func insert(
     _ values: some Encodable & Sendable,
+    returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     try mutableState.withValue {
       $0.request.method = .post
-      $0.request.body = try configuration.encoder.encode(values)
       var prefersHeaders: [String] = []
+      if let returning {
+        prefersHeaders.append("return=\(returning.rawValue)")
+      }
+      $0.request.body = try configuration.encoder.encode(values)
       if let count {
         prefersHeaders.append("count=\(count.rawValue)")
       }
@@ -93,6 +97,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   public func upsert(
     _ values: some Encodable & Sendable,
     onConflict: String? = nil,
+    returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil,
     ignoreDuplicates: Bool = false
   ) throws -> PostgrestFilterBuilder {
@@ -100,6 +105,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
       $0.request.method = .post
       var prefersHeaders = [
         "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates",
+        "return=\(returning.rawValue)",
       ]
       if let onConflict {
         $0.request.query.append(URLQueryItem(name: "on_conflict", value: onConflict))
@@ -138,12 +144,13 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   ///   - count: Count algorithm to use to count rows in a table.
   public func update(
     _ values: some Encodable & Sendable,
+    returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     try mutableState.withValue {
       $0.request.method = .patch
+      var preferHeaders = ["return=\(returning.rawValue)"]
       $0.request.body = try configuration.encoder.encode(values)
-      var preferHeaders: [String] = []
       if let count {
         preferHeaders.append("count=\(count.rawValue)")
       }
@@ -163,10 +170,13 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
   ///
   /// - Parameters:
   ///   - count: Count algorithm to use to count deleted rows.
-  public func delete(count: CountOption? = nil) -> PostgrestFilterBuilder {
+  public func delete(
+    returning: PostgrestReturningOptions = .representation,
+    count: CountOption? = nil
+  ) -> PostgrestFilterBuilder {
     mutableState.withValue {
       $0.request.method = .delete
-      var preferHeaders: [String] = []
+      var preferHeaders = ["return=\(returning.rawValue)"]
       if let count {
         preferHeaders.append("count=\(count.rawValue)")
       }
