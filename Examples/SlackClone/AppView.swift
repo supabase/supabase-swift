@@ -14,7 +14,7 @@ final class AppViewModel {
   var session: Session?
   var selectedChannel: Channel?
 
-  var realtimeConnectionStatus: RealtimeClientV2.Status?
+  var realtimeConnectionStatus: RealtimeClient.Status?
 
   init() {
     Task { [weak self] in

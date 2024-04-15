@@ -1,5 +1,5 @@
 //
-//  _PushTests.swift
+//  PushTests.swift
 //
 //
 //  Created by Guilherme Souza on 03/01/24.
@@ -10,9 +10,9 @@ import ConcurrencyExtras
 import TestHelpers
 import XCTest
 
-final class _PushTests: XCTestCase {
+final class PushTests: XCTestCase {
   var ws: MockWebSocketClient!
-  var socket: RealtimeClientV2!
+  var socket: RealtimeClient!
 
   override func invokeTest() {
     withMainSerialExecutor {
@@ -24,8 +24,8 @@ final class _PushTests: XCTestCase {
     super.setUp()
 
     ws = MockWebSocketClient()
-    socket = RealtimeClientV2(
-      config: RealtimeClientV2.Configuration(
+    socket = RealtimeClient(
+      config: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/v1/realtime")!,
         apiKey: "apikey"
       ),
@@ -34,7 +34,7 @@ final class _PushTests: XCTestCase {
   }
 
   func testPushWithoutAck() async {
-    let channel = RealtimeChannelV2(
+    let channel = RealtimeChannel(
       topic: "realtime:users",
       config: RealtimeChannelConfig(
         broadcast: .init(acknowledgeBroadcasts: false),
@@ -43,9 +43,9 @@ final class _PushTests: XCTestCase {
       socket: socket,
       logger: nil
     )
-    let push = PushV2(
+    let push = Push(
       channel: channel,
-      message: RealtimeMessageV2(
+      message: RealtimeMessage(
         joinRef: nil,
         ref: "1",
         topic: "realtime:users",

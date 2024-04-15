@@ -124,9 +124,9 @@ final class CallbackManager: @unchecked Sendable {
   }
 
   func triggerPresenceDiffs(
-    joins: [String: PresenceV2],
-    leaves: [String: PresenceV2],
-    rawMessage: RealtimeMessageV2
+    joins: [String: Presence],
+    leaves: [String: Presence],
+    rawMessage: RealtimeMessage
   ) {
     let presenceCallbacks = mutableState.callbacks.compactMap {
       if case let .presence(callback) = $0 {

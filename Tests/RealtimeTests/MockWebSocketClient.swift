@@ -15,8 +15,8 @@ import XCTestDynamicOverlay
 #endif
 
 final class MockWebSocketClient: WebSocketClient {
-  let sentMessages = LockIsolated<[RealtimeMessageV2]>([])
-  func send(_ message: RealtimeMessageV2) async throws {
+  let sentMessages = LockIsolated<[RealtimeMessage]>([])
+  func send(_ message: RealtimeMessage) async throws {
     sentMessages.withValue {
       $0.append(message)
     }
@@ -27,18 +27,18 @@ final class MockWebSocketClient: WebSocketClient {
   }
 
   private let receiveContinuation =
-    LockIsolated<AsyncThrowingStream<RealtimeMessageV2, any Error>.Continuation?>(nil)
-  func mockReceive(_ message: RealtimeMessageV2) {
+    LockIsolated<AsyncThrowingStream<RealtimeMessage, any Error>.Continuation?>(nil)
+  func mockReceive(_ message: RealtimeMessage) {
     receiveContinuation.value?.yield(message)
   }
 
-  private let onCallback = LockIsolated<((RealtimeMessageV2) -> RealtimeMessageV2?)?>(nil)
-  func on(_ callback: @escaping (RealtimeMessageV2) -> RealtimeMessageV2?) {
+  private let onCallback = LockIsolated<((RealtimeMessage) -> RealtimeMessage?)?>(nil)
+  func on(_ callback: @escaping (RealtimeMessage) -> RealtimeMessage?) {
     onCallback.setValue(callback)
   }
 
-  func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error> {
-    let (stream, continuation) = AsyncThrowingStream<RealtimeMessageV2, any Error>.makeStream()
+  func receive() -> AsyncThrowingStream<RealtimeMessage, any Error> {
+    let (stream, continuation) = AsyncThrowingStream<RealtimeMessage, any Error>.makeStream()
     receiveContinuation.setValue(continuation)
     return stream
   }

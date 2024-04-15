@@ -20,8 +20,8 @@ struct Logger: SupabaseLogger {
 }
 
 final class RealtimeIntegrationTests: XCTestCase {
-  let realtime = RealtimeClientV2(
-    config: RealtimeClientV2.Configuration(
+  let realtime = RealtimeClient(
+    config: RealtimeClient.Configuration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
       apiKey: DotEnv.SUPABASE_ANON_KEY,
       logger: Logger()

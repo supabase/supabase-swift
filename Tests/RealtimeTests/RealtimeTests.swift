@@ -16,14 +16,14 @@ final class RealtimeTests: XCTestCase {
   }
 
   var ws: MockWebSocketClient!
-  var sut: RealtimeClientV2!
+  var sut: RealtimeClient!
 
   override func setUp() {
     super.setUp()
 
     ws = MockWebSocketClient()
-    sut = RealtimeClientV2(
-      config: RealtimeClientV2.Configuration(
+    sut = RealtimeClient(
+      config: RealtimeClient.Configuration(
         url: url,
         apiKey: apiKey,
         heartbeatInterval: 1,
@@ -71,7 +71,7 @@ final class RealtimeTests: XCTestCase {
     ws.on { message in
       if message.event == "heartbeat" {
         expectation.fulfill()
-        return RealtimeMessageV2(
+        return RealtimeMessage(
           joinRef: message.joinRef,
           ref: message.ref,
           topic: "phoenix",
@@ -102,7 +102,7 @@ final class RealtimeTests: XCTestCase {
       return nil
     }
 
-    let statuses = LockIsolated<[RealtimeClientV2.Status]>([])
+    let statuses = LockIsolated<[RealtimeClient.Status]>([])
 
     Task {
       for await status in await sut.statusChange {
@@ -148,7 +148,7 @@ final class RealtimeTests: XCTestCase {
   }
 }
 
-extension RealtimeMessageV2 {
+extension RealtimeMessage {
   static let subscribeToMessages = Self(
     joinRef: "1",
     ref: "1",

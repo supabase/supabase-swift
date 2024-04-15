@@ -63,9 +63,6 @@ public final class SupabaseClient: @unchecked Sendable {
   /// Realtime client for Supabase
   public let realtime: RealtimeClient
 
-  /// Realtime client for Supabase
-  public let realtimeV2: RealtimeClientV2
-
   /// Supabase Functions allows you to deploy and invoke edge functions.
   public private(set) lazy var functions = FunctionsClient(
     url: functionsURL,
@@ -138,13 +135,7 @@ public final class SupabaseClient: @unchecked Sendable {
     )
 
     realtime = RealtimeClient(
-      supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
-      headers: defaultHeaders,
-      params: defaultHeaders
-    )
-
-    realtimeV2 = RealtimeClientV2(
-      config: RealtimeClientV2.Configuration(
+      config: RealtimeClient.Configuration(
         url: supabaseURL.appendingPathComponent("/realtime/v1"),
         apiKey: supabaseKey,
         headers: defaultHeaders,
@@ -201,9 +192,9 @@ public final class SupabaseClient: @unchecked Sendable {
   }
 
   /// Returns all Realtime channels.
-  public var channels: [RealtimeChannelV2] {
+  public var channels: [RealtimeChannel] {
     get async {
-      await Array(realtimeV2.subscriptions.values)
+      await Array(realtime.subscriptions.values)
     }
   }
 
@@ -214,19 +205,19 @@ public final class SupabaseClient: @unchecked Sendable {
   public func channel(
     _ name: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
-  ) async -> RealtimeChannelV2 {
-    await realtimeV2.channel(name, options: options)
+  ) async -> RealtimeChannel {
+    await realtime.channel(name, options: options)
   }
 
   /// Unsubscribes and removes Realtime channel from Realtime client.
   /// - Parameter channel: The Realtime channel to remove.
-  public func removeChannel(_ channel: RealtimeChannelV2) async {
-    await realtimeV2.removeChannel(channel)
+  public func removeChannel(_ channel: RealtimeChannel) async {
+    await realtime.removeChannel(channel)
   }
 
   /// Unsubscribes and removes all Realtime channels from Realtime client.
   public func removeAllChannels() async {
-    await realtimeV2.removeAllChannels()
+    await realtime.removeAllChannels()
   }
 
   deinit {
@@ -268,7 +259,6 @@ public final class SupabaseClient: @unchecked Sendable {
     let supportedEvents: [AuthChangeEvent] = [.initialSession, .signedIn, .tokenRefreshed]
     guard supportedEvents.contains(event) else { return }
 
-    realtime.setAuth(session?.accessToken)
-    await realtimeV2.setAuth(session?.accessToken)
+    await realtime.setAuth(session?.accessToken)
   }
 }
