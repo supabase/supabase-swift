@@ -1068,28 +1068,43 @@ public final class AuthClient: @unchecked Sendable {
     try await user().identities ?? []
   }
 
-  /// Gets an URL that can be used for manual linking identity.
+  /// Returns the URL to link the user's identity with an OAuth provider.
+  ///
+  /// This method supports the PKCE flow.
+  ///
   /// - Parameters:
   ///   - provider: The provider you want to link the user with.
   ///   - scopes: The scopes to request from the OAuth provider.
   ///   - redirectTo: The redirect URL to use, specify a configured deep link.
   ///   - queryParams: Additional query parameters to use.
-  /// - Returns: A URL that you can use to initiate the OAuth flow.
-  ///
-  /// - Warning: This method is experimental and is expected to change.
-  public func _getURLForLinkIdentity(
+  public func getLinkIdentityURL(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
-  ) throws -> URL {
-    try getURLForProvider(
+  ) async throws -> OAuthResponse {
+    let url = try getURLForProvider(
       url: configuration.url.appendingPathComponent("user/identities/authorize"),
       provider: provider,
       scopes: scopes,
       redirectTo: redirectTo,
-      queryParams: queryParams
+      queryParams: queryParams,
+      skipBrowserRedirect: true
     )
+
+    struct Response: Codable {
+      let url: URL
+    }
+
+    let response = try await api.authorizedExecute(
+      Request(
+        url: url,
+        method: .get
+      )
+    )
+    .decoded(as: Response.self, decoder: configuration.decoder)
+
+    return OAuthResponse(provider: provider, url: response.url)
   }
 
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
@@ -1202,7 +1217,8 @@ public final class AuthClient: @unchecked Sendable {
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
-    queryParams: [(name: String, value: String?)] = []
+    queryParams: [(name: String, value: String?)] = [],
+    skipBrowserRedirect: Bool? = nil
   ) throws -> URL {
     guard
       var components = URLComponents(
@@ -1232,6 +1248,10 @@ public final class AuthClient: @unchecked Sendable {
 
     if let codeChallengeMethod {
       queryItems.append(URLQueryItem(name: "code_challenge_method", value: codeChallengeMethod))
+    }
+
+    if let skipBrowserRedirect {
+      queryItems.append(URLQueryItem(name: "skip_http_redirect", value: "\(skipBrowserRedirect)"))
     }
 
     queryItems.append(contentsOf: queryParams.map(URLQueryItem.init))

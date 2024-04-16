@@ -10,6 +10,7 @@ import SwiftUI
 
 struct UserIdentityList: View {
   @Environment(\.webAuthenticationSession) private var webAuthenticationSession
+  @Environment(\.openURL) private var openURL
 
   @State private var identities = ActionState<[UserIdentity], any Error>.idle
   @State private var error: (any Error)?
@@ -61,22 +62,9 @@ struct UserIdentityList: View {
               Button(provider.rawValue) {
                 Task {
                   do {
-                    if #available(iOS 17.4, *) {
-                      let url = try await supabase.auth._getURLForLinkIdentity(provider: provider)
-                      let accessToken = try await supabase.auth.session.accessToken
-
-                      let callbackURL = try await webAuthenticationSession.authenticate(
-                        using: url,
-                        callback: .customScheme(Constants.redirectToURL.scheme!),
-                        preferredBrowserSession: .shared,
-                        additionalHeaderFields: ["Authorization": "Bearer \(accessToken)"]
-                      )
-
-                      debug("\(callbackURL)")
-                    } else {
-                      // Fallback on earlier versions
-                    }
-
+                    let response = try await supabase.auth.getLinkIdentityURL(provider: provider)
+                    openURL(response.url)
+                    debug("getLinkIdentityURL: \(response.url) opened for provider \(response.provider)")
                   } catch {
                     self.error = error
                   }
