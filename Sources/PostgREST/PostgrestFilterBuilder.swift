@@ -160,6 +160,36 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
     like(column, pattern: value)
   }
 
+  /// Match only rows where `column` matches all of `patterns` case-sensitively.
+  /// - Parameters:
+  ///   - column: The column to filter on
+  ///   - patterns: The patterns to match with
+  public func likeAllOf(
+    _ column: String,
+    patterns: [some URLQueryRepresentable]
+  ) -> PostgrestFilterBuilder {
+    let queryValue = patterns.queryValue
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "like(all).\(queryValue)"))
+    }
+    return self
+  }
+
+  /// Match only rows where `column` matches any of `patterns` case-sensitively.
+  /// - Parameters:
+  ///   - column: The column to filter on
+  ///   - patterns: The patterns to match with
+  public func likeAnyOf(
+    _ column: String,
+    patterns: [some URLQueryRepresentable]
+  ) -> PostgrestFilterBuilder {
+    let queryValue = patterns.queryValue
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "like(any).\(queryValue)"))
+    }
+    return self
+  }
+
   /// Match only rows where `column` matches `pattern` case-insensitively.
   ///
   /// - Parameters:
@@ -182,6 +212,36 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
     value: any URLQueryRepresentable
   ) -> PostgrestFilterBuilder {
     ilike(column, pattern: value)
+  }
+
+  /// Match only rows where `column` matches all of `patterns` case-insensitively.
+  /// - Parameters:
+  ///   - column: The column to filter on
+  ///   - patterns: The patterns to match with
+  public func iLikeAllOf(
+    _ column: String,
+    patterns: [some URLQueryRepresentable]
+  ) -> PostgrestFilterBuilder {
+    let queryValue = patterns.queryValue
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "ilike(all).\(queryValue)"))
+    }
+    return self
+  }
+
+  /// Match only rows where `column` matches any of `patterns` case-insensitively.
+  /// - Parameters:
+  ///   - column: The column to filter on
+  ///   - patterns: The patterns to match with
+  public func iLikeAnyOf(
+    _ column: String,
+    patterns: [some URLQueryRepresentable]
+  ) -> PostgrestFilterBuilder {
+    let queryValue = patterns.queryValue
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "ilike(any).\(queryValue)"))
+    }
+    return self
   }
 
   /// Match only rows where `column` IS `value`.
@@ -246,6 +306,24 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
     let queryValue = value.queryValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "cs.\(queryValue)"))
+    }
+    return self
+  }
+
+  /// Match only rows where every element appearing in `column` is contained by `value`.
+  ///
+  /// Only relevant for jsonb, array, and range columns.
+  ///
+  /// - Parameters:
+  ///   - column: The jsonb, array, or range column to filter on
+  ///   - value: The jsonb, array, or range value to filter with
+  public func containedBy(
+    _ column: String,
+    value: some URLQueryRepresentable
+  ) -> PostgrestFilterBuilder {
+    let queryValue = value.queryValue
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "cd.\(queryValue)"))
     }
     return self
   }
