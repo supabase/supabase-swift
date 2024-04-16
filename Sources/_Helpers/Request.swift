@@ -78,11 +78,27 @@ package struct HTTPClient: Sendable {
 }
 
 package struct Request: Sendable {
-  public var path: String
-  public var method: Method
-  public var query: [URLQueryItem]
-  public var headers: [String: String]
-  public var body: Data?
+  enum _URL {
+    case absolute(url: URL)
+    case relative(path: String)
+
+    func resolve(withBaseURL baseURL: URL) -> URL {
+      switch self {
+      case let .absolute(url): url
+      case let .relative(path): baseURL.appendingPathComponent(path)
+      }
+    }
+  }
+
+  var _url: _URL
+  package var method: Method
+  package var query: [URLQueryItem]
+  package var headers: [String: String]
+  package var body: Data?
+
+  package func url(withBaseURL baseURL: URL) -> URL {
+    _url.resolve(withBaseURL: baseURL)
+  }
 
   package enum Method: String, Sendable {
     case get = "GET"
@@ -93,22 +109,8 @@ package struct Request: Sendable {
     case head = "HEAD"
   }
 
-  package init(
-    path: String,
-    method: Method,
-    query: [URLQueryItem] = [],
-    headers: [String: String] = [:],
-    body: Data? = nil
-  ) {
-    self.path = path
-    self.method = method
-    self.query = query
-    self.headers = headers
-    self.body = body
-  }
-
   package func urlRequest(withBaseURL baseURL: URL) throws -> URLRequest {
-    var url = baseURL.appendingPathComponent(path)
+    var url = url(withBaseURL: baseURL)
     if !query.isEmpty {
       guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
         throw URLError(.badURL)
@@ -155,6 +157,40 @@ package struct Request: Sendable {
       return "\(escapedName)=\(escapedValue)"
     }
     .joined(separator: "&")
+  }
+}
+
+extension Request {
+  package init(
+    path: String,
+    method: Method,
+    query: [URLQueryItem] = [],
+    headers: [String: String] = [:],
+    body: Data? = nil
+  ) {
+    self.init(
+      _url: .relative(path: path),
+      method: method,
+      query: query,
+      headers: headers,
+      body: body
+    )
+  }
+
+  package init(
+    url: URL,
+    method: Method,
+    query: [URLQueryItem] = [],
+    headers: [String: String] = [:],
+    body: Data? = nil
+  ) {
+    self.init(
+      _url: .absolute(url: url),
+      method: method,
+      query: query,
+      headers: headers,
+      body: body
+    )
   }
 }
 

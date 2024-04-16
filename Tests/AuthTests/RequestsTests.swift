@@ -406,6 +406,21 @@ final class RequestsTests: XCTestCase {
     }
   }
 
+  func testGetLinkIdentityURL() async {
+    sessionManager.session = { @Sendable _ in .validSession }
+
+    let sut = makeSUT()
+
+    await assert {
+      _ = try await sut.getLinkIdentityURL(
+        provider: .github,
+        scopes: "user:email",
+        redirectTo: URL(string: "https://supabase.com"),
+        queryParams: [("extra_key", "extra_value")]
+      )
+    }
+  }
+
   private func assert(_ block: () async throws -> Void) async {
     do {
       try await block()

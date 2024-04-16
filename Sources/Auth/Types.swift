@@ -717,3 +717,8 @@ public struct SSOResponse: Codable, Hashable, Sendable {
   /// identity provider's authentication flow.
   public let url: URL
 }
+
+public struct OAuthResponse: Codable, Hashable, Sendable {
+  public let provider: Provider
+  public let url: URL
+}

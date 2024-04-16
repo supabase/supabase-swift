@@ -6,11 +6,11 @@
 //
 
 @testable import _Helpers
+@testable import Auth
 import ConcurrencyExtras
+import CustomDump
 import TestHelpers
 import XCTest
-
-@testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -340,6 +340,32 @@ final class AuthClientTests: XCTestCase {
     } catch {
       XCTFail("Unexcpted error: \(error)")
     }
+  }
+
+  func testGetLinkIdentityURL() async throws {
+    api.execute = { @Sendable _ in
+      .stub(
+        """
+        {
+          "url" : "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
+        }
+        """
+      )
+    }
+
+    sessionManager.session = { @Sendable _ in .validSession }
+    codeVerifierStorage = .live
+    let sut = makeSUT()
+
+    let response = try await sut.getLinkIdentityURL(provider: .github)
+
+    XCTAssertNoDifference(
+      response,
+      OAuthResponse(
+        provider: .github,
+        url: URL(string: "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt")!
+      )
+    )
   }
 
   private func makeSUT() -> AuthClient {
