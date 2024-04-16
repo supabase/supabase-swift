@@ -47,7 +47,7 @@ final class RealtimeIntegrationTests: XCTestCase {
     let receivedMessages = LockIsolated<[JSONObject]>([])
 
     Task {
-      for await message in await channel.broadcast(event: "test") {
+      for await message in await channel.broadcastStream(event: "test") {
         receivedMessages.withValue {
           $0.append(message)
         }
