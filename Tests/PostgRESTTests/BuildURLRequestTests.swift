@@ -15,7 +15,6 @@ struct User: Encodable {
   var username: String?
 }
 
-@MainActor
 final class BuildURLRequestTests: XCTestCase {
   let url = URL(string: "https://example.supabase.co")!
 
@@ -171,6 +170,41 @@ final class BuildURLRequestTests: XCTestCase {
         client.from("users")
           .select()
           .is("email", value: String?.none)
+      },
+      TestCase(name: "likeAllOf") { client in
+        client.from("users")
+          .select()
+          .likeAllOf("email", patterns: ["%@supabase.io", "%@supabase.com"])
+      },
+      TestCase(name: "likeAnyOf") { client in
+        client.from("users")
+          .select()
+          .likeAnyOf("email", patterns: ["%@supabase.io", "%@supabase.com"])
+      },
+      TestCase(name: "iLikeAllOf") { client in
+        client.from("users")
+          .select()
+          .iLikeAllOf("email", patterns: ["%@supabase.io", "%@supabase.com"])
+      },
+      TestCase(name: "iLikeAnyOf") { client in
+        client.from("users")
+          .select()
+          .iLikeAnyOf("email", patterns: ["%@supabase.io", "%@supabase.com"])
+      },
+      TestCase(name: "containedBy using array") { client in
+        client.from("users")
+          .select()
+          .containedBy("id", value: ["a", "b", "c"])
+      },
+      TestCase(name: "containedBy using range") { client in
+        client.from("users")
+          .select()
+          .containedBy("age", value: "[10,20]")
+      },
+      TestCase(name: "containedBy using json") { client in
+        client.from("users")
+          .select()
+          .containedBy("userMetadata", value: ["age": 18])
       },
     ]
 

@@ -1,3 +1,4 @@
+import _Helpers
 import Foundation
 
 /// A type that can fit into the query part of a URL.
@@ -32,6 +33,20 @@ extension Array: URLQueryRepresentable where Element: URLQueryRepresentable {
   }
 }
 
+extension AnyJSON: URLQueryRepresentable {
+  public var queryValue: String {
+    switch self {
+    case let .array(array): array.queryValue
+    case let .object(object): object.queryValue
+    case let .string(string): string.queryValue
+    case let .double(double): double.queryValue
+    case let .integer(integer): integer.queryValue
+    case let .bool(bool): bool.queryValue
+    case .null: "NULL"
+    }
+  }
+}
+
 extension Optional: URLQueryRepresentable where Wrapped: URLQueryRepresentable {
   public var queryValue: String {
     if let value = self {
@@ -42,13 +57,10 @@ extension Optional: URLQueryRepresentable where Wrapped: URLQueryRepresentable {
   }
 }
 
-extension Dictionary: URLQueryRepresentable
-  where
-  Key: URLQueryRepresentable,
-  Value: URLQueryRepresentable
-{
+extension JSONObject: URLQueryRepresentable {
   public var queryValue: String {
-    JSONSerialization.stringfy(self)
+    let value = mapValues(\.value)
+    return JSONSerialization.stringfy(value)
   }
 }
 

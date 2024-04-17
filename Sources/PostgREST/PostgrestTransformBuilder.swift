@@ -145,4 +145,53 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     }
     return self
   }
+
+  /// Return `value` as an object in [GeoJSON](https://geojson.org) format.
+  public func geojson() -> PostgrestTransformBuilder {
+    mutableState.withValue {
+      $0.request.headers["Accept"] = "application/geo+json"
+    }
+    return self
+  }
+
+  /// Return `data` as the EXPLAIN plan for the query.
+  ///
+  /// You need to enable the [db_plan_enabled](https://supabase.com/docs/guides/database/debugging-performance#enabling-explain)
+  /// setting before using this method.
+  ///
+  /// - Parameters:
+  ///   - analyze: If `true`, the query will be executed and the actual run time will be returned
+  ///   - verbose: If `true`, the query identifier will be returned and `data` will include the
+  /// output columns of the query
+  ///   - settings: If `true`, include information on configuration parameters that affect query
+  /// planning
+  ///   - buffers: If `true`, include information on buffer usage
+  ///   - wal: If `true`, include information on WAL record generation
+  ///   - format: The format of the output, can be `"text"` (default) or `"json"`
+  public func explain(
+    analyze: Bool = false,
+    verbose: Bool = false,
+    settings: Bool = false,
+    buffers: Bool = false,
+    wal: Bool = false,
+    format: String = "text"
+  ) -> PostgrestTransformBuilder {
+    mutableState.withValue {
+      let options = [
+        analyze ? "analyze" : nil,
+        verbose ? "verbose" : nil,
+        settings ? "settings" : nil,
+        buffers ? "buffers" : nil,
+        wal ? "wal" : nil,
+      ]
+      .compactMap { $0 }
+      .joined(separator: "|")
+      let forMediaType = $0.request.headers["Accept"] ?? "application/json"
+      $0.request
+        .headers["Accept"] =
+        "application/vnd.pgrst.plan+\"\(format)\"; for=\(forMediaType); options=\(options);"
+    }
+
+    return self
+  }
 }
