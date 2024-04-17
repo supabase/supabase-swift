@@ -117,6 +117,9 @@ public actor RealtimeClientV2 {
     subscriptions = [:]
   }
 
+  /// Connects the socket.
+  ///
+  /// Suspends until connected.
   public func connect() async {
     await connect(reconnect: false)
   }
@@ -284,7 +287,7 @@ public actor RealtimeClientV2 {
 
     pendingHeartbeatRef = makeRef()
 
-    await send(
+    await push(
       RealtimeMessageV2(
         joinRef: nil,
         ref: pendingHeartbeatRef?.description,
@@ -305,6 +308,8 @@ public actor RealtimeClientV2 {
     status = .disconnected
   }
 
+  /// Sets the JWT access token used for channel subscription authorization and Realtime RLS.
+  /// - Parameter token: A JWT string.
   public func setAuth(_ token: String?) async {
     accessToken = token
 
@@ -328,7 +333,14 @@ public actor RealtimeClientV2 {
     }
   }
 
-  func send(_ message: RealtimeMessageV2) async {
+  /// Push out a message if the socket is connected.
+  /// - Parameter message: The message to push through the socket.
+  public func push(_ message: RealtimeMessageV2) async {
+    guard status == .connected else {
+      config.logger?.warning("Trying to push a message while socket is not connected. This is not supported yet.")
+      return
+    }
+
     do {
       try await ws.send(message)
     } catch {

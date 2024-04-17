@@ -15,6 +15,8 @@ public struct RealtimeChannelConfig: Sendable {
 }
 
 public actor RealtimeChannelV2 {
+  public typealias Subscription = ObservationToken
+
   public enum Status: Sendable {
     case unsubscribed
     case subscribing
@@ -340,93 +342,84 @@ public actor RealtimeChannelV2 {
   }
 
   /// Listen for clients joining / leaving the channel using presences.
-  public func presenceChange() -> AsyncStream<any PresenceAction> {
-    let (stream, continuation) = AsyncStream<any PresenceAction>.makeStream()
-
-    let id = callbackManager.addPresenceCallback {
-      continuation.yield($0)
-    }
-
-    let logger = logger
-
-    continuation.onTermination = { [weak callbackManager] _ in
+  public func onPresenceChange(
+    _ callback: @escaping @Sendable (any PresenceAction) -> Void
+  ) -> Subscription {
+    let id = callbackManager.addPresenceCallback(callback: callback)
+    return Subscription { [weak callbackManager, logger] in
       logger?.debug("Removing presence callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
-
-    return stream
   }
 
   /// Listen for postgres changes in a channel.
-  public func postgresChange(
+  public func onPostgresChange(
     _: InsertAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: String? = nil
-  ) -> AsyncStream<InsertAction> {
-    postgresChange(event: .insert, schema: schema, table: table, filter: filter)
-      .compactMap { $0.wrappedAction as? InsertAction }
-      .eraseToStream()
+    filter: String? = nil,
+    callback: @escaping @Sendable (InsertAction) -> Void
+  ) -> Subscription {
+    _onPostgresChange(
+      event: .insert,
+      schema: schema,
+      table: table,
+      filter: filter
+    ) {
+      guard case let .insert(action) = $0 else { return }
+      callback(action)
+    }
   }
 
   /// Listen for postgres changes in a channel.
-  public func postgresChange(
+  public func onPostgresChange(
     _: UpdateAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: String? = nil
-  ) -> AsyncStream<UpdateAction> {
-    postgresChange(event: .update, schema: schema, table: table, filter: filter)
-      .compactMap { $0.wrappedAction as? UpdateAction }
-      .eraseToStream()
+    filter: String? = nil,
+    callback: @escaping @Sendable (UpdateAction) -> Void
+  ) -> Subscription {
+    _onPostgresChange(
+      event: .update,
+      schema: schema,
+      table: table,
+      filter: filter
+    ) {
+      guard case let .update(action) = $0 else { return }
+      callback(action)
+    }
   }
 
   /// Listen for postgres changes in a channel.
-  public func postgresChange(
+  public func onPostgresChange(
     _: DeleteAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: String? = nil
-  ) -> AsyncStream<DeleteAction> {
-    postgresChange(event: .delete, schema: schema, table: table, filter: filter)
-      .compactMap { $0.wrappedAction as? DeleteAction }
-      .eraseToStream()
+    filter: String? = nil,
+    callback: @escaping @Sendable (DeleteAction) -> Void
+  ) -> Subscription {
+    _onPostgresChange(
+      event: .delete,
+      schema: schema,
+      table: table,
+      filter: filter
+    ) {
+      guard case let .delete(action) = $0 else { return }
+      callback(action)
+    }
   }
 
-  /// Listen for postgres changes in a channel.
-  public func postgresChange(
-    _: SelectAction.Type,
-    schema: String = "public",
-    table: String? = nil,
-    filter: String? = nil
-  ) -> AsyncStream<SelectAction> {
-    postgresChange(event: .select, schema: schema, table: table, filter: filter)
-      .compactMap { $0.wrappedAction as? SelectAction }
-      .eraseToStream()
-  }
-
-  /// Listen for postgres changes in a channel.
-  public func postgresChange(
-    _: AnyAction.Type,
-    schema: String = "public",
-    table: String? = nil,
-    filter: String? = nil
-  ) -> AsyncStream<AnyAction> {
-    postgresChange(event: .all, schema: schema, table: table, filter: filter)
-  }
-
-  private func postgresChange(
+  func _onPostgresChange(
     event: PostgresChangeEvent,
     schema: String,
     table: String?,
-    filter: String?
-  ) -> AsyncStream<AnyAction> {
+    filter: String?,
+    callback: @escaping @Sendable (AnyAction) -> Void
+  ) -> Subscription {
     precondition(
       status != .subscribed,
       "You cannot call postgresChange after joining the channel"
     )
-
-    let (stream, continuation) = AsyncStream<AnyAction>.makeStream()
 
     let config = PostgresJoinConfig(
       event: event,
@@ -437,18 +430,11 @@ public actor RealtimeChannelV2 {
 
     clientChanges.append(config)
 
-    let id = callbackManager.addPostgresCallback(filter: config) { action in
-      continuation.yield(action)
-    }
-
-    let logger = logger
-
-    continuation.onTermination = { [weak callbackManager] _ in
+    let id = callbackManager.addPostgresCallback(filter: config, callback: callback)
+    return Subscription { [weak callbackManager, logger] in
       logger?.debug("Removing postgres callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
-
-    return stream
   }
 
   /// Listen for broadcast messages sent by other clients within the same channel under a specific
