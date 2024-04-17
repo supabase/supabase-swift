@@ -18,12 +18,12 @@ final class AppViewModel {
 
   init() {
     Task { [weak self] in
-      for await (event, session) in await supabase.auth.authStateChanges {
+      for await (event, session) in supabase.auth.authStateChanges {
         guard [.signedIn, .signedOut, .initialSession].contains(event) else { return }
         self?.session = session
 
         if session == nil {
-          for subscription in await supabase.realtimeV2.subscriptions.values {
+          for subscription in await supabase.realtime.subscriptions.values {
             await subscription.unsubscribe()
           }
         }
@@ -31,7 +31,7 @@ final class AppViewModel {
     }
 
     Task {
-      for await status in await supabase.realtimeV2.statusChange {
+      for await status in await supabase.realtime.statusChange {
         realtimeConnectionStatus = status
       }
     }
