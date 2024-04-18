@@ -90,14 +90,14 @@ public struct FunctionInvokeOptions: Sendable {
   }
 }
 
-public enum FunctionRegion: String {
+public enum FunctionRegion: String, Sendable {
   case any
   case apNortheast1 = "ap-northeast-1"
   case apNortheast2 = "ap-northeast-2"
   case apSouth1 = "ap-south-1"
   case apSoutheast1 = "ap-southeast-1"
   case apSoutheast2 = "ap-southeast-2"
-  case aaCentral1 = "ca-central-1"
+  case caCentral1 = "ca-central-1"
   case euCentral1 = "eu-central-1"
   case euWest1 = "eu-west-1"
   case euWest2 = "eu-west-2"
