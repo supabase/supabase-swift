@@ -1,5 +1,5 @@
 import _Helpers
-import Foundation
+@preconcurrency import Foundation
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -158,5 +158,49 @@ public actor FunctionsClient {
     }
 
     return (data, httpResponse)
+  }
+
+  public func _invokeWithStream(
+    _ functionName: String,
+    options invokeOptions: FunctionInvokeOptions
+  ) -> AsyncThrowingStream<Data, any Error> {
+    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
+    let delegate = StreamResponseDelegate(continuation: continuation)
+
+    let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+
+    let url = url.appendingPathComponent(functionName)
+    var urlRequest = URLRequest(url: url)
+    urlRequest.allHTTPHeaderFields = invokeOptions.headers.merging(headers) { invoke, _ in invoke }
+    urlRequest.httpMethod = (invokeOptions.method ?? .post).rawValue
+    urlRequest.httpBody = invokeOptions.body
+
+    let task = session.dataTask(with: urlRequest)
+    task.resume()
+
+    continuation.onTermination = { _ in
+      task.cancel()
+
+      // Hold a strong reference to delegate until continuation terminates.
+      _ = delegate
+    }
+
+    return stream
+  }
+}
+
+final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
+  let continuation: AsyncThrowingStream<Data, any Error>.Continuation
+
+  init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
+    self.continuation = continuation
+  }
+
+  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
+    continuation.yield(data)
+  }
+
+  func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
+    continuation.finish(throwing: error)
   }
 }
