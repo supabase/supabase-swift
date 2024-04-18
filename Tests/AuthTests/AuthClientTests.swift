@@ -12,7 +12,6 @@ import CustomDump
 import TestHelpers
 import XCTest
 
-
 final class AuthClientTests: XCTestCase {
   var eventEmitter: Auth.EventEmitter!
   var sessionManager: SessionManager!
