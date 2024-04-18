@@ -42,7 +42,7 @@ jobs:
         run: PLATFORM="${{ matrix.platform }}" SCHEME=Auth make test-library
 
   test-linux:
-    name: Test Linux
+    name: Test Auth (Linux)
     strategy:
       fail-fast: false
       matrix:
