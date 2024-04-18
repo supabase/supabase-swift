@@ -33,7 +33,38 @@ final class RealtimeTests: XCTestCase {
     )
   }
 
-  func testBehavior() async {
+  func testBehavior_Closure() async {
+    let channel = await sut.channel("public:messages")
+    _ = await channel.onPostgresChange(InsertAction.self, table: "messages") { _ in }
+    _ = await channel.onPostgresChange(UpdateAction.self, table: "messages") { _ in }
+    _ = await channel.onPostgresChange(DeleteAction.self, table: "messages") { _ in }
+
+    let statusChange = await sut.statusChange
+
+    await connectSocketAndWait()
+
+    let status = await statusChange.prefix(3).collect()
+    XCTAssertEqual(status, [.disconnected, .connecting, .connected])
+
+    let messageTask = await sut.messageTask
+    XCTAssertNotNil(messageTask)
+
+    let heartbeatTask = await sut.heartbeatTask
+    XCTAssertNotNil(heartbeatTask)
+
+    let subscription = Task {
+      await channel.subscribe()
+    }
+    await Task.megaYield()
+    ws.mockReceive(.messagesSubscribed)
+
+    // Wait until channel subscribed
+    await subscription.value
+
+    XCTAssertNoDifference(ws.sentMessages.value, [.subscribeToMessages])
+  }
+
+  func testBehavior_AsyncAwait() async {
     let channel = await sut.channel("public:messages")
     _ = await channel.postgresChange(InsertAction.self, table: "messages")
     _ = await channel.postgresChange(UpdateAction.self, table: "messages")
