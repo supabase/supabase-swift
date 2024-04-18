@@ -56,4 +56,4 @@ jobs:
         with:
           swift-version: ${{ matrix.swift-version }}
       - name: Run tests
-        run: swift test
+        run: swift test --filter AuthTests.
