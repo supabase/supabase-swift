@@ -215,3 +215,14 @@ final class SocketStream: AsyncSequence, Sendable {
     try await task.send(message)
   }
 }
+
+#if os(Linux) || os(Windows)
+  extension URLSessionWebSocketTask {
+    func receive(completionHandler: @Sendable @escaping (Result<URLSessionWebSocketTask.Message, any Error>) -> Void) {
+      Task {
+        let result = await Result(catching: { try await self.receive() })
+        completionHandler(result)
+      }
+    }
+  }
+#endif
