@@ -437,30 +437,16 @@ public actor RealtimeChannelV2 {
     }
   }
 
-  /// Listen for broadcast messages sent by other clients within the same channel under a specific
-  /// `event`.
-  public func broadcastStream(event: String) -> AsyncStream<JSONObject> {
-    let (stream, continuation) = AsyncStream<JSONObject>.makeStream()
-
-    let id = callbackManager.addBroadcastCallback(event: event) {
-      continuation.yield($0)
-    }
-
-    let logger = logger
-
-    continuation.onTermination = { [weak callbackManager] _ in
+  /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
+  public func onBroadcast(
+    event: String,
+    callback: @escaping @Sendable (JSONObject) -> Void
+  ) -> Subscription {
+    let id = callbackManager.addBroadcastCallback(event: event, callback: callback)
+    return Subscription { [weak callbackManager, logger] in
       logger?.debug("Removing broadcast callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
-
-    return stream
-  }
-
-  /// Listen for broadcast messages sent by other clients within the same channel under a specific
-  /// `event`.
-  @available(*, deprecated, renamed: "broadcastStream(event:)")
-  public func broadcast(event: String) -> AsyncStream<JSONObject> {
-    broadcastStream(event: event)
   }
 
   @discardableResult

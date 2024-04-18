@@ -101,4 +101,25 @@ extension RealtimeChannelV2 {
     }
     return stream
   }
+
+  /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
+  public func broadcastStream(event: String) -> AsyncStream<JSONObject> {
+    let (stream, continuation) = AsyncStream<JSONObject>.makeStream()
+
+    let subscription = onBroadcast(event: event) {
+      continuation.yield($0)
+    }
+
+    continuation.onTermination = { _ in
+      subscription.cancel()
+    }
+
+    return stream
+  }
+
+  /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
+  @available(*, deprecated, renamed: "broadcastStream(event:)")
+  public func broadcast(event: String) -> AsyncStream<JSONObject> {
+    broadcastStream(event: event)
+  }
 }

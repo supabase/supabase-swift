@@ -12,7 +12,7 @@ public final class ObservationToken: Sendable {
   let _onCancel = LockIsolated((@Sendable () -> Void)?.none)
 
   package init(_ onCancel: (@Sendable () -> Void)? = nil) {
-    self._onCancel.setValue(onCancel)
+    _onCancel.setValue(onCancel)
   }
 
   @available(*, deprecated, renamed: "cancel")
