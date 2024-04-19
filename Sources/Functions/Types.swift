@@ -91,7 +91,6 @@ public struct FunctionInvokeOptions: Sendable {
 }
 
 public enum FunctionRegion: String, Sendable {
-  case any
   case apNortheast1 = "ap-northeast-1"
   case apNortheast2 = "ap-northeast-2"
   case apSouth1 = "ap-south-1"

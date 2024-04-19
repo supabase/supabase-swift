@@ -90,17 +90,6 @@ final class FunctionsClientTests: XCTestCase {
     let _ = try? await sut.invoke("hello-world")
   }
 
-  func testInvokeWithAnyRegion() async {
-    let sut = FunctionsClient(url: url) {
-      let region = $0.value(forHTTPHeaderField: "x-region")
-      XCTAssertNil(region)
-
-      throw CancellationError()
-    }
-
-    let _ = try? await sut.invoke("hello-world", options: .init(region: .any))
-  }
-
   func testInvoke_shouldThrow_URLError_badServerResponse() async {
     let sut = FunctionsClient(url: url, headers: ["Apikey": apiKey]) { _ in
       throw URLError(.badServerResponse)

@@ -19,7 +19,7 @@ public actor FunctionsClient {
   /// Headers to be included in the requests.
   var headers: [String: String]
   /// The Region to invoke the functions in.
-  let region: String
+  let region: String?
   /// The fetch handler used to make requests.
   let fetch: FetchHandler
 
@@ -34,7 +34,7 @@ public actor FunctionsClient {
   public init(
     url: URL,
     headers: [String: String] = [:],
-    region: String = FunctionRegion.any.rawValue,
+    region: String? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
   ) {
     self.url = url
@@ -56,7 +56,7 @@ public actor FunctionsClient {
   public init(
     url: URL,
     headers: [String: String] = [:],
-    region: FunctionRegion = .any,
+    region: FunctionRegion? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
   ) {
     self.url = url
@@ -64,7 +64,7 @@ public actor FunctionsClient {
     if headers["X-Client-Info"] == nil {
       self.headers["X-Client-Info"] = "functions-swift/\(version)"
     }
-    self.region = region.rawValue
+    self.region = region?.rawValue
     self.fetch = fetch
   }
 
@@ -138,7 +138,7 @@ public actor FunctionsClient {
     urlRequest.httpBody = invokeOptions.body
 
     let region = invokeOptions.region ?? region
-    if region != FunctionRegion.any.rawValue {
+    if let region {
       urlRequest.setValue(region, forHTTPHeaderField: "x-region")
     }
 
