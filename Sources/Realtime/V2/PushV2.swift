@@ -30,9 +30,10 @@ actor PushV2 {
           }
         }
       } catch is TimeoutError {
+        channel?.logger?.debug("Push timed out.")
         return .timeout
       } catch {
-        channel?.logger?.error("error sending Push: \(error)")
+        channel?.logger?.error("Error sending push: \(error)")
         return .error
       }
     }

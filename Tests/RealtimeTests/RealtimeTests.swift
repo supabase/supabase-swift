@@ -27,7 +27,9 @@ final class RealtimeTests: XCTestCase {
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
         heartbeatInterval: 1,
-        reconnectDelay: 1
+        reconnectDelay: 1,
+        timeoutInterval: 2,
+        logger: TestLogger()
       ),
       ws: ws
     )
@@ -62,8 +64,83 @@ final class RealtimeTests: XCTestCase {
       // Wait until channel subscribed
       await subscription.value
 
-      XCTAssertNoDifference(ws.sentMessages.value, [.subscribeToMessages])
+      XCTAssertNoDifference(ws.sentMessages.value, [.subscribeToMessages(ref: "1", joinRef: "1")])
     }
+  }
+
+  func testSubscribeTimeout() async throws {
+    let channel = await sut.channel("public:messages")
+    let joinEventCount = LockIsolated(0)
+
+    ws.on { message in
+      if message.event == "heartbeat" {
+        return RealtimeMessageV2(
+          joinRef: message.joinRef,
+          ref: message.ref,
+          topic: "phoenix",
+          event: "phx_reply",
+          payload: [
+            "response": [:],
+            "status": "ok",
+          ]
+        )
+      }
+
+      if message.event == "phx_join" {
+        joinEventCount.withValue { $0 += 1 }
+
+        // Skip first join.
+        if joinEventCount.value == 2 {
+          return .messagesSubscribed
+        }
+      }
+
+      return nil
+    }
+
+    await connectSocketAndWait()
+
+    Task {
+      await channel.subscribe()
+    }
+
+    await Task.megaYield()
+
+    try? await Task.sleep(nanoseconds: NSEC_PER_SEC * 2)
+
+    let joinSentMessages = ws.sentMessages.value.filter { $0.event == "phx_join" }
+
+    let expectedMessages = try [
+      RealtimeMessageV2(
+        joinRef: "1",
+        ref: "1",
+        topic: "realtime:public:messages",
+        event: "phx_join",
+        payload: JSONObject(
+          RealtimeJoinPayload(
+            config: RealtimeJoinConfig(),
+            accessToken: apiKey
+          )
+        )
+      ),
+      RealtimeMessageV2(
+        joinRef: "3",
+        ref: "3",
+        topic: "realtime:public:messages",
+        event: "phx_join",
+        payload: JSONObject(
+          RealtimeJoinPayload(
+            config: RealtimeJoinConfig(),
+            accessToken: apiKey
+          )
+        )
+      ),
+    ]
+
+    XCTAssertNoDifference(
+      joinSentMessages,
+      expectedMessages
+    )
   }
 
   func testHeartbeat() async throws {
@@ -155,27 +232,29 @@ final class RealtimeTests: XCTestCase {
 }
 
 extension RealtimeMessageV2 {
-  static let subscribeToMessages = Self(
-    joinRef: "1",
-    ref: "1",
-    topic: "realtime:public:messages",
-    event: "phx_join",
-    payload: [
-      "access_token": "anon.api.key",
-      "config": [
-        "broadcast": [
-          "self": false,
-          "ack": false,
+  static func subscribeToMessages(ref: String?, joinRef: String?) -> RealtimeMessageV2 {
+    Self(
+      joinRef: joinRef,
+      ref: ref,
+      topic: "realtime:public:messages",
+      event: "phx_join",
+      payload: [
+        "access_token": "anon.api.key",
+        "config": [
+          "broadcast": [
+            "self": false,
+            "ack": false,
+          ],
+          "postgres_changes": [
+            ["table": "messages", "event": "INSERT", "schema": "public"],
+            ["table": "messages", "schema": "public", "event": "UPDATE"],
+            ["schema": "public", "table": "messages", "event": "DELETE"],
+          ],
+          "presence": ["key": ""],
         ],
-        "postgres_changes": [
-          ["table": "messages", "event": "INSERT", "schema": "public"],
-          ["table": "messages", "schema": "public", "event": "UPDATE"],
-          ["schema": "public", "table": "messages", "event": "DELETE"],
-        ],
-        "presence": ["key": ""],
-      ],
-    ]
-  )
+      ]
+    )
+  }
 
   static let messagesSubscribed = Self(
     joinRef: nil,
@@ -204,4 +283,10 @@ extension RealtimeMessageV2 {
       "status": "ok",
     ]
   )
+}
+
+struct TestLogger: SupabaseLogger {
+  func log(message: SupabaseLogMessage) {
+    print(message.description)
+  }
 }
