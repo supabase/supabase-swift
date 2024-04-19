@@ -71,6 +71,7 @@ public final class SupabaseClient: @unchecked Sendable {
     url: functionsURL,
     headers: defaultHeaders,
     region: options.functions.region,
+    logger: options.global.logger,
     fetch: fetchWithAuth
   )
 
