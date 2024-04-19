@@ -13,6 +13,20 @@ final class FunctionsClientTests: XCTestCase {
 
   lazy var sut = FunctionsClient(url: url, headers: ["Apikey": apiKey])
 
+  func testInit() async {
+    let client = FunctionsClient(
+      url: url,
+      headers: ["Apikey": apiKey],
+      region: .saEast1
+    )
+    let region = await client.region
+    XCTAssertEqual(region, "sa-east-1")
+
+    let headers = await client.headers
+    XCTAssertEqual(headers["Apikey"], apiKey)
+    XCTAssertNotNil(headers["X-Client-Info"])
+  }
+
   func testInvoke() async throws {
     let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
     let _request = ActorIsolated(URLRequest?.none)
@@ -41,6 +55,39 @@ final class FunctionsClientTests: XCTestCase {
       request?.value(forHTTPHeaderField: "X-Client-Info"),
       "functions-swift/\(Functions.version)"
     )
+  }
+
+  func testInvokeWithRegionDefinedInClient() async {
+    let sut = FunctionsClient(url: url, region: .caCentral1) {
+      let region = $0.value(forHTTPHeaderField: "x-region")
+      XCTAssertEqual(region, "ca-central-1")
+
+      throw CancellationError()
+    }
+
+    let _ = try? await sut.invoke("hello-world")
+  }
+
+  func testInvokeWithRegion() async {
+    let sut = FunctionsClient(url: url) {
+      let region = $0.value(forHTTPHeaderField: "x-region")
+      XCTAssertEqual(region, "ca-central-1")
+
+      throw CancellationError()
+    }
+
+    let _ = try? await sut.invoke("hello-world", options: .init(region: .caCentral1))
+  }
+
+  func testInvokeWithoutRegion() async {
+    let sut = FunctionsClient(url: url) {
+      let region = $0.value(forHTTPHeaderField: "x-region")
+      XCTAssertNil(region)
+
+      throw CancellationError()
+    }
+
+    let _ = try? await sut.invoke("hello-world")
   }
 
   func testInvoke_shouldThrow_URLError_badServerResponse() async {

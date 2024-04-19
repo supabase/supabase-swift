@@ -70,6 +70,7 @@ public final class SupabaseClient: @unchecked Sendable {
   public private(set) lazy var functions = FunctionsClient(
     url: functionsURL,
     headers: defaultHeaders,
+    region: options.functions.region,
     fetch: fetchWithAuth
   )
 

@@ -1,6 +1,7 @@
 import Auth
 import XCTest
 
+@testable import Functions
 @testable import Supabase
 
 final class AuthLocalStorageMock: AuthLocalStorage {
@@ -14,7 +15,7 @@ final class AuthLocalStorageMock: AuthLocalStorage {
 }
 
 final class SupabaseClientTests: XCTestCase {
-  func testClientInitialization() {
+  func testClientInitialization() async {
     let customSchema = "custom_schema"
     let localStorage = AuthLocalStorageMock()
     let customHeaders = ["header_field": "header_value"]
@@ -28,6 +29,9 @@ final class SupabaseClientTests: XCTestCase {
         global: SupabaseClientOptions.GlobalOptions(
           headers: customHeaders,
           session: .shared
+        ),
+        functions: SupabaseClientOptions.FunctionsOptions(
+          region: .apNortheast1
         )
       )
     )
@@ -50,6 +54,9 @@ final class SupabaseClientTests: XCTestCase {
         "Authorization": "Bearer ANON_KEY",
       ]
     )
+
+    let region = await client.functions.region
+    XCTAssertEqual(region, "ap-northeast-1")
   }
 
   #if !os(Linux)

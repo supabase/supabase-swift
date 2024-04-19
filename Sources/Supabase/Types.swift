@@ -11,6 +11,7 @@ public struct SupabaseClientOptions: Sendable {
   public let db: DatabaseOptions
   public let auth: AuthOptions
   public let global: GlobalOptions
+  public let functions: FunctionsOptions
 
   public struct DatabaseOptions: Sendable {
     /// The Postgres schema which your tables belong to. Must be on the list of exposed schemas in
@@ -87,14 +88,30 @@ public struct SupabaseClientOptions: Sendable {
     }
   }
 
+  public struct FunctionsOptions: Sendable {
+    /// The Region to invoke the functions in.
+    public let region: String?
+
+    @_disfavoredOverload
+    public init(region: String? = nil) {
+      self.region = region
+    }
+
+    public init(region: FunctionRegion? = nil) {
+      self.init(region: region?.rawValue)
+    }
+  }
+
   public init(
     db: DatabaseOptions = .init(),
     auth: AuthOptions,
-    global: GlobalOptions = .init()
+    global: GlobalOptions = .init(),
+    functions: FunctionsOptions = .init()
   ) {
     self.db = db
     self.auth = auth
     self.global = global
+    self.functions = functions
   }
 }
 
@@ -102,11 +119,13 @@ extension SupabaseClientOptions {
   #if !os(Linux)
     public init(
       db: DatabaseOptions = .init(),
-      global: GlobalOptions = .init()
+      global: GlobalOptions = .init(),
+      functions: FunctionsOptions = .init()
     ) {
       self.db = db
       auth = .init()
       self.global = global
+      self.functions = functions
     }
   #endif
 }

@@ -18,6 +18,8 @@ public actor FunctionsClient {
   let url: URL
   /// Headers to be included in the requests.
   var headers: [String: String]
+  /// The Region to invoke the functions in.
+  let region: String?
   /// The fetch handler used to make requests.
   let fetch: FetchHandler
 
@@ -26,10 +28,13 @@ public actor FunctionsClient {
   /// - Parameters:
   ///   - url: The base URL for the functions.
   ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
+  ///   - region: The Region to invoke the functions in.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
+  @_disfavoredOverload
   public init(
     url: URL,
     headers: [String: String] = [:],
+    region: String? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
   ) {
     self.url = url
@@ -37,6 +42,29 @@ public actor FunctionsClient {
     if headers["X-Client-Info"] == nil {
       self.headers["X-Client-Info"] = "functions-swift/\(version)"
     }
+    self.region = region
+    self.fetch = fetch
+  }
+
+  /// Initializes a new instance of `FunctionsClient`.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL for the functions.
+  ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
+  ///   - region: The Region to invoke the functions in.
+  ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
+  public init(
+    url: URL,
+    headers: [String: String] = [:],
+    region: FunctionRegion? = nil,
+    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+  ) {
+    self.url = url
+    self.headers = headers
+    if headers["X-Client-Info"] == nil {
+      self.headers["X-Client-Info"] = "functions-swift/\(version)"
+    }
+    self.region = region?.rawValue
     self.fetch = fetch
   }
 
@@ -108,6 +136,11 @@ public actor FunctionsClient {
     urlRequest.allHTTPHeaderFields = invokeOptions.headers.merging(headers) { invoke, _ in invoke }
     urlRequest.httpMethod = (invokeOptions.method ?? .post).rawValue
     urlRequest.httpBody = invokeOptions.body
+
+    let region = invokeOptions.region ?? region
+    if let region {
+      urlRequest.setValue(region, forHTTPHeaderField: "x-region")
+    }
 
     let (data, response) = try await fetch(urlRequest)
 
