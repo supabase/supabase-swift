@@ -60,16 +60,10 @@ public actor FunctionsClient {
     url: URL,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
-	logger: (any SupabaseLogger)? = nil,
+    logger: (any SupabaseLogger)? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
   ) {
-    self.url = url
-    self.headers = headers
-    if headers["X-Client-Info"] == nil {
-      self.headers["X-Client-Info"] = "functions-swift/\(version)"
-    }
-    self.region = region?.rawValue
-	http = HTTPClient(logger: logger, fetchHandler: fetch)
+    self.init(url: url, headers: headers, region: region?.rawValue, logger: logger, fetch: fetch)
   }
 
   /// Updates the authorization header.
@@ -135,12 +129,17 @@ public actor FunctionsClient {
     functionName: String,
     invokeOptions: FunctionInvokeOptions
   ) async throws -> Response {
-    let request = Request(
+    var request = Request(
       path: functionName,
       method: .post,
       headers: invokeOptions.headers.merging(headers) { invoke, _ in invoke },
       body: invokeOptions.body
     )
+
+    if let region = invokeOptions.region ?? region {
+      request.headers["x-region"] = region
+    }
+
     let response = try await http.fetch(request, baseURL: url)
 
     guard 200 ..< 300 ~= response.statusCode else {
@@ -154,7 +153,7 @@ public actor FunctionsClient {
 
     return response
   }
-  
+
   /// Invokes a function with streamed response.
   ///
   /// Function MUST return a `text/event-stream` content type for this method to work.
