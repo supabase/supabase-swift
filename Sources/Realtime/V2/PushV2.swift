@@ -23,8 +23,17 @@ actor PushV2 {
     await channel?.socket?.push(message)
 
     if channel?.config.broadcast.acknowledgeBroadcasts == true {
-      return await withCheckedContinuation {
-        receivedContinuation = $0
+      do {
+        return try await withTimeout(interval: channel?.socket?.config.timeoutInterval ?? 10) {
+          await withCheckedContinuation {
+            self.receivedContinuation = $0
+          }
+        }
+      } catch is TimeoutError {
+        return .timeout
+      } catch {
+        channel?.logger?.error("error sending Push: \(error)")
+        return .error
       }
     }
 
