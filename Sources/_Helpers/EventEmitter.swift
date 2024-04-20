@@ -9,10 +9,19 @@ import ConcurrencyExtras
 import Foundation
 
 public final class ObservationToken: Sendable {
-  let _onRemove = LockIsolated((@Sendable () -> Void)?.none)
+  let _onCancel = LockIsolated((@Sendable () -> Void)?.none)
 
+  package init(_ onCancel: (@Sendable () -> Void)? = nil) {
+    _onCancel.setValue(onCancel)
+  }
+
+  @available(*, deprecated, renamed: "cancel")
   public func remove() {
-    _onRemove.withValue {
+    cancel()
+  }
+
+  public func cancel() {
+    _onCancel.withValue {
       if $0 == nil {
         return
       }
@@ -23,7 +32,7 @@ public final class ObservationToken: Sendable {
   }
 
   deinit {
-    remove()
+    cancel()
   }
 }
 
@@ -53,7 +62,7 @@ package final class EventEmitter<Event: Sendable>: Sendable {
     let token = ObservationToken()
     let key = ObjectIdentifier(token)
 
-    token._onRemove.setValue { [weak self] in
+    token._onCancel.setValue { [weak self] in
       self?.listeners.withValue {
         $0[key] = nil
       }
@@ -86,7 +95,7 @@ package final class EventEmitter<Event: Sendable>: Sendable {
       }
 
       continuation.onTermination = { _ in
-        token.remove()
+        token.cancel()
       }
     }
   }

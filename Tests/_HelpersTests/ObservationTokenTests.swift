@@ -15,14 +15,14 @@ final class ObservationTokenTests: XCTestCase {
     let handle = ObservationToken()
 
     let onRemoveCallCount = LockIsolated(0)
-    handle._onRemove.setValue {
+    handle._onCancel.setValue {
       onRemoveCallCount.withValue {
         $0 += 1
       }
     }
 
-    handle.remove()
-    handle.remove()
+    handle.cancel()
+    handle.cancel()
 
     XCTAssertEqual(onRemoveCallCount.value, 1)
   }
@@ -31,7 +31,7 @@ final class ObservationTokenTests: XCTestCase {
     var handle: ObservationToken? = ObservationToken()
 
     let onRemoveCallCount = LockIsolated(0)
-    handle?._onRemove.setValue {
+    handle?._onCancel.setValue {
       onRemoveCallCount.withValue {
         $0 += 1
       }
