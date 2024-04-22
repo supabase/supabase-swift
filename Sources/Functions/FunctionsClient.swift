@@ -164,7 +164,8 @@ public actor FunctionsClient {
   /// - Returns: A stream of Data.
   ///
   /// - Warning: Experimental method.
-  public func _invoke(
+  /// - Note: This method doesn't use the same underlying `URLSession` as the remaining methods in the library.
+  public func _invokeWithStreamedResponse(
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()
   ) -> AsyncThrowingStream<Data, any Error> {
