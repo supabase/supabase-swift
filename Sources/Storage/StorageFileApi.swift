@@ -219,11 +219,13 @@ public class StorageFileApi: StorageApi {
       let paths: [String]
     }
 
+    let encoder = JSONEncoder()
+
     let response = try await execute(
       Request(
         path: "/object/sign/\(bucketId)",
         method: .post,
-        body: configuration.encoder.encode(
+        body: encoder.encode(
           Params(expiresIn: expiresIn, paths: paths)
         )
       )
