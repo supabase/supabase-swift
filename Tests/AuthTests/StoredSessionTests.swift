@@ -70,7 +70,7 @@ final class StoredSessionTests: XCTestCase {
       )
     )
 
-    try sut.storeSession(.init(session: session))
+    try sut.storeSession(session)
   }
 
   private final class DiskTestStorage: AuthLocalStorage {

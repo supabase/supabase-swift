@@ -1,10 +1,6 @@
 import _Helpers
 import Foundation
 
-struct SessionRefresher: Sendable {
-  var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
-}
-
 struct SessionManager: Sendable {
   var session: @Sendable (_ shouldValidateExpiration: Bool) async throws -> Session
   var update: @Sendable (_ session: Session) async throws -> Void
@@ -32,41 +28,45 @@ extension SessionManager {
 }
 
 private actor _DefaultSessionManager {
-  private var task: Task<Session, any Error>?
+  private var inFlightRefreshTask: Task<Session, any Error>?
 
   @Dependency(\.sessionStorage)
   private var storage: SessionStorage
 
-  @Dependency(\.sessionRefresher)
-  private var sessionRefresher: SessionRefresher
+  @Dependency(\.api)
+  private var api: APIClient
 
   @Dependency(\.eventEmitter)
   private var eventEmitter: EventEmitter
 
-  func session(shouldValidateExpiration: Bool) async throws -> Session {
-    if let task {
-      return try await task.value
-    }
+  @Dependency(\.logger)
+  private var logger
 
-    guard let currentSession = try storage.getSession() else {
+  @Dependency(\.configuration)
+  private var configuration
+
+  func session(shouldValidateExpiration _: Bool) async throws -> Session {
+    guard var currentSession = try storage.getSession() else {
       throw AuthError.sessionNotFound
     }
 
-    if currentSession.isValid || !shouldValidateExpiration {
-      return currentSession.session
+    let hasExpired = currentSession.expiresAt <= Date().timeIntervalSince1970
+    logger?.debug(
+      """
+      session has\(hasExpired ? "" : " not") expired
+      expires_at = \(currentSession.expiresAt)
+      """
+    )
+
+    if hasExpired {
+      currentSession = try await _callRefreshToken(currentSession.refreshToken)
     }
 
-    task = Task {
-      defer { task = nil }
-
-      return try await refreshSession(currentSession.session.refreshToken)
-    }
-
-    return try await task!.value
+    return currentSession
   }
 
   func update(_ session: Session) throws {
-    try storage.storeSession(StoredSession(session: session))
+    try storage.storeSession(session)
     eventEmitter.emit(.tokenRefreshed, session: session)
   }
 
@@ -74,10 +74,59 @@ private actor _DefaultSessionManager {
     try? storage.deleteSession()
   }
 
-  @discardableResult
   func refreshSession(_ refreshToken: String) async throws -> Session {
-    let session = try await sessionRefresher.refreshSession(refreshToken)
-    try update(session)
-    return session
+    try await _callRefreshToken(refreshToken)
+  }
+
+  private func _callRefreshToken(_ refreshToken: String) async throws -> Session {
+    logger?.debug("being")
+    defer { logger?.debug("end") }
+
+    if let inFlightRefreshTask {
+      return try await inFlightRefreshTask.value
+    }
+
+    inFlightRefreshTask = Task {
+      defer { inFlightRefreshTask = nil }
+
+      let session = try await _refreshAccessTokenWithRetry(refreshToken)
+      try update(session)
+      eventEmitter.emit(.tokenRefreshed, session: session)
+      return session
+    }
+
+    return try await inFlightRefreshTask!.value
+  }
+
+  private func _refreshAccessTokenWithRetry(_ refreshToken: String) async throws -> Session {
+    logger?.debug("being")
+    defer { logger?.debug("end") }
+
+    let startedAt = Date()
+
+    return try await retry { [logger] attempt in
+      if attempt > 0 {
+        try await Task.sleep(nanoseconds: NSEC_PER_MSEC * UInt64(200 * pow(2, Double(attempt - 1))))
+      }
+
+      logger?.debug("refreshing attempt \(attempt)")
+
+      return try await api.execute(
+        Request(
+          path: "/token",
+          method: .post,
+          query: [
+            URLQueryItem(name: "grant_type", value: "refresh_token"),
+          ],
+          body: configuration.encoder.encode(UserCredentials(refreshToken: refreshToken))
+        )
+      ).decoded(decoder: configuration.decoder)
+    } isRetryable: { attempt, error in
+      let nextBackoffInterval = 200 * pow(2, Double(attempt))
+      return
+        isRetryableError(error) &&
+        // retryable only if the request can be sent before the backoff overflows the tick duration
+        Date().timeIntervalSince1970 + nextBackoffInterval - startedAt.timeIntervalSince1970 < AutoRefreshToken.autoRefreshTickDuration
+    }
   }
 }

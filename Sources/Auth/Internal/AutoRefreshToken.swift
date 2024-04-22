@@ -5,32 +5,36 @@
 //  Created by Guilherme Souza on 06/04/24.
 //
 
+import ConcurrencyExtras
 import Foundation
 
-actor AutoRefreshToken {
-  private var task: Task<Void, Never>?
-  private let autoRefreshTickDuration: TimeInterval = 30
+final class AutoRefreshToken: Sendable {
+  private let task = LockIsolated<Task<Void, Never>?>(nil)
+  static let autoRefreshTickDuration: TimeInterval = 30
   private let autoRefreshTickThreshold = 3
 
   @Dependency(\.sessionManager) var sessionManager
   @Dependency(\.logger) var logger
 
   func start() {
-    stop()
+    logger?.debug("")
 
-    logger?.debug("start")
-
-    task = Task {
-      while !Task.isCancelled {
-        await autoRefreshTokenTick()
-        try? await Task.sleep(nanoseconds: UInt64(autoRefreshTickDuration) * NSEC_PER_SEC)
+    task.setValue(
+      Task {
+        while !Task.isCancelled {
+          await autoRefreshTokenTick()
+          try? await Task.sleep(nanoseconds: UInt64(Self.autoRefreshTickDuration) * NSEC_PER_SEC)
+        }
       }
-    }
+    )
   }
 
   func stop() {
-    task?.cancel()
-    task = nil
+    task.withValue {
+      $0?.cancel()
+      $0 = nil
+    }
+    logger?.debug("")
   }
 
   private func autoRefreshTokenTick() async {
@@ -47,16 +51,14 @@ actor AutoRefreshToken {
         return
       }
 
-      guard let expiresAt = session.expiresAt else {
-        return
-      }
+      let expiresAt = session.expiresAt
 
       // session will expire in this many ticks (or has already expired if <= 0)
-      let expiresInTicks = Int((expiresAt - now.timeIntervalSince1970) / autoRefreshTickDuration)
+      let expiresInTicks = Int((expiresAt - now.timeIntervalSince1970) / Self.autoRefreshTickDuration)
 
       logger?
         .debug(
-          "access token expires in \(expiresInTicks) ticks, a tick last \(autoRefreshTickDuration)s, refresh threshold is \(autoRefreshTickThreshold) ticks"
+          "access token expires in \(expiresInTicks) ticks, a tick last \(Self.autoRefreshTickDuration)s, refresh threshold is \(autoRefreshTickThreshold) ticks"
         )
 
       if expiresInTicks <= autoRefreshTickThreshold {

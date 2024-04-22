@@ -60,6 +60,7 @@ final class AuthClientTests: XCTestCase {
     eventEmitter = .live
     let session = Session.validSession
     sessionManager.session = { @Sendable _ in session }
+    sessionManager.refreshSession = { @Sendable _ in .validSession }
 
     sut = makeSUT()
 
@@ -80,6 +81,7 @@ final class AuthClientTests: XCTestCase {
     eventEmitter = .live
     let session = Session.validSession
     sessionManager.session = { @Sendable _ in session }
+    sessionManager.refreshSession = { @Sendable _ in .validSession }
 
     sut = makeSUT()
 

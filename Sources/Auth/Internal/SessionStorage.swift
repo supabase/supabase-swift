@@ -12,33 +12,39 @@ import Foundation
 struct StoredSession: Codable {
   var session: Session
   var expirationDate: Date
-
-  var isValid: Bool {
-    expirationDate > Date().addingTimeInterval(60)
-  }
-
-  init(session: Session, expirationDate: Date? = nil) {
-    self.session = session
-    self.expirationDate = expirationDate
-      ?? session.expiresAt.map(Date.init(timeIntervalSince1970:))
-      ?? Date().addingTimeInterval(session.expiresIn)
-  }
 }
 
 struct SessionStorage: Sendable {
-  var getSession: @Sendable () throws -> StoredSession?
-  var storeSession: @Sendable (_ session: StoredSession) throws -> Void
+  var getSession: @Sendable () throws -> Session?
+  var storeSession: @Sendable (_ session: Session) throws -> Void
   var deleteSession: @Sendable () throws -> Void
 }
 
 extension SessionStorage {
   static let live: Self = {
     @Dependency(\.configuration.localStorage) var localStorage: any AuthLocalStorage
+    @Dependency(\.logger) var logger
 
     return Self(
       getSession: {
-        try localStorage.retrieve(key: "supabase.session").flatMap {
-          try AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0)
+        logger?.debug("getSession begin")
+        defer { logger?.debug("getSession end") }
+
+        let storedData = try localStorage.retrieve(key: "supabase.session")
+
+        let storedSession = storedData.flatMap {
+          try? AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0)
+        }?.session
+
+        if let storedSession {
+          logger?.debug("Migrate from StoredSession to Session")
+          let session = try AuthClient.Configuration.jsonEncoder.encode(storedSession)
+          try localStorage.store(key: "supabase.session", value: session)
+          return storedSession
+        }
+
+        return try storedData.flatMap {
+          try AuthClient.Configuration.jsonDecoder.decode(Session.self, from: $0)
         }
       },
       storeSession: {

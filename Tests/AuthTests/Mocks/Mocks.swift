@@ -30,7 +30,7 @@ extension SessionStorage {
   )
 
   static var inMemory: Self {
-    let session = LockIsolated(StoredSession?.none)
+    let session = LockIsolated(Session?.none)
 
     return Self(
       getSession: { session.value },
@@ -38,10 +38,6 @@ extension SessionStorage {
       deleteSession: { session.setValue(nil) }
     )
   }
-}
-
-extension SessionRefresher {
-  static let mock = Self(refreshSession: unimplemented("SessionRefresher.refreshSession"))
 }
 
 extension Dependencies {
@@ -55,7 +51,6 @@ extension Dependencies {
     api: .mock,
     eventEmitter: .mock,
     sessionStorage: .mock,
-    sessionRefresher: .mock,
     codeVerifierStorage: .mock,
     logger: nil
   )

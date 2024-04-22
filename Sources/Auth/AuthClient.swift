@@ -11,6 +11,12 @@ import Foundation
 
 #if canImport(UIKit)
   import UIKit
+
+  typealias PlatformApplication = UIApplication
+#elseif canImport(AppKit)
+  import AppKit
+
+  typealias PlatformApplication = NSApplication
 #endif
 
 public final class AuthClient: Sendable {
@@ -195,6 +201,7 @@ public final class AuthClient: Sendable {
 
     if configuration.autoRefreshToken {
       autoRefreshToken = AutoRefreshToken()
+      autoRefreshToken?.start()
     }
 
     Current = Dependencies(
@@ -203,41 +210,34 @@ public final class AuthClient: Sendable {
       api: api,
       eventEmitter: eventEmitter,
       sessionStorage: sessionStorage,
-      sessionRefresher: SessionRefresher(
-        refreshSession: { [weak self] in
-          try await self?.refreshSession(refreshToken: $0) ?? .empty
-        }
-      ),
       codeVerifierStorage: codeVerifierStorage,
       logger: logger
     )
 
-    NotificationCenter.default.addObserver(
-      forName: UIApplication.willResignActiveNotification,
-      object: nil,
-      queue: nil
-    ) { [weak self] _ in
-      self?.appDidEnterBackground()
-    }
-    NotificationCenter.default.addObserver(
-      forName: UIApplication.didBecomeActiveNotification,
-      object: nil,
-      queue: nil
-    ) { [weak self] _ in
-      self?.appDidBecomeActive()
+    Task { @MainActor [weak self] in
+      NotificationCenter.default.addObserver(
+        forName: PlatformApplication.willResignActiveNotification,
+        object: nil,
+        queue: nil
+      ) { [self] _ in
+        self?.appDidEnterBackground()
+      }
+      NotificationCenter.default.addObserver(
+        forName: PlatformApplication.didBecomeActiveNotification,
+        object: nil,
+        queue: nil
+      ) { [self] _ in
+        self?.appDidBecomeActive()
+      }
     }
   }
 
   private func appDidEnterBackground() {
-    Task {
-      await autoRefreshToken?.stop()
-    }
+    autoRefreshToken?.stop()
   }
 
   private func appDidBecomeActive() {
-    Task {
-      await autoRefreshToken?.start()
-    }
+    autoRefreshToken?.start()
   }
 
   /// Listen for auth state changes.
@@ -1206,29 +1206,12 @@ public final class AuthClient: Sendable {
   /// - Returns: A new session.
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {
-    var credentials = UserCredentials(refreshToken: refreshToken)
-    if credentials.refreshToken == nil {
-      credentials.refreshToken = try await sessionManager.session(shouldValidateExpiration: false)
-        .refreshToken
+    if let refreshToken {
+      return try await sessionManager.refreshSession(refreshToken)
     }
 
-    let session = try await api.execute(
-      .init(
-        path: "/token",
-        method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "refresh_token")],
-        body: configuration.encoder.encode(credentials)
-      )
-    ).decoded(as: Session.self, decoder: configuration.decoder)
-
-    if session.user.phoneConfirmedAt != nil || session.user.emailConfirmedAt != nil
-      || session
-      .user.confirmedAt != nil
-    {
-      try await sessionManager.update(session)
-    }
-
-    return session
+    let refreshToken = try await sessionManager.session(shouldValidateExpiration: false).refreshToken
+    return try await sessionManager.refreshSession(refreshToken)
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {

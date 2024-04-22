@@ -35,7 +35,7 @@ final class SessionManagerTests: XCTestCase {
 
   func testSession_shouldReturnValidSession() async throws {
     Current.sessionStorage.getSession = {
-      .init(session: .validSession)
+      .validSession
     }
 
     let sut = SessionManager.live
@@ -54,17 +54,17 @@ final class SessionManagerTests: XCTestCase {
     let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
     Current.sessionStorage.getSession = {
-      .init(session: currentSession)
+      currentSession
     }
     Current.sessionStorage.storeSession = { _ in
       storeSessionCallCount.withValue {
         $0 += 1
       }
     }
-    Current.sessionRefresher.refreshSession = { _ in
-      refreshSessionCallCount.withValue { $0 += 1 }
-      return await refreshSessionStream.first { _ in true } ?? .empty
-    }
+//    Current.sessionRefresher.refreshSession = { _ in
+//      refreshSessionCallCount.withValue { $0 += 1 }
+//      return await refreshSessionStream.first { _ in true } ?? .empty
+//    }
 
     let sut = SessionManager.live
 

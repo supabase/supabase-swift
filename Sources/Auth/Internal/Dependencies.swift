@@ -8,7 +8,6 @@ struct Dependencies: Sendable {
   var api: APIClient
   var eventEmitter: EventEmitter
   var sessionStorage: SessionStorage
-  var sessionRefresher: SessionRefresher
   var codeVerifierStorage: CodeVerifierStorage
   var currentDate: @Sendable () -> Date = { Date() }
   var logger: (any SupabaseLogger)?
