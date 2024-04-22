@@ -324,17 +324,18 @@ final class AuthClientTests: XCTestCase {
     XCTAssertEqual(emitReceivedEvents.value.map(\.0), [.signedIn])
   }
 
-  @available(watchOS 6.2, tvOS 16.0, *)
   func testSignInWithOAuthWithInvalidRedirecTo() async {
     let sut = makeSUT()
 
     do {
       try await sut.signInWithOAuth(
         provider: .google,
-        redirectTo: nil
-      ) { _ in
-        XCTFail("Should not call launchFlow.")
-      }
+        redirectTo: nil,
+        launchFlow: { _ in
+          XCTFail("Should not call launchFlow.")
+          return URL(string: "https://supabase.com")!
+        }
+      )
     } catch let error as AuthError {
       XCTAssertEqual(error, .invalidRedirectScheme)
     } catch {

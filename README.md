@@ -6,6 +6,22 @@ Supabase client for swift. Mirrors the design of [supabase-js](https://github.co
 
 * Documentation: [https://supabase.com/docs/reference/swift/introduction](https://supabase.com/docs/reference/swift/introduction)
 
+## Supported Platforms
+
+| Platform | Support |
+|--------|--------|
+| iOS | ✅ |
+| macOS | ✅ |
+| watchOS | ✅ |
+| tvOS | ✅ |
+| visionOS | ✅ | 
+| Linux | ☑️ |
+| Windows | ☑️ |
+
+> ✅ Official support
+> 
+> ☑️ Works but not officially supported, and not guaranttee to keep working on future versions of the library.
+
 ## Usage
 
 Install the library using the Swift Package Manager.

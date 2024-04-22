@@ -1,6 +1,9 @@
 import _Helpers
-import AuthenticationServices
 import Foundation
+
+#if canImport(AuthenticationServices)
+  import AuthenticationServices
+#endif
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -652,75 +655,77 @@ public final class AuthClient: @unchecked Sendable {
     return try await session(from: resultURL)
   }
 
-  /// Sign-in an existing user via a third-party provider using ``ASWebAuthenticationSession``.
-  ///
-  /// - Parameters:
-  ///   - provider: The third-party provider.
-  ///   - redirectTo: A URL to send the user to after they are confirmed.
-  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
-  ///   - queryParams: Additional query params.
-  ///   - configure: A configuration closure that you can use to customize the internal
-  /// ``ASWebAuthenticationSession`` object.
-  ///
-  /// - Note: This method support the PKCE flow.
-  /// - Warning: Do not call `start()` on the `ASWebAuthenticationSession` object inside the
-  /// `configure` closure, as the method implementation calls it already.
-  @available(watchOS 6.2, tvOS 16.0, *)
-  @discardableResult
-  public func signInWithOAuth(
-    provider: Provider,
-    redirectTo: URL? = nil,
-    scopes: String? = nil,
-    queryParams: [(name: String, value: String?)] = [],
-    configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void = { _ in }
-  ) async throws -> Session {
-    try await signInWithOAuth(
-      provider: provider,
-      redirectTo: redirectTo,
-      scopes: scopes,
-      queryParams: queryParams
-    ) { @MainActor url in
-      try await withCheckedThrowingContinuation { continuation in
-        guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
-          continuation.resume(throwing: AuthError.invalidRedirectScheme)
-          return
-        }
-
-        #if !os(tvOS) && !os(watchOS)
-          var presentationContextProvider: DefaultPresentationContextProvider?
-        #endif
-
-        let session = ASWebAuthenticationSession(
-          url: url,
-          callbackURLScheme: callbackScheme
-        ) { url, error in
-          if let error {
-            continuation.resume(throwing: error)
-          } else if let url {
-            continuation.resume(returning: url)
-          } else {
-            continuation.resume(throwing: AuthError.missingURL)
+  #if canImport(AuthenticationServices)
+    /// Sign-in an existing user via a third-party provider using ``ASWebAuthenticationSession``.
+    ///
+    /// - Parameters:
+    ///   - provider: The third-party provider.
+    ///   - redirectTo: A URL to send the user to after they are confirmed.
+    ///   - scopes: A space-separated list of scopes granted to the OAuth application.
+    ///   - queryParams: Additional query params.
+    ///   - configure: A configuration closure that you can use to customize the internal
+    /// ``ASWebAuthenticationSession`` object.
+    ///
+    /// - Note: This method support the PKCE flow.
+    /// - Warning: Do not call `start()` on the `ASWebAuthenticationSession` object inside the
+    /// `configure` closure, as the method implementation calls it already.
+    @available(watchOS 6.2, tvOS 16.0, *)
+    @discardableResult
+    public func signInWithOAuth(
+      provider: Provider,
+      redirectTo: URL? = nil,
+      scopes: String? = nil,
+      queryParams: [(name: String, value: String?)] = [],
+      configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void = { _ in }
+    ) async throws -> Session {
+      try await signInWithOAuth(
+        provider: provider,
+        redirectTo: redirectTo,
+        scopes: scopes,
+        queryParams: queryParams
+      ) { @MainActor url in
+        try await withCheckedThrowingContinuation { continuation in
+          guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
+            continuation.resume(throwing: AuthError.invalidRedirectScheme)
+            return
           }
 
           #if !os(tvOS) && !os(watchOS)
-            // Keep a strong reference to presentationContextProvider until the flow completes.
-            _ = presentationContextProvider
+            var presentationContextProvider: DefaultPresentationContextProvider?
           #endif
-        }
 
-        configure(session)
+          let session = ASWebAuthenticationSession(
+            url: url,
+            callbackURLScheme: callbackScheme
+          ) { url, error in
+            if let error {
+              continuation.resume(throwing: error)
+            } else if let url {
+              continuation.resume(returning: url)
+            } else {
+              continuation.resume(throwing: AuthError.missingURL)
+            }
 
-        #if !os(tvOS) && !os(watchOS)
-          if session.presentationContextProvider == nil {
-            presentationContextProvider = DefaultPresentationContextProvider()
-            session.presentationContextProvider = presentationContextProvider
+            #if !os(tvOS) && !os(watchOS)
+              // Keep a strong reference to presentationContextProvider until the flow completes.
+              _ = presentationContextProvider
+            #endif
           }
-        #endif
 
-        session.start()
+          configure(session)
+
+          #if !os(tvOS) && !os(watchOS)
+            if session.presentationContextProvider == nil {
+              presentationContextProvider = DefaultPresentationContextProvider()
+              session.presentationContextProvider = presentationContextProvider
+            }
+          #endif
+
+          session.start()
+        }
       }
     }
-  }
+  #endif
 
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
@@ -1281,7 +1286,7 @@ extension AuthClient {
   public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
 }
 
-#if !os(tvOS) && !os(watchOS)
+#if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
   @MainActor
   final class DefaultPresentationContextProvider: NSObject,
     ASWebAuthenticationPresentationContextProviding
