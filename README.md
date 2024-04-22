@@ -18,8 +18,9 @@ Supabase client for swift. Mirrors the design of [supabase-js](https://github.co
 | Linux | ☑️ |
 | Windows | ☑️ |
 
-✅ Official support
-☑️ Works but not officially supported
+> ✅ Official support
+> 
+> ☑️ Works but not officially supported, and not guaranttee to keep working on future versions of the library.
 
 ## Usage
 
