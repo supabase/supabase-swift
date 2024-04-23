@@ -9,4 +9,5 @@
   import FoundationNetworking
 
   package let NSEC_PER_SEC: UInt64 = 1000000000
+  package let NSEC_PER_MSEC: UInt64 = 1000000
 #endif
