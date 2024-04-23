@@ -8,8 +8,9 @@
 import ConcurrencyExtras
 import Foundation
 
-final class AutoRefreshToken: Sendable {
-  private let task = LockIsolated<Task<Void, Never>?>(nil)
+actor AutoRefreshToken {
+  private var task: Task<Void, Never>?
+
   static let autoRefreshTickDuration: TimeInterval = 30
   private let autoRefreshTickThreshold = 3
 
@@ -19,21 +20,18 @@ final class AutoRefreshToken: Sendable {
   func start() {
     logger?.debug("")
 
-    task.setValue(
-      Task {
-        while !Task.isCancelled {
-          await autoRefreshTokenTick()
-          try? await Task.sleep(nanoseconds: UInt64(Self.autoRefreshTickDuration) * NSEC_PER_SEC)
-        }
+    task?.cancel()
+    task = Task {
+      while !Task.isCancelled {
+        await autoRefreshTokenTick()
+        try? await Task.sleep(nanoseconds: UInt64(Self.autoRefreshTickDuration) * NSEC_PER_SEC)
       }
-    )
+    }
   }
 
   func stop() {
-    task.withValue {
-      $0?.cancel()
-      $0 = nil
-    }
+    task?.cancel()
+    task = nil
     logger?.debug("")
   }
 

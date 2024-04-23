@@ -220,7 +220,7 @@ public final class AuthClient: Sendable {
     )
 
     if configuration.autoRefreshToken {
-      autoRefreshToken.start()
+      startAutoRefresh()
 
       #if !os(watchOS)
         Task { @MainActor [weak self] in
@@ -266,12 +266,12 @@ public final class AuthClient: Sendable {
   /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
   /// If you set the ``AuthClient/Configuration/autoRefreshToken`` you don't need to call this function, it will be called for you.
   public func startAutoRefresh() {
-    autoRefreshToken.start()
+    Task { await autoRefreshToken.start() }
   }
 
   /// Stops an active auto refresh process running in the background (if any).
   public func stopAutoRefresh() {
-    autoRefreshToken.stop()
+    Task { await autoRefreshToken.stop() }
   }
 
   /// Listen for auth state changes.
