@@ -9,10 +9,12 @@ import ConcurrencyExtras
 import Foundation
 
 actor AutoRefreshToken {
-  private var task: Task<Void, Never>?
+  /// Current session will be checked for refresh at this interval.
+  static let tickDuration: TimeInterval = 30
+  /// A token refresh will be attempted this many ticks before the current session expires.
+  static let tickThreshold = 3
 
-  static let autoRefreshTickDuration: TimeInterval = 30
-  private let autoRefreshTickThreshold = 3
+  private var task: Task<Void, Never>?
 
   @Dependency(\.sessionManager) var sessionManager
   @Dependency(\.logger) var logger
@@ -24,7 +26,7 @@ actor AutoRefreshToken {
     task = Task {
       while !Task.isCancelled {
         await autoRefreshTokenTick()
-        try? await Task.sleep(nanoseconds: UInt64(Self.autoRefreshTickDuration) * NSEC_PER_SEC)
+        try? await Task.sleep(nanoseconds: UInt64(AutoRefreshToken.tickDuration) * NSEC_PER_SEC)
       }
     }
   }
@@ -52,14 +54,14 @@ actor AutoRefreshToken {
       let expiresAt = session.expiresAt
 
       // session will expire in this many ticks (or has already expired if <= 0)
-      let expiresInTicks = Int((expiresAt - now.timeIntervalSince1970) / Self.autoRefreshTickDuration)
+      let expiresInTicks = Int((expiresAt - now.timeIntervalSince1970) / AutoRefreshToken.tickDuration)
 
       logger?
         .debug(
-          "access token expires in \(expiresInTicks) ticks, a tick last \(Self.autoRefreshTickDuration)s, refresh threshold is \(autoRefreshTickThreshold) ticks"
+          "access token expires in \(expiresInTicks) ticks, a tick last \(AutoRefreshToken.tickDuration)s, refresh threshold is \(AutoRefreshToken.tickThreshold) ticks"
         )
 
-      if expiresInTicks <= autoRefreshTickThreshold {
+      if expiresInTicks <= AutoRefreshToken.tickThreshold {
         _ = try await sessionManager.refreshSession(session.refreshToken)
       }
 

@@ -33,7 +33,7 @@ actor LiveSessionRefresher {
   private var eventEmitter
 
   func refreshSession(_ refreshToken: String) async throws -> Session {
-    logger?.debug("being")
+    logger?.debug("begin")
     defer { logger?.debug("end") }
 
     if let inFlightRefreshTask {
@@ -53,7 +53,7 @@ actor LiveSessionRefresher {
   }
 
   private func _refreshAccessTokenWithRetry(_ refreshToken: String) async throws -> Session {
-    logger?.debug("being")
+    logger?.debug("begin")
     defer { logger?.debug("end") }
 
     let startedAt = Date()
@@ -80,7 +80,7 @@ actor LiveSessionRefresher {
       return
         isRetryableError(error) &&
         // retryable only if the request can be sent before the backoff overflows the tick duration
-        Date().timeIntervalSince1970 + nextBackoffInterval - startedAt.timeIntervalSince1970 < AutoRefreshToken.autoRefreshTickDuration
+        Date().timeIntervalSince1970 + nextBackoffInterval - startedAt.timeIntervalSince1970 < AutoRefreshToken.tickDuration
     }
   }
 }
