@@ -11,6 +11,7 @@ struct Dependencies: Sendable {
   var codeVerifierStorage: CodeVerifierStorage
   var currentDate: @Sendable () -> Date = { Date() }
   var logger: (any SupabaseLogger)?
+  var sessionRefresher: SessionRefresher
 }
 
 private let _Current = LockIsolated<Dependencies?>(nil)

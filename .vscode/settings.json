@@ -8,5 +8,6 @@
     "Supabase",
     "whitespaces",
     "xctest"
-  ]
+  ],
+  "deno.enable": true
 }

@@ -40,6 +40,12 @@ extension SessionStorage {
   }
 }
 
+extension SessionRefresher {
+  static var mock: Self {
+    SessionRefresher(refreshSession: unimplemented("SessionRefresher.refreshSession"))
+  }
+}
+
 extension Dependencies {
   static let mock = Dependencies(
     configuration: AuthClient.Configuration(
@@ -52,7 +58,8 @@ extension Dependencies {
     eventEmitter: .mock,
     sessionStorage: .mock,
     codeVerifierStorage: .mock,
-    logger: nil
+    logger: nil,
+    sessionRefresher: .mock
   )
 }
 
@@ -70,7 +77,7 @@ extension Session {
     accessToken: "accesstoken",
     tokenType: "bearer",
     expiresIn: 60,
-    expiresAt: Date().addingTimeInterval(60).timeIntervalSince1970,
+    expiresAt: Date().addingTimeInterval(-60).timeIntervalSince1970,
     refreshToken: "refreshtoken",
     user: User(fromMockNamed: "user")
   )

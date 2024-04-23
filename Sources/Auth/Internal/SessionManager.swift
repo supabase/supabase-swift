@@ -1,43 +1,24 @@
 import _Helpers
 import Foundation
 
-struct SessionManager: Sendable {
-  var session: @Sendable (_ shouldValidateExpiration: Bool) async throws -> Session
-  var update: @Sendable (_ session: Session) async throws -> Void
-  var remove: @Sendable () async -> Void
+struct SessionRefresher: Sendable {
   var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
 }
 
-extension SessionManager {
-  func session(shouldValidateExpiration: Bool = true) async throws -> Session {
-    try await session(shouldValidateExpiration)
+extension SessionRefresher {
+  static var live: SessionRefresher {
+    let instance = LiveSessionRefresher()
+    return SessionRefresher(
+      refreshSession: { try await instance.refreshSession($0) }
+    )
   }
 }
 
-extension SessionManager {
-  static let live: SessionManager = {
-    let manager = _DefaultSessionManager()
-
-    return SessionManager(
-      session: { try await manager.session(shouldValidateExpiration: $0) },
-      update: { try await manager.update($0) },
-      remove: { await manager.remove() },
-      refreshSession: { try await manager.refreshSession($0) }
-    )
-  }()
-}
-
-private actor _DefaultSessionManager {
+actor LiveSessionRefresher {
   private var inFlightRefreshTask: Task<Session, any Error>?
 
   @Dependency(\.sessionStorage)
   private var storage: SessionStorage
-
-  @Dependency(\.api)
-  private var api: APIClient
-
-  @Dependency(\.eventEmitter)
-  private var eventEmitter: EventEmitter
 
   @Dependency(\.logger)
   private var logger
@@ -45,40 +26,13 @@ private actor _DefaultSessionManager {
   @Dependency(\.configuration)
   private var configuration
 
-  func session(shouldValidateExpiration _: Bool) async throws -> Session {
-    guard var currentSession = try storage.getSession() else {
-      throw AuthError.sessionNotFound
-    }
+  @Dependency(\.api)
+  private var api
 
-    let hasExpired = currentSession.expiresAt <= Date().timeIntervalSince1970
-    logger?.debug(
-      """
-      session has\(hasExpired ? "" : " not") expired
-      expires_at = \(currentSession.expiresAt)
-      """
-    )
-
-    if hasExpired {
-      currentSession = try await _callRefreshToken(currentSession.refreshToken)
-    }
-
-    return currentSession
-  }
-
-  func update(_ session: Session) throws {
-    try storage.storeSession(session)
-    eventEmitter.emit(.tokenRefreshed, session: session)
-  }
-
-  func remove() {
-    try? storage.deleteSession()
-  }
+  @Dependency(\.eventEmitter)
+  private var eventEmitter
 
   func refreshSession(_ refreshToken: String) async throws -> Session {
-    try await _callRefreshToken(refreshToken)
-  }
-
-  private func _callRefreshToken(_ refreshToken: String) async throws -> Session {
     logger?.debug("being")
     defer { logger?.debug("end") }
 
@@ -90,7 +44,7 @@ private actor _DefaultSessionManager {
       defer { inFlightRefreshTask = nil }
 
       let session = try await _refreshAccessTokenWithRetry(refreshToken)
-      try update(session)
+      try storage.storeSession(session)
       eventEmitter.emit(.tokenRefreshed, session: session)
       return session
     }
@@ -128,5 +82,77 @@ private actor _DefaultSessionManager {
         // retryable only if the request can be sent before the backoff overflows the tick duration
         Date().timeIntervalSince1970 + nextBackoffInterval - startedAt.timeIntervalSince1970 < AutoRefreshToken.autoRefreshTickDuration
     }
+  }
+}
+
+struct SessionManager: Sendable {
+  var session: @Sendable (_ shouldValidateExpiration: Bool) async throws -> Session
+  var update: @Sendable (_ session: Session) async throws -> Void
+  var remove: @Sendable () async -> Void
+  var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
+}
+
+extension SessionManager {
+  func session(shouldValidateExpiration: Bool = true) async throws -> Session {
+    try await session(shouldValidateExpiration)
+  }
+}
+
+extension SessionManager {
+  static let live: SessionManager = {
+    let manager = _DefaultSessionManager()
+
+    return SessionManager(
+      session: { try await manager.session(shouldValidateExpiration: $0) },
+      update: { try await manager.update($0) },
+      remove: { await manager.remove() },
+      refreshSession: { try await manager.refreshSession($0) }
+    )
+  }()
+}
+
+private actor _DefaultSessionManager {
+  @Dependency(\.sessionStorage)
+  private var storage: SessionStorage
+
+  @Dependency(\.logger)
+  private var logger
+
+  @Dependency(\.configuration)
+  private var configuration
+
+  @Dependency(\.sessionRefresher)
+  private var sessionRefresher
+
+  func session(shouldValidateExpiration _: Bool) async throws -> Session {
+    guard var currentSession = try storage.getSession() else {
+      throw AuthError.sessionNotFound
+    }
+
+    let hasExpired = currentSession.expiresAt <= Date().timeIntervalSince1970
+    logger?.debug(
+      """
+      session has\(hasExpired ? "" : " not") expired
+      expires_at = \(currentSession.expiresAt)
+      """
+    )
+
+    if hasExpired {
+      currentSession = try await refreshSession(currentSession.refreshToken)
+    }
+
+    return currentSession
+  }
+
+  func update(_ session: Session) throws {
+    try storage.storeSession(session)
+  }
+
+  func remove() {
+    try? storage.deleteSession()
+  }
+
+  func refreshSession(_ refreshToken: String) async throws -> Session {
+    try await sessionRefresher.refreshSession(refreshToken)
   }
 }

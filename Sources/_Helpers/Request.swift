@@ -100,6 +100,15 @@ package struct Request: Sendable {
     _url.resolve(withBaseURL: baseURL)
   }
 
+  package var path: String {
+    switch _url {
+    case let .absolute(url):
+      url.path
+    case let .relative(path):
+      path
+    }
+  }
+
   package enum Method: String, Sendable {
     case get = "GET"
     case post = "POST"

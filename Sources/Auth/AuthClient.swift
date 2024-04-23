@@ -1,4 +1,5 @@
 import _Helpers
+import ConcurrencyExtras
 import Foundation
 
 #if canImport(AuthenticationServices)
@@ -119,7 +120,7 @@ public final class AuthClient: Sendable {
   /// key in the client.
   public let admin: AuthAdmin
 
-  private var autoRefreshToken: AutoRefreshToken?
+  private let autoRefreshToken = AutoRefreshToken()
 
   /// Initializes a AuthClient with optional parameters.
   ///
@@ -182,9 +183,16 @@ public final class AuthClient: Sendable {
       api: api,
       eventEmitter: .live,
       sessionStorage: .live,
-      logger: configuration.logger
+      logger: configuration.logger,
+      sessionRefresher: .live
     )
   }
+
+  struct MutableState {
+    var notificationCenterObservers: [UncheckedSendable<any NSObjectProtocol>] = []
+  }
+
+  private let mutableState = LockIsolated(MutableState())
 
   /// This internal initializer is here only for easy injecting mock instances when testing.
   init(
@@ -194,15 +202,11 @@ public final class AuthClient: Sendable {
     api: APIClient,
     eventEmitter: EventEmitter,
     sessionStorage: SessionStorage,
-    logger: (any SupabaseLogger)?
+    logger: (any SupabaseLogger)?,
+    sessionRefresher: SessionRefresher
   ) {
     mfa = AuthMFA()
     admin = AuthAdmin()
-
-    if configuration.autoRefreshToken {
-      autoRefreshToken = AutoRefreshToken()
-      autoRefreshToken?.start()
-    }
 
     Current = Dependencies(
       configuration: configuration,
@@ -211,33 +215,60 @@ public final class AuthClient: Sendable {
       eventEmitter: eventEmitter,
       sessionStorage: sessionStorage,
       codeVerifierStorage: codeVerifierStorage,
-      logger: logger
+      logger: logger,
+      sessionRefresher: sessionRefresher
     )
 
+    if configuration.autoRefreshToken {
+      autoRefreshToken.start()
+    }
+
     Task { @MainActor [weak self] in
-      NotificationCenter.default.addObserver(
+      let observer1 = NotificationCenter.default.addObserver(
         forName: PlatformApplication.willResignActiveNotification,
         object: nil,
         queue: nil
-      ) { [self] _ in
+      ) { [weak self] _ in
         self?.appDidEnterBackground()
       }
-      NotificationCenter.default.addObserver(
+
+      let observer2 = NotificationCenter.default.addObserver(
         forName: PlatformApplication.didBecomeActiveNotification,
         object: nil,
         queue: nil
-      ) { [self] _ in
+      ) { [weak self] _ in
         self?.appDidBecomeActive()
+      }
+
+      let observers = [
+        UncheckedSendable(observer1),
+        UncheckedSendable(observer2),
+      ]
+
+      self?.mutableState.withValue {
+        $0.notificationCenterObservers = observers
       }
     }
   }
 
+  deinit {
+    mutableState.withValue {
+      for observer in $0.notificationCenterObservers {
+        NotificationCenter.default.removeObserver(observer.value)
+      }
+    }
+
+    mutableState.setValue(MutableState())
+  }
+
   private func appDidEnterBackground() {
-    autoRefreshToken?.stop()
+    guard configuration.autoRefreshToken else { return }
+    autoRefreshToken.stop()
   }
 
   private func appDidBecomeActive() {
-    autoRefreshToken?.start()
+    guard configuration.autoRefreshToken else { return }
+    autoRefreshToken.start()
   }
 
   /// Listen for auth state changes.

@@ -19,12 +19,15 @@ struct UnimplementedError: Error {}
 
 final class RequestsTests: XCTestCase {
   var sessionManager: SessionManager!
+  var sessionRefresher: SessionRefresher!
 
   override func setUp() {
     super.setUp()
 
     sessionManager = .mock
     sessionManager.remove = { @Sendable in }
+
+    sessionRefresher = .mock
   }
 
   func testSignUpWithEmailAndPassword() async {
@@ -140,6 +143,9 @@ final class RequestsTests: XCTestCase {
   }
 
   func testRefreshSession() async {
+    sessionManager = .live
+    sessionRefresher = .live
+
     let sut = makeSUT()
     await assert {
       try await sut.refreshSession(refreshToken: "refresh-token")
@@ -212,6 +218,8 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSetSessionWithAExpiredToken() async throws {
+    sessionManager = .live
+    sessionRefresher = .live
     let sut = makeSUT()
 
     let accessToken =
@@ -450,7 +458,8 @@ final class RequestsTests: XCTestCase {
       localStorage: InMemoryLocalStorage(),
       logger: nil,
       encoder: encoder,
-      fetch: { request in
+      fetch: {
+        request in
         DispatchQueue.main.sync {
           assertSnapshot(
             of: request, as: .curl, record: record, file: file, testName: testName, line: line
@@ -462,7 +471,8 @@ final class RequestsTests: XCTestCase {
         }
 
         throw UnimplementedError()
-      }
+      },
+      autoRefreshToken: false
     )
 
     let api = APIClient.live(
@@ -477,7 +487,8 @@ final class RequestsTests: XCTestCase {
       api: api,
       eventEmitter: .live,
       sessionStorage: .mock,
-      logger: nil
+      logger: nil,
+      sessionRefresher: sessionRefresher
     )
   }
 }

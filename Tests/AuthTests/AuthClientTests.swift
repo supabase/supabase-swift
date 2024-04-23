@@ -21,6 +21,7 @@ final class AuthClientTests: XCTestCase {
   var sessionManager: SessionManager!
 
   var sessionStorage: SessionStorage!
+  var sessionRefresher: SessionRefresher!
   var codeVerifierStorage: CodeVerifierStorage!
   var api: APIClient!
   var sut: AuthClient!
@@ -36,6 +37,7 @@ final class AuthClientTests: XCTestCase {
     Current = .mock
 
     sessionStorage = .mock
+    sessionRefresher = .mock
     codeVerifierStorage = .mock
     eventEmitter = .mock
     sessionManager = .mock
@@ -60,7 +62,6 @@ final class AuthClientTests: XCTestCase {
     eventEmitter = .live
     let session = Session.validSession
     sessionManager.session = { @Sendable _ in session }
-    sessionManager.refreshSession = { @Sendable _ in .validSession }
 
     sut = makeSUT()
 
@@ -81,7 +82,6 @@ final class AuthClientTests: XCTestCase {
     eventEmitter = .live
     let session = Session.validSession
     sessionManager.session = { @Sendable _ in session }
-    sessionManager.refreshSession = { @Sendable _ in .validSession }
 
     sut = makeSUT()
 
@@ -276,6 +276,7 @@ final class AuthClientTests: XCTestCase {
           "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNjQ4NjQwMDIxLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6Imd1aWxoZXJtZTJAZ3Jkcy5kZXYiLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7fSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQifQ.4lMvmz2pJkWu1hMsBgXP98Fwz4rbvFYl4VA9joRv6kY",
           "token_type": "bearer",
           "expires_in": 3600,
+          "expires_at": 12345678,
           "refresh_token": "GGduTeu95GraIXQ56jppkw",
           "user": {
             "id": "f33d3ec9-a2ee-47c4-80e1-5bd919f3d8b8",
@@ -376,7 +377,8 @@ final class AuthClientTests: XCTestCase {
       url: clientURL,
       headers: ["Apikey": "dummy.api.key"],
       localStorage: InMemoryLocalStorage(),
-      logger: nil
+      logger: nil,
+      autoRefreshToken: false
     )
 
     let sut = AuthClient(
@@ -386,7 +388,8 @@ final class AuthClientTests: XCTestCase {
       api: api,
       eventEmitter: eventEmitter,
       sessionStorage: sessionStorage,
-      logger: nil
+      logger: nil,
+      sessionRefresher: sessionRefresher
     )
 
     return sut
