@@ -205,7 +205,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSetSessionWithAFutureExpirationDate() async throws {
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
 
     let sut = makeSUT()
 
@@ -231,7 +231,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSignOut() async {
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
 
     let sut = makeSUT()
 
@@ -241,7 +241,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSignOutWithLocalScope() async {
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
 
     let sut = makeSUT()
 
@@ -251,7 +251,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSignOutWithOthersScope() async {
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
 
     let sut = makeSUT()
 
@@ -288,7 +288,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testUpdateUser() async throws {
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
 
     let sut = makeSUT()
 
@@ -351,7 +351,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testReauthenticate() async {
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
 
     let sut = makeSUT()
 
@@ -361,7 +361,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testUnlinkIdentity() async {
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
 
     let sut = makeSUT()
 
@@ -417,7 +417,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testGetLinkIdentityURL() async {
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
 
     let sut = makeSUT()
 

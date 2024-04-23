@@ -86,16 +86,10 @@ actor LiveSessionRefresher {
 }
 
 struct SessionManager: Sendable {
-  var session: @Sendable (_ shouldValidateExpiration: Bool) async throws -> Session
+  var session: @Sendable () async throws -> Session
   var update: @Sendable (_ session: Session) async throws -> Void
   var remove: @Sendable () async -> Void
   var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
-}
-
-extension SessionManager {
-  func session(shouldValidateExpiration: Bool = true) async throws -> Session {
-    try await session(shouldValidateExpiration)
-  }
 }
 
 extension SessionManager {
@@ -103,7 +97,7 @@ extension SessionManager {
     let manager = _DefaultSessionManager()
 
     return SessionManager(
-      session: { try await manager.session(shouldValidateExpiration: $0) },
+      session: { try await manager.session() },
       update: { try await manager.update($0) },
       remove: { await manager.remove() },
       refreshSession: { try await manager.refreshSession($0) }
@@ -124,7 +118,7 @@ private actor _DefaultSessionManager {
   @Dependency(\.sessionRefresher)
   private var sessionRefresher
 
-  func session(shouldValidateExpiration _: Bool) async throws -> Session {
+  func session() async throws -> Session {
     guard var currentSession = try storage.getSession() else {
       throw AuthError.sessionNotFound
     }

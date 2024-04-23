@@ -61,7 +61,7 @@ final class AuthClientTests: XCTestCase {
   func testOnAuthStateChanges() async {
     eventEmitter = .live
     let session = Session.validSession
-    sessionManager.session = { @Sendable _ in session }
+    sessionManager.session = { @Sendable in session }
 
     sut = makeSUT()
 
@@ -81,7 +81,7 @@ final class AuthClientTests: XCTestCase {
   func testAuthStateChanges() async throws {
     eventEmitter = .live
     let session = Session.validSession
-    sessionManager.session = { @Sendable _ in session }
+    sessionManager.session = { @Sendable in session }
 
     sut = makeSUT()
 
@@ -98,7 +98,7 @@ final class AuthClientTests: XCTestCase {
         $0.append(event)
       }
     }
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
     sessionManager.remove = { @Sendable in }
     api.execute = { @Sendable _ in .stub() }
 
@@ -119,7 +119,7 @@ final class AuthClientTests: XCTestCase {
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
     let removeCalled = LockIsolated(false)
     sessionManager.remove = { @Sendable in removeCalled.setValue(true) }
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
     api.execute = { @Sendable _ in .stub() }
 
     sut = makeSUT()
@@ -142,7 +142,7 @@ final class AuthClientTests: XCTestCase {
     sessionManager.remove = { @Sendable in
       removeCallCount.withValue { $0 += 1 }
     }
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
     api.execute = { @Sendable _ in throw AuthError.api(AuthError.APIError(code: 404)) }
 
     sut = makeSUT()
@@ -178,7 +178,7 @@ final class AuthClientTests: XCTestCase {
     sessionManager.remove = { @Sendable in
       removeCallCount.withValue { $0 += 1 }
     }
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
     api.execute = { @Sendable _ in throw AuthError.api(AuthError.APIError(code: 401)) }
 
     sut = makeSUT()
@@ -357,7 +357,7 @@ final class AuthClientTests: XCTestCase {
       )
     }
 
-    sessionManager.session = { @Sendable _ in .validSession }
+    sessionManager.session = { @Sendable in .validSession }
     codeVerifierStorage = .live
     let sut = makeSUT()
 

@@ -1244,7 +1244,7 @@ public final class AuthClient: Sendable {
       return try await sessionManager.refreshSession(refreshToken)
     }
 
-    let refreshToken = try await sessionManager.session(shouldValidateExpiration: false).refreshToken
+    let refreshToken = try await sessionManager.session().refreshToken
     return try await sessionManager.refreshSession(refreshToken)
   }
 
