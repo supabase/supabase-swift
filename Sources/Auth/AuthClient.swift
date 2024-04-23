@@ -10,7 +10,7 @@ import Foundation
   import FoundationNetworking
 #endif
 
-#if canImport(UIKit)
+#if canImport(UIKit) && !os(watchOS)
   import UIKit
 
   typealias PlatformApplication = UIApplication
@@ -221,33 +221,35 @@ public final class AuthClient: Sendable {
 
     if configuration.autoRefreshToken {
       autoRefreshToken.start()
-    }
 
-    Task { @MainActor [weak self] in
-      let observer1 = NotificationCenter.default.addObserver(
-        forName: PlatformApplication.willResignActiveNotification,
-        object: nil,
-        queue: nil
-      ) { [weak self] _ in
-        self?.appDidEnterBackground()
-      }
+      #if !os(watchOS)
+        Task { @MainActor [weak self] in
+          let observer1 = NotificationCenter.default.addObserver(
+            forName: PlatformApplication.willResignActiveNotification,
+            object: nil,
+            queue: nil
+          ) { [weak self] _ in
+            self?.stopAutoRefresh()
+          }
 
-      let observer2 = NotificationCenter.default.addObserver(
-        forName: PlatformApplication.didBecomeActiveNotification,
-        object: nil,
-        queue: nil
-      ) { [weak self] _ in
-        self?.appDidBecomeActive()
-      }
+          let observer2 = NotificationCenter.default.addObserver(
+            forName: PlatformApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: nil
+          ) { [weak self] _ in
+            self?.startAutoRefresh()
+          }
 
-      let observers = [
-        UncheckedSendable(observer1),
-        UncheckedSendable(observer2),
-      ]
+          let observers = [
+            UncheckedSendable(observer1),
+            UncheckedSendable(observer2),
+          ]
 
-      self?.mutableState.withValue {
-        $0.notificationCenterObservers = observers
-      }
+          self?.mutableState.withValue {
+            $0.notificationCenterObservers = observers
+          }
+        }
+      #endif
     }
   }
 
@@ -256,19 +258,20 @@ public final class AuthClient: Sendable {
       for observer in $0.notificationCenterObservers {
         NotificationCenter.default.removeObserver(observer.value)
       }
+
+      $0.notificationCenterObservers = []
     }
-
-    mutableState.setValue(MutableState())
   }
 
-  private func appDidEnterBackground() {
-    guard configuration.autoRefreshToken else { return }
-    autoRefreshToken.stop()
-  }
-
-  private func appDidBecomeActive() {
-    guard configuration.autoRefreshToken else { return }
+  /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
+  /// If you set the ``AuthClient/Configuration/autoRefreshToken`` you don't need to call this function, it will be called for you.
+  public func startAutoRefresh() {
     autoRefreshToken.start()
+  }
+
+  /// Stops an active auto refresh process running in the background (if any).
+  public func stopAutoRefresh() {
+    autoRefreshToken.stop()
   }
 
   /// Listen for auth state changes.
