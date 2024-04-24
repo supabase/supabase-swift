@@ -22,35 +22,27 @@ struct SessionStorage: Sendable {
 
 extension SessionStorage {
   static let live: Self = {
-    @Dependency(\.configuration.localStorage) var localStorage: any AuthLocalStorage
+    @Dependency(\.configuration.localStorage) var localStorage
     @Dependency(\.logger) var logger
+
+    let encoder = JSONEncoder()
+    let decoder = JSONDecoder()
 
     return Self(
       getSession: {
         logger?.debug("getSession begin")
         defer { logger?.debug("getSession end") }
 
-        let storedData = try localStorage.retrieve(key: "supabase.session")
+        migrateFromStoredSessionToSessionIfNeeded(encoder: encoder)
 
-        let storedSession = storedData.flatMap {
-          try? AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0)
-        }?.session
-
-        if let storedSession {
-          logger?.debug("Migrate from StoredSession to Session")
-          let session = try AuthClient.Configuration.jsonEncoder.encode(storedSession)
-          try localStorage.store(key: "supabase.session", value: session)
-          return storedSession
-        }
-
-        return try storedData.flatMap {
-          try AuthClient.Configuration.jsonDecoder.decode(Session.self, from: $0)
+        return try localStorage.retrieve(key: "supabase.session").flatMap {
+          try decoder.decode(Session.self, from: $0)
         }
       },
       storeSession: {
         try localStorage.store(
           key: "supabase.session",
-          value: AuthClient.Configuration.jsonEncoder.encode($0)
+          value: encoder.encode($0)
         )
       },
       deleteSession: {
@@ -58,4 +50,28 @@ extension SessionStorage {
       }
     )
   }()
+
+  static func migrateFromStoredSessionToSessionIfNeeded(encoder: JSONEncoder) {
+    @Dependency(\.configuration.localStorage) var localStorage
+    @Dependency(\.logger) var logger
+
+    logger?.debug("start")
+    defer { logger?.debug("end") }
+
+    do {
+      let storedData = try localStorage.retrieve(key: "supabase.session")
+
+      let storedSession = storedData.flatMap {
+        try? AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0)
+      }?.session
+
+      if let storedSession {
+        logger?.debug("Migrate from StoredSession to Session")
+        let session = try encoder.encode(storedSession)
+        try localStorage.store(key: "supabase.session", value: session)
+      }
+    } catch {
+      logger?.error("Error migrating stored session: \(error)")
+    }
+  }
 }
