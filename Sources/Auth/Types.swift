@@ -119,6 +119,19 @@ public struct Session: Codable, Hashable, Sendable {
       updatedAt: Date()
     )
   )
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    providerToken = try container.decodeIfPresent(String.self, forKey: .providerToken)
+    providerRefreshToken = try container.decodeIfPresent(String.self, forKey: .providerRefreshToken)
+    accessToken = try container.decode(String.self, forKey: .accessToken)
+    tokenType = try container.decode(String.self, forKey: .tokenType)
+    expiresIn = try container.decode(TimeInterval.self, forKey: .expiresIn)
+    expiresAt = try container.decodeIfPresent(TimeInterval.self, forKey: .expiresAt) ?? Date().timeIntervalSince1970
+    refreshToken = try container.decode(String.self, forKey: .refreshToken)
+    weakPassword = try container.decodeIfPresent(WeakPassword.self, forKey: .weakPassword)
+    user = try container.decode(User.self, forKey: .user)
+  }
 }
 
 public struct User: Codable, Hashable, Identifiable, Sendable {

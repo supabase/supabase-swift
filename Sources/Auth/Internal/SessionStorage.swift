@@ -25,15 +25,15 @@ extension SessionStorage {
     @Dependency(\.configuration.localStorage) var localStorage
     @Dependency(\.logger) var logger
 
-    let encoder = JSONEncoder()
-    let decoder = JSONDecoder()
+    let encoder = AuthClient.Configuration.jsonEncoder
+    let decoder = AuthClient.Configuration.jsonDecoder
 
     return Self(
       getSession: {
         logger?.debug("getSession begin")
         defer { logger?.debug("getSession end") }
 
-        migrateFromStoredSessionToSessionIfNeeded(encoder: encoder)
+        migrateFromStoredSessionToSessionIfNeeded(encoder: encoder, decoder: decoder)
 
         return try localStorage.retrieve(key: "supabase.session").flatMap {
           try decoder.decode(Session.self, from: $0)
@@ -51,7 +51,7 @@ extension SessionStorage {
     )
   }()
 
-  static func migrateFromStoredSessionToSessionIfNeeded(encoder: JSONEncoder) {
+  static func migrateFromStoredSessionToSessionIfNeeded(encoder: JSONEncoder, decoder: JSONDecoder) {
     @Dependency(\.configuration.localStorage) var localStorage
     @Dependency(\.logger) var logger
 
@@ -62,7 +62,7 @@ extension SessionStorage {
       let storedData = try localStorage.retrieve(key: "supabase.session")
 
       let storedSession = storedData.flatMap {
-        try? AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0)
+        try? decoder.decode(StoredSession.self, from: $0)
       }?.session
 
       if let storedSession {
