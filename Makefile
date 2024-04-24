@@ -48,10 +48,17 @@ test-integration: dot-env
 			-testPlan IntegrationTests \
 			-destination platform="$(PLATFORM_IOS)" | xcpretty
 
+test-swift:
+	swift test
+	swift test -c release
 
 test-linux:
-	docker build -t supabase-swift .
-	docker run supabase-swift
+	docker run \
+		--rm \
+		-v "$(PWD):$(PWD)" \
+		-w "$(PWD)" \
+		swift:5.9-focal \
+		bash -c 'apt-get update && apt-get -y install make && make test-swift'
 
 build-for-library-evolution:
 	swift build \

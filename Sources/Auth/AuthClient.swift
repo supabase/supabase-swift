@@ -222,7 +222,7 @@ public final class AuthClient: Sendable {
     if configuration.autoRefreshToken {
       startAutoRefresh()
 
-      #if !os(watchOS)
+      #if !os(watchOS) && !os(Linux) && !os(Windows)
         Task { @MainActor [weak self] in
           let observer1 = NotificationCenter.default.addObserver(
             forName: PlatformApplication.willResignActiveNotification,
