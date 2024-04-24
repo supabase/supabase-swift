@@ -19,12 +19,10 @@ final class FunctionsClientTests: XCTestCase {
       headers: ["Apikey": apiKey],
       region: .saEast1
     )
-    let region = await client.region
-    XCTAssertEqual(region, "sa-east-1")
+    XCTAssertEqual(client.region, "sa-east-1")
 
-    let headers = await client.headers
-    XCTAssertEqual(headers["Apikey"], apiKey)
-    XCTAssertNotNil(headers["X-Client-Info"])
+    XCTAssertEqual(client.headers["Apikey"], apiKey)
+    XCTAssertNotNil(client.headers["X-Client-Info"])
   }
 
   func testInvoke() async throws {
@@ -163,9 +161,8 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 
-  func test_setAuth() async {
-    await sut.setAuth(token: "access.token")
-    let headers = await sut.headers
-    XCTAssertEqual(headers["Authorization"], "Bearer access.token")
+  func test_setAuth() {
+    sut.setAuth(token: "access.token")
+    XCTAssertEqual(sut.headers["Authorization"], "Bearer access.token")
   }
 }

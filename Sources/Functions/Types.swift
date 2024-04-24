@@ -24,7 +24,7 @@ public struct FunctionInvokeOptions: Sendable {
   /// Method to use in the function invocation.
   let method: Method?
   /// Headers to be included in the function invocation.
-  let headers: [String: String]
+  let headers: HTTPHeaders
   /// Body data to be sent with the function invocation.
   let body: Data?
   /// The Region to invoke the function in.
@@ -44,7 +44,7 @@ public struct FunctionInvokeOptions: Sendable {
     region: String? = nil,
     body: some Encodable
   ) {
-    var defaultHeaders = headers
+    var defaultHeaders = HTTPHeaders()
 
     switch body {
     case let string as String:
@@ -60,7 +60,7 @@ public struct FunctionInvokeOptions: Sendable {
     }
 
     self.method = method
-    self.headers = defaultHeaders.merging(headers) { _, new in new }
+    self.headers = defaultHeaders.merged(with: HTTPHeaders(headers))
     self.region = region
   }
 
@@ -77,7 +77,7 @@ public struct FunctionInvokeOptions: Sendable {
     region: String? = nil
   ) {
     self.method = method
-    self.headers = headers
+    self.headers = HTTPHeaders(headers)
     self.region = region
     body = nil
   }
@@ -97,6 +97,23 @@ public struct FunctionInvokeOptions: Sendable {
       case .patch: .patch
       case .delete: .delete
       }
+    }
+  }
+
+  var httpMethod: HTTPMethod? {
+    switch method {
+    case .get:
+      .get
+    case .post:
+      .post
+    case .put:
+      .put
+    case .patch:
+      .patch
+    case .delete:
+      .delete
+    case nil:
+      nil
     }
   }
 }
