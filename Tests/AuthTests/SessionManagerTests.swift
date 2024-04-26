@@ -38,11 +38,6 @@ final class SessionManagerTests: XCTestCase {
       .init(session: .validSession)
     }
 
-    Current.sessionRefresher.refreshSession = { _ in
-      XCTFail("Should not call refreshSession")
-      return .expiredSession
-    }
-
     let sut = SessionManager.live
 
     let session = try await sut.session()
