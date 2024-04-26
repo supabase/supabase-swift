@@ -63,13 +63,13 @@ package struct HTTPResponse: Sendable {
   package let headers: HTTPHeaders
   package let statusCode: Int
 
-  package let _underlyingRespoknse: HTTPURLResponse
+  package let underlyingResponse: HTTPURLResponse
 
-  init(data: Data, response: HTTPURLResponse) {
+  package init(data: Data, response: HTTPURLResponse) {
     self.data = data
     headers = HTTPHeaders(response.allHeaderFields as? [String: String] ?? [:])
     statusCode = response.statusCode
-    _underlyingRespoknse = response
+    underlyingResponse = response
   }
 }
 
@@ -82,7 +82,11 @@ package protocol HTTPClientInterceptor: Sendable {
   ) async throws -> HTTPResponse
 }
 
-package actor _HTTPClient {
+package protocol HTTPClientType: Sendable {
+  func send(_ request: HTTPRequest) async throws -> HTTPResponse
+}
+
+package actor _HTTPClient: HTTPClientType {
   let fetch: @Sendable (URLRequest) async throws -> (Data, URLResponse)
   let interceptors: [any HTTPClientInterceptor]
 
@@ -140,7 +144,7 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
       logger.verbose(
         """
         Response [\(id)]: Status code: \(response.statusCode) Content-Length: \(
-          response._underlyingRespoknse.expectedContentLength
+          response.underlyingResponse.expectedContentLength
         )
         Body: \(stringfy(response.data))
         """

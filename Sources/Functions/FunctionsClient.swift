@@ -21,7 +21,7 @@ public final class FunctionsClient: Sendable {
   /// The Region to invoke the functions in.
   let region: String?
 
-  private let http: _HTTPClient
+  private let http: any HTTPClientType
 
   struct MutableState {
     /// Headers to be included in the requests.
@@ -43,29 +43,39 @@ public final class FunctionsClient: Sendable {
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
   @_disfavoredOverload
-  public init(
+  public convenience init(
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
   ) {
+    var interceptors: [any HTTPClientInterceptor] = []
+    if let logger {
+      interceptors.append(LoggerInterceptor(logger: logger))
+    }
+
+    let http = _HTTPClient(fetch: fetch, interceptors: interceptors)
+
+    self.init(url: url, headers: headers, region: region, http: http)
+  }
+
+  init(
+    url: URL,
+    headers: [String: String],
+    region: String?,
+    http: any HTTPClientType
+  ) {
     self.url = url
+    self.region = region
+    self.http = http
+
     mutableState.withValue {
       $0.headers = HTTPHeaders(headers)
       if $0.headers["X-Client-Info"] == nil {
         $0.headers["X-Client-Info"] = "functions-swift/\(version)"
       }
     }
-
-    self.region = region
-
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    http = _HTTPClient(fetch: fetch, interceptors: interceptors)
   }
 
   /// Initializes a new instance of `FunctionsClient`.
@@ -115,7 +125,7 @@ public final class FunctionsClient: Sendable {
     let response = try await rawInvoke(
       functionName: functionName, invokeOptions: options
     )
-    return try decode(response.data, response._underlyingRespoknse)
+    return try decode(response.data, response.underlyingResponse)
   }
 
   /// Invokes a function and decodes the response as a specific type.

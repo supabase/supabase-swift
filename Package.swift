@@ -67,6 +67,7 @@ let package = Package(
       name: "FunctionsTests",
       dependencies: [
         "Functions",
+        "TestHelpers",
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
       ]
