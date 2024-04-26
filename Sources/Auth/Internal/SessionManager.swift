@@ -43,16 +43,16 @@ private actor _DefaultSessionManager {
       return try await task.value
     }
 
-    guard let currentSession = try storage.getSession() else {
-      throw AuthError.sessionNotFound
-    }
-
-    if currentSession.isValid || !shouldValidateExpiration {
-      return currentSession.session
-    }
-
     task = Task {
       defer { task = nil }
+
+      guard let currentSession = try storage.getSession() else {
+        throw AuthError.sessionNotFound
+      }
+
+      if currentSession.isValid || !shouldValidateExpiration {
+        return currentSession.session
+      }
 
       let session = try await sessionRefresher.refreshSession(currentSession.session.refreshToken)
       try update(session)

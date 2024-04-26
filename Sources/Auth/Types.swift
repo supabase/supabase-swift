@@ -142,6 +142,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public var role: String?
   public var updatedAt: Date
   public var identities: [UserIdentity]?
+  public var isAnonymous: Bool
   public var factors: [Factor]?
 
   public init(
@@ -165,6 +166,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     role: String? = nil,
     updatedAt: Date,
     identities: [UserIdentity]? = nil,
+    isAnonymous: Bool = false,
     factors: [Factor]? = nil
   ) {
     self.id = id
@@ -187,7 +189,34 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     self.role = role
     self.updatedAt = updatedAt
     self.identities = identities
+    self.isAnonymous = isAnonymous
     self.factors = factors
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.id = try container.decode(UUID.self, forKey: .id)
+    self.appMetadata = try container.decode([String : AnyJSON].self, forKey: .appMetadata)
+    self.userMetadata = try container.decode([String : AnyJSON].self, forKey: .userMetadata)
+    self.aud = try container.decode(String.self, forKey: .aud)
+    self.confirmationSentAt = try container.decodeIfPresent(Date.self, forKey: .confirmationSentAt)
+    self.recoverySentAt = try container.decodeIfPresent(Date.self, forKey: .recoverySentAt)
+    self.emailChangeSentAt = try container.decodeIfPresent(Date.self, forKey: .emailChangeSentAt)
+    self.newEmail = try container.decodeIfPresent(String.self, forKey: .newEmail)
+    self.invitedAt = try container.decodeIfPresent(Date.self, forKey: .invitedAt)
+    self.actionLink = try container.decodeIfPresent(String.self, forKey: .actionLink)
+    self.email = try container.decodeIfPresent(String.self, forKey: .email)
+    self.phone = try container.decodeIfPresent(String.self, forKey: .phone)
+    self.createdAt = try container.decode(Date.self, forKey: .createdAt)
+    self.confirmedAt = try container.decodeIfPresent(Date.self, forKey: .confirmedAt)
+    self.emailConfirmedAt = try container.decodeIfPresent(Date.self, forKey: .emailConfirmedAt)
+    self.phoneConfirmedAt = try container.decodeIfPresent(Date.self, forKey: .phoneConfirmedAt)
+    self.lastSignInAt = try container.decodeIfPresent(Date.self, forKey: .lastSignInAt)
+    self.role = try container.decodeIfPresent(String.self, forKey: .role)
+    self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    self.identities = try container.decodeIfPresent([UserIdentity].self, forKey: .identities)
+    self.isAnonymous = try container.decodeIfPresent(Bool.self, forKey: .isAnonymous) ?? false
+    self.factors = try container.decodeIfPresent([Factor].self, forKey: .factors)
   }
 }
 
