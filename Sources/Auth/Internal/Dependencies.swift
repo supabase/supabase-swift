@@ -4,14 +4,16 @@ import Foundation
 
 struct Dependencies: Sendable {
   var configuration: AuthClient.Configuration
-  var api: APIClient
+  var sessionRefresher: SessionRefresher
+  var sessionManager = SessionManager()
+  var api = APIClient()
+
+  var eventEmitter: AuthStateChangeEventEmitter = .shared
+  var date: @Sendable () -> Date = { Date() }
+  var codeVerifierStorage = CodeVerifierStorage.live
+
   var encoder: JSONEncoder { configuration.encoder }
   var decoder: JSONDecoder { configuration.decoder }
-  var sessionManager: SessionManager
-  var eventEmitter: AuthStateChangeEventEmitter
-  var date: @Sendable () -> Date = { Date() }
-  var codeVerifierStorage: CodeVerifierStorage
-
   var logger: (any SupabaseLogger)? { configuration.logger }
 }
 

@@ -15,13 +15,6 @@ import XCTestDynamicOverlay
 
 let clientURL = URL(string: "http://localhost:54321/auth/v1")!
 
-extension CodeVerifierStorage {
-  static let mock = Self(
-    get: unimplemented("CodeVerifierStorage.get"),
-    set: unimplemented("CodeVerifierStorage.set")
-  )
-}
-
 extension Session {
   static let validSession = Session(
     accessToken: "accesstoken",

@@ -41,21 +41,9 @@ public final class AuthClient: Sendable {
   public init(configuration: Configuration) {
     Current = Dependencies(
       configuration: configuration,
-      api: APIClient(
-        http:
-        HTTPClient(
-          logger: configuration.logger,
-          fetchHandler: configuration.fetch
-        )
-      ),
-      sessionManager: SessionManager(
-        storage: configuration.localStorage,
-        sessionRefresher: SessionRefresher { [weak self] in
-          try await self?.refreshSession(refreshToken: $0) ?? .empty
-        }
-      ),
-      eventEmitter: AuthStateChangeEventEmitter.shared,
-      codeVerifierStorage: .live
+      sessionRefresher: SessionRefresher { [weak self] in
+        try await self?.refreshSession(refreshToken: $0) ?? .empty
+      }
     )
   }
 

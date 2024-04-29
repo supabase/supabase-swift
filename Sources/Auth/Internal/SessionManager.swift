@@ -8,15 +8,12 @@ struct SessionRefresher: Sendable {
 actor SessionManager {
   private var task: Task<Session, any Error>?
 
-  private let storage: any AuthLocalStorage
-  private let sessionRefresher: SessionRefresher
+  private var storage: any AuthLocalStorage {
+    Current.configuration.localStorage
+  }
 
-  init(
-    storage: any AuthLocalStorage,
-    sessionRefresher: SessionRefresher
-  ) {
-    self.storage = storage
-    self.sessionRefresher = sessionRefresher
+  private var sessionRefresher: SessionRefresher {
+    Current.sessionRefresher
   }
 
   func session(shouldValidateExpiration: Bool = true) async throws -> Session {

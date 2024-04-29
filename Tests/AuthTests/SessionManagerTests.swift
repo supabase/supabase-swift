@@ -14,11 +14,18 @@ import XCTest
 import XCTestDynamicOverlay
 
 final class SessionManagerTests: XCTestCase {
-  let storage = InMemoryLocalStorage()
-  var sessionRefresher = SessionRefresher(refreshSession: unimplemented("refreshSession"))
-  lazy var sut = SessionManager(storage: storage, sessionRefresher: sessionRefresher)
+  override func setUp() {
+    super.setUp()
+
+    Current = .init(
+      configuration: .init(url: clientURL, localStorage: InMemoryLocalStorage(), logger: nil),
+      sessionRefresher: SessionRefresher(refreshSession: unimplemented("refreshSession"))
+    )
+  }
 
   func testSession_shouldFailWithSessionNotFound() async {
+    let sut = SessionManager()
+
     do {
       _ = try await sut.session()
       XCTFail("Expected a \(AuthError.sessionNotFound) failure")
@@ -30,7 +37,9 @@ final class SessionManagerTests: XCTestCase {
 
   func testSession_shouldReturnValidSession() async throws {
     let session = Session.validSession
-    try storage.storeSession(.init(session: session))
+    try Current.configuration.localStorage.storeSession(.init(session: session))
+
+    let sut = SessionManager()
 
     let returnedSession = try await sut.session()
     XCTAssertNoDifference(returnedSession, session)
@@ -39,7 +48,7 @@ final class SessionManagerTests: XCTestCase {
   func testSession_shouldRefreshSession_whenCurrentSessionExpired() async throws {
     let currentSession = Session.expiredSession
 
-    try storage.storeSession(.init(session: currentSession))
+    try Current.configuration.localStorage.storeSession(.init(session: currentSession))
 
     let validSession = Session.validSession
 
@@ -47,15 +56,17 @@ final class SessionManagerTests: XCTestCase {
 
     let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
-    sessionRefresher.refreshSession = { _ in
+    Current.sessionRefresher.refreshSession = { _ in
       refreshSessionCallCount.withValue { $0 += 1 }
       return await refreshSessionStream.first { _ in true } ?? .empty
     }
 
+    let sut = SessionManager()
+
     // Fire N tasks and call sut.session()
     let tasks = (0 ..< 10).map { _ in
       Task.detached {
-        try await self.sut.session()
+        try await sut.session()
       }
     }
 

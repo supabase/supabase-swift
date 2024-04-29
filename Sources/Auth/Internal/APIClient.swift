@@ -8,45 +8,41 @@ extension HTTPClient {
 }
 
 struct APIClient: Sendable {
-  var execute: @Sendable (_ request: Request) async throws -> Response
-}
+  var configuration: AuthClient.Configuration {
+    Current.configuration
+  }
 
-extension APIClient {
-  init(http: HTTPClient) {
-    var configuration: AuthClient.Configuration {
-      Current.configuration
-    }
+  var http: HTTPClient {
+    HTTPClient(configuration: configuration)
+  }
 
-    self.init { request in
-      var request = request
-      request.headers.merge(configuration.headers) { r, _ in r }
+  func execute(_ request: Request) async throws -> Response {
+    var request = request
+    request.headers.merge(configuration.headers) { r, _ in r }
 
-      let response = try await http.fetch(request, baseURL: configuration.url)
+    let response = try await http.fetch(request, baseURL: configuration.url)
 
-      guard (200 ..< 300).contains(response.statusCode) else {
-        if let apiError = try? configuration.decoder.decode(
-          AuthError.APIError.self,
-          from: response.data
-        ) {
-          throw AuthError.api(apiError)
-        }
-
-        /// There are some GoTrue endpoints that can return a `PostgrestError`, for example the
-        /// ``AuthAdmin/deleteUser(id:shouldSoftDelete:)`` that could return an error in case the
-        /// user is referenced by other schemas.
-        let postgrestError = try configuration.decoder.decode(
-          PostgrestError.self,
-          from: response.data
-        )
-        throw postgrestError
+    guard (200 ..< 300).contains(response.statusCode) else {
+      if let apiError = try? configuration.decoder.decode(
+        AuthError.APIError.self,
+        from: response.data
+      ) {
+        throw AuthError.api(apiError)
       }
 
-      return response
+      /// There are some GoTrue endpoints that can return a `PostgrestError`, for example the
+      /// ``AuthAdmin/deleteUser(id:shouldSoftDelete:)`` that could return an error in case the
+      /// user is referenced by other schemas.
+      let postgrestError = try configuration.decoder.decode(
+        PostgrestError.self,
+        from: response.data
+      )
+      throw postgrestError
     }
-  }
-}
 
-extension APIClient {
+    return response
+  }
+
   @discardableResult
   func authorizedExecute(_ request: Request) async throws -> Response {
     var sessionManager: SessionManager {
