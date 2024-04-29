@@ -22,45 +22,6 @@ extension CodeVerifierStorage {
   )
 }
 
-extension SessionStorage {
-  static let mock = Self(
-    getSession: unimplemented("SessionStorage.getSession"),
-    storeSession: unimplemented("SessionStorage.storeSession"),
-    deleteSession: unimplemented("SessionStorage.deleteSession")
-  )
-
-  static var inMemory: Self {
-    let session = LockIsolated(StoredSession?.none)
-
-    return Self(
-      getSession: { session.value },
-      storeSession: { session.setValue($0) },
-      deleteSession: { session.setValue(nil) }
-    )
-  }
-}
-
-extension SessionRefresher {
-  static let mock = Self(refreshSession: unimplemented("SessionRefresher.refreshSession"))
-}
-
-extension Dependencies {
-  static let mock = Dependencies(
-    configuration: AuthClient.Configuration(
-      url: clientURL,
-      localStorage: InMemoryLocalStorage(),
-      logger: nil
-    ),
-    sessionManager: .mock,
-    api: .mock,
-    eventEmitter: .mock,
-    sessionStorage: .mock,
-    sessionRefresher: .mock,
-    codeVerifierStorage: .mock,
-    logger: nil
-  )
-}
-
 extension Session {
   static let validSession = Session(
     accessToken: "accesstoken",

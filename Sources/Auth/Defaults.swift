@@ -27,7 +27,7 @@ extension AuthClient.Configuration {
     encoder.keyEncodingStrategy = .convertToSnakeCase
     encoder.dateEncodingStrategy = .custom { date, encoder in
       var container = encoder.singleValueContainer()
-      let string = dateFormatter.string(from: date)
+      let string = dateFormatterWithFractionalSeconds.string(from: date)
       try container.encode(string)
     }
     return encoder

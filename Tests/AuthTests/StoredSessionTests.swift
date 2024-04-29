@@ -6,16 +6,10 @@ import XCTest
 final class StoredSessionTests: XCTestCase {
   override func setUpWithError() throws {
     try super.setUpWithError()
-    Current = .mock
-    Current.configuration = .init(
-      url: clientURL,
-      localStorage: try! DiskTestStorage(),
-      logger: nil
-    )
   }
 
   func testStoredSession() throws {
-    let sut = SessionStorage.live
+    let sut = try! DiskTestStorage()
 
     let _ = try sut.getSession()
 

@@ -1,44 +1,22 @@
 import _Helpers
 import Foundation
 
-struct SessionRefresher: Sendable {
-  var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
+protocol SessionRefresher: Sendable, AnyObject {
+  func refreshSession(_ refreshToken: String) async throws -> Session
 }
 
-struct SessionManager: Sendable {
-  var session: @Sendable (_ shouldValidateExpiration: Bool) async throws -> Session
-  var update: @Sendable (_ session: Session) async throws -> Void
-  var remove: @Sendable () async -> Void
-}
-
-extension SessionManager {
-  func session(shouldValidateExpiration: Bool = true) async throws -> Session {
-    try await session(shouldValidateExpiration)
-  }
-}
-
-extension SessionManager {
-  static let live: SessionManager = {
-    let manager = _DefaultSessionManager()
-
-    return SessionManager(
-      session: { try await manager.session(shouldValidateExpiration: $0) },
-      update: { try await manager.update($0) },
-      remove: { await manager.remove() }
-    )
-  }()
-}
-
-private actor _DefaultSessionManager {
+actor SessionManager {
   private var task: Task<Session, any Error>?
 
-  @Dependency(\.sessionStorage)
-  private var storage: SessionStorage
+  private let storage: any AuthLocalStorage
+  private unowned var sessionRefresher: any SessionRefresher
 
-  @Dependency(\.sessionRefresher)
-  private var sessionRefresher: SessionRefresher
+  init(storage: any AuthLocalStorage, sessionRefresher: any SessionRefresher) {
+    self.storage = storage
+    self.sessionRefresher = sessionRefresher
+  }
 
-  func session(shouldValidateExpiration: Bool) async throws -> Session {
+  func session(shouldValidateExpiration: Bool = true) async throws -> Session {
     if let task {
       return try await task.value
     }

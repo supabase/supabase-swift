@@ -17,12 +17,11 @@ import XCTest
 #endif
 
 final class AuthClientTests: XCTestCase {
-  var eventEmitter: Auth.EventEmitter!
   var sessionManager: SessionManager!
 
-  var sessionStorage: SessionStorage!
-  var codeVerifierStorage: CodeVerifierStorage!
-  var api: APIClient!
+  var storage: InMemoryLocalStorage!
+
+  var http: HTTPClient!
   var sut: AuthClient!
 
   override func invokeTest() {
@@ -33,13 +32,7 @@ final class AuthClientTests: XCTestCase {
 
   override func setUp() {
     super.setUp()
-    Current = .mock
-
-    sessionStorage = .mock
-    codeVerifierStorage = .mock
-    eventEmitter = .mock
-    sessionManager = .mock
-    api = .mock
+    storage = InMemoryLocalStorage()
   }
 
   override func tearDown() {
@@ -52,14 +45,13 @@ final class AuthClientTests: XCTestCase {
     defer { completion() }
 
     sut = nil
-    eventEmitter = nil
     sessionManager = nil
+    storage = nil
   }
 
-  func testOnAuthStateChanges() async {
-    eventEmitter = .live
+  func testOnAuthStateChanges() async throws {
     let session = Session.validSession
-    sessionManager.session = { @Sendable _ in session }
+    try storage.storeSession(.init(session: session))
 
     sut = makeSUT()
 
@@ -77,30 +69,27 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testAuthStateChanges() async throws {
-    eventEmitter = .live
-    let session = Session.validSession
-    sessionManager.session = { @Sendable _ in session }
-
     sut = makeSUT()
 
+    let session = Session.validSession
+    try storage.storeSession(.init(session: session))
+
     let stateChange = await sut.authStateChanges.first { _ in true }
-    XCTAssertEqual(stateChange?.event, .initialSession)
-    XCTAssertEqual(stateChange?.session, session)
+    XCTAssertNoDifference(stateChange?.event, .initialSession)
+    XCTAssertNoDifference(stateChange?.session, session)
   }
 
   func testSignOut() async throws {
-    let emitReceivedEvents = LockIsolated<[AuthChangeEvent]>([])
-
-    eventEmitter.emit = { @Sendable event, _, _ in
-      emitReceivedEvents.withValue {
-        $0.append(event)
-      }
+    sut = makeSUT { _ in
+      .stub()
     }
-    sessionManager.session = { @Sendable _ in .validSession }
-    sessionManager.remove = { @Sendable in }
-    api.execute = { @Sendable _ in .stub() }
 
-    sut = makeSUT()
+    try storage.storeSession(.init(session: .validSession))
+
+    let eventsTask = Task {
+      await sut.authStateChanges.prefix(2).collect()
+    }
+    await Task.megaYield()
 
     try await sut.signOut()
 
@@ -111,39 +100,36 @@ final class AuthClientTests: XCTestCase {
       XCTFail("Unexpected error.")
     }
 
-    XCTAssertEqual(emitReceivedEvents.value, [.signedOut])
+    let events = await eventsTask.value.map(\.event)
+    XCTAssertEqual(events, [.initialSession, .signedOut])
   }
 
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
-    let removeCalled = LockIsolated(false)
-    sessionManager.remove = { @Sendable in removeCalled.setValue(true) }
-    sessionManager.session = { @Sendable _ in .validSession }
-    api.execute = { @Sendable _ in .stub() }
+    sut = makeSUT { _ in
+      .stub()
+    }
 
-    sut = makeSUT()
+    try storage.storeSession(.init(session: .validSession))
 
     try await sut.signOut(scope: .others)
 
-    XCTAssertFalse(removeCalled.value)
+    let sessionRemoved = try storage.getSession() == nil
+    XCTAssertFalse(sessionRemoved)
   }
 
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
-    let emitReceivedEvents = LockIsolated<[(AuthChangeEvent, Session?)]>([])
-
-    eventEmitter.emit = { @Sendable event, session, _ in
-      emitReceivedEvents.withValue {
-        $0.append((event, session))
-      }
+    sut = makeSUT { _ in
+      throw AuthError.api(AuthError.APIError(code: 404))
     }
 
-    let removeCallCount = LockIsolated(0)
-    sessionManager.remove = { @Sendable in
-      removeCallCount.withValue { $0 += 1 }
-    }
-    sessionManager.session = { @Sendable _ in .validSession }
-    api.execute = { @Sendable _ in throw AuthError.api(AuthError.APIError(code: 404)) }
+    let validSession = Session.validSession
+    try storage.storeSession(.init(session: validSession))
 
-    sut = makeSUT()
+    let eventsTask = Task {
+      await sut.authStateChanges.prefix(2).collect()
+    }
+
+    await Task.megaYield()
 
     do {
       try await sut.signOut()
@@ -152,34 +138,29 @@ final class AuthClientTests: XCTestCase {
       XCTFail("Unexpected error: \(error)")
     }
 
-    let emitedParams = emitReceivedEvents.value
-    let emitedEvents = emitedParams.map(\.0)
-    let emitedSessions = emitedParams.map(\.1)
+    let events = await eventsTask.value.map(\.event)
+    let sessions = await eventsTask.value.map(\.session)
 
-    XCTAssertEqual(emitedEvents, [.signedOut])
-    XCTAssertEqual(emitedSessions.count, 1)
-    XCTAssertNil(emitedSessions[0])
+    XCTAssertNoDifference(events, [.initialSession, .signedOut])
+    XCTAssertNoDifference(sessions, [.validSession, nil])
 
-    XCTAssertEqual(removeCallCount.value, 1)
+    let sessionRemoved = try storage.getSession() == nil
+    XCTAssertTrue(sessionRemoved)
   }
 
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
-    let emitReceivedEvents = LockIsolated<[(AuthChangeEvent, Session?)]>([])
-
-    eventEmitter.emit = { @Sendable event, session, _ in
-      emitReceivedEvents.withValue {
-        $0.append((event, session))
-      }
+    sut = makeSUT { _ in
+      throw AuthError.api(AuthError.APIError(code: 401))
     }
 
-    let removeCallCount = LockIsolated(0)
-    sessionManager.remove = { @Sendable in
-      removeCallCount.withValue { $0 += 1 }
-    }
-    sessionManager.session = { @Sendable _ in .validSession }
-    api.execute = { @Sendable _ in throw AuthError.api(AuthError.APIError(code: 401)) }
+    let validSession = Session.validSession
+    try storage.storeSession(.init(session: validSession))
 
-    sut = makeSUT()
+    let eventsTask = Task {
+      await sut.authStateChanges.prefix(2).collect()
+    }
+
+    await Task.megaYield()
 
     do {
       try await sut.signOut()
@@ -188,131 +169,48 @@ final class AuthClientTests: XCTestCase {
       XCTFail("Unexpected error: \(error)")
     }
 
-    let emitedParams = emitReceivedEvents.value
-    let emitedEvents = emitedParams.map(\.0)
-    let emitedSessions = emitedParams.map(\.1)
+    let events = await eventsTask.value.map(\.event)
+    let sessions = await eventsTask.value.map(\.session)
 
-    XCTAssertEqual(emitedEvents, [.signedOut])
-    XCTAssertEqual(emitedSessions.count, 1)
-    XCTAssertNil(emitedSessions[0])
+    XCTAssertNoDifference(events, [.initialSession, .signedOut])
+    XCTAssertNoDifference(sessions, [validSession, nil])
 
-    XCTAssertEqual(removeCallCount.value, 1)
+    let sessionRemoved = try storage.getSession() == nil
+    XCTAssertTrue(sessionRemoved)
   }
 
   func testSignInAnonymously() async throws {
-    let emitReceivedEvents = LockIsolated<[(AuthChangeEvent, Session?)]>([])
+    let session = Session(fromMockNamed: "anonymous-sign-in-response")
 
-    eventEmitter.emit = { @Sendable event, session, _ in
-      emitReceivedEvents.withValue {
-        $0.append((event, session))
-      }
-    }
-    sessionManager.remove = { @Sendable in }
-    sessionManager.update = { @Sendable _ in }
-
-    api.execute = { @Sendable _ in
-      .stub(
-        """
-        {
-          "access_token" : "eyJhbGciOiJIUzI1NiIsImtpZCI6ImpIaU1GZmtNTzRGdVROdXUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzExOTk0NzEzLCJpYXQiOjE3MTE5OTExMTMsImlzcyI6Imh0dHBzOi8vYWp5YWdzaHV6bnV2anFoampmdG8uc3VwYWJhc2UuY28vYXV0aC92MSIsInN1YiI6ImJiZmE5MjU0LWM1ZDEtNGNmZi1iYTc2LTU2YmYwM2IwNWEwMSIsImVtYWlsIjoiIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnt9LCJ1c2VyX21ldGFkYXRhIjp7fSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJhbm9ueW1vdXMiLCJ0aW1lc3RhbXAiOjE3MTE5OTExMTN9XSwic2Vzc2lvbl9pZCI6ImMyODlmYTcwLWIzYWUtNDI1Yi05MDQxLWUyZjVhNzBlZTcyYSIsImlzX2Fub255bW91cyI6dHJ1ZX0.whBzmyMv3-AQSaiY6Fi-v_G68Q8oULhB7axImj9qOdw",
-          "expires_at" : 1711994713,
-          "expires_in" : 3600,
-          "refresh_token" : "0xS9iJUWdXnWlCJtFiXk5A",
-          "token_type" : "bearer",
-          "user" : {
-            "app_metadata" : {
-
-            },
-            "aud" : "authenticated",
-            "created_at" : "2024-04-01T17:05:13.013312Z",
-            "email" : "",
-            "id" : "bbfa9254-c5d1-4cff-ba76-56bf03b05a01",
-            "identities" : [
-
-            ],
-            "is_anonymous" : true,
-            "last_sign_in_at" : "2024-04-01T17:05:13.018294975Z",
-            "phone" : "",
-            "role" : "authenticated",
-            "updated_at" : "2024-04-01T17:05:13.022041Z",
-            "user_metadata" : {
-
-            }
-          }
-        }
-        """,
-        code: 200
-      )
+    let sut = makeSUT { _ in
+      .stub(fromFileName: "anonymous-sign-in-response")
     }
 
-    let sut = makeSUT()
+    let eventsTask = Task {
+      await sut.authStateChanges.prefix(2).collect()
+    }
+
+    await Task.megaYield()
 
     try await sut.signInAnonymously()
 
-    let events = emitReceivedEvents.value.map(\.0)
+    let events = await eventsTask.value.map(\.event)
+    let sessions = await eventsTask.value.map(\.session)
 
-    XCTAssertEqual(events, [.signedIn])
+    XCTAssertEqual(events, [.initialSession, .signedIn])
+    XCTAssertEqual(sessions, [nil, session])
   }
 
   func testSignInWithOAuth() async throws {
-    let emitReceivedEvents = LockIsolated<[(AuthChangeEvent, Session?)]>([])
-
-    eventEmitter.emit = { @Sendable event, session, _ in
-      emitReceivedEvents.withValue {
-        $0.append((event, session))
-      }
+    let sut = makeSUT { _ in
+      .stub(fromFileName: "session")
     }
 
-    sessionStorage = .live
-    codeVerifierStorage = .live
-    sessionManager = .live
-
-    api.execute = { @Sendable _ in
-      .stub(
-        """
-        {
-          "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNjQ4NjQwMDIxLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6Imd1aWxoZXJtZTJAZ3Jkcy5kZXYiLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7fSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQifQ.4lMvmz2pJkWu1hMsBgXP98Fwz4rbvFYl4VA9joRv6kY",
-          "token_type": "bearer",
-          "expires_in": 3600,
-          "refresh_token": "GGduTeu95GraIXQ56jppkw",
-          "user": {
-            "id": "f33d3ec9-a2ee-47c4-80e1-5bd919f3d8b8",
-            "aud": "authenticated",
-            "role": "authenticated",
-            "email": "guilherme@binaryscraping.co",
-            "email_confirmed_at": "2022-03-30T10:33:41.018575157Z",
-            "phone": "",
-            "last_sign_in_at": "2022-03-30T10:33:41.021531328Z",
-            "app_metadata": {
-              "provider": "email",
-              "providers": [
-                "email"
-              ]
-            },
-            "user_metadata": {},
-            "identities": [
-              {
-                "id": "f33d3ec9-a2ee-47c4-80e1-5bd919f3d8b8",
-                "user_id": "f33d3ec9-a2ee-47c4-80e1-5bd919f3d8b8",
-                "identity_id": "859f402d-b3de-4105-a1b9-932836d9193b",
-                "identity_data": {
-                  "sub": "f33d3ec9-a2ee-47c4-80e1-5bd919f3d8b8"
-                },
-                "provider": "email",
-                "last_sign_in_at": "2022-03-30T10:33:41.015557063Z",
-                "created_at": "2022-03-30T10:33:41.015612Z",
-                "updated_at": "2022-03-30T10:33:41.015616Z"
-              }
-            ],
-            "created_at": "2022-03-30T10:33:41.005433Z",
-            "updated_at": "2022-03-30T10:33:41.022688Z"
-          }
-        }
-        """
-      )
+    let eventsTask = Task {
+      await sut.authStateChanges.prefix(2).collect()
     }
 
-    let sut = makeSUT()
+    await Task.megaYield()
 
     try await sut.signInWithOAuth(
       provider: .google,
@@ -321,7 +219,9 @@ final class AuthClientTests: XCTestCase {
       URL(string: "supabase://auth-callback?code=12345") ?? url
     }
 
-    XCTAssertEqual(emitReceivedEvents.value.map(\.0), [.signedIn])
+    let events = await eventsTask.value.map(\.event)
+
+    XCTAssertEqual(events, [.initialSession, .signedIn])
   }
 
   func testSignInWithOAuthWithInvalidRedirecTo() async {
@@ -344,7 +244,7 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testGetLinkIdentityURL() async throws {
-    api.execute = { @Sendable _ in
+    let sut = makeSUT { _ in
       .stub(
         """
         {
@@ -354,9 +254,7 @@ final class AuthClientTests: XCTestCase {
       )
     }
 
-    sessionManager.session = { @Sendable _ in .validSession }
-    codeVerifierStorage = .live
-    let sut = makeSUT()
+    try storage.storeSession(.init(session: .validSession))
 
     let response = try await sut.getLinkIdentityURL(provider: .github)
 
@@ -369,23 +267,25 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
-  private func makeSUT() -> AuthClient {
+  private func makeSUT(
+    fetch: ((URLRequest) async throws -> Response)? = nil
+  ) -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["Apikey": "dummy.api.key"],
-      localStorage: InMemoryLocalStorage(),
-      logger: nil
+      localStorage: storage,
+      logger: nil,
+      fetch: { request in
+        guard let fetch else {
+          throw UnimplementedError()
+        }
+
+        let response = try await fetch(request)
+        return (response.data, response.response)
+      }
     )
 
-    let sut = AuthClient(
-      configuration: configuration,
-      sessionManager: sessionManager,
-      codeVerifierStorage: codeVerifierStorage,
-      api: api,
-      eventEmitter: eventEmitter,
-      sessionStorage: sessionStorage,
-      logger: nil
-    )
+    let sut = AuthClient(configuration: configuration)
 
     return sut
   }
@@ -395,6 +295,18 @@ extension Response {
   static func stub(_ body: String = "", code: Int = 200) -> Response {
     Response(
       data: body.data(using: .utf8)!,
+      response: HTTPURLResponse(
+        url: clientURL,
+        statusCode: code,
+        httpVersion: nil,
+        headerFields: nil
+      )!
+    )
+  }
+
+  static func stub(fromFileName fileName: String, code: Int = 200) -> Response {
+    Response(
+      data: json(named: fileName),
       response: HTTPURLResponse(
         url: clientURL,
         statusCode: code,

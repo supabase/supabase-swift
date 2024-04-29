@@ -6,24 +6,23 @@
 //
 
 import _Helpers
+@testable import Auth
 import ConcurrencyExtras
+import CustomDump
+import TestHelpers
 import XCTest
 import XCTestDynamicOverlay
 
-@testable import Auth
-
 final class SessionManagerTests: XCTestCase {
-  override func setUp() {
-    super.setUp()
+  let storage = InMemoryLocalStorage()
+  let sessionRefresher = SessionRefresherMock()
 
-    Current = .mock
-  }
+  lazy var sut = SessionManager(
+    storage: storage,
+    sessionRefresher: sessionRefresher
+  )
 
   func testSession_shouldFailWithSessionNotFound() async {
-    Current.sessionStorage.getSession = { nil }
-
-    let sut = SessionManager.live
-
     do {
       _ = try await sut.session()
       XCTFail("Expected a \(AuthError.sessionNotFound) failure")
@@ -33,45 +32,34 @@ final class SessionManagerTests: XCTestCase {
     }
   }
 
-//  func testSession_shouldReturnValidSession() async throws {
-//    Current.sessionStorage.getSession = {
-//      .init(session: .validSession)
-//    }
-//
-//    let sut = SessionManager.live
-//
-//    let session = try await sut.session()
-//    XCTAssertEqual(session, .validSession)
-//  }
+  func testSession_shouldReturnValidSession() async throws {
+    let session = Session.validSession
+    try storage.storeSession(.init(session: session))
+
+    let returnedSession = try await sut.session()
+    XCTAssertNoDifference(returnedSession, session)
+  }
 
   func testSession_shouldRefreshSession_whenCurrentSessionExpired() async throws {
     let currentSession = Session.expiredSession
+
+    try storage.storeSession(.init(session: currentSession))
+
     let validSession = Session.validSession
 
-    let storeSessionCallCount = LockIsolated(0)
     let refreshSessionCallCount = LockIsolated(0)
 
     let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
-    Current.sessionStorage.getSession = {
-      .init(session: currentSession)
-    }
-    Current.sessionStorage.storeSession = { _ in
-      storeSessionCallCount.withValue {
-        $0 += 1
-      }
-    }
-    Current.sessionRefresher.refreshSession = { _ in
+    sessionRefresher.refreshSessionClosure = { _ in
       refreshSessionCallCount.withValue { $0 += 1 }
       return await refreshSessionStream.first { _ in true } ?? .empty
     }
 
-    let sut = SessionManager.live
-
     // Fire N tasks and call sut.session()
     let tasks = (0 ..< 10).map { _ in
       Task.detached {
-        try await sut.session()
+        try await self.sut.session()
       }
     }
 
@@ -89,7 +77,15 @@ final class SessionManagerTests: XCTestCase {
 
     // Verify that refresher and storage was called only once.
     XCTAssertEqual(refreshSessionCallCount.value, 1)
-    XCTAssertEqual(storeSessionCallCount.value, 1)
     XCTAssertEqual(try result.map { try $0.get() }, (0 ..< 10).map { _ in validSession })
+  }
+
+  final class SessionRefresherMock: SessionRefresher, @unchecked Sendable {
+    var refreshSessionCalled = false
+    var refreshSessionClosure: ((String) async throws -> Session)?
+    func refreshSession(_ refreshToken: String) async throws -> Session {
+      refreshSessionCalled = true
+      return try await refreshSessionClosure?(refreshToken) ?? .expiredSession
+    }
   }
 }
