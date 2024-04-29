@@ -8,6 +8,10 @@
 import _Helpers
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 extension AuthClient {
   /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler = @Sendable (
