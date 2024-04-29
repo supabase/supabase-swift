@@ -50,7 +50,9 @@ public final class AuthClient: Sendable {
       ),
       sessionManager: SessionManager(
         storage: configuration.localStorage,
-        sessionRefresher: self
+        sessionRefresher: SessionRefresher { [weak self] in
+          try await self?.refreshSession(refreshToken: $0) ?? .empty
+        }
       ),
       eventEmitter: AuthStateChangeEventEmitter.shared,
       codeVerifierStorage: .live
@@ -1160,9 +1162,3 @@ extension AuthClient {
     }
   }
 #endif
-
-extension AuthClient: SessionRefresher {
-  func refreshSession(_ refreshToken: String) async throws -> Session {
-    try await refreshSession(refreshToken: refreshToken)
-  }
-}

@@ -1,17 +1,20 @@
 import _Helpers
 import Foundation
 
-protocol SessionRefresher: Sendable, AnyObject {
-  func refreshSession(_ refreshToken: String) async throws -> Session
+struct SessionRefresher: Sendable {
+  var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
 }
 
 actor SessionManager {
   private var task: Task<Session, any Error>?
 
   private let storage: any AuthLocalStorage
-  private unowned var sessionRefresher: any SessionRefresher
+  private let sessionRefresher: SessionRefresher
 
-  init(storage: any AuthLocalStorage, sessionRefresher: any SessionRefresher) {
+  init(
+    storage: any AuthLocalStorage,
+    sessionRefresher: SessionRefresher
+  ) {
     self.storage = storage
     self.sessionRefresher = sessionRefresher
   }

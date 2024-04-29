@@ -15,12 +15,8 @@ import XCTestDynamicOverlay
 
 final class SessionManagerTests: XCTestCase {
   let storage = InMemoryLocalStorage()
-  let sessionRefresher = SessionRefresherMock()
-
-  lazy var sut = SessionManager(
-    storage: storage,
-    sessionRefresher: sessionRefresher
-  )
+  var sessionRefresher = SessionRefresher(refreshSession: unimplemented("refreshSession"))
+  lazy var sut = SessionManager(storage: storage, sessionRefresher: sessionRefresher)
 
   func testSession_shouldFailWithSessionNotFound() async {
     do {
@@ -51,7 +47,7 @@ final class SessionManagerTests: XCTestCase {
 
     let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
-    sessionRefresher.refreshSessionClosure = { _ in
+    sessionRefresher.refreshSession = { _ in
       refreshSessionCallCount.withValue { $0 += 1 }
       return await refreshSessionStream.first { _ in true } ?? .empty
     }
@@ -78,14 +74,5 @@ final class SessionManagerTests: XCTestCase {
     // Verify that refresher and storage was called only once.
     XCTAssertEqual(refreshSessionCallCount.value, 1)
     XCTAssertEqual(try result.map { try $0.get() }, (0 ..< 10).map { _ in validSession })
-  }
-
-  final class SessionRefresherMock: SessionRefresher, @unchecked Sendable {
-    var refreshSessionCalled = false
-    var refreshSessionClosure: ((String) async throws -> Session)?
-    func refreshSession(_ refreshToken: String) async throws -> Session {
-      refreshSessionCalled = true
-      return try await refreshSessionClosure?(refreshToken) ?? .expiredSession
-    }
   }
 }
