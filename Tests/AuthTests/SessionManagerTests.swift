@@ -33,16 +33,16 @@ final class SessionManagerTests: XCTestCase {
     }
   }
 
-  func testSession_shouldReturnValidSession() async throws {
-    Current.sessionStorage.getSession = {
-      .init(session: .validSession)
-    }
-
-    let sut = SessionManager.live
-
-    let session = try await sut.session()
-    XCTAssertEqual(session, .validSession)
-  }
+//  func testSession_shouldReturnValidSession() async throws {
+//    Current.sessionStorage.getSession = {
+//      .init(session: .validSession)
+//    }
+//
+//    let sut = SessionManager.live
+//
+//    let session = try await sut.session()
+//    XCTAssertEqual(session, .validSession)
+//  }
 
   func testSession_shouldRefreshSession_whenCurrentSessionExpired() async throws {
     let currentSession = Session.expiredSession

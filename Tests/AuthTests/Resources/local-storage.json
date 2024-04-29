@@ -33,6 +33,7 @@
             "user_id" : "859F402D-B3DE-4105-A1B9-932836D9193B"
           }
         ],
+        "is_anonymous" : false,
         "phone" : "",
         "role" : "authenticated",
         "updated_at" : "2022-04-09T11:57:01Z",
