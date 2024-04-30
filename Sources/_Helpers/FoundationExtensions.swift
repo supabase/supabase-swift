@@ -5,6 +5,8 @@
 //  Created by Guilherme Souza on 23/04/24.
 //
 
+import Foundation
+
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 
@@ -27,5 +29,22 @@ extension Result {
     } else {
       nil
     }
+  }
+}
+
+extension URL {
+  package func appendingQueryItem(_ queryItem: URLQueryItem) -> URL {
+    appendingQueryItems([queryItem])
+  }
+
+  package func appendingQueryItems(_ queryItems: [URLQueryItem]) -> URL {
+    guard var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else {
+      return self
+    }
+
+    let currentQueryItems = components.queryItems ?? []
+    components.queryItems = currentQueryItems + queryItems
+
+    return components.url ?? self
   }
 }

@@ -8,7 +8,7 @@ import Foundation
 public class StorageApi: @unchecked Sendable {
   public let configuration: StorageClientConfiguration
 
-  private let http: HTTPClient
+  private let http: any HTTPClientType
 
   public init(configuration: StorageClientConfiguration) {
     var configuration = configuration
@@ -16,22 +16,25 @@ public class StorageApi: @unchecked Sendable {
       configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
     }
     self.configuration = configuration
-    http = HTTPClient(logger: configuration.logger, fetchHandler: configuration.session.fetch)
+
+    var interceptors: [any HTTPClientInterceptor] = []
+    if let logger = configuration.logger {
+      interceptors.append(LoggerInterceptor(logger: logger))
+    }
+
+    http = _HTTPClient(
+      fetch: configuration.session.fetch,
+      interceptors: interceptors
+    )
   }
 
   @discardableResult
-  func execute(_ request: Request) async throws -> Response {
-    try await execute(request.urlRequest(withBaseURL: configuration.url))
-  }
-
-  func execute(_ request: URLRequest) async throws -> Response {
+  func execute(_ request: HTTPRequest) async throws -> HTTPResponse {
     var request = request
+    request.headers.merge(with: HTTPHeaders(configuration.headers))
 
-    for (key, value) in configuration.headers {
-      request.setValue(value, forHTTPHeaderField: key)
-    }
+    let response = try await http.send(request)
 
-    let response = try await http.rawFetch(request)
     guard (200 ..< 300).contains(response.statusCode) else {
       if let error = try? configuration.decoder.decode(StorageError.self, from: response.data) {
         throw error
@@ -44,14 +47,13 @@ public class StorageApi: @unchecked Sendable {
   }
 }
 
-extension Request {
+extension HTTPRequest {
   init(
-    path: String,
-    method: Method,
-    query: [URLQueryItem] = [],
+    url: URL,
+    method: HTTPMethod,
     formData: FormData,
     options: FileOptions,
-    headers: [String: String] = [:]
+    headers: HTTPHeaders = [:]
   ) {
     var headers = headers
     if headers["Content-Type"] == nil {
@@ -61,9 +63,8 @@ extension Request {
       headers["Cache-Control"] = "max-age=\(options.cacheControl)"
     }
     self.init(
-      path: path,
+      url: url,
       method: method,
-      query: query,
       headers: headers,
       body: formData.data
     )

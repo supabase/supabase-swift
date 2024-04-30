@@ -73,7 +73,11 @@ package struct HTTPResponse: Sendable {
   }
 }
 
-extension HTTPResponse {}
+extension HTTPResponse {
+  package func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder = JSONDecoder()) throws -> T {
+    try decoder.decode(T.self, from: data)
+  }
+}
 
 package protocol HTTPClientInterceptor: Sendable {
   func intercept(
