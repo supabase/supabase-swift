@@ -164,7 +164,7 @@ public final class AuthClient: Sendable {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      eventEmitter.emit(.signedIn, session: session, token: nil)
+      eventEmitter.emit(.signedIn, session: session)
     }
 
     return response
@@ -264,7 +264,7 @@ public final class AuthClient: Sendable {
     )
 
     try await sessionManager.update(session)
-    eventEmitter.emit(.signedIn, session: session, token: nil)
+    eventEmitter.emit(.signedIn, session: session)
 
     return session
   }
@@ -445,7 +445,7 @@ public final class AuthClient: Sendable {
     codeVerifierStorage.set(nil)
 
     try await sessionManager.update(session)
-    eventEmitter.emit(.signedIn, session: session, token: nil)
+    eventEmitter.emit(.signedIn, session: session)
 
     return session
   }
@@ -642,10 +642,10 @@ public final class AuthClient: Sendable {
     )
 
     try await sessionManager.update(session)
-    eventEmitter.emit(.signedIn, session: session, token: nil)
+    eventEmitter.emit(.signedIn, session: session)
 
     if let type = params.first(where: { $0.name == "type" })?.value, type == "recovery" {
-      eventEmitter.emit(.passwordRecovery, session: session, token: nil)
+      eventEmitter.emit(.passwordRecovery, session: session)
     }
 
     return session
@@ -690,7 +690,7 @@ public final class AuthClient: Sendable {
     }
 
     try await sessionManager.update(session)
-    eventEmitter.emit(.signedIn, session: session, token: nil)
+    eventEmitter.emit(.signedIn, session: session)
     return session
   }
 
@@ -724,7 +724,7 @@ public final class AuthClient: Sendable {
 
     if scope != .others {
       await sessionManager.remove()
-      eventEmitter.emit(.signedOut, session: nil, token: nil)
+      eventEmitter.emit(.signedOut, session: nil)
     }
   }
 
@@ -804,7 +804,7 @@ public final class AuthClient: Sendable {
 
     if let session = response.session {
       try await sessionManager.update(session)
-      eventEmitter.emit(.signedIn, session: session, token: nil)
+      eventEmitter.emit(.signedIn, session: session)
     }
 
     return response
@@ -918,7 +918,7 @@ public final class AuthClient: Sendable {
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
     try await sessionManager.update(session)
-    eventEmitter.emit(.userUpdated, session: session, token: nil)
+    eventEmitter.emit(.userUpdated, session: session)
     return updatedUser
   }
 
@@ -1033,7 +1033,7 @@ public final class AuthClient: Sendable {
       .user.confirmedAt != nil
     {
       try await sessionManager.update(session)
-      eventEmitter.emit(.tokenRefreshed, session: session, token: nil)
+      eventEmitter.emit(.tokenRefreshed, session: session)
     }
 
     return session

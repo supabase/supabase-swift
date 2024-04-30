@@ -14,7 +14,7 @@ struct AuthStateChangeEventEmitter {
     }
   }
 
-  func emit(_ event: AuthChangeEvent, session: Session?, token: ObservationToken?) {
+  func emit(_ event: AuthChangeEvent, session: Session?, token: ObservationToken? = nil) {
     NotificationCenter.default.post(
       name: AuthClient.didChangeAuthStateNotification,
       object: nil,
