@@ -1,11 +1,15 @@
 //
-//  RequestRetrier.swift
+//  RetryRequestInterceptor.swift
 //
 //
 //  Created by Guilherme Souza on 23/04/24.
 //
 
 import Foundation
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 
 /// An HTTP client interceptor for retrying failed HTTP requests with exponential backoff.
 ///
