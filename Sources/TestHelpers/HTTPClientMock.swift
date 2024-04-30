@@ -15,9 +15,16 @@ package final class HTTPClientMock: HTTPClientType {
 
   private let mocks: LockIsolated < [@Sendable (HTTPRequest) async throws -> HTTPResponse?]> = .init([])
   private let _receivedRequests = LockIsolated<[HTTPRequest]>([])
+  private let _returnedResponses = LockIsolated<[Result<HTTPResponse, any Error>]>([])
 
+  /// Requests received by this client in order.
   package var receivedRequests: [HTTPRequest] {
     _receivedRequests.value
+  }
+
+  /// Responses returned by this client in order.
+  package var returnedResponses: [Result<HTTPResponse, any Error>] {
+    _returnedResponses.value
   }
 
   package init() {}
@@ -51,7 +58,15 @@ package final class HTTPClientMock: HTTPClientType {
 
     for mock in mocks.value {
       if let response = try await mock(request) {
+        _returnedResponses.withValue {
+          $0.append(.success(response))
+        }
         return response
+      } catch {
+        _returnedResponses.withValue {
+          $0.append(.failure(error))
+        }
+        throw error
       }
     }
 
