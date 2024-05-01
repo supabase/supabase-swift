@@ -9,6 +9,6 @@ func json(named name: String) -> Data {
 
 extension Decodable {
   init(fromMockNamed name: String) {
-    self = try! Current.configuration.decoder.decode(Self.self, from: json(named: name))
+    self = try! AuthClient.Configuration.jsonDecoder.decode(Self.self, from: json(named: name))
   }
 }

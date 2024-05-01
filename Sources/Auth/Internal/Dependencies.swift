@@ -4,14 +4,17 @@ import Foundation
 
 struct Dependencies: Sendable {
   var configuration: AuthClient.Configuration
-  var sessionManager: SessionManager
-  var api: APIClient
-  var eventEmitter: EventEmitter
-  var sessionStorage: SessionStorage
   var sessionRefresher: SessionRefresher
-  var codeVerifierStorage: CodeVerifierStorage
-  var currentDate: @Sendable () -> Date = { Date() }
-  var logger: (any SupabaseLogger)?
+  var sessionManager = SessionManager()
+  var api = APIClient()
+
+  var eventEmitter: AuthStateChangeEventEmitter = .shared
+  var date: @Sendable () -> Date = { Date() }
+  var codeVerifierStorage = CodeVerifierStorage.live
+
+  var encoder: JSONEncoder { configuration.encoder }
+  var decoder: JSONDecoder { configuration.decoder }
+  var logger: (any SupabaseLogger)? { configuration.logger }
 }
 
 private let _Current = LockIsolated<Dependencies?>(nil)
@@ -27,18 +30,5 @@ var Current: Dependencies {
     _Current.withValue { Current in
       Current = newValue
     }
-  }
-}
-
-@propertyWrapper
-struct Dependency<Value: Sendable>: Sendable {
-  var wrappedValue: Value {
-    Current[keyPath: keyPath.value]
-  }
-
-  let keyPath: UncheckedSendable<KeyPath<Dependencies, Value>>
-
-  init(_ keyPath: KeyPath<Dependencies, Value>) {
-    self.keyPath = UncheckedSendable(keyPath)
   }
 }

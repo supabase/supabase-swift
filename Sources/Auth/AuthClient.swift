@@ -1,4 +1,5 @@
 import _Helpers
+import ConcurrencyExtras
 import Foundation
 
 #if canImport(AuthenticationServices)
@@ -9,81 +10,13 @@ import Foundation
   import FoundationNetworking
 #endif
 
-public final class AuthClient: @unchecked Sendable {
-  /// FetchHandler is a type alias for asynchronous network request handling.
-  public typealias FetchHandler = @Sendable (
-    _ request: URLRequest
-  ) async throws -> (Data, URLResponse)
-
-  /// Configuration struct represents the client configuration.
-  public struct Configuration: Sendable {
-    public let url: URL
-    public var headers: [String: String]
-    public let flowType: AuthFlowType
-    public let redirectToURL: URL?
-    public let localStorage: any AuthLocalStorage
-    public let logger: (any SupabaseLogger)?
-    public let encoder: JSONEncoder
-    public let decoder: JSONDecoder
-    public let fetch: FetchHandler
-
-    /// Initializes a AuthClient Configuration with optional parameters.
-    ///
-    /// - Parameters:
-    ///   - url: The base URL of the Auth server.
-    ///   - headers: Custom headers to be included in requests.
-    ///   - flowType: The authentication flow type.
-    ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
-    ///   - localStorage: The storage mechanism for local data.
-    ///   - logger: The logger to use.
-    ///   - encoder: The JSON encoder to use for encoding requests.
-    ///   - decoder: The JSON decoder to use for decoding responses.
-    ///   - fetch: The asynchronous fetch handler for network requests.
-    public init(
-      url: URL,
-      headers: [String: String] = [:],
-      flowType: AuthFlowType = Configuration.defaultFlowType,
-      redirectToURL: URL? = nil,
-      localStorage: any AuthLocalStorage,
-      logger: (any SupabaseLogger)? = nil,
-      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
-    ) {
-      let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
-
-      self.url = url
-      self.headers = headers
-      self.flowType = flowType
-      self.redirectToURL = redirectToURL
-      self.localStorage = localStorage
-      self.logger = logger
-      self.encoder = encoder
-      self.decoder = decoder
-      self.fetch = fetch
-    }
-  }
-
-  @Dependency(\.configuration)
-  private var configuration: Configuration
-
-  @Dependency(\.api)
-  private var api: APIClient
-
-  @Dependency(\.eventEmitter)
-  private var eventEmitter: EventEmitter
-
-  @Dependency(\.sessionManager)
-  private var sessionManager: SessionManager
-
-  @Dependency(\.codeVerifierStorage)
-  private var codeVerifierStorage: CodeVerifierStorage
-
-  @Dependency(\.currentDate)
-  private var currentDate: @Sendable () -> Date
-
-  @Dependency(\.logger)
-  private var logger: (any SupabaseLogger)?
+public final class AuthClient: Sendable {
+  private var api: APIClient { Current.api }
+  private var configuration: AuthClient.Configuration { Current.configuration }
+  private var codeVerifierStorage: CodeVerifierStorage { Current.codeVerifierStorage }
+  private var date: @Sendable () -> Date { Current.date }
+  private var sessionManager: SessionManager { Current.sessionManager }
+  private var eventEmitter: AuthStateChangeEventEmitter { Current.eventEmitter }
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -95,101 +28,22 @@ public final class AuthClient: @unchecked Sendable {
   }
 
   /// Namespace for accessing multi-factor authentication API.
-  public let mfa: AuthMFA
-
+  public let mfa = AuthMFA()
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `service_role` key, be careful to never expose `service_role`
   /// key in the client.
-  public let admin: AuthAdmin
-
-  /// Initializes a AuthClient with optional parameters.
-  ///
-  /// - Parameters:
-  ///   - url: The base URL of the Auth server.
-  ///   - headers: Custom headers to be included in requests.
-  ///   - flowType: The authentication flow type..
-  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
-  ///   - localStorage: The storage mechanism for local data..
-  ///   - logger: The logger to use.
-  ///   - encoder: The JSON encoder to use for encoding requests.
-  ///   - decoder: The JSON decoder to use for decoding responses.
-  ///   - fetch: The asynchronous fetch handler for network requests.
-  public convenience init(
-    url: URL,
-    headers: [String: String] = [:],
-    flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-    redirectToURL: URL? = nil,
-    localStorage: any AuthLocalStorage,
-    logger: (any SupabaseLogger)? = nil,
-    encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
-  ) {
-    self.init(
-      configuration: Configuration(
-        url: url,
-        headers: headers,
-        flowType: flowType,
-        redirectToURL: redirectToURL,
-        localStorage: localStorage,
-        logger: logger,
-        encoder: encoder,
-        decoder: decoder,
-        fetch: fetch
-      )
-    )
-  }
+  public let admin = AuthAdmin()
 
   /// Initializes a AuthClient with a specific configuration.
   ///
   /// - Parameters:
   ///   - configuration: The client configuration.
-  public convenience init(configuration: Configuration) {
-    let api = APIClient.live(
-      configuration: configuration,
-      http: HTTPClient(
-        logger: configuration.logger,
-        fetchHandler: configuration.fetch
-      )
-    )
-
-    self.init(
-      configuration: configuration,
-      sessionManager: .live,
-      codeVerifierStorage: .live,
-      api: api,
-      eventEmitter: .live,
-      sessionStorage: .live,
-      logger: configuration.logger
-    )
-  }
-
-  /// This internal initializer is here only for easy injecting mock instances when testing.
-  init(
-    configuration: Configuration,
-    sessionManager: SessionManager,
-    codeVerifierStorage: CodeVerifierStorage,
-    api: APIClient,
-    eventEmitter: EventEmitter,
-    sessionStorage: SessionStorage,
-    logger: (any SupabaseLogger)?
-  ) {
-    mfa = AuthMFA()
-    admin = AuthAdmin()
-
+  public init(configuration: Configuration) {
     Current = Dependencies(
       configuration: configuration,
-      sessionManager: sessionManager,
-      api: api,
-      eventEmitter: eventEmitter,
-      sessionStorage: sessionStorage,
-      sessionRefresher: SessionRefresher(
-        refreshSession: { [weak self] in
-          try await self?.refreshSession(refreshToken: $0) ?? .empty
-        }
-      ),
-      codeVerifierStorage: codeVerifierStorage,
-      logger: logger
+      sessionRefresher: SessionRefresher { [weak self] in
+        try await self?.refreshSession(refreshToken: $0) ?? .empty
+      }
     )
   }
 
@@ -204,7 +58,7 @@ public final class AuthClient: @unchecked Sendable {
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
   ) async -> some AuthStateChangeListenerRegistration {
-    let token = eventEmitter.attachListener(listener)
+    let token = eventEmitter.attach(listener)
     await emitInitialSession(forToken: token)
     return token
   }
@@ -782,7 +636,7 @@ public final class AuthClient: @unchecked Sendable {
       accessToken: accessToken,
       tokenType: tokenType,
       expiresIn: expiresIn,
-      expiresAt: expiresAt ?? currentDate().addingTimeInterval(expiresIn).timeIntervalSince1970,
+      expiresAt: expiresAt ?? date().addingTimeInterval(expiresIn).timeIntervalSince1970,
       refreshToken: refreshToken,
       user: user
     )
@@ -808,7 +662,7 @@ public final class AuthClient: @unchecked Sendable {
   /// - Returns: A new valid session.
   @discardableResult
   public func setSession(accessToken: String, refreshToken: String) async throws -> Session {
-    let now = currentDate()
+    let now = date()
     var expiresAt = now
     var hasExpired = true
     var session: Session
@@ -1187,7 +1041,7 @@ public final class AuthClient: @unchecked Sendable {
 
   private func emitInitialSession(forToken token: ObservationToken) async {
     let session = try? await session
-    eventEmitter.emit(.initialSession, session, token)
+    eventEmitter.emit(.initialSession, session: session, token: token)
   }
 
   private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {

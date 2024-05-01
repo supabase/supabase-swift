@@ -18,13 +18,12 @@ import XCTest
 struct UnimplementedError: Error {}
 
 final class RequestsTests: XCTestCase {
-  var sessionManager: SessionManager!
+  var storage: InMemoryLocalStorage!
 
   override func setUp() {
     super.setUp()
 
-    sessionManager = .mock
-    sessionManager.remove = { @Sendable in }
+    storage = InMemoryLocalStorage()
   }
 
   func testSignUpWithEmailAndPassword() async {
@@ -156,10 +155,7 @@ final class RequestsTests: XCTestCase {
 
       let currentDate = Date()
 
-      Current.sessionManager = .live
-      Current.sessionStorage.storeSession = { _ in }
-      Current.codeVerifierStorage.get = { nil }
-      Current.currentDate = { currentDate }
+      Current.date = { currentDate }
 
       let url = URL(
         string:
@@ -182,8 +178,6 @@ final class RequestsTests: XCTestCase {
   func testSessionFromURLWithMissingComponent() async {
     let sut = makeSUT()
 
-    Current.codeVerifierStorage.get = { nil }
-
     let url = URL(
       string:
       "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
@@ -199,7 +193,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSetSessionWithAFutureExpirationDate() async throws {
-    sessionManager.session = { @Sendable _ in .validSession }
+    try storage.storeSession(.init(session: .validSession))
 
     let sut = makeSUT()
 
@@ -222,8 +216,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignOut() async {
-    sessionManager.session = { @Sendable _ in .validSession }
+  func testSignOut() async throws {
+    try storage.storeSession(.init(session: .validSession))
 
     let sut = makeSUT()
 
@@ -232,8 +226,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignOutWithLocalScope() async {
-    sessionManager.session = { @Sendable _ in .validSession }
+  func testSignOutWithLocalScope() async throws {
+    try storage.storeSession(.init(session: .validSession))
 
     let sut = makeSUT()
 
@@ -242,8 +236,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignOutWithOthersScope() async {
-    sessionManager.session = { @Sendable _ in .validSession }
+  func testSignOutWithOthersScope() async throws {
+    try storage.storeSession(.init(session: .validSession))
 
     let sut = makeSUT()
 
@@ -280,9 +274,9 @@ final class RequestsTests: XCTestCase {
   }
 
   func testUpdateUser() async throws {
-    sessionManager.session = { @Sendable _ in .validSession }
-
     let sut = makeSUT()
+
+    try storage.storeSession(.init(session: .validSession))
 
     await assert {
       try await sut.update(
@@ -342,20 +336,20 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testReauthenticate() async {
-    sessionManager.session = { @Sendable _ in .validSession }
-
+  func testReauthenticate() async throws {
     let sut = makeSUT()
+
+    try storage.storeSession(.init(session: .validSession))
 
     await assert {
       try await sut.reauthenticate()
     }
   }
 
-  func testUnlinkIdentity() async {
-    sessionManager.session = { @Sendable _ in .validSession }
-
+  func testUnlinkIdentity() async throws {
     let sut = makeSUT()
+
+    try storage.storeSession(.init(session: .validSession))
 
     await assert {
       try await sut.unlinkIdentity(
@@ -408,10 +402,10 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testGetLinkIdentityURL() async {
-    sessionManager.session = { @Sendable _ in .validSession }
-
+  func testGetLinkIdentityURL() async throws {
     let sut = makeSUT()
+
+    try storage.storeSession(.init(session: .validSession))
 
     await assert {
       _ = try await sut.getLinkIdentityURL(
@@ -447,7 +441,7 @@ final class RequestsTests: XCTestCase {
       url: clientURL,
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       flowType: flowType,
-      localStorage: InMemoryLocalStorage(),
+      localStorage: storage,
       logger: nil,
       encoder: encoder,
       fetch: { request in
@@ -465,20 +459,7 @@ final class RequestsTests: XCTestCase {
       }
     )
 
-    let api = APIClient.live(
-      configuration: configuration,
-      http: HTTPClient(logger: nil, fetchHandler: configuration.fetch)
-    )
-
-    return AuthClient(
-      configuration: configuration,
-      sessionManager: sessionManager,
-      codeVerifierStorage: .mock,
-      api: api,
-      eventEmitter: .live,
-      sessionStorage: .mock,
-      logger: nil
-    )
+    return AuthClient(configuration: configuration)
   }
 }
 

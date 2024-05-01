@@ -2,53 +2,28 @@ import _Helpers
 import ConcurrencyExtras
 import Foundation
 
-struct EventEmitter: Sendable {
-  var attachListener: @Sendable (
-    _ listener: @escaping AuthStateChangeListener
-  ) -> ObservationToken
+struct AuthStateChangeEventEmitter {
+  static let shared = AuthStateChangeEventEmitter(emitter: .init(initialEvent: nil, emitsLastEventWhenAttaching: false))
 
-  var emit: @Sendable (
-    _ event: AuthChangeEvent,
-    _ session: Session?,
-    _ token: ObservationToken?
-  ) -> Void
-}
+  let emitter: EventEmitter<(AuthChangeEvent, Session?)?>
 
-extension EventEmitter {
-  func emit(
-    _ event: AuthChangeEvent,
-    session: Session?
-  ) {
-    emit(event, session, nil)
+  func attach(_ listener: @escaping AuthStateChangeListener) -> ObservationToken {
+    emitter.attach { event in
+      guard let event else { return }
+      listener(event.0, event.1)
+    }
   }
-}
 
-extension EventEmitter {
-  static let live: EventEmitter = {
-    let emitter = _Helpers.EventEmitter<(AuthChangeEvent, Session?)?>(
-      initialEvent: nil,
-      emitsLastEventWhenAttaching: false
+  func emit(_ event: AuthChangeEvent, session: Session?, token: ObservationToken? = nil) {
+    NotificationCenter.default.post(
+      name: AuthClient.didChangeAuthStateNotification,
+      object: nil,
+      userInfo: [
+        AuthClient.authChangeEventInfoKey: event,
+        AuthClient.authChangeSessionInfoKey: session as Any,
+      ]
     )
 
-    return EventEmitter(
-      attachListener: { listener in
-        emitter.attach { event in
-          guard let event else { return }
-          listener(event.0, event.1)
-        }
-      },
-      emit: { event, session, token in
-        NotificationCenter.default.post(
-          name: AuthClient.didChangeAuthStateNotification,
-          object: nil,
-          userInfo: [
-            AuthClient.authChangeEventInfoKey: event,
-            AuthClient.authChangeSessionInfoKey: session as Any,
-          ]
-        )
-
-        emitter.emit((event, session), to: token)
-      }
-    )
-  }()
+    emitter.emit((event, session), to: token)
+  }
 }

@@ -1,0 +1,27 @@
+{
+  "access_token" : "eyJhbGciOiJIUzI1NiIsImtpZCI6ImpIaU1GZmtNTzRGdVROdXUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzExOTk0NzEzLCJpYXQiOjE3MTE5OTExMTMsImlzcyI6Imh0dHBzOi8vYWp5YWdzaHV6bnV2anFoampmdG8uc3VwYWJhc2UuY28vYXV0aC92MSIsInN1YiI6ImJiZmE5MjU0LWM1ZDEtNGNmZi1iYTc2LTU2YmYwM2IwNWEwMSIsImVtYWlsIjoiIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnt9LCJ1c2VyX21ldGFkYXRhIjp7fSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJhbm9ueW1vdXMiLCJ0aW1lc3RhbXAiOjE3MTE5OTExMTN9XSwic2Vzc2lvbl9pZCI6ImMyODlmYTcwLWIzYWUtNDI1Yi05MDQxLWUyZjVhNzBlZTcyYSIsImlzX2Fub255bW91cyI6dHJ1ZX0.whBzmyMv3-AQSaiY6Fi-v_G68Q8oULhB7axImj9qOdw",
+  "expires_at" : 1711994713,
+  "expires_in" : 3600,
+  "refresh_token" : "0xS9iJUWdXnWlCJtFiXk5A",
+  "token_type" : "bearer",
+  "user" : {
+    "app_metadata" : {
+
+    },
+    "aud" : "authenticated",
+    "created_at" : "2024-04-01T17:05:13.013312Z",
+    "email" : "",
+    "id" : "bbfa9254-c5d1-4cff-ba76-56bf03b05a01",
+    "identities" : [
+
+    ],
+    "is_anonymous" : true,
+    "last_sign_in_at" : "2024-04-01T17:05:13.018294975Z",
+    "phone" : "",
+    "role" : "authenticated",
+    "updated_at" : "2024-04-01T17:05:13.022041Z",
+    "user_metadata" : {
+
+    }
+  }
+}
