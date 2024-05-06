@@ -75,6 +75,7 @@ let package = Package(
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         "_Helpers",
         "Auth",
         "TestHelpers",
