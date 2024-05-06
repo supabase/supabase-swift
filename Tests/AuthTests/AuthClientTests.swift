@@ -299,7 +299,7 @@ final class AuthClientTests: XCTestCase {
   }
 
   private func makeSUT(
-    fetch: ((URLRequest) async throws -> Response)? = nil
+    fetch: ((URLRequest) async throws -> HTTPResponse)? = nil
   ) -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: clientURL,
@@ -312,7 +312,7 @@ final class AuthClientTests: XCTestCase {
         }
 
         let response = try await fetch(request)
-        return (response.data, response.response)
+        return (response.data, response.underlyingResponse)
       }
     )
 
@@ -322,9 +322,9 @@ final class AuthClientTests: XCTestCase {
   }
 }
 
-extension Response {
-  static func stub(_ body: String = "", code: Int = 200) -> Response {
-    Response(
+extension HTTPResponse {
+  static func stub(_ body: String = "", code: Int = 200) -> HTTPResponse {
+    HTTPResponse(
       data: body.data(using: .utf8)!,
       response: HTTPURLResponse(
         url: clientURL,
@@ -335,8 +335,8 @@ extension Response {
     )
   }
 
-  static func stub(fromFileName fileName: String, code: Int = 200) -> Response {
-    Response(
+  static func stub(fromFileName fileName: String, code: Int = 200) -> HTTPResponse {
+    HTTPResponse(
       data: json(named: fileName),
       response: HTTPURLResponse(
         url: clientURL,
