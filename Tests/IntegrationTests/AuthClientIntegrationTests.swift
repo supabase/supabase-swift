@@ -11,6 +11,10 @@ import CustomDump
 import TestHelpers
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class AuthClientIntegrationTests: XCTestCase {
   let authClient = AuthClient(
     configuration: AuthClient.Configuration(
