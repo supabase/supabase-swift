@@ -21,7 +21,7 @@ final class AuthClientTests: XCTestCase {
 
   var storage: InMemoryLocalStorage!
 
-  var http: HTTPClient!
+  var http: HTTPClientMock!
   var sut: AuthClient!
 
   override func invokeTest() {

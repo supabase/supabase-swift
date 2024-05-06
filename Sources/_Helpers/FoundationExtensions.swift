@@ -33,18 +33,26 @@ extension Result {
 }
 
 extension URL {
-  package func appendingQueryItem(_ queryItem: URLQueryItem) -> URL {
-    appendingQueryItems([queryItem])
-  }
+  package mutating func appendQueryItems(_ queryItems: [URLQueryItem]) {
+    guard !queryItems.isEmpty else {
+      return
+    }
 
-  package func appendingQueryItems(_ queryItems: [URLQueryItem]) -> URL {
     guard var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else {
-      return self
+      return
     }
 
     let currentQueryItems = components.queryItems ?? []
     components.queryItems = currentQueryItems + queryItems
 
-    return components.url ?? self
+    if let newURL = components.url {
+      self = newURL
+    }
+  }
+
+  package func appendingQueryItems(_ queryItems: [URLQueryItem]) -> URL {
+    var url = self
+    url.appendQueryItems(queryItems)
+    return url
   }
 }

@@ -60,6 +60,7 @@ public class StorageFileApi: StorageApi {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/\(bucketId)/\(path)"),
         method: method,
+        query: [],
         formData: form,
         options: options,
         headers: headers
@@ -326,9 +327,9 @@ public class StorageFileApi: StorageApi {
     return try await execute(
       HTTPRequest(
         url: configuration.url
-          .appendingPathComponent("\(renderPath)/\(bucketId)/\(path)")
-          .appendingQueryItems(queryItems),
-        method: .get
+          .appendingPathComponent("\(renderPath)/\(bucketId)/\(path)"),
+        method: .get,
+        query: queryItems
       )
     )
     .data
@@ -460,9 +461,9 @@ public class StorageFileApi: StorageApi {
     return try await execute(
       HTTPRequest(
         url: configuration.url
-          .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)")
-          .appendingQueryItem(URLQueryItem(name: "token", value: token)),
+          .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
         method: .put,
+        query: [URLQueryItem(name: "token", value: token)],
         formData: form,
         options: options,
         headers: headers

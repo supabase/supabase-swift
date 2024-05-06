@@ -10,10 +10,10 @@ import Foundation
 public class PostgrestBuilder: @unchecked Sendable {
   /// The configuration for the PostgREST client.
   let configuration: PostgrestClient.Configuration
-  let http: HTTPClient
+  let http: any HTTPClientType
 
   struct MutableState {
-    var request: Request
+    var request: HTTPRequest
 
     /// The options for fetching data from the PostgREST server.
     var fetchOptions: FetchOptions
@@ -23,10 +23,16 @@ public class PostgrestBuilder: @unchecked Sendable {
 
   init(
     configuration: PostgrestClient.Configuration,
-    request: Request
+    request: HTTPRequest
   ) {
     self.configuration = configuration
-    http = HTTPClient(logger: configuration.logger, fetchHandler: configuration.fetch)
+
+    var interceptors: [any HTTPClientInterceptor] = []
+    if let logger = configuration.logger {
+      interceptors.append(LoggerInterceptor(logger: logger))
+    }
+
+    http = _HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
 
     mutableState = LockIsolated(
       MutableState(
@@ -107,7 +113,7 @@ public class PostgrestBuilder: @unchecked Sendable {
       return $0.request
     }
 
-    let response = try await http.fetch(request, baseURL: configuration.url)
+    let response = try await http.send(request)
 
     guard 200 ..< 300 ~= response.statusCode else {
       if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
@@ -118,6 +124,6 @@ public class PostgrestBuilder: @unchecked Sendable {
     }
 
     let value = try decode(response.data)
-    return PostgrestResponse(data: response.data, response: response.response, value: value)
+    return PostgrestResponse(data: response.data, response: response.underlyingResponse, value: value)
   }
 }

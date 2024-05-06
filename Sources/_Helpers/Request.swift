@@ -4,7 +4,7 @@ import Foundation
   import FoundationNetworking
 #endif
 
-package struct HTTPClient: Sendable {
+package struct HTTPClientOld: Sendable {
   public typealias FetchHandler = @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
   let logger: (any SupabaseLogger)?

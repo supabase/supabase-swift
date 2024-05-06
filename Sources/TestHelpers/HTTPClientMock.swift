@@ -57,11 +57,13 @@ package final class HTTPClientMock: HTTPClientType {
     _receivedRequests.withValue { $0.append(request) }
 
     for mock in mocks.value {
-      if let response = try await mock(request) {
-        _returnedResponses.withValue {
-          $0.append(.success(response))
+      do {
+        if let response = try await mock(request) {
+          _returnedResponses.withValue {
+            $0.append(.success(response))
+          }
+          return response
         }
-        return response
       } catch {
         _returnedResponses.withValue {
           $0.append(.failure(error))

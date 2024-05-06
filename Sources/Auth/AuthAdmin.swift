@@ -9,6 +9,7 @@ import _Helpers
 import Foundation
 
 public struct AuthAdmin: Sendable {
+  var configuration: AuthClient.Configuration { Current.configuration }
   var api: APIClient { Current.api }
   var encoder: JSONEncoder { Current.encoder }
 
@@ -21,8 +22,8 @@ public struct AuthAdmin: Sendable {
   /// - Warning: Never expose your `service_role` key on the client.
   public func deleteUser(id: String, shouldSoftDelete: Bool = false) async throws {
     _ = try await api.execute(
-      Request(
-        path: "/admin/users/\(id)",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("admin/users/\(id)"),
         method: .delete,
         body: encoder.encode(
           DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)

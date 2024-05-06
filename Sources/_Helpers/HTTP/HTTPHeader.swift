@@ -23,7 +23,7 @@ package struct HTTPHeaders {
   }
 
   package mutating func update(_ field: HTTPHeader) {
-    if let index = fields.firstIndex(where: { $0.name == field.name }) {
+    if let index = fields.firstIndex(where: { $0.name.lowercased() == field.name.lowercased() }) {
       fields[index] = field
     } else {
       fields.append(field)
@@ -35,12 +35,12 @@ package struct HTTPHeaders {
   }
 
   package mutating func remove(name: String) {
-    fields.removeAll { $0.name == name.lowercased() }
+    fields.removeAll { $0.name.lowercased() == name.lowercased() }
   }
 
   package func value(for name: String) -> String? {
     fields
-      .firstIndex(where: { $0.name == name.lowercased() })
+      .firstIndex(where: { $0.name.lowercased() == name.lowercased() })
       .map { fields[$0].value }
   }
 
@@ -54,6 +54,15 @@ package struct HTTPHeaders {
       } else {
         remove(name: name)
       }
+    }
+  }
+
+  package subscript(_ name: String, default defaultValue: String) -> String {
+    get {
+      self[name] ?? defaultValue
+    }
+    set {
+      self[name] = newValue
     }
   }
 
@@ -129,7 +138,7 @@ package struct HTTPHeader: Sendable, Hashable {
   package let value: String
 
   package init(name: String, value: String) {
-    self.name = name.lowercased()
+    self.name = name
     self.value = value
   }
 }

@@ -51,6 +51,7 @@ extension HTTPRequest {
   init(
     url: URL,
     method: HTTPMethod,
+    query: [URLQueryItem],
     formData: FormData,
     options: FileOptions,
     headers: HTTPHeaders = [:]
@@ -65,6 +66,7 @@ extension HTTPRequest {
     self.init(
       url: url,
       method: method,
+      query: query,
       headers: headers,
       body: formData.data
     )
