@@ -712,8 +712,8 @@ public final class AuthClient: Sendable {
       )
     } catch {
       // ignore 404s since user might not exist anymore
-      // ignore 401s since an invalid or expired JWT should sign out the current session
-      let ignoredCodes = Set([404, 401])
+      // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.
+      let ignoredCodes = Set([404, 403, 401])
 
       if case let AuthError.api(apiError) = error, let code = apiError.code,
          !ignoredCodes.contains(code)
