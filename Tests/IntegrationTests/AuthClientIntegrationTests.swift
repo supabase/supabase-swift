@@ -11,6 +11,10 @@ import CustomDump
 import TestHelpers
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class AuthClientIntegrationTests: XCTestCase {
   let authClient = AuthClient(
     configuration: AuthClient.Configuration(
@@ -186,6 +190,23 @@ final class AuthClientIntegrationTests: XCTestCase {
   func testSignInAnonymous() async throws {
     try await XCTAssertAuthChangeEvents([.initialSession, .signedIn]) {
       try await authClient.signInAnonymously()
+    }
+  }
+
+  func testDeleteAccountAndSignOut() async throws {
+    let response = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+
+    let session = try XCTUnwrap(response.session)
+
+    var request = URLRequest(url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1/rpc/delete_user")!)
+    request.httpMethod = "POST"
+    request.setValue(DotEnv.SUPABASE_ANON_KEY, forHTTPHeaderField: "apikey")
+    request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+
+    _ = try await URLSession.shared.data(for: request)
+
+    try await XCTAssertAuthChangeEvents([.initialSession, .signedOut]) {
+      try await authClient.signOut()
     }
   }
 

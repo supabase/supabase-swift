@@ -179,6 +179,37 @@ final class AuthClientTests: XCTestCase {
     XCTAssertTrue(sessionRemoved)
   }
 
+  func testSignOutShouldRemoveSessionIf403Returned() async throws {
+    sut = makeSUT { _ in
+      throw AuthError.api(AuthError.APIError(code: 403))
+    }
+
+    let validSession = Session.validSession
+    try storage.storeSession(.init(session: validSession))
+
+    let eventsTask = Task {
+      await sut.authStateChanges.prefix(2).collect()
+    }
+
+    await Task.megaYield()
+
+    do {
+      try await sut.signOut()
+    } catch AuthError.api {
+    } catch {
+      XCTFail("Unexpected error: \(error)")
+    }
+
+    let events = await eventsTask.value.map(\.event)
+    let sessions = await eventsTask.value.map(\.session)
+
+    XCTAssertNoDifference(events, [.initialSession, .signedOut])
+    XCTAssertNoDifference(sessions, [validSession, nil])
+
+    let sessionRemoved = try storage.getSession() == nil
+    XCTAssertTrue(sessionRemoved)
+  }
+
   func testSignInAnonymously() async throws {
     let session = Session(fromMockNamed: "anonymous-sign-in-response")
 
