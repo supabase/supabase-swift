@@ -15,7 +15,7 @@ package protocol HTTPClientType: Sendable {
   func send(_ request: HTTPRequest) async throws -> HTTPResponse
 }
 
-package actor _HTTPClient: HTTPClientType {
+package actor HTTPClient: HTTPClientType {
   let fetch: @Sendable (URLRequest) async throws -> (Data, URLResponse)
   let interceptors: [any HTTPClientInterceptor]
 

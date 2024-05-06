@@ -1,7 +1,7 @@
 import _Helpers
 import Foundation
 
-extension _HTTPClient {
+extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
     var interceptors: [any HTTPClientInterceptor] = []
     if let logger = configuration.logger {

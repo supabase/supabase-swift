@@ -55,7 +55,7 @@ public final class FunctionsClient: Sendable {
       interceptors.append(LoggerInterceptor(logger: logger))
     }
 
-    let http = _HTTPClient(fetch: fetch, interceptors: interceptors)
+    let http = HTTPClient(fetch: fetch, interceptors: interceptors)
 
     self.init(url: url, headers: headers, region: region, http: http)
   }

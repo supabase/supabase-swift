@@ -32,7 +32,7 @@ public class PostgrestBuilder: @unchecked Sendable {
       interceptors.append(LoggerInterceptor(logger: logger))
     }
 
-    http = _HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
+    http = HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
 
     mutableState = LockIsolated(
       MutableState(

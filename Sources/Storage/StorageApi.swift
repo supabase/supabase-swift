@@ -22,7 +22,7 @@ public class StorageApi: @unchecked Sendable {
       interceptors.append(LoggerInterceptor(logger: logger))
     }
 
-    http = _HTTPClient(
+    http = HTTPClient(
       fetch: configuration.session.fetch,
       interceptors: interceptors
     )

@@ -235,7 +235,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       headers["X-Client-Info"] = "realtime-swift/\(version)"
     }
     self.headers = headers
-    http = _HTTPClient(fetch: { try await URLSession.shared.data(for: $0) }, interceptors: [])
+    http = HTTPClient(fetch: { try await URLSession.shared.data(for: $0) }, interceptors: [])
 
     let params = paramsClosure?()
     if let jwt = (params?["Authorization"] as? String)?.split(separator: " ").last {

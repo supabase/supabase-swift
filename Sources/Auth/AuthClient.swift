@@ -44,7 +44,7 @@ public final class AuthClient: Sendable {
       sessionRefresher: SessionRefresher { [weak self] in
         try await self?.refreshSession(refreshToken: $0) ?? .empty
       },
-      http: _HTTPClient(configuration: configuration)
+      http: HTTPClient(configuration: configuration)
     )
   }
 
