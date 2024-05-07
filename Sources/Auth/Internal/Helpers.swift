@@ -1,29 +1,30 @@
 import Foundation
 
-struct Params: Hashable {
-  var name: String
-  var value: String
-}
-
-func extractParams(from url: URL) -> [Params] {
+/// Extracts parameters encoded in the URL both in the query and fragment.
+func extractParams(from url: URL) -> [String: String] {
   guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-    return []
+    return [:]
   }
+
+  var result: [String: String] = [:]
 
   if let fragment = components.fragment {
-    return extractParams(from: fragment)
-  }
-
-  if let queryItems = components.queryItems {
-    return queryItems.map {
-      Params(name: $0.name, value: $0.value ?? "")
+    let items = extractParams(from: fragment)
+    for item in items {
+      result[item.name] = item.value
     }
   }
 
-  return []
+  if let items = components.queryItems {
+    for item in items {
+      result[item.name] = item.value
+    }
+  }
+
+  return result
 }
 
-func extractParams(from fragment: String) -> [Params] {
+private func extractParams(from fragment: String) -> [URLQueryItem] {
   let components =
     fragment
       .split(separator: "&")
@@ -33,7 +34,7 @@ func extractParams(from fragment: String) -> [Params] {
     components
       .compactMap {
         $0.count == 2
-          ? Params(name: String($0[0]), value: String($0[1]))
+          ? URLQueryItem(name: String($0[0]), value: String($0[1]))
           : nil
       }
 }

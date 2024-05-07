@@ -595,7 +595,7 @@ public final class AuthClient: Sendable {
     let params = extractParams(from: url)
 
     if isPKCEFlow(url: url) {
-      guard let code = params.first(where: { $0.name == "code" })?.value else {
+      guard let code = params["code"] else {
         throw AuthError.pkce(.codeVerifierNotFound)
       }
 
@@ -603,24 +603,22 @@ public final class AuthClient: Sendable {
       return session
     }
 
-    if let errorDescription = params.first(where: { $0.name == "error_description" })?.value {
+    if let errorDescription = params["error_description"] {
       throw AuthError.api(.init(errorDescription: errorDescription))
     }
 
     guard
-      let accessToken = params.first(where: { $0.name == "access_token" })?.value,
-      let expiresIn = params.first(where: { $0.name == "expires_in" }).map(\.value)
-      .flatMap(TimeInterval.init),
-      let refreshToken = params.first(where: { $0.name == "refresh_token" })?.value,
-      let tokenType = params.first(where: { $0.name == "token_type" })?.value
+      let accessToken = params["access_token"],
+      let expiresIn = params["expires_in"].flatMap(TimeInterval.init),
+      let refreshToken = params["refresh_token"],
+      let tokenType = params["token_type"]
     else {
       throw URLError(.badURL)
     }
 
-    let expiresAt = params.first(where: { $0.name == "expires_at" }).map(\.value)
-      .flatMap(TimeInterval.init)
-    let providerToken = params.first(where: { $0.name == "provider_token" })?.value
-    let providerRefreshToken = params.first(where: { $0.name == "provider_refresh_token" })?.value
+    let expiresAt = params["expires_at"].flatMap(TimeInterval.init)
+    let providerToken = params["provider_token"]
+    let providerRefreshToken = params["provider_refresh_token"]
 
     let user = try await api.execute(
       .init(
@@ -644,7 +642,7 @@ public final class AuthClient: Sendable {
     try await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
 
-    if let type = params.first(where: { $0.name == "type" })?.value, type == "recovery" {
+    if let type = params["type"], type == "recovery" {
       eventEmitter.emit(.passwordRecovery, session: session)
     }
 
@@ -1060,15 +1058,13 @@ public final class AuthClient: Sendable {
 
   private func isImplicitGrantFlow(url: URL) -> Bool {
     let fragments = extractParams(from: url)
-    return fragments.contains {
-      $0.name == "access_token" || $0.name == "error_description"
-    }
+    return fragments["access_token"] != nil || fragments["error_description"] != nil
   }
 
   private func isPKCEFlow(url: URL) -> Bool {
     let fragments = extractParams(from: url)
     let currentCodeVerifier = codeVerifierStorage.get()
-    return fragments.contains(where: { $0.name == "code" }) && currentCodeVerifier != nil
+    return fragments["code"] != nil && currentCodeVerifier != nil
   }
 
   private func getURLForProvider(
