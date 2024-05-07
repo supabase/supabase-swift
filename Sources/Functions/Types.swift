@@ -1,3 +1,4 @@
+import _Helpers
 import Foundation
 
 /// An error type representing various errors that can occur while invoking functions.
@@ -87,6 +88,16 @@ public struct FunctionInvokeOptions: Sendable {
     case put = "PUT"
     case patch = "PATCH"
     case delete = "DELETE"
+
+    var httpMethod: Request.Method {
+      switch self {
+      case .get: .get
+      case .post: .post
+      case .put: .put
+      case .patch: .patch
+      case .delete: .delete
+      }
+    }
   }
 }
 

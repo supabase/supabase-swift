@@ -131,7 +131,7 @@ public actor FunctionsClient {
   ) async throws -> Response {
     var request = Request(
       path: functionName,
-      method: .post,
+      method: invokeOptions.method?.httpMethod ?? .post,
       headers: invokeOptions.headers.merging(headers) { invoke, _ in invoke },
       body: invokeOptions.body
     )

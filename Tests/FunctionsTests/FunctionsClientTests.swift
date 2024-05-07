@@ -57,6 +57,23 @@ final class FunctionsClientTests: XCTestCase {
     )
   }
 
+  func testInvokeWithCustomMethod() async throws {
+    let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
+    let _request = ActorIsolated(URLRequest?.none)
+
+    let sut = FunctionsClient(url: self.url, headers: ["Apikey": apiKey]) { request in
+      await _request.setValue(request)
+      return (
+        Data(), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+      )
+    }
+
+    try await sut.invoke("hello_world", options: .init(method: .get))
+    let request = await _request.value
+
+    XCTAssertEqual(request?.httpMethod, "GET")
+  }
+
   func testInvokeWithRegionDefinedInClient() async {
     let sut = FunctionsClient(url: url, region: .caCentral1) {
       let region = $0.value(forHTTPHeaderField: "x-region")
