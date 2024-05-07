@@ -4,23 +4,6 @@ import Foundation
   import FoundationNetworking
 #endif
 
-func stringfy(_ data: Data?) -> String {
-  guard let data else {
-    return "<none>"
-  }
-
-  do {
-    let object = try JSONSerialization.jsonObject(with: data, options: [])
-    let prettyData = try JSONSerialization.data(
-      withJSONObject: object,
-      options: [.prettyPrinted, .sortedKeys]
-    )
-    return String(data: prettyData, encoding: .utf8) ?? "<failed>"
-  } catch {
-    return String(data: data, encoding: .utf8) ?? "<failed>"
-  }
-}
-
 extension CharacterSet {
   /// Creates a CharacterSet from RFC 3986 allowed characters.
   ///
