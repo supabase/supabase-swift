@@ -452,10 +452,12 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
     type: TextSearchType? = nil
   ) -> PostgrestFilterBuilder {
     let queryValue = query.queryValue
+    let configPart = config.map { "(\($0))" }
+
     mutableState.withValue {
       $0.request.query.append(
         URLQueryItem(
-          name: column, value: "\(type?.rawValue ?? "")fts\(config ?? "").\(queryValue)"
+          name: column, value: "\(type?.rawValue ?? "")fts\(configPart ?? "").\(queryValue)"
         )
       )
     }

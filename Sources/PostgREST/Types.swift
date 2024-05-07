@@ -32,6 +32,10 @@ public struct PostgrestResponse<T: Sendable>: Sendable {
     self.count = count
     self.value = value
   }
+
+  public func string(encoding: String.Encoding = .utf8) -> String? {
+    String(data: data, encoding: encoding)
+  }
 }
 
 /// Returns count as part of the response when specified.
