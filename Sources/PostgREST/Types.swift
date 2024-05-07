@@ -32,7 +32,8 @@ public struct PostgrestResponse<T: Sendable>: Sendable {
     self.count = count
     self.value = value
   }
-
+  
+  /// Returns the response converting the returned Data into Unicode characters using a given encoding.
   public func string(encoding: String.Encoding = .utf8) -> String? {
     String(data: data, encoding: encoding)
   }
