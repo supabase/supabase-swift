@@ -24,11 +24,6 @@ public class StorageFileApi: StorageApi {
     super.init(configuration: configuration)
   }
 
-  private struct UploadResponse: Decodable {
-    let Key: String
-    let Id: String
-  }
-
   private struct MoveResponse: Decodable {
     let message: String
   }
@@ -56,6 +51,11 @@ public class StorageFileApi: StorageApi {
     form.append(
       file: File(name: fileName, data: file, fileName: fileName, contentType: contentType)
     )
+
+    struct UploadResponse: Decodable {
+      let Key: String
+      let Id: String
+    }
 
     let response = try await execute(
       HTTPRequest(
@@ -134,7 +134,11 @@ public class StorageFileApi: StorageApi {
   ///   - to: The new file path, including the new file name. For example `folder/image-copy.png`.
   @discardableResult
   public func copy(from source: String, to destination: String) async throws -> String {
-    try await execute(
+    struct UploadResponse: Decodable {
+      let Key: String
+    }
+
+    return try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/copy"),
         method: .post,
@@ -400,15 +404,24 @@ public class StorageFileApi: StorageApi {
   ///
   /// - Note: Signed upload URLs can be used to upload files to the bucket without further
   /// authentication. They are valid for 2 hours.
-  public func createSignedUploadURL(path: String) async throws -> SignedUploadURL {
+  public func createSignedUploadURL(
+    path: String,
+    options: CreateSignedUploadURLOptions? = nil
+  ) async throws -> SignedUploadURL {
     struct Response: Decodable {
       let url: URL
+    }
+
+    var headers = HTTPHeaders()
+    if let upsert = options?.upsert, upsert {
+      headers["x-upsert"] = "true"
     }
 
     let response = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
-        method: .post
+        method: .post,
+        headers: headers
       )
     )
     .decoded(as: Response.self, decoder: configuration.decoder)
@@ -448,7 +461,7 @@ public class StorageFileApi: StorageApi {
     token: String,
     file: Data,
     options: FileOptions = FileOptions()
-  ) async throws -> String {
+  ) async throws -> SignedURLUploadResponse {
     let contentType = options.contentType
     var headers = HTTPHeaders([
       "x-upsert": "\(options.upsert)",
@@ -465,7 +478,11 @@ public class StorageFileApi: StorageApi {
       contentType: contentType
     ))
 
-    return try await execute(
+    struct UploadResponse: Decodable {
+      let Key: String
+    }
+
+    let fullPath = try await execute(
       HTTPRequest(
         url: configuration.url
           .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
@@ -478,6 +495,8 @@ public class StorageFileApi: StorageApi {
     )
     .decoded(as: UploadResponse.self, decoder: configuration.decoder)
     .Key
+
+    return SignedURLUploadResponse(path: path, fullPath: fullPath)
   }
 }
 

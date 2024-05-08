@@ -101,16 +101,128 @@ final class StorageFileIntegrationTests: XCTestCase {
     XCTAssertEqual(res.path, uploadPath)
   }
 
-  private func newBucket(prefix: String = "", isPublic: Bool = true) async throws -> String {
-    let bucketName = "\(!prefix.isEmpty ? prefix + "-" : "")bucket-\(UUID().uuidString)"
-    return try await findOrCreateBucket(name: bucketName, isPublic: isPublic)
+  func testUploadFileWithinFileSizeLimit() async throws {
+    bucketName = try await newBucket(prefix: "with-limit", options: BucketOptions(public: true, fileSizeLimit: "1mb"))
+
+    try await storage.from(bucketName).upload(path: uploadPath, file: file)
   }
 
-  private func findOrCreateBucket(name: String, isPublic: Bool = true) async throws -> String {
+  func testUploadFileThatExceedFileSizeLimit() async throws {
+    bucketName = try await newBucket(prefix: "with-limit", options: BucketOptions(public: true, fileSizeLimit: "1kb"))
+
+    do {
+      try await storage.from(bucketName).upload(path: uploadPath, file: file)
+      XCTFail("Unexpected success")
+    } catch {
+      assertInlineSnapshot(of: error, as: .dump) {
+        """
+        ▿ StorageError
+          ▿ error: Optional<String>
+            - some: "Payload too large"
+          - message: "The object exceeded the maximum allowed size"
+          ▿ statusCode: Optional<String>
+            - some: "413"
+
+        """
+      }
+    }
+  }
+
+  func testUploadFileWithValidMimeType() async throws {
+    bucketName = try await newBucket(prefix: "with-mimetype", options: BucketOptions(public: true, allowedMimeTypes: ["image/jpeg"]))
+
+    try await storage.from(bucketName).upload(
+      path: uploadPath,
+      file: file,
+      options: FileOptions(
+        contentType: "image/jpeg"
+      )
+    )
+  }
+
+  func testUploadFileWithInvalidMimeType() async throws {
+    bucketName = try await newBucket(prefix: "with-mimetype", options: BucketOptions(public: true, allowedMimeTypes: ["image/png"]))
+
+    do {
+      try await storage.from(bucketName).upload(
+        path: uploadPath,
+        file: file,
+        options: FileOptions(
+          contentType: "image/jpeg"
+        )
+      )
+      XCTFail("Unexpected success")
+    } catch {
+      assertInlineSnapshot(of: error, as: .dump) {
+        """
+        ▿ StorageError
+          ▿ error: Optional<String>
+            - some: "invalid_mime_type"
+          - message: "mime type image/jpeg is not supported"
+          ▿ statusCode: Optional<String>
+            - some: "415"
+
+        """
+      }
+    }
+  }
+
+  func testSignedURLForUpload() async throws {
+    let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
+    XCTAssertEqual(res.path, uploadPath)
+    XCTAssertTrue(
+      res.signedURL.absoluteString.contains("\(DotEnv.SUPABASE_URL)/storage/v1/object/upload/sign/\(bucketName)/\(uploadPath)")
+    )
+  }
+
+  func testCanUploadWithSignedURLForUpload() async throws {
+    let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
+
+    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(path: res.path, token: res.token, file: file)
+    XCTAssertEqual(uploadRes.path, uploadPath)
+  }
+
+  func testCanUploadOverwritingFilesWithSignedURL() async throws {
+    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+
+    let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath, options: CreateSignedUploadURLOptions(upsert: true))
+    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(path: res.path, token: res.token, file: file)
+    XCTAssertEqual(uploadRes.path, uploadPath)
+  }
+
+  func testCannotUploadToSignedURLTwice() async throws {
+    let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
+
+    try await storage.from(bucketName).uploadToSignedURL(path: res.path, token: res.token, file: file)
+
+    do {
+      try await storage.from(bucketName).uploadToSignedURL(path: res.path, token: res.token, file: file)
+      XCTFail("Unexpected success")
+    } catch {
+      assertInlineSnapshot(of: error, as: .dump) {
+        """
+        ▿ StorageError
+          ▿ error: Optional<String>
+            - some: "Duplicate"
+          - message: "The resource already exists"
+          ▿ statusCode: Optional<String>
+            - some: "409"
+
+        """
+      }
+    }
+  }
+
+  private func newBucket(prefix: String = "", options: BucketOptions = BucketOptions(public: true)) async throws -> String {
+    let bucketName = "\(!prefix.isEmpty ? prefix + "-" : "")bucket-\(UUID().uuidString)"
+    return try await findOrCreateBucket(name: bucketName, options: options)
+  }
+
+  private func findOrCreateBucket(name: String, options: BucketOptions = BucketOptions(public: true)) async throws -> String {
     do {
       _ = try await storage.getBucket(name)
     } catch {
-      try await storage.createBucket(name, options: .init(public: isPublic))
+      try await storage.createBucket(name, options: options)
     }
 
     return name

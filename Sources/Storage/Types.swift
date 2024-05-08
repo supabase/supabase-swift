@@ -98,3 +98,16 @@ public struct FileUploadResponse: Sendable {
   public let path: String
   public let fullPath: String
 }
+
+public struct SignedURLUploadResponse: Sendable {
+  public let path: String
+  public let fullPath: String
+}
+
+public struct CreateSignedUploadURLOptions: Sendable {
+  public var upsert: Bool
+
+  public init(upsert: Bool) {
+    self.upsert = upsert
+  }
+}

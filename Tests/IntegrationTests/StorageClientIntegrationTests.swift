@@ -24,7 +24,7 @@ final class StorageClientIntegrationTests: XCTestCase {
     let bucketName = "test-bucket"
 
     var buckets = try await storage.listBuckets()
-    XCTAssertEqual(buckets, [])
+    XCTAssertFalse(buckets.contains(where: { $0.name == bucketName }))
 
     try await storage.createBucket(bucketName, options: .init(public: true))
 
@@ -34,7 +34,7 @@ final class StorageClientIntegrationTests: XCTestCase {
     XCTAssertEqual(bucket.isPublic, true)
 
     buckets = try await storage.listBuckets()
-    XCTAssertEqual(buckets, [bucket])
+    XCTAssertTrue(buckets.contains { $0.id == bucket.id })
 
     try await storage.updateBucket(bucketName, options: BucketOptions(allowedMimeTypes: ["image/jpeg"]))
 
@@ -44,38 +44,25 @@ final class StorageClientIntegrationTests: XCTestCase {
     try await storage.deleteBucket(bucketName)
 
     buckets = try await storage.listBuckets()
-    XCTAssertEqual(buckets, [])
+    XCTAssertFalse(buckets.contains { $0.id == bucket.id })
   }
 
   func testGetBucketWithWrongId() async {
     do {
       _ = try await storage.getBucket("not-exist-id")
       XCTFail("Unexpected success")
-    } catch let error as StorageError {
-      assertInlineSnapshot(of: error, as: .description) {
+    } catch {
+      assertInlineSnapshot(of: error, as: .dump) {
         """
-        StorageError(statusCode: Optional("404"), message: "Bucket not found", error: Optional("Bucket not found"))
+        ▿ StorageError
+          ▿ error: Optional<String>
+            - some: "Bucket not found"
+          - message: "Bucket not found"
+          ▿ statusCode: Optional<String>
+            - some: "404"
+
         """
       }
-    } catch {
-      XCTFail("Unexpected error: \(error)")
     }
-  }
-
-  private func findOrCreateBucket(name: String, isPublic: Bool = true) async throws -> String {
-    do {
-      _ = try await storage.getBucket(name)
-    } catch {
-      try await storage.createBucket(name, options: .init(public: isPublic))
-    }
-
-    return name
-  }
-
-  private func uploadFileURL(_ fileName: String) -> URL {
-    URL(fileURLWithPath: #file)
-      .deletingLastPathComponent()
-      .appendingPathComponent("Fixtures/Upload")
-      .appendingPathComponent(fileName)
   }
 }
