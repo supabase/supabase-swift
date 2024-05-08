@@ -88,16 +88,6 @@ public struct FunctionInvokeOptions: Sendable {
     case put = "PUT"
     case patch = "PATCH"
     case delete = "DELETE"
-
-    var httpMethod: Request.Method {
-      switch self {
-      case .get: .get
-      case .post: .post
-      case .put: .put
-      case .patch: .patch
-      case .delete: .delete
-      }
-    }
   }
 
   var httpMethod: HTTPMethod? {

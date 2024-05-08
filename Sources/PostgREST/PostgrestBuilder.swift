@@ -120,7 +120,7 @@ public class PostgrestBuilder: @unchecked Sendable {
         throw error
       }
 
-      throw HTTPError(data: response.data, response: response.response)
+      throw HTTPError(data: response.data, response: response.underlyingResponse)
     }
 
     let value = try decode(response.data)

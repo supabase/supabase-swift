@@ -45,7 +45,7 @@ struct APIClient: Sendable {
         throw postgrestError
       }
 
-      throw HTTPError(data: response.data, response: response.response)
+      throw HTTPError(data: response.data, response: response.underlyingResponse)
     }
 
     return response

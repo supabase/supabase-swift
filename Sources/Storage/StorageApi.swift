@@ -40,7 +40,7 @@ public class StorageApi: @unchecked Sendable {
         throw error
       }
 
-      throw HTTPError(data: response.data, response: response.response)
+      throw HTTPError(data: response.data, response: response.underlyingResponse)
     }
 
     return response

@@ -58,6 +58,22 @@ final class FunctionsClientTests: XCTestCase {
     XCTAssertEqual(request?.headers["X-Client-Info"], "functions-swift/\(Functions.version)")
   }
 
+  func testInvokeWithCustomMethod() async throws {
+    let http = HTTPClientMock().any { _ in try .stub(body: Empty()) }
+
+    let sut = FunctionsClient(
+      url: self.url,
+      headers: ["Apikey": apiKey],
+      region: nil,
+      http: http
+    )
+
+    try await sut.invoke("hello-world", options: .init(method: .delete))
+
+    let request = http.receivedRequests.last
+    XCTAssertEqual(request?.method, .delete)
+  }
+
   func testInvokeWithRegionDefinedInClient() async throws {
     let http = HTTPClientMock()
       .any { _ in try .stub(body: Empty()) }
