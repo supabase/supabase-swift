@@ -12,6 +12,7 @@ define SECRETS
 enum DotEnv {
   static let SUPABASE_URL = "$(SUPABASE_URL)"
   static let SUPABASE_ANON_KEY = "$(SUPABASE_ANON_KEY)"
+  static let SUPABASE_SERVICE_ROLE_KEY = "$(SUPABASE_SERVICE_ROLE_KEY)"
 }
 endef
 

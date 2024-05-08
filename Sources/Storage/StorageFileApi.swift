@@ -26,6 +26,7 @@ public class StorageFileApi: StorageApi {
 
   private struct UploadResponse: Decodable {
     let Key: String
+    let Id: String
   }
 
   private struct MoveResponse: Decodable {
@@ -41,7 +42,7 @@ public class StorageFileApi: StorageApi {
     path: String,
     file: Data,
     options: FileOptions
-  ) async throws -> String {
+  ) async throws -> FileUploadResponse {
     let contentType = options.contentType
     var headers = HTTPHeaders([
       "x-upsert": "\(options.upsert)",
@@ -56,7 +57,7 @@ public class StorageFileApi: StorageApi {
       file: File(name: fileName, data: file, fileName: fileName, contentType: contentType)
     )
 
-    return try await execute(
+    let response = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/\(bucketId)/\(path)"),
         method: method,
@@ -66,7 +67,13 @@ public class StorageFileApi: StorageApi {
         headers: headers
       )
     )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder).Key
+    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
+
+    return FileUploadResponse(
+      id: response.Id,
+      path: path,
+      fullPath: response.Key
+    )
   }
 
   /// Uploads a file to an existing bucket.
@@ -80,7 +87,7 @@ public class StorageFileApi: StorageApi {
     path: String,
     file: Data,
     options: FileOptions = FileOptions()
-  ) async throws -> String {
+  ) async throws -> FileUploadResponse {
     try await uploadOrUpdate(method: .post, path: path, file: file, options: options)
   }
 
@@ -95,7 +102,7 @@ public class StorageFileApi: StorageApi {
     path: String,
     file: Data,
     options: FileOptions = FileOptions()
-  ) async throws -> String {
+  ) async throws -> FileUploadResponse {
     try await uploadOrUpdate(method: .put, path: path, file: file, options: options)
   }
 

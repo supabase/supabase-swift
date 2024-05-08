@@ -62,7 +62,7 @@ final class FunctionsClientTests: XCTestCase {
     let http = HTTPClientMock().any { _ in try .stub(body: Empty()) }
 
     let sut = FunctionsClient(
-      url: self.url,
+      url: url,
       headers: ["Apikey": apiKey],
       region: nil,
       http: http

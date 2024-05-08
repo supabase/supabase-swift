@@ -92,3 +92,9 @@ public struct SignedUploadURL: Sendable {
   public let path: String
   public let token: String
 }
+
+public struct FileUploadResponse: Sendable {
+  public let id: String
+  public let path: String
+  public let fullPath: String
+}
