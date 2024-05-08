@@ -134,11 +134,15 @@ public class StorageFileApi: StorageApi {
 
   /// Copies an existing file to a new path in the same bucket.
   /// - Parameters:
-  ///   - from: The original file path, including the current file name. For example
-  /// `folder/image.png`.
-  ///   - to: The new file path, including the new file name. For example `folder/image-copy.png`.
+  ///   - source: The original file path, including the current file name. For example `folder/image.png`.
+  ///   - destination: The new file path, including the new file name. For example `folder/image-copy.png`.
+  ///   - options: The destination options.
   @discardableResult
-  public func copy(from source: String, to destination: String) async throws -> String {
+  public func copy(
+    from source: String,
+    to destination: String,
+    options: DestinationOptions? = nil
+  ) async throws -> String {
     struct UploadResponse: Decodable {
       let Key: String
     }
@@ -152,6 +156,7 @@ public class StorageFileApi: StorageApi {
             "bucketId": bucketId,
             "sourceKey": source,
             "destinationKey": destination,
+            "destinationBucket": options?.destinationBucket
           ]
         )
       )

@@ -10,9 +10,9 @@ public struct TransformOptions: Encodable, Sendable {
   public init(
     width: Int? = nil,
     height: Int? = nil,
-    resize: String? = "cover",
+    resize: String? = nil,
     quality: Int? = 80,
-    format: String? = "origin"
+    format: String? = nil
   ) {
     self.width = width
     self.height = height
