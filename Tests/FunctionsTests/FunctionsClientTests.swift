@@ -1,6 +1,7 @@
 import _Helpers
 import ConcurrencyExtras
 @testable import Functions
+import TestHelpers
 import XCTest
 
 #if canImport(FoundationNetworking)
@@ -19,24 +20,27 @@ final class FunctionsClientTests: XCTestCase {
       headers: ["Apikey": apiKey],
       region: .saEast1
     )
-    let region = await client.region
-    XCTAssertEqual(region, "sa-east-1")
+    XCTAssertEqual(client.region, "sa-east-1")
 
-    let headers = await client.headers
-    XCTAssertEqual(headers["Apikey"], apiKey)
-    XCTAssertNotNil(headers["X-Client-Info"])
+    XCTAssertEqual(client.headers["Apikey"], apiKey)
+    XCTAssertNotNil(client.headers["X-Client-Info"])
   }
 
   func testInvoke() async throws {
     let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
-    let _request = ActorIsolated(URLRequest?.none)
 
-    let sut = FunctionsClient(url: self.url, headers: ["Apikey": apiKey]) { request in
-      await _request.setValue(request)
-      return (
-        Data(), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
-      )
-    }
+    let http = HTTPClientMock()
+      .when {
+        $0.url.pathComponents.contains("hello_world")
+      } return: { _ in
+        try .stub(body: Empty())
+      }
+    let sut = FunctionsClient(
+      url: self.url,
+      headers: ["Apikey": apiKey],
+      region: nil,
+      http: http
+    )
 
     let body = ["name": "Supabase"]
 
@@ -45,72 +49,87 @@ final class FunctionsClientTests: XCTestCase {
       options: .init(headers: ["X-Custom-Key": "value"], body: body)
     )
 
-    let request = await _request.value
+    let request = http.receivedRequests.last
 
     XCTAssertEqual(request?.url, url)
-    XCTAssertEqual(request?.httpMethod, "POST")
-    XCTAssertEqual(request?.value(forHTTPHeaderField: "Apikey"), apiKey)
-    XCTAssertEqual(request?.value(forHTTPHeaderField: "X-Custom-Key"), "value")
-    XCTAssertEqual(
-      request?.value(forHTTPHeaderField: "X-Client-Info"),
-      "functions-swift/\(Functions.version)"
-    )
+    XCTAssertEqual(request?.method, .post)
+    XCTAssertEqual(request?.headers["Apikey"], apiKey)
+    XCTAssertEqual(request?.headers["X-Custom-Key"], "value")
+    XCTAssertEqual(request?.headers["X-Client-Info"], "functions-swift/\(Functions.version)")
   }
 
   func testInvokeWithCustomMethod() async throws {
-    let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
-    let _request = ActorIsolated(URLRequest?.none)
+    let http = HTTPClientMock().any { _ in try .stub(body: Empty()) }
 
-    let sut = FunctionsClient(url: self.url, headers: ["Apikey": apiKey]) { request in
-      await _request.setValue(request)
-      return (
-        Data(), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
-      )
-    }
+    let sut = FunctionsClient(
+      url: self.url,
+      headers: ["Apikey": apiKey],
+      region: nil,
+      http: http
+    )
 
-    try await sut.invoke("hello_world", options: .init(method: .get))
-    let request = await _request.value
+    try await sut.invoke("hello-world", options: .init(method: .delete))
 
-    XCTAssertEqual(request?.httpMethod, "GET")
+    let request = http.receivedRequests.last
+    XCTAssertEqual(request?.method, .delete)
   }
 
-  func testInvokeWithRegionDefinedInClient() async {
-    let sut = FunctionsClient(url: url, region: .caCentral1) {
-      let region = $0.value(forHTTPHeaderField: "x-region")
-      XCTAssertEqual(region, "ca-central-1")
+  func testInvokeWithRegionDefinedInClient() async throws {
+    let http = HTTPClientMock()
+      .any { _ in try .stub(body: Empty()) }
 
-      throw CancellationError()
-    }
+    let sut = FunctionsClient(
+      url: url,
+      headers: [:],
+      region: FunctionRegion.caCentral1.rawValue,
+      http: http
+    )
 
-    let _ = try? await sut.invoke("hello-world")
+    try await sut.invoke("hello-world")
+
+    XCTAssertEqual(http.receivedRequests.last?.headers["x-region"], "ca-central-1")
   }
 
-  func testInvokeWithRegion() async {
-    let sut = FunctionsClient(url: url) {
-      let region = $0.value(forHTTPHeaderField: "x-region")
-      XCTAssertEqual(region, "ca-central-1")
+  func testInvokeWithRegion() async throws {
+    let http = HTTPClientMock()
+      .any { _ in try .stub(body: Empty()) }
 
-      throw CancellationError()
-    }
+    let sut = FunctionsClient(
+      url: url,
+      headers: [:],
+      region: nil,
+      http: http
+    )
 
-    let _ = try? await sut.invoke("hello-world", options: .init(region: .caCentral1))
+    try await sut.invoke("hello-world", options: .init(region: .caCentral1))
+
+    XCTAssertEqual(http.receivedRequests.last?.headers["x-region"], "ca-central-1")
   }
 
-  func testInvokeWithoutRegion() async {
-    let sut = FunctionsClient(url: url) {
-      let region = $0.value(forHTTPHeaderField: "x-region")
-      XCTAssertNil(region)
+  func testInvokeWithoutRegion() async throws {
+    let http = HTTPClientMock()
+      .any { _ in try .stub(body: Empty()) }
 
-      throw CancellationError()
-    }
+    let sut = FunctionsClient(
+      url: url,
+      headers: [:],
+      region: nil,
+      http: http
+    )
 
-    let _ = try? await sut.invoke("hello-world")
+    try await sut.invoke("hello-world")
+
+    XCTAssertNil(http.receivedRequests.last?.headers["x-region"])
   }
 
   func testInvoke_shouldThrow_URLError_badServerResponse() async {
-    let sut = FunctionsClient(url: url, headers: ["Apikey": apiKey]) { _ in
-      throw URLError(.badServerResponse)
-    }
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["Apikey": apiKey],
+      region: nil,
+      http: HTTPClientMock()
+        .any { _ in throw URLError(.badServerResponse) }
+    )
 
     do {
       try await sut.invoke("hello_world")
@@ -122,21 +141,18 @@ final class FunctionsClientTests: XCTestCase {
   }
 
   func testInvoke_shouldThrow_FunctionsError_httpError() async {
-    let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
-
-    let sut = FunctionsClient(url: self.url, headers: ["Apikey": apiKey]) { _ in
-      (
-        "error".data(using: .utf8)!,
-        HTTPURLResponse(url: url, statusCode: 300, httpVersion: nil, headerFields: nil)!
-      )
-    }
-
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["Apikey": apiKey],
+      region: nil,
+      http: HTTPClientMock()
+        .any { _ in try .stub(body: Empty(), statusCode: 300) }
+    )
     do {
       try await sut.invoke("hello_world")
       XCTFail("Invoke should fail.")
-    } catch let FunctionsError.httpError(code, data) {
+    } catch let FunctionsError.httpError(code, _) {
       XCTAssertEqual(code, 300)
-      XCTAssertEqual(data, "error".data(using: .utf8))
     } catch {
       XCTFail("Unexpected error thrown \(error)")
     }
@@ -145,14 +161,17 @@ final class FunctionsClientTests: XCTestCase {
   func testInvoke_shouldThrow_FunctionsError_relayError() async {
     let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
 
-    let sut = FunctionsClient(url: self.url, headers: ["Apikey": apiKey]) { _ in
-      (
-        Data(),
-        HTTPURLResponse(
-          url: url, statusCode: 200, httpVersion: nil, headerFields: ["x-relay-error": "true"]
-        )!
-      )
-    }
+    let sut = FunctionsClient(
+      url: self.url,
+      headers: ["Apikey": apiKey],
+      region: nil,
+      http: HTTPClientMock().any { _ in
+        try .stub(
+          body: Empty(),
+          headers: ["x-relay-error": "true"]
+        )
+      }
+    )
 
     do {
       try await sut.invoke("hello_world")
@@ -163,9 +182,30 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 
-  func test_setAuth() async {
-    await sut.setAuth(token: "access.token")
-    let headers = await sut.headers
-    XCTAssertEqual(headers["Authorization"], "Bearer access.token")
+  func test_setAuth() {
+    sut.setAuth(token: "access.token")
+    XCTAssertEqual(sut.headers["Authorization"], "Bearer access.token")
   }
 }
+
+extension HTTPResponse {
+  static func stub(
+    body: any Encodable,
+    statusCode: Int = 200,
+    headers: HTTPHeaders = .init()
+  ) throws -> HTTPResponse {
+    let data = try JSONEncoder().encode(body)
+    let response = HTTPURLResponse(
+      url: URL(string: "http://127.0.0.1")!,
+      statusCode: statusCode,
+      httpVersion: nil,
+      headerFields: headers.dictionary
+    )!
+    return HTTPResponse(
+      data: data,
+      response: response
+    )
+  }
+}
+
+struct Empty: Codable {}

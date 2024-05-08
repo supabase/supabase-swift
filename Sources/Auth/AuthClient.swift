@@ -43,7 +43,8 @@ public final class AuthClient: Sendable {
       configuration: configuration,
       sessionRefresher: SessionRefresher { [weak self] in
         try await self?.refreshSession(refreshToken: $0) ?? .empty
-      }
+      },
+      http: HTTPClient(configuration: configuration)
     )
   }
 
@@ -105,7 +106,7 @@ public final class AuthClient: Sendable {
 
     return try await _signUp(
       request: .init(
-        path: "/signup",
+        url: configuration.url.appendingPathComponent("signup"),
         method: .post,
         query: [
           (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
@@ -141,7 +142,7 @@ public final class AuthClient: Sendable {
   ) async throws -> AuthResponse {
     try await _signUp(
       request: .init(
-        path: "/signup",
+        url: configuration.url.appendingPathComponent("signup"),
         method: .post,
         body: configuration.encoder.encode(
           SignUpRequest(
@@ -155,7 +156,7 @@ public final class AuthClient: Sendable {
     )
   }
 
-  private func _signUp(request: Request) async throws -> AuthResponse {
+  private func _signUp(request: HTTPRequest) async throws -> AuthResponse {
     await sessionManager.remove()
     let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
@@ -179,7 +180,7 @@ public final class AuthClient: Sendable {
   ) async throws -> Session {
     try await _signIn(
       request: .init(
-        path: "/token",
+        url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "password")],
         body: configuration.encoder.encode(
@@ -202,7 +203,7 @@ public final class AuthClient: Sendable {
   ) async throws -> Session {
     try await _signIn(
       request: .init(
-        path: "/token",
+        url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "password")],
         body: configuration.encoder.encode(
@@ -222,7 +223,7 @@ public final class AuthClient: Sendable {
   public func signInWithIdToken(credentials: OpenIDConnectCredentials) async throws -> Session {
     try await _signIn(
       request: .init(
-        path: "/token",
+        url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "id_token")],
         body: configuration.encoder.encode(credentials)
@@ -242,8 +243,8 @@ public final class AuthClient: Sendable {
     captchaToken: String? = nil
   ) async throws -> Session {
     try await _signIn(
-      request: Request(
-        path: "/signup",
+      request: HTTPRequest(
+        url: configuration.url.appendingPathComponent("signup"),
         method: .post,
         body: configuration.encoder.encode(
           SignUpRequest(
@@ -255,7 +256,7 @@ public final class AuthClient: Sendable {
     )
   }
 
-  private func _signIn(request: Request) async throws -> Session {
+  private func _signIn(request: HTTPRequest) async throws -> Session {
     await sessionManager.remove()
 
     let session = try await api.execute(request).decoded(
@@ -293,7 +294,7 @@ public final class AuthClient: Sendable {
 
     _ = try await api.execute(
       .init(
-        path: "/otp",
+        url: configuration.url.appendingPathComponent("otp"),
         method: .post,
         query: [
           (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
@@ -336,7 +337,7 @@ public final class AuthClient: Sendable {
     await sessionManager.remove()
     _ = try await api.execute(
       .init(
-        path: "/otp",
+        url: configuration.url.appendingPathComponent("otp"),
         method: .post,
         body: configuration.encoder.encode(
           OTPParams(
@@ -368,8 +369,8 @@ public final class AuthClient: Sendable {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     return try await api.execute(
-      Request(
-        path: "/sso",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("sso"),
         method: .post,
         body: configuration.encoder.encode(
           SignInWithSSORequest(
@@ -403,8 +404,8 @@ public final class AuthClient: Sendable {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     return try await api.execute(
-      Request(
-        path: "/sso",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("sso"),
         method: .post,
         body: configuration.encoder.encode(
           SignInWithSSORequest(
@@ -429,7 +430,7 @@ public final class AuthClient: Sendable {
 
     let session: Session = try await api.execute(
       .init(
-        path: "/token",
+        url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "pkce")],
         body: configuration.encoder.encode(
@@ -622,7 +623,7 @@ public final class AuthClient: Sendable {
 
     let user = try await api.execute(
       .init(
-        path: "/user",
+        url: configuration.url.appendingPathComponent("user"),
         method: .get,
         headers: ["Authorization": "\(tokenType) \(accessToken)"]
       )
@@ -703,7 +704,7 @@ public final class AuthClient: Sendable {
 
       try await api.authorizedExecute(
         .init(
-          path: "/logout",
+          url: configuration.url.appendingPathComponent("logout"),
           method: .post,
           query: [URLQueryItem(name: "scope", value: scope.rawValue)]
         )
@@ -737,7 +738,7 @@ public final class AuthClient: Sendable {
   ) async throws -> AuthResponse {
     try await _verifyOTP(
       request: .init(
-        path: "/verify",
+        url: configuration.url.appendingPathComponent("verify"),
         method: .post,
         query: [
           (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
@@ -770,7 +771,7 @@ public final class AuthClient: Sendable {
   ) async throws -> AuthResponse {
     try await _verifyOTP(
       request: .init(
-        path: "/verify",
+        url: configuration.url.appendingPathComponent("verify"),
         method: .post,
         body: configuration.encoder.encode(
           VerifyOTPParams.mobile(
@@ -788,7 +789,7 @@ public final class AuthClient: Sendable {
   }
 
   private func _verifyOTP(
-    request: Request,
+    request: HTTPRequest,
     shouldRemoveSession: Bool
   ) async throws -> AuthResponse {
     if shouldRemoveSession {
@@ -823,8 +824,8 @@ public final class AuthClient: Sendable {
     }
 
     _ = try await api.execute(
-      Request(
-        path: "/resend",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("resend"),
         method: .post,
         query: [
           (emailRedirectTo ?? configuration.redirectToURL).map { URLQueryItem(
@@ -860,8 +861,8 @@ public final class AuthClient: Sendable {
     }
 
     return try await api.execute(
-      Request(
-        path: "/resend",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("resend"),
         method: .post,
         body: configuration.encoder.encode(
           ResendMobileParams(
@@ -878,7 +879,10 @@ public final class AuthClient: Sendable {
   /// Sends a re-authentication OTP to the user's email or phone number.
   public func reauthenticate() async throws {
     try await api.authorizedExecute(
-      Request(path: "/reauthenticate", method: .get)
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("reauthenticate"),
+        method: .get
+      )
     )
   }
 
@@ -889,7 +893,7 @@ public final class AuthClient: Sendable {
   /// Should be used only when you require the most current user data. For faster results,
   /// session.user is recommended.
   public func user(jwt: String? = nil) async throws -> User {
-    var request = Request(path: "/user", method: .get)
+    var request = HTTPRequest(url: configuration.url.appendingPathComponent("user"), method: .get)
 
     if let jwt {
       request.headers["Authorization"] = "Bearer \(jwt)"
@@ -912,7 +916,11 @@ public final class AuthClient: Sendable {
 
     var session = try await sessionManager.session()
     let updatedUser = try await api.authorizedExecute(
-      .init(path: "/user", method: .put, body: configuration.encoder.encode(user))
+      .init(
+        url: configuration.url.appendingPathComponent("user"),
+        method: .put,
+        body: configuration.encoder.encode(user)
+      )
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
     try await sessionManager.update(session)
@@ -954,7 +962,7 @@ public final class AuthClient: Sendable {
     }
 
     let response = try await api.authorizedExecute(
-      Request(
+      HTTPRequest(
         url: url,
         method: .get
       )
@@ -968,8 +976,8 @@ public final class AuthClient: Sendable {
   /// with that identity once it's unlinked.
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
     try await api.authorizedExecute(
-      Request(
-        path: "/user/identities/\(identity.identityId)",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("user/identities/\(identity.identityId)"),
         method: .delete
       )
     )
@@ -985,7 +993,7 @@ public final class AuthClient: Sendable {
 
     _ = try await api.execute(
       .init(
-        path: "/recover",
+        url: configuration.url.appendingPathComponent("recover"),
         method: .post,
         query: [
           (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
@@ -1019,7 +1027,7 @@ public final class AuthClient: Sendable {
 
     let session = try await api.execute(
       .init(
-        path: "/token",
+        url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "refresh_token")],
         body: configuration.encoder.encode(credentials)

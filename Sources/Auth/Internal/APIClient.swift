@@ -3,7 +3,12 @@ import Foundation
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
-    self.init(logger: configuration.logger, fetchHandler: configuration.fetch)
+    var interceptors: [any HTTPClientInterceptor] = []
+    if let logger = configuration.logger {
+      interceptors.append(LoggerInterceptor(logger: logger))
+    }
+
+    self.init(fetch: configuration.fetch, interceptors: interceptors)
   }
 }
 
@@ -12,15 +17,15 @@ struct APIClient: Sendable {
     Current.configuration
   }
 
-  var http: HTTPClient {
-    HTTPClient(configuration: configuration)
+  var http: any HTTPClientType {
+    Current.http
   }
 
-  func execute(_ request: Request) async throws -> Response {
+  func execute(_ request: HTTPRequest) async throws -> HTTPResponse {
     var request = request
-    request.headers.merge(configuration.headers) { r, _ in r }
+    request.headers.merge(with: HTTPHeaders(configuration.headers))
 
-    let response = try await http.fetch(request, baseURL: configuration.url)
+    let response = try await http.send(request)
 
     guard (200 ..< 300).contains(response.statusCode) else {
       if let apiError = try? configuration.decoder.decode(
@@ -40,14 +45,14 @@ struct APIClient: Sendable {
         throw postgrestError
       }
 
-      throw HTTPError(data: response.data, response: response.response)
+      throw HTTPError(data: response.data, response: response.underlyingResponse)
     }
 
     return response
   }
 
   @discardableResult
-  func authorizedExecute(_ request: Request) async throws -> Response {
+  func authorizedExecute(_ request: HTTPRequest) async throws -> HTTPResponse {
     var sessionManager: SessionManager {
       Current.sessionManager
     }

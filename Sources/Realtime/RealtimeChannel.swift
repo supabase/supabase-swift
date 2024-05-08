@@ -749,14 +749,14 @@ public class RealtimeChannel {
       ]
 
       do {
-        let request = try Request(
-          path: "",
+        let request = try HTTPRequest(
+          url: broadcastEndpointURL,
           method: .post,
-          headers: headers.mapValues { "\($0)" },
+          headers: HTTPHeaders(headers.mapValues { "\($0)" }),
           body: JSONSerialization.data(withJSONObject: body)
         )
 
-        let response = try await socket?.http.fetch(request, baseURL: broadcastEndpointURL)
+        let response = try await socket?.http.send(request)
         guard let response, 200 ..< 300 ~= response.statusCode else {
           return .error
         }

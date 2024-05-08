@@ -115,7 +115,11 @@ public final class PostgrestClient: Sendable {
   public func from(_ table: String) -> PostgrestQueryBuilder {
     PostgrestQueryBuilder(
       configuration: configuration,
-      request: .init(path: table, method: .get, headers: configuration.headers)
+      request: .init(
+        url: configuration.url.appendingPathComponent(table),
+        method: .get,
+        headers: HTTPHeaders(configuration.headers)
+      )
     )
   }
 
@@ -131,7 +135,11 @@ public final class PostgrestClient: Sendable {
   ) throws -> PostgrestFilterBuilder {
     try PostgrestRpcBuilder(
       configuration: configuration,
-      request: Request(path: "/rpc/\(fn)", method: .post, headers: configuration.headers)
+      request: HTTPRequest(
+        url: configuration.url.appendingPathComponent("rpc/\(fn)"),
+        method: .post,
+        headers: HTTPHeaders(configuration.headers)
+      )
     ).rpc(params: params, count: count)
   }
 

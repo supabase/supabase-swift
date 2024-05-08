@@ -1,5 +1,6 @@
 import _Helpers
-@preconcurrency import Foundation
+import ConcurrencyExtras
+import Foundation
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -8,7 +9,7 @@ import _Helpers
 let version = _Helpers.version
 
 /// An actor representing a client for invoking functions.
-public actor FunctionsClient {
+public final class FunctionsClient: Sendable {
   /// Fetch handler used to make requests.
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
     Data, URLResponse
@@ -16,36 +17,21 @@ public actor FunctionsClient {
 
   /// The base URL for the functions.
   let url: URL
-  /// Headers to be included in the requests.
-  var headers: [String: String]
+
   /// The Region to invoke the functions in.
   let region: String?
 
-  private let http: HTTPClient
+  private let http: any HTTPClientType
 
-  /// Initializes a new instance of `FunctionsClient`.
-  ///
-  /// - Parameters:
-  ///   - url: The base URL for the functions.
-  ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
-  ///   - region: The Region to invoke the functions in.
-  ///   - logger: SupabaseLogger instance to use.
-  ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  @_disfavoredOverload
-  public init(
-    url: URL,
-    headers: [String: String] = [:],
-    region: String? = nil,
-    logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
-  ) {
-    self.url = url
-    self.headers = headers
-    if headers["X-Client-Info"] == nil {
-      self.headers["X-Client-Info"] = "functions-swift/\(version)"
-    }
-    self.region = region
-    http = HTTPClient(logger: logger, fetchHandler: fetch)
+  struct MutableState {
+    /// Headers to be included in the requests.
+    var headers = HTTPHeaders()
+  }
+
+  private let mutableState = LockIsolated(MutableState())
+
+  var headers: HTTPHeaders {
+    mutableState.headers
   }
 
   /// Initializes a new instance of `FunctionsClient`.
@@ -56,7 +42,51 @@ public actor FunctionsClient {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  public init(
+  @_disfavoredOverload
+  public convenience init(
+    url: URL,
+    headers: [String: String] = [:],
+    region: String? = nil,
+    logger: (any SupabaseLogger)? = nil,
+    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+  ) {
+    var interceptors: [any HTTPClientInterceptor] = []
+    if let logger {
+      interceptors.append(LoggerInterceptor(logger: logger))
+    }
+
+    let http = HTTPClient(fetch: fetch, interceptors: interceptors)
+
+    self.init(url: url, headers: headers, region: region, http: http)
+  }
+
+  init(
+    url: URL,
+    headers: [String: String],
+    region: String?,
+    http: any HTTPClientType
+  ) {
+    self.url = url
+    self.region = region
+    self.http = http
+
+    mutableState.withValue {
+      $0.headers = HTTPHeaders(headers)
+      if $0.headers["X-Client-Info"] == nil {
+        $0.headers["X-Client-Info"] = "functions-swift/\(version)"
+      }
+    }
+  }
+
+  /// Initializes a new instance of `FunctionsClient`.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL for the functions.
+  ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
+  ///   - region: The Region to invoke the functions in.
+  ///   - logger: SupabaseLogger instance to use.
+  ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
+  public convenience init(
     url: URL,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
@@ -70,10 +100,12 @@ public actor FunctionsClient {
   ///
   /// - Parameter token: The new JWT token sent in the authorization header.
   public func setAuth(token: String?) {
-    if let token {
-      headers["Authorization"] = "Bearer \(token)"
-    } else {
-      headers["Authorization"] = nil
+    mutableState.withValue {
+      if let token {
+        $0.headers["Authorization"] = "Bearer \(token)"
+      } else {
+        $0.headers["Authorization"] = nil
+      }
     }
   }
 
@@ -93,7 +125,7 @@ public actor FunctionsClient {
     let response = try await rawInvoke(
       functionName: functionName, invokeOptions: options
     )
-    return try decode(response.data, response.response)
+    return try decode(response.data, response.underlyingResponse)
   }
 
   /// Invokes a function and decodes the response as a specific type.
@@ -128,11 +160,11 @@ public actor FunctionsClient {
   private func rawInvoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) async throws -> Response {
-    var request = Request(
-      path: functionName,
-      method: invokeOptions.method?.httpMethod ?? .post,
-      headers: invokeOptions.headers.merging(headers) { invoke, _ in invoke },
+  ) async throws -> HTTPResponse {
+    var request = HTTPRequest(
+      url: url.appendingPathComponent(functionName),
+      method: invokeOptions.httpMethod ?? .post,
+      headers: mutableState.headers.merged(with: invokeOptions.headers),
       body: invokeOptions.body
     )
 
@@ -140,13 +172,13 @@ public actor FunctionsClient {
       request.headers["x-region"] = region
     }
 
-    let response = try await http.fetch(request, baseURL: url)
+    let response = try await http.send(request)
 
     guard 200 ..< 300 ~= response.statusCode else {
       throw FunctionsError.httpError(code: response.statusCode, data: response.data)
     }
 
-    let isRelayError = response.response.value(forHTTPHeaderField: "x-relay-error") == "true"
+    let isRelayError = response.headers["x-relay-error"] == "true"
     if isRelayError {
       throw FunctionsError.relayError
     }
@@ -176,7 +208,7 @@ public actor FunctionsClient {
 
     let url = url.appendingPathComponent(functionName)
     var urlRequest = URLRequest(url: url)
-    urlRequest.allHTTPHeaderFields = invokeOptions.headers.merging(headers) { invoke, _ in invoke }
+    urlRequest.allHTTPHeaderFields = mutableState.headers.merged(with: invokeOptions.headers).dictionary
     urlRequest.httpMethod = (invokeOptions.method ?? .post).rawValue
     urlRequest.httpBody = invokeOptions.body
 

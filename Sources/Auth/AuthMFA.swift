@@ -3,6 +3,7 @@ import Foundation
 
 /// Contains the full multi-factor authentication API.
 public struct AuthMFA: Sendable {
+  var configuration: AuthClient.Configuration { Current.configuration }
   var api: APIClient { Current.api }
   var encoder: JSONEncoder { Current.encoder }
   var decoder: JSONDecoder { Current.decoder }
@@ -22,8 +23,9 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response after enrolling the factor.
   public func enroll(params: MFAEnrollParams) async throws -> AuthMFAEnrollResponse {
     try await api.authorizedExecute(
-      Request(
-        path: "/factors", method: .post,
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("factors"),
+        method: .post,
         body: encoder.encode(params)
       )
     )
@@ -36,7 +38,10 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response with the challenge information.
   public func challenge(params: MFAChallengeParams) async throws -> AuthMFAChallengeResponse {
     try await api.authorizedExecute(
-      Request(path: "/factors/\(params.factorId)/challenge", method: .post)
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
+        method: .post
+      )
     )
     .decoded(decoder: decoder)
   }
@@ -48,8 +53,9 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response after verifying the factor.
   public func verify(params: MFAVerifyParams) async throws -> AuthMFAVerifyResponse {
     let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
-      Request(
-        path: "/factors/\(params.factorId)/verify", method: .post,
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
+        method: .post,
         body: encoder.encode(params)
       )
     ).decoded(decoder: decoder)
@@ -69,7 +75,10 @@ public struct AuthMFA: Sendable {
   @discardableResult
   public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
     try await api.authorizedExecute(
-      Request(path: "/factors/\(params.factorId)", method: .delete)
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)"),
+        method: .delete
+      )
     )
     .decoded(decoder: decoder)
   }

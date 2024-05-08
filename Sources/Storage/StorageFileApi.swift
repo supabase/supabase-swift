@@ -37,15 +37,15 @@ public class StorageFileApi: StorageApi {
   }
 
   func uploadOrUpdate(
-    method: Request.Method,
+    method: HTTPMethod,
     path: String,
     file: Data,
     options: FileOptions
   ) async throws -> String {
     let contentType = options.contentType
-    var headers = [
+    var headers = HTTPHeaders([
       "x-upsert": "\(options.upsert)",
-    ]
+    ])
 
     headers["duplex"] = options.duplex
 
@@ -57,9 +57,10 @@ public class StorageFileApi: StorageApi {
     )
 
     return try await execute(
-      Request(
-        path: "/object/\(bucketId)/\(path)",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/\(bucketId)/\(path)"),
         method: method,
+        query: [],
         formData: form,
         options: options,
         headers: headers
@@ -105,8 +106,8 @@ public class StorageFileApi: StorageApi {
   ///   - to: The new file path, including the new file name. For example `folder/image-copy.png`.
   public func move(from source: String, to destination: String) async throws {
     try await execute(
-      Request(
-        path: "/object/move",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/move"),
         method: .post,
         body: configuration.encoder.encode(
           [
@@ -127,8 +128,8 @@ public class StorageFileApi: StorageApi {
   @discardableResult
   public func copy(from source: String, to destination: String) async throws -> String {
     try await execute(
-      Request(
-        path: "/object/copy",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/copy"),
         method: .post,
         body: configuration.encoder.encode(
           [
@@ -166,8 +167,8 @@ public class StorageFileApi: StorageApi {
     let encoder = JSONEncoder()
 
     let response = try await execute(
-      Request(
-        path: "/object/sign/\(bucketId)/\(path)",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/sign/\(bucketId)/\(path)"),
         method: .post,
         body: encoder.encode(
           Body(expiresIn: expiresIn, transform: transform)
@@ -222,8 +223,8 @@ public class StorageFileApi: StorageApi {
     let encoder = JSONEncoder()
 
     let response = try await execute(
-      Request(
-        path: "/object/sign/\(bucketId)",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/sign/\(bucketId)"),
         method: .post,
         body: encoder.encode(
           Params(expiresIn: expiresIn, paths: paths)
@@ -281,8 +282,8 @@ public class StorageFileApi: StorageApi {
   /// [`folder/image.png`].
   public func remove(paths: [String]) async throws -> [FileObject] {
     try await execute(
-      Request(
-        path: "/object/\(bucketId)",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/\(bucketId)"),
         method: .delete,
         body: configuration.encoder.encode(["prefixes": paths])
       )
@@ -302,8 +303,8 @@ public class StorageFileApi: StorageApi {
     options.prefix = path ?? ""
 
     return try await execute(
-      Request(
-        path: "/object/list/\(bucketId)",
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/list/\(bucketId)"),
         method: .post,
         body: configuration.encoder.encode(options)
       )
@@ -324,7 +325,12 @@ public class StorageFileApi: StorageApi {
     let renderPath = options != nil ? "render/image/authenticated" : "object"
 
     return try await execute(
-      Request(path: "/\(renderPath)/\(bucketId)/\(path)", method: .get, query: queryItems)
+      HTTPRequest(
+        url: configuration.url
+          .appendingPathComponent("\(renderPath)/\(bucketId)/\(path)"),
+        method: .get,
+        query: queryItems
+      )
     )
     .data
   }
@@ -393,7 +399,10 @@ public class StorageFileApi: StorageApi {
     }
 
     let response = try await execute(
-      Request(path: "/object/upload/sign/\(bucketId)/\(path)", method: .post)
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
+        method: .post
+      )
     )
     .decoded(as: Response.self, decoder: configuration.decoder)
 
@@ -434,9 +443,9 @@ public class StorageFileApi: StorageApi {
     options: FileOptions = FileOptions()
   ) async throws -> String {
     let contentType = options.contentType
-    var headers = [
+    var headers = HTTPHeaders([
       "x-upsert": "\(options.upsert)",
-    ]
+    ])
     headers["duplex"] = options.duplex
 
     let fileName = fileName(fromPath: path)
@@ -450,12 +459,11 @@ public class StorageFileApi: StorageApi {
     ))
 
     return try await execute(
-      Request(
-        path: "/object/upload/sign/\(bucketId)/\(path)",
+      HTTPRequest(
+        url: configuration.url
+          .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
         method: .put,
-        query: [
-          URLQueryItem(name: "token", value: token),
-        ],
+        query: [URLQueryItem(name: "token", value: token)],
         formData: form,
         options: options,
         headers: headers

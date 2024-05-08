@@ -19,7 +19,8 @@ final class SessionManagerTests: XCTestCase {
 
     Current = .init(
       configuration: .init(url: clientURL, localStorage: InMemoryLocalStorage(), logger: nil),
-      sessionRefresher: SessionRefresher(refreshSession: unimplemented("refreshSession"))
+      sessionRefresher: SessionRefresher(refreshSession: unimplemented("refreshSession")),
+      http: HTTPClientMock()
     )
   }
 
