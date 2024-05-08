@@ -110,8 +110,11 @@ public class PostgrestBuilder: @unchecked Sendable {
     let response = try await http.fetch(request, baseURL: configuration.url)
 
     guard 200 ..< 300 ~= response.statusCode else {
-      let error = try configuration.decoder.decode(PostgrestError.self, from: response.data)
-      throw error
+      if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
+        throw error
+      }
+
+      throw HTTPError(data: response.data, response: response.response)
     }
 
     let value = try decode(response.data)
