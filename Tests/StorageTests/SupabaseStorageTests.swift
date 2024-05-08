@@ -48,7 +48,7 @@ final class SupabaseStorageTests: XCTestCase {
     )
     XCTAssertEqual(
       baseUrlWithAllOptions.absoluteString,
-      "\(supabaseURL)/render/image/public/\(bucketId)/\(path)?download=test&width=300&height=300&resize=cover&quality=80&format=origin"
+      "\(supabaseURL)/render/image/public/\(bucketId)/\(path)?download=test&width=300&height=300&quality=80"
     )
   }
 
