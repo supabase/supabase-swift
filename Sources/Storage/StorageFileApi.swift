@@ -108,10 +108,14 @@ public class StorageFileApi: StorageApi {
 
   /// Moves an existing file, optionally renaming it at the same time.
   /// - Parameters:
-  ///   - from: The original file path, including the current file name. For example
-  /// `folder/image.png`.
-  ///   - to: The new file path, including the new file name. For example `folder/image-copy.png`.
-  public func move(from source: String, to destination: String) async throws {
+  ///   - source: The original file path, including the current file name. For example `folder/image.png`.
+  ///   - destination: The new file path, including the new file name. For example `folder/image-copy.png`.
+  ///   - options: The destination options.
+  public func move(
+    from source: String,
+    to destination: String,
+    options: DestinationOptions? = nil
+  ) async throws {
     try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/move"),
@@ -121,6 +125,7 @@ public class StorageFileApi: StorageApi {
             "bucketId": bucketId,
             "sourceKey": source,
             "destinationKey": destination,
+            "destinationBucket": options?.destinationBucket
           ]
         )
       )

@@ -111,3 +111,11 @@ public struct CreateSignedUploadURLOptions: Sendable {
     self.upsert = upsert
   }
 }
+
+public struct DestinationOptions: Sendable {
+  public var destinationBucket: String?
+
+  public init(destinationBucket: String? = nil) {
+    self.destinationBucket = destinationBucket
+  }
+}

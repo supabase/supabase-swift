@@ -213,12 +213,49 @@ final class StorageFileIntegrationTests: XCTestCase {
     }
   }
 
-  private func newBucket(prefix: String = "", options: BucketOptions = BucketOptions(public: true)) async throws -> String {
+  func testListObjects() async throws {
+    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    let res = try await storage.from(bucketName).list(path: "testpath")
+
+    XCTAssertEqual(res.count, 1)
+    XCTAssertEqual(res[0].name, uploadPath.replacingOccurrences(of: "testpath/", with: ""))
+  }
+
+  func testMoveObjectToDifferentPath() async throws {
+    let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
+    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+
+    try await storage.from(bucketName).move(from: uploadPath, to: newPath)
+  }
+
+  func testMoveObjectsAcrossBucketsInDifferentPath() async throws {
+    let newBucketName = "bucket-move"
+    try await storage.createBucket(newBucketName)
+
+    let newPath = "testpath/file-to-move-\(UUID().uuidString).txt"
+    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+
+    try await storage.from(bucketName).move(
+      from: uploadPath,
+      to: newPath,
+      options: DestinationOptions(destinationBucket: newBucketName)
+    )
+
+    _ = try await storage.from(newBucketName).download(path: newPath)
+  }
+
+  private func newBucket(
+    prefix: String = "",
+    options: BucketOptions = BucketOptions(public: true)
+  ) async throws -> String {
     let bucketName = "\(!prefix.isEmpty ? prefix + "-" : "")bucket-\(UUID().uuidString)"
     return try await findOrCreateBucket(name: bucketName, options: options)
   }
 
-  private func findOrCreateBucket(name: String, options: BucketOptions = BucketOptions(public: true)) async throws -> String {
+  private func findOrCreateBucket(
+    name: String,
+    options: BucketOptions = BucketOptions(public: true)
+  ) async throws -> String {
     do {
       _ = try await storage.getBucket(name)
     } catch {
