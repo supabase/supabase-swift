@@ -26,10 +26,10 @@ public struct HTTPError: Error, Sendable {
 
 extension HTTPError: LocalizedError {
   public var errorDescription: String? {
-      var message = "Status Code: \(self.response.statusCode)"
-      if let body = String(data: data, encoding: .utf8) {
-          message += " Body: \(body)"
-      }
-      return message
+    var message = "Status Code: \(response.statusCode)"
+    if let body = String(data: data, encoding: .utf8) {
+      message += " Body: \(body)"
+    }
+    return message
   }
 }

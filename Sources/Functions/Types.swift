@@ -29,17 +29,21 @@ public struct FunctionInvokeOptions: Sendable {
   let body: Data?
   /// The Region to invoke the function in.
   let region: String?
+  /// The query to be included in the function invocation.
+  let query: [URLQueryItem]
 
   /// Initializes the `FunctionInvokeOptions` structure.
   ///
   /// - Parameters:
   ///   - method: Method to use in the function invocation.
+  ///   - query: The query to be included in the function invocation.
   ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
   ///   - region: The Region to invoke the function in.
   ///   - body: The body data to be sent with the function invocation. (Default: nil)
   @_disfavoredOverload
   public init(
     method: Method? = nil,
+    query: [URLQueryItem] = [],
     headers: [String: String] = [:],
     region: String? = nil,
     body: some Encodable
@@ -62,23 +66,27 @@ public struct FunctionInvokeOptions: Sendable {
     self.method = method
     self.headers = defaultHeaders.merged(with: HTTPHeaders(headers))
     self.region = region
+    self.query = query
   }
 
   /// Initializes the `FunctionInvokeOptions` structure.
   ///
   /// - Parameters:
   ///   - method: Method to use in the function invocation.
+  ///   - query: The query to be included in the function invocation.
   ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
   ///   - region: The Region to invoke the function in.
   @_disfavoredOverload
   public init(
     method: Method? = nil,
+    query: [URLQueryItem] = [],
     headers: [String: String] = [:],
     region: String? = nil
   ) {
     self.method = method
     self.headers = HTTPHeaders(headers)
     self.region = region
+    self.query = query
     body = nil
   }
 

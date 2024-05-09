@@ -125,7 +125,7 @@ public class StorageFileApi: StorageApi {
             "bucketId": bucketId,
             "sourceKey": source,
             "destinationKey": destination,
-            "destinationBucket": options?.destinationBucket
+            "destinationBucket": options?.destinationBucket,
           ]
         )
       )
@@ -156,7 +156,7 @@ public class StorageFileApi: StorageApi {
             "bucketId": bucketId,
             "sourceKey": source,
             "destinationKey": destination,
-            "destinationBucket": options?.destinationBucket
+            "destinationBucket": options?.destinationBucket,
           ]
         )
       )

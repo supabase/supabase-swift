@@ -164,6 +164,7 @@ public final class FunctionsClient: Sendable {
     var request = HTTPRequest(
       url: url.appendingPathComponent(functionName),
       method: invokeOptions.httpMethod ?? .post,
+      query: invokeOptions.query,
       headers: mutableState.headers.merged(with: invokeOptions.headers),
       body: invokeOptions.body
     )
@@ -207,7 +208,9 @@ public final class FunctionsClient: Sendable {
     let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
     let url = url.appendingPathComponent(functionName)
-    var urlRequest = URLRequest(url: url)
+    var urlRequest = URLRequest(
+      url: invokeOptions.query.isEmpty ? url : url.appendingQueryItems(invokeOptions.query)
+    )
     urlRequest.allHTTPHeaderFields = mutableState.headers.merged(with: invokeOptions.headers).dictionary
     urlRequest.httpMethod = (invokeOptions.method ?? .post).rawValue
     urlRequest.httpBody = invokeOptions.body
