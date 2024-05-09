@@ -698,15 +698,24 @@ public final class AuthClient: Sendable {
   /// If using ``SignOutScope/others`` scope, no ``AuthChangeEvent/signedOut`` event is fired.
   /// - Parameter scope: Specifies which sessions should be logged out.
   public func signOut(scope: SignOutScope = .global) async throws {
-    do {
-      // Make sure we have a valid session.
-      _ = try await sessionManager.session()
+    let accessToken = currentSession?.accessToken
 
-      try await api.authorizedExecute(
+    if scope != .others {
+        await sessionManager.remove()
+        eventEmitter.emit(.signedOut, session: nil)
+    }
+
+    guard let accessToken else {
+        throw AuthError.sessionNotFound
+    }
+
+    do {
+      _ = try await api.execute(
         .init(
           url: configuration.url.appendingPathComponent("logout"),
           method: .post,
-          query: [URLQueryItem(name: "scope", value: scope.rawValue)]
+          query: [URLQueryItem(name: "scope", value: scope.rawValue)], 
+          headers: [.init(name: "Authorization", value: "Bearer \(accessToken)")]
         )
       )
     } catch {
@@ -719,11 +728,6 @@ public final class AuthClient: Sendable {
       {
         throw error
       }
-    }
-
-    if scope != .others {
-      await sessionManager.remove()
-      eventEmitter.emit(.signedOut, session: nil)
     }
   }
 
