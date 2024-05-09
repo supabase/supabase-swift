@@ -3,6 +3,7 @@ import ConcurrencyExtras
 import Foundation
 
 public typealias PostgrestError = _Helpers.PostgrestError
+public typealias HTTPError = _Helpers.HTTPError
 public typealias AnyJSON = _Helpers.AnyJSON
 
 #if canImport(FoundationNetworking)
