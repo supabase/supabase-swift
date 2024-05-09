@@ -886,12 +886,25 @@ public final class AuthClient: Sendable {
     )
   }
 
+  /// Returns the current session, if any.
+  ///
+  /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
+  public var currentSession: Session? {
+    try? configuration.localStorage.getSession()?.session
+  }
+
+  /// Returns the current user, if any.
+  ///
+  /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
+  public var currentUser: User? {
+    try? configuration.localStorage.getSession()?.session.user
+  }
+
   /// Gets the current user details if there is an existing session.
   /// - Parameter jwt: Takes in an optional access token jwt. If no jwt is provided, user() will
   /// attempt to get the jwt from the current session.
   ///
-  /// Should be used only when you require the most current user data. For faster results,
-  /// session.user is recommended.
+  /// Should be used only when you require the most current user data. For faster results, ``currentUser`` is recommended.
   public func user(jwt: String? = nil) async throws -> User {
     var request = HTTPRequest(url: configuration.url.appendingPathComponent("user"), method: .get)
 
