@@ -92,3 +92,30 @@ public struct SignedUploadURL: Sendable {
   public let path: String
   public let token: String
 }
+
+public struct FileUploadResponse: Sendable {
+  public let id: String
+  public let path: String
+  public let fullPath: String
+}
+
+public struct SignedURLUploadResponse: Sendable {
+  public let path: String
+  public let fullPath: String
+}
+
+public struct CreateSignedUploadURLOptions: Sendable {
+  public var upsert: Bool
+
+  public init(upsert: Bool) {
+    self.upsert = upsert
+  }
+}
+
+public struct DestinationOptions: Sendable {
+  public var destinationBucket: String?
+
+  public init(destinationBucket: String? = nil) {
+    self.destinationBucket = destinationBucket
+  }
+}

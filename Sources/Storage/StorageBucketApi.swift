@@ -35,7 +35,7 @@ public class StorageBucketApi: StorageApi {
     var id: String
     var name: String
     var `public`: Bool
-    var fileSizeLimit: Int?
+    var fileSizeLimit: String?
     var allowedMimeTypes: [String]?
   }
 

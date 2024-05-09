@@ -84,6 +84,7 @@ let package = Package(
         "TestHelpers",
         "PostgREST",
         "Realtime",
+        "Storage",
       ]
     ),
     .target(
