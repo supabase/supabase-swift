@@ -161,18 +161,7 @@ public final class FunctionsClient: Sendable {
     functionName: String,
     invokeOptions: FunctionInvokeOptions
   ) async throws -> HTTPResponse {
-    var request = HTTPRequest(
-      url: url.appendingPathComponent(functionName),
-      method: invokeOptions.httpMethod ?? .post,
-      query: invokeOptions.query,
-      headers: mutableState.headers.merged(with: invokeOptions.headers),
-      body: invokeOptions.body
-    )
-
-    if let region = invokeOptions.region ?? region {
-      request.headers["x-region"] = region
-    }
-
+    let request = buildRequest(functionName: functionName, options: invokeOptions)
     let response = try await http.send(request)
 
     guard 200 ..< 300 ~= response.statusCode else {
@@ -207,13 +196,7 @@ public final class FunctionsClient: Sendable {
 
     let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
-    let url = url.appendingPathComponent(functionName)
-    var urlRequest = URLRequest(
-      url: invokeOptions.query.isEmpty ? url : url.appendingQueryItems(invokeOptions.query)
-    )
-    urlRequest.allHTTPHeaderFields = mutableState.headers.merged(with: invokeOptions.headers).dictionary
-    urlRequest.httpMethod = (invokeOptions.method ?? .post).rawValue
-    urlRequest.httpBody = invokeOptions.body
+    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
 
     let task = session.dataTask(with: urlRequest) { data, response, _ in
       guard let httpResponse = response as? HTTPURLResponse else {
@@ -243,6 +226,22 @@ public final class FunctionsClient: Sendable {
     }
 
     return stream
+  }
+
+  private func buildRequest(functionName: String, options: FunctionInvokeOptions) -> HTTPRequest {
+    var request = HTTPRequest(
+      url: url.appendingPathComponent(functionName),
+      method: options.httpMethod ?? .post,
+      query: options.query,
+      headers: mutableState.headers.merged(with: options.headers),
+      body: options.body
+    )
+
+    if let region = options.region ?? region {
+      request.headers["x-region"] = region
+    }
+
+    return request
   }
 }
 
