@@ -16,6 +16,29 @@ import Foundation
 public typealias JSONObject = _Helpers.JSONObject
 
 public actor RealtimeClientV2 {
+  public struct ConfigurationOptions: Sendable {
+    var heartbeatInterval: TimeInterval
+    var reconnectDelay: TimeInterval
+    var timeoutInterval: TimeInterval
+    var disconnectOnSessionLoss: Bool
+    var connectOnSubscribe: Bool
+
+    public init(
+      heartbeatInterval: TimeInterval = 15,
+      reconnectDelay: TimeInterval = 7,
+      timeoutInterval: TimeInterval = 10,
+      disconnectOnSessionLoss: Bool = true,
+      connectOnSubscribe: Bool = true
+    ) {
+      self.heartbeatInterval = heartbeatInterval
+      self.reconnectDelay = reconnectDelay
+      self.timeoutInterval = timeoutInterval
+      self.disconnectOnSessionLoss = disconnectOnSessionLoss
+      self.connectOnSubscribe = connectOnSubscribe
+      self.logger = logger
+    }
+  }
+  
   public struct Configuration: Sendable {
     var url: URL
     var apiKey: String
@@ -26,26 +49,22 @@ public actor RealtimeClientV2 {
     var disconnectOnSessionLoss: Bool
     var connectOnSubscribe: Bool
     var logger: (any SupabaseLogger)?
-
+  
     public init(
       url: URL,
       apiKey: String,
       headers: [String: String] = [:],
-      heartbeatInterval: TimeInterval = 15,
-      reconnectDelay: TimeInterval = 7,
-      timeoutInterval: TimeInterval = 10,
-      disconnectOnSessionLoss: Bool = true,
-      connectOnSubscribe: Bool = true,
+      options: ConfigurationOptions = ConfigurationOptions(),
       logger: (any SupabaseLogger)? = nil
     ) {
       self.url = url
       self.apiKey = apiKey
       self.headers = headers
-      self.heartbeatInterval = heartbeatInterval
-      self.reconnectDelay = reconnectDelay
-      self.timeoutInterval = timeoutInterval
-      self.disconnectOnSessionLoss = disconnectOnSessionLoss
-      self.connectOnSubscribe = connectOnSubscribe
+      self.heartbeatInterval = options.heartbeatInterval
+      self.reconnectDelay = options.reconnectDelay
+      self.timeoutInterval = options.timeoutInterval
+      self.disconnectOnSessionLoss = options.disconnectOnSessionLoss
+      self.connectOnSubscribe = options.connectOnSubscribe
       self.logger = logger
     }
   }
