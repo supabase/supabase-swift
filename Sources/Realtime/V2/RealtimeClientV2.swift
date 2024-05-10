@@ -35,7 +35,6 @@ public actor RealtimeClientV2 {
       self.timeoutInterval = timeoutInterval
       self.disconnectOnSessionLoss = disconnectOnSessionLoss
       self.connectOnSubscribe = connectOnSubscribe
-      self.logger = logger
     }
   }
   
