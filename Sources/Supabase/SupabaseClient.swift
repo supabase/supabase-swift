@@ -108,7 +108,8 @@ public final class SupabaseClient: @unchecked Sendable {
   public init(
     supabaseURL: URL,
     supabaseKey: String,
-    options: SupabaseClientOptions
+    options: SupabaseClientOptions,
+    realtimeOptions: RealtimeClientV2.ConfigurationOptions = RealtimeClientV2.ConfigurationOptions()
   ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
@@ -150,6 +151,7 @@ public final class SupabaseClient: @unchecked Sendable {
         url: supabaseURL.appendingPathComponent("/realtime/v1"),
         apiKey: supabaseKey,
         headers: defaultHeaders,
+        options: realtimeOptions,
         logger: options.global.logger
       )
     )
