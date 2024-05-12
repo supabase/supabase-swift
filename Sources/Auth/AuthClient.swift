@@ -921,7 +921,7 @@ public final class AuthClient: Sendable {
 
   /// Updates user data, if there is a logged in user.
   @discardableResult
-  public func update(user: UserAttributes) async throws -> User {
+  public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
     var user = user
 
     if user.email != nil {
@@ -935,6 +935,12 @@ public final class AuthClient: Sendable {
       .init(
         url: configuration.url.appendingPathComponent("user"),
         method: .put,
+        query: [
+            (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
+                name: "redirect_to",
+                value: $0.absoluteString
+            ) },
+        ].compactMap { $0 },
         body: configuration.encoder.encode(user)
       )
     ).decoded(as: User.self, decoder: configuration.decoder)
