@@ -23,7 +23,7 @@ struct APIClient: Sendable {
 
   func execute(_ request: HTTPRequest) async throws -> HTTPResponse {
     var request = request
-    request.headers.merge(with: HTTPHeaders(configuration.headers))
+    request.headers = HTTPHeaders(configuration.headers).merged(with: request.headers)
 
     let response = try await http.send(request)
 
