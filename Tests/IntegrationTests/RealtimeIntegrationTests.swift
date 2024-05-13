@@ -21,9 +21,9 @@ struct Logger: SupabaseLogger {
 
 final class RealtimeIntegrationTests: XCTestCase {
   let realtime = RealtimeClientV2(
+    url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
     config: RealtimeClientV2.Configuration(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
-      apiKey: DotEnv.SUPABASE_ANON_KEY,
+      headers: ["apikey": DotEnv.SUPABASE_ANON_KEY],
       logger: Logger()
     )
   )
@@ -47,7 +47,7 @@ final class RealtimeIntegrationTests: XCTestCase {
     let receivedMessages = LockIsolated<[JSONObject]>([])
 
     Task {
-      for await message in await channel.broadcast(event: "test") {
+      for await message in await channel.broadcastStream(event: "test") {
         receivedMessages.withValue {
           $0.append(message)
         }

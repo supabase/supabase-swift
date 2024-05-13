@@ -149,3 +149,9 @@ extension HTTPHeader: CustomStringConvertible {
     "\(name): \(value)"
   }
 }
+
+extension HTTPHeaders: Equatable {
+  package static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.dictionary == rhs.dictionary
+  }
+}

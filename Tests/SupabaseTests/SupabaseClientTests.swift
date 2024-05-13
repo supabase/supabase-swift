@@ -1,8 +1,9 @@
 import Auth
-import XCTest
-
+import CustomDump
 @testable import Functions
+@testable import Realtime
 @testable import Supabase
+import XCTest
 
 final class AuthLocalStorageMock: AuthLocalStorage {
   func store(key _: String, value _: Data) throws {}
@@ -32,6 +33,9 @@ final class SupabaseClientTests: XCTestCase {
         ),
         functions: SupabaseClientOptions.FunctionsOptions(
           region: .apNortheast1
+        ),
+        realtime: RealtimeClientOptions(
+          headers: ["custom_realtime_header_key": "custom_realtime_header_value"]
         )
       )
     )
@@ -55,8 +59,14 @@ final class SupabaseClientTests: XCTestCase {
       ]
     )
 
-    let region = await client.functions.region
-    XCTAssertEqual(region, "ap-northeast-1")
+    XCTAssertEqual(client.functions.region, "ap-northeast-1")
+
+    let realtimeURL = await client.realtimeV2.url
+    XCTAssertEqual(realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")
+
+    let realtimeOptions = await client.realtimeV2.options
+    let expectedRealtimeHeader = client.defaultHeaders.merged(with: ["custom_realtime_header_key": "custom_realtime_header_value"])
+    XCTAssertNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
   }
 
   #if !os(Linux)

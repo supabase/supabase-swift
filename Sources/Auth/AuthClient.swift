@@ -699,13 +699,13 @@ public final class AuthClient: Sendable {
   /// - Parameter scope: Specifies which sessions should be logged out.
   public func signOut(scope: SignOutScope = .global) async throws {
     guard let accessToken = currentSession?.accessToken else {
-        configuration.logger?.warning("signOut called without a session")
-        return
+      configuration.logger?.warning("signOut called without a session")
+      return
     }
 
     if scope != .others {
-        await sessionManager.remove()
-        eventEmitter.emit(.signedOut, session: nil)
+      await sessionManager.remove()
+      eventEmitter.emit(.signedOut, session: nil)
     }
 
     do {
@@ -713,7 +713,7 @@ public final class AuthClient: Sendable {
         .init(
           url: configuration.url.appendingPathComponent("logout"),
           method: .post,
-          query: [URLQueryItem(name: "scope", value: scope.rawValue)], 
+          query: [URLQueryItem(name: "scope", value: scope.rawValue)],
           headers: [.init(name: "Authorization", value: "Bearer \(accessToken)")]
         )
       )

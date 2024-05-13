@@ -25,9 +25,9 @@ final class _PushTests: XCTestCase {
 
     ws = MockWebSocketClient()
     socket = RealtimeClientV2(
-      config: RealtimeClientV2.Configuration(
-        url: URL(string: "https://localhost:54321/v1/realtime")!,
-        apiKey: "apikey"
+      url: URL(string: "https://localhost:54321/v1/realtime")!,
+      options: RealtimeClientOptions(
+        headers: ["apiKey": "apikey"]
       ),
       ws: ws
     )
