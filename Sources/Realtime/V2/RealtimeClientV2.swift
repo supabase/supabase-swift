@@ -17,7 +17,39 @@ public typealias JSONObject = _Helpers.JSONObject
 
 public actor RealtimeClientV2 {
   @available(*, deprecated, renamed: "RealtimeClientOptions")
-  public typealias Configuration = RealtimeClientOptions
+  public struct Configuration: Sendable {
+    var url: URL
+    var apiKey: String
+    var headers: [String: String]
+    var heartbeatInterval: TimeInterval
+    var reconnectDelay: TimeInterval
+    var timeoutInterval: TimeInterval
+    var disconnectOnSessionLoss: Bool
+    var connectOnSubscribe: Bool
+    var logger: (any SupabaseLogger)?
+
+    public init(
+      url: URL,
+      apiKey: String,
+      headers: [String: String] = [:],
+      heartbeatInterval: TimeInterval = 15,
+      reconnectDelay: TimeInterval = 7,
+      timeoutInterval: TimeInterval = 10,
+      disconnectOnSessionLoss: Bool = true,
+      connectOnSubscribe: Bool = true,
+      logger: (any SupabaseLogger)? = nil
+    ) {
+      self.url = url
+      self.apiKey = apiKey
+      self.headers = headers
+      self.heartbeatInterval = heartbeatInterval
+      self.reconnectDelay = reconnectDelay
+      self.timeoutInterval = timeoutInterval
+      self.disconnectOnSessionLoss = disconnectOnSessionLoss
+      self.connectOnSubscribe = connectOnSubscribe
+      self.logger = logger
+    }
+  }
 
   public enum Status: Sendable, CustomStringConvertible {
     case disconnected
@@ -74,16 +106,32 @@ public actor RealtimeClientV2 {
     statusEventEmitter.attach(listener)
   }
 
-  public init(url: URL, config: RealtimeClientOptions) {
+  @available(*, deprecated, message: "Use RealtimeClientV2.init(url:options) instead.")
+  public init(config: Configuration) {
+    self.init(
+      url: config.url,
+      options: RealtimeClientOptions(
+        headers: config.headers,
+        heartbeatInterval: config.heartbeatInterval,
+        reconnectDelay: config.reconnectDelay,
+        timeoutInterval: config.timeoutInterval,
+        disconnectOnSessionLoss: config.disconnectOnSessionLoss,
+        connectOnSubscribe: config.connectOnSubscribe,
+        logger: config.logger
+      )
+    )
+  }
+
+  public init(url: URL, options: RealtimeClientOptions) {
     self.init(
       url: url,
-      options: config,
+      options: options,
       ws: WebSocket(
         realtimeURL: Self.realtimeWebSocketURL(
           baseURL: Self.realtimeBaseURL(url: url),
-          apikey: config.apikey
+          apikey: options.apikey
         ),
-        options: config
+        options: options
       )
     )
   }

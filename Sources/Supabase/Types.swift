@@ -13,7 +13,7 @@ public struct SupabaseClientOptions: Sendable {
   public let auth: AuthOptions
   public let global: GlobalOptions
   public let functions: FunctionsOptions
-  public let realtime: RealtimeClientV2.Configuration
+  public let realtime: RealtimeClientOptions
 
   public struct DatabaseOptions: Sendable {
     /// The Postgres schema which your tables belong to. Must be on the list of exposed schemas in
@@ -109,7 +109,7 @@ public struct SupabaseClientOptions: Sendable {
     auth: AuthOptions,
     global: GlobalOptions = .init(),
     functions: FunctionsOptions = .init(),
-    realtime: RealtimeClientV2.Configuration = .init()
+    realtime: RealtimeClientOptions = .init()
   ) {
     self.db = db
     self.auth = auth
@@ -125,7 +125,7 @@ extension SupabaseClientOptions {
       db: DatabaseOptions = .init(),
       global: GlobalOptions = .init(),
       functions: FunctionsOptions = .init(),
-      realtime: RealtimeClientV2.Configuration = .init()
+      realtime: RealtimeClientOptions = .init()
     ) {
       self.db = db
       auth = .init()

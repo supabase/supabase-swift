@@ -153,7 +153,7 @@ public final class SupabaseClient: @unchecked Sendable {
 
     realtimeV2 = RealtimeClientV2(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      config: realtimeOptions
+      options: realtimeOptions
     )
 
     listenForAuthEvents()
