@@ -17,6 +17,13 @@ final class AuthLocalStorageMock: AuthLocalStorage {
 
 final class SupabaseClientTests: XCTestCase {
   func testClientInitialization() async {
+    final class Logger: SupabaseLogger {
+      func log(message _: SupabaseLogMessage) {
+        // no-op
+      }
+    }
+
+    let logger = Logger()
     let customSchema = "custom_schema"
     let localStorage = AuthLocalStorageMock()
     let customHeaders = ["header_field": "header_value"]
@@ -29,7 +36,8 @@ final class SupabaseClientTests: XCTestCase {
         auth: SupabaseClientOptions.AuthOptions(storage: localStorage),
         global: SupabaseClientOptions.GlobalOptions(
           headers: customHeaders,
-          session: .shared
+          session: .shared,
+          logger: logger
         ),
         functions: SupabaseClientOptions.FunctionsOptions(
           region: .apNortheast1
@@ -67,6 +75,7 @@ final class SupabaseClientTests: XCTestCase {
     let realtimeOptions = await client.realtimeV2.options
     let expectedRealtimeHeader = client.defaultHeaders.merged(with: ["custom_realtime_header_key": "custom_realtime_header_value"])
     XCTAssertNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
+    XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
   }
 
   #if !os(Linux)
