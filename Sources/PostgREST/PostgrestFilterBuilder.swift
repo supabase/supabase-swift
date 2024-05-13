@@ -254,7 +254,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
   ///   - value: The value to filter with
   public func `is`(
     _ column: String,
-    value: any URLQueryRepresentable
+    value: Bool?
   ) -> PostgrestFilterBuilder {
     let queryValue = value.queryValue
     mutableState.withValue {
