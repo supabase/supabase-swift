@@ -23,9 +23,9 @@ final class RealtimeTests: XCTestCase {
 
     ws = MockWebSocketClient()
     sut = RealtimeClientV2(
-      config: RealtimeClientV2.Configuration(
-        url: url,
-        apiKey: apiKey,
+      url: url,
+      options: RealtimeClientOptions(
+        headers: ["apikey": apiKey],
         heartbeatInterval: 1,
         reconnectDelay: 1
       ),

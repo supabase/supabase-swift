@@ -70,7 +70,7 @@ public actor RealtimeChannelV2 {
   /// Subscribes to the channel
   public func subscribe() async {
     if await socket?.status != .connected {
-      if socket?.config.connectOnSubscribe != true {
+      if socket?.options.connectOnSubscribe != true {
         fatalError(
           "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
         )

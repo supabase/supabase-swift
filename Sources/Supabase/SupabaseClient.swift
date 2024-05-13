@@ -43,7 +43,7 @@ public final class SupabaseClient: @unchecked Sendable {
   private lazy var rest = PostgrestClient(
     url: databaseURL,
     schema: options.db.schema,
-    headers: defaultHeaders,
+    headers: defaultHeaders.dictionary,
     logger: options.global.logger,
     fetch: fetchWithAuth,
     encoder: options.db.encoder,
@@ -54,7 +54,7 @@ public final class SupabaseClient: @unchecked Sendable {
   public private(set) lazy var storage = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
       url: storageURL,
-      headers: defaultHeaders,
+      headers: defaultHeaders.dictionary,
       session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
       logger: options.global.logger
     )
@@ -69,13 +69,13 @@ public final class SupabaseClient: @unchecked Sendable {
   /// Supabase Functions allows you to deploy and invoke edge functions.
   public private(set) lazy var functions = FunctionsClient(
     url: functionsURL,
-    headers: defaultHeaders,
+    headers: defaultHeaders.dictionary,
     region: options.functions.region,
     logger: options.global.logger,
     fetch: fetchWithAuth
   )
 
-  let defaultHeaders: [String: String]
+  let defaultHeaders: HTTPHeaders
   private let listenForAuthEventsTask = LockIsolated(Task<Void, Never>?.none)
 
   private var session: URLSession {
@@ -100,10 +100,8 @@ public final class SupabaseClient: @unchecked Sendable {
 
   /// Create a new client.
   /// - Parameters:
-  ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
-  /// your project dashboard.
-  ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
-  /// your project dashboard.
+  ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in your project dashboard.
+  ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in your project dashboard.
   ///   - options: Custom options to configure client's behavior.
   public init(
     supabaseURL: URL,
@@ -118,15 +116,16 @@ public final class SupabaseClient: @unchecked Sendable {
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
-    defaultHeaders = [
+    defaultHeaders = HTTPHeaders([
       "X-Client-Info": "supabase-swift/\(version)",
       "Authorization": "Bearer \(supabaseKey)",
       "Apikey": supabaseKey,
-    ].merging(options.global.headers) { _, new in new }
+    ])
+    .merged(with: HTTPHeaders(options.global.headers))
 
     auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
-      headers: defaultHeaders,
+      headers: defaultHeaders.dictionary,
       flowType: options.auth.flowType,
       redirectToURL: options.auth.redirectToURL,
       localStorage: options.auth.storage,
@@ -141,17 +140,20 @@ public final class SupabaseClient: @unchecked Sendable {
 
     realtime = RealtimeClient(
       supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
-      headers: defaultHeaders,
-      params: defaultHeaders
+      headers: defaultHeaders.dictionary,
+      params: defaultHeaders.dictionary
     )
 
+    var realtimeOptions = options.realtime
+    realtimeOptions.headers.merge(with: defaultHeaders)
+
+    if realtimeOptions.logger == nil {
+      realtimeOptions.logger = options.global.logger
+    }
+
     realtimeV2 = RealtimeClientV2(
-      config: RealtimeClientV2.Configuration(
-        url: supabaseURL.appendingPathComponent("/realtime/v1"),
-        apiKey: supabaseKey,
-        headers: defaultHeaders,
-        logger: options.global.logger
-      )
+      url: supabaseURL.appendingPathComponent("/realtime/v1"),
+      options: realtimeOptions
     )
 
     listenForAuthEvents()

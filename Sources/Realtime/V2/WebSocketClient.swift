@@ -44,13 +44,13 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
 
   private let mutableState = LockIsolated(MutableState())
 
-  init(config: RealtimeClientV2.Configuration) {
-    realtimeURL = config.realtimeWebSocketURL
+  init(realtimeURL: URL, options: RealtimeClientOptions) {
+    self.realtimeURL = realtimeURL
 
     let sessionConfiguration = URLSessionConfiguration.default
-    sessionConfiguration.httpAdditionalHeaders = config.headers
+    sessionConfiguration.httpAdditionalHeaders = options.headers.dictionary
     configuration = sessionConfiguration
-    logger = config.logger
+    logger = options.logger
   }
 
   func connect() -> AsyncStream<ConnectionStatus> {

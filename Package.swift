@@ -158,11 +158,18 @@ let package = Package(
         "Functions",
       ]
     ),
-    .testTarget(name: "SupabaseTests", dependencies: ["Supabase"]),
+    .testTarget(
+      name: "SupabaseTests",
+      dependencies: [
+        "Supabase",
+        .product(name: "CustomDump", package: "swift-custom-dump"),
+      ]
+    ),
     .target(
       name: "TestHelpers",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Auth",
       ]
     ),

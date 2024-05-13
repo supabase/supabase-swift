@@ -1,8 +1,9 @@
 import Auth
-import XCTest
-
+import CustomDump
 @testable import Functions
+@testable import Realtime
 @testable import Supabase
+import XCTest
 
 final class AuthLocalStorageMock: AuthLocalStorage {
   func store(key _: String, value _: Data) throws {}
@@ -16,6 +17,13 @@ final class AuthLocalStorageMock: AuthLocalStorage {
 
 final class SupabaseClientTests: XCTestCase {
   func testClientInitialization() async {
+    final class Logger: SupabaseLogger {
+      func log(message _: SupabaseLogMessage) {
+        // no-op
+      }
+    }
+
+    let logger = Logger()
     let customSchema = "custom_schema"
     let localStorage = AuthLocalStorageMock()
     let customHeaders = ["header_field": "header_value"]
@@ -28,10 +36,14 @@ final class SupabaseClientTests: XCTestCase {
         auth: SupabaseClientOptions.AuthOptions(storage: localStorage),
         global: SupabaseClientOptions.GlobalOptions(
           headers: customHeaders,
-          session: .shared
+          session: .shared,
+          logger: logger
         ),
         functions: SupabaseClientOptions.FunctionsOptions(
           region: .apNortheast1
+        ),
+        realtime: RealtimeClientOptions(
+          headers: ["custom_realtime_header_key": "custom_realtime_header_value"]
         )
       )
     )
@@ -55,8 +67,15 @@ final class SupabaseClientTests: XCTestCase {
       ]
     )
 
-    let region = await client.functions.region
-    XCTAssertEqual(region, "ap-northeast-1")
+    XCTAssertEqual(client.functions.region, "ap-northeast-1")
+
+    let realtimeURL = await client.realtimeV2.url
+    XCTAssertEqual(realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")
+
+    let realtimeOptions = await client.realtimeV2.options
+    let expectedRealtimeHeader = client.defaultHeaders.merged(with: ["custom_realtime_header_key": "custom_realtime_header_value"])
+    XCTAssertNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
+    XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
   }
 
   #if !os(Linux)
