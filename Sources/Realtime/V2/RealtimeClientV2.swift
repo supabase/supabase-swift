@@ -106,7 +106,7 @@ public actor RealtimeClientV2 {
     statusEventEmitter.attach(listener)
   }
 
-  @available(*, deprecated, message: "Use RealtimeClientV2.init(url:options) instead.")
+  @available(*, deprecated, renamed: "RealtimeClientV2.init(url:options:)")
   public init(config: Configuration) {
     self.init(
       url: config.url,
