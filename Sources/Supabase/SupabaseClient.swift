@@ -145,7 +145,7 @@ public final class SupabaseClient: @unchecked Sendable {
     )
 
     var realtimeOptions = options.realtime
-    realtimeOptions.headers = realtimeOptions.headers.merged(with: defaultHeaders)
+    realtimeOptions.headers.merge(with: defaultHeaders)
 
     if realtimeOptions.logger == nil {
       realtimeOptions.logger = options.global.logger
