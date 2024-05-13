@@ -169,7 +169,7 @@ final class BuildURLRequestTests: XCTestCase {
       TestCase(name: "query if nil value") { client in
         client.from("users")
           .select()
-          .is("email", value: String?.none)
+          .is("email", value: nil)
       },
       TestCase(name: "likeAllOf") { client in
         client.from("users")

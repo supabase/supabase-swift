@@ -288,7 +288,7 @@ final class PostgrestFilterTests: XCTestCase {
   }
 
   func testIs() async throws {
-    let res = try await client.from("users").select("data").is("data", value: AnyJSON.null)
+    let res = try await client.from("users").select("data").is("data", value: nil)
       .execute()
       .value as AnyJSON
 
@@ -556,7 +556,7 @@ final class PostgrestFilterTests: XCTestCase {
     let res = try await client.from("users")
       .select()
       .eq("username", value: "supabot")
-      .is("data", value: AnyJSON.null)
+      .is("data", value: nil)
       .overlaps("age_range", value: "[1,2)")
       .eq("status", value: "ONLINE")
       .textSearch("catchphrase", query: "cat")
