@@ -22,7 +22,7 @@ struct Logger: SupabaseLogger {
 final class RealtimeIntegrationTests: XCTestCase {
   let realtime = RealtimeClientV2(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
-    config: RealtimeClientV2.Configuration(
+    options: RealtimeClientOptions(
       headers: ["apikey": DotEnv.SUPABASE_ANON_KEY],
       logger: Logger()
     )
