@@ -18,7 +18,7 @@ public typealias SupabaseLogMessage = _Helpers.SupabaseLogMessage
 let version = _Helpers.version
 
 /// Supabase Client.
-public final class SupabaseClient: @unchecked Sendable {
+public final class SupabaseClient: Sendable {
   let options: SupabaseClientOptions
   let supabaseURL: URL
   let supabaseKey: String
@@ -30,53 +30,74 @@ public final class SupabaseClient: @unchecked Sendable {
   /// by access policies.
   public let auth: AuthClient
 
-  /// Database client for Supabase.
-  @available(
-    *,
-    deprecated,
-    message: "Direct access to database is deprecated, please use one of the available methods such as, SupabaseClient.from(_:), SupabaseClient.rpc(_:params:), or SupabaseClient.schema(_:)."
-  )
-  public var database: PostgrestClient {
-    rest
+  var rest: PostgrestClient {
+    mutableState.withValue {
+      if $0.rest == nil {
+        $0.rest = PostgrestClient(
+          url: databaseURL,
+          schema: options.db.schema,
+          headers: defaultHeaders.dictionary,
+          logger: options.global.logger,
+          fetch: fetchWithAuth,
+          encoder: options.db.encoder,
+          decoder: options.db.decoder
+        )
+      }
+
+      return $0.rest!
+    }
   }
 
-  private lazy var rest = PostgrestClient(
-    url: databaseURL,
-    schema: options.db.schema,
-    headers: defaultHeaders.dictionary,
-    logger: options.global.logger,
-    fetch: fetchWithAuth,
-    encoder: options.db.encoder,
-    decoder: options.db.decoder
-  )
-
   /// Supabase Storage allows you to manage user-generated content, such as photos or videos.
-  public private(set) lazy var storage = SupabaseStorageClient(
-    configuration: StorageClientConfiguration(
-      url: storageURL,
-      headers: defaultHeaders.dictionary,
-      session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
-      logger: options.global.logger
-    )
-  )
+  public var storage: SupabaseStorageClient {
+    mutableState.withValue {
+      if $0.storage == nil {
+        $0.storage = SupabaseStorageClient(
+          configuration: StorageClientConfiguration(
+            url: storageURL,
+            headers: defaultHeaders.dictionary,
+            session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+            logger: options.global.logger
+          )
+        )
+      }
 
-  /// Realtime client for Supabase
-  public let realtime: RealtimeClient
+      return $0.storage!
+    }
+  }
+
+  let _realtime: UncheckedSendable<RealtimeClient>
 
   /// Realtime client for Supabase
   public let realtimeV2: RealtimeClientV2
 
   /// Supabase Functions allows you to deploy and invoke edge functions.
-  public private(set) lazy var functions = FunctionsClient(
-    url: functionsURL,
-    headers: defaultHeaders.dictionary,
-    region: options.functions.region,
-    logger: options.global.logger,
-    fetch: fetchWithAuth
-  )
+  public var functions: FunctionsClient {
+    mutableState.withValue {
+      if $0.functions == nil {
+        $0.functions = FunctionsClient(
+          url: functionsURL,
+          headers: defaultHeaders.dictionary,
+          region: options.functions.region,
+          logger: options.global.logger,
+          fetch: fetchWithAuth
+        )
+      }
+
+      return $0.functions!
+    }
+  }
 
   let defaultHeaders: HTTPHeaders
-  private let listenForAuthEventsTask = LockIsolated(Task<Void, Never>?.none)
+
+  struct MutableState {
+    var listenForAuthEventsTask: Task<Void, Never>?
+    var storage: SupabaseStorageClient?
+    var rest: PostgrestClient?
+    var functions: FunctionsClient?
+  }
+
+  private let mutableState = LockIsolated(MutableState())
 
   private var session: URLSession {
     options.global.session
@@ -138,10 +159,12 @@ public final class SupabaseClient: @unchecked Sendable {
       }
     )
 
-    realtime = RealtimeClient(
-      supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
-      headers: defaultHeaders.dictionary,
-      params: defaultHeaders.dictionary
+    _realtime = UncheckedSendable(
+      RealtimeClient(
+        supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
+        headers: defaultHeaders.dictionary,
+        params: defaultHeaders.dictionary
+      )
     )
 
     var realtimeOptions = options.realtime
@@ -234,7 +257,7 @@ public final class SupabaseClient: @unchecked Sendable {
   }
 
   deinit {
-    listenForAuthEventsTask.value?.cancel()
+    mutableState.listenForAuthEventsTask?.cancel()
   }
 
   @Sendable
@@ -259,13 +282,14 @@ public final class SupabaseClient: @unchecked Sendable {
   }
 
   private func listenForAuthEvents() {
-    listenForAuthEventsTask.setValue(
-      Task {
-        for await (event, session) in auth.authStateChanges {
-          await handleTokenChanged(event: event, session: session)
-        }
+    let task = Task {
+      for await (event, session) in auth.authStateChanges {
+        await handleTokenChanged(event: event, session: session)
       }
-    )
+    }
+    mutableState.withValue {
+      $0.listenForAuthEventsTask = task
+    }
   }
 
   private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
