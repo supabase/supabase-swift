@@ -109,7 +109,7 @@ public actor RealtimeChannelV2 {
     )
 
     do {
-      try await withTimeout(interval: socket?.config.timeoutInterval ?? 10) { [self] in
+      try await withTimeout(interval: socket?.options.timeoutInterval ?? 10) { [self] in
         _ = await statusChange.first { @Sendable in $0 == .subscribed }
       }
     } catch {
