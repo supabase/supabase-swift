@@ -31,6 +31,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     if let logger = configuration.logger {
       interceptors.append(LoggerInterceptor(logger: logger))
     }
+    interceptors.append(RetryRequestInterceptor.default)
 
     http = HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
 

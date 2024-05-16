@@ -21,6 +21,7 @@ public class StorageApi: @unchecked Sendable {
     if let logger = configuration.logger {
       interceptors.append(LoggerInterceptor(logger: logger))
     }
+    interceptors.append(RetryRequestInterceptor.default)
 
     http = HTTPClient(
       fetch: configuration.session.fetch,
