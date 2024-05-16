@@ -106,10 +106,8 @@ public final class SupabaseClient: Sendable {
   #if !os(Linux)
     /// Create a new client.
     /// - Parameters:
-    ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in
-    /// your project dashboard.
-    ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in
-    /// your project dashboard.
+    ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in your project dashboard.
+    ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in your project dashboard.
     public convenience init(supabaseURL: URL, supabaseKey: String) {
       self.init(
         supabaseURL: supabaseURL,
@@ -293,8 +291,12 @@ public final class SupabaseClient: Sendable {
   }
 
   private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
-    let supportedEvents: [AuthChangeEvent] = [.initialSession, .signedIn, .tokenRefreshed]
-    guard supportedEvents.contains(event) else { return }
+    guard [
+      .initialSession,
+      .signedIn,
+      .tokenRefreshed,
+      .signedOut,
+    ].contains(event) else { return }
 
     realtime.setAuth(session?.accessToken)
     await realtimeV2.setAuth(session?.accessToken)
