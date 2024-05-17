@@ -298,6 +298,27 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  func testLinkIdentity() async throws {
+    let sut = makeSUT { _ in
+      .stub(
+        """
+        {
+          "url" : "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
+        }
+        """
+      )
+    }
+
+    try storage.storeSession(.init(session: .validSession))
+
+    try await sut.linkIdentity(provider: .github) { url in
+      XCTAssertEqual(
+        url.absoluteString,
+        "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
+      )
+    }
+  }
+
   private func makeSUT(
     fetch: ((URLRequest) async throws -> HTTPResponse)? = nil
   ) -> AuthClient {
