@@ -19,15 +19,20 @@ import Foundation
   import AppKit
 #endif
 
-enum URLOpener {
-  @MainActor
-  static func open(_ url: URL) {
-    #if os(macOS)
-      NSWorkspace.shared.open(url)
-    #elseif os(iOS) || os(tvOS) || os(visionOS) || targetEnvironment(macCatalyst)
-      UIApplication.shared.open(url)
-    #elseif os(watchOS)
-      WKExtension.shared().openSystemURL(url)
-    #endif
+struct URLOpener {
+  var open: @MainActor @Sendable (_ url: URL) -> Void
+}
+
+extension URLOpener {
+  static var live: Self {
+    URLOpener { url in
+      #if os(macOS)
+        NSWorkspace.shared.open(url)
+      #elseif os(iOS) || os(tvOS) || os(visionOS) || targetEnvironment(macCatalyst)
+        UIApplication.shared.open(url)
+      #elseif os(watchOS)
+        WKExtension.shared().openSystemURL(url)
+      #endif
+    }
   }
 }

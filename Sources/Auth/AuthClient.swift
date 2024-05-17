@@ -1004,7 +1004,7 @@ public final class AuthClient: Sendable {
       scopes: scopes,
       redirectTo: redirectTo,
       queryParams: queryParams,
-      launchURL: { URLOpener.open($0) }
+      launchURL: { Current.urlOpener.open($0) }
     )
   }
 
