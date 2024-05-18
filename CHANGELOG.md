@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.0](https://github.com/supabase/supabase-swift/compare/v2.10.1...v2.11.0) (2024-05-18)
+
+
+### Features
+
+* **auth:** add linkIdentity method ([#392](https://github.com/supabase/supabase-swift/issues/392)) ([7dfaa46](https://github.com/supabase/supabase-swift/commit/7dfaa466e305eb4e29fe7b8472c362bdeba6fa45))
+
 ## [2.10.1](https://github.com/supabase/supabase-swift/compare/v2.10.0...v2.10.1) (2024-05-15)
 
 
