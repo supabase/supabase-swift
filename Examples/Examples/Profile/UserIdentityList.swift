@@ -62,9 +62,7 @@ struct UserIdentityList: View {
               Button(provider.rawValue) {
                 Task {
                   do {
-                    let response = try await supabase.auth.getLinkIdentityURL(provider: provider)
-                    openURL(response.url)
-                    debug("getLinkIdentityURL: \(response.url) opened for provider \(response.provider)")
+                    try await supabase.auth.linkIdentity(provider: provider)
                   } catch {
                     self.error = error
                   }

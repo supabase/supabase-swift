@@ -12,6 +12,7 @@ struct Dependencies: Sendable {
   var eventEmitter: AuthStateChangeEventEmitter = .shared
   var date: @Sendable () -> Date = { Date() }
   var codeVerifierStorage = CodeVerifierStorage.live
+  var urlOpener: URLOpener = .live
 
   var encoder: JSONEncoder { configuration.encoder }
   var decoder: JSONDecoder { configuration.decoder }

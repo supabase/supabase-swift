@@ -210,6 +210,14 @@ final class AuthClientIntegrationTests: XCTestCase {
     }
   }
 
+  func testLinkIdentity() async throws {
+    try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+
+    try await authClient.linkIdentity(provider: .github) { url in
+      XCTAssertTrue(url.absoluteString.contains("github.com"))
+    }
+  }
+
   @discardableResult
   private func signUpIfNeededOrSignIn(
     email: String,

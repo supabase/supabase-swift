@@ -955,14 +955,67 @@ public final class AuthClient: Sendable {
     try await user().identities ?? []
   }
 
+  /// Links an OAuth identity to an existing user.
+  ///
+  /// This method supports the PKCE flow.
+  ///
+  /// - Parameters:
+  ///   - provider: The provider you want to link the user with.
+  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
+  ///   - redirectTo: A URL to send the user to after they are confirmed.
+  ///   - queryParams: Additional query parameters to use.
+  ///   - launchURL: Custom launch URL logic.
+  public func linkIdentity(
+    provider: Provider,
+    scopes: String? = nil,
+    redirectTo: URL? = nil,
+    queryParams: [(name: String, value: String?)] = [],
+    launchURL: @MainActor (_ url: URL) -> Void
+  ) async throws {
+    let response = try await getLinkIdentityURL(
+      provider: provider,
+      scopes: scopes,
+      redirectTo: redirectTo,
+      queryParams: queryParams
+    )
+
+    await launchURL(response.url)
+  }
+
+  /// Links an OAuth identity to an existing user.
+  ///
+  /// This method supports the PKCE flow.
+  ///
+  /// - Parameters:
+  ///   - provider: The provider you want to link the user with.
+  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
+  ///   - redirectTo: A URL to send the user to after they are confirmed.
+  ///   - queryParams: Additional query parameters to use.
+  ///
+  /// - Note: This method opens the URL using the default URL opening mechanism for the platform, if you with to provide your own URL opening logic use ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``.
+  public func linkIdentity(
+    provider: Provider,
+    scopes: String? = nil,
+    redirectTo: URL? = nil,
+    queryParams: [(name: String, value: String?)] = []
+  ) async throws {
+    try await linkIdentity(
+      provider: provider,
+      scopes: scopes,
+      redirectTo: redirectTo,
+      queryParams: queryParams,
+      launchURL: { Current.urlOpener.open($0) }
+    )
+  }
+
   /// Returns the URL to link the user's identity with an OAuth provider.
   ///
   /// This method supports the PKCE flow.
   ///
   /// - Parameters:
   ///   - provider: The provider you want to link the user with.
-  ///   - scopes: The scopes to request from the OAuth provider.
-  ///   - redirectTo: The redirect URL to use, specify a configured deep link.
+  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
+  ///   - redirectTo: A URL to send the user to after they are confirmed.
   ///   - queryParams: Additional query parameters to use.
   public func getLinkIdentityURL(
     provider: Provider,
