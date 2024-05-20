@@ -26,16 +26,16 @@ extension Session {
 }
 
 extension AuthLocalStorage {
-  func getSession() throws -> StoredSession? {
+  func getSession() throws -> Session? {
     try retrieve(key: "supabase.session").flatMap {
-      try AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0)
+      try AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0).session
     }
   }
 
-  func storeSession(_ session: StoredSession) throws {
+  func storeSession(_ session: Session) throws {
     try store(
       key: "supabase.session",
-      value: AuthClient.Configuration.jsonEncoder.encode(session)
+      value: AuthClient.Configuration.jsonEncoder.encode(StoredSession(session: session))
     )
   }
 

@@ -53,14 +53,14 @@ public final class AuthClient: Sendable {
   ///
   /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
   public var currentSession: Session? {
-    try? configuration.localStorage.getSession()?.session
+    try? configuration.localStorage.getSession()
   }
 
   /// Returns the current user, if any.
   ///
   /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
   public var currentUser: User? {
-    try? configuration.localStorage.getSession()?.session.user
+    try? configuration.localStorage.getSession()?.user
   }
 
   /// Namespace for accessing multi-factor authentication API.

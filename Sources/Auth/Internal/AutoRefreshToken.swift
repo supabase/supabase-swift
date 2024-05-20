@@ -62,7 +62,7 @@ private actor LiveAutoRefreshToken {
     let now = Date()
 
     do {
-      guard let currentSession = try? storage.getSession()?.session else {
+      guard let currentSession = try? storage.getSession() else {
         throw AuthError.sessionNotFound
       }
 

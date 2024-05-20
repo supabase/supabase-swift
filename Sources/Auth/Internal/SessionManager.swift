@@ -24,20 +24,18 @@ actor SessionManager {
         throw AuthError.sessionNotFound
       }
 
-      if currentSession.session.isValid {
-        return currentSession.session
+      if currentSession.isValid {
+        return currentSession
       }
 
-      let session = try await sessionRefresher.refreshSession(currentSession.session.refreshToken)
-      try update(session)
-      return session
+      return try await sessionRefresher.refreshSession(currentSession.refreshToken)
     }
 
     return try await task!.value
   }
 
   func update(_ session: Session) throws {
-    try storage.storeSession(StoredSession(session: session))
+    try storage.storeSession(session)
   }
 
   func remove() {

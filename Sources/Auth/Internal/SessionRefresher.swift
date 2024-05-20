@@ -45,7 +45,7 @@ private actor LiveSessionRefresher {
       defer { inFlightRefreshTask = nil }
 
       let session = try await refreshSessionWithRetry(refreshToken)
-      try storage.storeSession(StoredSession(session: session))
+      try storage.storeSession(session)
       eventEmitter.emit(.tokenRefreshed, session: session)
 
       scheduleNextTokenRefresh(session)

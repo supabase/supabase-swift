@@ -50,7 +50,7 @@ final class SessionManagerTests: XCTestCase {
   func testSession_shouldRefreshSession_whenCurrentSessionExpired() async throws {
     let currentSession = Session.expiredSession
 
-    try Current.configuration.localStorage.storeSession(.init(session: currentSession))
+    try Current.configuration.localStorage.storeSession(currentSession)
 
     let validSession = Session.validSession
 
