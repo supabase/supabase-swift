@@ -24,46 +24,36 @@ extension SessionRefresher {
 private actor LiveSessionRefresher {
   static let shared = LiveSessionRefresher()
 
-  private var configuration: AuthClient.Configuration {
-    Current.configuration
-  }
+  private var configuration: AuthClient.Configuration { Current.configuration }
+  private var storage: any AuthLocalStorage { Current.configuration.localStorage }
+  private var eventEmitter: AuthStateChangeEventEmitter { Current.eventEmitter }
+  private var logger: (any SupabaseLogger)? { Current.logger }
+  private var api: APIClient { Current.api }
 
-  private var storage: any AuthLocalStorage {
-    Current.configuration.localStorage
-  }
-
-  private var eventEmitter: AuthStateChangeEventEmitter {
-    Current.eventEmitter
-  }
-
-  private var logger: (any SupabaseLogger)? {
-    Current.logger
-  }
-
-  private var api: APIClient {
-    Current.api
-  }
-
-  private var task: Task<Session, any Error>?
+  private var inFlightRefreshTask: Task<Session, any Error>?
+  private var scheduledNextRefreshTask: Task<Void, Never>?
 
   func refreshSession(_ refreshToken: String) async throws -> Session {
     logger?.debug("begin")
     defer { logger?.debug("end") }
 
-    if let task {
-      return try await task.value
+    if let inFlightRefreshTask {
+      return try await inFlightRefreshTask.value
     }
 
-    task = Task {
-      defer { task = nil }
+    inFlightRefreshTask = Task {
+      defer { inFlightRefreshTask = nil }
 
       let session = try await refreshSessionWithRetry(refreshToken)
       try storage.storeSession(StoredSession(session: session))
       eventEmitter.emit(.tokenRefreshed, session: session)
+      
+      scheduleNextTokenRefresh(session)
+
       return session
     }
 
-    return try await task!.value
+    return try await inFlightRefreshTask!.value
   }
 
   private func refreshSessionWithRetry(_ refreshToken: String) async throws -> Session {
@@ -93,6 +83,25 @@ private actor LiveSessionRefresher {
       let nextBackoffInterval = 200 * pow(2, Double(attempt))
       return isRetryableError(error) &&
         Date().timeIntervalSince1970 + nextBackoffInterval - startedAt.timeIntervalSince1970 < AUTO_REFRESH_TICK_DURATION
+    }
+  }
+
+  private func scheduleNextTokenRefresh(_ refreshedSession: Session) {
+    guard scheduledNextRefreshTask == nil else {
+      return
+    }
+
+    scheduledNextRefreshTask = Task {
+      defer { scheduledNextRefreshTask = nil }
+      let expiresAt = Date(timeIntervalSince1970: refreshedSession.expiresAt)
+      let expiresIn = expiresAt.timeIntervalSinceNow
+
+      let timeToRefresh = max(expiresIn * 0.9, 0)
+      try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeToRefresh))
+
+      if Task.isCancelled { return }
+
+      _ = try? await refreshSession(refreshedSession.refreshToken)
     }
   }
 }
