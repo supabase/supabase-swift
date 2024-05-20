@@ -64,10 +64,12 @@ private actor LiveSessionRefresher {
 
     return try await retry { [logger] attempt in
       if attempt > 0 {
-        try await Task.sleep(nanoseconds: NSEC_PER_MSEC * UInt64(200 * pow(2, Double(attempt - 1))))
+        try await Task.sleep(
+          nanoseconds: NSEC_PER_MSEC * UInt64(computeRetryDelay(attempt: attempt - 1))
+        )
       }
 
-      logger?.debug("refreshing attempt \(attempt)")
+      logger?.debug("refresh attempt \(attempt)")
 
       return try await api.execute(
         HTTPRequest(
@@ -80,28 +82,37 @@ private actor LiveSessionRefresher {
         )
       ).decoded(decoder: configuration.decoder)
     } isRetryable: { attempt, error in
-      let nextBackoffInterval = 200 * pow(2, Double(attempt))
-      return isRetryableError(error) &&
+      let nextBackoffInterval = computeRetryDelay(attempt: attempt)
+      return error.isRetryable &&
         Date().timeIntervalSince1970 + nextBackoffInterval - startedAt.timeIntervalSince1970 < AUTO_REFRESH_TICK_DURATION
     }
   }
 
   private func scheduleNextTokenRefresh(_ refreshedSession: Session) {
+    logger?.debug("")
+
     guard scheduledNextRefreshTask == nil else {
       return
     }
 
     scheduledNextRefreshTask = Task {
       defer { scheduledNextRefreshTask = nil }
+
       let expiresAt = Date(timeIntervalSince1970: refreshedSession.expiresAt)
       let expiresIn = expiresAt.timeIntervalSinceNow
 
+      // if expiresIn < 0, it will refresh right away.
       let timeToRefresh = max(expiresIn * 0.9, 0)
-      try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeToRefresh))
 
-      if Task.isCancelled { return }
+      logger?.debug("scheduled next token refresh in: \(timeToRefresh)s")
+
+      try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeToRefresh))
 
       _ = try? await refreshSession(refreshedSession.refreshToken)
     }
+  }
+
+  private nonisolated func computeRetryDelay(attempt: Int) -> TimeInterval {
+    200 * pow(2, Double(attempt))
   }
 }
