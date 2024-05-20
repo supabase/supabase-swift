@@ -68,3 +68,72 @@ private func base64URLDecode(_ value: String) -> Data? {
   }
   return Data(base64Encoded: base64, options: .ignoreUnknownCharacters)
 }
+
+struct RetryLimitReachedError: Error {}
+
+/// Retry an operation while `limit` is not reached and `isRetryable` returns true.
+func retry<T>(
+  limit: Int = .max,
+  _ operation: @Sendable (_ attempt: Int) async throws -> T,
+  isRetryable: @Sendable (_ attempt: Int, _ error: any Error) -> Bool
+) async throws -> T {
+  for attempt in 0 ..< limit {
+    do {
+      return try await operation(attempt)
+    } catch {
+      if !isRetryable(attempt, error) {
+        throw error
+      }
+    }
+  }
+
+  throw RetryLimitReachedError()
+}
+
+// List of default retryable status codes taken from Alamofire.
+// https://github.com/Alamofire/Alamofire/blob/f455c2975872ccd2d9c81594c658af65716e9b9a/Source/Features/RetryPolicy.swift#L51
+let retryableStatusCode: Set<Int> = [
+  408, // Request Timeout
+  500, // Internal Server Error
+  502, // Bad Gateway
+  503, // Service Unavailable
+  504, // Gateway Timeout
+]
+
+// List of default retryable URLError codes taken from Alamofire.
+// https://github.com/Alamofire/Alamofire/blob/f455c2975872ccd2d9c81594c658af65716e9b9a/Source/Features/RetryPolicy.swift#L59
+let retryableURLErrorCodes: Set<URLError.Code> = [
+  .backgroundSessionInUseByAnotherProcess,
+  .backgroundSessionWasDisconnected,
+  .badServerResponse,
+  .callIsActive,
+  .cannotConnectToHost,
+  .cannotFindHost,
+  .cannotLoadFromNetwork,
+  .dataNotAllowed,
+  .dnsLookupFailed,
+  .downloadDecodingFailedMidStream,
+  .downloadDecodingFailedToComplete,
+  .internationalRoamingOff,
+  .networkConnectionLost,
+  .notConnectedToInternet,
+  .secureConnectionFailed,
+  .serverCertificateHasBadDate,
+  .serverCertificateNotYetValid,
+  .timedOut,
+]
+
+func isRetryableError(_ error: any Error) -> Bool {
+  if let urlError = error as? URLError {
+    return retryableURLErrorCodes.contains(urlError.code)
+  }
+
+  if let authError = error as? AuthError,
+     case let .api(apiError) = authError,
+     let code = apiError.code
+  {
+    return retryableStatusCode.contains(code)
+  }
+
+  return false
+}

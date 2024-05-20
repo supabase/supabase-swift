@@ -4,7 +4,7 @@ import Foundation
 
 struct Dependencies: Sendable {
   var configuration: AuthClient.Configuration
-  var sessionRefresher: SessionRefresher
+  var sessionRefresher = SessionRefresher.live
   var http: any HTTPClientType
   var sessionManager = SessionManager()
   var api = APIClient()

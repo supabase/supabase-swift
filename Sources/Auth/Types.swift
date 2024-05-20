@@ -71,7 +71,7 @@ public struct Session: Codable, Hashable, Sendable {
 
   /// UNIX timestamp after which the ``Session/accessToken`` should be renewed by using the refresh
   /// token with the `refresh_token` grant type.
-  public var expiresAt: TimeInterval?
+  public var expiresAt: TimeInterval
 
   /// An opaque string that can be used once to obtain a new access and refresh token.
   public var refreshToken: String
@@ -88,7 +88,7 @@ public struct Session: Codable, Hashable, Sendable {
     accessToken: String,
     tokenType: String,
     expiresIn: TimeInterval,
-    expiresAt: TimeInterval?,
+    expiresAt: TimeInterval,
     refreshToken: String,
     weakPassword: WeakPassword? = nil,
     user: User
@@ -108,7 +108,7 @@ public struct Session: Codable, Hashable, Sendable {
     accessToken: "",
     tokenType: "",
     expiresIn: 0,
-    expiresAt: nil,
+    expiresAt: 0,
     refreshToken: "",
     user: User(
       id: UUID(),

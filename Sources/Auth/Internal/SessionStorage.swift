@@ -13,15 +13,15 @@ struct StoredSession: Codable {
   var session: Session
   var expirationDate: Date
 
-  var isValid: Bool {
-    expirationDate.timeIntervalSince(Date()) > 60
-  }
-
-  init(session: Session, expirationDate: Date? = nil) {
+  init(session: Session, expirationDate _: Date? = nil) {
     self.session = session
-    self.expirationDate = expirationDate
-      ?? session.expiresAt.map(Date.init(timeIntervalSince1970:))
-      ?? Date().addingTimeInterval(session.expiresIn)
+    expirationDate = Date(timeIntervalSince1970: session.expiresAt)
+  }
+}
+
+extension Session {
+  var isValid: Bool {
+    expiresAt - Date().timeIntervalSince1970 > 60
   }
 }
 

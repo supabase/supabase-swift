@@ -1,10 +1,6 @@
 import _Helpers
 import Foundation
 
-struct SessionRefresher: Sendable {
-  var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
-}
-
 actor SessionManager {
   private var task: Task<Session, any Error>?
 
@@ -16,7 +12,7 @@ actor SessionManager {
     Current.sessionRefresher
   }
 
-  func session(shouldValidateExpiration: Bool = true) async throws -> Session {
+  func session() async throws -> Session {
     if let task {
       return try await task.value
     }
@@ -28,7 +24,7 @@ actor SessionManager {
         throw AuthError.sessionNotFound
       }
 
-      if currentSession.isValid || !shouldValidateExpiration {
+      if currentSession.session.isValid {
         return currentSession.session
       }
 

@@ -10,13 +10,35 @@ import Foundation
   import FoundationNetworking
 #endif
 
+#if canImport(UIKit) && !os(watchOS)
+  import UIKit
+
+  typealias PlatformApplication = UIApplication
+#elseif canImport(AppKit)
+  import AppKit
+
+  typealias PlatformApplication = NSApplication
+#endif
+
+let AUTO_REFRESH_TICK_DURATION: TimeInterval = 30
+let AUTO_REFRESH_TICK_THRESHOLD = 3
+
 public final class AuthClient: Sendable {
+  struct MutableState {
+    var autoRefreshTokenTask: Task<Void, Never>?
+    var notificationCenterObservers: [UncheckedSendable<any NSObjectProtocol>] = []
+  }
+
+  private let mutableState = LockIsolated(MutableState())
+
   private var api: APIClient { Current.api }
   private var configuration: AuthClient.Configuration { Current.configuration }
   private var codeVerifierStorage: CodeVerifierStorage { Current.codeVerifierStorage }
   private var date: @Sendable () -> Date { Current.date }
   private var sessionManager: SessionManager { Current.sessionManager }
+  private var sessionRefresher: SessionRefresher { Current.sessionRefresher }
   private var eventEmitter: AuthStateChangeEventEmitter { Current.eventEmitter }
+  private var logger: (any SupabaseLogger)? { Current.logger }
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -25,6 +47,20 @@ public final class AuthClient: Sendable {
     get async throws {
       try await sessionManager.session()
     }
+  }
+
+  /// Returns the current session, if any.
+  ///
+  /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
+  public var currentSession: Session? {
+    try? configuration.localStorage.getSession()?.session
+  }
+
+  /// Returns the current user, if any.
+  ///
+  /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
+  public var currentUser: User? {
+    try? configuration.localStorage.getSession()?.session.user
   }
 
   /// Namespace for accessing multi-factor authentication API.
@@ -41,11 +77,51 @@ public final class AuthClient: Sendable {
   public init(configuration: Configuration) {
     Current = Dependencies(
       configuration: configuration,
-      sessionRefresher: SessionRefresher { [weak self] in
-        try await self?.refreshSession(refreshToken: $0) ?? .empty
-      },
       http: HTTPClient(configuration: configuration)
     )
+
+    if configuration.autoRefreshToken {
+      startAutoRefresh()
+
+      #if !os(watchOS) && !os(Linux) && !os(Windows)
+        Task { @MainActor [weak self] in
+          let observer1 = NotificationCenter.default.addObserver(
+            forName: PlatformApplication.willResignActiveNotification,
+            object: nil,
+            queue: nil
+          ) { [weak self] _ in
+            self?.stopAutoRefresh()
+          }
+
+          let observer2 = NotificationCenter.default.addObserver(
+            forName: PlatformApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: nil
+          ) { [weak self] _ in
+            self?.startAutoRefresh()
+          }
+
+          let observers = [
+            UncheckedSendable(observer1),
+            UncheckedSendable(observer2),
+          ]
+
+          self?.mutableState.withValue {
+            $0.notificationCenterObservers = observers
+          }
+        }
+      #endif
+    }
+  }
+
+  deinit {
+    mutableState.withValue {
+      for observer in $0.notificationCenterObservers {
+        NotificationCenter.default.removeObserver(observer.value)
+      }
+
+      $0.notificationCenterObservers = []
+    }
   }
 
   /// Listen for auth state changes.
@@ -889,20 +965,6 @@ public final class AuthClient: Sendable {
     )
   }
 
-  /// Returns the current session, if any.
-  ///
-  /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
-  public var currentSession: Session? {
-    try? configuration.localStorage.getSession()?.session
-  }
-
-  /// Returns the current user, if any.
-  ///
-  /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
-  public var currentUser: User? {
-    try? configuration.localStorage.getSession()?.session.user
-  }
-
   /// Gets the current user details if there is an existing session.
   /// - Parameter jwt: Takes in an optional access token jwt. If no jwt is provided, user() will
   /// attempt to get the jwt from the current session.
@@ -1094,30 +1156,72 @@ public final class AuthClient: Sendable {
   /// - Returns: A new session.
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {
-    var credentials = UserCredentials(refreshToken: refreshToken)
-    if credentials.refreshToken == nil {
-      credentials.refreshToken = try await sessionManager.session(shouldValidateExpiration: false)
-        .refreshToken
+    guard let refreshToken = refreshToken ?? currentSession?.refreshToken else {
+      throw AuthError.sessionNotFound
     }
 
-    let session = try await api.execute(
-      .init(
-        url: configuration.url.appendingPathComponent("token"),
-        method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "refresh_token")],
-        body: configuration.encoder.encode(credentials)
-      )
-    ).decoded(as: Session.self, decoder: configuration.decoder)
+    return try await sessionRefresher.refreshSession(refreshToken)
+  }
 
-    if session.user.phoneConfirmedAt != nil || session.user.emailConfirmedAt != nil
-      || session
-      .user.confirmedAt != nil
-    {
-      try await sessionManager.update(session)
-      eventEmitter.emit(.tokenRefreshed, session: session)
+  /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
+  /// If you set the ``AuthClient/Configuration/autoRefreshToken`` you don't need to call this function, it will be called for you.
+  public func startAutoRefresh() {
+    logger?.debug("")
+
+    mutableState.withValue {
+      $0.autoRefreshTokenTask?.cancel()
+      $0.autoRefreshTokenTask = Task {
+        while !Task.isCancelled {
+          try? await Task.sleep(nanoseconds: UInt64(AUTO_REFRESH_TICK_DURATION) * NSEC_PER_SEC)
+          await autoRefreshTokenTick()
+        }
+      }
+    }
+  }
+
+  /// Stops an active auto refresh process running in the background (if any).
+  public func stopAutoRefresh() {
+    logger?.debug("")
+
+    mutableState.withValue {
+      $0.autoRefreshTokenTask?.cancel()
+      $0.autoRefreshTokenTask = nil
+    }
+  }
+
+  private func autoRefreshTokenTick() async {
+    logger?.debug("begin")
+    defer {
+      logger?.debug("end")
     }
 
-    return session
+    let now = Date()
+
+    do {
+      guard let currentSession else {
+        throw AuthError.sessionNotFound
+      }
+
+      let expiresAt = currentSession.expiresAt
+
+      // session will expire in this many ticks (or has already expired if <= 0)
+      let expiresInTicks = Int((expiresAt - now.timeIntervalSince1970) / AUTO_REFRESH_TICK_DURATION)
+
+      logger?
+        .debug(
+          "access token expires in \(expiresInTicks) ticks, a tick last \(AUTO_REFRESH_TICK_DURATION)s, refresh threshold is \(AUTO_REFRESH_TICK_THRESHOLD) ticks"
+        )
+
+      if expiresInTicks <= AUTO_REFRESH_TICK_THRESHOLD {
+        _ = try await refreshSession(refreshToken: session.refreshToken)
+      }
+
+    } catch AuthError.sessionNotFound {
+      logger?.debug("no session")
+      return
+    } catch {
+      logger?.error("Auto refresh tick failed with error: \(error)")
+    }
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {
