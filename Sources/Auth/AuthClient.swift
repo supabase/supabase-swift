@@ -25,7 +25,6 @@ let AUTO_REFRESH_TICK_THRESHOLD = 3
 
 public final class AuthClient: Sendable {
   struct MutableState {
-    var autoRefreshTokenTask: Task<Void, Never>?
     var notificationCenterObservers: [UncheckedSendable<any NSObjectProtocol>] = []
   }
 
@@ -39,6 +38,7 @@ public final class AuthClient: Sendable {
   private var sessionRefresher: SessionRefresher { Current.sessionRefresher }
   private var eventEmitter: AuthStateChangeEventEmitter { Current.eventEmitter }
   private var logger: (any SupabaseLogger)? { Current.logger }
+  private var autoRefreshToken: AutoRefreshToken { Current.autoRefreshToken }
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -81,7 +81,9 @@ public final class AuthClient: Sendable {
     )
 
     if configuration.autoRefreshToken {
-      startAutoRefresh()
+      Task {
+        await startAutoRefresh()
+      }
 
       #if !os(watchOS) && !os(Linux) && !os(Windows)
         Task { @MainActor [weak self] in
@@ -90,7 +92,9 @@ public final class AuthClient: Sendable {
             object: nil,
             queue: nil
           ) { [weak self] _ in
-            self?.stopAutoRefresh()
+            Task { [weak self] in
+              await self?.stopAutoRefresh()
+            }
           }
 
           let observer2 = NotificationCenter.default.addObserver(
@@ -98,7 +102,9 @@ public final class AuthClient: Sendable {
             object: nil,
             queue: nil
           ) { [weak self] _ in
-            self?.startAutoRefresh()
+            Task { [weak self] in
+              await self?.startAutoRefresh()
+            }
           }
 
           let observers = [
@@ -1165,63 +1171,13 @@ public final class AuthClient: Sendable {
 
   /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
   /// If you set the ``AuthClient/Configuration/autoRefreshToken`` you don't need to call this function, it will be called for you.
-  public func startAutoRefresh() {
-    logger?.debug("")
-
-    mutableState.withValue {
-      $0.autoRefreshTokenTask?.cancel()
-      $0.autoRefreshTokenTask = Task {
-        while !Task.isCancelled {
-          try? await Task.sleep(nanoseconds: UInt64(AUTO_REFRESH_TICK_DURATION) * NSEC_PER_SEC)
-          await autoRefreshTokenTick()
-        }
-      }
-    }
+  public func startAutoRefresh() async {
+    await autoRefreshToken.start()
   }
 
   /// Stops an active auto refresh process running in the background (if any).
-  public func stopAutoRefresh() {
-    logger?.debug("")
-
-    mutableState.withValue {
-      $0.autoRefreshTokenTask?.cancel()
-      $0.autoRefreshTokenTask = nil
-    }
-  }
-
-  private func autoRefreshTokenTick() async {
-    logger?.debug("begin")
-    defer {
-      logger?.debug("end")
-    }
-
-    let now = Date()
-
-    do {
-      guard let currentSession else {
-        throw AuthError.sessionNotFound
-      }
-
-      let expiresAt = currentSession.expiresAt
-
-      // session will expire in this many ticks (or has already expired if <= 0)
-      let expiresInTicks = Int((expiresAt - now.timeIntervalSince1970) / AUTO_REFRESH_TICK_DURATION)
-
-      logger?
-        .debug(
-          "access token expires in \(expiresInTicks) ticks, a tick last \(AUTO_REFRESH_TICK_DURATION)s, refresh threshold is \(AUTO_REFRESH_TICK_THRESHOLD) ticks"
-        )
-
-      if expiresInTicks <= AUTO_REFRESH_TICK_THRESHOLD {
-        _ = try await refreshSession(refreshToken: session.refreshToken)
-      }
-
-    } catch AuthError.sessionNotFound {
-      logger?.debug("no session")
-      return
-    } catch {
-      logger?.error("Auto refresh tick failed with error: \(error)")
-    }
+  public func stopAutoRefresh() async {
+    await autoRefreshToken.stop()
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {

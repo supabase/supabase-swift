@@ -8,6 +8,7 @@ struct Dependencies: Sendable {
   var http: any HTTPClientType
   var sessionManager = SessionManager()
   var api = APIClient()
+  var autoRefreshToken: AutoRefreshToken = .live
 
   var eventEmitter: AuthStateChangeEventEmitter = .shared
   var date: @Sendable () -> Date = { Date() }

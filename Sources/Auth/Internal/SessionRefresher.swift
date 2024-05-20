@@ -47,7 +47,7 @@ private actor LiveSessionRefresher {
       let session = try await refreshSessionWithRetry(refreshToken)
       try storage.storeSession(StoredSession(session: session))
       eventEmitter.emit(.tokenRefreshed, session: session)
-      
+
       scheduleNextTokenRefresh(session)
 
       return session
