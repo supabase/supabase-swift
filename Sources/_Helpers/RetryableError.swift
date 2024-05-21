@@ -26,6 +26,10 @@ extension Error {
   }
 }
 
+extension CancellationError: RetryableError {
+  package var isRetryable: Bool { false }
+}
+
 // List of default retryable status codes taken from Alamofire.
 // https://github.com/Alamofire/Alamofire/blob/f455c2975872ccd2d9c81594c658af65716e9b9a/Source/Features/RetryPolicy.swift#L51
 package let retryableStatusCode: Set<Int> = [

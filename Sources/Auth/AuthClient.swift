@@ -10,35 +10,15 @@ import Foundation
   import FoundationNetworking
 #endif
 
-#if canImport(UIKit) && !os(watchOS)
-  import UIKit
-
-  typealias PlatformApplication = UIApplication
-#elseif canImport(AppKit)
-  import AppKit
-
-  typealias PlatformApplication = NSApplication
-#endif
-
-let AUTO_REFRESH_TICK_DURATION: TimeInterval = 30
-let AUTO_REFRESH_TICK_THRESHOLD = 3
-
 public final class AuthClient: Sendable {
-  struct MutableState {
-    var notificationCenterObservers: [UncheckedSendable<any NSObjectProtocol>] = []
-  }
-
-  private let mutableState = LockIsolated(MutableState())
-
   private var api: APIClient { Current.api }
   private var configuration: AuthClient.Configuration { Current.configuration }
   private var codeVerifierStorage: CodeVerifierStorage { Current.codeVerifierStorage }
   private var date: @Sendable () -> Date { Current.date }
   private var sessionManager: SessionManager { Current.sessionManager }
-  private var sessionRefresher: SessionRefresher { Current.sessionRefresher }
   private var eventEmitter: AuthStateChangeEventEmitter { Current.eventEmitter }
   private var logger: (any SupabaseLogger)? { Current.logger }
-  private var autoRefreshToken: AutoRefreshToken { Current.autoRefreshToken }
+  private var storage: any AuthLocalStorage { Current.configuration.localStorage }
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -53,14 +33,14 @@ public final class AuthClient: Sendable {
   ///
   /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
   public var currentSession: Session? {
-    try? configuration.localStorage.getSession()
+    storage.getSession()
   }
 
   /// Returns the current user, if any.
   ///
   /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
   public var currentUser: User? {
-    try? configuration.localStorage.getSession()?.user
+    storage.getSession()?.user
   }
 
   /// Namespace for accessing multi-factor authentication API.
@@ -79,55 +59,6 @@ public final class AuthClient: Sendable {
       configuration: configuration,
       http: HTTPClient(configuration: configuration)
     )
-
-    if configuration.autoRefreshToken {
-      Task {
-        await startAutoRefresh()
-      }
-
-      #if !os(watchOS) && !os(Linux) && !os(Windows)
-        Task { @MainActor [weak self] in
-          let observer1 = NotificationCenter.default.addObserver(
-            forName: PlatformApplication.willResignActiveNotification,
-            object: nil,
-            queue: nil
-          ) { [weak self] _ in
-            Task { [weak self] in
-              await self?.stopAutoRefresh()
-            }
-          }
-
-          let observer2 = NotificationCenter.default.addObserver(
-            forName: PlatformApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: nil
-          ) { [weak self] _ in
-            Task { [weak self] in
-              await self?.startAutoRefresh()
-            }
-          }
-
-          let observers = [
-            UncheckedSendable(observer1),
-            UncheckedSendable(observer2),
-          ]
-
-          self?.mutableState.withValue {
-            $0.notificationCenterObservers = observers
-          }
-        }
-      #endif
-    }
-  }
-
-  deinit {
-    mutableState.withValue {
-      for observer in $0.notificationCenterObservers {
-        NotificationCenter.default.removeObserver(observer.value)
-      }
-
-      $0.notificationCenterObservers = []
-    }
   }
 
   /// Listen for auth state changes.
@@ -240,13 +171,14 @@ public final class AuthClient: Sendable {
 
   private func _signUp(request: HTTPRequest) async throws -> AuthResponse {
     await sessionManager.remove()
+
     let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
       decoder: configuration.decoder
     )
 
     if let session = response.session {
-      try await sessionManager.update(session)
+      await sessionManager.update(session)
       eventEmitter.emit(.signedIn, session: session)
     }
 
@@ -346,7 +278,7 @@ public final class AuthClient: Sendable {
       decoder: configuration.decoder
     )
 
-    try await sessionManager.update(session)
+    await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
 
     return session
@@ -527,7 +459,7 @@ public final class AuthClient: Sendable {
 
     codeVerifierStorage.set(nil)
 
-    try await sessionManager.update(session)
+    await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
 
     return session
@@ -722,7 +654,7 @@ public final class AuthClient: Sendable {
       user: user
     )
 
-    try await sessionManager.update(session)
+    await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
 
     if let type = params["type"], type == "recovery" {
@@ -770,7 +702,7 @@ public final class AuthClient: Sendable {
       )
     }
 
-    try await sessionManager.update(session)
+    await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
     return session
   }
@@ -887,7 +819,7 @@ public final class AuthClient: Sendable {
     )
 
     if let session = response.session {
-      try await sessionManager.update(session)
+      await sessionManager.update(session)
       eventEmitter.emit(.signedIn, session: session)
     }
 
@@ -1013,7 +945,7 @@ public final class AuthClient: Sendable {
       )
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
-    try await sessionManager.update(session)
+    await sessionManager.update(session)
     eventEmitter.emit(.userUpdated, session: session)
     return updatedUser
   }
@@ -1166,18 +1098,7 @@ public final class AuthClient: Sendable {
       throw AuthError.sessionNotFound
     }
 
-    return try await sessionRefresher.refreshSession(refreshToken)
-  }
-
-  /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
-  /// If you set the ``AuthClient/Configuration/autoRefreshToken`` you don't need to call this function, it will be called for you.
-  public func startAutoRefresh() async {
-    await autoRefreshToken.start()
-  }
-
-  /// Stops an active auto refresh process running in the background (if any).
-  public func stopAutoRefresh() async {
-    await autoRefreshToken.stop()
+    return try await sessionManager.refreshSession(refreshToken)
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {

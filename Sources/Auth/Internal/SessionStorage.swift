@@ -26,9 +26,16 @@ extension Session {
 }
 
 extension AuthLocalStorage {
-  func getSession() throws -> Session? {
-    try retrieve(key: "supabase.session").flatMap {
-      try AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0).session
+  func getSession() -> Session? {
+    let logger = Current.logger
+
+    do {
+      return try retrieve(key: "supabase.session").flatMap {
+        try AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0).session
+      }
+    } catch {
+      logger?.error("\(error)")
+      return nil
     }
   }
 

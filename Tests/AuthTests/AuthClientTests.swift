@@ -113,7 +113,7 @@ final class AuthClientTests: XCTestCase {
 
     try await sut.signOut(scope: .others)
 
-    let sessionRemoved = try storage.getSession() == nil
+    let sessionRemoved = storage.getSession() == nil
     XCTAssertFalse(sessionRemoved)
   }
 
@@ -144,7 +144,7 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNoDifference(events, [.initialSession, .signedOut])
     XCTAssertNoDifference(sessions, [.validSession, nil])
 
-    let sessionRemoved = try storage.getSession() == nil
+    let sessionRemoved = storage.getSession() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -175,7 +175,7 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNoDifference(events, [.initialSession, .signedOut])
     XCTAssertNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = try storage.getSession() == nil
+    let sessionRemoved = storage.getSession() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -206,7 +206,7 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNoDifference(events, [.initialSession, .signedOut])
     XCTAssertNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = try storage.getSession() == nil
+    let sessionRemoved = storage.getSession() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -362,6 +362,18 @@ extension HTTPResponse {
   static func stub(fromFileName fileName: String, code: Int = 200) -> HTTPResponse {
     HTTPResponse(
       data: json(named: fileName),
+      response: HTTPURLResponse(
+        url: clientURL,
+        statusCode: code,
+        httpVersion: nil,
+        headerFields: nil
+      )!
+    )
+  }
+
+  static func stub(_ value: some Encodable, code: Int = 200) -> HTTPResponse {
+    HTTPResponse(
+      data: try! Current.configuration.encoder.encode(value),
       response: HTTPURLResponse(
         url: clientURL,
         statusCode: code,

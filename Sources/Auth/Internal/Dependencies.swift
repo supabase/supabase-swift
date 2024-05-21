@@ -4,11 +4,9 @@ import Foundation
 
 struct Dependencies: Sendable {
   var configuration: AuthClient.Configuration
-  var sessionRefresher = SessionRefresher.live
   var http: any HTTPClientType
-  var sessionManager = SessionManager()
+  var sessionManager = SessionManager.live
   var api = APIClient()
-  var autoRefreshToken: AutoRefreshToken = .live
 
   var eventEmitter: AuthStateChangeEventEmitter = .shared
   var date: @Sendable () -> Date = { Date() }

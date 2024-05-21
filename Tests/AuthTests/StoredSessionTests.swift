@@ -11,7 +11,7 @@ final class StoredSessionTests: XCTestCase {
   func testStoredSession() throws {
     let sut = try! DiskTestStorage()
 
-    let _ = try sut.getSession()
+    XCTAssertNotNil(sut.getSession())
 
     let session = Session(
       accessToken: "accesstoken",
