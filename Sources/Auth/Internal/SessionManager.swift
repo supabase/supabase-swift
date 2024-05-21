@@ -32,7 +32,7 @@ private actor LiveSessionManager {
   private var scheduledNextRefreshTask: Task<Void, Never>?
 
   func session() async throws -> Session {
-    guard let currentSession = storage.getSession() else {
+    guard let currentSession = try storage.getSession() else {
       throw AuthError.sessionNotFound
     }
 
