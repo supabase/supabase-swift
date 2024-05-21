@@ -113,7 +113,7 @@ final class AuthClientTests: XCTestCase {
 
     try await sut.signOut(scope: .others)
 
-    let sessionRemoved = storage.getSession() == nil
+    let sessionRemoved = try storage.getSession() == nil
     XCTAssertFalse(sessionRemoved)
   }
 
@@ -144,7 +144,7 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNoDifference(events, [.initialSession, .signedOut])
     XCTAssertNoDifference(sessions, [.validSession, nil])
 
-    let sessionRemoved = storage.getSession() == nil
+    let sessionRemoved = try storage.getSession() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -175,7 +175,7 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNoDifference(events, [.initialSession, .signedOut])
     XCTAssertNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = storage.getSession() == nil
+    let sessionRemoved = try storage.getSession() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -206,7 +206,7 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNoDifference(events, [.initialSession, .signedOut])
     XCTAssertNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = storage.getSession() == nil
+    let sessionRemoved = try storage.getSession() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
