@@ -37,6 +37,8 @@ private actor LiveSessionManager {
     }
 
     if currentSession.isValid {
+      scheduleNextTokenRefresh(currentSession)
+
       return currentSession
     }
 
@@ -99,10 +101,13 @@ private actor LiveSessionManager {
     }
   }
 
-  private func scheduleNextTokenRefresh(_ refreshedSession: Session) {
-    logger?.debug("")
+  private func scheduleNextTokenRefresh(_ refreshedSession: Session, source: StaticString = #function) {
+    logger?.debug("source: \(source)")
 
-    scheduledNextRefreshTask?.cancel()
+    guard scheduledNextRefreshTask == nil else {
+      logger?.debug("source: \(source) refresh task already scheduled")
+      return
+    }
 
     scheduledNextRefreshTask = Task {
       defer { scheduledNextRefreshTask = nil }
@@ -113,7 +118,7 @@ private actor LiveSessionManager {
       // if expiresIn < 0, it will refresh right away.
       let timeToRefresh = max(expiresIn * 0.9, 0)
 
-      logger?.debug("scheduled next token refresh in: \(timeToRefresh)s")
+      logger?.debug("source: \(source) scheduled next token refresh in: \(timeToRefresh)s")
 
       try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeToRefresh))
 
