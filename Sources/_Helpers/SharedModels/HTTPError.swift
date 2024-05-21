@@ -33,9 +33,3 @@ extension HTTPError: LocalizedError {
     return message
   }
 }
-
-extension HTTPError: RetryableError {
-  package var isRetryable: Bool {
-    retryableStatusCode.contains(response.statusCode)
-  }
-}

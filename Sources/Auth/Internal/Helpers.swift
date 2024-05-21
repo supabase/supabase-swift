@@ -69,13 +69,3 @@ private func base64URLDecode(_ value: String) -> Data? {
   }
   return Data(base64Encoded: base64, options: .ignoreUnknownCharacters)
 }
-
-extension AuthError: RetryableError {
-  package var isRetryable: Bool {
-    guard case let .api(error) = self, let code = error.code else {
-      return false
-    }
-
-    return retryableStatusCode.contains(code)
-  }
-}
