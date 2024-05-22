@@ -14,11 +14,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
-    supabase.application(application, didFinishLaunchingWithOptions: launchOptions)
+    if let url = launchOptions?[.url] as? URL {
+      supabase.handle(url)
+    }
+    return true
   }
 
   func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-    supabase.application(app, open: url, options: options)
+    supabase.handle(url)
+    return true
   }
 
   func application(_: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options _: UIScene.ConnectionOptions) -> UISceneConfiguration {
@@ -30,7 +34,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 class SceneDelegate: UIResponder, UISceneDelegate {
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-    supabase.scene(scene, openURLContexts: URLContexts)
+    guard let url = URLContexts.first?.url else { return }
+
+    supabase.handle(url)
   }
 }
 
