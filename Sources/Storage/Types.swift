@@ -44,9 +44,8 @@ public struct FileOptions: Sendable {
   /// in the `Cache-Control: max-age=<seconds>` header. Defaults to 3600 seconds.
   public var cacheControl: String
 
-  /// The `Content-Type` header value. Should be specified if using a `fileBody` that is neither
-  /// `Blob` nor `File` nor `FormData`, otherwise will default to `text/plain;charset=UTF-8`.
-  public var contentType: String
+  /// The `Content-Type` header value.
+  public var contentType: String?
 
   /// When upsert is set to true, the file is overwritten if it exists. When set to false, an error
   /// is thrown if the object already exists. Defaults to false.
@@ -59,7 +58,7 @@ public struct FileOptions: Sendable {
 
   public init(
     cacheControl: String = "3600",
-    contentType: String = "text/plain;charset=UTF-8",
+    contentType: String? = nil,
     upsert: Bool = false,
     duplex: String? = nil
   ) {
