@@ -15,6 +15,11 @@ public enum AuthChangeEvent: String, Sendable {
   case mfaChallengeVerified = "MFA_CHALLENGE_VERIFIED"
 }
 
+@available(
+  *,
+  deprecated,
+  message: "Access to UserCredentials will be removed on the next major release."
+)
 public struct UserCredentials: Codable, Hashable, Sendable {
   public var email: String?
   public var password: String?
@@ -104,21 +109,13 @@ public struct Session: Codable, Hashable, Sendable {
     self.user = user
   }
 
-  static let empty = Session(
-    accessToken: "",
-    tokenType: "",
-    expiresIn: 0,
-    expiresAt: 0,
-    refreshToken: "",
-    user: User(
-      id: UUID(),
-      appMetadata: [:],
-      userMetadata: [:],
-      aud: "",
-      createdAt: Date(),
-      updatedAt: Date()
-    )
-  )
+  /// Returns `true` if the token is expired or will expire in the next 30 seconds.
+  ///
+  /// The 30 second buffer is to account for latency issues.
+  public var isExpired: Bool {
+    let expiresAt = Date(timeIntervalSince1970: expiresAt)
+    return expiresAt.timeIntervalSinceNow < EXPIRY_MARGIN
+  }
 }
 
 public struct User: Codable, Hashable, Identifiable, Sendable {
@@ -513,7 +510,7 @@ public struct Factor: Identifiable, Codable, Hashable, Sendable {
   public let friendlyName: String?
 
   /// Type of factor. Only `totp` supported with this version but may change in future versions.
-  public let factorType: String
+  public let factorType: FactorType
 
   /// Factor's status.
   public let status: FactorStatus
@@ -718,8 +715,7 @@ public struct ResendMobileResponse: Decodable, Hashable, Sendable {
 }
 
 public struct WeakPassword: Codable, Hashable, Sendable {
-  /// List of reasons the password is too weak, could be any of `length`, `characters`, or
-  /// `pwned`.
+  /// List of reasons the password is too weak, could be any of `length`, `characters`, or `pwned`.
   public let reasons: [String]
 }
 
