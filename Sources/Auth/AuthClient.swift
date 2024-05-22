@@ -17,6 +17,8 @@ public final class AuthClient: Sendable {
   private var date: @Sendable () -> Date { Current.date }
   private var sessionManager: SessionManager { Current.sessionManager }
   private var eventEmitter: AuthStateChangeEventEmitter { Current.eventEmitter }
+  private var logger: (any SupabaseLogger)? { Current.logger }
+  private var storage: any AuthLocalStorage { Current.configuration.localStorage }
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -25,6 +27,20 @@ public final class AuthClient: Sendable {
     get async throws {
       try await sessionManager.session()
     }
+  }
+
+  /// Returns the current session, if any.
+  ///
+  /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
+  public var currentSession: Session? {
+    try? storage.getSession()
+  }
+
+  /// Returns the current user, if any.
+  ///
+  /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
+  public var currentUser: User? {
+    try? storage.getSession()?.user
   }
 
   /// Namespace for accessing multi-factor authentication API.
@@ -41,9 +57,6 @@ public final class AuthClient: Sendable {
   public init(configuration: Configuration) {
     Current = Dependencies(
       configuration: configuration,
-      sessionRefresher: SessionRefresher { [weak self] in
-        try await self?.refreshSession(refreshToken: $0) ?? .empty
-      },
       http: HTTPClient(configuration: configuration)
     )
   }
@@ -158,13 +171,14 @@ public final class AuthClient: Sendable {
 
   private func _signUp(request: HTTPRequest) async throws -> AuthResponse {
     await sessionManager.remove()
+
     let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
       decoder: configuration.decoder
     )
 
     if let session = response.session {
-      try await sessionManager.update(session)
+      await sessionManager.update(session)
       eventEmitter.emit(.signedIn, session: session)
     }
 
@@ -264,7 +278,7 @@ public final class AuthClient: Sendable {
       decoder: configuration.decoder
     )
 
-    try await sessionManager.update(session)
+    await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
 
     return session
@@ -445,7 +459,7 @@ public final class AuthClient: Sendable {
 
     codeVerifierStorage.set(nil)
 
-    try await sessionManager.update(session)
+    await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
 
     return session
@@ -640,7 +654,7 @@ public final class AuthClient: Sendable {
       user: user
     )
 
-    try await sessionManager.update(session)
+    await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
 
     if let type = params["type"], type == "recovery" {
@@ -688,7 +702,7 @@ public final class AuthClient: Sendable {
       )
     }
 
-    try await sessionManager.update(session)
+    await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
     return session
   }
@@ -805,7 +819,7 @@ public final class AuthClient: Sendable {
     )
 
     if let session = response.session {
-      try await sessionManager.update(session)
+      await sessionManager.update(session)
       eventEmitter.emit(.signedIn, session: session)
     }
 
@@ -889,20 +903,6 @@ public final class AuthClient: Sendable {
     )
   }
 
-  /// Returns the current session, if any.
-  ///
-  /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
-  public var currentSession: Session? {
-    try? configuration.localStorage.getSession()?.session
-  }
-
-  /// Returns the current user, if any.
-  ///
-  /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
-  public var currentUser: User? {
-    try? configuration.localStorage.getSession()?.session.user
-  }
-
   /// Gets the current user details if there is an existing session.
   /// - Parameter jwt: Takes in an optional access token jwt. If no jwt is provided, user() will
   /// attempt to get the jwt from the current session.
@@ -945,7 +945,7 @@ public final class AuthClient: Sendable {
       )
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
-    try await sessionManager.update(session)
+    await sessionManager.update(session)
     eventEmitter.emit(.userUpdated, session: session)
     return updatedUser
   }
@@ -1094,30 +1094,11 @@ public final class AuthClient: Sendable {
   /// - Returns: A new session.
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {
-    var credentials = UserCredentials(refreshToken: refreshToken)
-    if credentials.refreshToken == nil {
-      credentials.refreshToken = try await sessionManager.session(shouldValidateExpiration: false)
-        .refreshToken
+    guard let refreshToken = refreshToken ?? currentSession?.refreshToken else {
+      throw AuthError.sessionNotFound
     }
 
-    let session = try await api.execute(
-      .init(
-        url: configuration.url.appendingPathComponent("token"),
-        method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "refresh_token")],
-        body: configuration.encoder.encode(credentials)
-      )
-    ).decoded(as: Session.self, decoder: configuration.decoder)
-
-    if session.user.phoneConfirmedAt != nil || session.user.emailConfirmedAt != nil
-      || session
-      .user.confirmedAt != nil
-    {
-      try await sessionManager.update(session)
-      eventEmitter.emit(.tokenRefreshed, session: session)
-    }
-
-    return session
+    return try await sessionManager.refreshSession(refreshToken)
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {

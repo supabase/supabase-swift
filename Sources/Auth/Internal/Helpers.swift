@@ -1,3 +1,4 @@
+import _Helpers
 import Foundation
 
 /// Extracts parameters encoded in the URL both in the query and fragment.

@@ -14,18 +14,21 @@ import XCTest
 import XCTestDynamicOverlay
 
 final class SessionManagerTests: XCTestCase {
+  var http: HTTPClientMock!
+
   override func setUp() {
     super.setUp()
 
+    http = HTTPClientMock()
+
     Current = .init(
       configuration: .init(url: clientURL, localStorage: InMemoryLocalStorage(), logger: nil),
-      sessionRefresher: SessionRefresher(refreshSession: unimplemented("refreshSession")),
-      http: HTTPClientMock()
+      http: http
     )
   }
 
   func testSession_shouldFailWithSessionNotFound() async {
-    let sut = SessionManager()
+    let sut = SessionManager.live
 
     do {
       _ = try await sut.session()
@@ -36,21 +39,19 @@ final class SessionManagerTests: XCTestCase {
     }
   }
 
-  // TODO: Fix flaky test
-  //  func testSession_shouldReturnValidSession() async throws {
-  //    let session = Session.validSession
-  //    try Current.configuration.localStorage.storeSession(.init(session: session))
-  //
-  //    let sut = SessionManager()
-  //
-  //    let returnedSession = try await sut.session()
-  //    XCTAssertNoDifference(returnedSession, session)
-  //  }
+  func testSession_shouldReturnValidSession() async throws {
+    let session = Session.validSession
+    try Current.configuration.localStorage.storeSession(session)
+
+    let sut = SessionManager.live
+
+    let returnedSession = try await sut.session()
+    XCTAssertNoDifference(returnedSession, session)
+  }
 
   func testSession_shouldRefreshSession_whenCurrentSessionExpired() async throws {
     let currentSession = Session.expiredSession
-
-    try Current.configuration.localStorage.storeSession(.init(session: currentSession))
+    try Current.configuration.localStorage.storeSession(currentSession)
 
     let validSession = Session.validSession
 
@@ -58,12 +59,16 @@ final class SessionManagerTests: XCTestCase {
 
     let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
-    Current.sessionRefresher.refreshSession = { _ in
-      refreshSessionCallCount.withValue { $0 += 1 }
-      return await refreshSessionStream.first { _ in true } ?? .empty
-    }
+    http.when(
+      { $0.url.path.contains("/token") },
+      return: { _ in
+        refreshSessionCallCount.withValue { $0 += 1 }
+        let session = await refreshSessionStream.first(where: { _ in true })!
+        return .stub(session)
+      }
+    )
 
-    let sut = SessionManager()
+    let sut = SessionManager.live
 
     // Fire N tasks and call sut.session()
     let tasks = (0 ..< 10).map { _ in

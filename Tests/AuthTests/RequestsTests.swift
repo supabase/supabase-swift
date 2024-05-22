@@ -193,7 +193,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSetSessionWithAFutureExpirationDate() async throws {
-    try storage.storeSession(.init(session: .validSession))
+    try storage.storeSession(.validSession)
 
     let sut = makeSUT()
 
@@ -217,7 +217,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSignOut() async throws {
-    try storage.storeSession(.init(session: .validSession))
+    try storage.storeSession(.validSession)
 
     let sut = makeSUT()
 
@@ -227,7 +227,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSignOutWithLocalScope() async throws {
-    try storage.storeSession(.init(session: .validSession))
+    try storage.storeSession(.validSession)
 
     let sut = makeSUT()
 
@@ -237,7 +237,7 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSignOutWithOthersScope() async throws {
-    try storage.storeSession(.init(session: .validSession))
+    try storage.storeSession(.validSession)
 
     let sut = makeSUT()
 
@@ -276,7 +276,7 @@ final class RequestsTests: XCTestCase {
   func testUpdateUser() async throws {
     let sut = makeSUT()
 
-    try storage.storeSession(.init(session: .validSession))
+    try storage.storeSession(.validSession)
 
     await assert {
       try await sut.update(
@@ -339,7 +339,7 @@ final class RequestsTests: XCTestCase {
   func testReauthenticate() async throws {
     let sut = makeSUT()
 
-    try storage.storeSession(.init(session: .validSession))
+    try storage.storeSession(.validSession)
 
     await assert {
       try await sut.reauthenticate()
@@ -349,7 +349,7 @@ final class RequestsTests: XCTestCase {
   func testUnlinkIdentity() async throws {
     let sut = makeSUT()
 
-    try storage.storeSession(.init(session: .validSession))
+    try storage.storeSession(.validSession)
 
     await assert {
       try await sut.unlinkIdentity(
@@ -405,7 +405,7 @@ final class RequestsTests: XCTestCase {
   func testGetLinkIdentityURL() async throws {
     let sut = makeSUT()
 
-    try storage.storeSession(.init(session: .validSession))
+    try storage.storeSession(.validSession)
 
     await assert {
       _ = try await sut.getLinkIdentityURL(

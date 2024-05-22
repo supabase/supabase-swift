@@ -13,29 +13,29 @@ struct StoredSession: Codable {
   var session: Session
   var expirationDate: Date
 
-  var isValid: Bool {
-    expirationDate.timeIntervalSince(Date()) > 60
-  }
-
-  init(session: Session, expirationDate: Date? = nil) {
+  init(session: Session, expirationDate _: Date? = nil) {
     self.session = session
-    self.expirationDate = expirationDate
-      ?? session.expiresAt.map(Date.init(timeIntervalSince1970:))
-      ?? Date().addingTimeInterval(session.expiresIn)
+    expirationDate = Date(timeIntervalSince1970: session.expiresAt)
+  }
+}
+
+extension Session {
+  var isValid: Bool {
+    expiresAt - Date().timeIntervalSince1970 > 60
   }
 }
 
 extension AuthLocalStorage {
-  func getSession() throws -> StoredSession? {
+  func getSession() throws -> Session? {
     try retrieve(key: "supabase.session").flatMap {
-      try AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0)
+      try AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0).session
     }
   }
 
-  func storeSession(_ session: StoredSession) throws {
+  func storeSession(_ session: Session) throws {
     try store(
       key: "supabase.session",
-      value: AuthClient.Configuration.jsonEncoder.encode(session)
+      value: AuthClient.Configuration.jsonEncoder.encode(StoredSession(session: session))
     )
   }
 
