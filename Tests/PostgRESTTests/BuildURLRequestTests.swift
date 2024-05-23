@@ -206,6 +206,11 @@ final class BuildURLRequestTests: XCTestCase {
           .select()
           .containedBy("userMetadata", value: ["age": 18])
       },
+      TestCase(name: "filter starting with non-alphanumeric") { client in
+        client.from("users")
+          .select()
+          .eq("to", value: "+16505555555")
+      },
     ]
 
     for testCase in testCases {
