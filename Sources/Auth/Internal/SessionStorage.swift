@@ -19,12 +19,6 @@ struct StoredSession: Codable {
   }
 }
 
-extension Session {
-  var isValid: Bool {
-    expiresAt - Date().timeIntervalSince1970 > 60
-  }
-}
-
 extension AuthLocalStorage {
   func getSession() throws -> Session? {
     try retrieve(key: "supabase.session").flatMap {

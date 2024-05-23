@@ -5,11 +5,15 @@ public enum AuthError: LocalizedError, Sendable, Equatable {
   case malformedJWT
   case sessionNotFound
   case api(APIError)
+
+  /// Error thrown during PKCE flow.
   case pkce(PKCEFailureReason)
+
   case invalidImplicitGrantFlowURL
   case missingURL
   case invalidRedirectScheme
 
+  /// An error returned by the API.
   public struct APIError: Error, Decodable, Sendable, Equatable {
     /// A basic message describing the problem with the request. Usually missing if
     /// ``AuthError/APIError/error`` is present.
@@ -39,21 +43,32 @@ public enum AuthError: LocalizedError, Sendable, Equatable {
   }
 
   public enum PKCEFailureReason: Sendable {
+    /// Code verifier not found in the URL.
     case codeVerifierNotFound
+
+    /// Not a valid PKCE flow URL.
     case invalidPKCEFlowURL
   }
 
   public var errorDescription: String? {
     switch self {
     case let .api(error): error.errorDescription ?? error.msg ?? error.error
-    case .missingExpClaim: "Missing expiration claim on access token."
+    case .missingExpClaim: "Missing expiration claim in the access token."
     case .malformedJWT: "A malformed JWT received."
     case .sessionNotFound: "Unable to get a valid session."
-    case .pkce(.codeVerifierNotFound): "A code verifier wasn't found in PKCE flow."
-    case .pkce(.invalidPKCEFlowURL): "Not a valid PKCE flow url."
+    case let .pkce(reason): reason.errorDescription
     case .invalidImplicitGrantFlowURL: "Not a valid implicit grant flow url."
     case .missingURL: "Missing URL."
     case .invalidRedirectScheme: "Invalid redirect scheme."
+    }
+  }
+}
+
+extension AuthError.PKCEFailureReason {
+  var errorDescription: String {
+    switch self {
+    case .codeVerifierNotFound: "A code verifier wasn't found in PKCE flow."
+    case .invalidPKCEFlowURL: "Not a valid PKCE flow url."
     }
   }
 }

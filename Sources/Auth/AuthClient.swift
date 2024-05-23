@@ -599,17 +599,17 @@ public final class AuthClient: Sendable {
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
   public func session(from url: URL) async throws -> Session {
-    if configuration.flowType == .implicit, !isImplicitGrantFlow(url: url) {
+    let params = extractParams(from: url)
+
+    if configuration.flowType == .implicit, !isImplicitGrantFlow(params: params) {
       throw AuthError.invalidImplicitGrantFlowURL
     }
 
-    if configuration.flowType == .pkce, !isPKCEFlow(url: url) {
+    if configuration.flowType == .pkce, !isPKCEFlow(params: params) {
       throw AuthError.pkce(.invalidPKCEFlowURL)
     }
 
-    let params = extractParams(from: url)
-
-    if isPKCEFlow(url: url) {
+    if isPKCEFlow(params: params) {
       guard let code = params["code"] else {
         throw AuthError.pkce(.codeVerifierNotFound)
       }
@@ -1120,15 +1120,13 @@ public final class AuthClient: Sendable {
     return (codeChallenge, codeChallengeMethod)
   }
 
-  private func isImplicitGrantFlow(url: URL) -> Bool {
-    let fragments = extractParams(from: url)
-    return fragments["access_token"] != nil || fragments["error_description"] != nil
+  private func isImplicitGrantFlow(params: [String: String]) -> Bool {
+    params["access_token"] != nil || params["error_description"] != nil
   }
 
-  private func isPKCEFlow(url: URL) -> Bool {
-    let fragments = extractParams(from: url)
+  private func isPKCEFlow(params: [String: String]) -> Bool {
     let currentCodeVerifier = codeVerifierStorage.get()
-    return fragments["code"] != nil && currentCodeVerifier != nil
+    return params["code"] != nil && currentCodeVerifier != nil
   }
 
   private func getURLForProvider(

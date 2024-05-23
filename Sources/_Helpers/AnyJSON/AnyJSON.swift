@@ -22,8 +22,7 @@ public enum AnyJSON: Sendable, Codable, Hashable {
 
   /// Returns the underlying Swift value corresponding to the `AnyJSON` instance.
   ///
-  /// - Note: For `.object` and `.array` cases, the returned value contains recursively transformed
-  /// `AnyJSON` instances.
+  /// - Note: For `.object` and `.array` cases, the returned value contains recursively transformed `AnyJSON` instances.
   public var value: Any {
     switch self {
     case .null: NSNull()

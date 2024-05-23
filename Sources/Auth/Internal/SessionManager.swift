@@ -36,7 +36,7 @@ private actor LiveSessionManager {
       throw AuthError.sessionNotFound
     }
 
-    if currentSession.isValid {
+    if !currentSession.isExpired {
       scheduleNextTokenRefresh(currentSession)
 
       return currentSession
