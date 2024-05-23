@@ -27,7 +27,6 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.8.1"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
-    .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
   ],
   targets: [
     .target(
@@ -48,13 +47,6 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Crypto", package: "swift-crypto"),
-        .product(
-          name: "KeychainAccess",
-          package: "KeychainAccess",
-          condition: .when(
-            platforms: [.macOS, .iOS, .macCatalyst, .visionOS, .tvOS, .watchOS]
-          )
-        ),
         "_Helpers",
       ]
     ),
