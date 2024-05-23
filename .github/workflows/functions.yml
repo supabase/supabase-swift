@@ -4,14 +4,14 @@ on:
   pull_request:
     paths:
       - "Sources/Functions/**"
-      - "Tests/Functions/**"
+      - "Tests/FunctionsTests/**"
       - ".github/workflows/functions.yml"
   push:
     branches:
       - main
     paths:
       - "Sources/Functions/**"
-      - "Tests/Functions/**"
+      - "Tests/FunctionsTests/**"
       - ".github/workflows/functions.yml"
 
 concurrency:

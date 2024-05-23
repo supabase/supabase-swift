@@ -4,14 +4,14 @@ on:
   pull_request:
     paths:
       - "Sources/Realtime/**"
-      - "Tests/Realtime/**"
+      - "Tests/RealtimeTests/**"
       - ".github/workflows/realtime.yml"
   push:
     branches:
       - main
     paths:
       - "Sources/Realtime/**"
-      - "Tests/Realtime/**"
+      - "Tests/RealtimeTests/**"
       - ".github/workflows/realtime.yml"
 
 concurrency:
