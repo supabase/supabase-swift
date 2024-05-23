@@ -4,14 +4,14 @@ on:
   pull_request:
     paths:
       - "Sources/Supabase/**"
-      - "Tests/Supabase/**"
+      - "Tests/SupabaseTests/**"
       - ".github/workflows/supabase.yml"
   push:
     branches:
       - main
     paths:
       - "Sources/Supabase/**"
-      - "Tests/Supabase/**"
+      - "Tests/SupabaseTests/**"
       - ".github/workflows/supabase.yml"
 
 concurrency:

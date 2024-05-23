@@ -4,14 +4,14 @@ on:
   pull_request:
     paths:
       - "Sources/Auth/**"
-      - "Tests/Auth/**"
+      - "Tests/AuthTests/**"
       - ".github/workflows/auth.yml"
   push:
     branches:
       - main
     paths:
       - "Sources/Auth/**"
-      - "Tests/Auth/**"
+      - "Tests/AuthTests/**"
       - ".github/workflows/auth.yml"
 
 concurrency:

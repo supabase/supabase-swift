@@ -4,14 +4,14 @@ on:
   pull_request:
     paths:
       - "Sources/Storage/**"
-      - "Tests/Storage/**"
+      - "Tests/StorageTests/**"
       - ".github/workflows/storage.yml"
   push:
     branches:
       - main
     paths:
       - "Sources/Storage/**"
-      - "Tests/Storage/**"
+      - "Tests/StorageTests/**"
       - ".github/workflows/storage.yml"
 
 concurrency:

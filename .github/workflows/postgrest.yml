@@ -4,14 +4,14 @@ on:
   pull_request:
     paths:
       - "Sources/PostgREST/**"
-      - "Tests/PostgREST/**"
+      - "Tests/PostgRESTTests/**"
       - ".github/workflows/postgrest.yml"
   push:
     branches:
       - main
     paths:
       - "Sources/PostgREST/**"
-      - "Tests/PostgREST/**"
+      - "Tests/PostgRESTTests/**"
       - ".github/workflows/postgrest.yml"
 
 concurrency:
