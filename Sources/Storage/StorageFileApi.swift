@@ -320,6 +320,8 @@ public class StorageFileApi: StorageApi {
     path: String? = nil,
     options: SearchOptions? = nil
   ) async throws -> [FileObject] {
+    let encoder = JSONEncoder()
+    
     var options = options ?? DEFAULT_SEARCH_OPTIONS
     options.prefix = path ?? ""
 
@@ -327,7 +329,7 @@ public class StorageFileApi: StorageApi {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/list/\(bucketId)"),
         method: .post,
-        body: configuration.encoder.encode(options)
+        body: encoder.encode(options)
       )
     )
     .decoded(decoder: configuration.decoder)
