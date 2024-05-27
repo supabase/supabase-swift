@@ -38,14 +38,14 @@ public class StorageFileApi: StorageApi {
     file: Data,
     options: FileOptions
   ) async throws -> FileUploadResponse {
-    let contentType = options.contentType
+    let contentType = options.contentType ?? mimeTypeForExtension(path.pathExtension)
     var headers = HTTPHeaders([
       "x-upsert": "\(options.upsert)",
     ])
 
     headers["duplex"] = options.duplex
 
-    let fileName = fileName(fromPath: path)
+    let fileName = path.fileName
 
     let form = FormData()
     form.append(
@@ -474,13 +474,13 @@ public class StorageFileApi: StorageApi {
     file: Data,
     options: FileOptions = FileOptions()
   ) async throws -> SignedURLUploadResponse {
-    let contentType = options.contentType
+    let contentType = options.contentType ?? mimeTypeForExtension(path.pathExtension)
     var headers = HTTPHeaders([
       "x-upsert": "\(options.upsert)",
     ])
     headers["duplex"] = options.duplex
 
-    let fileName = fileName(fromPath: path)
+    let fileName = path.fileName
 
     let form = FormData()
     form.append(file: File(
@@ -510,8 +510,4 @@ public class StorageFileApi: StorageApi {
 
     return SignedURLUploadResponse(path: path, fullPath: fullPath)
   }
-}
-
-private func fileName(fromPath path: String) -> String {
-  (path as NSString).lastPathComponent
 }
