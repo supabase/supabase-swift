@@ -17,7 +17,7 @@ public final class AuthClient: Sendable {
   private var date: @Sendable () -> Date { Current.date }
   private var sessionManager: SessionManager { Current.sessionManager }
   private var eventEmitter: AuthStateChangeEventEmitter { Current.eventEmitter }
-  private var logger: (any SupabaseLogger)? { Current.logger }
+  private var logger: (any SupabaseLogger)? { Current.configuration.logger }
   private var storage: any AuthLocalStorage { Current.configuration.localStorage }
 
   /// Returns the session, refreshing it if necessary.
@@ -595,6 +595,67 @@ public final class AuthClient: Sendable {
       }
     }
   #endif
+
+  /// Handles an incoming URL received by the app.
+  ///
+  /// ## Usage example:
+  ///
+  /// ### UIKit app lifecycle
+  ///
+  /// In your `AppDelegate.swift`:
+  ///
+  /// ```swift
+  /// public func application(
+  ///   _ application: UIApplication,
+  ///   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  /// ) -> Bool {
+  ///   if let url = launchOptions?[.url] as? URL {
+  ///     supabase.auth.handle(url)
+  ///   }
+  ///
+  ///   return true
+  /// }
+  ///
+  /// func application(
+  ///   _ app: UIApplication,
+  ///   open url: URL,
+  ///   options: [UIApplication.OpenURLOptionsKey: Any]
+  /// ) -> Bool {
+  ///   supabase.auth.handle(url)
+  ///   return true
+  /// }
+  /// ```
+  ///
+  /// ### UIKit app lifecycle with scenes
+  ///
+  /// In your `SceneDelegate.swift`:
+  ///
+  /// ```swift
+  /// func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+  ///   guard let url = URLContexts.first?.url else { return }
+  ///   supabase.auth.handle(url)
+  /// }
+  /// ```
+  ///
+  /// ### SwiftUI app lifecycle
+  ///
+  /// In your `AppDelegate.swift`:
+  ///
+  /// ```swift
+  /// SomeView()
+  ///   .onOpenURL { url in
+  ///     supabase.auth.handle(url)
+  ///   }
+  /// ```
+  public func handle(_ url: URL) {
+    Task {
+      do {
+        try await session(from: url)
+      } catch {
+        logger?.error("Failure loading session from url '\(url)' error: \(error)")
+      }
+    }
+  }
 
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult

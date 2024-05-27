@@ -254,6 +254,61 @@ public final class SupabaseClient: Sendable {
     await realtimeV2.removeAllChannels()
   }
 
+  /// Handles an incoming URL received by the app.
+  ///
+  /// ## Usage example:
+  ///
+  /// ### UIKit app lifecycle
+  ///
+  /// In your `AppDelegate.swift`:
+  ///
+  /// ```swift
+  /// public func application(
+  ///   _ application: UIApplication,
+  ///   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  /// ) -> Bool {
+  ///   if let url = launchOptions?[.url] as? URL {
+  ///     supabase.handle(url)
+  ///   }
+  ///
+  ///   return true
+  /// }
+  ///
+  /// func application(
+  ///   _ app: UIApplication,
+  ///   open url: URL,
+  ///   options: [UIApplication.OpenURLOptionsKey: Any]
+  /// ) -> Bool {
+  ///   supabase.handle(url)
+  ///   return true
+  /// }
+  /// ```
+  ///
+  /// ### UIKit app lifecycle with scenes
+  ///
+  /// In your `SceneDelegate.swift`:
+  ///
+  /// ```swift
+  /// func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+  ///   guard let url = URLContexts.first?.url else { return }
+  ///   supabase.handle(url)
+  /// }
+  /// ```
+  ///
+  /// ### SwiftUI app lifecycle
+  ///
+  /// In your `AppDelegate.swift`:
+  ///
+  /// ```swift
+  /// SomeView()
+  ///   .onOpenURL { url in
+  ///     supabase.handle(url)
+  ///   }
+  /// ```
+  public func handle(_ url: URL) {
+    auth.handle(url)
+  }
+
   deinit {
     mutableState.listenForAuthEventsTask?.cancel()
   }
