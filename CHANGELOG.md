@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.12.0](https://github.com/supabase/supabase-swift/compare/v2.11.0...v2.12.0) (2024-05-26)
+
+
+### Features
+
+* **auth:** add isExpired variable to session type ([#399](https://github.com/supabase/supabase-swift/issues/399)) ([dcada1a](https://github.com/supabase/supabase-swift/commit/dcada1accae66793e0f4e046dd8620870b93b3dd))
+* **auth:** retry auth requests, and schedule next refresh retry in background ([#395](https://github.com/supabase/supabase-swift/issues/395)) ([35ac278](https://github.com/supabase/supabase-swift/commit/35ac2784a71edbfcaf9bc3d9dab5f721c5ea2ba6))
+
+
+### Bug Fixes
+
+* manually percent encode query items to allow values with + sign ([#402](https://github.com/supabase/supabase-swift/issues/402)) ([a0ecb70](https://github.com/supabase/supabase-swift/commit/a0ecb70804f2a97aecb66499afad8ec3370815c6))
+* **storage:** list method using wrong encoder ([#405](https://github.com/supabase/supabase-swift/issues/405)) ([f16989a](https://github.com/supabase/supabase-swift/commit/f16989a5b5bd5c6d769bfaff7e6ae076dc2d3ba5))
+
 ## [2.11.0](https://github.com/supabase/supabase-swift/compare/v2.10.1...v2.11.0) (2024-05-18)
 
 
