@@ -29,7 +29,7 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            reference = "container:PostgREST.xctestplan"
+            reference = "container:TestPlans/PostgREST.xctestplan"
             default = "YES">
          </TestPlanReference>
       </TestPlans>
