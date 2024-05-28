@@ -35,6 +35,12 @@ final class RealtimeTests: XCTestCase {
     )
   }
 
+  override func tearDown() async throws {
+    await sut.disconnect()
+
+    try await super.tearDown()
+  }
+
   func testBehavior() async throws {
     try await withTimeout(interval: 2) { [self] in
       let channel = await sut.channel("public:messages")
@@ -218,6 +224,51 @@ final class RealtimeTests: XCTestCase {
         ]
       )
     }
+  }
+
+  func testChannelSubscribe_timeout() async throws {
+    let channel = await sut.channel("test")
+    await connectSocketAndWait()
+
+    Task {
+      await channel.subscribe()
+    }
+
+    await Task.megaYield()
+
+    try? await Task.sleep(nanoseconds: NSEC_PER_SEC * 2)
+
+    let joinMessages = ws.sentMessages.value.filter { $0.event == "phx_join" }
+
+    XCTAssertNoDifference(
+      joinMessages,
+      [
+        RealtimeMessageV2(
+          joinRef: "1",
+          ref: "1",
+          topic: "realtime:test",
+          event: "phx_join",
+          payload: try JSONObject(
+            RealtimeJoinPayload(
+              config: RealtimeJoinConfig(),
+              accessToken: apiKey
+            )
+          )
+        ),
+        RealtimeMessageV2(
+          joinRef: "3",
+          ref: "3",
+          topic: "realtime:test",
+          event: "phx_join",
+          payload: try JSONObject(
+            RealtimeJoinPayload(
+              config: RealtimeJoinConfig(),
+              accessToken: apiKey
+            )
+          )
+        ),
+      ]
+    )
   }
 
   private func connectSocketAndWait() async {
