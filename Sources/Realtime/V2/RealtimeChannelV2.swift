@@ -43,7 +43,7 @@ public actor RealtimeChannelV2 {
   private var pushes: [String: PushV2] = [:]
 
   public private(set) var status: Status {
-    get { statusEventEmitter.lastEvent.value }
+    get { statusEventEmitter.lastEvent }
     set { statusEventEmitter.emit(newValue) }
   }
 
