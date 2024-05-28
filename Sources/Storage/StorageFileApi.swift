@@ -321,7 +321,7 @@ public class StorageFileApi: StorageApi {
     options: SearchOptions? = nil
   ) async throws -> [FileObject] {
     let encoder = JSONEncoder()
-    
+
     var options = options ?? DEFAULT_SEARCH_OPTIONS
     options.prefix = path ?? ""
 

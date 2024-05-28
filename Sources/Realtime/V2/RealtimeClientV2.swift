@@ -91,7 +91,7 @@ public actor RealtimeClientV2 {
 
   /// The current connection status.
   public private(set) var status: Status {
-    get { statusEventEmitter.lastEvent.value }
+    get { statusEventEmitter.lastEvent }
     set { statusEventEmitter.emit(newValue) }
   }
 

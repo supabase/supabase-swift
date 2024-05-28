@@ -28,7 +28,7 @@ test-all: dot-env
 				-skipMacroValidation \
 				-workspace supabase-swift.xcworkspace \
 				-scheme "$(SCHEME)" \
-				-testPlan AllTests \
+				-testPlan TestPlans/AllTests \
 				-destination platform="$(PLATFORM)" | xcpretty
 
 test-library: dot-env
@@ -46,7 +46,7 @@ test-integration: dot-env
 			-skipMacroValidation \
 			-workspace supabase-swift.xcworkspace \
 			-scheme Supabase \
-			-testPlan IntegrationTests \
+			-testPlan TestPlans/IntegrationTests \
 			-destination platform="$(PLATFORM_IOS)" | xcpretty
 
 

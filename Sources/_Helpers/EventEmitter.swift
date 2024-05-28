@@ -40,22 +40,23 @@ package final class EventEmitter<Event: Sendable>: Sendable {
   public typealias Listener = @Sendable (Event) -> Void
 
   private let listeners = LockIsolated<[ObjectIdentifier: Listener]>([:])
-  public let lastEvent: LockIsolated<Event>
+  private let _lastEvent: LockIsolated<Event>
+  package var lastEvent: Event { _lastEvent.value }
 
   let emitsLastEventWhenAttaching: Bool
 
-  public init(
+  package init(
     initialEvent event: Event,
     emitsLastEventWhenAttaching: Bool = true
   ) {
-    lastEvent = LockIsolated(event)
+    _lastEvent = LockIsolated(event)
     self.emitsLastEventWhenAttaching = emitsLastEventWhenAttaching
   }
 
-  public func attach(_ listener: @escaping Listener) -> ObservationToken {
+  package func attach(_ listener: @escaping Listener) -> ObservationToken {
     defer {
       if emitsLastEventWhenAttaching {
-        listener(lastEvent.value)
+        listener(lastEvent)
       }
     }
 
@@ -75,8 +76,8 @@ package final class EventEmitter<Event: Sendable>: Sendable {
     return token
   }
 
-  public func emit(_ event: Event, to token: ObservationToken? = nil) {
-    lastEvent.setValue(event)
+  package func emit(_ event: Event, to token: ObservationToken? = nil) {
+    _lastEvent.setValue(event)
     let listeners = listeners.value
 
     if let token {
@@ -88,7 +89,7 @@ package final class EventEmitter<Event: Sendable>: Sendable {
     }
   }
 
-  public func stream() -> AsyncStream<Event> {
+  package func stream() -> AsyncStream<Event> {
     AsyncStream { continuation in
       let token = attach { status in
         continuation.yield(status)

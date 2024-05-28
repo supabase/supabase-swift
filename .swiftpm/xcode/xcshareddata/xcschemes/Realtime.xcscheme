@@ -29,7 +29,7 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            reference = "container:Realtime.xctestplan"
+            reference = "container:TestPlans/Realtime.xctestplan"
             default = "YES">
          </TestPlanReference>
       </TestPlans>
