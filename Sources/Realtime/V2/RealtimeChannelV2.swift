@@ -202,10 +202,33 @@ public final class RealtimeChannelV2: Sendable {
   ///   - event: Broadcast message event.
   ///   - message: Message payload.
   public func broadcast(event: String, message: JSONObject) async {
-    assert(
-      status == .subscribed,
-      "You can only broadcast after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
-    )
+    guard let socket else { return }
+
+    if status != .subscribed {
+      struct Message: Encodable {
+        let topic: String
+        let event: String
+        let payload: JSONObject
+      }
+
+      _ = try? await socket.http.send(
+        HTTPRequest(
+          url: socket.broadcastURL,
+          method: .post,
+          headers: [
+            "apikey": socket.apikey ?? "",
+            "content-type": "application/json",
+          ],
+          body: JSONEncoder().encode(
+            Message(
+              topic: topic,
+              event: event,
+              payload: message
+            )
+          )
+        )
+      )
+    }
 
     await push(
       RealtimeMessageV2(

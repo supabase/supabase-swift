@@ -8,6 +8,13 @@
 import Foundation
 import Helpers
 
+/// Represents the different status of a push
+public enum PushStatus: String, Sendable {
+  case ok
+  case error
+  case timeout
+}
+
 actor PushV2 {
   private weak var channel: RealtimeChannelV2?
   let message: RealtimeMessageV2
