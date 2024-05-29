@@ -16,6 +16,13 @@ public enum SupabaseLogLevel: Int, Codable, CustomStringConvertible, Sendable {
   }
 }
 
+@usableFromInline
+package enum SupabaseLoggerTaskLocal {
+  @TaskLocal
+  @usableFromInline
+  package static var additionalContext: JSONObject = [:]
+}
+
 public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
   public let system: String
   public let level: SupabaseLogLevel
@@ -24,6 +31,7 @@ public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
   public let function: String
   public let line: UInt
   public let timestamp: TimeInterval
+  public let additionalContext: JSONObject
 
   @usableFromInline
   init(
@@ -33,7 +41,8 @@ public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
     fileID: String,
     function: String,
     line: UInt,
-    timestamp: TimeInterval
+    timestamp: TimeInterval,
+    additionalContext: JSONObject
   ) {
     self.system = system
     self.level = level
@@ -42,12 +51,17 @@ public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
     self.function = function
     self.line = line
     self.timestamp = timestamp
+    self.additionalContext = additionalContext
   }
 
   public var description: String {
     let date = iso8601Formatter.string(from: Date(timeIntervalSince1970: timestamp))
     let file = fileID.split(separator: ".", maxSplits: 1).first.map(String.init) ?? fileID
-    return "\(date) [\(level)] [\(system)] [\(file).\(function):\(line)] \(message)"
+    var description = "\(date) [\(level)] [\(system)] [\(file).\(function):\(line)] \(message)"
+    if !additionalContext.isEmpty {
+      description += "\ncontext: \(additionalContext.description)"
+    }
+    return description
   }
 }
 
@@ -68,7 +82,8 @@ extension SupabaseLogger {
     message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
     function: StaticString = #function,
-    line: UInt = #line
+    line: UInt = #line,
+    additionalContext: JSONObject = [:]
   ) {
     let system = "\(fileID)".split(separator: "/").first ?? ""
 
@@ -80,7 +95,11 @@ extension SupabaseLogger {
         fileID: "\(fileID)",
         function: "\(function)",
         line: line,
-        timestamp: Date().timeIntervalSince1970
+        timestamp: Date().timeIntervalSince1970,
+        additionalContext: additionalContext.merging(
+          SupabaseLoggerTaskLocal.additionalContext,
+          uniquingKeysWith: { _, new in new }
+        )
       )
     )
   }
@@ -90,9 +109,17 @@ extension SupabaseLogger {
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
     function: StaticString = #function,
-    line: UInt = #line
+    line: UInt = #line,
+    additionalContext: JSONObject = [:]
   ) {
-    log(.verbose, message: message(), fileID: fileID, function: function, line: line)
+    log(
+      .verbose,
+      message: message(),
+      fileID: fileID,
+      function: function,
+      line: line,
+      additionalContext: additionalContext
+    )
   }
 
   @inlinable
@@ -100,9 +127,17 @@ extension SupabaseLogger {
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
     function: StaticString = #function,
-    line: UInt = #line
+    line: UInt = #line,
+    additionalContext: JSONObject = [:]
   ) {
-    log(.debug, message: message(), fileID: fileID, function: function, line: line)
+    log(
+      .debug,
+      message: message(),
+      fileID: fileID,
+      function: function,
+      line: line,
+      additionalContext: additionalContext
+    )
   }
 
   @inlinable
@@ -110,9 +145,17 @@ extension SupabaseLogger {
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
     function: StaticString = #function,
-    line: UInt = #line
+    line: UInt = #line,
+    additionalContext: JSONObject = [:]
   ) {
-    log(.warning, message: message(), fileID: fileID, function: function, line: line)
+    log(
+      .warning,
+      message: message(),
+      fileID: fileID,
+      function: function,
+      line: line,
+      additionalContext: additionalContext
+    )
   }
 
   @inlinable
@@ -120,8 +163,35 @@ extension SupabaseLogger {
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
     function: StaticString = #function,
-    line: UInt = #line
+    line: UInt = #line,
+    additionalContext: JSONObject = [:]
   ) {
-    log(.error, message: message(), fileID: fileID, function: function, line: line)
+    log(
+      .error,
+      message: message(),
+      fileID: fileID,
+      function: function,
+      line: line,
+      additionalContext: additionalContext
+    )
+  }
+}
+
+@inlinable
+package func trace<R>(
+  using logger: (any SupabaseLogger)?,
+  @_inheritActorContext _ operation: @Sendable () async throws -> R,
+  fileID: StaticString = #fileID,
+  function: StaticString = #function,
+  line: UInt = #line
+) async rethrows -> R {
+  logger?.debug("begin", fileID: fileID, function: function, line: line)
+  defer { logger?.debug("end", fileID: fileID, function: function, line: line) }
+
+  do {
+    return try await operation()
+  } catch {
+    logger?.debug("error: \(error)", fileID: fileID, function: function, line: line)
+    throw error
   }
 }

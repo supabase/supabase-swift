@@ -32,57 +32,62 @@ private actor LiveSessionManager {
   private var scheduledNextRefreshTask: Task<Void, Never>?
 
   func session() async throws -> Session {
-    guard let currentSession = try storage.getSession() else {
-      throw AuthError.sessionNotFound
+    try await trace(using: logger) {
+      guard let currentSession = try storage.getSession() else {
+        throw AuthError.sessionNotFound
+      }
+
+      if !currentSession.isExpired {
+        await scheduleNextTokenRefresh(currentSession)
+
+        return currentSession
+      }
+
+      return try await refreshSession(currentSession.refreshToken)
     }
-
-    if !currentSession.isExpired {
-      scheduleNextTokenRefresh(currentSession)
-
-      return currentSession
-    }
-
-    return try await refreshSession(currentSession.refreshToken)
   }
 
   func refreshSession(_ refreshToken: String) async throws -> Session {
-    logger?.debug("begin")
-    defer { logger?.debug("end") }
+    try await SupabaseLoggerTaskLocal.$additionalContext.withValue(
+      merging: ["refreshID": .string(UUID().uuidString)]
+    ) {
+      try await trace(using: logger) {
+        if let inFlightRefreshTask {
+          logger?.debug("refresh already in flight")
+          return try await inFlightRefreshTask.value
+        }
 
-    if let inFlightRefreshTask {
-      logger?.debug("refresh already in flight")
-      return try await inFlightRefreshTask.value
-    }
+        inFlightRefreshTask = Task {
+          logger?.debug("refresh task started")
 
-    inFlightRefreshTask = Task {
-      logger?.debug("refresh task started")
+          defer {
+            inFlightRefreshTask = nil
+            logger?.debug("refresh task ended")
+          }
 
-      defer {
-        inFlightRefreshTask = nil
-        logger?.debug("refresh task ended")
+          let session = try await api.execute(
+            HTTPRequest(
+              url: configuration.url.appendingPathComponent("token"),
+              method: .post,
+              query: [
+                URLQueryItem(name: "grant_type", value: "refresh_token"),
+              ],
+              body: configuration.encoder.encode(UserCredentials(refreshToken: refreshToken))
+            )
+          )
+          .decoded(as: Session.self, decoder: configuration.decoder)
+
+          update(session)
+          eventEmitter.emit(.tokenRefreshed, session: session)
+
+          await scheduleNextTokenRefresh(session)
+
+          return session
+        }
+
+        return try await inFlightRefreshTask!.value
       }
-
-      let session = try await api.execute(
-        HTTPRequest(
-          url: configuration.url.appendingPathComponent("token"),
-          method: .post,
-          query: [
-            URLQueryItem(name: "grant_type", value: "refresh_token"),
-          ],
-          body: configuration.encoder.encode(UserCredentials(refreshToken: refreshToken))
-        )
-      )
-      .decoded(as: Session.self, decoder: configuration.decoder)
-
-      update(session)
-      eventEmitter.emit(.tokenRefreshed, session: session)
-
-      scheduleNextTokenRefresh(session)
-
-      return session
     }
-
-    return try await inFlightRefreshTask!.value
   }
 
   func update(_ session: Session) {
@@ -101,37 +106,41 @@ private actor LiveSessionManager {
     }
   }
 
-  private func scheduleNextTokenRefresh(_ refreshedSession: Session, source: StaticString = #function) {
-    logger?.debug("source: \(source)")
-
-    guard configuration.autoRefreshToken else {
-      logger?.debug("auto refresh token disabled")
-      return
-    }
-
-    guard scheduledNextRefreshTask == nil else {
-      logger?.debug("source: \(source) refresh task already scheduled")
-      return
-    }
-
-    scheduledNextRefreshTask = Task {
-      defer { scheduledNextRefreshTask = nil }
-
-      let expiresAt = Date(timeIntervalSince1970: refreshedSession.expiresAt)
-      let expiresIn = expiresAt.timeIntervalSinceNow
-
-      // if expiresIn < 0, it will refresh right away.
-      let timeToRefresh = max(expiresIn * 0.9, 0)
-
-      logger?.debug("source: \(source) scheduled next token refresh in: \(timeToRefresh)s")
-
-      try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeToRefresh))
-
-      if Task.isCancelled {
+  private func scheduleNextTokenRefresh(_ refreshedSession: Session, caller: StaticString = #function) async {
+    await SupabaseLoggerTaskLocal.$additionalContext.withValue(
+      merging: ["caller": .string("\(caller)")]
+    ) {
+      guard configuration.autoRefreshToken else {
+        logger?.debug("auto refresh token disabled")
         return
       }
 
-      _ = try? await refreshSession(refreshedSession.refreshToken)
+      guard scheduledNextRefreshTask == nil else {
+        logger?.debug("refresh task already scheduled")
+        return
+      }
+
+      scheduledNextRefreshTask = Task {
+        await trace(using: logger) {
+          defer { scheduledNextRefreshTask = nil }
+
+          let expiresAt = Date(timeIntervalSince1970: refreshedSession.expiresAt)
+          let expiresIn = expiresAt.timeIntervalSinceNow
+
+          // if expiresIn < 0, it will refresh right away.
+          let timeToRefresh = max(expiresIn * 0.9, 0)
+
+          logger?.debug("scheduled next token refresh in: \(timeToRefresh)s")
+
+          try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeToRefresh))
+
+          if Task.isCancelled {
+            return
+          }
+
+          _ = try? await refreshSession(refreshedSession.refreshToken)
+        }
+      }
     }
   }
 }
