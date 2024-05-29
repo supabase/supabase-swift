@@ -27,81 +27,59 @@ final class RealtimeTests: XCTestCase {
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
         heartbeatInterval: 1,
-        reconnectDelay: 1
+        reconnectDelay: 1,
+        timeoutInterval: 2,
+        logger: TestLogger()
       ),
       ws: ws
     )
   }
 
-  func testBehavior_Closure() async {
-    let channel = await sut.channel("public:messages")
-    _ = await channel.onPostgresChange(InsertAction.self, table: "messages") { _ in }
-    _ = await channel.onPostgresChange(UpdateAction.self, table: "messages") { _ in }
-    _ = await channel.onPostgresChange(DeleteAction.self, table: "messages") { _ in }
+  override func tearDown() async throws {
+    await sut.disconnect()
 
-    let statusChange = await sut.statusChange
-
-    await connectSocketAndWait()
-
-    let status = await statusChange.prefix(3).collect()
-    XCTAssertEqual(status, [.disconnected, .connecting, .connected])
-
-    let messageTask = await sut.messageTask
-    XCTAssertNotNil(messageTask)
-
-    let heartbeatTask = await sut.heartbeatTask
-    XCTAssertNotNil(heartbeatTask)
-
-    let subscription = Task {
-      await channel.subscribe()
-    }
-    await Task.megaYield()
-    ws.mockReceive(.messagesSubscribed)
-
-    // Wait until channel subscribed
-    await subscription.value
-
-    XCTAssertNoDifference(ws.sentMessages.value, [.subscribeToMessages])
+    try await super.tearDown()
   }
 
-  func testBehavior_AsyncAwait() async {
-    let channel = await sut.channel("public:messages")
-    _ = await channel.postgresChange(InsertAction.self, table: "messages")
-    _ = await channel.postgresChange(UpdateAction.self, table: "messages")
-    _ = await channel.postgresChange(DeleteAction.self, table: "messages")
+  func testBehavior() async throws {
+    try await withTimeout(interval: 2) { [self] in
+      let channel = await sut.channel("public:messages")
+      _ = await channel.postgresChange(InsertAction.self, table: "messages")
+      _ = await channel.postgresChange(UpdateAction.self, table: "messages")
+      _ = await channel.postgresChange(DeleteAction.self, table: "messages")
 
-    let statusChange = await sut.statusChange
+      let statusChange = await sut.statusChange
 
-    await connectSocketAndWait()
+      await connectSocketAndWait()
 
-    let status = await statusChange.prefix(3).collect()
-    XCTAssertEqual(status, [.disconnected, .connecting, .connected])
+      let status = await statusChange.prefix(3).collect()
+      XCTAssertEqual(status, [.disconnected, .connecting, .connected])
 
-    let messageTask = await sut.messageTask
-    XCTAssertNotNil(messageTask)
+      let messageTask = await sut.messageTask
+      XCTAssertNotNil(messageTask)
 
-    let heartbeatTask = await sut.heartbeatTask
-    XCTAssertNotNil(heartbeatTask)
+      let heartbeatTask = await sut.heartbeatTask
+      XCTAssertNotNil(heartbeatTask)
 
-    let subscription = Task {
-      await channel.subscribe()
+      let subscription = Task {
+        await channel.subscribe()
+      }
+      await Task.megaYield()
+      ws.mockReceive(.messagesSubscribed)
+
+      // Wait until channel subscribed
+      await subscription.value
+
+      XCTAssertNoDifference(ws.sentMessages.value, [.subscribeToMessages(ref: "1", joinRef: "1")])
     }
-    await Task.megaYield()
-    ws.mockReceive(.messagesSubscribed)
-
-    // Wait until channel subscribed
-    await subscription.value
-
-    XCTAssertNoDifference(ws.sentMessages.value, [.subscribeToMessages])
   }
 
-  func testHeartbeat() async throws {
-    let expectation = expectation(description: "heartbeat")
-    expectation.expectedFulfillmentCount = 2
+  func testSubscribeTimeout() async throws {
+    let channel = await sut.channel("public:messages")
+    let joinEventCount = LockIsolated(0)
 
     ws.on { message in
       if message.event == "heartbeat" {
-        expectation.fulfill()
         return RealtimeMessageV2(
           joinRef: message.joinRef,
           ref: message.ref,
@@ -114,58 +92,138 @@ final class RealtimeTests: XCTestCase {
         )
       }
 
+      if message.event == "phx_join" {
+        joinEventCount.withValue { $0 += 1 }
+
+        // Skip first join.
+        if joinEventCount.value == 2 {
+          return .messagesSubscribed
+        }
+      }
+
       return nil
     }
 
     await connectSocketAndWait()
 
-    await fulfillment(of: [expectation], timeout: 3)
+    Task {
+      await channel.subscribe()
+    }
+
+    await Task.megaYield()
+
+    try? await Task.sleep(nanoseconds: NSEC_PER_SEC * 2)
+
+    let joinSentMessages = ws.sentMessages.value.filter { $0.event == "phx_join" }
+
+    let expectedMessages = try [
+      RealtimeMessageV2(
+        joinRef: "1",
+        ref: "1",
+        topic: "realtime:public:messages",
+        event: "phx_join",
+        payload: JSONObject(
+          RealtimeJoinPayload(
+            config: RealtimeJoinConfig(),
+            accessToken: apiKey
+          )
+        )
+      ),
+      RealtimeMessageV2(
+        joinRef: "3",
+        ref: "3",
+        topic: "realtime:public:messages",
+        event: "phx_join",
+        payload: JSONObject(
+          RealtimeJoinPayload(
+            config: RealtimeJoinConfig(),
+            accessToken: apiKey
+          )
+        )
+      ),
+    ]
+
+    XCTAssertNoDifference(
+      joinSentMessages,
+      expectedMessages
+    )
+  }
+
+  func testHeartbeat() async throws {
+    try await withTimeout(interval: 4) { [self] in
+      let expectation = expectation(description: "heartbeat")
+      expectation.expectedFulfillmentCount = 2
+
+      ws.on { message in
+        if message.event == "heartbeat" {
+          expectation.fulfill()
+          return RealtimeMessageV2(
+            joinRef: message.joinRef,
+            ref: message.ref,
+            topic: "phoenix",
+            event: "phx_reply",
+            payload: [
+              "response": [:],
+              "status": "ok",
+            ]
+          )
+        }
+
+        return nil
+      }
+
+      await connectSocketAndWait()
+
+      await fulfillment(of: [expectation], timeout: 3)
+    }
   }
 
   func testHeartbeat_whenNoResponse_shouldReconnect() async throws {
-    let sentHeartbeatExpectation = expectation(description: "sentHeartbeat")
+    try await withTimeout(interval: 6) { [self] in
+      let sentHeartbeatExpectation = expectation(description: "sentHeartbeat")
 
-    ws.on {
-      if $0.event == "heartbeat" {
-        sentHeartbeatExpectation.fulfill()
+      ws.on {
+        if $0.event == "heartbeat" {
+          sentHeartbeatExpectation.fulfill()
+        }
+
+        return nil
       }
 
-      return nil
-    }
+      let statuses = LockIsolated<[RealtimeClientV2.Status]>([])
 
-    let statuses = LockIsolated<[RealtimeClientV2.Status]>([])
-
-    Task {
-      for await status in await sut.statusChange {
-        statuses.withValue {
-          $0.append(status)
+      Task {
+        for await status in await sut.statusChange {
+          statuses.withValue {
+            $0.append(status)
+          }
         }
       }
+      await Task.megaYield()
+      await connectSocketAndWait()
+
+      await fulfillment(of: [sentHeartbeatExpectation], timeout: 2)
+
+      let pendingHeartbeatRef = await sut.pendingHeartbeatRef
+      XCTAssertNotNil(pendingHeartbeatRef)
+
+      // Wait until next heartbeat
+      try await Task.sleep(nanoseconds: NSEC_PER_SEC * 2)
+
+      // Wait for reconnect delay
+      try await Task.sleep(nanoseconds: NSEC_PER_SEC * 1)
+
+      XCTAssertEqual(
+        statuses.value,
+        [
+          .disconnected,
+          .connecting,
+          .connected,
+          .disconnected,
+          .connecting,
+        ]
+      )
     }
-    await Task.megaYield()
-    await connectSocketAndWait()
-
-    await fulfillment(of: [sentHeartbeatExpectation], timeout: 2)
-
-    let pendingHeartbeatRef = await sut.pendingHeartbeatRef
-    XCTAssertNotNil(pendingHeartbeatRef)
-
-    // Wait until next heartbeat
-    try await Task.sleep(nanoseconds: NSEC_PER_SEC * 2)
-
-    // Wait for reconnect delay
-    try await Task.sleep(nanoseconds: NSEC_PER_SEC * 1)
-
-    XCTAssertEqual(
-      statuses.value,
-      [
-        .disconnected,
-        .connecting,
-        .connected,
-        .disconnected,
-        .connecting,
-      ]
-    )
   }
 
   private func connectSocketAndWait() async {
@@ -180,27 +238,29 @@ final class RealtimeTests: XCTestCase {
 }
 
 extension RealtimeMessageV2 {
-  static let subscribeToMessages = Self(
-    joinRef: "1",
-    ref: "1",
-    topic: "realtime:public:messages",
-    event: "phx_join",
-    payload: [
-      "access_token": "anon.api.key",
-      "config": [
-        "broadcast": [
-          "self": false,
-          "ack": false,
+  static func subscribeToMessages(ref: String?, joinRef: String?) -> RealtimeMessageV2 {
+    Self(
+      joinRef: joinRef,
+      ref: ref,
+      topic: "realtime:public:messages",
+      event: "phx_join",
+      payload: [
+        "access_token": "anon.api.key",
+        "config": [
+          "broadcast": [
+            "self": false,
+            "ack": false,
+          ],
+          "postgres_changes": [
+            ["table": "messages", "event": "INSERT", "schema": "public"],
+            ["table": "messages", "schema": "public", "event": "UPDATE"],
+            ["schema": "public", "table": "messages", "event": "DELETE"],
+          ],
+          "presence": ["key": ""],
         ],
-        "postgres_changes": [
-          ["table": "messages", "event": "INSERT", "schema": "public"],
-          ["table": "messages", "schema": "public", "event": "UPDATE"],
-          ["schema": "public", "table": "messages", "event": "DELETE"],
-        ],
-        "presence": ["key": ""],
-      ],
-    ]
-  )
+      ]
+    )
+  }
 
   static let messagesSubscribed = Self(
     joinRef: nil,
@@ -229,4 +289,10 @@ extension RealtimeMessageV2 {
       "status": "ok",
     ]
   )
+}
+
+struct TestLogger: SupabaseLogger {
+  func log(message: SupabaseLogMessage) {
+    print(message.description)
+  }
 }

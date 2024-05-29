@@ -108,7 +108,18 @@ public actor RealtimeChannelV2 {
       )
     )
 
-    _ = await statusChange.first { @Sendable in $0 == .subscribed }
+    do {
+      try await withTimeout(interval: socket?.options.timeoutInterval ?? 10) { [self] in
+        _ = await statusChange.first { @Sendable in $0 == .subscribed }
+      }
+    } catch {
+      if error is TimeoutError {
+        logger?.debug("subscribe timed out.")
+        await subscribe()
+      } else {
+        logger?.error("subscribe failed: \(error)")
+      }
+    }
   }
 
   public func unsubscribe() async {
