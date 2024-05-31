@@ -11,7 +11,7 @@ import SwiftUI
 
 class AppDelegate: UIResponder, UIApplicationDelegate {
   func application(
-    _ application: UIApplication,
+    _: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
     if let url = launchOptions?[.url] as? URL {
@@ -20,7 +20,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     return true
   }
 
-  func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+  func application(_: UIApplication, open url: URL, options _: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
     supabase.handle(url)
     return true
   }
@@ -33,7 +33,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 }
 
 class SceneDelegate: UIResponder, UISceneDelegate {
-  func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+  func scene(_: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
     guard let url = URLContexts.first?.url else { return }
 
     supabase.handle(url)

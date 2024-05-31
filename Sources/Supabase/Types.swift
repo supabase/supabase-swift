@@ -54,18 +54,23 @@ public struct SupabaseClientOptions: Sendable {
     /// The JSON decoder to use for decoding responses.
     public let decoder: JSONDecoder
 
+    /// Set to `true` if you want to automatically refresh the token before expiring.
+    public let autoRefreshToken: Bool
+
     public init(
       storage: any AuthLocalStorage,
       redirectToURL: URL? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
+      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
+      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
     ) {
       self.storage = storage
       self.redirectToURL = redirectToURL
       self.flowType = flowType
       self.encoder = encoder
       self.decoder = decoder
+      self.autoRefreshToken = autoRefreshToken
     }
   }
 

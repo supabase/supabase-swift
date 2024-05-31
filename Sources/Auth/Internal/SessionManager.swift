@@ -104,6 +104,11 @@ private actor LiveSessionManager {
   private func scheduleNextTokenRefresh(_ refreshedSession: Session, source: StaticString = #function) {
     logger?.debug("source: \(source)")
 
+    guard configuration.autoRefreshToken else {
+      logger?.debug("auto refresh token disabled")
+      return
+    }
+
     guard scheduledNextRefreshTask == nil else {
       logger?.debug("source: \(source) refresh task already scheduled")
       return
