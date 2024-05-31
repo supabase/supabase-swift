@@ -1,4 +1,4 @@
-import Auth
+@testable import Auth
 import CustomDump
 @testable import Functions
 @testable import Realtime
@@ -33,7 +33,10 @@ final class SupabaseClientTests: XCTestCase {
       supabaseKey: "ANON_KEY",
       options: SupabaseClientOptions(
         db: SupabaseClientOptions.DatabaseOptions(schema: customSchema),
-        auth: SupabaseClientOptions.AuthOptions(storage: localStorage),
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
         global: SupabaseClientOptions.GlobalOptions(
           headers: customHeaders,
           session: .shared,
@@ -76,6 +79,8 @@ final class SupabaseClientTests: XCTestCase {
     let expectedRealtimeHeader = client.defaultHeaders.merged(with: ["custom_realtime_header_key": "custom_realtime_header_value"])
     XCTAssertNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
+
+    XCTAssertFalse(client.auth.configuration.autoRefreshToken)
   }
 
   #if !os(Linux)
