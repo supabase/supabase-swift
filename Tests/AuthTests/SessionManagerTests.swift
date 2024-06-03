@@ -22,9 +22,20 @@ final class SessionManagerTests: XCTestCase {
     http = HTTPClientMock()
 
     Current = .init(
-      configuration: .init(url: clientURL, localStorage: InMemoryLocalStorage(), logger: nil),
+      configuration: .init(
+        url: clientURL,
+        localStorage: InMemoryLocalStorage(),
+        logger: nil,
+        autoRefreshToken: false
+      ),
       http: http
     )
+  }
+
+  override func invokeTest() {
+    withMainSerialExecutor {
+      super.invokeTest()
+    }
   }
 
   func testSession_shouldFailWithSessionNotFound() async {
