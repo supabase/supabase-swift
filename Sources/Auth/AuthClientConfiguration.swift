@@ -30,6 +30,9 @@ extension AuthClient {
     public let decoder: JSONDecoder
     public let fetch: FetchHandler
 
+    /// Set to `true` if you want to automatically refresh the token before expiring.
+    public let autoRefreshToken: Bool
+
     /// Initializes a AuthClient Configuration with optional parameters.
     ///
     /// - Parameters:
@@ -42,6 +45,7 @@ extension AuthClient {
     ///   - encoder: The JSON encoder to use for encoding requests.
     ///   - decoder: The JSON decoder to use for decoding responses.
     ///   - fetch: The asynchronous fetch handler for network requests.
+    ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
     public init(
       url: URL,
       headers: [String: String] = [:],
@@ -51,7 +55,8 @@ extension AuthClient {
       logger: (any SupabaseLogger)? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
 
@@ -64,6 +69,7 @@ extension AuthClient {
       self.encoder = encoder
       self.decoder = decoder
       self.fetch = fetch
+      self.autoRefreshToken = autoRefreshToken
     }
   }
 
@@ -79,6 +85,7 @@ extension AuthClient {
   ///   - encoder: The JSON encoder to use for encoding requests.
   ///   - decoder: The JSON decoder to use for decoding responses.
   ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
@@ -88,7 +95,8 @@ extension AuthClient {
     logger: (any SupabaseLogger)? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
   ) {
     self.init(
       configuration: Configuration(
@@ -100,7 +108,8 @@ extension AuthClient {
         logger: logger,
         encoder: encoder,
         decoder: decoder,
-        fetch: fetch
+        fetch: fetch,
+        autoRefreshToken: autoRefreshToken
       )
     )
   }

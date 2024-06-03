@@ -12,7 +12,7 @@ import Foundation
 
 public final class AuthClient: Sendable {
   private var api: APIClient { Current.api }
-  private var configuration: AuthClient.Configuration { Current.configuration }
+  var configuration: AuthClient.Configuration { Current.configuration }
   private var codeVerifierStorage: CodeVerifierStorage { Current.codeVerifierStorage }
   private var date: @Sendable () -> Date { Current.date }
   private var sessionManager: SessionManager { Current.sessionManager }
