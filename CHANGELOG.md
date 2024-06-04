@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.13.0](https://github.com/supabase/supabase-swift/compare/v2.12.0...v2.13.0) (2024-06-04)
+
+
+### Features
+
+* **auth:** add convenience deep link handling methods ([#397](https://github.com/supabase/supabase-swift/issues/397)) ([db7a094](https://github.com/supabase/supabase-swift/commit/db7a0949d2e2a7a16f0d684e11d569b7ad0bee8e))
+* **auth:** add options for disabling auto refresh token ([#411](https://github.com/supabase/supabase-swift/issues/411)) ([24f6a76](https://github.com/supabase/supabase-swift/commit/24f6a7683f8154b6f7a0c80b6324717efdd95c76))
+* improve logging on token refresh logic ([#410](https://github.com/supabase/supabase-swift/issues/410)) ([a8ed053](https://github.com/supabase/supabase-swift/commit/a8ed053c96eaf69146dc40bbec7702fe88077354))
+* **storage:** fill content-type based on file extension ([#400](https://github.com/supabase/supabase-swift/issues/400)) ([569f445](https://github.com/supabase/supabase-swift/commit/569f4455bbde6e6ea1c6a7f630a1e1d66dc39bb0))
+
+
+### Bug Fixes
+
+* **realtime:** handle timeout when subscribing to channel ([#349](https://github.com/supabase/supabase-swift/issues/349)) ([a222dd4](https://github.com/supabase/supabase-swift/commit/a222dd4aad072917d44ba18232bb32c01b5e1c18))
+
 ## [2.12.0](https://github.com/supabase/supabase-swift/compare/v2.11.0...v2.12.0) (2024-05-26)
 
 
