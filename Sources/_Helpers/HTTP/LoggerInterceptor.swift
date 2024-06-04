@@ -19,28 +19,30 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
     next: @Sendable (HTTPRequest) async throws -> HTTPResponse
   ) async throws -> HTTPResponse {
     let id = UUID().uuidString
-    logger.verbose(
-      """
-      Request [\(id)]: \(request.method.rawValue) \(request.url.absoluteString
-        .removingPercentEncoding ?? "")
-      Body: \(stringfy(request.body))
-      """
-    )
-
-    do {
-      let response = try await next(request)
+    return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(merging: ["requestID": .string(id)]) {
       logger.verbose(
         """
-        Response [\(id)]: Status code: \(response.statusCode) Content-Length: \(
-          response.underlyingResponse.expectedContentLength
-        )
-        Body: \(stringfy(response.data))
+        Request: \(request.method.rawValue) \(request.url.absoluteString
+          .removingPercentEncoding ?? "")
+        Body: \(stringfy(request.body))
         """
       )
-      return response
-    } catch {
-      logger.error("Response [\(id)]: Failure \(error)")
-      throw error
+
+      do {
+        let response = try await next(request)
+        logger.verbose(
+          """
+          Response: Status code: \(response.statusCode) Content-Length: \(
+            response.underlyingResponse.expectedContentLength
+          )
+          Body: \(stringfy(response.data))
+          """
+        )
+        return response
+      } catch {
+        logger.error("Response: Failure \(error)")
+        throw error
+      }
     }
   }
 }
