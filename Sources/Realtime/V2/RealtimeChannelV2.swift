@@ -14,7 +14,34 @@ public struct RealtimeChannelConfig: Sendable {
   public var presence: PresenceJoinConfig
 }
 
-public actor RealtimeChannelV2 {
+struct Socket: Sendable {
+  var status: @Sendable () -> RealtimeClientV2.Status
+  var options: @Sendable () -> RealtimeClientOptions
+  var accessToken: @Sendable () -> String?
+  var makeRef: @Sendable () -> Int
+
+  var connect: @Sendable () async -> Void
+  var addChannel: @Sendable (_ channel: RealtimeChannelV2) -> Void
+  var removeChannel: @Sendable (_ channel: RealtimeChannelV2) async -> Void
+  var push: @Sendable (_ message: RealtimeMessageV2) async -> Void
+}
+
+extension Socket {
+  init(client: RealtimeClientV2) {
+    self.init(
+      status: { [weak client] in client?.status ?? .disconnected },
+      options: { [weak client] in client?.options ?? .init() },
+      accessToken: { [weak client] in client?.mutableState.accessToken },
+      makeRef: { [weak client] in client?.makeRef() ?? 0 },
+      connect: { [weak client] in await client?.connect() },
+      addChannel: { [weak client] in client?.addChannel($0) },
+      removeChannel: { [weak client] in await client?.removeChannel($0) },
+      push: { [weak client] in await client?.push($0) }
+    )
+  }
+}
+
+public final class RealtimeChannelV2: Sendable {
   public typealias Subscription = ObservationToken
 
   public enum Status: Sendable {
@@ -24,23 +51,21 @@ public actor RealtimeChannelV2 {
     case unsubscribing
   }
 
-  weak var socket: RealtimeClientV2? {
-    didSet {
-      assert(oldValue == nil, "socket should not be modified once set")
-    }
+  struct MutableState {
+    var clientChanges: [PostgresJoinConfig] = []
+    var joinRef: String?
+    var pushes: [String: PushV2] = [:]
   }
+
+  private let mutableState = LockIsolated(MutableState())
 
   let topic: String
   let config: RealtimeChannelConfig
   let logger: (any SupabaseLogger)?
+  let socket: Socket
 
   private let callbackManager = CallbackManager()
-
   private let statusEventEmitter = EventEmitter<Status>(initialEvent: .unsubscribed)
-
-  private var clientChanges: [PostgresJoinConfig] = []
-  private var joinRef: String?
-  private var pushes: [String: PushV2] = [:]
 
   public private(set) var status: Status {
     get { statusEventEmitter.lastEvent }
@@ -54,13 +79,13 @@ public actor RealtimeChannelV2 {
   init(
     topic: String,
     config: RealtimeChannelConfig,
-    socket: RealtimeClientV2,
+    socket: Socket,
     logger: (any SupabaseLogger)?
   ) {
-    self.socket = socket
     self.topic = topic
     self.config = config
     self.logger = logger
+    self.socket = socket
   }
 
   deinit {
@@ -69,16 +94,16 @@ public actor RealtimeChannelV2 {
 
   /// Subscribes to the channel
   public func subscribe() async {
-    if await socket?.status != .connected {
-      if socket?.options.connectOnSubscribe != true {
+    if socket.status() != .connected {
+      if socket.options().connectOnSubscribe != true {
         fatalError(
           "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
         )
       }
-      await socket?.connect()
+      await socket.connect()
     }
 
-    await socket?.addChannel(self)
+    socket.addChannel(self)
 
     status = .subscribing
     logger?.debug("subscribing to channel \(topic)")
@@ -86,15 +111,16 @@ public actor RealtimeChannelV2 {
     let joinConfig = RealtimeJoinConfig(
       broadcast: config.broadcast,
       presence: config.presence,
-      postgresChanges: clientChanges
+      postgresChanges: mutableState.clientChanges
     )
 
-    let payload = await RealtimeJoinPayload(
+    let payload = RealtimeJoinPayload(
       config: joinConfig,
-      accessToken: socket?.accessToken
+      accessToken: socket.accessToken()
     )
 
-    joinRef = await socket?.makeRef().description
+    let joinRef = socket.makeRef().description
+    mutableState.withValue { $0.joinRef = joinRef }
 
     logger?.debug("subscribing to channel with body: \(joinConfig)")
 
@@ -109,7 +135,7 @@ public actor RealtimeChannelV2 {
     )
 
     do {
-      try await withTimeout(interval: socket?.options.timeoutInterval ?? 10) { [self] in
+      try await withTimeout(interval: socket.options().timeoutInterval) { [self] in
         _ = await statusChange.first { @Sendable in $0 == .subscribed }
       }
     } catch {
@@ -128,8 +154,8 @@ public actor RealtimeChannelV2 {
 
     await push(
       RealtimeMessageV2(
-        joinRef: joinRef,
-        ref: socket?.makeRef().description,
+        joinRef: mutableState.joinRef,
+        ref: socket.makeRef().description,
         topic: topic,
         event: ChannelEvent.leave,
         payload: [:]
@@ -141,8 +167,8 @@ public actor RealtimeChannelV2 {
     logger?.debug("Updating auth token for channel \(topic)")
     await push(
       RealtimeMessageV2(
-        joinRef: joinRef,
-        ref: socket?.makeRef().description,
+        joinRef: mutableState.joinRef,
+        ref: socket.makeRef().description,
         topic: topic,
         event: ChannelEvent.accessToken,
         payload: ["access_token": .string(jwt)]
@@ -162,8 +188,8 @@ public actor RealtimeChannelV2 {
 
     await push(
       RealtimeMessageV2(
-        joinRef: joinRef,
-        ref: socket?.makeRef().description,
+        joinRef: mutableState.joinRef,
+        ref: socket.makeRef().description,
         topic: topic,
         event: ChannelEvent.broadcast,
         payload: [
@@ -187,8 +213,8 @@ public actor RealtimeChannelV2 {
 
     await push(
       RealtimeMessageV2(
-        joinRef: joinRef,
-        ref: socket?.makeRef().description,
+        joinRef: mutableState.joinRef,
+        ref: socket.makeRef().description,
         topic: topic,
         event: ChannelEvent.presence,
         payload: [
@@ -203,8 +229,8 @@ public actor RealtimeChannelV2 {
   public func untrack() async {
     await push(
       RealtimeMessageV2(
-        joinRef: joinRef,
-        ref: socket?.makeRef().description,
+        joinRef: mutableState.joinRef,
+        ref: socket.makeRef().description,
         topic: topic,
         event: ChannelEvent.presence,
         payload: [
@@ -329,7 +355,7 @@ public actor RealtimeChannelV2 {
         Task { [weak self] in
           guard let self else { return }
 
-          await socket?.removeChannel(self)
+          await socket.removeChannel(self)
           logger?.debug("Unsubscribed from channel \(message.topic)")
         }
 
@@ -439,7 +465,9 @@ public actor RealtimeChannelV2 {
       filter: filter
     )
 
-    clientChanges.append(config)
+    mutableState.withValue {
+      $0.clientChanges.append(config)
+    }
 
     let id = callbackManager.addPostgresCallback(filter: config, callback: callback)
     return Subscription { [weak callbackManager, logger] in
@@ -464,14 +492,18 @@ public actor RealtimeChannelV2 {
   private func push(_ message: RealtimeMessageV2) async -> PushStatus {
     let push = PushV2(channel: self, message: message)
     if let ref = message.ref {
-      pushes[ref] = push
+      mutableState.withValue {
+        $0.pushes[ref] = push
+      }
     }
     return await push.send()
   }
 
   private func didReceiveReply(ref: String, status: String) {
     Task {
-      let push = pushes.removeValue(forKey: ref)
+      let push = mutableState.withValue {
+        $0.pushes.removeValue(forKey: ref)
+      }
       await push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
     }
   }

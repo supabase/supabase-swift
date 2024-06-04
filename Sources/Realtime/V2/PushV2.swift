@@ -20,11 +20,11 @@ actor PushV2 {
   }
 
   func send() async -> PushStatus {
-    await channel?.socket?.push(message)
+    await channel?.socket.push(message)
 
     if channel?.config.broadcast.acknowledgeBroadcasts == true {
       do {
-        return try await withTimeout(interval: channel?.socket?.options.timeoutInterval ?? 10) {
+        return try await withTimeout(interval: channel?.socket.options().timeoutInterval ?? 10) {
           await withCheckedContinuation {
             self.receivedContinuation = $0
           }
