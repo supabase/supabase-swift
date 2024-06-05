@@ -8,8 +8,10 @@
 import Foundation
 
 extension TaskLocal where Value == JSONObject {
+  @inlinable
   @discardableResult
-  @inlinable package func withValue<R>(
+  @_unsafeInheritExecutor
+  package func withValue<R>(
     merging valueDuringOperation: Value,
     @_inheritActorContext operation: @Sendable () async throws -> R,
     file: String = #fileID,
