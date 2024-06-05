@@ -178,6 +178,8 @@ extension SupabaseLogger {
 }
 
 @inlinable
+@discardableResult
+@_unsafeInheritExecutor
 package func trace<R>(
   using logger: (any SupabaseLogger)?,
   @_inheritActorContext _ operation: @Sendable () async throws -> R,
