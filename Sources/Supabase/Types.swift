@@ -147,14 +147,16 @@ extension SupabaseClientOptions.AuthOptions {
       redirectToURL: URL? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
+      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
+      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
     ) {
       self.init(
         storage: AuthClient.Configuration.defaultLocalStorage,
         redirectToURL: redirectToURL,
         flowType: flowType,
         encoder: encoder,
-        decoder: decoder
+        decoder: decoder,
+        autoRefreshToken: autoRefreshToken
       )
     }
   #endif
