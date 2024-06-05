@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 13/05/24.
 //
 
-import _Helpers
 import Foundation
+import Helpers
 
 /// Options for initializing ``RealtimeClientV2``.
 public struct RealtimeClientOptions: Sendable {

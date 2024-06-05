@@ -1,5 +1,5 @@
-import _Helpers
 import Foundation
+import Helpers
 
 /// A type that can fit into the query part of a URL.
 public protocol URLQueryRepresentable {

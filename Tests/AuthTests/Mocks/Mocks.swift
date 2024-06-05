@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 27/10/23.
 //
 
-import _Helpers
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import TestHelpers
 import XCTestDynamicOverlay
 

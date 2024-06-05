@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 14/12/23.
 //
 
-import _Helpers
 import Foundation
+import Helpers
 
 extension AuthClient.Configuration {
   private static let dateFormatterWithFractionalSeconds = { () -> ISO8601DateFormatter in

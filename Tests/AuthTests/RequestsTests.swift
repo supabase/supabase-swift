@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 07/10/23.
 //
 
-import _Helpers
 @testable import Auth
+import Helpers
 import SnapshotTesting
 import TestHelpers
 import XCTest

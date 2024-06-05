@@ -1,12 +1,12 @@
-import _Helpers
 import ConcurrencyExtras
 import Foundation
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-let version = _Helpers.version
+let version = Helpers.version
 
 /// An actor representing a client for invoking functions.
 public final class FunctionsClient: Sendable {

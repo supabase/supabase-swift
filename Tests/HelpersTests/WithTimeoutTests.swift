@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 19/04/24.
 //
 
-import _Helpers
 import Foundation
+import Helpers
 import XCTest
 
 final class WithTimeoutTests: XCTestCase {

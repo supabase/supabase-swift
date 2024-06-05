@@ -30,16 +30,16 @@ let package = Package(
   ],
   targets: [
     .target(
-      name: "_Helpers",
+      name: "Helpers",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
       ]
     ),
     .testTarget(
-      name: "_HelpersTests",
+      name: "HelpersTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
-        "_Helpers",
+        "Helpers",
       ]
     ),
     .target(
@@ -47,7 +47,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Crypto", package: "swift-crypto"),
-        "_Helpers",
+        "Helpers",
       ]
     ),
     .testTarget(
@@ -56,7 +56,7 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
-        "_Helpers",
+        "Helpers",
         "Auth",
         "TestHelpers",
       ],
@@ -65,7 +65,7 @@ let package = Package(
       ],
       resources: [.process("Resources")]
     ),
-    .target(name: "Functions", dependencies: ["_Helpers"]),
+    .target(name: "Functions", dependencies: ["Helpers"]),
     .testTarget(
       name: "FunctionsTests",
       dependencies: [
@@ -83,7 +83,7 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
-        "_Helpers",
+        "Helpers",
         "Auth",
         "PostgREST",
         "Realtime",
@@ -96,14 +96,14 @@ let package = Package(
       name: "PostgREST",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        "_Helpers",
+        "Helpers",
       ]
     ),
     .testTarget(
       name: "PostgRESTTests",
       dependencies: [
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-        "_Helpers",
+        "Helpers",
         "PostgREST",
       ],
       exclude: ["__Snapshots__"]
@@ -112,7 +112,7 @@ let package = Package(
       name: "Realtime",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        "_Helpers",
+        "Helpers",
       ]
     ),
     .testTarget(
@@ -124,7 +124,7 @@ let package = Package(
         "TestHelpers",
       ]
     ),
-    .target(name: "Storage", dependencies: ["_Helpers"]),
+    .target(name: "Storage", dependencies: ["Helpers"]),
     .testTarget(
       name: "StorageTests",
       dependencies: [

@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 17/02/24.
 //
 
-@testable import _Helpers
 import ConcurrencyExtras
 import Foundation
+@testable import Helpers
 import XCTest
 
 final class ObservationTokenTests: XCTestCase {

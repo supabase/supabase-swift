@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 26/04/24.
 //
 
-import _Helpers
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import XCTestDynamicOverlay
 
 package final class HTTPClientMock: HTTPClientType {

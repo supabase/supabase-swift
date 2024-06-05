@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 23/12/23.
 //
 
-import _Helpers
 import Foundation
+import Helpers
 
 public struct Column: Equatable, Codable, Sendable {
   public let name: String

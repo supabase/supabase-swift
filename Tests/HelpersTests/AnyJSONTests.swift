@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 28/12/23.
 //
 
-@testable import _Helpers
 import CustomDump
 import Foundation
+@testable import Helpers
 import XCTest
 
 final class AnyJSONTests: XCTestCase {

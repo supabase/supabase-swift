@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 14/12/23.
 //
 
-import _Helpers
 import Foundation
+import Helpers
 
-let version = _Helpers.version
+let version = Helpers.version
 
 extension PostgrestClient.Configuration {
   private static let supportedDateFormatters: [ISO8601DateFormatter] = [
