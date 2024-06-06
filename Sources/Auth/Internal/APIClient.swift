@@ -1,5 +1,5 @@
-import _Helpers
 import Foundation
+import Helpers
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {

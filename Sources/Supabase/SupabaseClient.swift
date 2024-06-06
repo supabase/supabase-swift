@@ -1,8 +1,8 @@
-import _Helpers
 @_exported import Auth
 import ConcurrencyExtras
 import Foundation
 @_exported import Functions
+import Helpers
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
@@ -11,11 +11,11 @@ import Foundation
   import FoundationNetworking
 #endif
 
-public typealias SupabaseLogger = _Helpers.SupabaseLogger
-public typealias SupabaseLogLevel = _Helpers.SupabaseLogLevel
-public typealias SupabaseLogMessage = _Helpers.SupabaseLogMessage
+public typealias SupabaseLogger = Helpers.SupabaseLogger
+public typealias SupabaseLogLevel = Helpers.SupabaseLogLevel
+public typealias SupabaseLogMessage = Helpers.SupabaseLogMessage
 
-let version = _Helpers.version
+let version = Helpers.version
 
 /// Supabase Client.
 public final class SupabaseClient: Sendable {

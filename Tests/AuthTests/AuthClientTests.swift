@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
-@testable import _Helpers
 @testable import Auth
 import ConcurrencyExtras
 import CustomDump
+@testable import Helpers
 import TestHelpers
 import XCTest
 

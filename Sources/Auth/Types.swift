@@ -1,8 +1,8 @@
-import _Helpers
 import Foundation
+import Helpers
 
-public typealias AnyJSON = _Helpers.AnyJSON
-public typealias JSONObject = _Helpers.JSONObject
+public typealias AnyJSON = Helpers.AnyJSON
+public typealias JSONObject = Helpers.JSONObject
 
 public enum AuthChangeEvent: String, Sendable {
   case initialSession = "INITIAL_SESSION"

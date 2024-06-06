@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 25/01/24.
 //
 
-import _Helpers
 import Foundation
+import Helpers
 
 public struct AuthAdmin: Sendable {
   var configuration: AuthClient.Configuration { Current.configuration }

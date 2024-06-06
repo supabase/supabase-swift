@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
-import _Helpers
 import ConcurrencyExtras
 import Foundation
+import Helpers
 
 public struct RealtimeChannelConfig: Sendable {
   public var broadcast: BroadcastJoinConfig

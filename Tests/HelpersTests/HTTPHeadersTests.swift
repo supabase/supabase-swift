@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 24/04/24.
 //
 
-@testable import _Helpers
+@testable import Helpers
 import XCTest
 
 final class HTTPHeadersTests: XCTestCase {

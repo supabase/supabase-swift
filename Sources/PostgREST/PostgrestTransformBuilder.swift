@@ -1,5 +1,5 @@
-import _Helpers
 import Foundation
+import Helpers
 
 public class PostgrestTransformBuilder: PostgrestBuilder {
   /// Perform a SELECT on the query result.

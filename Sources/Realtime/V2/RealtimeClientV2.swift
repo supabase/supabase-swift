@@ -5,15 +5,15 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
-import _Helpers
 import ConcurrencyExtras
 import Foundation
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-public typealias JSONObject = _Helpers.JSONObject
+public typealias JSONObject = Helpers.JSONObject
 
 public actor RealtimeClientV2 {
   @available(*, deprecated, renamed: "RealtimeClientOptions")

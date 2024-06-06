@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 29/04/24.
 //
 
-import _Helpers
 import Foundation
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

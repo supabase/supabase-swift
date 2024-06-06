@@ -1,5 +1,5 @@
-import _Helpers
 import Foundation
+import Helpers
 
 public final class PostgrestQueryBuilder: PostgrestBuilder {
   /// Perform a SELECT query on the table or view.

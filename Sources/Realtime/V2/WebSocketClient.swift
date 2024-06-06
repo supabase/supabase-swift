@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 29/12/23.
 //
 
-import _Helpers
 import ConcurrencyExtras
 import Foundation
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

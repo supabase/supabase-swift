@@ -8,7 +8,7 @@
       "prerelease": false,
       "release-type": "simple",
       "extra-files": [
-        "Sources/_Helpers/Version.swift"
+        "Sources/Helpers/Version.swift"
       ]
     }
   },
