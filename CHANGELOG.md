@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.13.1](https://github.com/supabase/supabase-swift/compare/v2.13.0...v2.13.1) (2024-06-06)
+
+
+### Bug Fixes
+
+* **auth:** missing autoRefreshToken param in initializer ([#415](https://github.com/supabase/supabase-swift/issues/415)) ([32de22f](https://github.com/supabase/supabase-swift/commit/32de22ffa775bfc45f4077330de3dbe81b327f3e))
+* invalid identifier for _Helpers target ([#414](https://github.com/supabase/supabase-swift/issues/414)) ([b2c8aee](https://github.com/supabase/supabase-swift/commit/b2c8aee894c7a9c729d66bd850f4ffa706a21ae3))
+
 ## [2.13.0](https://github.com/supabase/supabase-swift/compare/v2.12.0...v2.13.0) (2024-06-04)
 
 
