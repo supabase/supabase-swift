@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.2](https://github.com/supabase/supabase-swift/compare/v2.13.1...v2.13.2) (2024-06-07)
+
+
+### Bug Fixes
+
+* **auth:** don't call removeSession prematurely ([#416](https://github.com/supabase/supabase-swift/issues/416)) ([00221a8](https://github.com/supabase/supabase-swift/commit/00221a84fbf026ab41911d23be01e8065a949989))
+
 ## [2.13.1](https://github.com/supabase/supabase-swift/compare/v2.13.0...v2.13.1) (2024-06-06)
 
 
