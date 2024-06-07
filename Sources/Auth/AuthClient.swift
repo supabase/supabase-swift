@@ -170,8 +170,6 @@ public final class AuthClient: Sendable {
   }
 
   private func _signUp(request: HTTPRequest) async throws -> AuthResponse {
-    await sessionManager.remove()
-
     let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
       decoder: configuration.decoder
@@ -271,8 +269,6 @@ public final class AuthClient: Sendable {
   }
 
   private func _signIn(request: HTTPRequest) async throws -> Session {
-    await sessionManager.remove()
-
     let session = try await api.execute(request).decoded(
       as: Session.self,
       decoder: configuration.decoder
@@ -302,8 +298,6 @@ public final class AuthClient: Sendable {
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
   ) async throws {
-    await sessionManager.remove()
-
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     _ = try await api.execute(
@@ -348,7 +342,6 @@ public final class AuthClient: Sendable {
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
   ) async throws {
-    await sessionManager.remove()
     _ = try await api.execute(
       .init(
         url: configuration.url.appendingPathComponent("otp"),
@@ -378,8 +371,6 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    await sessionManager.remove()
-
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     return try await api.execute(
@@ -413,8 +404,6 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    await sessionManager.remove()
-
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     return try await api.execute(
@@ -834,8 +823,7 @@ public final class AuthClient: Sendable {
             )
           )
         )
-      ),
-      shouldRemoveSession: type != .emailChange
+      )
     )
   }
 
@@ -861,19 +849,11 @@ public final class AuthClient: Sendable {
             )
           )
         )
-      ),
-      shouldRemoveSession: type != .phoneChange
+      )
     )
   }
 
-  private func _verifyOTP(
-    request: HTTPRequest,
-    shouldRemoveSession: Bool
-  ) async throws -> AuthResponse {
-    if shouldRemoveSession {
-      await sessionManager.remove()
-    }
-
+  private func _verifyOTP(request: HTTPRequest) async throws -> AuthResponse {
     let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
       decoder: configuration.decoder
@@ -897,10 +877,6 @@ public final class AuthClient: Sendable {
     emailRedirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    if type != .emailChange {
-      await sessionManager.remove()
-    }
-
     _ = try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("resend"),
@@ -934,11 +910,7 @@ public final class AuthClient: Sendable {
     type: ResendMobileType,
     captchaToken: String? = nil
   ) async throws -> ResendMobileResponse {
-    if type != .phoneChange {
-      await sessionManager.remove()
-    }
-
-    return try await api.execute(
+    try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("resend"),
         method: .post,
