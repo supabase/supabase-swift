@@ -40,7 +40,7 @@ final class _PushTests: XCTestCase {
         broadcast: .init(acknowledgeBroadcasts: false),
         presence: .init()
       ),
-      socket: socket,
+      socket: Socket(client: socket),
       logger: nil
     )
     let push = PushV2(

@@ -35,30 +35,30 @@ final class RealtimeTests: XCTestCase {
     )
   }
 
-  override func tearDown() async throws {
-    await sut.disconnect()
-
-    try await super.tearDown()
+  override func tearDown() {
+    sut.disconnect()
+  
+    super.tearDown()
   }
 
   func testBehavior() async throws {
     try await withTimeout(interval: 2) { [self] in
-      let channel = await sut.channel("public:messages")
-      _ = await channel.postgresChange(InsertAction.self, table: "messages")
-      _ = await channel.postgresChange(UpdateAction.self, table: "messages")
-      _ = await channel.postgresChange(DeleteAction.self, table: "messages")
+      let channel = sut.channel("public:messages")
+      _ = channel.postgresChange(InsertAction.self, table: "messages")
+      _ = channel.postgresChange(UpdateAction.self, table: "messages")
+      _ = channel.postgresChange(DeleteAction.self, table: "messages")
 
-      let statusChange = await sut.statusChange
+      let statusChange = sut.statusChange
 
       await connectSocketAndWait()
 
       let status = await statusChange.prefix(3).collect()
       XCTAssertEqual(status, [.disconnected, .connecting, .connected])
 
-      let messageTask = await sut.messageTask
+      let messageTask = sut.mutableState.messageTask
       XCTAssertNotNil(messageTask)
 
-      let heartbeatTask = await sut.heartbeatTask
+      let heartbeatTask = sut.mutableState.heartbeatTask
       XCTAssertNotNil(heartbeatTask)
 
       let subscription = Task {
@@ -75,7 +75,7 @@ final class RealtimeTests: XCTestCase {
   }
 
   func testSubscribeTimeout() async throws {
-    let channel = await sut.channel("public:messages")
+    let channel = sut.channel("public:messages")
     let joinEventCount = LockIsolated(0)
 
     ws.on { message in
@@ -130,8 +130,8 @@ final class RealtimeTests: XCTestCase {
         )
       ),
       RealtimeMessageV2(
-        joinRef: "3",
-        ref: "3",
+        joinRef: "2",
+        ref: "2",
         topic: "realtime:public:messages",
         event: "phx_join",
         payload: JSONObject(
@@ -193,7 +193,7 @@ final class RealtimeTests: XCTestCase {
       let statuses = LockIsolated<[RealtimeClientV2.Status]>([])
 
       Task {
-        for await status in await sut.statusChange {
+        for await status in sut.statusChange {
           statuses.withValue {
             $0.append(status)
           }
@@ -204,7 +204,7 @@ final class RealtimeTests: XCTestCase {
 
       await fulfillment(of: [sentHeartbeatExpectation], timeout: 2)
 
-      let pendingHeartbeatRef = await sut.pendingHeartbeatRef
+      let pendingHeartbeatRef = sut.mutableState.pendingHeartbeatRef
       XCTAssertNotNil(pendingHeartbeatRef)
 
       // Wait until next heartbeat

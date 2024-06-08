@@ -106,7 +106,9 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - email: User's email address.
   ///   - password: Password for the user.
-  ///   - data: User's metadata.
+  ///   - data: Custom data object to store additional user metadata.
+  ///   - redirectTo: The redirect URL embedded in the email link, defaults to ``Configuration/redirectToURL`` if not provided.
+  ///   - captchaToken: Optional captcha token for securing this endpoint.
   @discardableResult
   public func signUp(
     email: String,
@@ -145,7 +147,8 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - phone: User's phone number with international prefix.
   ///   - password: Password for the user.
-  ///   - data: User's metadata.
+  ///   - data: Custom data object to store additional user metadata.
+  ///   - captchaToken: Optional captcha token for securing this endpoint.
   @discardableResult
   public func signUp(
     phone: String,
@@ -184,6 +187,10 @@ public final class AuthClient: Sendable {
   }
 
   /// Log in an existing user with an email and password.
+  /// - Parameters:
+  ///   - email: User's email address.
+  ///   - password: User's password.
+  ///   - captchaToken: Optional captcha token for securing this endpoint.
   @discardableResult
   public func signIn(
     email: String,
@@ -207,6 +214,10 @@ public final class AuthClient: Sendable {
   }
 
   /// Log in an existing user with a phone and password.
+  /// - Parameters:
+  ///   - email: User's phone number.
+  ///   - password: User's password.
+  ///   - captchaToken: Optional captcha token for securing this endpoint.
   @discardableResult
   public func signIn(
     phone: String,
@@ -333,8 +344,7 @@ public final class AuthClient: Sendable {
   ///   - data: User's metadata.
   ///   - captchaToken: Captcha verification token.
   ///
-  /// - Note: You need to configure a WhatsApp sender on Twillo if you are using phone sign in with
-  /// the `whatsapp` channel.
+  /// - Note: You need to configure a WhatsApp sender on Twillo if you are using phone sign in with the `whatsapp` channel.
   public func signInWithOTP(
     phone: String,
     channel: MessagingChannel = .sms,
@@ -362,8 +372,7 @@ public final class AuthClient: Sendable {
   /// Attempts a single-sign on using an enterprise Identity Provider.
   /// - Parameters:
   ///   - domain: The email domain to use for signing in.
-  ///   - redirectTo: The URL to redirect the user to after they sign in with the third-party
-  /// provider.
+  ///   - redirectTo: The URL to redirect the user to after they sign in with the third-party provider.
   ///   - captchaToken: The captcha token to be used for captcha verification.
   /// - Returns: A URL that you can use to initiate the provider's authentication flow.
   public func signInWithSSO(

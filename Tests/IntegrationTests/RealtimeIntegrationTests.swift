@@ -40,14 +40,14 @@ final class RealtimeIntegrationTests: XCTestCase {
     let expectation = expectation(description: "receivedBroadcastMessages")
     expectation.expectedFulfillmentCount = 3
 
-    let channel = await realtime.channel("integration") {
+    let channel = realtime.channel("integration") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
     let receivedMessages = LockIsolated<[JSONObject]>([])
 
     Task {
-      for await message in await channel.broadcastStream(event: "test") {
+      for await message in channel.broadcastStream(event: "test") {
         receivedMessages.withValue {
           $0.append(message)
         }
@@ -101,7 +101,7 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testPresence() async throws {
-    let channel = await realtime.channel("integration") {
+    let channel = realtime.channel("integration") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
@@ -111,7 +111,7 @@ final class RealtimeIntegrationTests: XCTestCase {
     let receivedPresenceChanges = LockIsolated<[any PresenceAction]>([])
 
     Task {
-      for await presence in await channel.presenceChange() {
+      for await presence in channel.presenceChange() {
         receivedPresenceChanges.withValue {
           $0.append(presence)
         }
@@ -161,7 +161,7 @@ final class RealtimeIntegrationTests: XCTestCase {
 
   // FIXME: Test getting stuck
 //  func testPostgresChanges() async throws {
-//    let channel = await realtime.channel("db-changes")
+//    let channel = realtime.channel("db-changes")
 //
 //    let receivedInsertActions = Task {
 //      await channel.postgresChange(InsertAction.self, schema: "public").prefix(1).collect()

@@ -72,10 +72,10 @@ final class SupabaseClientTests: XCTestCase {
 
     XCTAssertEqual(client.functions.region, "ap-northeast-1")
 
-    let realtimeURL = await client.realtimeV2.url
+    let realtimeURL = client.realtimeV2.url
     XCTAssertEqual(realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")
 
-    let realtimeOptions = await client.realtimeV2.options
+    let realtimeOptions = client.realtimeV2.options
     let expectedRealtimeHeader = client.defaultHeaders.merged(with: ["custom_realtime_header_key": "custom_realtime_header_value"])
     XCTAssertNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
