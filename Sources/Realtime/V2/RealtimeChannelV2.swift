@@ -357,6 +357,7 @@ public final class RealtimeChannelV2: Sendable {
 
           await socket.removeChannel(self)
           logger?.debug("Unsubscribed from channel \(message.topic)")
+          status = .unsubscribed
         }
 
       case .error:
