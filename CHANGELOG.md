@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.3](https://github.com/supabase/supabase-swift/compare/v2.13.2...v2.13.3) (2024-06-17)
+
+
+### Bug Fixes
+
+* **realtime:** Adds missing `.unsubscribed` status change ([#420](https://github.com/supabase/supabase-swift/issues/420)) ([dc90fb6](https://github.com/supabase/supabase-swift/commit/dc90fb675e9b9ccf7733d28a4fcfc3e59416e119))
+
 ## [2.13.2](https://github.com/supabase/supabase-swift/compare/v2.13.1...v2.13.2) (2024-06-07)
 
 
