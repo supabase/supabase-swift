@@ -100,11 +100,14 @@ final class SupabaseClientTests: XCTestCase {
   #endif
 
   func testClientInitWithCustomAccessToken() async {
+    let localStorage = AuthLocalStorageMock()
+
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "ANON_KEY",
       options: .init(
         auth: .init(
+          storage: localStorage,
           accessToken: { "jwt" }
         )
       )
