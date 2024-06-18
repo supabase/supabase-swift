@@ -112,7 +112,7 @@ public final class SupabaseClient: Sendable {
     var changedAccessToken: String?
   }
 
-  private let mutableState = LockIsolated(MutableState())
+  let mutableState = LockIsolated(MutableState())
 
   private var session: URLSession {
     options.global.session
@@ -390,3 +390,26 @@ public final class SupabaseClient: Sendable {
     await realtimeV2.setAuth(accessToken)
   }
 }
+
+#if DEBUG
+  typealias PreconditionHandler = @Sendable (
+    _ condition: @autoclosure () -> Bool,
+    _ message: @autoclosure () -> String,
+    _ file: StaticString,
+    _ line: UInt
+  ) -> Void
+
+  let overridedPreconditionHandler = LockIsolated<PreconditionHandler?>(nil)
+  func precondition(
+    _ condition: @autoclosure () -> Bool,
+    _ message: @autoclosure () -> String = String(),
+    file: StaticString = #file,
+    line: UInt = #line
+  ) {
+    if let precondition = overridedPreconditionHandler.value {
+      precondition(condition(), message(), file, line)
+    } else {
+      Swift.precondition(condition(), message(), file: file, line: line)
+    }
+  }
+#endif

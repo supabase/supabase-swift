@@ -83,6 +83,11 @@ final class SupabaseClientTests: XCTestCase {
 
     XCTAssertFalse(client.auth.configuration.autoRefreshToken)
     XCTAssertEqual(client.auth.configuration.storageKey, "sb-project-ref-auth-token")
+
+    XCTAssertNotNil(
+      client.mutableState.listenForAuthEventsTask,
+      "should listen for internal auth events"
+    )
   }
 
   #if !os(Linux)
@@ -93,4 +98,30 @@ final class SupabaseClientTests: XCTestCase {
       )
     }
   #endif
+
+  func testClientInitWithCustomAccessToken() async {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "ANON_KEY",
+      options: .init(
+        auth: .init(
+          accessToken: { "jwt" }
+        )
+      )
+    )
+
+    XCTAssertNil(
+      client.mutableState.listenForAuthEventsTask,
+      "should not listen for internal auth events when using 3p authentication"
+    )
+
+    overridedPreconditionHandler.setValue { _, message, _, _ in
+      XCTAssertEqual(
+        message(),
+        "Supabase Client is configured with the auth.accessToken option, accessing supabase.auth is not possible."
+      )
+    }
+
+    _ = client.auth
+  }
 }
