@@ -37,7 +37,7 @@ final class RealtimeTests: XCTestCase {
 
   override func tearDown() {
     sut.disconnect()
-  
+
     super.tearDown()
   }
 

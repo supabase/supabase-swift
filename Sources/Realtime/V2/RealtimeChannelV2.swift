@@ -176,10 +176,18 @@ public final class RealtimeChannelV2: Sendable {
     )
   }
 
+  /// Send a broadcast message with `event` and a `Codable` payload.
+  /// - Parameters:
+  ///   - event: Broadcast message event.
+  ///   - message: Message payload.
   public func broadcast(event: String, message: some Codable) async throws {
     try await broadcast(event: event, message: JSONObject(message))
   }
 
+  /// Send a broadcast message with `event` and a raw `JSON` payload.
+  /// - Parameters:
+  ///   - event: Broadcast message event.
+  ///   - message: Message payload.
   public func broadcast(event: String, message: JSONObject) async {
     assert(
       status == .subscribed,

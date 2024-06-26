@@ -23,9 +23,15 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
     self.payload = payload
   }
 
+  var status: PushStatus? {
+    payload["status"]
+      .flatMap(\.stringValue)
+      .flatMap(PushStatus.init(rawValue:))
+  }
+
   public var eventType: EventType? {
     switch event {
-    case ChannelEvent.system where payload["status"]?.stringValue == "ok": .system
+    case ChannelEvent.system where status == .ok: .system
     case ChannelEvent.postgresChanges:
       .postgresChanges
     case ChannelEvent.broadcast:
