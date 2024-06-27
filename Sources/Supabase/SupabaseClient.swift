@@ -95,6 +95,8 @@ public final class SupabaseClient: Sendable {
     var storage: SupabaseStorageClient?
     var rest: PostgrestClient?
     var functions: FunctionsClient?
+
+    var changedAccessToken: String?
   }
 
   private let mutableState = LockIsolated(MutableState())
@@ -347,14 +349,19 @@ public final class SupabaseClient: Sendable {
   }
 
   private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
-    guard [
-      .initialSession,
-      .signedIn,
-      .tokenRefreshed,
-      .signedOut,
-    ].contains(event) else { return }
+    let accessToken = mutableState.withValue {
+      if event == .tokenRefreshed || event == .signedIn, $0.changedAccessToken != session?.accessToken {
+        $0.changedAccessToken = session?.accessToken
+        return session?.accessToken
+      } else if event == .signedOut {
+        $0.changedAccessToken = nil
+        return supabaseKey
+      } else {
+        return nil
+      }
+    }
 
-    realtime.setAuth(session?.accessToken)
-    await realtimeV2.setAuth(session?.accessToken)
+    realtime.setAuth(accessToken)
+    await realtimeV2.setAuth(accessToken)
   }
 }
