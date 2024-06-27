@@ -44,6 +44,9 @@ public struct SupabaseClientOptions: Sendable {
     /// Default URL to be used for redirect on the flows that requires it.
     public let redirectToURL: URL?
 
+    /// Optional key name used for storing tokens in local storage.
+    public let storageKey: String?
+
     /// OAuth flow to use - defaults to PKCE flow. PKCE is recommended for mobile and server-side
     /// applications.
     public let flowType: AuthFlowType
@@ -60,6 +63,7 @@ public struct SupabaseClientOptions: Sendable {
     public init(
       storage: any AuthLocalStorage,
       redirectToURL: URL? = nil,
+      storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
@@ -67,6 +71,7 @@ public struct SupabaseClientOptions: Sendable {
     ) {
       self.storage = storage
       self.redirectToURL = redirectToURL
+      self.storageKey = storageKey
       self.flowType = flowType
       self.encoder = encoder
       self.decoder = decoder
@@ -145,6 +150,7 @@ extension SupabaseClientOptions.AuthOptions {
   #if !os(Linux)
     public init(
       redirectToURL: URL? = nil,
+      storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
@@ -153,6 +159,7 @@ extension SupabaseClientOptions.AuthOptions {
       self.init(
         storage: AuthClient.Configuration.defaultLocalStorage,
         redirectToURL: redirectToURL,
+        storageKey: storageKey,
         flowType: flowType,
         encoder: encoder,
         decoder: decoder,

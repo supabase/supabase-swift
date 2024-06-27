@@ -24,6 +24,9 @@ extension AuthClient {
     public var headers: [String: String]
     public let flowType: AuthFlowType
     public let redirectToURL: URL?
+
+    /// Optional key name used for storing tokens in local storage.
+    public var storageKey: String?
     public let localStorage: any AuthLocalStorage
     public let logger: (any SupabaseLogger)?
     public let encoder: JSONEncoder
@@ -40,6 +43,7 @@ extension AuthClient {
     ///   - headers: Custom headers to be included in requests.
     ///   - flowType: The authentication flow type.
     ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
+    ///   - storageKey: Optional key name used for storing tokens in local storage.
     ///   - localStorage: The storage mechanism for local data.
     ///   - logger: The logger to use.
     ///   - encoder: The JSON encoder to use for encoding requests.
@@ -51,6 +55,7 @@ extension AuthClient {
       headers: [String: String] = [:],
       flowType: AuthFlowType = Configuration.defaultFlowType,
       redirectToURL: URL? = nil,
+      storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
       logger: (any SupabaseLogger)? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
@@ -64,6 +69,7 @@ extension AuthClient {
       self.headers = headers
       self.flowType = flowType
       self.redirectToURL = redirectToURL
+      self.storageKey = storageKey
       self.localStorage = localStorage
       self.logger = logger
       self.encoder = encoder
@@ -80,6 +86,7 @@ extension AuthClient {
   ///   - headers: Custom headers to be included in requests.
   ///   - flowType: The authentication flow type..
   ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
+  ///   - storageKey: Optional key name used for storing tokens in local storage.
   ///   - localStorage: The storage mechanism for local data..
   ///   - logger: The logger to use.
   ///   - encoder: The JSON encoder to use for encoding requests.
@@ -91,6 +98,7 @@ extension AuthClient {
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
     redirectToURL: URL? = nil,
+    storageKey: String? = nil,
     localStorage: any AuthLocalStorage,
     logger: (any SupabaseLogger)? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
@@ -104,6 +112,7 @@ extension AuthClient {
         headers: headers,
         flowType: flowType,
         redirectToURL: redirectToURL,
+        storageKey: storageKey,
         localStorage: localStorage,
         logger: logger,
         encoder: encoder,

@@ -1,5 +1,5 @@
 {
-  "supabase.session" : {
+  "supabase.auth.token" : {
     "expiration_date" : "2024-04-01T13:25:07.000Z",
     "session" : {
       "access_token" : "accesstoken",

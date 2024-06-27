@@ -4,12 +4,11 @@ import SnapshotTesting
 import XCTest
 
 final class StoredSessionTests: XCTestCase {
-  override func setUpWithError() throws {
-    try super.setUpWithError()
-  }
-
   func testStoredSession() throws {
     let sut = try! DiskTestStorage()
+
+    Current = .mock
+    Current.configuration.storageKey = "supabase.auth.token"
 
     let _ = try sut.getSession()
 
