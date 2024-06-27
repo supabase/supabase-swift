@@ -9,7 +9,7 @@ import ConcurrencyExtras
 import Foundation
 import Helpers
 
-final class CallbackManager: @unchecked Sendable {
+final class CallbackManager: Sendable {
   struct MutableState {
     var id = 0
     var serverChanges: [PostgresJoinConfig] = []

@@ -33,7 +33,6 @@ struct AnyJSONView: View {
           }
         }
       }
-
     case let .object(object):
       let elements = Array(object).sorted(by: { $0.key < $1.key })
       ForEach(elements, id: \.key) { element in

@@ -96,6 +96,7 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
 
         case .data:
           fallthrough
+
         default:
           throw RealtimeError("Unsupported message type.")
         }
