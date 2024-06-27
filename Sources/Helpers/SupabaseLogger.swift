@@ -55,7 +55,7 @@ public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
   }
 
   public var description: String {
-    let date = iso8601Formatter.string(from: Date(timeIntervalSince1970: timestamp))
+    let date = DateFormatter.iso8601_noMilliseconds.string(from: Date(timeIntervalSince1970: timestamp))
     let file = fileID.split(separator: ".", maxSplits: 1).first.map(String.init) ?? fileID
     var description = "\(date) [\(level)] [\(system)] [\(file).\(function):\(line)] \(message)"
     if !additionalContext.isEmpty {
@@ -64,12 +64,6 @@ public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
     return description
   }
 }
-
-private let iso8601Formatter: ISO8601DateFormatter = {
-  let formatter = ISO8601DateFormatter()
-  formatter.formatOptions = [.withInternetDateTime]
-  return formatter
-}()
 
 public protocol SupabaseLogger: Sendable {
   func log(message: SupabaseLogMessage)

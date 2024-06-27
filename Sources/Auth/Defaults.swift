@@ -9,25 +9,13 @@ import Foundation
 import Helpers
 
 extension AuthClient.Configuration {
-  private static let dateFormatterWithFractionalSeconds = { () -> ISO8601DateFormatter in
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter
-  }()
-
-  private static let dateFormatter = { () -> ISO8601DateFormatter in
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime]
-    return formatter
-  }()
-
   /// The default JSONEncoder instance used by the ``AuthClient``.
   public static let jsonEncoder: JSONEncoder = {
     let encoder = JSONEncoder()
     encoder.keyEncodingStrategy = .convertToSnakeCase
     encoder.dateEncodingStrategy = .custom { date, encoder in
       var container = encoder.singleValueContainer()
-      let string = dateFormatterWithFractionalSeconds.string(from: date)
+      let string = DateFormatter.iso8601.string(from: date)
       try container.encode(string)
     }
     return encoder
@@ -41,7 +29,7 @@ extension AuthClient.Configuration {
       let container = try decoder.singleValueContainer()
       let string = try container.decode(String.self)
 
-      let supportedFormatters = [dateFormatterWithFractionalSeconds, dateFormatter]
+      let supportedFormatters: [DateFormatter] = [.iso8601, .iso8601_noMilliseconds]
 
       for formatter in supportedFormatters {
         if let date = formatter.date(from: string) {
