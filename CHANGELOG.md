@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.13.4](https://github.com/supabase/supabase-swift/compare/v2.13.3...v2.13.4) (2024-06-28)
+
+
+### Bug Fixes
+
+* concurrency warnings pre swift 6 support ([#428](https://github.com/supabase/supabase-swift/issues/428)) ([bee6fa7](https://github.com/supabase/supabase-swift/commit/bee6fa70182cd750d4a9c2c107bc143470c4108b))
+* **realtime:** revert realtime token to apikey on user sign out ([#429](https://github.com/supabase/supabase-swift/issues/429)) ([11c629f](https://github.com/supabase/supabase-swift/commit/11c629fce23ddc3ae82ba8f04814cb0841af0ae3))
+
 ## [2.13.3](https://github.com/supabase/supabase-swift/compare/v2.13.2...v2.13.3) (2024-06-17)
 
 
