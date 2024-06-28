@@ -16,28 +16,34 @@ public struct RealtimeChannelConfig: Sendable {
 }
 
 struct Socket: Sendable {
+  var broadcastURL: @Sendable () -> URL
   var status: @Sendable () -> RealtimeClientV2.Status
   var options: @Sendable () -> RealtimeClientOptions
   var accessToken: @Sendable () -> String?
+  var apiKey: @Sendable () -> String?
   var makeRef: @Sendable () -> Int
 
   var connect: @Sendable () async -> Void
   var addChannel: @Sendable (_ channel: RealtimeChannelV2) -> Void
   var removeChannel: @Sendable (_ channel: RealtimeChannelV2) async -> Void
   var push: @Sendable (_ message: RealtimeMessageV2) async -> Void
+  var httpSend: @Sendable (_ request: HTTPRequest) async throws -> HTTPResponse
 }
 
 extension Socket {
   init(client: RealtimeClientV2) {
     self.init(
+      broadcastURL: { [weak client] in client?.broadcastURL ?? URL(string: "http://localhost")! },
       status: { [weak client] in client?.status ?? .disconnected },
       options: { [weak client] in client?.options ?? .init() },
       accessToken: { [weak client] in client?.mutableState.accessToken },
+      apiKey: { [weak client] in client?.apikey },
       makeRef: { [weak client] in client?.makeRef() ?? 0 },
       connect: { [weak client] in await client?.connect() },
       addChannel: { [weak client] in client?.addChannel($0) },
       removeChannel: { [weak client] in await client?.removeChannel($0) },
-      push: { [weak client] in await client?.push($0) }
+      push: { [weak client] in await client?.push($0) },
+      httpSend: { [weak client] in try await client?.http.send($0) ?? .init(data: Data(), response: HTTPURLResponse()) }
     )
   }
 }
@@ -202,8 +208,6 @@ public final class RealtimeChannelV2: Sendable {
   ///   - event: Broadcast message event.
   ///   - message: Message payload.
   public func broadcast(event: String, message: JSONObject) async {
-    guard let socket else { return }
-
     if status != .subscribed {
       struct Message: Encodable {
         let topic: String
@@ -211,12 +215,12 @@ public final class RealtimeChannelV2: Sendable {
         let payload: JSONObject
       }
 
-      _ = try? await socket.http.send(
+      _ = try? await socket.httpSend(
         HTTPRequest(
-          url: socket.broadcastURL,
+          url: socket.broadcastURL(),
           method: .post,
           headers: [
-            "apikey": socket.apikey ?? "",
+            "apikey": socket.apiKey() ?? "",
             "content-type": "application/json",
           ],
           body: JSONEncoder().encode(
