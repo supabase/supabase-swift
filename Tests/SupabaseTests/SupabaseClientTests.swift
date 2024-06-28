@@ -81,6 +81,7 @@ final class SupabaseClientTests: XCTestCase {
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
 
     XCTAssertFalse(client.auth.configuration.autoRefreshToken)
+    XCTAssertEqual(client.auth.configuration.storageKey, "sb-project-ref-auth-token")
   }
 
   #if !os(Linux)

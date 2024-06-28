@@ -144,11 +144,15 @@ public final class SupabaseClient: Sendable {
     ])
     .merged(with: HTTPHeaders(options.global.headers))
 
+    // default storage key uses the supabase project ref as a namespace
+    let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"
+
     auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       headers: defaultHeaders.dictionary,
       flowType: options.auth.flowType,
       redirectToURL: options.auth.redirectToURL,
+      storageKey: options.auth.storageKey ?? defaultStorageKey,
       localStorage: options.auth.storage,
       logger: options.global.logger,
       encoder: options.auth.encoder,

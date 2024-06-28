@@ -20,20 +20,37 @@ struct StoredSession: Codable {
 }
 
 extension AuthLocalStorage {
+  var key: String {
+    Current.configuration.storageKey ?? AuthClient.Configuration.defaultStorageKey
+  }
+
+  var oldKey: String { "supabase.session" }
+
   func getSession() throws -> Session? {
-    try retrieve(key: "supabase.session").flatMap {
+    var storedData = try? retrieve(key: oldKey)
+
+    if let storedData {
+      // migrate to new key.
+      try store(key: key, value: storedData)
+      try? remove(key: oldKey)
+    } else {
+      storedData = try retrieve(key: key)
+    }
+
+    return try storedData.flatMap {
       try AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0).session
     }
   }
 
   func storeSession(_ session: Session) throws {
     try store(
-      key: "supabase.session",
+      key: key,
       value: AuthClient.Configuration.jsonEncoder.encode(StoredSession(session: session))
     )
   }
 
   func deleteSession() throws {
-    try remove(key: "supabase.session")
+    try remove(key: key)
+    try? remove(key: oldKey)
   }
 }
