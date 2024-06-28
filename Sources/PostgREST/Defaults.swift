@@ -11,17 +11,9 @@ import Helpers
 let version = Helpers.version
 
 extension PostgrestClient.Configuration {
-  private static let supportedDateFormatters: [ISO8601DateFormatter] = [
-    { () -> ISO8601DateFormatter in
-      let formatter = ISO8601DateFormatter()
-      formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-      return formatter
-    }(),
-    { () -> ISO8601DateFormatter in
-      let formatter = ISO8601DateFormatter()
-      formatter.formatOptions = [.withInternetDateTime]
-      return formatter
-    }(),
+  private static let supportedDateFormatters: [DateFormatter] = [
+    .iso8601,
+    .iso8601_noMilliseconds,
   ]
 
   /// The default `JSONDecoder` instance for ``PostgrestClient`` responses.
