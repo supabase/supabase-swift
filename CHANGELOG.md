@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.5](https://github.com/supabase/supabase-swift/compare/v2.13.4...v2.13.5) (2024-06-28)
+
+
+### Bug Fixes
+
+* **auth:** use project ref as namespace for storing token ([#430](https://github.com/supabase/supabase-swift/issues/430)) ([82fa93d](https://github.com/supabase/supabase-swift/commit/82fa93d0c19de6baa6de4b02dd0cdf3a17a3f0cd))
+
 ## [2.13.4](https://github.com/supabase/supabase-swift/compare/v2.13.3...v2.13.4) (2024-06-28)
 
 
