@@ -16,16 +16,11 @@ extension AnyJSON {
       let container = try decoder.singleValueContainer()
       let dateString = try container.decode(String.self)
 
-      let date = DateFormatter.iso8601.date(from: dateString) ?? DateFormatter
-        .iso8601_noMilliseconds.date(from: dateString)
+      let date = ISO8601DateFormatter.iso8601WithFractionalSeconds.value.date(from: dateString) ?? ISO8601DateFormatter.iso8601.value.date(from: dateString)
 
       guard let decodedDate = date else {
-        throw DecodingError.typeMismatch(
-          Date.self,
-          DecodingError.Context(
-            codingPath: container.codingPath,
-            debugDescription: "String is not a valid Date"
-          )
+        throw DecodingError.dataCorruptedError(
+          in: container, debugDescription: "Invalid date format: \(dateString)"
         )
       }
 
@@ -38,7 +33,11 @@ extension AnyJSON {
   public static let encoder: JSONEncoder = {
     let encoder = JSONEncoder()
     encoder.dataEncodingStrategy = .base64
-    encoder.dateEncodingStrategy = .formatted(DateFormatter.iso8601)
+    encoder.dateEncodingStrategy = .custom { date, encoder in
+      let string = ISO8601DateFormatter.iso8601WithFractionalSeconds.value.string(from: date)
+      var container = encoder.singleValueContainer()
+      try container.encode(string)
+    }
     return encoder
   }()
 }
