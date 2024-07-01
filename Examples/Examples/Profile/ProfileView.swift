@@ -18,9 +18,17 @@ struct ProfileView: View {
   var body: some View {
     NavigationStack {
       List {
-        if let user = user.flatMap({ try? AnyJSON($0) }) {
+        if let user,
+           let json = try? AnyJSON(user) {
           Section {
-            AnyJSONView(value: user)
+            AnyJSONView(value: json)
+          }
+        }
+
+        if let user {
+          NavigationLink("Update profile") {
+            UpdateProfileView(user: user)
+              .navigationTitle("Update profile")
           }
         }
 

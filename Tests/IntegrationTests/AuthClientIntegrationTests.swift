@@ -193,6 +193,17 @@ final class AuthClientIntegrationTests: XCTestCase {
     }
   }
 
+  func testSignInAnonymousAndLinkUserWithEmail() async throws {
+    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .userUpdated]) {
+      try await authClient.signInAnonymously()
+
+      let email = mockEmail()
+      let user = try await authClient.update(user: UserAttributes(email: email))
+
+      XCTAssertEqual(user.newEmail, email)
+    }
+  }
+
   func testDeleteAccountAndSignOut() async throws {
     let response = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
