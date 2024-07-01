@@ -55,7 +55,7 @@ public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
   }
 
   public var description: String {
-    let date = DateFormatter.iso8601_noMilliseconds.string(from: Date(timeIntervalSince1970: timestamp))
+    let date = ISO8601DateFormatter.iso8601.value.string(from: Date(timeIntervalSince1970: timestamp))
     let file = fileID.split(separator: ".", maxSplits: 1).first.map(String.init) ?? fileID
     var description = "\(date) [\(level)] [\(system)] [\(file).\(function):\(line)] \(message)"
     if !additionalContext.isEmpty {
