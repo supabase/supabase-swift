@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.6](https://github.com/supabase/supabase-swift/compare/v2.13.5...v2.13.6) (2024-07-01)
+
+
+### Bug Fixes
+
+* date formatter breaking change ([#435](https://github.com/supabase/supabase-swift/issues/435)) ([6b4cc2e](https://github.com/supabase/supabase-swift/commit/6b4cc2e7fc3b61960449a15d36ef732c8020f222))
+
 ## [2.13.5](https://github.com/supabase/supabase-swift/compare/v2.13.4...v2.13.5) (2024-06-28)
 
 
