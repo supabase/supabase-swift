@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.7](https://github.com/supabase/supabase-swift/compare/v2.13.6...v2.13.7) (2024-07-02)
+
+
+### Bug Fixes
+
+* **realtime:** send access token to realtime on initial session ([#439](https://github.com/supabase/supabase-swift/issues/439)) ([048e81b](https://github.com/supabase/supabase-swift/commit/048e81b9ca5a317ad4340c4bae60f556d9e31584))
+
 ## [2.13.6](https://github.com/supabase/supabase-swift/compare/v2.13.5...v2.13.6) (2024-07-01)
 
 
