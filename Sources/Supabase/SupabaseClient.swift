@@ -353,16 +353,18 @@ public final class SupabaseClient: Sendable {
   }
 
   private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
-    let accessToken = mutableState.withValue {
-      if event == .tokenRefreshed || event == .signedIn, $0.changedAccessToken != session?.accessToken {
+    let accessToken: String? = mutableState.withValue {
+      if [.initialSession, .signedIn, .tokenRefreshed].contains(event), $0.changedAccessToken != session?.accessToken {
         $0.changedAccessToken = session?.accessToken
-        return session?.accessToken
-      } else if event == .signedOut {
+        return session?.accessToken ?? supabaseKey
+      }
+
+      if event == .signedOut {
         $0.changedAccessToken = nil
         return supabaseKey
-      } else {
-        return nil
       }
+
+      return nil
     }
 
     realtime.setAuth(accessToken)
