@@ -354,7 +354,7 @@ public final class SupabaseClient: Sendable {
 
   private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
     let accessToken = mutableState.withValue {
-      if event == .tokenRefreshed || event == .signedIn, $0.changedAccessToken != session?.accessToken {
+      if event == .initialSession || event == .tokenRefreshed || event == .signedIn, $0.changedAccessToken != session?.accessToken {
         $0.changedAccessToken = session?.accessToken
         return session?.accessToken
       } else if event == .signedOut {
