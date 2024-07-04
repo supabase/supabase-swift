@@ -39,7 +39,7 @@ final class _PushTests: XCTestCase {
       config: RealtimeChannelConfig(
         broadcast: .init(acknowledgeBroadcasts: false),
         presence: .init(),
-        privateTopic: false
+        isPrivate: false
       ),
       socket: Socket(client: socket),
       logger: nil
