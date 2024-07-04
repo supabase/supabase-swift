@@ -12,6 +12,7 @@ import Helpers
 public struct RealtimeChannelConfig: Sendable {
   public var broadcast: BroadcastJoinConfig
   public var presence: PresenceJoinConfig
+  public var isPrivate: Bool
 }
 
 struct Socket: Sendable {
@@ -111,7 +112,8 @@ public final class RealtimeChannelV2: Sendable {
     let joinConfig = RealtimeJoinConfig(
       broadcast: config.broadcast,
       presence: config.presence,
-      postgresChanges: mutableState.clientChanges
+      postgresChanges: mutableState.clientChanges,
+      isPrivate: config.isPrivate
     )
 
     let payload = RealtimeJoinPayload(

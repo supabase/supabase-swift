@@ -38,7 +38,8 @@ final class _PushTests: XCTestCase {
       topic: "realtime:users",
       config: RealtimeChannelConfig(
         broadcast: .init(acknowledgeBroadcasts: false),
-        presence: .init()
+        presence: .init(),
+        isPrivate: false
       ),
       socket: Socket(client: socket),
       logger: nil

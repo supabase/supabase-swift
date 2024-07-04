@@ -249,7 +249,8 @@ public final class RealtimeClientV2: Sendable {
   ) -> RealtimeChannelV2 {
     var config = RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
-      presence: PresenceJoinConfig(key: "")
+      presence: PresenceJoinConfig(key: ""),
+      isPrivate: false
     )
     options(&config)
 

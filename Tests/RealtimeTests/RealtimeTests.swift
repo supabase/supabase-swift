@@ -257,6 +257,7 @@ extension RealtimeMessageV2 {
             ["schema": "public", "table": "messages", "event": "DELETE"],
           ],
           "presence": ["key": ""],
+          "private": false,
         ],
       ]
     )
