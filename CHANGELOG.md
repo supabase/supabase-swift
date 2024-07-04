@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.8](https://github.com/supabase/supabase-swift/compare/v2.13.7...v2.13.8) (2024-07-04)
+
+
+### Bug Fixes
+
+* Add private topic to Realtime ([#442](https://github.com/supabase/supabase-swift/issues/442)) ([a491b29](https://github.com/supabase/supabase-swift/commit/a491b297ca4cf965e554632d0a9be4052844d6a8))
+
 ## [2.13.7](https://github.com/supabase/supabase-swift/compare/v2.13.6...v2.13.7) (2024-07-02)
 
 
