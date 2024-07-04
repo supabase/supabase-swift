@@ -110,10 +110,10 @@ public final class RealtimeChannelV2: Sendable {
     logger?.debug("subscribing to channel \(topic)")
 
     let joinConfig = RealtimeJoinConfig(
-      isPrivate: config.isPrivate,
       broadcast: config.broadcast,
       presence: config.presence,
-      postgresChanges: mutableState.clientChanges
+      postgresChanges: mutableState.clientChanges,
+      isPrivate: config.isPrivate
     )
 
     let payload = RealtimeJoinPayload(

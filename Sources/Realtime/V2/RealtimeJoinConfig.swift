@@ -18,10 +18,10 @@ struct RealtimeJoinPayload: Codable {
 }
 
 struct RealtimeJoinConfig: Codable, Hashable {
-  public var isPrivate: Bool = false
   var broadcast: BroadcastJoinConfig = .init()
   var presence: PresenceJoinConfig = .init()
   var postgresChanges: [PostgresJoinConfig] = []
+  var isPrivate: Bool = false
 
   enum CodingKeys: String, CodingKey {
     case broadcast
