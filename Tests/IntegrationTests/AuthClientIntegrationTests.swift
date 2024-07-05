@@ -16,16 +16,36 @@ import XCTest
 #endif
 
 final class AuthClientIntegrationTests: XCTestCase {
-  let authClient = AuthClient(
-    configuration: AuthClient.Configuration(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
-      headers: [
-        "apikey": DotEnv.SUPABASE_ANON_KEY,
-      ],
-      localStorage: InMemoryLocalStorage(),
-      logger: nil
+  let authClient = makeClient()
+
+  static func makeClient() -> AuthClient {
+    AuthClient(
+      configuration: AuthClient.Configuration(
+        url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
+        headers: [
+          "apikey": DotEnv.SUPABASE_ANON_KEY,
+        ],
+        localStorage: InMemoryLocalStorage(),
+        logger: nil
+      )
     )
-  )
+  }
+
+  func testMultipleAuthInstances() async throws {
+    try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+
+    let client2 = Self.makeClient()
+
+    let sessionFromClient1 = try await authClient.session
+    let sessionFromClient2 = try await client2.setSession(
+      accessToken: sessionFromClient1.accessToken,
+      refreshToken: sessionFromClient1.refreshToken
+    )
+
+    XCTAssertNoDifference(sessionFromClient1.accessToken, sessionFromClient2.accessToken)
+    XCTAssertNoDifference(sessionFromClient1.refreshToken, sessionFromClient2.refreshToken)
+    XCTAssertNoDifference(sessionFromClient1.expiresAt, sessionFromClient2.expiresAt)
+  }
 
   func testSignUpAndSignInWithEmail() async throws {
     try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {

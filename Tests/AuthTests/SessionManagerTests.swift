@@ -16,19 +16,28 @@ import XCTestDynamicOverlay
 final class SessionManagerTests: XCTestCase {
   var http: HTTPClientMock!
 
+  let clientID = AuthClientID()
+
+  var sut: SessionManager {
+    Dependencies[clientID].sessionManager
+  }
+
   override func setUp() {
     super.setUp()
 
     http = HTTPClientMock()
 
-    Current = .init(
+    Dependencies[clientID] = .init(
       configuration: .init(
         url: clientURL,
         localStorage: InMemoryLocalStorage(),
         logger: nil,
         autoRefreshToken: false
       ),
-      http: http
+      http: http,
+      api: APIClient(clientID: clientID),
+      sessionStorage: SessionStorage.live(clientID: clientID),
+      sessionManager: SessionManager.live(clientID: clientID)
     )
   }
 
@@ -39,8 +48,6 @@ final class SessionManagerTests: XCTestCase {
   }
 
   func testSession_shouldFailWithSessionNotFound() async {
-    let sut = SessionManager.live
-
     do {
       _ = try await sut.session()
       XCTFail("Expected a \(AuthError.sessionNotFound) failure")
@@ -52,9 +59,7 @@ final class SessionManagerTests: XCTestCase {
 
   func testSession_shouldReturnValidSession() async throws {
     let session = Session.validSession
-    try Current.configuration.localStorage.storeSession(session)
-
-    let sut = SessionManager.live
+    try Dependencies[clientID].sessionStorage.store(session)
 
     let returnedSession = try await sut.session()
     XCTAssertNoDifference(returnedSession, session)
@@ -62,7 +67,7 @@ final class SessionManagerTests: XCTestCase {
 
   func testSession_shouldRefreshSession_whenCurrentSessionExpired() async throws {
     let currentSession = Session.expiredSession
-    try Current.configuration.localStorage.storeSession(currentSession)
+    try Dependencies[clientID].sessionStorage.store(currentSession)
 
     let validSession = Session.validSession
 
@@ -79,12 +84,10 @@ final class SessionManagerTests: XCTestCase {
       }
     )
 
-    let sut = SessionManager.live
-
     // Fire N tasks and call sut.session()
     let tasks = (0 ..< 10).map { _ in
-      Task.detached {
-        try await sut.session()
+      Task.detached { [weak self] in
+        try await self?.sut.session()
       }
     }
 
@@ -94,7 +97,7 @@ final class SessionManagerTests: XCTestCase {
     refreshSessionContinuation.finish()
 
     // Await for all tasks to complete.
-    var result: [Result<Session, Error>] = []
+    var result: [Result<Session?, Error>] = []
     for task in tasks {
       let value = await task.result
       result.append(value)

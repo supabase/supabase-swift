@@ -1,16 +1,29 @@
 @testable import Auth
 import ConcurrencyExtras
 import SnapshotTesting
+import TestHelpers
 import XCTest
 
 final class StoredSessionTests: XCTestCase {
+  let clientID = AuthClientID()
+
   func testStoredSession() throws {
-    let sut = try! DiskTestStorage()
+    Dependencies[clientID] = Dependencies(
+      configuration: AuthClient.Configuration(
+        url: URL(string: "http://localhost")!,
+        storageKey: "supabase.auth.token",
+        localStorage: try! DiskTestStorage(),
+        logger: nil
+      ),
+      http: HTTPClientMock(),
+      api: .init(clientID: clientID),
+      sessionStorage: .live(clientID: clientID),
+      sessionManager: .live(clientID: clientID)
+    )
 
-    Current = .mock
-    Current.configuration.storageKey = "supabase.auth.token"
+    let sut = Dependencies[clientID].sessionStorage
 
-    let _ = try sut.getSession()
+    let _ = try sut.get()
 
     let session = Session(
       accessToken: "accesstoken",
@@ -63,7 +76,7 @@ final class StoredSessionTests: XCTestCase {
       )
     )
 
-    try sut.storeSession(session)
+    try sut.store(session)
   }
 
   private final class DiskTestStorage: AuthLocalStorage {

@@ -18,14 +18,6 @@ import XCTest
 struct UnimplementedError: Error {}
 
 final class RequestsTests: XCTestCase {
-  var storage: InMemoryLocalStorage!
-
-  override func setUp() {
-    super.setUp()
-
-    storage = InMemoryLocalStorage()
-  }
-
   func testSignUpWithEmailAndPassword() async {
     let sut = makeSUT()
 
@@ -155,7 +147,7 @@ final class RequestsTests: XCTestCase {
 
       let currentDate = Date()
 
-      Current.date = { currentDate }
+      Dependencies[sut.clientID].date = { currentDate }
 
       let url = URL(
         string:
@@ -193,9 +185,8 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSetSessionWithAFutureExpirationDate() async throws {
-    try storage.storeSession(.validSession)
-
     let sut = makeSUT()
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
@@ -217,9 +208,8 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSignOut() async throws {
-    try storage.storeSession(.validSession)
-
     let sut = makeSUT()
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.signOut()
@@ -227,9 +217,8 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSignOutWithLocalScope() async throws {
-    try storage.storeSession(.validSession)
-
     let sut = makeSUT()
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.signOut(scope: .local)
@@ -237,9 +226,9 @@ final class RequestsTests: XCTestCase {
   }
 
   func testSignOutWithOthersScope() async throws {
-    try storage.storeSession(.validSession)
-
     let sut = makeSUT()
+
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.signOut(scope: .others)
@@ -276,7 +265,7 @@ final class RequestsTests: XCTestCase {
   func testUpdateUser() async throws {
     let sut = makeSUT()
 
-    try storage.storeSession(.validSession)
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.update(
@@ -339,7 +328,7 @@ final class RequestsTests: XCTestCase {
   func testReauthenticate() async throws {
     let sut = makeSUT()
 
-    try storage.storeSession(.validSession)
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.reauthenticate()
@@ -349,7 +338,7 @@ final class RequestsTests: XCTestCase {
   func testUnlinkIdentity() async throws {
     let sut = makeSUT()
 
-    try storage.storeSession(.validSession)
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.unlinkIdentity(
@@ -405,7 +394,7 @@ final class RequestsTests: XCTestCase {
   func testGetLinkIdentityURL() async throws {
     let sut = makeSUT()
 
-    try storage.storeSession(.validSession)
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       _ = try await sut.getLinkIdentityURL(
@@ -441,7 +430,7 @@ final class RequestsTests: XCTestCase {
       url: clientURL,
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       flowType: flowType,
-      localStorage: storage,
+      localStorage: InMemoryLocalStorage(),
       logger: nil,
       encoder: encoder,
       fetch: { request in

@@ -13,7 +13,7 @@ import Helpers
 typealias AuthClientID = UUID
 
 public final class AuthClient: Sendable {
-  private let clientID = AuthClientID()
+  let clientID = AuthClientID()
 
   private var api: APIClient { Dependencies[clientID].api }
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
@@ -51,6 +51,7 @@ public final class AuthClient: Sendable {
   public var mfa: AuthMFA {
     AuthMFA(clientID: clientID)
   }
+
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `service_role` key, be careful to never expose `service_role`
   /// key in the client.
