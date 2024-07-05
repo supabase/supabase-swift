@@ -10,8 +10,8 @@ struct SessionManager: Sendable {
 }
 
 extension SessionManager {
-  static var live: Self {
-    let instance = LiveSessionManager()
+  static func live(clientID: AuthClientID) -> Self {
+    let instance = LiveSessionManager(clientID: clientID)
     return Self(
       session: { try await instance.session() },
       refreshSession: { try await instance.refreshSession($0) },
@@ -22,18 +22,24 @@ extension SessionManager {
 }
 
 private actor LiveSessionManager {
-  private var configuration: AuthClient.Configuration { Current.configuration }
-  private var storage: any AuthLocalStorage { Current.configuration.localStorage }
-  private var eventEmitter: AuthStateChangeEventEmitter { Current.eventEmitter }
-  private var logger: (any SupabaseLogger)? { Current.logger }
-  private var api: APIClient { Current.api }
+  private var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
+  private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
+  private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
+  private var logger: (any SupabaseLogger)? { Dependencies[clientID].logger }
+  private var api: APIClient { Dependencies[clientID].api }
 
   private var inFlightRefreshTask: Task<Session, any Error>?
   private var scheduledNextRefreshTask: Task<Void, Never>?
 
+  let clientID: AuthClientID
+
+  init(clientID: AuthClientID) {
+    self.clientID = clientID
+  }
+
   func session() async throws -> Session {
     try await trace(using: logger) {
-      guard let currentSession = try storage.getSession() else {
+      guard let currentSession = try sessionStorage.get() else {
         throw AuthError.sessionNotFound
       }
 
@@ -92,7 +98,7 @@ private actor LiveSessionManager {
 
   func update(_ session: Session) {
     do {
-      try storage.storeSession(session)
+      try sessionStorage.store(session)
     } catch {
       logger?.error("Failed to store session: \(error)")
     }
@@ -100,7 +106,7 @@ private actor LiveSessionManager {
 
   func remove() {
     do {
-      try storage.deleteSession()
+      try sessionStorage.delete()
     } catch {
       logger?.error("Failed to remove session: \(error)")
     }

@@ -9,9 +9,11 @@ import Foundation
 import Helpers
 
 public struct AuthAdmin: Sendable {
-  var configuration: AuthClient.Configuration { Current.configuration }
-  var api: APIClient { Current.api }
-  var encoder: JSONEncoder { Current.encoder }
+  let clientID: AuthClientID
+
+  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
+  var api: APIClient { Dependencies[clientID].api }
+  var encoder: JSONEncoder { Dependencies[clientID].encoder }
 
   /// Delete a user. Requires `service_role` key.
   /// - Parameter id: The id of the user you want to delete.

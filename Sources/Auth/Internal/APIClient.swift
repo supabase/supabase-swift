@@ -21,12 +21,14 @@ extension HTTPClient {
 }
 
 struct APIClient: Sendable {
+  let clientID: AuthClientID
+
   var configuration: AuthClient.Configuration {
-    Current.configuration
+    Dependencies[clientID].configuration
   }
 
   var http: any HTTPClientType {
-    Current.http
+    Dependencies[clientID].http
   }
 
   func execute(_ request: HTTPRequest) async throws -> HTTPResponse {
@@ -62,7 +64,7 @@ struct APIClient: Sendable {
   @discardableResult
   func authorizedExecute(_ request: HTTPRequest) async throws -> HTTPResponse {
     var sessionManager: SessionManager {
-      Current.sessionManager
+      Dependencies[clientID].sessionManager
     }
 
     let session = try await sessionManager.session()

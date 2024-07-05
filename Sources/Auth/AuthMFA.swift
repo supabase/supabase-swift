@@ -3,12 +3,14 @@ import Helpers
 
 /// Contains the full multi-factor authentication API.
 public struct AuthMFA: Sendable {
-  var configuration: AuthClient.Configuration { Current.configuration }
-  var api: APIClient { Current.api }
-  var encoder: JSONEncoder { Current.encoder }
-  var decoder: JSONDecoder { Current.decoder }
-  var sessionManager: SessionManager { Current.sessionManager }
-  var eventEmitter: AuthStateChangeEventEmitter { Current.eventEmitter }
+  let clientID: AuthClientID
+
+  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
+  var api: APIClient { Dependencies[clientID].api }
+  var encoder: JSONEncoder { Dependencies[clientID].encoder }
+  var decoder: JSONDecoder { Dependencies[clientID].decoder }
+  var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
+  var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
   /// creates a new `unverified` factor.

@@ -5,8 +5,9 @@ import Helpers
 struct Dependencies: Sendable {
   var configuration: AuthClient.Configuration
   var http: any HTTPClientType
-  var sessionManager = SessionManager.live
-  var api = APIClient()
+  var api: APIClient
+  var sessionStorage: SessionStorage
+  var sessionManager: SessionManager
 
   var eventEmitter: AuthStateChangeEventEmitter = .shared
   var date: @Sendable () -> Date = { Date() }
@@ -18,18 +19,18 @@ struct Dependencies: Sendable {
   var logger: (any SupabaseLogger)? { configuration.logger }
 }
 
-private let _Current = LockIsolated<Dependencies?>(nil)
-var Current: Dependencies {
-  get {
-    guard let instance = _Current.value else {
-      fatalError("Current should be set before usage.")
-    }
+extension Dependencies {
+  static let instances = LockIsolated([AuthClientID: Dependencies]())
 
-    return instance
-  }
-  set {
-    _Current.withValue { Current in
-      Current = newValue
+  static subscript(_ id: AuthClientID) -> Dependencies {
+    get {
+      guard let instance = instances[id] else {
+        fatalError("Dependencies not found for id: \(id)")
+      }
+      return instance
+    }
+    set {
+      instances.withValue { $0[id] = newValue }
     }
   }
 }
