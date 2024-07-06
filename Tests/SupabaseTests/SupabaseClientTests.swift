@@ -61,7 +61,7 @@ final class SupabaseClientTests: XCTestCase {
     )
 
     XCTAssertEqual(
-      client.defaultHeaders,
+      client.headers,
       [
         "X-Client-Info": "supabase-swift/\(Supabase.version)",
         "Apikey": "ANON_KEY",
@@ -69,6 +69,7 @@ final class SupabaseClientTests: XCTestCase {
         "Authorization": "Bearer ANON_KEY",
       ]
     )
+    XCTAssertNoDifference(client._headers.dictionary, client.headers)
 
     XCTAssertEqual(client.functions.region, "ap-northeast-1")
 
@@ -76,7 +77,7 @@ final class SupabaseClientTests: XCTestCase {
     XCTAssertEqual(realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")
 
     let realtimeOptions = client.realtimeV2.options
-    let expectedRealtimeHeader = client.defaultHeaders.merged(with: ["custom_realtime_header_key": "custom_realtime_header_value"])
+    let expectedRealtimeHeader = client._headers.merged(with: ["custom_realtime_header_key": "custom_realtime_header_value"])
     XCTAssertNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
 

@@ -36,7 +36,7 @@ public final class SupabaseClient: Sendable {
         $0.rest = PostgrestClient(
           url: databaseURL,
           schema: options.db.schema,
-          headers: defaultHeaders.dictionary,
+          headers: headers,
           logger: options.global.logger,
           fetch: fetchWithAuth,
           encoder: options.db.encoder,
@@ -55,7 +55,7 @@ public final class SupabaseClient: Sendable {
         $0.storage = SupabaseStorageClient(
           configuration: StorageClientConfiguration(
             url: storageURL,
-            headers: defaultHeaders.dictionary,
+            headers: headers,
             session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
             logger: options.global.logger
           )
@@ -77,7 +77,7 @@ public final class SupabaseClient: Sendable {
       if $0.functions == nil {
         $0.functions = FunctionsClient(
           url: functionsURL,
-          headers: defaultHeaders.dictionary,
+          headers: headers,
           region: options.functions.region,
           logger: options.global.logger,
           fetch: fetchWithAuth
@@ -88,7 +88,13 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  let defaultHeaders: HTTPHeaders
+  let _headers: HTTPHeaders
+  /// Headers provided to the inner clients on initialization.
+  ///
+  /// - Note: This collection is non-mutable, if you want to provide different headers, pass it in ``SupabaseClientOptions/GlobalOptions/headers``.
+  public var headers: [String: String] {
+    _headers.dictionary
+  }
 
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
@@ -137,7 +143,7 @@ public final class SupabaseClient: Sendable {
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
-    defaultHeaders = HTTPHeaders([
+    _headers = HTTPHeaders([
       "X-Client-Info": "supabase-swift/\(version)",
       "Authorization": "Bearer \(supabaseKey)",
       "Apikey": supabaseKey,
@@ -149,7 +155,7 @@ public final class SupabaseClient: Sendable {
 
     auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
-      headers: defaultHeaders.dictionary,
+      headers: _headers.dictionary,
       flowType: options.auth.flowType,
       redirectToURL: options.auth.redirectToURL,
       storageKey: options.auth.storageKey ?? defaultStorageKey,
@@ -167,13 +173,13 @@ public final class SupabaseClient: Sendable {
     _realtime = UncheckedSendable(
       RealtimeClient(
         supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
-        headers: defaultHeaders.dictionary,
-        params: defaultHeaders.dictionary
+        headers: _headers.dictionary,
+        params: _headers.dictionary
       )
     )
 
     var realtimeOptions = options.realtime
-    realtimeOptions.headers.merge(with: defaultHeaders)
+    realtimeOptions.headers.merge(with: _headers)
 
     if realtimeOptions.logger == nil {
       realtimeOptions.logger = options.global.logger
