@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.9](https://github.com/supabase/supabase-swift/compare/v2.13.8...v2.13.9) (2024-07-06)
+
+
+### Bug Fixes
+
+* expose SupabaseClient headers ([#447](https://github.com/supabase/supabase-swift/issues/447)) ([50fc325](https://github.com/supabase/supabase-swift/commit/50fc32501fe6fc229841f35511b672cd29364aaa))
+
 ## [2.13.8](https://github.com/supabase/supabase-swift/compare/v2.13.7...v2.13.8) (2024-07-04)
 
 
