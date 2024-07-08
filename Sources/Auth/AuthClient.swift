@@ -862,6 +862,25 @@ public final class AuthClient: Sendable {
     )
   }
 
+  /// Log in an user given a token hash received via email.
+  @discardableResult
+  public func verifyOTP(
+    tokenHash: String,
+    type: EmailOTPType
+  ) async throws -> AuthResponse {
+    try await _verifyOTP(
+      request: .init(
+        url: configuration.url.appendingPathComponent("verify"),
+        method: .post,
+        body: configuration.encoder.encode(
+          VerifyOTPParams.tokenHash(
+            VerifyTokenHashParams(tokenHash: tokenHash, type: type)
+          )
+        )
+      )
+    )
+  }
+
   private func _verifyOTP(request: HTTPRequest) async throws -> AuthResponse {
     let response = try await api.execute(request).decoded(
       as: AuthResponse.self,

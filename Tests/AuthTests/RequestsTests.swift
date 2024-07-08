@@ -273,6 +273,17 @@ final class RequestsTests: XCTestCase {
     }
   }
 
+  func testVerifyOTPUsingTokenHash() async {
+    let sut = makeSUT()
+
+    await assert {
+      try await sut.verifyOTP(
+        tokenHash: "abc-def",
+        type: .email
+      )
+    }
+  }
+
   func testUpdateUser() async throws {
     let sut = makeSUT()
 

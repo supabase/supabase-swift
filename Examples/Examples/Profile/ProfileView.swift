@@ -19,7 +19,8 @@ struct ProfileView: View {
     NavigationStack {
       List {
         if let user,
-           let json = try? AnyJSON(user) {
+           let json = try? AnyJSON(user)
+        {
           Section {
             AnyJSONView(value: json)
           }
