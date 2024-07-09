@@ -34,6 +34,7 @@
 		7956406A2955AFBD0088A06F /* ErrorText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640692955AFBD0088A06F /* ErrorText.swift */; };
 		7956406D2955B3500088A06F /* SwiftUINavigation in Frameworks */ = {isa = PBXBuildFile; productRef = 7956406C2955B3500088A06F /* SwiftUINavigation */; };
 		795640702955B5190088A06F /* IdentifiedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 7956406F2955B5190088A06F /* IdentifiedCollections */; };
+		79615DF92C3DA92C005AE6E0 /* CustomDump in Frameworks */ = {isa = PBXBuildFile; productRef = 79615DF82C3DA92C005AE6E0 /* CustomDump */; };
 		796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796298982AEBBA77000AA957 /* MFAFlow.swift */; };
 		7962989D2AEBC6F9000AA957 /* SVGView in Frameworks */ = {isa = PBXBuildFile; productRef = 7962989C2AEBC6F9000AA957 /* SVGView */; };
 		79719ECE2ADF26C400737804 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79719ECD2ADF26C400737804 /* Supabase */; };
@@ -169,6 +170,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				792404E32C3473EC002959B3 /* Supabase in Frameworks */,
+				79615DF92C3DA92C005AE6E0 /* CustomDump in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -409,6 +411,7 @@
 			name = SupaDrive;
 			packageProductDependencies = (
 				792404E22C3473EC002959B3 /* Supabase */,
+				79615DF82C3DA92C005AE6E0 /* CustomDump */,
 			);
 			productName = SupaDrive;
 			productReference = 792404B72C3454A9002959B3 /* SupaDrive.app */;
@@ -518,6 +521,7 @@
 				7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */,
 				7962989B2AEBC6F9000AA957 /* XCRemoteSwiftPackageReference "SVGView" */,
 				79E2B5562B97890F0042CD21 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				79615DF72C3DA92C005AE6E0 /* XCRemoteSwiftPackageReference "swift-custom-dump" */,
 			);
 			productRefGroup = 793895C72954ABFF0044F2B8 /* Products */;
 			projectDirPath = "";
@@ -1160,6 +1164,14 @@
 				minimumVersion = 1.0.0;
 			};
 		};
+		79615DF72C3DA92C005AE6E0 /* XCRemoteSwiftPackageReference "swift-custom-dump" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-custom-dump";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.0;
+			};
+		};
 		7962989B2AEBC6F9000AA957 /* XCRemoteSwiftPackageReference "SVGView" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/exyte/SVGView";
@@ -1192,6 +1204,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */;
 			productName = IdentifiedCollections;
+		};
+		79615DF82C3DA92C005AE6E0 /* CustomDump */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 79615DF72C3DA92C005AE6E0 /* XCRemoteSwiftPackageReference "swift-custom-dump" */;
+			productName = CustomDump;
 		};
 		7962989C2AEBC6F9000AA957 /* SVGView */ = {
 			isa = XCSwiftPackageProductDependency;

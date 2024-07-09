@@ -24,7 +24,9 @@ struct AppLogger: SupabaseLogger {
 struct SupaDriveApp: App {
   var body: some Scene {
     WindowGroup {
-      AuthView()
+      AuthView { session in
+        AppView(path: [session.user.id.uuidString.lowercased()])
+      }
     }
   }
 }

@@ -5,14 +5,15 @@
 //  Created by Guilherme Souza on 02/07/24.
 //
 
+import CustomDump
 import Supabase
 import SwiftUI
 
 enum Item: Identifiable, Hashable {
-  case folder(Folder)
-  case file(File)
+  case folder(FileObject)
+  case file(FileObject)
 
-  var id: String {
+  var id: String? {
     switch self {
     case let .file(file): file.id
     case let .folder(folder): folder.id
@@ -37,16 +38,17 @@ enum Item: Identifiable, Hashable {
   }
 }
 
-struct Folder: Identifiable, Hashable {
-  let id: String
-  let name: String
-  let items: [Item]
-}
-
-struct File: Identifiable, Hashable {
-  let id: String
-  let name: String
-}
+//
+// struct Folder: Identifiable, Hashable {
+//  let id: String
+//  let name: String
+//  let items: [Item]
+// }
+//
+// struct File: Identifiable, Hashable {
+//  let id: String
+//  let name: String
+// }
 
 struct AppView: View {
   @State var path: [String]
@@ -85,16 +87,27 @@ struct AppView: View {
         let selectedItem = selectedItemPerPath[lastPath],
         case let .file(file) = selectedItem
       {
-        ScrollView {
-          VStack {
-            Text(file.name)
+        Form {
+          Text(file.name)
+            .font(.title2)
+          Divider()
+
+          if let contentLenth = file.metadata?["contentLength"]?.intValue {
+            LabeledContent("Size", value: "\(contentLenth)")
           }
-          .frame(width: 200)
-          .padding()
+
+          if let mimeType = file.metadata?["mimetype"]?.stringValue {
+            LabeledContent("MIME Type", value: mimeType)
+          }
         }
-        .background(Color.secondary)
+        .frame(width: 300)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .transition(.move(edge: .trailing))
       }
     }
+    .animation(.default, value: path.last)
   }
 }
 
@@ -125,7 +138,7 @@ struct PanelView: View {
       do {
         let files = try await supabase.storage.from("main").list(path: path)
 
-        items = files.map(Item.init)
+        items = files.compactMap(Item.init)
       } catch {
         dump(error)
       }
@@ -154,16 +167,35 @@ struct PanelView: View {
         Color.gray.opacity(0.2)
       }
     }
+    .contextMenu {
+      Button("New folder") {
+        Task {
+          try! await supabase.storage.from("main")
+            .upload(path: "\(path)/Untiltled/.dummy", file: Data())
+          reload = UUID()
+        }
+      }
+    }
   }
 }
 
 extension Item {
-  init(file: FileObject) {
+  init?(file: FileObject) {
+    if file.name.hasPrefix(".") { return nil }
+
     if file.id == nil {
-      self = .folder(Folder(id: file.name, name: file.name, items: []))
+      self = .folder(file)
     } else {
-      self = .file(File(id: file.id!, name: file.name))
+      self = .file(file)
     }
+  }
+}
+
+extension FileObject {
+  var metadataDump: String {
+    var output = ""
+    customDump(metadata, to: &output)
+    return output
   }
 }
 
