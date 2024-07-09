@@ -10,15 +10,19 @@ import Helpers
   import FoundationNetworking
 #endif
 
+typealias AuthClientID = UUID
+
 public final class AuthClient: Sendable {
-  private var api: APIClient { Current.api }
-  var configuration: AuthClient.Configuration { Current.configuration }
-  private var codeVerifierStorage: CodeVerifierStorage { Current.codeVerifierStorage }
-  private var date: @Sendable () -> Date { Current.date }
-  private var sessionManager: SessionManager { Current.sessionManager }
-  private var eventEmitter: AuthStateChangeEventEmitter { Current.eventEmitter }
-  private var logger: (any SupabaseLogger)? { Current.configuration.logger }
-  private var storage: any AuthLocalStorage { Current.configuration.localStorage }
+  let clientID = AuthClientID()
+
+  private var api: APIClient { Dependencies[clientID].api }
+  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
+  private var codeVerifierStorage: CodeVerifierStorage { Dependencies[clientID].codeVerifierStorage }
+  private var date: @Sendable () -> Date { Dependencies[clientID].date }
+  private var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
+  private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
+  private var logger: (any SupabaseLogger)? { Dependencies[clientID].configuration.logger }
+  private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -33,31 +37,39 @@ public final class AuthClient: Sendable {
   ///
   /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
   public var currentSession: Session? {
-    try? storage.getSession()
+    try? sessionStorage.get()
   }
 
   /// Returns the current user, if any.
   ///
   /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
   public var currentUser: User? {
-    try? storage.getSession()?.user
+    try? sessionStorage.get()?.user
   }
 
   /// Namespace for accessing multi-factor authentication API.
-  public let mfa = AuthMFA()
+  public var mfa: AuthMFA {
+    AuthMFA(clientID: clientID)
+  }
+
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `service_role` key, be careful to never expose `service_role`
   /// key in the client.
-  public let admin = AuthAdmin()
+  public var admin: AuthAdmin {
+    AuthAdmin(clientID: clientID)
+  }
 
   /// Initializes a AuthClient with a specific configuration.
   ///
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    Current = Dependencies(
+    Dependencies[clientID] = Dependencies(
       configuration: configuration,
-      http: HTTPClient(configuration: configuration)
+      http: HTTPClient(configuration: configuration),
+      api: APIClient(clientID: clientID),
+      sessionStorage: .live(clientID: clientID),
+      sessionManager: .live(clientID: clientID)
     )
   }
 
@@ -1065,7 +1077,7 @@ public final class AuthClient: Sendable {
       scopes: scopes,
       redirectTo: redirectTo,
       queryParams: queryParams,
-      launchURL: { Current.urlOpener.open($0) }
+      launchURL: { Dependencies[clientID].urlOpener.open($0) }
     )
   }
 

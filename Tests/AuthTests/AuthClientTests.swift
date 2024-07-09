@@ -51,9 +51,8 @@ final class AuthClientTests: XCTestCase {
 
   func testOnAuthStateChanges() async throws {
     let session = Session.validSession
-    try storage.storeSession(session)
-
-    sut = makeSUT()
+    let sut = makeSUT()
+    try Dependencies[sut.clientID].sessionStorage.store(session)
 
     let events = LockIsolated([AuthChangeEvent]())
 
@@ -69,10 +68,9 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testAuthStateChanges() async throws {
-    sut = makeSUT()
-
     let session = Session.validSession
-    try storage.storeSession(session)
+    let sut = makeSUT()
+    try Dependencies[sut.clientID].sessionStorage.store(session)
 
     let stateChange = await sut.authStateChanges.first { _ in true }
     XCTAssertNoDifference(stateChange?.event, .initialSession)
@@ -84,7 +82,7 @@ final class AuthClientTests: XCTestCase {
       .stub()
     }
 
-    try storage.storeSession(.validSession)
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -109,11 +107,11 @@ final class AuthClientTests: XCTestCase {
       .stub()
     }
 
-    try storage.storeSession(.validSession)
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     try await sut.signOut(scope: .others)
 
-    let sessionRemoved = try storage.getSession() == nil
+    let sessionRemoved = try Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertFalse(sessionRemoved)
   }
 
@@ -123,7 +121,7 @@ final class AuthClientTests: XCTestCase {
     }
 
     let validSession = Session.validSession
-    try storage.storeSession(validSession)
+    try Dependencies[sut.clientID].sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -144,7 +142,7 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNoDifference(events, [.initialSession, .signedOut])
     XCTAssertNoDifference(sessions, [.validSession, nil])
 
-    let sessionRemoved = try storage.getSession() == nil
+    let sessionRemoved = try Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -154,7 +152,7 @@ final class AuthClientTests: XCTestCase {
     }
 
     let validSession = Session.validSession
-    try storage.storeSession(validSession)
+    try Dependencies[sut.clientID].sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -175,7 +173,7 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNoDifference(events, [.initialSession, .signedOut])
     XCTAssertNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = try storage.getSession() == nil
+    let sessionRemoved = try Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -185,7 +183,7 @@ final class AuthClientTests: XCTestCase {
     }
 
     let validSession = Session.validSession
-    try storage.storeSession(validSession)
+    try Dependencies[sut.clientID].sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -206,7 +204,7 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNoDifference(events, [.initialSession, .signedOut])
     XCTAssertNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = try storage.getSession() == nil
+    let sessionRemoved = try Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -285,7 +283,7 @@ final class AuthClientTests: XCTestCase {
       )
     }
 
-    try storage.storeSession(.validSession)
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let response = try await sut.getLinkIdentityURL(provider: .github)
 
@@ -310,10 +308,10 @@ final class AuthClientTests: XCTestCase {
       )
     }
 
-    try storage.storeSession(.validSession)
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let receivedURL = LockIsolated<URL?>(nil)
-    Current.urlOpener.open = { url in
+    Dependencies[sut.clientID].urlOpener.open = { url in
       receivedURL.setValue(url)
     }
 
@@ -373,7 +371,7 @@ extension HTTPResponse {
 
   static func stub(_ value: some Encodable, code: Int = 200) -> HTTPResponse {
     HTTPResponse(
-      data: try! Current.configuration.encoder.encode(value),
+      data: try! AuthClient.Configuration.jsonEncoder.encode(value),
       response: HTTPURLResponse(
         url: clientURL,
         statusCode: code,

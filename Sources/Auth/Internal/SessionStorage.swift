@@ -19,38 +19,50 @@ struct StoredSession: Codable {
   }
 }
 
-extension AuthLocalStorage {
-  var key: String {
-    Current.configuration.storageKey ?? AuthClient.Configuration.defaultStorageKey
-  }
+struct SessionStorage {
+  var get: @Sendable () throws -> Session?
+  var store: @Sendable (_ session: Session) throws -> Void
+  var delete: @Sendable () throws -> Void
+}
 
-  var oldKey: String { "supabase.session" }
-
-  func getSession() throws -> Session? {
-    var storedData = try? retrieve(key: oldKey)
-
-    if let storedData {
-      // migrate to new key.
-      try store(key: key, value: storedData)
-      try? remove(key: oldKey)
-    } else {
-      storedData = try retrieve(key: key)
+extension SessionStorage {
+  static func live(clientID: AuthClientID) -> SessionStorage {
+    var key: String {
+      Dependencies[clientID].configuration.storageKey ?? AuthClient.Configuration.defaultStorageKey
     }
 
-    return try storedData.flatMap {
-      try AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0).session
-    }
-  }
+    var oldKey: String { "supabase.session" }
 
-  func storeSession(_ session: Session) throws {
-    try store(
-      key: key,
-      value: AuthClient.Configuration.jsonEncoder.encode(StoredSession(session: session))
+    var storage: any AuthLocalStorage {
+      Dependencies[clientID].configuration.localStorage
+    }
+
+    return SessionStorage(
+      get: {
+        var storedData = try? storage.retrieve(key: oldKey)
+
+        if let storedData {
+          // migrate to new key.
+          try storage.store(key: key, value: storedData)
+          try? storage.remove(key: oldKey)
+        } else {
+          storedData = try storage.retrieve(key: key)
+        }
+
+        return try storedData.flatMap {
+          try AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: $0).session
+        }
+      },
+      store: { session in
+        try storage.store(
+          key: key,
+          value: AuthClient.Configuration.jsonEncoder.encode(StoredSession(session: session))
+        )
+      },
+      delete: {
+        try storage.remove(key: key)
+        try? storage.remove(key: oldKey)
+      }
     )
-  }
-
-  func deleteSession() throws {
-    try remove(key: key)
-    try? remove(key: oldKey)
   }
 }

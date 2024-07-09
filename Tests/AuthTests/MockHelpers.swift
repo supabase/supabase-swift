@@ -21,6 +21,9 @@ extension Dependencies {
       localStorage: InMemoryLocalStorage(),
       logger: nil
     ),
-    http: HTTPClientMock()
+    http: HTTPClientMock(),
+    api: APIClient(clientID: AuthClientID()),
+    sessionStorage: SessionStorage.live(clientID: AuthClientID()),
+    sessionManager: SessionManager.live(clientID: AuthClientID())
   )
 }
