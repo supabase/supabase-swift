@@ -371,6 +371,7 @@ struct OTPParams: Codable, Hashable, Sendable {
 enum VerifyOTPParams: Encodable {
   case email(VerifyEmailOTPParams)
   case mobile(VerifyMobileOTPParams)
+  case tokenHash(VerifyTokenHashParams)
 
   func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
@@ -378,6 +379,8 @@ enum VerifyOTPParams: Encodable {
     case let .email(value):
       try container.encode(value)
     case let .mobile(value):
+      try container.encode(value)
+    case let .tokenHash(value):
       try container.encode(value)
     }
   }
@@ -388,6 +391,11 @@ struct VerifyEmailOTPParams: Encodable, Hashable, Sendable {
   var token: String
   var type: EmailOTPType
   var gotrueMetaSecurity: AuthMetaSecurity?
+}
+
+struct VerifyTokenHashParams: Encodable, Hashable, Sendable {
+  var tokenHash: String
+  var type: EmailOTPType
 }
 
 struct VerifyMobileOTPParams: Encodable, Hashable {

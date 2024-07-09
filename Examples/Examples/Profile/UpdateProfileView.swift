@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 14/05/24.
 //
 
-import SwiftUI
 import Supabase
+import SwiftUI
 
 struct UpdateProfileView: View {
   let user: User
@@ -93,7 +93,7 @@ struct UpdateProfileView: View {
   }
 
   @MainActor
-  private func verifyTapped() async { 
+  private func verifyTapped() async {
     do {
       try await supabase.auth.verifyOTP(phone: phone, token: otp, type: .phoneChange)
     } catch {
