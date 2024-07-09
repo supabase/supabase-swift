@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.14.0](https://github.com/supabase/supabase-swift/compare/v2.13.9...v2.14.0) (2024-07-09)
+
+
+### Features
+
+* **auth:** add support for multiple auth instances ([#445](https://github.com/supabase/supabase-swift/issues/445)) ([6803ddd](https://github.com/supabase/supabase-swift/commit/6803ddd02aa02b34ee093725611710da4f7671c1))
+
+
+### Bug Fixes
+
+* **auth:** verify otp using token hash ([#451](https://github.com/supabase/supabase-swift/issues/451)) ([58ab9af](https://github.com/supabase/supabase-swift/commit/58ab9afb152d3701a63009cc83c392f97e5bdea1))
+
 ## [2.13.9](https://github.com/supabase/supabase-swift/compare/v2.13.8...v2.13.9) (2024-07-06)
 
 
