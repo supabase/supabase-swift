@@ -284,6 +284,7 @@ final class RequestsTests: XCTestCase {
           email: "example@mail.com",
           phone: "+1 202-918-2132",
           password: "another.pass",
+          nonce: "abcdef",
           emailChangeToken: "123456",
           data: ["custom_key": .string("custom_value")]
         )
