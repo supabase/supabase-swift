@@ -67,6 +67,11 @@
         query[kSecAttrAccessGroup as String] = accessGroup
       }
 
+      // this is highly recommended for all keychain operations and makes the
+      // macOS keychain item behave like an iOS keychain item
+      // https://developer.apple.com/documentation/security/ksecusedataprotectionkeychain
+      query[kSecUseDataProtectionKeychain as String] = kCFBooleanTrue
+
       return query
     }
 
