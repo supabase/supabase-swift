@@ -8,7 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 
-public final class ObservationToken: Sendable {
+public final class ObservationToken: Sendable, Hashable {
   let _onCancel = LockIsolated((@Sendable () -> Void)?.none)
 
   package init(_ onCancel: (@Sendable () -> Void)? = nil) {
@@ -33,6 +33,20 @@ public final class ObservationToken: Sendable {
 
   deinit {
     cancel()
+  }
+
+  public static func == (lhs: ObservationToken, rhs: ObservationToken) -> Bool {
+    ObjectIdentifier(lhs) == ObjectIdentifier(rhs)
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(ObjectIdentifier(self))
+  }
+}
+
+extension ObservationToken {
+  public func store(in set: inout Set<ObservationToken>) {
+    set.insert(self)
   }
 }
 

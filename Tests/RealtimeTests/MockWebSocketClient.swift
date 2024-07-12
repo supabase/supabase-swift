@@ -15,42 +15,81 @@ import XCTestDynamicOverlay
 #endif
 
 final class MockWebSocketClient: WebSocketClient {
-  let sentMessages = LockIsolated<[RealtimeMessageV2]>([])
+  struct MutableState {
+    var receiveContinuation: AsyncThrowingStream<RealtimeMessageV2, any Error>.Continuation?
+    var sentMessages: [RealtimeMessageV2] = []
+    var onCallback: ((RealtimeMessageV2) -> RealtimeMessageV2?)?
+    var connectContinuation: AsyncStream<ConnectionStatus>.Continuation?
+
+    var sendMessageBuffer: [RealtimeMessageV2] = []
+    var connectionStatusBuffer: [ConnectionStatus] = []
+  }
+
+  private let mutableState = LockIsolated(MutableState())
+
+  var sentMessages: [RealtimeMessageV2] {
+    mutableState.sentMessages
+  }
+
   func send(_ message: RealtimeMessageV2) async throws {
-    sentMessages.withValue {
-      $0.append(message)
-    }
+    mutableState.withValue {
+      $0.sentMessages.append(message)
 
-    if let callback = onCallback.value, let response = callback(message) {
-      mockReceive(response)
+      if let callback = $0.onCallback, let response = callback(message) {
+        mockReceive(response)
+      }
     }
   }
 
-  private let receiveContinuation =
-    LockIsolated<AsyncThrowingStream<RealtimeMessageV2, any Error>.Continuation?>(nil)
   func mockReceive(_ message: RealtimeMessageV2) {
-    receiveContinuation.value?.yield(message)
+    mutableState.withValue {
+      if let continuation = $0.receiveContinuation {
+        continuation.yield(message)
+      } else {
+        $0.sendMessageBuffer.append(message)
+      }
+    }
   }
 
-  private let onCallback = LockIsolated<((RealtimeMessageV2) -> RealtimeMessageV2?)?>(nil)
   func on(_ callback: @escaping (RealtimeMessageV2) -> RealtimeMessageV2?) {
-    onCallback.setValue(callback)
+    mutableState.withValue {
+      $0.onCallback = callback
+    }
   }
 
   func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error> {
     let (stream, continuation) = AsyncThrowingStream<RealtimeMessageV2, any Error>.makeStream()
-    receiveContinuation.setValue(continuation)
+    mutableState.withValue {
+      $0.receiveContinuation = continuation
+
+      while !$0.sendMessageBuffer.isEmpty {
+        let message = $0.sendMessageBuffer.removeFirst()
+        $0.receiveContinuation?.yield(message)
+      }
+    }
     return stream
   }
 
-  private let connectContinuation = LockIsolated<AsyncStream<ConnectionStatus>.Continuation?>(nil)
   func mockConnect(_ status: ConnectionStatus) {
-    connectContinuation.value?.yield(status)
+    mutableState.withValue {
+      if let continuation = $0.connectContinuation {
+        continuation.yield(status)
+      } else {
+        $0.connectionStatusBuffer.append(status)
+      }
+    }
   }
 
   func connect() -> AsyncStream<ConnectionStatus> {
     let (stream, continuation) = AsyncStream<ConnectionStatus>.makeStream()
-    connectContinuation.setValue(continuation)
+    mutableState.withValue {
+      $0.connectContinuation = continuation
+
+      while !$0.connectionStatusBuffer.isEmpty {
+        let status = $0.connectionStatusBuffer.removeFirst()
+        $0.connectContinuation?.yield(status)
+      }
+    }
     return stream
   }
 
