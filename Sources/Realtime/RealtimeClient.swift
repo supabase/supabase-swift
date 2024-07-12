@@ -351,7 +351,7 @@ public final class RealtimeClient: Sendable {
 
     if let pendingHeartbeatRef {
       await push(
-        RealtimeMessageV2(
+        RealtimeMessage(
           joinRef: nil,
           ref: pendingHeartbeatRef.description,
           topic: "phoenix",
@@ -391,7 +391,7 @@ public final class RealtimeClient: Sendable {
     }
   }
 
-  private func onMessage(_ message: RealtimeMessageV2) async {
+  private func onMessage(_ message: RealtimeMessage) async {
     mutableState.withValue {
       let channel = $0.subscriptions[message.topic]
 
@@ -408,7 +408,7 @@ public final class RealtimeClient: Sendable {
 
   /// Push out a message if the socket is connected.
   /// - Parameter message: The message to push through the socket.
-  public func push(_ message: RealtimeMessageV2) async {
+  public func push(_ message: RealtimeMessage) async {
     guard status == .connected else {
       options.logger?.warning("Trying to push a message while socket is not connected. This is not supported yet.")
       return

@@ -20,8 +20,8 @@ enum ConnectionStatus {
 }
 
 protocol WebSocketClient: Sendable {
-  func send(_ message: RealtimeMessageV2) async throws
-  func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error>
+  func send(_ message: RealtimeMessage) async throws
+  func receive() -> AsyncThrowingStream<RealtimeMessage, any Error>
   func connect() -> AsyncStream<ConnectionStatus>
   func disconnect(closeCode: URLSessionWebSocketTask.CloseCode)
 }
@@ -72,7 +72,7 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
     }
   }
 
-  func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error> {
+  func receive() -> AsyncThrowingStream<RealtimeMessage, any Error> {
     mutableState.withValue { mutableState in
       guard let stream = mutableState.stream else {
         return .finished(
@@ -91,7 +91,7 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
             throw RealtimeError("Expected a UTF8 encoded message.")
           }
 
-          let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
+          let message = try JSONDecoder().decode(RealtimeMessage.self, from: data)
           return message
 
         case .data:
@@ -105,7 +105,7 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
     }
   }
 
-  func send(_ message: RealtimeMessageV2) async throws {
+  func send(_ message: RealtimeMessage) async throws {
     let data = try JSONEncoder().encode(message)
     let string = String(decoding: data, as: UTF8.self)
 
