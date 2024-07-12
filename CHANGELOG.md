@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.14.1](https://github.com/supabase/supabase-swift/compare/v2.14.0...v2.14.1) (2024-07-11)
+
+
+### Bug Fixes
+
+* **auth:** add missing nonce param when updating user ([#457](https://github.com/supabase/supabase-swift/issues/457)) ([a087a6a](https://github.com/supabase/supabase-swift/commit/a087a6a872f0540f163e89bcab6839d0f1695fd8))
+* **auth:** prevent from requesting login keychain password os macOS ([#455](https://github.com/supabase/supabase-swift/issues/455)) ([3e45b5a](https://github.com/supabase/supabase-swift/commit/3e45b5a79f7a33e7752102c31730b7604292cb89))
+
 ## [2.14.0](https://github.com/supabase/supabase-swift/compare/v2.13.9...v2.14.0) (2024-07-09)
 
 
