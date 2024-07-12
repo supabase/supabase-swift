@@ -20,8 +20,8 @@ enum ConnectionStatus {
 }
 
 protocol WebSocketClient: Sendable {
-  func send(_ message: RealtimeMessageV2) async throws
-  func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error>
+  func send(_ message: RealtimeMessage) async throws
+  func receive() -> AsyncThrowingStream<RealtimeMessage, any Error>
   func connect() -> AsyncStream<ConnectionStatus>
   func disconnect()
 }
@@ -66,7 +66,7 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
     }
   }
 
-  func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error> {
+  func receive() -> AsyncThrowingStream<RealtimeMessage, any Error> {
     guard let connection = mutableState.connection else {
       return .finished(
         throwing: RealtimeError(
@@ -78,7 +78,7 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
     return connection.receive()
   }
 
-  func send(_ message: RealtimeMessageV2) async throws {
+  func send(_ message: RealtimeMessage) async throws {
     logger?.verbose("Sending message: \(message)")
     try await mutableState.connection?.send(message)
   }
