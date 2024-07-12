@@ -22,13 +22,21 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     }
     .joined(separator: "")
     mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: "select", value: cleanedColumns))
+      $0.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
 
-      if $0.request.headers["Prefer"] != nil {
-        $0.request.headers["Prefer", default: ""] += ","
+      if let prefer = $0.request.headers["Prefer"] {
+        var components = prefer.components(separatedBy: ",")
+
+        if let index = components.firstIndex(where: { $0.hasPrefix("return=") }) {
+          components[index] = "return=representation"
+        } else {
+          components.append("return=representation")
+        }
+
+        $0.request.headers["Prefer"] = components.joined(separator: ",")
+      } else {
+        $0.request.headers["Prefer"] = "return=representation"
       }
-
-      $0.request.headers["Prefer", default: ""] += "return=representation"
     }
     return self
   }

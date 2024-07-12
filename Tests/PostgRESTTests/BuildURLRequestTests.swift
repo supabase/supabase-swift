@@ -141,6 +141,17 @@ final class BuildURLRequestTests: XCTestCase {
             ]
           )
       },
+      TestCase(name: "select after bulk upsert") { client in
+        try client.from("users")
+          .upsert(
+            [
+              User(email: "johndoe@supabase.io"),
+              User(email: "johndoe2@supabase.io"),
+            ],
+            onConflict: "username"
+          )
+          .select()
+      },
       TestCase(name: "test upsert ignoring duplicates") { client in
         try client.from("users")
           .upsert(User(email: "johndoe@supabase.io"), ignoreDuplicates: true)
