@@ -16,13 +16,13 @@ final class RealtimeTests: XCTestCase {
   }
 
   var ws: MockWebSocketClient!
-  var sut: RealtimeClientV2!
+  var sut: RealtimeClient!
 
   override func setUp() {
     super.setUp()
 
     ws = MockWebSocketClient()
-    sut = RealtimeClientV2(
+    sut = RealtimeClient(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
@@ -97,7 +97,7 @@ final class RealtimeTests: XCTestCase {
 
     ws.on { message in
       if message.event == "heartbeat" {
-        return RealtimeMessageV2(
+        return RealtimeMessage(
           joinRef: message.joinRef,
           ref: message.ref,
           topic: "phoenix",
@@ -129,7 +129,7 @@ final class RealtimeTests: XCTestCase {
     let joinSentMessages = ws.sentMessages.filter { $0.event == "phx_join" }
 
     let expectedMessages = try [
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: "1",
         ref: "1",
         topic: "realtime:public:messages",
@@ -141,7 +141,7 @@ final class RealtimeTests: XCTestCase {
           )
         )
       ),
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: "2",
         ref: "2",
         topic: "realtime:public:messages",
@@ -240,8 +240,8 @@ final class RealtimeTests: XCTestCase {
   }
 }
 
-extension RealtimeMessageV2 {
-  static func subscribeToMessages(ref: String?, joinRef: String?) -> RealtimeMessageV2 {
+extension RealtimeMessage {
+  static func subscribeToMessages(ref: String?, joinRef: String?) -> RealtimeMessage {
     Self(
       joinRef: joinRef,
       ref: ref,
