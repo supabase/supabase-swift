@@ -77,6 +77,17 @@ public final class RealtimeChannelV2: Sendable {
     statusEventEmitter.stream()
   }
 
+  /// Listen for connection status changes.
+  /// - Parameter listener: Closure that will be called when connection status changes.
+  /// - Returns: An observation handle that can be used to stop listening.
+  ///
+  /// - Note: Use ``statusChange`` if you prefer to use Async/Await.
+  public func onStatusChange(
+    _ listener: @escaping @Sendable (Status) -> Void
+  ) -> ObservationToken {
+    statusEventEmitter.attach(listener)
+  }
+
   init(
     topic: String,
     config: RealtimeChannelConfig,
