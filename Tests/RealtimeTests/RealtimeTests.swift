@@ -57,7 +57,7 @@ final class RealtimeTests: XCTestCase {
     }
     .store(in: &subscriptions)
 
-    let socketStatuses = LockIsolated([RealtimeClientV2.Status]())
+    let socketStatuses = LockIsolated([RealtimeClient.Status]())
 
     sut.onStatusChange { status in
       socketStatuses.withValue { $0.append(status) }
@@ -74,7 +74,7 @@ final class RealtimeTests: XCTestCase {
     let heartbeatTask = sut.mutableState.heartbeatTask
     XCTAssertNotNil(heartbeatTask)
 
-    let channelStatuses = LockIsolated([RealtimeChannelV2.Status]())
+    let channelStatuses = LockIsolated([RealtimeChannel.Status]())
     channel.onStatusChange { status in
       channelStatuses.withValue {
         $0.append(status)
@@ -168,7 +168,7 @@ final class RealtimeTests: XCTestCase {
     ws.on { message in
       if message.event == "heartbeat" {
         expectation.fulfill()
-        return RealtimeMessageV2(
+        return RealtimeMessage(
           joinRef: message.joinRef,
           ref: message.ref,
           topic: "phoenix",
@@ -199,7 +199,7 @@ final class RealtimeTests: XCTestCase {
       return nil
     }
 
-    let statuses = LockIsolated<[RealtimeClientV2.Status]>([])
+    let statuses = LockIsolated<[RealtimeClient.Status]>([])
 
     Task {
       for await status in sut.statusChange {

@@ -24,7 +24,7 @@ struct Socket: Sendable {
   var connect: @Sendable () async -> Void
   var addChannel: @Sendable (_ channel: RealtimeChannel) -> Void
   var removeChannel: @Sendable (_ channel: RealtimeChannel) async -> Void
-  var push: @Sendable (_ message: RealtimeMessageV2) async -> Void
+  var push: @Sendable (_ message: RealtimeMessage) async -> Void
 }
 
 extension Socket {
@@ -74,6 +74,17 @@ public final class RealtimeChannel: Sendable {
   public private(set) var status: Status {
     get { statusEventEmitter.lastEvent }
     set { statusEventEmitter.emit(newValue) }
+  }
+
+  /// Listen for connection status changes.
+  /// - Parameter listener: Closure that will be called when connection status changes.
+  /// - Returns: An observation handle that can be used to stop listening.
+  ///
+  /// - Note: Use ``statusChange`` if you prefer to use Async/Await.
+  public func onStatusChange(
+    _ listener: @escaping @Sendable (Status) -> Void
+  ) -> ObservationToken {
+    statusEventEmitter.attach(listener)
   }
 
   public var statusChange: AsyncStream<Status> {
@@ -130,7 +141,7 @@ public final class RealtimeChannel: Sendable {
     logger?.debug("subscribing to channel with body: \(joinConfig)")
 
     await push(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: joinRef,
         ref: joinRef,
         topic: topic,
@@ -158,7 +169,7 @@ public final class RealtimeChannel: Sendable {
     logger?.debug("unsubscribing from channel \(topic)")
 
     await push(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: mutableState.joinRef,
         ref: socket.makeRef().description,
         topic: topic,
@@ -171,7 +182,7 @@ public final class RealtimeChannel: Sendable {
   public func updateAuth(jwt: String) async {
     logger?.debug("Updating auth token for channel \(topic)")
     await push(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: mutableState.joinRef,
         ref: socket.makeRef().description,
         topic: topic,
@@ -200,7 +211,7 @@ public final class RealtimeChannel: Sendable {
     )
 
     await push(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: mutableState.joinRef,
         ref: socket.makeRef().description,
         topic: topic,
@@ -225,7 +236,7 @@ public final class RealtimeChannel: Sendable {
     )
 
     await push(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: mutableState.joinRef,
         ref: socket.makeRef().description,
         topic: topic,
@@ -241,7 +252,7 @@ public final class RealtimeChannel: Sendable {
 
   public func untrack() async {
     await push(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: mutableState.joinRef,
         ref: socket.makeRef().description,
         topic: topic,
@@ -254,7 +265,7 @@ public final class RealtimeChannel: Sendable {
     )
   }
 
-  func onMessage(_ message: RealtimeMessageV2) {
+  func onMessage(_ message: RealtimeMessage) {
     do {
       guard let eventType = message.eventType else {
         logger?.debug("Received message without event type: \(message)")
@@ -503,7 +514,7 @@ public final class RealtimeChannel: Sendable {
   }
 
   @discardableResult
-  private func push(_ message: RealtimeMessageV2) async -> PushStatus {
+  private func push(_ message: RealtimeMessage) async -> PushStatus {
     let push = Push(channel: self, message: message)
     if let ref = message.ref {
       mutableState.withValue {
