@@ -21,14 +21,14 @@ final class RealtimeTests: XCTestCase {
 
   var ws: MockWebSocketClient!
   var http: HTTPClientMock!
-  var sut: RealtimeClientV2!
+  var sut: RealtimeClient!
 
   override func setUp() {
     super.setUp()
 
     ws = MockWebSocketClient()
     http = HTTPClientMock()
-    sut = RealtimeClientV2(
+    sut = RealtimeClient(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
@@ -64,7 +64,7 @@ final class RealtimeTests: XCTestCase {
     }
     .store(in: &subscriptions)
 
-    let socketStatuses = LockIsolated([RealtimeClientV2.Status]())
+    let socketStatuses = LockIsolated([RealtimeClient.Status]())
 
     sut.onStatusChange { status in
       socketStatuses.withValue { $0.append(status) }
@@ -81,7 +81,7 @@ final class RealtimeTests: XCTestCase {
     let heartbeatTask = sut.mutableState.heartbeatTask
     XCTAssertNotNil(heartbeatTask)
 
-    let channelStatuses = LockIsolated([RealtimeChannelV2.Status]())
+    let channelStatuses = LockIsolated([RealtimeChannel.Status]())
     channel.onStatusChange { status in
       channelStatuses.withValue {
         $0.append(status)
@@ -104,7 +104,7 @@ final class RealtimeTests: XCTestCase {
 
     ws.on { message in
       if message.event == "heartbeat" {
-        return RealtimeMessageV2(
+        return RealtimeMessage(
           joinRef: message.joinRef,
           ref: message.ref,
           topic: "phoenix",
@@ -136,7 +136,7 @@ final class RealtimeTests: XCTestCase {
     let joinSentMessages = ws.sentMessages.filter { $0.event == "phx_join" }
 
     let expectedMessages = try [
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: "1",
         ref: "1",
         topic: "realtime:public:messages",
@@ -148,7 +148,7 @@ final class RealtimeTests: XCTestCase {
           )
         )
       ),
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: "2",
         ref: "2",
         topic: "realtime:public:messages",
@@ -175,7 +175,7 @@ final class RealtimeTests: XCTestCase {
     ws.on { message in
       if message.event == "heartbeat" {
         expectation.fulfill()
-        return RealtimeMessageV2(
+        return RealtimeMessage(
           joinRef: message.joinRef,
           ref: message.ref,
           topic: "phoenix",
@@ -206,7 +206,7 @@ final class RealtimeTests: XCTestCase {
       return nil
     }
 
-    let statuses = LockIsolated<[RealtimeClientV2.Status]>([])
+    let statuses = LockIsolated<[RealtimeClient.Status]>([])
 
     Task {
       for await status in sut.statusChange {
@@ -295,8 +295,8 @@ final class RealtimeTests: XCTestCase {
   }
 }
 
-extension RealtimeMessageV2 {
-  static func subscribeToMessages(ref: String?, joinRef: String?) -> RealtimeMessageV2 {
+extension RealtimeMessage {
+  static func subscribeToMessages(ref: String?, joinRef: String?) -> RealtimeMessage {
     Self(
       joinRef: joinRef,
       ref: ref,

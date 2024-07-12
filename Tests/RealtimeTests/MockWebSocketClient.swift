@@ -16,22 +16,22 @@ import XCTestDynamicOverlay
 
 final class MockWebSocketClient: WebSocketClient {
   struct MutableState {
-    var receiveContinuation: AsyncThrowingStream<RealtimeMessageV2, any Error>.Continuation?
-    var sentMessages: [RealtimeMessageV2] = []
-    var onCallback: ((RealtimeMessageV2) -> RealtimeMessageV2?)?
+    var receiveContinuation: AsyncThrowingStream<RealtimeMessage, any Error>.Continuation?
+    var sentMessages: [RealtimeMessage] = []
+    var onCallback: ((RealtimeMessage) -> RealtimeMessage?)?
     var connectContinuation: AsyncStream<ConnectionStatus>.Continuation?
 
-    var sendMessageBuffer: [RealtimeMessageV2] = []
+    var sendMessageBuffer: [RealtimeMessage] = []
     var connectionStatusBuffer: [ConnectionStatus] = []
   }
 
   private let mutableState = LockIsolated(MutableState())
 
-  var sentMessages: [RealtimeMessageV2] {
+  var sentMessages: [RealtimeMessage] {
     mutableState.sentMessages
   }
 
-  func send(_ message: RealtimeMessageV2) async throws {
+  func send(_ message: RealtimeMessage) async throws {
     mutableState.withValue {
       $0.sentMessages.append(message)
 
@@ -41,7 +41,7 @@ final class MockWebSocketClient: WebSocketClient {
     }
   }
 
-  func mockReceive(_ message: RealtimeMessageV2) {
+  func mockReceive(_ message: RealtimeMessage) {
     mutableState.withValue {
       if let continuation = $0.receiveContinuation {
         continuation.yield(message)
@@ -51,14 +51,14 @@ final class MockWebSocketClient: WebSocketClient {
     }
   }
 
-  func on(_ callback: @escaping (RealtimeMessageV2) -> RealtimeMessageV2?) {
+  func on(_ callback: @escaping (RealtimeMessage) -> RealtimeMessage?) {
     mutableState.withValue {
       $0.onCallback = callback
     }
   }
 
-  func receive() -> AsyncThrowingStream<RealtimeMessageV2, any Error> {
-    let (stream, continuation) = AsyncThrowingStream<RealtimeMessageV2, any Error>.makeStream()
+  func receive() -> AsyncThrowingStream<RealtimeMessage, any Error> {
+    let (stream, continuation) = AsyncThrowingStream<RealtimeMessage, any Error>.makeStream()
     mutableState.withValue {
       $0.receiveContinuation = continuation
 
