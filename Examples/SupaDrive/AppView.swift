@@ -9,75 +9,38 @@ import CustomDump
 import Supabase
 import SwiftUI
 
-enum Item: Identifiable, Hashable {
-  case folder(FileObject)
-  case file(FileObject)
-
-  var id: String? {
-    switch self {
-    case let .file(file): file.id
-    case let .folder(folder): folder.id
-    }
-  }
-
-  var name: String {
-    switch self {
-    case let .file(file): file.name
-    case let .folder(folder): folder.name
-    }
-  }
-
-  var isFolder: Bool {
-    if case .folder = self { return true }
-    return false
-  }
-
-  var isFile: Bool {
-    if case .file = self { return true }
-    return false
-  }
-}
-
-//
-// struct Folder: Identifiable, Hashable {
-//  let id: String
-//  let name: String
-//  let items: [Item]
-// }
-//
-// struct File: Identifiable, Hashable {
-//  let id: String
-//  let name: String
-// }
-
 struct AppView: View {
   @State var path: [String]
-  @State var selectedItemPerPath: [String: Item] = [:]
+  @State var selectedItemPerPath: [String: FileObject] = [:]
 
   @State var reload = UUID()
 
   var body: some View {
-    ScrollView(.horizontal) {
-      HStack {
-        ForEach(path.indices, id: \.self) { pathIndex in
-          PanelView(
-            path: path[0 ... pathIndex].joined(separator: "/"),
-            selectedItem: Binding(
-              get: {
-                selectedItemPerPath[path[pathIndex]]
-              },
-              set: { newValue in
-                selectedItemPerPath[path[pathIndex]] = newValue
+    VStack(alignment: .leading, spacing: 0) {
+      breadcrump
 
-                if case let .folder(folder) = newValue {
-                  path.replaceSubrange((pathIndex + 1)..., with: [folder.name])
-                } else {
-                  path.replaceSubrange((pathIndex + 1)..., with: [])
+      ScrollView(.horizontal) {
+        HStack {
+          ForEach(path.indices, id: \.self) { pathIndex in
+            PanelView(
+              path: path[0 ... pathIndex].joined(separator: "/"),
+              selectedItem: Binding(
+                get: {
+                  selectedItemPerPath[path[pathIndex]]
+                },
+                set: { newValue in
+                  selectedItemPerPath[path[pathIndex]] = newValue
+
+                  if let newValue, let name = newValue.name, newValue.id == nil {
+                    path.replaceSubrange((pathIndex + 1)..., with: [name])
+                  } else {
+                    path.replaceSubrange((pathIndex + 1)..., with: [])
+                  }
                 }
-              }
+              )
             )
-          )
-          .frame(width: 200)
+            .frame(width: 200)
+          }
         }
       }
     }
@@ -85,18 +48,18 @@ struct AppView: View {
       if
         let lastPath = path.last,
         let selectedItem = selectedItemPerPath[lastPath],
-        case let .file(file) = selectedItem
+        selectedItem.id != nil
       {
         Form {
-          Text(file.name)
+          Text(selectedItem.name ?? "")
             .font(.title2)
           Divider()
 
-          if let contentLenth = file.metadata?["contentLength"]?.intValue {
+          if let contentLenth = selectedItem.metadata?["contentLength"]?.intValue {
             LabeledContent("Size", value: "\(contentLenth)")
           }
 
-          if let mimeType = file.metadata?["mimetype"]?.stringValue {
+          if let mimeType = selectedItem.metadata?["mimetype"]?.stringValue {
             LabeledContent("MIME Type", value: mimeType)
           }
         }
@@ -107,29 +70,44 @@ struct AppView: View {
         .transition(.move(edge: .trailing))
       }
     }
-    .animation(.default, value: path.last)
+    .animation(.default, value: path)
+    .animation(.default, value: selectedItemPerPath)
+  }
+
+  var breadcrump: some View {
+    HStack {
+      ForEach(Array(zip(path.indices, path)), id: \.0) { idx, path in
+        Button(path) {
+          self.path.replaceSubrange((idx + 1)..., with: [])
+        }
+        .buttonStyle(.plain)
+
+        if idx != self.path.indices.last {
+          Text(">")
+        }
+      }
+    }
+    .padding()
   }
 }
 
 struct PanelView: View {
   var path: String
-  @Binding var selectedItem: Item?
+  @Binding var selectedItem: FileObject?
 
   @State private var isDraggingOver = false
-  @State private var items: [Item] = []
+  @State private var items: [FileObject] = []
 
   @State private var reload = UUID()
 
   var body: some View {
     List {
-      Section(path) {
-        ForEach(items) { item in
-          Button {
-            selectedItem = item
-          } label: {
-            Text(item.name)
-              .background(selectedItem == item ? Color.blue : Color.clear)
-          }
+      ForEach(items) { item in
+        Button {
+          selectedItem = item
+        } label: {
+          Text(item.name ?? "")
+            .bold(selectedItem == item)
         }
       }
       .buttonStyle(.plain)
@@ -138,7 +116,7 @@ struct PanelView: View {
       do {
         let files = try await supabase.storage.from("main").list(path: path)
 
-        items = files.compactMap(Item.init)
+        items = files.filter { $0.name?.hasPrefix(".") == false }
       } catch {
         dump(error)
       }
@@ -150,7 +128,7 @@ struct PanelView: View {
             return
           }
 
-          Task {
+          Task { @MainActor in
             let path = url.lastPathComponent
             let file = try! Data(contentsOf: url)
             try! await supabase.storage.from("main")
@@ -175,18 +153,6 @@ struct PanelView: View {
           reload = UUID()
         }
       }
-    }
-  }
-}
-
-extension Item {
-  init?(file: FileObject) {
-    if file.name.hasPrefix(".") { return nil }
-
-    if file.id == nil {
-      self = .folder(file)
-    } else {
-      self = .file(file)
     }
   }
 }
