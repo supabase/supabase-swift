@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.2](https://github.com/supabase/supabase-swift/compare/v2.14.1...v2.14.2) (2024-07-13)
+
+
+### Bug Fixes
+
+* **postgrest:** avoid duplicated columns and prefer fields ([#463](https://github.com/supabase/supabase-swift/issues/463)) ([e4f85f3](https://github.com/supabase/supabase-swift/commit/e4f85f3512ce06e85d8ca2922f0a4ca011079c21))
+
 ## [2.14.1](https://github.com/supabase/supabase-swift/compare/v2.14.0...v2.14.1) (2024-07-11)
 
 
