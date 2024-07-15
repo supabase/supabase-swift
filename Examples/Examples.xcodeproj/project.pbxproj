@@ -37,6 +37,7 @@
 		79615DF92C3DA92C005AE6E0 /* CustomDump in Frameworks */ = {isa = PBXBuildFile; productRef = 79615DF82C3DA92C005AE6E0 /* CustomDump */; };
 		796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796298982AEBBA77000AA957 /* MFAFlow.swift */; };
 		7962989D2AEBC6F9000AA957 /* SVGView in Frameworks */ = {isa = PBXBuildFile; productRef = 7962989C2AEBC6F9000AA957 /* SVGView */; };
+		796B32BE2C4559E900DDD7B4 /* IdentifiedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 796B32BD2C4559E900DDD7B4 /* IdentifiedCollections */; };
 		79719ECE2ADF26C400737804 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79719ECD2ADF26C400737804 /* Supabase */; };
 		797D664A2B46A1D8007592ED /* Dependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797D66492B46A1D8007592ED /* Dependencies.swift */; };
 		797EFB662BABD82A00098D6B /* BucketList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797EFB652BABD82A00098D6B /* BucketList.swift */; };
@@ -169,6 +170,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				796B32BE2C4559E900DDD7B4 /* IdentifiedCollections in Frameworks */,
 				792404E32C3473EC002959B3 /* Supabase in Frameworks */,
 				79615DF92C3DA92C005AE6E0 /* CustomDump in Frameworks */,
 			);
@@ -412,6 +414,7 @@
 			packageProductDependencies = (
 				792404E22C3473EC002959B3 /* Supabase */,
 				79615DF82C3DA92C005AE6E0 /* CustomDump */,
+				796B32BD2C4559E900DDD7B4 /* IdentifiedCollections */,
 			);
 			productName = SupaDrive;
 			productReference = 792404B72C3454A9002959B3 /* SupaDrive.app */;
@@ -1214,6 +1217,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7962989B2AEBC6F9000AA957 /* XCRemoteSwiftPackageReference "SVGView" */;
 			productName = SVGView;
+		};
+		796B32BD2C4559E900DDD7B4 /* IdentifiedCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */;
+			productName = IdentifiedCollections;
 		};
 		79719ECD2ADF26C400737804 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;

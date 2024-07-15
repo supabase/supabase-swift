@@ -8,12 +8,54 @@
 import CustomDump
 import Supabase
 import SwiftUI
+import IdentifiedCollections
+
+@MainActor
+@Observable
+final class AppModel {
+  var panels: IdentifiedArrayOf<PanelModel> {
+    didSet {
+      bindPanelModels()
+    }
+  }
+
+  init(panels: IdentifiedArrayOf<PanelModel>) {
+    self.panels = panels
+    bindPanelModels()
+  }
+
+  var path: String {
+    panels.last?.path ?? ""
+  }
+
+  var pathComponents: [String] {
+    path.components(separatedBy: "/")
+  }
+
+  var selectedFile: FileObject? {
+    panels.last?.selectedItem
+  }
+
+  private func bindPanelModels() {
+    for panel in panels {
+      panel.onSelectItem = { [weak self, weak panel] item in
+        guard let self, let panel else { return }
+
+//        self.panels.append(PanelModel(path: self.path.appending))
+//
+//        if let name = item.name, item.id == nil {
+//          self.panels.replaceSubrange(
+//            (index + 1)...,
+//            with: [PanelModel(path: self.path.appending("/\(name)"))]
+//          )
+//        }
+      }
+    }
+  }
+}
 
 struct AppView: View {
-  @State var path: [String]
-  @State var selectedItemPerPath: [String: FileObject] = [:]
-
-  @State var reload = UUID()
+  @Bindable var model: AppModel
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -21,23 +63,25 @@ struct AppView: View {
 
       ScrollView(.horizontal) {
         HStack {
-          ForEach(path.indices, id: \.self) { pathIndex in
+          ForEach(model.panels) { panel in
             PanelView(
-              path: path[0 ... pathIndex].joined(separator: "/"),
-              selectedItem: Binding(
-                get: {
-                  selectedItemPerPath[path[pathIndex]]
-                },
-                set: { newValue in
-                  selectedItemPerPath[path[pathIndex]] = newValue
-
-                  if let newValue, let name = newValue.name, newValue.id == nil {
-                    path.replaceSubrange((pathIndex + 1)..., with: [name])
-                  } else {
-                    path.replaceSubrange((pathIndex + 1)..., with: [])
-                  }
-                }
-              )
+              model: panel
+//              model: PanelModel(path: path[0 ... pathIndex].joined(separator: "/"))
+//              path: path[0 ... pathIndex].joined(separator: "/"),
+//              selectedItem: Binding(
+//                get: {
+//                  selectedItemPerPath[path[pathIndex]]
+//                },
+//                set: { newValue in
+//                  selectedItemPerPath[path[pathIndex]] = newValue
+//
+//                  if let newValue, let name = newValue.name, newValue.id == nil {
+//                    path.replaceSubrange((pathIndex + 1)..., with: [name])
+//                  } else {
+//                    path.replaceSubrange((pathIndex + 1)..., with: [])
+//                  }
+//                }
+//              )
             )
             .frame(width: 200)
           }
@@ -45,21 +89,17 @@ struct AppView: View {
       }
     }
     .overlay(alignment: .trailing) {
-      if
-        let lastPath = path.last,
-        let selectedItem = selectedItemPerPath[lastPath],
-        selectedItem.id != nil
-      {
+      if let selectedFile = model.selectedFile {
         Form {
-          Text(selectedItem.name ?? "")
+          Text(selectedFile.name ?? "")
             .font(.title2)
           Divider()
 
-          if let contentLenth = selectedItem.metadata?["contentLength"]?.intValue {
+          if let contentLenth = selectedFile.metadata?["contentLength"]?.intValue {
             LabeledContent("Size", value: "\(contentLenth)")
           }
 
-          if let mimeType = selectedItem.metadata?["mimetype"]?.stringValue {
+          if let mimeType = selectedFile.metadata?["mimetype"]?.stringValue {
             LabeledContent("MIME Type", value: mimeType)
           }
         }
@@ -70,56 +110,116 @@ struct AppView: View {
         .transition(.move(edge: .trailing))
       }
     }
-    .animation(.default, value: path)
-    .animation(.default, value: selectedItemPerPath)
+    .animation(.default, value: model.path)
+    .animation(.default, value: model.selectedFile)
   }
 
   var breadcrump: some View {
     HStack {
-      ForEach(Array(zip(path.indices, path)), id: \.0) { idx, path in
+      ForEach(Array(zip(model.pathComponents.indices, model.pathComponents)), id: \.0) { idx, path in
         Button(path) {
-          self.path.replaceSubrange((idx + 1)..., with: [])
+//          self.path.replaceSubrange((idx + 1)..., with: [])
         }
         .buttonStyle(.plain)
 
-        if idx != self.path.indices.last {
-          Text(">")
-        }
+//        if idx != self.path.indices.last {
+//          Text(">")
+//        }
       }
     }
     .padding()
   }
 }
 
+struct DragValue: Codable {
+  let path: String
+  let object: FileObject
+}
+
+@MainActor
+@Observable
+final class PanelModel: Identifiable {
+  let path: String
+  var selectedItem: FileObject?
+
+  var items: [FileObject] = []
+
+  @ObservationIgnored
+  var onSelectItem: @MainActor (FileObject) -> Void = { _ in }
+
+  init(path: String) {
+    self.path = path
+  }
+
+  func load() async {
+    do {
+      let files = try await supabase.storage.from("main").list(path: path)
+      items = files.filter { $0.name?.hasPrefix(".") == false }
+    } catch {
+      dump(error)
+    }
+  }
+
+  func didSelectItem(_ item: FileObject) {
+    self.selectedItem = item
+    onSelectItem(item)
+  }
+
+  func newFolderButtonTapped() async {
+    do {
+      try await supabase.storage.from("main")
+        .upload(path: "\(path)/Untiltled/.dummy", file: Data())
+    } catch {
+
+    }
+  }
+
+  func uploadFile(at url: URL) async {
+    let path = url.lastPathComponent
+
+    do {
+      let file = try Data(contentsOf: url)
+      try await supabase.storage.from("main")
+        .upload(path: "\(self.path)/\(path)", file: file)
+    } catch {}
+  }
+}
+
 struct PanelView: View {
-  var path: String
-  @Binding var selectedItem: FileObject?
+  @Bindable var model: PanelModel
 
   @State private var isDraggingOver = false
-  @State private var items: [FileObject] = []
-
-  @State private var reload = UUID()
 
   var body: some View {
     List {
-      ForEach(items) { item in
-        Button {
-          selectedItem = item
-        } label: {
-          Text(item.name ?? "")
-            .bold(selectedItem == item)
-        }
+      ForEach(model.items) { item in
+        Text(item.name ?? "")
+          .bold(model.selectedItem == item)
+          .onTapGesture {
+            model.didSelectItem(item)
+          }
+          .onDrag {
+            let data = try! JSONEncoder().encode(DragValue(path: model.path, object: item))
+            let string = String(decoding: data, as: UTF8.self)
+            return NSItemProvider(object: string as NSString)
+          }
       }
-      .buttonStyle(.plain)
-    }
-    .task(id: reload) {
-      do {
-        let files = try await supabase.storage.from("main").list(path: path)
+      .onInsert(of: ["public.text"]) { index, items in
+        for item in items {
+          Task {
+            guard let data = try await item.loadItem(forTypeIdentifier: "public.text") as? Data,
+                  let value = try? JSONDecoder().decode(DragValue.self, from: data) else {
+              return
+            }
 
-        items = files.filter { $0.name?.hasPrefix(".") == false }
-      } catch {
-        dump(error)
+            self.model.items.insert(value.object, at: index)
+          }
+        }
+        print(index, items)
       }
+    }
+    .task {
+      await model.load()
     }
     .onDrop(of: [.fileURL], isTargeted: $isDraggingOver) { providers in
       for provider in providers {
@@ -128,13 +228,8 @@ struct PanelView: View {
             return
           }
 
-          Task { @MainActor in
-            let path = url.lastPathComponent
-            let file = try! Data(contentsOf: url)
-            try! await supabase.storage.from("main")
-              .upload(path: "\(self.path)/\(path)", file: file)
-
-            reload = UUID()
+          Task {
+            await model.uploadFile(at: url)
           }
         }
       }
@@ -148,23 +243,13 @@ struct PanelView: View {
     .contextMenu {
       Button("New folder") {
         Task {
-          try! await supabase.storage.from("main")
-            .upload(path: "\(path)/Untiltled/.dummy", file: Data())
-          reload = UUID()
+          await model.newFolderButtonTapped()
         }
       }
     }
   }
 }
 
-extension FileObject {
-  var metadataDump: String {
-    var output = ""
-    customDump(metadata, to: &output)
-    return output
-  }
-}
-
 #Preview {
-  AppView(path: [])
+  AppView(model: AppModel(panels: []))
 }

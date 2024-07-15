@@ -25,7 +25,9 @@ struct SupaDriveApp: App {
   var body: some Scene {
     WindowGroup {
       AuthView { session in
-        AppView(path: [session.user.id.uuidString.lowercased()])
+        AppView(
+          model: AppModel(panels: [PanelModel(path: session.user.id.uuidString.lowercased())])
+        )
       }
     }
   }
