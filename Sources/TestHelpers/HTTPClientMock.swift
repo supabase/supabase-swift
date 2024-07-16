@@ -10,22 +10,16 @@ import Foundation
 import Helpers
 import XCTestDynamicOverlay
 
-package final class HTTPClientMock: HTTPClientType {
+package actor HTTPClientMock: HTTPClientType {
   package struct MockNotFound: Error {}
 
-  private let mocks: LockIsolated < [@Sendable (HTTPRequest) async throws -> HTTPResponse?]> = .init([])
-  private let _receivedRequests = LockIsolated<[HTTPRequest]>([])
-  private let _returnedResponses = LockIsolated<[Result<HTTPResponse, any Error>]>([])
-
+  private var mocks = [@Sendable (HTTPRequest) async throws -> HTTPResponse?]()
+  
   /// Requests received by this client in order.
-  package var receivedRequests: [HTTPRequest] {
-    _receivedRequests.value
-  }
+  package var receivedRequests: [HTTPRequest] = []
 
   /// Responses returned by this client in order.
-  package var returnedResponses: [Result<HTTPResponse, any Error>] {
-    _returnedResponses.value
-  }
+  package var returnedResponses: [Result<HTTPResponse, any Error>] = []
 
   package init() {}
 
@@ -34,14 +28,11 @@ package final class HTTPClientMock: HTTPClientType {
     _ request: @escaping @Sendable (HTTPRequest) -> Bool,
     return response: @escaping @Sendable (HTTPRequest) async throws -> HTTPResponse
   ) -> Self {
-    mocks.withValue {
-      $0.append { r in
-        if request(r) {
-          return try await response(r)
-        }
-
-        return nil
+    mocks.append { r in
+      if request(r) {
+        return try await response(r)
       }
+      return nil
     }
     return self
   }
@@ -54,20 +45,16 @@ package final class HTTPClientMock: HTTPClientType {
   }
 
   package func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-    _receivedRequests.withValue { $0.append(request) }
+    receivedRequests.append(request)
 
-    for mock in mocks.value {
+    for mock in mocks{
       do {
         if let response = try await mock(request) {
-          _returnedResponses.withValue {
-            $0.append(.success(response))
-          }
+          returnedResponses.append(.success(response))
           return response
         }
       } catch {
-        _returnedResponses.withValue {
-          $0.append(.failure(error))
-        }
+        returnedResponses.append(.failure(error))
         throw error
       }
     }

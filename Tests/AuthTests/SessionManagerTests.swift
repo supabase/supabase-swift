@@ -31,7 +31,7 @@ final class SessionManagerTests: XCTestCase {
       configuration: .init(
         url: clientURL,
         localStorage: InMemoryLocalStorage(),
-        logger: nil,
+        logger: TestLogger(),
         autoRefreshToken: false
       ),
       http: http,
@@ -72,7 +72,7 @@ final class SessionManagerTests: XCTestCase {
 
       let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
-      http.when(
+      await http.when(
         { $0.url.path.contains("/token") },
         return: { _ in
           refreshSessionCallCount.withValue { $0 += 1 }
@@ -83,7 +83,7 @@ final class SessionManagerTests: XCTestCase {
 
       // Fire N tasks and call sut.session()
       let tasks = (0 ..< 10).map { _ in
-        Task.detached { [weak self] in
+        Task { [weak self] in
           try await self?.sut.session()
         }
       }
@@ -104,5 +104,11 @@ final class SessionManagerTests: XCTestCase {
       XCTAssertEqual(refreshSessionCallCount.value, 1)
       XCTAssertEqual(try result.map { try $0.get() }, (0 ..< 10).map { _ in validSession })
     }
+  }
+}
+
+struct TestLogger: SupabaseLogger {
+  func log(message: SupabaseLogMessage) {
+    print(message.description)
   }
 }

@@ -29,7 +29,7 @@ final class FunctionsClientTests: XCTestCase {
   func testInvoke() async throws {
     let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
 
-    let http = HTTPClientMock()
+    let http = await HTTPClientMock()
       .when {
         $0.url.pathComponents.contains("hello_world")
       } return: { _ in
@@ -49,7 +49,7 @@ final class FunctionsClientTests: XCTestCase {
       options: .init(headers: ["X-Custom-Key": "value"], body: body)
     )
 
-    let request = http.receivedRequests.last
+    let request = await http.receivedRequests.last
 
     XCTAssertEqual(request?.url, url)
     XCTAssertEqual(request?.method, .post)
@@ -59,7 +59,7 @@ final class FunctionsClientTests: XCTestCase {
   }
 
   func testInvokeWithCustomMethod() async throws {
-    let http = HTTPClientMock().any { _ in try .stub(body: Empty()) }
+    let http = await HTTPClientMock().any { _ in try .stub(body: Empty()) }
 
     let sut = FunctionsClient(
       url: url,
@@ -70,12 +70,12 @@ final class FunctionsClientTests: XCTestCase {
 
     try await sut.invoke("hello-world", options: .init(method: .delete))
 
-    let request = http.receivedRequests.last
+    let request = await http.receivedRequests.last
     XCTAssertEqual(request?.method, .delete)
   }
 
   func testInvokeWithQuery() async throws {
-    let http = HTTPClientMock().any { _ in try .stub(body: Empty()) }
+    let http = await HTTPClientMock().any { _ in try .stub(body: Empty()) }
 
     let sut = FunctionsClient(
       url: url,
@@ -91,12 +91,12 @@ final class FunctionsClientTests: XCTestCase {
       )
     )
 
-    let request = http.receivedRequests.last
+    let request = await http.receivedRequests.last
     XCTAssertEqual(request?.urlRequest.url?.query, "key=value")
   }
 
   func testInvokeWithRegionDefinedInClient() async throws {
-    let http = HTTPClientMock()
+    let http = await HTTPClientMock()
       .any { _ in try .stub(body: Empty()) }
 
     let sut = FunctionsClient(
@@ -108,11 +108,12 @@ final class FunctionsClientTests: XCTestCase {
 
     try await sut.invoke("hello-world")
 
-    XCTAssertEqual(http.receivedRequests.last?.headers["x-region"], "ca-central-1")
+    let request = await http.receivedRequests.last
+    XCTAssertEqual(request?.headers["x-region"], "ca-central-1")
   }
 
   func testInvokeWithRegion() async throws {
-    let http = HTTPClientMock()
+    let http = await HTTPClientMock()
       .any { _ in try .stub(body: Empty()) }
 
     let sut = FunctionsClient(
@@ -124,11 +125,12 @@ final class FunctionsClientTests: XCTestCase {
 
     try await sut.invoke("hello-world", options: .init(region: .caCentral1))
 
-    XCTAssertEqual(http.receivedRequests.last?.headers["x-region"], "ca-central-1")
+    let request = await http.receivedRequests.last
+    XCTAssertEqual(request?.headers["x-region"], "ca-central-1")
   }
 
   func testInvokeWithoutRegion() async throws {
-    let http = HTTPClientMock()
+    let http = await HTTPClientMock()
       .any { _ in try .stub(body: Empty()) }
 
     let sut = FunctionsClient(
@@ -140,11 +142,12 @@ final class FunctionsClientTests: XCTestCase {
 
     try await sut.invoke("hello-world")
 
-    XCTAssertNil(http.receivedRequests.last?.headers["x-region"])
+    let request = await http.receivedRequests.last
+    XCTAssertNil(request?.headers["x-region"])
   }
 
   func testInvoke_shouldThrow_URLError_badServerResponse() async {
-    let sut = FunctionsClient(
+    let sut = await FunctionsClient(
       url: url,
       headers: ["Apikey": apiKey],
       region: nil,
@@ -162,7 +165,7 @@ final class FunctionsClientTests: XCTestCase {
   }
 
   func testInvoke_shouldThrow_FunctionsError_httpError() async {
-    let sut = FunctionsClient(
+    let sut = await FunctionsClient(
       url: url,
       headers: ["Apikey": apiKey],
       region: nil,
@@ -180,9 +183,7 @@ final class FunctionsClientTests: XCTestCase {
   }
 
   func testInvoke_shouldThrow_FunctionsError_relayError() async {
-    let url = URL(string: "http://localhost:5432/functions/v1/hello_world")!
-
-    let sut = FunctionsClient(
+    let sut = await FunctionsClient(
       url: self.url,
       headers: ["Apikey": apiKey],
       region: nil,
