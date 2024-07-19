@@ -13,27 +13,20 @@ final class AuthViewModel {
   var email = ""
   var toast: ToastState?
 
-  func signInButtonTapped() {
-    Task {
-      do {
-        try await supabase.auth.signInWithOTP(
-          email: email,
-          redirectTo: URL(string: "slackclone://sign-in")
-        )
-        toast = ToastState(status: .success, title: "Check your inbox.")
-      } catch {
-        toast = ToastState(status: .error, title: "Error", description: error.localizedDescription)
-      }
-    }
-  }
+  func signInButtonTapped() async {
+    do {
+      try await supabase.auth.signInWithOTP(email: email)
+      toast = ToastState(status: .success, title: "Check your inbox.")
 
-  func handle(_ url: URL) {
-    Task {
-      do {
-        try await supabase.auth.session(from: url)
-      } catch {
-        toast = ToastState(status: .error, title: "Error", description: error.localizedDescription)
-      }
+      try? await Task.sleep(for: .seconds(1))
+
+      #if os(macOS)
+        NSWorkspace.shared.open(URL(string: "http://127.0.0.1:54324")!)
+      #else
+        await UIApplication.shared.open(URL(string: "http://127.0.0.1:54324")!)
+      #endif
+    } catch {
+      toast = ToastState(status: .error, title: "Error", description: error.localizedDescription)
     }
   }
 }
@@ -54,12 +47,11 @@ struct AuthView: View {
           .autocorrectionDisabled()
       }
       Button("Sign in with Magic Link") {
-        model.signInButtonTapped()
+        Task { await model.signInButtonTapped() }
       }
     }
     .padding()
     .toast(state: $model.toast)
-    .onOpenURL { model.handle($0) }
   }
 }
 

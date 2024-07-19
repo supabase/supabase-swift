@@ -10,13 +10,12 @@
 			<key>CFBundleURLIconFile</key>
 			<string></string>
 			<key>CFBundleURLName</key>
-			<string>com.supabase.SlackClone</string>
+			<string>com.supabase.slack-clone</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>slackclone</string>
+				<string>com.supabase.slack-clone</string>
 			</array>
 		</dict>
-		<dict/>
 	</array>
 </dict>
 </plist>
