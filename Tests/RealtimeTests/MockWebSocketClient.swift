@@ -93,5 +93,5 @@ final class MockWebSocketClient: WebSocketClient {
     return stream
   }
 
-  func disconnect(closeCode _: URLSessionWebSocketTask.CloseCode) {}
+  func disconnect() {}
 }
