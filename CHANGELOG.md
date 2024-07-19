@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.3](https://github.com/supabase/supabase-swift/compare/v2.14.2...v2.14.3) (2024-07-19)
+
+
+### Bug Fixes
+
+* **realtime:** crash when connecting socket ([#470](https://github.com/supabase/supabase-swift/issues/470)) ([5cf4f56](https://github.com/supabase/supabase-swift/commit/5cf4f563c0cbc551d8e60f5e7f8a45034644580c))
+
 ## [2.14.2](https://github.com/supabase/supabase-swift/compare/v2.14.1...v2.14.2) (2024-07-13)
 
 
