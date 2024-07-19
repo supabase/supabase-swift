@@ -184,7 +184,7 @@ final class FunctionsClientTests: XCTestCase {
 
   func testInvoke_shouldThrow_FunctionsError_relayError() async {
     let sut = await FunctionsClient(
-      url: self.url,
+      url: url,
       headers: ["Apikey": apiKey],
       region: nil,
       http: HTTPClientMock().any { _ in

@@ -14,7 +14,7 @@ package actor HTTPClientMock: HTTPClientType {
   package struct MockNotFound: Error {}
 
   private var mocks = [@Sendable (HTTPRequest) async throws -> HTTPResponse?]()
-  
+
   /// Requests received by this client in order.
   package var receivedRequests: [HTTPRequest] = []
 
@@ -47,7 +47,7 @@ package actor HTTPClientMock: HTTPClientType {
   package func send(_ request: HTTPRequest) async throws -> HTTPResponse {
     receivedRequests.append(request)
 
-    for mock in mocks{
+    for mock in mocks {
       do {
         if let response = try await mock(request) {
           returnedResponses.append(.success(response))

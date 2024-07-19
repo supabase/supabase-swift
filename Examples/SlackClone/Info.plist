@@ -13,10 +13,9 @@
 			<string>com.supabase.SlackClone</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>slackclone</string>
+				<string>com.supabase.SlackClone</string>
 			</array>
 		</dict>
-		<dict/>
 	</array>
 </dict>
 </plist>

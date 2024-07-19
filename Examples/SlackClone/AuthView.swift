@@ -16,10 +16,7 @@ final class AuthViewModel {
   func signInButtonTapped() {
     Task {
       do {
-        try await supabase.auth.signInWithOTP(
-          email: email,
-          redirectTo: URL(string: "slackclone://sign-in")
-        )
+        try await supabase.auth.signInWithOTP(email: email)
         toast = ToastState(status: .success, title: "Check your inbox.")
       } catch {
         toast = ToastState(status: .error, title: "Error", description: error.localizedDescription)
