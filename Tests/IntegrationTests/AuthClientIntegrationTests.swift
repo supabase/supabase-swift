@@ -220,7 +220,7 @@ final class AuthClientIntegrationTests: XCTestCase {
       let email = mockEmail()
       let user = try await authClient.update(user: UserAttributes(email: email))
 
-      XCTAssertEqual(user.newEmail, email)
+      XCTAssertEqual(user.email, email)
     }
   }
 
