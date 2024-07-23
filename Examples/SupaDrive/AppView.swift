@@ -13,14 +13,16 @@ import IdentifiedCollections
 @MainActor
 @Observable
 final class AppModel {
-  var panels: IdentifiedArrayOf<PanelModel> {
+  let root: PanelModel
+
+  var panels: IdentifiedArrayOf<PanelModel> = [] {
     didSet {
       bindPanelModels()
     }
   }
 
-  init(panels: IdentifiedArrayOf<PanelModel>) {
-    self.panels = panels
+  init(root: PanelModel) {
+    self.root = root
     bindPanelModels()
   }
 
@@ -33,22 +35,15 @@ final class AppModel {
   }
 
   var selectedFile: FileObject? {
-    panels.last?.selectedItem
+   nil// panels.last?.selectedItem
   }
 
   private func bindPanelModels() {
-    for panel in panels {
+    for panel in [root] + panels {
       panel.onSelectItem = { [weak self, weak panel] item in
         guard let self, let panel else { return }
 
-//        self.panels.append(PanelModel(path: self.path.appending))
-//
-//        if let name = item.name, item.id == nil {
-//          self.panels.replaceSubrange(
-//            (index + 1)...,
-//            with: [PanelModel(path: self.path.appending("/\(name)"))]
-//          )
-//        }
+        self.panels.append(PanelModel(path: panel.path.appending("/\(item.name!)")))
       }
     }
   }
@@ -58,35 +53,11 @@ struct AppView: View {
   @Bindable var model: AppModel
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      breadcrump
-
-      ScrollView(.horizontal) {
-        HStack {
-          ForEach(model.panels) { panel in
-            PanelView(
-              model: panel
-//              model: PanelModel(path: path[0 ... pathIndex].joined(separator: "/"))
-//              path: path[0 ... pathIndex].joined(separator: "/"),
-//              selectedItem: Binding(
-//                get: {
-//                  selectedItemPerPath[path[pathIndex]]
-//                },
-//                set: { newValue in
-//                  selectedItemPerPath[path[pathIndex]] = newValue
-//
-//                  if let newValue, let name = newValue.name, newValue.id == nil {
-//                    path.replaceSubrange((pathIndex + 1)..., with: [name])
-//                  } else {
-//                    path.replaceSubrange((pathIndex + 1)..., with: [])
-//                  }
-//                }
-//              )
-            )
-            .frame(width: 200)
-          }
+    NavigationStack(path: $model.panels) {
+      PanelView(model: model.root)
+        .navigationDestination(for: PanelModel.self) { model in
+          PanelView(model: model)
         }
-      }
     }
     .overlay(alignment: .trailing) {
       if let selectedFile = model.selectedFile {
@@ -110,24 +81,8 @@ struct AppView: View {
         .transition(.move(edge: .trailing))
       }
     }
-    .animation(.default, value: model.path)
-    .animation(.default, value: model.selectedFile)
-  }
-
-  var breadcrump: some View {
-    HStack {
-      ForEach(Array(zip(model.pathComponents.indices, model.pathComponents)), id: \.0) { idx, path in
-        Button(path) {
-//          self.path.replaceSubrange((idx + 1)..., with: [])
-        }
-        .buttonStyle(.plain)
-
-//        if idx != self.path.indices.last {
-//          Text(">")
-//        }
-      }
-    }
-    .padding()
+//    .animation(.default, value: model.path)
+//    .animation(.default, value: model.selectedFile)
   }
 }
 
@@ -138,9 +93,17 @@ struct DragValue: Codable {
 
 @MainActor
 @Observable
-final class PanelModel: Identifiable {
+final class PanelModel: Identifiable, Hashable {
+  nonisolated func hash(into hasher: inout Hasher) {
+    hasher.combine(ObjectIdentifier(self))
+  }
+
+  nonisolated static func == (lhs: PanelModel, rhs: PanelModel) -> Bool {
+    lhs === rhs
+  }
+
   let path: String
-  var selectedItem: FileObject?
+  var selectedItem: FileObject.ID?
 
   var items: [FileObject] = []
 
@@ -160,15 +123,21 @@ final class PanelModel: Identifiable {
     }
   }
 
-  func didSelectItem(_ item: FileObject) {
-    self.selectedItem = item
+  func onPrimaryAction(_ itemID: FileObject.ID) {
+    guard let item = items.first(where: { $0.id == itemID }) else { return }
     onSelectItem(item)
   }
+
+//  func didSelectItem(_ item: FileObject) {
+//    self.selectedItem = item
+//    onSelectItem(item)
+//  }
 
   func newFolderButtonTapped() async {
     do {
       try await supabase.storage.from("main")
         .upload(path: "\(path)/Untiltled/.dummy", file: Data())
+      await load()
     } catch {
 
     }
@@ -181,6 +150,7 @@ final class PanelModel: Identifiable {
       let file = try Data(contentsOf: url)
       try await supabase.storage.from("main")
         .upload(path: "\(self.path)/\(path)", file: file)
+      await load()
     } catch {}
   }
 }
@@ -191,33 +161,58 @@ struct PanelView: View {
   @State private var isDraggingOver = false
 
   var body: some View {
-    List {
-      ForEach(model.items) { item in
-        Text(item.name ?? "")
-          .bold(model.selectedItem == item)
-          .onTapGesture {
-            model.didSelectItem(item)
-          }
-          .onDrag {
-            let data = try! JSONEncoder().encode(DragValue(path: model.path, object: item))
-            let string = String(decoding: data, as: UTF8.self)
-            return NSItemProvider(object: string as NSString)
-          }
+    Table(model.items, selection: $model.selectedItem) {
+      TableColumn("Name") { item in
+        Text(item.name ?? "No name")
       }
-      .onInsert(of: ["public.text"]) { index, items in
-        for item in items {
-          Task {
-            guard let data = try await item.loadItem(forTypeIdentifier: "public.text") as? Data,
-                  let value = try? JSONDecoder().decode(DragValue.self, from: data) else {
-              return
-            }
 
-            self.model.items.insert(value.object, at: index)
-          }
+      TableColumn("Date modified") { item in
+        if let lastModifiedStringValue = item.metadata?["lastModified"]?.stringValue,
+           let lastModified = try? Date(lastModifiedStringValue, strategy: .iso8601.day().month().year().dateTimeSeparator(.standard).time(includingFractionalSeconds: true))
+        {
+          Text(lastModified.formatted(date: .abbreviated, time: .shortened))
+        } else {
+          Text("-")
         }
-        print(index, items)
+      }
+
+      TableColumn("Size") { item in
+        if let sizeRawValue = item.metadata?["size"]?.intValue {
+          Text(sizeRawValue.formatted(.byteCount(style: .file)))
+        } else {
+          Text("-")
+        }
       }
     }
+    .contextMenu(
+      forSelectionType: FileObject.ID.self,
+      menu: { items in
+        Button("New folder") {
+          Task {
+            await model.newFolderButtonTapped()
+          }
+        }
+      },
+      primaryAction: { items in
+        guard let item = items.first else { return }
+
+        model.onPrimaryAction(item)
+      }
+    )
+//    .onInsert(of: ["public.text"]) { index, items in
+//      for item in items {
+//        Task {
+//          guard let data = try await item.loadItem(forTypeIdentifier: "public.text") as? Data,
+//                let value = try? JSONDecoder().decode(DragValue.self, from: data) else {
+//            return
+//          }
+//
+//          self.model.items.insert(value.object, at: index)
+//        }
+//      }
+//      print(index, items)
+//    }
+    .navigationTitle(model.path)
     .task {
       await model.load()
     }
@@ -240,16 +235,5 @@ struct PanelView: View {
         Color.gray.opacity(0.2)
       }
     }
-    .contextMenu {
-      Button("New folder") {
-        Task {
-          await model.newFolderButtonTapped()
-        }
-      }
-    }
   }
-}
-
-#Preview {
-  AppView(model: AppModel(panels: []))
 }
