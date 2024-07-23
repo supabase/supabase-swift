@@ -20,7 +20,7 @@
          location = "group:Functions.xctestplan">
       </FileRef>
       <FileRef
-         location = "group:IntegrationTests.xctestplan">
+         location = "group:Integration.xctestplan">
       </FileRef>
       <FileRef
          location = "group:AllTests.xctestplan">

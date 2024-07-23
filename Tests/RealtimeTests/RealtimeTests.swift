@@ -85,7 +85,7 @@ final class RealtimeTests: XCTestCase {
     ws.mockReceive(.messagesSubscribed)
     await channel.subscribe()
 
-    XCTAssertNoDifference(
+    expectNoDifference(
       ws.sentMessages,
       [.subscribeToMessages(ref: "1", joinRef: "1")]
     )
@@ -155,7 +155,7 @@ final class RealtimeTests: XCTestCase {
       ),
     ]
 
-    XCTAssertNoDifference(
+    expectNoDifference(
       joinSentMessages,
       expectedMessages
     )

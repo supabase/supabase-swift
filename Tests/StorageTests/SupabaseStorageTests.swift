@@ -80,7 +80,7 @@ final class SupabaseStorageTests: XCTestCase {
       expiresIn: 60
     )
 
-    XCTAssertNoDifference(
+    expectNoDifference(
       urls.map(\.absoluteString),
       [
         "\(supabaseURL.absoluteString)/sign/file1.txt?token=abc.def.ghi",

@@ -156,7 +156,7 @@ final class CallbackManagerTests: XCTestCase {
       data: .delete(deleteSpecificUserAction)
     )
 
-    XCTAssertNoDifference(
+    expectNoDifference(
       receivedActions.value,
       [
         .update(updateUserAction),
@@ -212,8 +212,8 @@ final class CallbackManagerTests: XCTestCase {
       rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
 
-    XCTAssertNoDifference(receivedAction.value?.joins, joins)
-    XCTAssertNoDifference(receivedAction.value?.leaves, leaves)
+    expectNoDifference(receivedAction.value?.joins, joins)
+    expectNoDifference(receivedAction.value?.leaves, leaves)
   }
 }
 

@@ -57,7 +57,7 @@ final class SessionManagerTests: XCTestCase {
       try Dependencies[clientID].sessionStorage.store(session)
 
       let returnedSession = try await sut.session()
-      XCTAssertNoDifference(returnedSession, session)
+      expectNoDifference(returnedSession, session)
     }
   }
 

@@ -70,7 +70,7 @@ final class RealtimeIntegrationTests: XCTestCase {
 
       await fulfillment(of: [expectation], timeout: 0.5)
 
-      XCTAssertNoDifference(
+      expectNoDifference(
         receivedMessages.value,
         [
           [
@@ -139,7 +139,7 @@ final class RealtimeIntegrationTests: XCTestCase {
 
       let joins = try receivedPresenceChanges.value.map { try $0.decodeJoins(as: UserState.self) }
       let leaves = try receivedPresenceChanges.value.map { try $0.decodeLeaves(as: UserState.self) }
-      XCTAssertNoDifference(
+      expectNoDifference(
         joins,
         [
           [], // This is the first PRESENCE_STATE event.
@@ -149,7 +149,7 @@ final class RealtimeIntegrationTests: XCTestCase {
         ]
       )
 
-      XCTAssertNoDifference(
+      expectNoDifference(
         leaves,
         [
           [], // This is the first PRESENCE_STATE event.
@@ -216,29 +216,29 @@ final class RealtimeIntegrationTests: XCTestCase {
 //      $0.oldRecord["key"]?.stringValue
 //    }
 //
-//    XCTAssertNoDifference(insertedEntries, [Entry(key: key, value: "value1")])
-//    XCTAssertNoDifference(updatedEntries, [Entry(key: key, value: "value2")])
-//    XCTAssertNoDifference(deletedEntryIds, [key])
+//    expectNoDifference(insertedEntries, [Entry(key: key, value: "value1")])
+//    expectNoDifference(updatedEntries, [Entry(key: key, value: "value2")])
+//    expectNoDifference(deletedEntryIds, [key])
 //
 //    let receivedAnyActions = await receivedAnyActionsTask.value
 //    XCTAssertEqual(receivedAnyActions.count, 3)
 //
 //    if case let .insert(action) = receivedAnyActions[0] {
 //      let record = try action.decodeRecord(as: Entry.self, decoder: JSONDecoder())
-//      XCTAssertNoDifference(record, Entry(key: key, value: "value1"))
+//      expectNoDifference(record, Entry(key: key, value: "value1"))
 //    } else {
 //      XCTFail("Expected a `AnyAction.insert` on `receivedAnyActions[0]`")
 //    }
 //
 //    if case let .update(action) = receivedAnyActions[1] {
 //      let record = try action.decodeRecord(as: Entry.self, decoder: JSONDecoder())
-//      XCTAssertNoDifference(record, Entry(key: key, value: "value2"))
+//      expectNoDifference(record, Entry(key: key, value: "value2"))
 //    } else {
 //      XCTFail("Expected a `AnyAction.update` on `receivedAnyActions[1]`")
 //    }
 //
 //    if case let .delete(action) = receivedAnyActions[2] {
-//      XCTAssertNoDifference(key, action.oldRecord["key"]?.stringValue)
+//      expectNoDifference(key, action.oldRecord["key"]?.stringValue)
 //    } else {
 //      XCTFail("Expected a `AnyAction.delete` on `receivedAnyActions[2]`")
 //    }

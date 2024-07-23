@@ -73,8 +73,8 @@ final class AuthClientTests: XCTestCase {
     try Dependencies[sut.clientID].sessionStorage.store(session)
 
     let stateChange = await sut.authStateChanges.first { _ in true }
-    XCTAssertNoDifference(stateChange?.event, .initialSession)
-    XCTAssertNoDifference(stateChange?.session, session)
+    expectNoDifference(stateChange?.event, .initialSession)
+    expectNoDifference(stateChange?.session, session)
   }
 
   func testSignOut() async throws {
@@ -139,8 +139,8 @@ final class AuthClientTests: XCTestCase {
     let events = await eventsTask.value.map(\.event)
     let sessions = await eventsTask.value.map(\.session)
 
-    XCTAssertNoDifference(events, [.initialSession, .signedOut])
-    XCTAssertNoDifference(sessions, [.validSession, nil])
+    expectNoDifference(events, [.initialSession, .signedOut])
+    expectNoDifference(sessions, [.validSession, nil])
 
     let sessionRemoved = try Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
@@ -170,8 +170,8 @@ final class AuthClientTests: XCTestCase {
     let events = await eventsTask.value.map(\.event)
     let sessions = await eventsTask.value.map(\.session)
 
-    XCTAssertNoDifference(events, [.initialSession, .signedOut])
-    XCTAssertNoDifference(sessions, [validSession, nil])
+    expectNoDifference(events, [.initialSession, .signedOut])
+    expectNoDifference(sessions, [validSession, nil])
 
     let sessionRemoved = try Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
@@ -201,8 +201,8 @@ final class AuthClientTests: XCTestCase {
     let events = await eventsTask.value.map(\.event)
     let sessions = await eventsTask.value.map(\.session)
 
-    XCTAssertNoDifference(events, [.initialSession, .signedOut])
-    XCTAssertNoDifference(sessions, [validSession, nil])
+    expectNoDifference(events, [.initialSession, .signedOut])
+    expectNoDifference(sessions, [validSession, nil])
 
     let sessionRemoved = try Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
@@ -287,7 +287,7 @@ final class AuthClientTests: XCTestCase {
 
     let response = try await sut.getLinkIdentityURL(provider: .github)
 
-    XCTAssertNoDifference(
+    expectNoDifference(
       response,
       OAuthResponse(
         provider: .github,

@@ -69,7 +69,7 @@ final class SupabaseClientTests: XCTestCase {
         "Authorization": "Bearer ANON_KEY",
       ]
     )
-    XCTAssertNoDifference(client._headers.dictionary, client.headers)
+    expectNoDifference(client._headers.dictionary, client.headers)
 
     XCTAssertEqual(client.functions.region, "ap-northeast-1")
 
@@ -78,7 +78,7 @@ final class SupabaseClientTests: XCTestCase {
 
     let realtimeOptions = client.realtimeV2.options
     let expectedRealtimeHeader = client._headers.merged(with: ["custom_realtime_header_key": "custom_realtime_header_value"])
-    XCTAssertNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
+    expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
 
     XCTAssertFalse(client.auth.configuration.autoRefreshToken)
