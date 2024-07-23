@@ -42,9 +42,9 @@ final class AuthClientIntegrationTests: XCTestCase {
       refreshToken: sessionFromClient1.refreshToken
     )
 
-    XCTAssertNoDifference(sessionFromClient1.accessToken, sessionFromClient2.accessToken)
-    XCTAssertNoDifference(sessionFromClient1.refreshToken, sessionFromClient2.refreshToken)
-    XCTAssertNoDifference(sessionFromClient1.expiresAt, sessionFromClient2.expiresAt)
+    expectNoDifference(sessionFromClient1.accessToken, sessionFromClient2.accessToken)
+    expectNoDifference(sessionFromClient1.refreshToken, sessionFromClient2.refreshToken)
+    expectNoDifference(sessionFromClient1.expiresAt, sessionFromClient2.expiresAt)
   }
 
   func testSignUpAndSignInWithEmail() async throws {
@@ -168,7 +168,7 @@ final class AuthClientIntegrationTests: XCTestCase {
   func testUserIdentities() async throws {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
     let identities = try await authClient.userIdentities()
-    XCTAssertNoDifference(session.user.identities, identities)
+    expectNoDifference(session.user.identities, identities)
   }
 
   func testUnlinkIdentity_withOnlyOneIdentity() async throws {
@@ -327,7 +327,7 @@ final class AuthClientIntegrationTests: XCTestCase {
 
     await fulfillment(of: [expectation], timeout: 0.5)
 
-    XCTAssertNoDifference(events, receivedEvents.value)
+    expectNoDifference(events, receivedEvents.value)
 
     token.remove()
   }

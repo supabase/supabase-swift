@@ -67,7 +67,7 @@ final class AnyJSONTests: XCTestCase {
     let data = try XCTUnwrap(jsonString.data(using: .utf8))
     let decodedJSON = try AnyJSON.decoder.decode(AnyJSON.self, from: data)
 
-    XCTAssertNoDifference(decodedJSON, jsonObject)
+    expectNoDifference(decodedJSON, jsonObject)
   }
 
   // Commented out as this is failing on CI.
@@ -78,11 +78,11 @@ final class AnyJSONTests: XCTestCase {
   //    let data = try encoder.encode(jsonObject)
   //    let decodedJSONString = try XCTUnwrap(String(data: data, encoding: .utf8))
   //
-  //    XCTAssertNoDifference(decodedJSONString, jsonString)
+  //    expectNoDifference(decodedJSONString, jsonString)
   //  }
 
   func testInitFromCodable() {
-    XCTAssertNoDifference(try AnyJSON(jsonObject), jsonObject)
+    expectNoDifference(try AnyJSON(jsonObject), jsonObject)
 
     let codableValue = CodableValue(
       integer: 1,
@@ -104,8 +104,8 @@ final class AnyJSONTests: XCTestCase {
       "any_json": jsonObject,
     ]
 
-    XCTAssertNoDifference(try AnyJSON(codableValue), json)
-    XCTAssertNoDifference(codableValue, try json.decode(as: CodableValue.self))
+    expectNoDifference(try AnyJSON(codableValue), json)
+    expectNoDifference(codableValue, try json.decode(as: CodableValue.self))
   }
 }
 
