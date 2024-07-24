@@ -778,6 +778,11 @@ public final class AuthClient: Sendable {
     return session
   }
 
+  /// Provides a synchronous means of instantly invalidating the current local session.
+  public func invalidateCurrentSession() {
+    try? sessionStorage.delete()
+  }
+
   /// Signs out the current user, if there is a logged in user.
   ///
   /// If using ``SignOutScope/others`` scope, no ``AuthChangeEvent/signedOut`` event is fired.
