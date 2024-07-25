@@ -213,40 +213,59 @@ public final class RealtimeChannelV2: Sendable {
         let topic: String
         let event: String
         let payload: JSONObject
+        let `private`: Bool
       }
 
-      _ = try? await socket.httpSend(
-        HTTPRequest(
-          url: socket.broadcastURL(),
-          method: .post,
-          headers: [
-            "apikey": socket.apiKey() ?? "",
-            "content-type": "application/json",
-          ],
-          body: JSONEncoder().encode(
-            Message(
-              topic: topic,
-              event: event,
-              payload: message
+      var headers = HTTPHeaders(["content-type": "application/json"])
+      if let apiKey = socket.apiKey() {
+        headers["apikey"] = apiKey
+      }
+      if let accessToken = socket.accessToken() {
+        headers["authorization"] = "Bearer \(accessToken)"
+      }
+
+      let task = Task { [headers] in
+        _ = try? await socket.httpSend(
+          HTTPRequest(
+            url: socket.broadcastURL(),
+            method: .post,
+            headers: headers,
+            body: JSONEncoder().encode(
+              [
+                "messages": [
+                  Message(
+                    topic: topic,
+                    event: event,
+                    payload: message,
+                    private: config.isPrivate
+                  ),
+                ],
+              ]
             )
           )
         )
+      }
+
+      if config.broadcast.acknowledgeBroadcasts {
+        try? await withTimeout(interval: socket.options().timeoutInterval) {
+          await task.value
+        }
+      }
+    } else {
+      await push(
+        RealtimeMessageV2(
+          joinRef: mutableState.joinRef,
+          ref: socket.makeRef().description,
+          topic: topic,
+          event: ChannelEvent.broadcast,
+          payload: [
+            "type": "broadcast",
+            "event": .string(event),
+            "payload": .object(message),
+          ]
+        )
       )
     }
-
-    await push(
-      RealtimeMessageV2(
-        joinRef: mutableState.joinRef,
-        ref: socket.makeRef().description,
-        topic: topic,
-        event: ChannelEvent.broadcast,
-        payload: [
-          "type": "broadcast",
-          "event": .string(event),
-          "payload": .object(message),
-        ]
-      )
-    )
   }
 
   public func track(_ state: some Codable) async throws {
