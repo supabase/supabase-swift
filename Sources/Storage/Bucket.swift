@@ -3,17 +3,22 @@ import Foundation
 public struct Bucket: Identifiable, Hashable, Codable, Sendable {
   public var id: String
   public var name: String
-  public var owner: String
-  public var isPublic: Bool
-  public var createdAt: Date
-  public var updatedAt: Date
+  public var owner: String?
+  public var isPublic: Bool?
+  public var createdAt: Date?
+  public var updatedAt: Date?
   public var allowedMimeTypes: [String]?
-  public var fileSizeLimit: Int?
+  public var fileSizeLimit: Int64?
 
   public init(
-    id: String, name: String, owner: String, isPublic: Bool, createdAt: Date, updatedAt: Date,
-    allowedMimeTypes: [String]?,
-    fileSizeLimit: Int?
+    id: String,
+    name: String,
+    owner: String? = nil,
+    isPublic: Bool? = nil,
+    createdAt: Date? = nil,
+    updatedAt: Date? = nil,
+    allowedMimeTypes: [String]? = nil,
+    fileSizeLimit: Int64? = nil
   ) {
     self.id = id
     self.name = name
