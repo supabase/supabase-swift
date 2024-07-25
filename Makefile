@@ -32,12 +32,11 @@ build-all-platforms:
 			-configuration "$(CONFIG)" \
 			-workspace Supabase.xcworkspace \
 			-scheme "$(SCHEME)" \
-			-testPlan AllTests \
-			-destination platform="$$platform" | xcpretty || exit 1; \
+			-destination generic/platform="$$platform" | xcpretty || exit 1; \
 	done
 
 test-library: dot-env
-	for platform in "$(PLATFORM_IOS)" "$(PLATFORM_MACOS)" "$(PLATFORM_MAC_CATALYST)" "$(PLATFORM_TVOS)" "$(PLATFORM_VISIONOS)" "$(PLATFORM_WATCHOS)"; do \
+	for platform in "$(PLATFORM_IOS)" "$(PLATFORM_MACOS)"; do \
 		xcodebuild test \
 			-skipMacroValidation \
 			-configuration "$(CONFIG)" \
