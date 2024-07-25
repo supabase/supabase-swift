@@ -5,6 +5,10 @@ import Helpers
 import TestHelpers
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class RealtimeTests: XCTestCase {
   let url = URL(string: "https://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"

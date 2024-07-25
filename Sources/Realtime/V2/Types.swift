@@ -8,6 +8,10 @@
 import Foundation
 import Helpers
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// Options for initializing ``RealtimeClientV2``.
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPHeaders
