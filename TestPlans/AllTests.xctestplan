@@ -57,8 +57,8 @@
     {
       "target" : {
         "containerPath" : "container:",
-        "identifier" : "_HelpersTests",
-        "name" : "_HelpersTests"
+        "identifier" : "HelpersTests",
+        "name" : "HelpersTests"
       }
     }
   ],

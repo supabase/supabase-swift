@@ -105,13 +105,6 @@ public struct RealtimeChannelOptions {
   }
 }
 
-/// Represents the different status of a push
-public enum PushStatus: String, Sendable {
-  case ok
-  case error
-  case timeout
-}
-
 public enum RealtimeSubscribeStates {
   case subscribed
   case timedOut

@@ -82,7 +82,7 @@ final class AnyJSONTests: XCTestCase {
   //  }
 
   func testInitFromCodable() {
-    expectNoDifference(try AnyJSON(jsonObject), jsonObject)
+    try expectNoDifference(AnyJSON(jsonObject), jsonObject)
 
     let codableValue = CodableValue(
       integer: 1,
@@ -104,8 +104,8 @@ final class AnyJSONTests: XCTestCase {
       "any_json": jsonObject,
     ]
 
-    expectNoDifference(try AnyJSON(codableValue), json)
-    expectNoDifference(codableValue, try json.decode(as: CodableValue.self))
+    try expectNoDifference(AnyJSON(codableValue), json)
+    try expectNoDifference(codableValue, json.decode(as: CodableValue.self))
   }
 }
 

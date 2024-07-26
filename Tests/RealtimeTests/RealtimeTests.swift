@@ -5,6 +5,10 @@ import Helpers
 import TestHelpers
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class RealtimeTests: XCTestCase {
   let url = URL(string: "https://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
@@ -16,12 +20,14 @@ final class RealtimeTests: XCTestCase {
   }
 
   var ws: MockWebSocketClient!
+  var http: HTTPClientMock!
   var sut: RealtimeClientV2!
 
   override func setUp() {
     super.setUp()
 
     ws = MockWebSocketClient()
+    http = HTTPClientMock()
     sut = RealtimeClientV2(
       url: url,
       options: RealtimeClientOptions(
@@ -31,7 +37,8 @@ final class RealtimeTests: XCTestCase {
         timeoutInterval: 2,
         logger: TestLogger()
       ),
-      ws: ws
+      ws: ws,
+      http: http
     )
   }
 
@@ -230,6 +237,54 @@ final class RealtimeTests: XCTestCase {
         .connected,
         .disconnected,
         .connecting,
+      ]
+    )
+  }
+
+  func testBroadcastWithHTTP() async throws {
+    await http.when {
+      $0.url.path.hasSuffix("broadcast")
+    } return: { _ in
+      HTTPResponse(
+        data: "{}".data(using: .utf8)!,
+        response: HTTPURLResponse(
+          url: self.sut.broadcastURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+
+    let channel = sut.channel("public:messages") {
+      $0.broadcast.acknowledgeBroadcasts = true
+    }
+
+    try await channel.broadcast(event: "test", message: ["value": 42])
+
+    let request = await http.receivedRequests.last
+    expectNoDifference(
+      request?.headers,
+      [
+        "content-type": "application/json",
+        "apikey": "anon.api.key",
+        "authorization": "Bearer anon.api.key",
+      ]
+    )
+
+    let body = try XCTUnwrap(request?.body)
+    let json = try JSONDecoder().decode(JSONObject.self, from: body)
+    expectNoDifference(
+      json,
+      [
+        "messages": [
+          [
+            "topic": "realtime:public:messages",
+            "event": "test",
+            "payload": ["value": 42],
+            "private": false,
+          ],
+        ],
       ]
     )
   }

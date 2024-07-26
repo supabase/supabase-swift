@@ -36,131 +36,147 @@ final class RealtimeIntegrationTests: XCTestCase {
     logger: Logger()
   )
 
-  func testBroadcast() async throws {
-    try await withMainSerialExecutor {
-      let expectation = expectation(description: "receivedBroadcastMessages")
-      expectation.expectedFulfillmentCount = 3
-
-      let channel = realtime.channel("integration") {
-        $0.broadcast.receiveOwnBroadcasts = true
-      }
-
-      let receivedMessages = LockIsolated<[JSONObject]>([])
-
-      Task {
-        for await message in channel.broadcastStream(event: "test") {
-          receivedMessages.withValue {
-            $0.append(message)
-          }
-          expectation.fulfill()
-        }
-      }
-
-      await Task.yield()
-
-      await channel.subscribe()
-
-      struct Message: Codable {
-        var value: Int
-      }
-
-      try await channel.broadcast(event: "test", message: Message(value: 1))
-      try await channel.broadcast(event: "test", message: Message(value: 2))
-      try await channel.broadcast(event: "test", message: ["value": 3, "another_value": 42])
-
-      await fulfillment(of: [expectation], timeout: 0.5)
-
-      expectNoDifference(
-        receivedMessages.value,
-        [
-          [
-            "event": "test",
-            "payload": [
-              "value": 1,
-            ],
-            "type": "broadcast",
-          ],
-          [
-            "event": "test",
-            "payload": [
-              "value": 2,
-            ],
-            "type": "broadcast",
-          ],
-          [
-            "event": "test",
-            "payload": [
-              "value": 3,
-              "another_value": 42,
-            ],
-            "type": "broadcast",
-          ],
-        ]
-      )
-
-      await channel.unsubscribe()
+  override func invokeTest() {
+    withMainSerialExecutor {
+      super.invokeTest()
     }
   }
 
-  func testPresence() async throws {
-    try await withMainSerialExecutor {
-      let channel = realtime.channel("integration") {
-        $0.broadcast.receiveOwnBroadcasts = true
-      }
+  func testBroadcast() async throws {
+    let expectation = expectation(description: "receivedBroadcastMessages")
+    expectation.expectedFulfillmentCount = 3
 
-      let expectation = expectation(description: "presenceChange")
-      expectation.expectedFulfillmentCount = 4
-
-      let receivedPresenceChanges = LockIsolated<[any PresenceAction]>([])
-
-      Task {
-        for await presence in channel.presenceChange() {
-          receivedPresenceChanges.withValue {
-            $0.append(presence)
-          }
-          expectation.fulfill()
-        }
-      }
-
-      await Task.yield()
-
-      await channel.subscribe()
-
-      struct UserState: Codable, Equatable {
-        let email: String
-      }
-
-      try await channel.track(UserState(email: "test@supabase.com"))
-      try await channel.track(["email": "test2@supabase.com"])
-
-      await channel.untrack()
-
-      await fulfillment(of: [expectation], timeout: 0.5)
-
-      let joins = try receivedPresenceChanges.value.map { try $0.decodeJoins(as: UserState.self) }
-      let leaves = try receivedPresenceChanges.value.map { try $0.decodeLeaves(as: UserState.self) }
-      expectNoDifference(
-        joins,
-        [
-          [], // This is the first PRESENCE_STATE event.
-          [UserState(email: "test@supabase.com")],
-          [UserState(email: "test2@supabase.com")],
-          [],
-        ]
-      )
-
-      expectNoDifference(
-        leaves,
-        [
-          [], // This is the first PRESENCE_STATE event.
-          [],
-          [UserState(email: "test@supabase.com")],
-          [UserState(email: "test2@supabase.com")],
-        ]
-      )
-
-      await channel.unsubscribe()
+    let channel = realtime.channel("integration") {
+      $0.broadcast.receiveOwnBroadcasts = true
     }
+
+    let receivedMessages = LockIsolated<[JSONObject]>([])
+
+    Task {
+      for await message in channel.broadcastStream(event: "test") {
+        receivedMessages.withValue {
+          $0.append(message)
+        }
+        expectation.fulfill()
+      }
+    }
+
+    await Task.yield()
+
+    await channel.subscribe()
+
+    struct Message: Codable {
+      var value: Int
+    }
+
+    try await channel.broadcast(event: "test", message: Message(value: 1))
+    try await channel.broadcast(event: "test", message: Message(value: 2))
+    try await channel.broadcast(event: "test", message: ["value": 3, "another_value": 42])
+
+    await fulfillment(of: [expectation], timeout: 0.5)
+
+    expectNoDifference(
+      receivedMessages.value,
+      [
+        [
+          "event": "test",
+          "payload": [
+            "value": 1,
+          ],
+          "type": "broadcast",
+        ],
+        [
+          "event": "test",
+          "payload": [
+            "value": 2,
+          ],
+          "type": "broadcast",
+        ],
+        [
+          "event": "test",
+          "payload": [
+            "value": 3,
+            "another_value": 42,
+          ],
+          "type": "broadcast",
+        ],
+      ]
+    )
+
+    await channel.unsubscribe()
+  }
+
+  func testBroadcastWithUnsubscribedChannel() async throws {
+    let channel = realtime.channel("integration") {
+      $0.broadcast.acknowledgeBroadcasts = true
+    }
+
+    struct Message: Codable {
+      var value: Int
+    }
+
+    try await channel.broadcast(event: "test", message: Message(value: 1))
+    try await channel.broadcast(event: "test", message: Message(value: 2))
+    try await channel.broadcast(event: "test", message: ["value": 3, "another_value": 42])
+  }
+
+  func testPresence() async throws {
+    let channel = realtime.channel("integration") {
+      $0.broadcast.receiveOwnBroadcasts = true
+    }
+
+    let expectation = expectation(description: "presenceChange")
+    expectation.expectedFulfillmentCount = 4
+
+    let receivedPresenceChanges = LockIsolated<[any PresenceAction]>([])
+
+    Task {
+      for await presence in channel.presenceChange() {
+        receivedPresenceChanges.withValue {
+          $0.append(presence)
+        }
+        expectation.fulfill()
+      }
+    }
+
+    await Task.yield()
+
+    await channel.subscribe()
+
+    struct UserState: Codable, Equatable {
+      let email: String
+    }
+
+    try await channel.track(UserState(email: "test@supabase.com"))
+    try await channel.track(["email": "test2@supabase.com"])
+
+    await channel.untrack()
+
+    await fulfillment(of: [expectation], timeout: 0.5)
+
+    let joins = try receivedPresenceChanges.value.map { try $0.decodeJoins(as: UserState.self) }
+    let leaves = try receivedPresenceChanges.value.map { try $0.decodeLeaves(as: UserState.self) }
+    expectNoDifference(
+      joins,
+      [
+        [], // This is the first PRESENCE_STATE event.
+        [UserState(email: "test@supabase.com")],
+        [UserState(email: "test2@supabase.com")],
+        [],
+      ]
+    )
+
+    expectNoDifference(
+      leaves,
+      [
+        [], // This is the first PRESENCE_STATE event.
+        [],
+        [UserState(email: "test@supabase.com")],
+        [UserState(email: "test2@supabase.com")],
+      ]
+    )
+
+    await channel.unsubscribe()
   }
 
   // FIXME: Test getting stuck
