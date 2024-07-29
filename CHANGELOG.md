@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.15.0](https://github.com/supabase/supabase-swift/compare/v2.14.3...v2.15.0) (2024-07-29)
+
+
+### Features
+
+* add third-party auth support ([#423](https://github.com/supabase/supabase-swift/issues/423)) ([d760f2d](https://github.com/supabase/supabase-swift/commit/d760f2d28373e80c16e8e256bf2491780a820afc))
+* **realtime:** send broadcast events through HTTP ([#476](https://github.com/supabase/supabase-swift/issues/476)) ([93f4ff5](https://github.com/supabase/supabase-swift/commit/93f4ff5d3504ec5cac7e51bff4923dab51adb04b))
+
 ## [2.14.3](https://github.com/supabase/supabase-swift/compare/v2.14.2...v2.14.3) (2024-07-19)
 
 
