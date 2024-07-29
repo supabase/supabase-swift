@@ -3,6 +3,7 @@ import ConcurrencyExtras
 import Foundation
 @_exported import Functions
 import Helpers
+import IssueReporting
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
@@ -30,10 +31,12 @@ public final class SupabaseClient: Sendable {
 
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured by access policies.
   public var auth: AuthClient {
-    precondition(
-      options.auth.accessToken == nil,
-      "Supabase Client is configured with the auth.accessToken option, accessing supabase.auth is not possible."
-    )
+    if options.auth.accessToken != nil {
+      reportIssue("""
+      Supabase Client is configured with the auth.accessToken option,
+      accessing supabase.auth is not possible.
+      """)
+    }
     return _auth
   }
 
@@ -390,26 +393,3 @@ public final class SupabaseClient: Sendable {
     await realtimeV2.setAuth(accessToken)
   }
 }
-
-#if DEBUG
-  typealias PreconditionHandler = @Sendable (
-    _ condition: @autoclosure () -> Bool,
-    _ message: @autoclosure () -> String,
-    _ file: StaticString,
-    _ line: UInt
-  ) -> Void
-
-  let overridedPreconditionHandler = LockIsolated<PreconditionHandler?>(nil)
-  func precondition(
-    _ condition: @autoclosure () -> Bool,
-    _ message: @autoclosure () -> String = String(),
-    file: StaticString = #file,
-    line: UInt = #line
-  ) {
-    if let precondition = overridedPreconditionHandler.value {
-      precondition(condition(), message(), file, line)
-    } else {
-      Swift.precondition(condition(), message(), file: file, line: line)
-    }
-  }
-#endif

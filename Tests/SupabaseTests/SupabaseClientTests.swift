@@ -1,6 +1,7 @@
 @testable import Auth
 import CustomDump
 @testable import Functions
+import IssueReporting
 @testable import Realtime
 @testable import Supabase
 import XCTest
@@ -118,13 +119,8 @@ final class SupabaseClientTests: XCTestCase {
       "should not listen for internal auth events when using 3p authentication"
     )
 
-    overridedPreconditionHandler.setValue { _, message, _, _ in
-      XCTAssertEqual(
-        message(),
-        "Supabase Client is configured with the auth.accessToken option, accessing supabase.auth is not possible."
-      )
+    withExpectedIssue {
+      _ = client.auth
     }
-
-    _ = client.auth
   }
 }

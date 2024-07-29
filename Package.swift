@@ -137,6 +137,7 @@ let package = Package(
       name: "Supabase",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         "Auth",
         "Functions",
         "PostgREST",
