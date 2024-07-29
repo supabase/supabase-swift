@@ -60,6 +60,12 @@ public struct SupabaseClientOptions: Sendable {
     /// Set to `true` if you want to automatically refresh the token before expiring.
     public let autoRefreshToken: Bool
 
+    /// Optional function for using a third-party authentication system with Supabase. The function should return an access token or ID token (JWT) by obtaining it from the third-party auth client library.
+    /// Note that this function may be called concurrently and many times. Use memoization and locking techniques if this is not supported by the client libraries.
+    /// When set, the `auth` namespace of the Supabase client cannot be used.
+    /// Create another client if you wish to use Supabase Auth and third-party authentications concurrently in the same application.
+    public let accessToken: (@Sendable () async throws -> String)?
+
     public init(
       storage: any AuthLocalStorage,
       redirectToURL: URL? = nil,
@@ -67,7 +73,8 @@ public struct SupabaseClientOptions: Sendable {
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+      accessToken: (@Sendable () async throws -> String)? = nil
     ) {
       self.storage = storage
       self.redirectToURL = redirectToURL
@@ -76,6 +83,7 @@ public struct SupabaseClientOptions: Sendable {
       self.encoder = encoder
       self.decoder = decoder
       self.autoRefreshToken = autoRefreshToken
+      self.accessToken = accessToken
     }
   }
 
@@ -154,7 +162,8 @@ extension SupabaseClientOptions.AuthOptions {
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+      accessToken: (@Sendable () async throws -> String)? = nil
     ) {
       self.init(
         storage: AuthClient.Configuration.defaultLocalStorage,
@@ -163,7 +172,8 @@ extension SupabaseClientOptions.AuthOptions {
         flowType: flowType,
         encoder: encoder,
         decoder: decoder,
-        autoRefreshToken: autoRefreshToken
+        autoRefreshToken: autoRefreshToken,
+        accessToken: accessToken
       )
     }
   #endif

@@ -1,6 +1,7 @@
 @testable import Auth
 import CustomDump
 @testable import Functions
+import IssueReporting
 @testable import Realtime
 @testable import Supabase
 import XCTest
@@ -83,6 +84,11 @@ final class SupabaseClientTests: XCTestCase {
 
     XCTAssertFalse(client.auth.configuration.autoRefreshToken)
     XCTAssertEqual(client.auth.configuration.storageKey, "sb-project-ref-auth-token")
+
+    XCTAssertNotNil(
+      client.mutableState.listenForAuthEventsTask,
+      "should listen for internal auth events"
+    )
   }
 
   #if !os(Linux)
@@ -93,4 +99,31 @@ final class SupabaseClientTests: XCTestCase {
       )
     }
   #endif
+
+  func testClientInitWithCustomAccessToken() async {
+    let localStorage = AuthLocalStorageMock()
+
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "ANON_KEY",
+      options: .init(
+        auth: .init(
+          storage: localStorage,
+          accessToken: { "jwt" }
+        )
+      )
+    )
+
+    XCTAssertNil(
+      client.mutableState.listenForAuthEventsTask,
+      "should not listen for internal auth events when using 3p authentication"
+    )
+
+    #if canImport(Darwin)
+      // withExpectedIssue is unavailable on non-Darwin platform.
+      withExpectedIssue {
+        _ = client.auth
+      }
+    #endif
+  }
 }

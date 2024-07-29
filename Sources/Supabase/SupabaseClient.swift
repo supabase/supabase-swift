@@ -3,6 +3,7 @@ import ConcurrencyExtras
 import Foundation
 @_exported import Functions
 import Helpers
+import IssueReporting
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
@@ -26,9 +27,18 @@ public final class SupabaseClient: Sendable {
   let databaseURL: URL
   let functionsURL: URL
 
-  /// Supabase Auth allows you to create and manage user sessions for access to data that is secured
-  /// by access policies.
-  public let auth: AuthClient
+  private let _auth: AuthClient
+
+  /// Supabase Auth allows you to create and manage user sessions for access to data that is secured by access policies.
+  public var auth: AuthClient {
+    if options.auth.accessToken != nil {
+      reportIssue("""
+      Supabase Client is configured with the auth.accessToken option,
+      accessing supabase.auth is not possible.
+      """)
+    }
+    return _auth
+  }
 
   var rest: PostgrestClient {
     mutableState.withValue {
@@ -105,7 +115,7 @@ public final class SupabaseClient: Sendable {
     var changedAccessToken: String?
   }
 
-  private let mutableState = LockIsolated(MutableState())
+  let mutableState = LockIsolated(MutableState())
 
   private var session: URLSession {
     options.global.session
@@ -153,7 +163,7 @@ public final class SupabaseClient: Sendable {
     // default storage key uses the supabase project ref as a namespace
     let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"
 
-    auth = AuthClient(
+    _auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       headers: _headers.dictionary,
       flowType: options.auth.flowType,
@@ -190,7 +200,9 @@ public final class SupabaseClient: Sendable {
       options: realtimeOptions
     )
 
-    listenForAuthEvents()
+    if options.auth.accessToken == nil {
+      listenForAuthEvents()
+    }
   }
 
   /// Performs a query on a table or a view.
@@ -240,9 +252,7 @@ public final class SupabaseClient: Sendable {
 
   /// Returns all Realtime channels.
   public var channels: [RealtimeChannelV2] {
-    get async {
-      await Array(realtimeV2.subscriptions.values)
-    }
+    Array(realtimeV2.subscriptions.values)
   }
 
   /// Creates a Realtime channel with Broadcast, Presence, and Postgres Changes.
@@ -252,8 +262,8 @@ public final class SupabaseClient: Sendable {
   public func channel(
     _ name: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
-  ) async -> RealtimeChannelV2 {
-    await realtimeV2.channel(name, options: options)
+  ) -> RealtimeChannelV2 {
+    realtimeV2.channel(name, options: options)
   }
 
   /// Unsubscribes and removes Realtime channel from Realtime client.
@@ -340,9 +350,15 @@ public final class SupabaseClient: Sendable {
   }
 
   private func adapt(request: URLRequest) async -> URLRequest {
+    let token: String? = if let accessToken = options.auth.accessToken {
+      try? await accessToken()
+    } else {
+      try? await auth.session.accessToken
+    }
+
     var request = request
-    if let accessToken = try? await auth.session.accessToken {
-      request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+    if let token {
+      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
     return request
   }
