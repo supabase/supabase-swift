@@ -119,8 +119,11 @@ final class SupabaseClientTests: XCTestCase {
       "should not listen for internal auth events when using 3p authentication"
     )
 
-    withExpectedIssue {
-      _ = client.auth
-    }
+    #if canImport(Darwin)
+      // withExpectedIssue is unavailable on non-Darwin platform.
+      withExpectedIssue {
+        _ = client.auth
+      }
+    #endif
   }
 }
