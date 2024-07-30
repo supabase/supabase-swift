@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.15.2](https://github.com/supabase/supabase-swift/compare/v2.15.1...v2.15.2) (2024-07-30)
+
+
+### Bug Fixes
+
+* **auth:** mark identities last_sign_in_at field as optional ([#483](https://github.com/supabase/supabase-swift/issues/483)) ([c93cf90](https://github.com/supabase/supabase-swift/commit/c93cf90d60d7d6ed1ff04a6a51e72ab009f30795))
+
 ## [2.15.1](https://github.com/supabase/supabase-swift/compare/v2.15.0...v2.15.1) (2024-07-30)
 
 
