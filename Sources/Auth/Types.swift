@@ -223,9 +223,9 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   public var userId: UUID
   public var identityData: [String: AnyJSON]?
   public var provider: String
-  public var createdAt: Date
-  public var lastSignInAt: Date
-  public var updatedAt: Date
+  public var createdAt: Date?
+  public var lastSignInAt: Date?
+  public var updatedAt: Date?
 
   public init(
     id: String,
@@ -233,9 +233,9 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     userId: UUID,
     identityData: [String: AnyJSON],
     provider: String,
-    createdAt: Date,
-    lastSignInAt: Date,
-    updatedAt: Date
+    createdAt: Date?,
+    lastSignInAt: Date?,
+    updatedAt: Date?
   ) {
     self.id = id
     self.identityId = identityId
@@ -267,9 +267,9 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     userId = try container.decode(UUID.self, forKey: .userId)
     identityData = try container.decodeIfPresent([String: AnyJSON].self, forKey: .identityData)
     provider = try container.decode(String.self, forKey: .provider)
-    createdAt = try container.decode(Date.self, forKey: .createdAt)
-    lastSignInAt = try container.decode(Date.self, forKey: .lastSignInAt)
-    updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+    lastSignInAt = try container.decodeIfPresent(Date.self, forKey: .lastSignInAt)
+    updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -280,9 +280,9 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     try container.encode(userId, forKey: .userId)
     try container.encodeIfPresent(identityData, forKey: .identityData)
     try container.encode(provider, forKey: .provider)
-    try container.encode(createdAt, forKey: .createdAt)
-    try container.encode(lastSignInAt, forKey: .lastSignInAt)
-    try container.encode(updatedAt, forKey: .updatedAt)
+    try container.encodeIfPresent(createdAt, forKey: .createdAt)
+    try container.encodeIfPresent(lastSignInAt, forKey: .lastSignInAt)
+    try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
   }
 }
 

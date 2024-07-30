@@ -26,6 +26,17 @@
       "last_sign_in_at": "2022-04-09T11:23:45Z",
       "created_at": "2022-04-09T11:23:45.899924Z",
       "updated_at": "2022-04-09T11:23:45.899926Z"
+    },
+    {
+      "id": "6c69f399-be1b-467a-9c53-d3753abdd2df",
+      "user_id": "6c69f399-be1b-467a-9c53-d3753abdd2df",
+      "identity_id": "6c69f399-be1b-467a-9c53-d3753abdd2df",
+      "identity_data": {
+        "sub": "6c69f399-be1b-467a-9c53-d3753abdd2df"
+      },
+      "provider": "github",
+      "created_at": "2022-04-09T11:23:45.899924Z",
+      "updated_at": "2022-04-09T11:23:45.899926Z"
     }
   ],
   "created_at": "2022-04-09T11:23:45.874827Z",
