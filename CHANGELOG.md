@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.15.1](https://github.com/supabase/supabase-swift/compare/v2.15.0...v2.15.1) (2024-07-30)
+
+
+### Bug Fixes
+
+* **storage:** list folders ([#454](https://github.com/supabase/supabase-swift/issues/454)) ([4e9f52a](https://github.com/supabase/supabase-swift/commit/4e9f52a0257a8b6e747854a53553421322a947df))
+
 ## [2.15.0](https://github.com/supabase/supabase-swift/compare/v2.14.3...v2.15.0) (2024-07-29)
 
 
