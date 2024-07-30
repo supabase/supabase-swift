@@ -1,4 +1,5 @@
 import Foundation
+import Helpers
 
 public struct SearchOptions: Encodable, Sendable {
   var prefix: String
@@ -116,5 +117,93 @@ public struct DestinationOptions: Sendable {
 
   public init(destinationBucket: String? = nil) {
     self.destinationBucket = destinationBucket
+  }
+}
+
+public struct FileObject: Identifiable, Hashable, Codable, Sendable {
+  public var name: String
+  public var bucketId: String?
+  public var owner: String?
+  public var id: UUID?
+  public var updatedAt: Date?
+  public var createdAt: Date?
+  public var lastAccessedAt: Date?
+  public var metadata: [String: AnyJSON]?
+  public var buckets: Bucket?
+
+  public init(
+    name: String,
+    bucketId: String? = nil,
+    owner: String? = nil,
+    id: UUID? = nil,
+    updatedAt: Date? = nil,
+    createdAt: Date? = nil,
+    lastAccessedAt: Date? = nil,
+    metadata: [String: AnyJSON]? = nil,
+    buckets: Bucket? = nil
+  ) {
+    self.name = name
+    self.bucketId = bucketId
+    self.owner = owner
+    self.id = id
+    self.updatedAt = updatedAt
+    self.createdAt = createdAt
+    self.lastAccessedAt = lastAccessedAt
+    self.metadata = metadata
+    self.buckets = buckets
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case name
+    case bucketId = "bucket_id"
+    case owner
+    case id
+    case updatedAt = "updated_at"
+    case createdAt = "created_at"
+    case lastAccessedAt = "last_accessed_at"
+    case metadata
+    case buckets
+  }
+}
+
+public struct Bucket: Identifiable, Hashable, Codable, Sendable {
+  public var id: String
+  public var name: String
+  public var owner: String
+  public var isPublic: Bool
+  public var createdAt: Date
+  public var updatedAt: Date
+  public var allowedMimeTypes: [String]?
+  public var fileSizeLimit: Int64?
+
+  public init(
+    id: String,
+    name: String,
+    owner: String,
+    isPublic: Bool,
+    createdAt: Date,
+    updatedAt: Date,
+    allowedMimeTypes: [String]? = nil,
+    fileSizeLimit: Int64? = nil
+  ) {
+    self.id = id
+    self.name = name
+    self.owner = owner
+    self.isPublic = isPublic
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+    self.allowedMimeTypes = allowedMimeTypes
+    self.fileSizeLimit = fileSizeLimit
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case name
+    case owner
+    case isPublic = "public"
+    case createdAt = "created_at"
+    case updatedAt = "updated_at"
+    case allowedMimeTypes = "allowed_mime_types"
+    case fileSizeLimit = "file_size_limit"
   }
 }

@@ -313,6 +313,22 @@ final class StorageFileIntegrationTests: XCTestCase {
     )
   }
 
+  func testCreateAndLoadEmptyFolder() async throws {
+    let path = "empty-folder/.placeholder"
+    try await storage.from(bucketName).upload(path: path, file: Data())
+
+    let files = try await storage.from(bucketName).list()
+    assertInlineSnapshot(of: files, as: .json) {
+      """
+      [
+        {
+          "name" : "empty-folder"
+        }
+      ]
+      """
+    }
+  }
+
   private func newBucket(
     prefix: String = "",
     options: BucketOptions = BucketOptions(public: true)
