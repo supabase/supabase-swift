@@ -9,6 +9,24 @@ import ConcurrencyExtras
 import Foundation
 import Helpers
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+
+  extension HTTPURLResponse {
+    convenience init() {
+      self.init(
+        url: URL(string: "http://127.0.0.1")!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: nil
+      )!
+    }
+  }
+#endif
+
+@available(*, deprecated, renamed: "RealtimeChannel")
+public typealias RealtimeChannelV2 = RealtimeChannel
+
 public struct RealtimeChannelConfig: Sendable {
   public var broadcast: BroadcastJoinConfig
   public var presence: PresenceJoinConfig
@@ -16,34 +34,37 @@ public struct RealtimeChannelConfig: Sendable {
 }
 
 struct Socket: Sendable {
+  var broadcastURL: @Sendable () -> URL
   var status: @Sendable () -> RealtimeClient.Status
   var options: @Sendable () -> RealtimeClientOptions
   var accessToken: @Sendable () -> String?
+  var apiKey: @Sendable () -> String?
   var makeRef: @Sendable () -> Int
 
   var connect: @Sendable () async -> Void
   var addChannel: @Sendable (_ channel: RealtimeChannel) -> Void
   var removeChannel: @Sendable (_ channel: RealtimeChannel) async -> Void
   var push: @Sendable (_ message: RealtimeMessage) async -> Void
+  var httpSend: @Sendable (_ request: HTTPRequest) async throws -> HTTPResponse
 }
 
 extension Socket {
   init(client: RealtimeClient) {
     self.init(
+      broadcastURL: { [weak client] in client?.broadcastURL ?? URL(string: "http://localhost")! },
       status: { [weak client] in client?.status ?? .disconnected },
       options: { [weak client] in client?.options ?? .init() },
       accessToken: { [weak client] in client?.mutableState.accessToken },
+      apiKey: { [weak client] in client?.apikey },
       makeRef: { [weak client] in client?.makeRef() ?? 0 },
       connect: { [weak client] in await client?.connect() },
       addChannel: { [weak client] in client?.addChannel($0) },
       removeChannel: { [weak client] in await client?.removeChannel($0) },
-      push: { [weak client] in await client?.push($0) }
+      push: { [weak client] in await client?.push($0) },
+      httpSend: { [weak client] in try await client?.http.send($0) ?? .init(data: Data(), response: HTTPURLResponse()) }
     )
   }
 }
-
-@available(*, deprecated, renamed: "RealtimeChannel")
-public typealias RealtimeChannelV2 = RealtimeChannel
 
 public final class RealtimeChannel: Sendable {
   public typealias Subscription = ObservationToken
@@ -76,6 +97,10 @@ public final class RealtimeChannel: Sendable {
     set { statusEventEmitter.emit(newValue) }
   }
 
+  public var statusChange: AsyncStream<Status> {
+    statusEventEmitter.stream()
+  }
+
   /// Listen for connection status changes.
   /// - Parameter listener: Closure that will be called when connection status changes.
   /// - Returns: An observation handle that can be used to stop listening.
@@ -85,10 +110,6 @@ public final class RealtimeChannel: Sendable {
     _ listener: @escaping @Sendable (Status) -> Void
   ) -> ObservationToken {
     statusEventEmitter.attach(listener)
-  }
-
-  public var statusChange: AsyncStream<Status> {
-    statusEventEmitter.stream()
   }
 
   init(
@@ -205,24 +226,64 @@ public final class RealtimeChannel: Sendable {
   ///   - event: Broadcast message event.
   ///   - message: Message payload.
   public func broadcast(event: String, message: JSONObject) async {
-    assert(
-      status == .subscribed,
-      "You can only broadcast after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
-    )
+    if status != .subscribed {
+      struct Message: Encodable {
+        let topic: String
+        let event: String
+        let payload: JSONObject
+        let `private`: Bool
+      }
 
-    await push(
-      RealtimeMessage(
-        joinRef: mutableState.joinRef,
-        ref: socket.makeRef().description,
-        topic: topic,
-        event: ChannelEvent.broadcast,
-        payload: [
-          "type": "broadcast",
-          "event": .string(event),
-          "payload": .object(message),
-        ]
+      var headers = HTTPHeaders(["content-type": "application/json"])
+      if let apiKey = socket.apiKey() {
+        headers["apikey"] = apiKey
+      }
+      if let accessToken = socket.accessToken() {
+        headers["authorization"] = "Bearer \(accessToken)"
+      }
+
+      let task = Task { [headers] in
+        _ = try? await socket.httpSend(
+          HTTPRequest(
+            url: socket.broadcastURL(),
+            method: .post,
+            headers: headers,
+            body: JSONEncoder().encode(
+              [
+                "messages": [
+                  Message(
+                    topic: topic,
+                    event: event,
+                    payload: message,
+                    private: config.isPrivate
+                  ),
+                ],
+              ]
+            )
+          )
+        )
+      }
+
+      if config.broadcast.acknowledgeBroadcasts {
+        try? await withTimeout(interval: socket.options().timeoutInterval) {
+          await task.value
+        }
+      }
+    } else {
+      await push(
+        RealtimeMessage(
+          joinRef: mutableState.joinRef,
+          ref: socket.makeRef().description,
+          topic: topic,
+          event: ChannelEvent.broadcast,
+          payload: [
+            "type": "broadcast",
+            "event": .string(event),
+            "payload": .object(message),
+          ]
+        )
       )
-    )
+    }
   }
 
   public func track(_ state: some Codable) async throws {

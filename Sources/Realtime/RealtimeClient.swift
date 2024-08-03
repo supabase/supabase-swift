@@ -82,6 +82,7 @@ public final class RealtimeClient: Sendable {
   let options: RealtimeClientOptions
   let ws: any WebSocketClient
   let mutableState = LockIsolated(MutableState())
+  let http: any HTTPClientType
   let apikey: String?
 
   public var subscriptions: [String: RealtimeChannel] {
@@ -131,6 +132,12 @@ public final class RealtimeClient: Sendable {
   }
 
   public convenience init(url: URL, options: RealtimeClientOptions) {
+    var interceptors: [any HTTPClientInterceptor] = []
+
+    if let logger = options.logger {
+      interceptors.append(LoggerInterceptor(logger: logger))
+    }
+
     self.init(
       url: url,
       options: options,
@@ -140,14 +147,24 @@ public final class RealtimeClient: Sendable {
           apikey: options.apikey
         ),
         options: options
+      ),
+      http: HTTPClient(
+        fetch: options.fetch ?? { try await URLSession.shared.data(for: $0) },
+        interceptors: interceptors
       )
     )
   }
 
-  init(url: URL, options: RealtimeClientOptions, ws: any WebSocketClient) {
+  init(
+    url: URL,
+    options: RealtimeClientOptions,
+    ws: any WebSocketClient,
+    http: any HTTPClientType
+  ) {
     self.url = url
     self.options = options
     self.ws = ws
+    self.http = http
     apikey = options.apikey
 
     mutableState.withValue {
@@ -474,7 +491,7 @@ public final class RealtimeClient: Sendable {
     return url
   }
 
-  private var broadcastURL: URL {
+  var broadcastURL: URL {
     url.appendingPathComponent("api/broadcast")
   }
 }
