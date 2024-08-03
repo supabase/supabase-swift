@@ -1,7 +1,7 @@
 import Foundation
 import Helpers
 
-public class PostgrestFilterBuilder: PostgrestTransformBuilder {
+public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Sendable {
   public enum Operator: String, CaseIterable, Sendable {
     case eq, neq, gt, gte, lt, lte, like, ilike, `is`, `in`, cs, cd, sl, sr, nxl, nxr, adj, ov, fts,
          plfts, phfts, wfts
@@ -472,33 +472,6 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
     textSearch(column, query: query, config: config, type: nil)
   }
 
-  @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .plain type.")
-  public func plfts(
-    _ column: String,
-    query: any URLQueryRepresentable,
-    config: String? = nil
-  ) -> PostgrestFilterBuilder {
-    textSearch(column, query: query, config: config, type: .plain)
-  }
-
-  @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .phrase type.")
-  public func phfts(
-    _ column: String,
-    query: any URLQueryRepresentable,
-    config: String? = nil
-  ) -> PostgrestFilterBuilder {
-    textSearch(column, query: query, config: config, type: .phrase)
-  }
-
-  @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .websearch type.")
-  public func wfts(
-    _ column: String,
-    query: any URLQueryRepresentable,
-    config: String? = nil
-  ) -> PostgrestFilterBuilder {
-    textSearch(column, query: query, config: config, type: .websearch)
-  }
-
   /// Match only rows which satisfy the filter. This is an escape hatch - you should use the specific filter methods wherever possible.
   ///
   /// Unlike most filters, `opearator` and `value` are used as-is and need to follow [PostgREST syntax](https://postgrest.org/en/stable/api.html#operators). You also need to make sure they are properly sanitized.
@@ -617,29 +590,5 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder {
     config: String? = nil
   ) -> PostgrestFilterBuilder {
     fts(column, query: query, config: config)
-  }
-
-  public func plainToFullTextSearch(
-    _ column: String,
-    query: String,
-    config: String? = nil
-  ) -> PostgrestFilterBuilder {
-    plfts(column, query: query, config: config)
-  }
-
-  public func phraseToFullTextSearch(
-    _ column: String,
-    query: String,
-    config: String? = nil
-  ) -> PostgrestFilterBuilder {
-    phfts(column, query: query, config: config)
-  }
-
-  public func webFullTextSearch(
-    _ column: String,
-    query: String,
-    config: String? = nil
-  ) -> PostgrestFilterBuilder {
-    wfts(column, query: query, config: config)
   }
 }
