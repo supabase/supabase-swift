@@ -33,7 +33,7 @@ final class WebSocket: NSObject, URLSessionWebSocketDelegate, WebSocketClient, @
 
   struct MutableState {
     var continuation: AsyncStream<ConnectionStatus>.Continuation?
-    var connection: WebSocketConnection<RealtimeMessageV2, RealtimeMessageV2>?
+    var connection: WebSocketConnection<RealtimeMessage, RealtimeMessage>?
   }
 
   private let mutableState = LockIsolated(MutableState())
