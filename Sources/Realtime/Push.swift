@@ -31,7 +31,7 @@ actor Push {
 
     if channel?.config.broadcast.acknowledgeBroadcasts == true {
       do {
-        return try await withTimeout(interval: channel?.socket.options().timeoutInterval ?? 10) {
+        return try await withTimeout(interval: channel?.socket.options.timeoutInterval ?? 10) {
           await withCheckedContinuation {
             self.receivedContinuation = $0
           }

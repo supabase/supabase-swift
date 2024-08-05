@@ -119,6 +119,7 @@ let package = Package(
       name: "RealtimeTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         "PostgREST",
         "Realtime",
         "TestHelpers",
