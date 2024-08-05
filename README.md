@@ -1,3 +1,6 @@
+[⚠️ Changes to Package.swift](#changes-to-packageswift)
+
+
 # supabase-swift
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fsupabase%2Fsupabase-swift%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/supabase/supabase-swift)
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fsupabase%2Fsupabase-swift%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/supabase/supabase-swift)
@@ -91,3 +94,14 @@ let client = SupabaseClient(
 We are building the features of Firebase using enterprise-grade, open source products. We support existing communities wherever possible, and if the products don’t exist we build them and open source them ourselves. Thanks to these sponsors who are making the OSS ecosystem better for everyone.
 
 [![New Sponsor](https://user-images.githubusercontent.com/10214025/90518111-e74bbb00-e198-11ea-8f88-c9e3c1aa4b5b.png)](https://github.com/sponsors/supabase)
+
+## Changes to `Package.swift`
+
+This fork of the Supabase Swift package updates the dependency URL for the 'xctest-dynamic-overlay' repository, which appears to have been renamed to 'swift-issue-reporting'. The change is made to address conflicts arising from this renaming. The specific line in `Package.swift` has been [updated](https://github.com/jmfigueroa/supabase-swift/blob/cddad6fe8ec2fbd71d26afe545f03f5cf7081714/Package.swift#L34) as follows:
+
+```swift
+.package(url: "https://github.com/pointfreeco/swift-issue-reporting", from: "1.2.2"),
+```
+
+See also [here](https://github.com/jmfigueroa/supabase-swift/blob/cddad6fe8ec2fbd71d26afe545f03f5cf7081714/Package.swift#L64)
+
