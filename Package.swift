@@ -1,6 +1,11 @@
 // swift-tools-version:5.9
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+// This fork of the Supabase package includes an updated dependency URL for 'xctest-dynamic-overlay',
+// which appears to have been renamed to 'swift-issue-reporting'. This change addresses conflicts
+// caused by the repository's renaming.
+
+
 import Foundation
 import PackageDescription
 
@@ -26,7 +31,7 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.2"),
-    .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
+    .package(url: "https://github.com/pointfreeco/swift-issue-reporting", from: "1.2.2"),
   ],
   targets: [
     .target(
@@ -55,7 +60,8 @@ let package = Package(
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        // Updated dependency URL to reflect the assumed renaming of the repository from 'xctest-dynamic-overlay' to 'swift-issue-reporting'
+        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Helpers",
         "Auth",
         "TestHelpers",
@@ -71,7 +77,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Functions",
         "TestHelpers",
       ],
@@ -82,7 +88,7 @@ let package = Package(
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Helpers",
         "Auth",
         "PostgREST",
@@ -129,7 +135,7 @@ let package = Package(
       name: "StorageTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Storage",
       ]
     ),
@@ -137,7 +143,7 @@ let package = Package(
       name: "Supabase",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Auth",
         "Functions",
         "PostgREST",
@@ -156,7 +162,7 @@ let package = Package(
       name: "TestHelpers",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Auth",
       ]
     ),
