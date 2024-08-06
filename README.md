@@ -120,4 +120,6 @@ This fork of the Supabase Swift package updates the dependency URL for the 'xcte
 
 // Updated URL to forked 'swift-custom-dump' repository.
 .package(url: "https://github.com/jmfigueroa/swift-custom-dump", branch: "main"),
+```
+
 
