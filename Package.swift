@@ -1,5 +1,9 @@
 // swift-tools-version:5.9
-// The swift-tools-version declares the minimum version of Swift required to build this package.
+
+// ⚠️ This fork updates the dependency URL for the 'xctest-dynamic-overlay' repository, 
+// which appears to have been renamed to 'swift-issue-reporting'. Additionally, 
+// the 'swift-custom-dump' repository was forked and updated to address similar issues.
+// See: https://github.com/jmfigueroa/swift-custom-dump
 
 import Foundation
 import PackageDescription
@@ -22,11 +26,11 @@ let package = Package(
     .library(name: "Supabase", targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "4.0.0"),
-    .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
-    .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
-    .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.2"),
-    .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
+    .package(url: "https://github.com/apple/swift-crypto.git", branch: "main"),
+    .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", branch: "main"),
+    .package(url: "https://github.com/jmfigueroa/swift-custom-dump", branch: "main"),
+    .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", branch: "main"),
+    .package(url: "https://github.com/pointfreeco/swift-issue-reporting", branch: "main"),
   ],
   targets: [
     .target(
@@ -55,7 +59,7 @@ let package = Package(
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Helpers",
         "Auth",
         "TestHelpers",
@@ -71,7 +75,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Functions",
         "TestHelpers",
       ],
@@ -82,7 +86,7 @@ let package = Package(
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Helpers",
         "Auth",
         "PostgREST",
@@ -129,7 +133,7 @@ let package = Package(
       name: "StorageTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Storage",
       ]
     ),
@@ -137,7 +141,7 @@ let package = Package(
       name: "Supabase",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(name: "IssueReporting", package: "swift-issue-reporting"),
         "Auth",
         "Functions",
         "PostgREST",
@@ -156,7 +160,7 @@ let package = Package(
       name: "TestHelpers",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Auth",
       ]
     ),
@@ -167,5 +171,6 @@ for target in package.targets where !target.isTest {
   target.swiftSettings = [
     .enableUpcomingFeature("ExistentialAny"),
     .enableExperimentalFeature("StrictConcurrency"),
+    .unsafeFlags(["-suppress-warnings"])
   ]
 }
