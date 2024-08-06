@@ -1,10 +1,9 @@
 // swift-tools-version:5.9
-// The swift-tools-version declares the minimum version of Swift required to build this package.
 
-// This fork of the Supabase package includes an updated dependency URL for 'xctest-dynamic-overlay',
-// which appears to have been renamed to 'swift-issue-reporting'. This change addresses conflicts
-// caused by the repository's renaming.
-
+// ⚠️ This fork updates the dependency URL for the 'xctest-dynamic-overlay' repository, 
+// which appears to have been renamed to 'swift-issue-reporting'. Additionally, 
+// the 'swift-custom-dump' repository was forked and updated to address similar issues.
+// See: https://github.com/jmfigueroa/swift-custom-dump
 
 import Foundation
 import PackageDescription
@@ -27,11 +26,11 @@ let package = Package(
     .library(name: "Supabase", targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "4.0.0"),
-    .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
-    .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
-    .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.2"),
-    .package(url: "https://github.com/pointfreeco/swift-issue-reporting", from: "1.2.2"),
+    .package(url: "https://github.com/apple/swift-crypto.git", branch: "main"),
+    .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", branch: "main"),
+    .package(url: "https://github.com/jmfigueroa/swift-custom-dump", branch: "main"),
+    .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", branch: "main"),
+    .package(url: "https://github.com/pointfreeco/swift-issue-reporting", branch: "main"),
   ],
   targets: [
     .target(
@@ -60,7 +59,6 @@ let package = Package(
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-        // Updated dependency URL to reflect the assumed renaming of the repository from 'xctest-dynamic-overlay' to 'swift-issue-reporting'
         .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
         "Helpers",
         "Auth",
@@ -143,7 +141,7 @@ let package = Package(
       name: "Supabase",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "XCTestDynamicOverlay", package: "swift-issue-reporting"),
+        .product(name: "IssueReporting", package: "swift-issue-reporting"),
         "Auth",
         "Functions",
         "PostgREST",
