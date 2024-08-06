@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.15.3](https://github.com/supabase/supabase-swift/compare/v2.15.2...v2.15.3) (2024-08-06)
+
+
+### Bug Fixes
+
+* **auth:** add missing figma, kakao, linkedin_oidc, slack_oidc, zoom, and fly providers ([#493](https://github.com/supabase/supabase-swift/issues/493)) ([152f5ce](https://github.com/supabase/supabase-swift/commit/152f5ce8e14dd54ad70ab0184d9dcb9ead65d824))
+
 ## [2.15.2](https://github.com/supabase/supabase-swift/compare/v2.15.1...v2.15.2) (2024-07-30)
 
 
