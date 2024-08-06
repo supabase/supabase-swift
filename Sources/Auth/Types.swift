@@ -293,17 +293,23 @@ public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {
   case discord
   case email
   case facebook
+  case figma
   case github
   case gitlab
   case google
+  case kakao
   case keycloak
   case linkedin
+  case linkedinOIDC = "linkedin_oidc"
   case notion
   case slack
+  case slackOIDC = "slack_oidc"
   case spotify
   case twitch
   case twitter
   case workos
+  case zoom
+  case fly
 
   public var id: RawValue { rawValue }
 }
