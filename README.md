@@ -105,3 +105,19 @@ This fork of the Supabase Swift package updates the dependency URL for the 'xcte
 
 See also [here](https://github.com/jmfigueroa/supabase-swift/blob/cddad6fe8ec2fbd71d26afe545f03f5cf7081714/Package.swift#L64)
 
+
+# Supabase Swift Package Fork
+
+⚠️ **Warning:** This fork updates the dependency URL for the 'xctest-dynamic-overlay' repository, which appears to have been renamed to 'swift-issue-reporting'. Additionally, the 'swift-custom-dump' repository was forked and updated to address similar issues. The changes are made to ensure compatibility and resolve conflicts. See the [Changes to Package.swift](#changes-to-packageswift) section for more details.
+
+## Changes to Package.swift
+
+This fork of the Supabase Swift package updates the dependency URL for the 'xctest-dynamic-overlay' repository, which appears to have been renamed to 'swift-issue-reporting'. Additionally, the 'swift-custom-dump' repository was forked and updated due to similar issues. The specific lines in `Package.swift` have been updated as follows:
+
+```swift
+// Updated URL to 'swift-issue-reporting' repository while keeping the original name 'xctest-dynamic-overlay'.
+.package(url: "https://github.com/pointfreeco/swift-issue-reporting", branch: "main"),
+
+// Updated URL to forked 'swift-custom-dump' repository.
+.package(url: "https://github.com/jmfigueroa/swift-custom-dump", branch: "main"),
+
