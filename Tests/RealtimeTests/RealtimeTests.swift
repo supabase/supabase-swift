@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import CustomDump
 import Helpers
+import InlineSnapshotTesting
 @testable import Realtime
 import TestHelpers
 import XCTest
@@ -42,31 +43,30 @@ final class RealtimeTests: XCTestCase {
     )
   }
 
-  override func tearDown() {
-    sut.disconnect()
-
-    super.tearDown()
+  override func tearDown() async throws {
+    await sut.disconnect()
+    try await super.tearDown()
   }
 
   func testBehavior() async throws {
-    let channel = sut.channel("public:messages")
+    let channel = await sut.channel("public:messages")
     var subscriptions: Set<ObservationToken> = []
 
-    channel.onPostgresChange(InsertAction.self, table: "messages") { _ in
+    await channel.onPostgresChange(InsertAction.self, table: "messages") { _ in
     }
     .store(in: &subscriptions)
 
-    channel.onPostgresChange(UpdateAction.self, table: "messages") { _ in
+    await channel.onPostgresChange(UpdateAction.self, table: "messages") { _ in
     }
     .store(in: &subscriptions)
 
-    channel.onPostgresChange(DeleteAction.self, table: "messages") { _ in
+    await channel.onPostgresChange(DeleteAction.self, table: "messages") { _ in
     }
     .store(in: &subscriptions)
 
     let socketStatuses = LockIsolated([RealtimeClient.Status]())
 
-    sut.onStatusChange { status in
+    await sut.onStatusChange { status in
       socketStatuses.withValue { $0.append(status) }
     }
     .store(in: &subscriptions)
@@ -75,14 +75,14 @@ final class RealtimeTests: XCTestCase {
 
     XCTAssertEqual(socketStatuses.value, [.disconnected, .connecting, .connected])
 
-    let messageTask = sut.mutableState.messageTask
+    let messageTask = await sut.messageTask
     XCTAssertNotNil(messageTask)
 
-    let heartbeatTask = sut.mutableState.heartbeatTask
+    let heartbeatTask = await sut.heartbeatTask
     XCTAssertNotNil(heartbeatTask)
 
     let channelStatuses = LockIsolated([RealtimeChannel.Status]())
-    channel.onStatusChange { status in
+    await channel.onStatusChange { status in
       channelStatuses.withValue {
         $0.append(status)
       }
@@ -92,14 +92,52 @@ final class RealtimeTests: XCTestCase {
     ws.mockReceive(.messagesSubscribed)
     await channel.subscribe()
 
-    expectNoDifference(
-      ws.sentMessages,
-      [.subscribeToMessages(ref: "1", joinRef: "1")]
-    )
+    assertInlineSnapshot(of: ws.sentMessages, as: .json) {
+      """
+      [
+        {
+          "event" : "phx_join",
+          "join_ref" : "1",
+          "payload" : {
+            "access_token" : "anon.api.key",
+            "config" : {
+              "broadcast" : {
+                "ack" : false,
+                "self" : false
+              },
+              "postgres_changes" : [
+                {
+                  "event" : "INSERT",
+                  "schema" : "public",
+                  "table" : "messages"
+                },
+                {
+                  "event" : "UPDATE",
+                  "schema" : "public",
+                  "table" : "messages"
+                },
+                {
+                  "event" : "DELETE",
+                  "schema" : "public",
+                  "table" : "messages"
+                }
+              ],
+              "presence" : {
+                "key" : ""
+              },
+              "private" : false
+            }
+          },
+          "ref" : "1",
+          "topic" : "realtime:public:messages"
+        }
+      ]
+      """
+    }
   }
 
   func testSubscribeTimeout() async throws {
-    let channel = sut.channel("public:messages")
+    let channel = await sut.channel("public:messages")
     let joinEventCount = LockIsolated(0)
 
     ws.on { message in
@@ -135,37 +173,56 @@ final class RealtimeTests: XCTestCase {
 
     let joinSentMessages = ws.sentMessages.filter { $0.event == "phx_join" }
 
-    let expectedMessages = try [
-      RealtimeMessage(
-        joinRef: "1",
-        ref: "1",
-        topic: "realtime:public:messages",
-        event: "phx_join",
-        payload: JSONObject(
-          RealtimeJoinPayload(
-            config: RealtimeJoinConfig(),
-            accessToken: apiKey
-          )
-        )
-      ),
-      RealtimeMessage(
-        joinRef: "2",
-        ref: "2",
-        topic: "realtime:public:messages",
-        event: "phx_join",
-        payload: JSONObject(
-          RealtimeJoinPayload(
-            config: RealtimeJoinConfig(),
-            accessToken: apiKey
-          )
-        )
-      ),
-    ]
+    assertInlineSnapshot(of: joinSentMessages, as: .json) {
+      """
+      [
+        {
+          "event" : "phx_join",
+          "join_ref" : "1",
+          "payload" : {
+            "access_token" : "anon.api.key",
+            "config" : {
+              "broadcast" : {
+                "ack" : false,
+                "self" : false
+              },
+              "postgres_changes" : [
 
-    expectNoDifference(
-      joinSentMessages,
-      expectedMessages
-    )
+              ],
+              "presence" : {
+                "key" : ""
+              },
+              "private" : false
+            }
+          },
+          "ref" : "1",
+          "topic" : "realtime:public:messages"
+        },
+        {
+          "event" : "phx_join",
+          "join_ref" : "3",
+          "payload" : {
+            "access_token" : "anon.api.key",
+            "config" : {
+              "broadcast" : {
+                "ack" : false,
+                "self" : false
+              },
+              "postgres_changes" : [
+
+              ],
+              "presence" : {
+                "key" : ""
+              },
+              "private" : false
+            }
+          },
+          "ref" : "3",
+          "topic" : "realtime:public:messages"
+        }
+      ]
+      """
+    }
   }
 
   func testHeartbeat() async throws {
@@ -209,7 +266,7 @@ final class RealtimeTests: XCTestCase {
     let statuses = LockIsolated<[RealtimeClient.Status]>([])
 
     Task {
-      for await status in sut.statusChange {
+      for await status in await sut.statusChange {
         statuses.withValue {
           $0.append(status)
         }
@@ -220,7 +277,7 @@ final class RealtimeTests: XCTestCase {
 
     await fulfillment(of: [sentHeartbeatExpectation], timeout: 2)
 
-    let pendingHeartbeatRef = sut.mutableState.pendingHeartbeatRef
+    let pendingHeartbeatRef = await sut.pendingHeartbeatRef
     XCTAssertNotNil(pendingHeartbeatRef)
 
     // Wait until next heartbeat
@@ -245,7 +302,7 @@ final class RealtimeTests: XCTestCase {
     await http.when {
       $0.url.path.hasSuffix("broadcast")
     } return: { _ in
-      HTTPResponse(
+      await HTTPResponse(
         data: "{}".data(using: .utf8)!,
         response: HTTPURLResponse(
           url: self.sut.broadcastURL,
@@ -256,7 +313,7 @@ final class RealtimeTests: XCTestCase {
       )
     }
 
-    let channel = sut.channel("public:messages") {
+    let channel = await sut.channel("public:messages") {
       $0.broadcast.acknowledgeBroadcasts = true
     }
 
@@ -274,19 +331,23 @@ final class RealtimeTests: XCTestCase {
 
     let body = try XCTUnwrap(request?.body)
     let json = try JSONDecoder().decode(JSONObject.self, from: body)
-    expectNoDifference(
-      json,
-      [
-        "messages": [
-          [
-            "topic": "realtime:public:messages",
-            "event": "test",
-            "payload": ["value": 42],
-            "private": false,
-          ],
-        ],
-      ]
-    )
+
+    assertInlineSnapshot(of: json, as: .json) {
+      """
+      {
+        "messages" : [
+          {
+            "event" : "test",
+            "payload" : {
+              "value" : 42
+            },
+            "private" : false,
+            "topic" : "realtime:public:messages"
+          }
+        ]
+      }
+      """
+    }
   }
 
   private func connectSocketAndWait() async {
@@ -296,31 +357,6 @@ final class RealtimeTests: XCTestCase {
 }
 
 extension RealtimeMessage {
-  static func subscribeToMessages(ref: String?, joinRef: String?) -> RealtimeMessage {
-    Self(
-      joinRef: joinRef,
-      ref: ref,
-      topic: "realtime:public:messages",
-      event: "phx_join",
-      payload: [
-        "access_token": "anon.api.key",
-        "config": [
-          "broadcast": [
-            "self": false,
-            "ack": false,
-          ],
-          "postgres_changes": [
-            ["table": "messages", "event": "INSERT", "schema": "public"],
-            ["table": "messages", "schema": "public", "event": "UPDATE"],
-            ["schema": "public", "table": "messages", "event": "DELETE"],
-          ],
-          "presence": ["key": ""],
-          "private": false,
-        ],
-      ]
-    )
-  }
-
   static let messagesSubscribed = Self(
     joinRef: nil,
     ref: "2",
@@ -334,17 +370,6 @@ extension RealtimeMessage {
           ["id": 85243397, "event": "DELETE", "schema": "public", "table": "messages"],
         ],
       ],
-      "status": "ok",
-    ]
-  )
-
-  static let heartbeatResponse = Self(
-    joinRef: nil,
-    ref: "1",
-    topic: "phoenix",
-    event: "phx_reply",
-    payload: [
-      "response": [:],
       "status": "ok",
     ]
   )
