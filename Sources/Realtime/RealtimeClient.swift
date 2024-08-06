@@ -18,7 +18,7 @@ public typealias JSONObject = Helpers.JSONObject
 @available(*, deprecated, renamed: "RealtimeClient")
 public typealias RealtimeClientV2 = RealtimeClient
 
-public final class RealtimeClient: Sendable {
+public actor RealtimeClient {
   @available(*, deprecated, renamed: "RealtimeClientOptions")
   public struct Configuration: Sendable {
     var url: URL
@@ -68,28 +68,19 @@ public final class RealtimeClient: Sendable {
     }
   }
 
-  struct MutableState {
-    var accessToken: String?
-    var ref = 0
-    var pendingHeartbeatRef: Int?
-    var heartbeatTask: Task<Void, Never>?
-    var messageTask: Task<Void, Never>?
-    var connectionTask: Task<Void, Never>?
-    var subscriptions: [String: RealtimeChannel] = [:]
-  }
-
   let url: URL
   let options: RealtimeClientOptions
   let ws: any WebSocketClient
-  let mutableState = LockIsolated(MutableState())
   let http: any HTTPClientType
   let apikey: String?
 
-  public var subscriptions: [String: RealtimeChannel] {
-    mutableState.subscriptions
-  }
-
   private let statusEventEmitter = EventEmitter<Status>(initialEvent: .disconnected)
+  private(set) var accessToken: String?
+  private(set) var ref = 0
+  private(set) var pendingHeartbeatRef: Int?
+  private(set) var heartbeatTask: Task<Void, Never>?
+  private(set) var messageTask: Task<Void, Never>?
+  private(set) var connectionTask: Task<Void, Never>?
 
   /// AsyncStream that emits when connection status change.
   ///
@@ -104,6 +95,8 @@ public final class RealtimeClient: Sendable {
     set { statusEventEmitter.emit(newValue) }
   }
 
+  public private(set) var subscriptions: [String: RealtimeChannel] = [:]
+
   /// Listen for connection status changes.
   /// - Parameter listener: Closure that will be called when connection status changes.
   /// - Returns: An observation handle that can be used to stop listening.
@@ -116,7 +109,7 @@ public final class RealtimeClient: Sendable {
   }
 
   @available(*, deprecated, renamed: "RealtimeClient.init(url:options:)")
-  public convenience init(config: Configuration) {
+  public init(config: Configuration) {
     self.init(
       url: config.url,
       options: RealtimeClientOptions(
@@ -131,7 +124,7 @@ public final class RealtimeClient: Sendable {
     )
   }
 
-  public convenience init(url: URL, options: RealtimeClientOptions) {
+  public init(url: URL, options: RealtimeClientOptions) {
     var interceptors: [any HTTPClientInterceptor] = []
 
     if let logger = options.logger {
@@ -166,18 +159,13 @@ public final class RealtimeClient: Sendable {
     self.ws = ws
     self.http = http
     apikey = options.apikey
-
-    mutableState.withValue {
-      $0.accessToken = options.accessToken ?? options.apikey
-    }
+    accessToken = options.accessToken ?? options.apikey
   }
 
   deinit {
-    mutableState.withValue {
-      $0.heartbeatTask?.cancel()
-      $0.messageTask?.cancel()
-      $0.subscriptions = [:]
-    }
+    heartbeatTask?.cancel()
+    messageTask?.cancel()
+    subscriptions = [:]
   }
 
   /// Connects the socket.
@@ -189,7 +177,7 @@ public final class RealtimeClient: Sendable {
 
   func connect(reconnect: Bool) async {
     if status == .disconnected {
-      let connectionTask = Task {
+      connectionTask = Task {
         if reconnect {
           try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(options.reconnectDelay))
 
@@ -222,10 +210,6 @@ public final class RealtimeClient: Sendable {
             await onError(error)
           }
         }
-      }
-
-      mutableState.withValue {
-        $0.connectionTask = connectionTask
       }
     }
 
@@ -277,25 +261,21 @@ public final class RealtimeClient: Sendable {
     return RealtimeChannel(
       topic: "realtime:\(topic)",
       config: config,
-      socket: Socket(client: self),
+      socket: self,
       logger: self.options.logger
     )
   }
 
   public func addChannel(_ channel: RealtimeChannel) {
-    mutableState.withValue {
-      $0.subscriptions[channel.topic] = channel
-    }
+    subscriptions[channel.topic] = channel
   }
 
   public func removeChannel(_ channel: RealtimeChannel) async {
-    if channel.status == .subscribed {
+    if await channel.status == .subscribed {
       await channel.unsubscribe()
     }
 
-    mutableState.withValue {
-      $0.subscriptions[channel.topic] = nil
-    }
+    subscriptions[channel.topic] = nil
 
     if subscriptions.isEmpty {
       options.logger?.debug("No more subscribed channel in socket")
@@ -316,7 +296,7 @@ public final class RealtimeClient: Sendable {
   }
 
   private func listenForMessages() {
-    let messageTask = Task { [weak self] in
+    messageTask = Task { [weak self] in
       guard let self else { return }
 
       do {
@@ -334,13 +314,10 @@ public final class RealtimeClient: Sendable {
         await reconnect()
       }
     }
-    mutableState.withValue {
-      $0.messageTask = messageTask
-    }
   }
 
   private func startHeartbeating() {
-    let heartbeatTask = Task { [weak self, options] in
+    heartbeatTask = Task { [weak self, options] in
       while !Task.isCancelled {
         try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(options.heartbeatInterval))
         if Task.isCancelled {
@@ -349,47 +326,34 @@ public final class RealtimeClient: Sendable {
         await self?.sendHeartbeat()
       }
     }
-    mutableState.withValue {
-      $0.heartbeatTask = heartbeatTask
-    }
   }
 
   private func sendHeartbeat() async {
-    let pendingHeartbeatRef: Int? = mutableState.withValue {
-      if $0.pendingHeartbeatRef != nil {
-        $0.pendingHeartbeatRef = nil
-        return nil
-      }
-
+    if pendingHeartbeatRef != nil {
+      pendingHeartbeatRef = nil
+      options.logger?.debug("Heartbeat timeout")
+      await reconnect()
+    } else {
       let ref = makeRef()
-      $0.pendingHeartbeatRef = ref
-      return ref
-    }
-
-    if let pendingHeartbeatRef {
+      pendingHeartbeatRef = ref
       await push(
         RealtimeMessage(
           joinRef: nil,
-          ref: pendingHeartbeatRef.description,
+          ref: pendingHeartbeatRef!.description,
           topic: "phoenix",
           event: "heartbeat",
           payload: [:]
         )
       )
-    } else {
-      options.logger?.debug("Heartbeat timeout")
-      await reconnect()
     }
   }
 
   public func disconnect() {
     options.logger?.debug("Closing WebSocket connection")
-    mutableState.withValue {
-      $0.ref = 0
-      $0.messageTask?.cancel()
-      $0.heartbeatTask?.cancel()
-      $0.connectionTask?.cancel()
-    }
+    ref = 0
+    messageTask?.cancel()
+    heartbeatTask?.cancel()
+    connectionTask?.cancel()
     ws.disconnect()
     status = .disconnected
   }
@@ -397,29 +361,25 @@ public final class RealtimeClient: Sendable {
   /// Sets the JWT access token used for channel subscription authorization and Realtime RLS.
   /// - Parameter token: A JWT string.
   public func setAuth(_ token: String?) async {
-    mutableState.withValue {
-      $0.accessToken = token
-    }
+    accessToken = token
 
     for channel in subscriptions.values {
-      if let token, channel.status == .subscribed {
+      if let token, await channel.status == .subscribed {
         await channel.updateAuth(jwt: token)
       }
     }
   }
 
   private func onMessage(_ message: RealtimeMessage) async {
-    mutableState.withValue {
-      let channel = $0.subscriptions[message.topic]
+    let channel = subscriptions[message.topic]
 
-      if let ref = message.ref, Int(ref) == $0.pendingHeartbeatRef {
-        $0.pendingHeartbeatRef = nil
-        options.logger?.debug("heartbeat received")
-      } else {
-        options.logger?
-          .debug("Received event \(message.event) for channel \(channel?.topic ?? "null")")
-        channel?.onMessage(message)
-      }
+    if let ref = message.ref, Int(ref) == pendingHeartbeatRef {
+      pendingHeartbeatRef = nil
+      options.logger?.debug("heartbeat received")
+    } else {
+      options.logger?
+        .debug("Received event \(message.event) for channel \(channel?.topic ?? "null")")
+      await channel?.onMessage(message)
     }
   }
 
@@ -445,10 +405,8 @@ public final class RealtimeClient: Sendable {
   }
 
   func makeRef() -> Int {
-    mutableState.withValue {
-      $0.ref += 1
-      return $0.ref
-    }
+    ref += 1
+    return ref
   }
 
   static func realtimeBaseURL(url: URL) -> URL {

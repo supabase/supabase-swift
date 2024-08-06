@@ -245,7 +245,7 @@ public final class SupabaseClient: Sendable {
 
   /// Returns all Realtime channels.
   public var channels: [RealtimeChannel] {
-    Array(realtime.subscriptions.values)
+    get async { await Array(realtime.subscriptions.values) }
   }
 
   /// Creates a Realtime channel with Broadcast, Presence, and Postgres Changes.
@@ -255,8 +255,8 @@ public final class SupabaseClient: Sendable {
   public func channel(
     _ name: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
-  ) -> RealtimeChannel {
-    realtime.channel(name, options: options)
+  ) async -> RealtimeChannel {
+    await realtime.channel(name, options: options)
   }
 
   /// Unsubscribes and removes Realtime channel from Realtime client.
