@@ -1,5 +1,28 @@
 # Changelog
 
+## [3.0.0](https://github.com/supabase/supabase-swift/compare/v2.15.2...v3.0.0) (2024-08-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* **realtime:** make realtime channel and client actors ([#492](https://github.com/supabase/supabase-swift/issues/492))
+* **postgrest:** remove deprecated code ([#488](https://github.com/supabase/supabase-swift/issues/488))
+* drop old realtime client ([#460](https://github.com/supabase/supabase-swift/issues/460))
+
+### Features
+
+* **postgrest:** remove deprecated code ([#488](https://github.com/supabase/supabase-swift/issues/488)) ([f435c37](https://github.com/supabase/supabase-swift/commit/f435c371be5574006768425ac1a21b04e5dffe42))
+
+
+### Miscellaneous Chores
+
+* drop old realtime client ([#460](https://github.com/supabase/supabase-swift/issues/460)) ([156cffc](https://github.com/supabase/supabase-swift/commit/156cffc8f4e6a2b2bddb84ae8d1a839f4d11d278))
+
+
+### Code Refactoring
+
+* **realtime:** make realtime channel and client actors ([#492](https://github.com/supabase/supabase-swift/issues/492)) ([0f41db2](https://github.com/supabase/supabase-swift/commit/0f41db2835e739a32822a2e30ec70736acbfd1b3))
+
 ## [2.15.2](https://github.com/supabase/supabase-swift/compare/v2.15.1...v2.15.2) (2024-07-30)
 
 

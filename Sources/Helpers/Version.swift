@@ -1,1 +1,1 @@
-package let version = "2.15.2" // {x-release-please-version}
+package let version = "3.0.0" // {x-release-please-version}
