@@ -3,7 +3,7 @@ import Helpers
 
 struct NoParams: Encodable {}
 
-public final class PostgrestRpcBuilder: PostgrestBuilder {
+public final class PostgrestRpcBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Performs a function call with parameters.
   /// - Parameters:
   ///   - params: The parameters to pass to the function.

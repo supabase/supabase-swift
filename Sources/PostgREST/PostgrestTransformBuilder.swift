@@ -1,7 +1,7 @@
 import Foundation
 import Helpers
 
-public class PostgrestTransformBuilder: PostgrestBuilder {
+public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Perform a SELECT on the query result.
   ///
   /// By default, `.insert()`, `.update()`, `.upsert()`, and `.delete()` do not return modified rows. By calling this method, modified rows are returned in `value`.

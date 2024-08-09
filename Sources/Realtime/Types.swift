@@ -12,7 +12,7 @@ import Helpers
   import FoundationNetworking
 #endif
 
-/// Options for initializing ``RealtimeClientV2``.
+/// Options for initializing ``RealtimeClient``.
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPHeaders
   var heartbeatInterval: TimeInterval

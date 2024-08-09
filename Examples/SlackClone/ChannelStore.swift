@@ -22,7 +22,7 @@ final class ChannelStore {
     Task {
       channels = await fetchChannels()
 
-      let channel = await supabase.realtimeV2.channel("public:channels")
+      let channel = await supabase.realtime.channel("public:channels")
 
       let insertions = await channel.postgresChange(InsertAction.self, table: "channels")
       let deletions = await channel.postgresChange(DeleteAction.self, table: "channels")

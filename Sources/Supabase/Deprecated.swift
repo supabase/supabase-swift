@@ -17,10 +17,4 @@ extension SupabaseClient {
   public var database: PostgrestClient {
     rest
   }
-
-  /// Realtime client for Supabase
-  @available(*, deprecated, message: "Use realtimeV2")
-  public var realtime: RealtimeClient {
-    _realtime.value
-  }
 }
