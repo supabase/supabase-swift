@@ -12,16 +12,16 @@ import Helpers
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 
-extension HTTPURLResponse {
-  convenience init() {
-    self.init(
-      url: URL(string: "http://127.0.0.1")!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: nil
-    )!
+  extension HTTPURLResponse {
+    convenience init() {
+      self.init(
+        url: URL(string: "http://127.0.0.1")!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: nil
+      )!
+    }
   }
-}
 #endif
 
 public struct RealtimeChannelConfig: Sendable {

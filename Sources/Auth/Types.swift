@@ -531,7 +531,7 @@ public struct Factor: Identifiable, Codable, Hashable, Sendable {
   /// Friendly name of the factor, useful to disambiguate between multiple factors.
   public let friendlyName: String?
 
-  /// Type of factor. Only `totp` supported with this version but may change in future versions.
+  /// Type of factor. `totp` and `phone` supported with this version.
   public let factorType: FactorType
 
   /// Factor's status.
@@ -541,7 +541,11 @@ public struct Factor: Identifiable, Codable, Hashable, Sendable {
   public let updatedAt: Date
 }
 
-public struct MFAEnrollParams: Encodable, Hashable, Sendable {
+public protocol MFAEnrollParamsType: Encodable, Hashable, Sendable {
+  var factorType: FactorType { get }
+}
+
+public struct MFATotpEnrollParams: MFAEnrollParamsType {
   public let factorType: FactorType = "totp"
   /// Domain which the user is enrolled with.
   public let issuer: String?
@@ -554,15 +558,48 @@ public struct MFAEnrollParams: Encodable, Hashable, Sendable {
   }
 }
 
+extension MFAEnrollParamsType where Self == MFATotpEnrollParams {
+  public static func totp(issuer: String? = nil, friendlyName: String? = nil) -> Self {
+    MFATotpEnrollParams(issuer: issuer, friendlyName: friendlyName)
+  }
+}
+
+public struct MFAPhoneEnrollParams: MFAEnrollParamsType {
+  public let factorType: FactorType = "phone"
+
+  /// Human readable name assigned to the factor.
+  public let friendlyName: String?
+
+  /// Phone number to be enrolled. Number should conform to E.164 standard.
+  public let phone: String
+
+  public init(friendlyName: String? = nil, phone: String) {
+    self.friendlyName = friendlyName
+    self.phone = phone
+  }
+}
+
+extension MFAEnrollParamsType where Self == MFAPhoneEnrollParams {
+  public static func phone(friendlyName: String? = nil, phone: String) -> Self {
+    MFAPhoneEnrollParams(friendlyName: friendlyName, phone: phone)
+  }
+}
+
 public struct AuthMFAEnrollResponse: Decodable, Hashable, Sendable {
   /// ID of the factor that was just enrolled (in an unverified state).
   public let id: String
 
-  /// Type of MFA factor. Only `totp` supported for now.
+  /// Type of MFA factor.
   public let type: FactorType
 
-  /// TOTP enrollment information.
+  /// TOTP enrollment information. Available only if the ``type`` is `totp`.
   public var totp: TOTP?
+
+  /// Friendly name of the factor, useful to disambiguate between multiple factors.
+  public var friendlyName: String?
+
+  /// Phone number of the MFA factor in E.164 format. Used to send messages. Available only if the ``type`` is `phone`.
+  public var phone: String?
 
   public struct TOTP: Decodable, Hashable, Sendable {
     /// Contains a QR code encoding the authenticator URI. You can convert it to a URL by prepending
@@ -584,8 +621,12 @@ public struct MFAChallengeParams: Encodable, Hashable {
   /// ID of the factor to be challenged. Returned in ``AuthMFA/enroll(params:)``.
   public let factorId: String
 
-  public init(factorId: String) {
+  /// Messaging channel to use (e.g. `whatsapp` or `sms`). Only relevant for phone factors.
+  public let channel: MessagingChannel?
+
+  public init(factorId: String, channel: MessagingChannel? = nil) {
     self.factorId = factorId
+    self.channel = channel
   }
 }
 
@@ -632,6 +673,9 @@ public struct AuthMFAChallengeResponse: Decodable, Hashable, Sendable {
   /// ID of the newly created challenge.
   public let id: String
 
+  /// Factor type which generated the challenge.
+  public let type: FactorType
+
   /// Timestamp in UNIX seconds when this challenge will no longer be usable.
   public let expiresAt: TimeInterval
 }
@@ -649,6 +693,9 @@ public struct AuthMFAListFactorsResponse: Decodable, Hashable, Sendable {
 
   /// Only verified TOTP factors. (A subset of `all`.)
   public let totp: [Factor]
+
+  /// Only verified phone factors. (A subset of `all`.)
+  public let phone: [Factor]
 }
 
 public typealias AuthenticatorAssuranceLevels = String

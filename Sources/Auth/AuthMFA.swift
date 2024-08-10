@@ -23,7 +23,7 @@ public struct AuthMFA: Sendable {
   ///
   /// - Parameter params: The parameters for enrolling a new MFA factor.
   /// - Returns: An authentication response after enrolling the factor.
-  public func enroll(params: MFAEnrollParams) async throws -> AuthMFAEnrollResponse {
+  public func enroll(params: any MFAEnrollParamsType) async throws -> AuthMFAEnrollResponse {
     try await api.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("factors"),
@@ -42,7 +42,8 @@ public struct AuthMFA: Sendable {
     try await api.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
-        method: .post
+        method: .post,
+        body: params.channel == nil ? nil : encoder.encode(["channel": params.channel])
       )
     )
     .decoded(decoder: decoder)
@@ -112,7 +113,10 @@ public struct AuthMFA: Sendable {
     let totp = factors.filter {
       $0.factorType == "totp" && $0.status == .verified
     }
-    return AuthMFAListFactorsResponse(all: factors, totp: totp)
+    let phone = factors.filter {
+      $0.factorType == "phone" && $0.status == .verified
+    }
+    return AuthMFAListFactorsResponse(all: factors, totp: totp, phone: phone)
   }
 
   /// Returns the Authenticator Assurance Level (AAL) for the active session.
