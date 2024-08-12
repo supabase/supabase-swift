@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.0](https://github.com/supabase/supabase-swift/compare/v2.15.3...v2.16.0) (2024-08-12)
+
+
+### Features
+
+* **auth:** add MFA phone ([#496](https://github.com/supabase/supabase-swift/issues/496)) ([2e445f2](https://github.com/supabase/supabase-swift/commit/2e445f24ba1856dd7ebb57dfabbba45ec1e0f118))
+
 ## [2.15.3](https://github.com/supabase/supabase-swift/compare/v2.15.2...v2.15.3) (2024-08-06)
 
 
