@@ -126,3 +126,6 @@ extension AuthClient {
     )
   }
 }
+
+@available(*, deprecated, message: "Use MFATotpEnrollParams or MFAPhoneEnrollParams instead.")
+public typealias MFAEnrollParams = MFATotpEnrollParams

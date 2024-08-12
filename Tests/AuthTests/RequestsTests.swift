@@ -418,6 +418,76 @@ final class RequestsTests: XCTestCase {
     }
   }
 
+  func testMFAEnrollLegacy() async throws {
+    let sut = makeSUT()
+
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.mfa.enroll(params: MFAEnrollParams(issuer: "supabase.com", friendlyName: "test"))
+    }
+  }
+
+  func testMFAEnrollTotp() async throws {
+    let sut = makeSUT()
+
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.mfa.enroll(params: .totp(issuer: "supabase.com", friendlyName: "test"))
+    }
+  }
+
+  func testMFAEnrollPhone() async throws {
+    let sut = makeSUT()
+
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.mfa.enroll(params: .phone(friendlyName: "test", phone: "+1 202-918-2132"))
+    }
+  }
+
+  func testMFAChallenge() async throws {
+    let sut = makeSUT()
+
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.mfa.challenge(params: .init(factorId: "123"))
+    }
+  }
+
+  func testMFAChallengePhone() async throws {
+    let sut = makeSUT()
+
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.mfa.challenge(params: .init(factorId: "123", channel: .whatsapp))
+    }
+  }
+
+  func testMFAVerify() async throws {
+    let sut = makeSUT()
+
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.mfa.verify(params: .init(factorId: "123", challengeId: "123", code: "123456"))
+    }
+  }
+
+  func testMFAUnenroll() async throws {
+    let sut = makeSUT()
+
+    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.mfa.unenroll(params: .init(factorId: "123"))
+    }
+  }
+
   private func assert(_ block: () async throws -> Void) async {
     do {
       try await block()

@@ -1,0 +1,8 @@
+curl \
+	--request POST \
+	--header "Apikey: dummy.api.key" \
+	--header "Authorization: Bearer accesstoken" \
+	--header "Content-Type: application/json" \
+	--header "X-Client-Info: gotrue-swift/x.y.z" \
+	--data "{\"factor_type\":\"phone\",\"friendly_name\":\"test\",\"phone\":\"+1 202-918-2132\"}" \
+	"http://localhost:54321/auth/v1/factors"
