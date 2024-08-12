@@ -8,12 +8,12 @@ struct CodeVerifierStorage: Sendable {
 }
 
 extension CodeVerifierStorage {
-  static let live: Self = {
+  static var live: Self {
     let code = LockIsolated(String?.none)
 
     return Self(
       get: { code.value },
       set: { code.setValue($0) }
     )
-  }()
+  }
 }

@@ -9,7 +9,7 @@ struct Dependencies: Sendable {
   var sessionStorage: SessionStorage
   var sessionManager: SessionManager
 
-  var eventEmitter: AuthStateChangeEventEmitter = .shared
+  var eventEmitter = AuthStateChangeEventEmitter()
   var date: @Sendable () -> Date = { Date() }
   var codeVerifierStorage = CodeVerifierStorage.live
   var urlOpener: URLOpener = .live
