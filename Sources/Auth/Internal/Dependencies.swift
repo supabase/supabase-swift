@@ -6,12 +6,13 @@ struct Dependencies: Sendable {
   var configuration: AuthClient.Configuration
   var http: any HTTPClientType
   var api: APIClient
+  var codeVerifierStorage: CodeVerifierStorage
   var sessionStorage: SessionStorage
   var sessionManager: SessionManager
 
   var eventEmitter = AuthStateChangeEventEmitter()
   var date: @Sendable () -> Date = { Date() }
-  var codeVerifierStorage = CodeVerifierStorage.live
+
   var urlOpener: URLOpener = .live
 
   var encoder: JSONEncoder { configuration.encoder }

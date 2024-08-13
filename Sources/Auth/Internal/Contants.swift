@@ -8,3 +8,4 @@
 import Foundation
 
 let EXPIRY_MARGIN: TimeInterval = 30
+let STORAGE_KEY = "supabase.auth.token"

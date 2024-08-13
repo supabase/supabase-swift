@@ -36,6 +36,7 @@ final class SessionManagerTests: XCTestCase {
       ),
       http: http,
       api: APIClient(clientID: clientID),
+      codeVerifierStorage: .mock,
       sessionStorage: SessionStorage.live(clientID: clientID),
       sessionManager: SessionManager.live(clientID: clientID)
     )

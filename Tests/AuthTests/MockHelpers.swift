@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 import Foundation
 import TestHelpers
 
@@ -23,7 +24,19 @@ extension Dependencies {
     ),
     http: HTTPClientMock(),
     api: APIClient(clientID: AuthClientID()),
+    codeVerifierStorage: CodeVerifierStorage.mock,
     sessionStorage: SessionStorage.live(clientID: AuthClientID()),
     sessionManager: SessionManager.live(clientID: AuthClientID())
   )
+}
+
+extension CodeVerifierStorage {
+  static var mock: CodeVerifierStorage {
+    let code = LockIsolated<String?>(nil)
+
+    return Self(
+      get: { code.value },
+      set: { code.setValue($0) }
+    )
+  }
 }
