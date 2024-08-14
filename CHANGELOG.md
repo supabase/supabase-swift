@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.16.1](https://github.com/supabase/supabase-swift/compare/v2.16.0...v2.16.1) (2024-08-14)
+
+
+### Bug Fixes
+
+* **auth:** auth event emitter being shared among clients ([#500](https://github.com/supabase/supabase-swift/issues/500)) ([83f3385](https://github.com/supabase/supabase-swift/commit/83f338502a242691bc6455819fc0599c5e2021c1))
+* **auth:** store code verifier in keychain ([#502](https://github.com/supabase/supabase-swift/issues/502)) ([b86154a](https://github.com/supabase/supabase-swift/commit/b86154a9aa808f40f87de39e32cf48e40534662e))
+
 ## [2.16.0](https://github.com/supabase/supabase-swift/compare/v2.15.3...v2.16.0) (2024-08-12)
 
 
