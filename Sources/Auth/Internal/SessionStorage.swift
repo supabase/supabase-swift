@@ -28,7 +28,7 @@ struct SessionStorage {
 extension SessionStorage {
   static func live(clientID: AuthClientID) -> SessionStorage {
     var key: String {
-      Dependencies[clientID].configuration.storageKey ?? AuthClient.Configuration.defaultStorageKey
+      Dependencies[clientID].configuration.storageKey ?? STORAGE_KEY
     }
 
     var oldKey: String { "supabase.session" }

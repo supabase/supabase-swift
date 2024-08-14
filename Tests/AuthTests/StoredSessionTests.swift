@@ -17,6 +17,7 @@ final class StoredSessionTests: XCTestCase {
       ),
       http: HTTPClientMock(),
       api: .init(clientID: clientID),
+      codeVerifierStorage: .mock,
       sessionStorage: .live(clientID: clientID),
       sessionManager: .live(clientID: clientID)
     )

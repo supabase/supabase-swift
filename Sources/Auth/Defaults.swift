@@ -57,6 +57,4 @@ extension AuthClient.Configuration {
 
   /// The default value when initializing a ``AuthClient`` instance.
   public static let defaultAutoRefreshToken: Bool = true
-
-  static let defaultStorageKey = "supabase.auth.token"
 }

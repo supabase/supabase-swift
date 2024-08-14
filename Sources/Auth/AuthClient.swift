@@ -68,6 +68,7 @@ public final class AuthClient: Sendable {
       configuration: configuration,
       http: HTTPClient(configuration: configuration),
       api: APIClient(clientID: clientID),
+      codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
       sessionManager: .live(clientID: clientID)
     )
