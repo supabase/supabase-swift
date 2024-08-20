@@ -50,6 +50,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   }
 
   /// Set a HTTP header for the request.
+  @discardableResult
   public func setHeader(name: String, value: String) -> Self {
     mutableState.withValue {
       $0.request.headers.update(name: name, value: value)
