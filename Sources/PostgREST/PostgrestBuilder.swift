@@ -49,6 +49,14 @@ public class PostgrestBuilder: @unchecked Sendable {
     )
   }
 
+  /// Set a HTTP header for the request.
+  public func setHeader(name: String, value: String) -> Self {
+    mutableState.withValue {
+      $0.request.headers.update(name: name, value: value)
+    }
+    return self
+  }
+
   /// Executes the request and returns a response of type Void.
   /// - Parameters:
   ///   - options: Options for querying Supabase.
