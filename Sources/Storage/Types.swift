@@ -57,16 +57,28 @@ public struct FileOptions: Sendable {
   /// fetch() method.
   public var duplex: String?
 
+  /// The metadata option is an object that allows you to store additional information about the file.
+  /// This information can be used to filter and search for files.
+  /// The metadata object can contain any key-value pairs you want to store.
+  public var metadata: [String: AnyJSON]?
+
+  /// Optionally add extra headers.
+  public var headers: [String: String]?
+
   public init(
     cacheControl: String = "3600",
     contentType: String? = nil,
     upsert: Bool = false,
-    duplex: String? = nil
+    duplex: String? = nil,
+    metadata: [String: AnyJSON]? = nil,
+    headers: [String: String]? = nil
   ) {
     self.cacheControl = cacheControl
     self.contentType = contentType
     self.upsert = upsert
     self.duplex = duplex
+    self.metadata = metadata
+    self.headers = headers
   }
 }
 
@@ -163,6 +175,38 @@ public struct FileObject: Identifiable, Hashable, Codable, Sendable {
     case lastAccessedAt = "last_accessed_at"
     case metadata
     case buckets
+  }
+}
+
+public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
+  public let id: String
+  public let version: String
+  public let name: String
+  public let bucketId: String
+  public let updatedAt: Date
+  public let createdAt: Date
+  public let lastAccessedAt: Date
+  public let size: Int?
+  public let cacheControl: String?
+  public let contentType: String?
+  public let etag: String?
+  public let lastModified: Date?
+  public let metadata: [String: AnyJSON]?
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case version
+    case name
+    case bucketId = "bucket_id"
+    case updatedAt = "updated_at"
+    case createdAt = "created_at"
+    case lastAccessedAt = "last_accessed_at"
+    case size
+    case cacheControl = "cache_control"
+    case contentType = "content_type"
+    case etag
+    case lastModified = "last_modified"
+    case metadata
   }
 }
 

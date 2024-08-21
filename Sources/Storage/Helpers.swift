@@ -7,38 +7,67 @@
 
 import Foundation
 
-#if canImport(CoreServices)
+#if canImport(MobileCoreServices)
+  import MobileCoreServices
+#elseif canImport(CoreServices)
   import CoreServices
 #endif
 
 #if canImport(UniformTypeIdentifiers)
   import UniformTypeIdentifiers
-#endif
 
-#if os(Linux) || os(Windows)
-  /// On Linux or Windows this method always returns `application/octet-stream`.
-  func mimeTypeForExtension(_: String) -> String {
-    "application/octet-stream"
+  func mimeType(forPathExtension pathExtension: String) -> String {
+    #if swift(>=5.9)
+      if #available(iOS 14, macOS 11, tvOS 14, watchOS 7, visionOS 1, *) {
+        return UTType(filenameExtension: pathExtension)?.preferredMIMEType
+          ?? "application/octet-stream"
+      } else {
+        if let id = UTTypeCreatePreferredIdentifierForTag(
+          kUTTagClassFilenameExtension, pathExtension as CFString, nil
+        )?.takeRetainedValue(),
+          let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
+          .takeRetainedValue()
+        {
+          return contentType as String
+        }
+
+        return "application/octet-stream"
+      }
+    #else
+      if #available(iOS 14, macOS 11, tvOS 14, watchOS 7, *) {
+        return UTType(filenameExtension: pathExtension)?.preferredMIMEType
+          ?? "application/octet-stream"
+      } else {
+        if let id = UTTypeCreatePreferredIdentifierForTag(
+          kUTTagClassFilenameExtension, pathExtension as CFString, nil
+        )?.takeRetainedValue(),
+          let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
+          .takeRetainedValue()
+        {
+          return contentType as String
+        }
+
+        return "application/octet-stream"
+      }
+    #endif
   }
 #else
-  func mimeTypeForExtension(_ fileExtension: String) -> String {
-    if #available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, visionOS 1.0, *) {
-      return UTType(filenameExtension: fileExtension)?.preferredMIMEType ?? "application/octet-stream"
-    } else {
-      guard
-        let type = UTTypeCreatePreferredIdentifierForTag(
-          kUTTagClassFilenameExtension,
-          fileExtension as NSString,
-          nil
-        )?.takeUnretainedValue(),
-        let mimeType = UTTypeCopyPreferredTagWithClass(
-          type,
-          kUTTagClassMIMEType
-        )?.takeUnretainedValue()
-      else { return "application/octet-stream" }
 
-      return mimeType as String
-    }
+  // MARK: - Private - Mime Type
+
+  func mimeType(forPathExtension pathExtension: String) -> String {
+    #if canImport(CoreServices) || canImport(MobileCoreServices)
+      if let id = UTTypeCreatePreferredIdentifierForTag(
+        kUTTagClassFilenameExtension, pathExtension as CFString, nil
+      )?.takeRetainedValue(),
+        let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
+        .takeRetainedValue()
+      {
+        return contentType as String
+      }
+    #endif
+
+    return "application/octet-stream"
   }
 #endif
 

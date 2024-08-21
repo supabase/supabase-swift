@@ -64,7 +64,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testSignURL() async throws {
-    _ = try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000)
     XCTAssertTrue(
@@ -73,7 +73,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testSignURL_withDownloadQueryString() async throws {
-    _ = try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000, download: true)
     XCTAssertTrue(
@@ -83,7 +83,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testSignURL_withCustomFilenameForDownload() async throws {
-    _ = try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000, download: "test.jpg")
     XCTAssertTrue(
@@ -95,9 +95,9 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testUploadAndUpdateFile() async throws {
     let file2 = try Data(contentsOf: uploadFileURL("file-2.txt"))
 
-    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    let res = try await storage.from(bucketName).update(path: uploadPath, file: file2)
+    let res = try await storage.from(bucketName).update(uploadPath, data: file2)
     XCTAssertEqual(res.path, uploadPath)
   }
 
@@ -107,7 +107,7 @@ final class StorageFileIntegrationTests: XCTestCase {
       options: BucketOptions(public: true, fileSizeLimit: "1mb")
     )
 
-    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    try await storage.from(bucketName).upload(uploadPath, data: file)
   }
 
   func testUploadFileThatExceedFileSizeLimit() async throws {
@@ -117,7 +117,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     )
 
     do {
-      try await storage.from(bucketName).upload(path: uploadPath, file: file)
+      try await storage.from(bucketName).upload(uploadPath, data: file)
       XCTFail("Unexpected success")
     } catch {
       assertInlineSnapshot(of: error, as: .dump) {
@@ -141,8 +141,8 @@ final class StorageFileIntegrationTests: XCTestCase {
     )
 
     try await storage.from(bucketName).upload(
-      path: uploadPath,
-      file: file,
+      uploadPath,
+      data: file,
       options: FileOptions(
         contentType: "image/jpeg"
       )
@@ -157,8 +157,8 @@ final class StorageFileIntegrationTests: XCTestCase {
 
     do {
       try await storage.from(bucketName).upload(
-        path: uploadPath,
-        file: file,
+        uploadPath,
+        data: file,
         options: FileOptions(
           contentType: "image/jpeg"
         )
@@ -192,25 +192,25 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testCanUploadWithSignedURLForUpload() async throws {
     let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
 
-    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(path: res.path, token: res.token, file: file)
+    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
     XCTAssertEqual(uploadRes.path, uploadPath)
   }
 
   func testCanUploadOverwritingFilesWithSignedURL() async throws {
-    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath, options: CreateSignedUploadURLOptions(upsert: true))
-    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(path: res.path, token: res.token, file: file)
+    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
     XCTAssertEqual(uploadRes.path, uploadPath)
   }
 
   func testCannotUploadToSignedURLTwice() async throws {
     let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
 
-    try await storage.from(bucketName).uploadToSignedURL(path: res.path, token: res.token, file: file)
+    try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
 
     do {
-      try await storage.from(bucketName).uploadToSignedURL(path: res.path, token: res.token, file: file)
+      try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
       XCTFail("Unexpected success")
     } catch {
       assertInlineSnapshot(of: error, as: .dump) {
@@ -228,7 +228,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testListObjects() async throws {
-    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    try await storage.from(bucketName).upload(uploadPath, data: file)
     let res = try await storage.from(bucketName).list(path: "testpath")
 
     XCTAssertEqual(res.count, 1)
@@ -237,7 +237,7 @@ final class StorageFileIntegrationTests: XCTestCase {
 
   func testMoveObjectToDifferentPath() async throws {
     let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    try await storage.from(bucketName).upload(uploadPath, data: file)
 
     try await storage.from(bucketName).move(from: uploadPath, to: newPath)
   }
@@ -247,7 +247,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     try await findOrCreateBucket(name: newBucketName)
 
     let newPath = "testpath/file-to-move-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    try await storage.from(bucketName).upload(uploadPath, data: file)
 
     try await storage.from(bucketName).move(
       from: uploadPath,
@@ -260,7 +260,7 @@ final class StorageFileIntegrationTests: XCTestCase {
 
   func testCopyObjectToDifferentPath() async throws {
     let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    try await storage.from(bucketName).upload(uploadPath, data: file)
 
     try await storage.from(bucketName).copy(from: uploadPath, to: newPath)
   }
@@ -270,7 +270,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     try await findOrCreateBucket(name: newBucketName)
 
     let newPath = "testpath/file-to-copy-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    try await storage.from(bucketName).upload(uploadPath, data: file)
 
     try await storage.from(bucketName).copy(
       from: uploadPath,
@@ -282,14 +282,14 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testDownloadsAnObject() async throws {
-    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let res = try await storage.from(bucketName).download(path: uploadPath)
     XCTAssertGreaterThan(res.count, 0)
   }
 
   func testRemovesAnObject() async throws {
-    try await storage.from(bucketName).upload(path: uploadPath, file: file)
+    try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let res = try await storage.from(bucketName).remove(paths: [uploadPath])
     XCTAssertEqual(res.count, 1)
@@ -315,7 +315,7 @@ final class StorageFileIntegrationTests: XCTestCase {
 
   func testCreateAndLoadEmptyFolder() async throws {
     let path = "empty-folder/.placeholder"
-    try await storage.from(bucketName).upload(path: path, file: Data())
+    try await storage.from(bucketName).upload(path, data: Data())
 
     let files = try await storage.from(bucketName).list()
     assertInlineSnapshot(of: files, as: .json) {

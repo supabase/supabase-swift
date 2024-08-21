@@ -4,7 +4,7 @@ import Helpers
 public typealias SupabaseLogger = Helpers.SupabaseLogger
 public typealias SupabaseLogMessage = Helpers.SupabaseLogMessage
 
-public struct StorageClientConfiguration {
+public struct StorageClientConfiguration: Sendable {
   public let url: URL
   public var headers: [String: String]
   public let encoder: JSONEncoder
@@ -29,7 +29,7 @@ public struct StorageClientConfiguration {
   }
 }
 
-public class SupabaseStorageClient: StorageBucketApi {
+public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
   /// Perform file operation in a bucket.
   /// - Parameter id: The bucket id to operate on.
   /// - Returns: StorageFileApi object
