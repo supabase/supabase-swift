@@ -37,7 +37,10 @@ public class StorageApi: @unchecked Sendable {
     let response = try await http.send(request)
 
     guard (200 ..< 300).contains(response.statusCode) else {
-      if let error = try? configuration.decoder.decode(StorageError.self, from: response.data) {
+      if let error = try? configuration.decoder.decode(
+        StorageError.self,
+        from: response.data
+      ) {
         throw error
       }
 

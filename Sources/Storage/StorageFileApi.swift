@@ -15,6 +15,12 @@ let DEFAULT_SEARCH_OPTIONS = SearchOptions(
   )
 )
 
+private let defaultFileOptions = FileOptions(
+  cacheControl: "3600",
+  contentType: "text/plain;charset=UTF-8",
+  upsert: false
+)
+
 /// Supabase Storage File API
 public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// The bucket id to operate on.
@@ -33,19 +39,36 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let signedURL: URL
   }
 
+  private func encodeMetadata(_ metadata: JSONObject) -> Data {
+    let encoder = AnyJSON.encoder
+    return (try? encoder.encode(metadata)) ?? "{}".data(using: .utf8)!
+  }
+
   func uploadOrUpdate(
     method: HTTPMethod,
     path: String,
     formData: MultipartFormData,
-    options: FileOptions
+    options: FileOptions?
   ) async throws -> FileUploadResponse {
     var headers = HTTPHeaders()
+
+    let options = options ?? defaultFileOptions
+    let metadata = options.metadata
 
     if method == .post {
       headers.update(name: "x-upsert", value: "\(options.upsert)")
     }
 
     headers["duplex"] = options.duplex
+
+    if let metadata {
+      formData.append(encodeMetadata(metadata), withName: "metadata")
+    }
+
+    formData.append(
+      options.cacheControl.data(using: .utf8)!,
+      withName: "cacheControl"
+    )
 
     struct UploadResponse: Decodable {
       let Key: String
@@ -404,6 +427,27 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     .decoded(decoder: configuration.decoder)
   }
 
+  /// Checks the existence of file.
+  public func exists(path: String) async throws -> Bool {
+    do {
+      let response = try await execute(
+        HTTPRequest(
+          url: configuration.url.appendingPathComponent("object/\(bucketId)/\(path)"),
+          method: .head
+        )
+      )
+      return true
+    } catch {
+      if let error = error as? StorageError, let statusCode = error.statusCode,
+         ["400", "404"].contains(statusCode)
+      {
+        return false
+      }
+
+      throw error
+    }
+  }
+
   /// Returns a public url for an asset.
   /// - Parameters:
   ///  - path: The file path to the asset. For example `folder/image.png`.
@@ -517,13 +561,13 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     _ path: String,
     token: String,
     data: Data,
-    options: FileOptions = FileOptions()
+    options: FileOptions? = nil
   ) async throws -> SignedURLUploadResponse {
     let formData = MultipartFormData()
     formData.append(
       data,
       withName: path.fileName,
-      mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
+      mimeType: options?.contentType ?? mimeType(forPathExtension: path.pathExtension)
     )
     return try await _uploadToSignedURL(
       path: path,
@@ -545,7 +589,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     _ path: String,
     token: String,
     fileURL: Data,
-    options: FileOptions = FileOptions()
+    options: FileOptions? = nil
   ) async throws -> SignedURLUploadResponse {
     let formData = MultipartFormData()
     formData.append(fileURL, withName: path.fileName)
@@ -561,12 +605,19 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     path: String,
     token: String,
     formData: MultipartFormData,
-    options: FileOptions
+    options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
+    let options = options ?? defaultFileOptions
     var headers = HTTPHeaders([
       "x-upsert": "\(options.upsert)",
     ])
     headers["duplex"] = options.duplex
+
+    if let metadata = options.metadata {
+      formData.append(encodeMetadata(metadata), withName: "metadata")
+    }
+
+    formData.append(options.cacheControl.data(using: .utf8)!, withName: "cacheControl")
 
     struct UploadResponse: Decodable {
       let Key: String
