@@ -106,10 +106,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
+    let fileName = path.fileName
     let formData = MultipartFormData()
     formData.append(
       data,
-      withName: path.fileName,
+      withName: fileName,
+      fileName: fileName,
       mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
     )
     return try await uploadOrUpdate(method: .post, path: path, formData: formData, options: options)
@@ -121,8 +123,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     fileURL: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
+    let fileName = path.fileName
     let formData = MultipartFormData()
-    formData.append(fileURL, withName: path.fileName)
+    formData.append(fileURL, withName: fileName, fileName: fileName)
     return try await uploadOrUpdate(method: .post, path: path, formData: formData, options: options)
   }
 
@@ -138,10 +141,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
+    let fileName = path.fileName
     let formData = MultipartFormData()
     formData.append(
       data,
-      withName: path.fileName,
+      withName: fileName,
+      fileName: fileName,
       mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
     )
     return try await uploadOrUpdate(method: .put, path: path, formData: formData, options: options)
@@ -430,7 +435,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// Checks the existence of file.
   public func exists(path: String) async throws -> Bool {
     do {
-      let response = try await execute(
+      try await execute(
         HTTPRequest(
           url: configuration.url.appendingPathComponent("object/\(bucketId)/\(path)"),
           method: .head
@@ -438,9 +443,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       )
       return true
     } catch {
-      if let error = error as? StorageError, let statusCode = error.statusCode,
-         ["400", "404"].contains(statusCode)
-      {
+      var statusCode: Int?
+
+      if let error = error as? StorageError {
+        statusCode = error.statusCode.flatMap(Int.init)
+      } else if let error = error as? HTTPError {
+        statusCode = error.response.statusCode
+      }
+
+      if let statusCode, [400, 404].contains(statusCode) {
         return false
       }
 
@@ -563,10 +574,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     data: Data,
     options: FileOptions? = nil
   ) async throws -> SignedURLUploadResponse {
+    let fileName = path.fileName
     let formData = MultipartFormData()
     formData.append(
       data,
-      withName: path.fileName,
+      withName: fileName,
+      fileName: fileName,
       mimeType: options?.contentType ?? mimeType(forPathExtension: path.pathExtension)
     )
     return try await _uploadToSignedURL(

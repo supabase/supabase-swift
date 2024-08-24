@@ -329,6 +329,23 @@ final class StorageFileIntegrationTests: XCTestCase {
     }
   }
 
+  func testInfo() async throws {
+    try await storage.from(bucketName).upload(uploadPath, data: file)
+
+    let info = try await storage.from(bucketName).info(path: uploadPath)
+    assertInlineSnapshot(of: info, as: .json)
+  }
+
+  func testExists() async throws {
+    try await storage.from(bucketName).upload(uploadPath, data: file)
+
+    var exists = try await storage.from(bucketName).exists(path: uploadPath)
+    XCTAssertTrue(exists)
+
+    exists = try await storage.from(bucketName).exists(path: "invalid.jpg")
+    XCTAssertFalse(exists)
+  }
+
   private func newBucket(
     prefix: String = "",
     options: BucketOptions = BucketOptions(public: true)
