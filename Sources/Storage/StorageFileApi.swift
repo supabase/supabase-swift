@@ -44,15 +44,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     return (try? encoder.encode(metadata)) ?? "{}".data(using: .utf8)!
   }
 
-  func uploadOrUpdate(
+  private func _uploadOrUpdate(
     method: HTTPMethod,
     path: String,
     formData: MultipartFormData,
     options: FileOptions?
   ) async throws -> FileUploadResponse {
-    var headers = HTTPHeaders()
-
     let options = options ?? defaultFileOptions
+    var headers = options.headers.map { HTTPHeaders($0) } ?? HTTPHeaders()
+
     let metadata = options.metadata
 
     if method == .post {
@@ -114,7 +114,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       fileName: fileName,
       mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
     )
-    return try await uploadOrUpdate(method: .post, path: path, formData: formData, options: options)
+    return try await _uploadOrUpdate(method: .post, path: path, formData: formData, options: options)
   }
 
   @discardableResult
@@ -126,7 +126,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let fileName = path.fileName
     let formData = MultipartFormData()
     formData.append(fileURL, withName: fileName, fileName: fileName)
-    return try await uploadOrUpdate(method: .post, path: path, formData: formData, options: options)
+    return try await _uploadOrUpdate(method: .post, path: path, formData: formData, options: options)
   }
 
   /// Replaces an existing file at the specified path with a new one.
@@ -149,7 +149,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       fileName: fileName,
       mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
     )
-    return try await uploadOrUpdate(method: .put, path: path, formData: formData, options: options)
+    return try await _uploadOrUpdate(method: .put, path: path, formData: formData, options: options)
   }
 
   /// Replaces an existing file at the specified path with a new one.
@@ -166,7 +166,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ) async throws -> FileUploadResponse {
     let formData = MultipartFormData()
     formData.append(fileURL, withName: path.fileName)
-    return try await uploadOrUpdate(method: .put, path: path, formData: formData, options: options)
+    return try await _uploadOrUpdate(method: .put, path: path, formData: formData, options: options)
   }
 
   /// Moves an existing file, optionally renaming it at the same time.
@@ -621,9 +621,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
     let options = options ?? defaultFileOptions
-    var headers = HTTPHeaders([
-      "x-upsert": "\(options.upsert)",
-    ])
+    var headers = options.headers.map { HTTPHeaders($0) } ?? HTTPHeaders()
+
+    headers["x-upsert"] = "\(options.upsert)"
     headers["duplex"] = options.duplex
 
     if let metadata = options.metadata {
