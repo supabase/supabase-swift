@@ -425,7 +425,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   public func info(path: String) async throws -> FileObjectV2 {
     try await execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/info/\(bucketId)/\(path)"),
+        url: configuration.url.appendingPathComponent("object/info/public/\(bucketId)/\(path)"),
         method: .get
       )
     )

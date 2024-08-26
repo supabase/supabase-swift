@@ -182,10 +182,10 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
   public let id: String
   public let version: String
   public let name: String
-  public let bucketId: String
-  public let updatedAt: Date
-  public let createdAt: Date
-  public let lastAccessedAt: Date
+  public let bucketId: String?
+  public let updatedAt: Date?
+  public let createdAt: Date?
+  public let lastAccessedAt: Date?
   public let size: Int?
   public let cacheControl: String?
   public let contentType: String?

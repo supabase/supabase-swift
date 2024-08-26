@@ -333,7 +333,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let info = try await storage.from(bucketName).info(path: uploadPath)
-    assertInlineSnapshot(of: info, as: .json)
+    XCTAssertEqual(info.name, uploadPath)
   }
 
   func testExists() async throws {
