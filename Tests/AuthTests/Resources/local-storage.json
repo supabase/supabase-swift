@@ -1,45 +1,42 @@
 {
   "supabase.auth.token" : {
-    "expiration_date" : "2024-04-01T13:25:07.000Z",
-    "session" : {
-      "access_token" : "accesstoken",
-      "expires_at" : 1711977907,
-      "expires_in" : 120,
-      "refresh_token" : "refreshtoken",
-      "token_type" : "bearer",
-      "user" : {
-        "app_metadata" : {
+    "access_token" : "accesstoken",
+    "expires_at" : 1711977907,
+    "expires_in" : 120,
+    "refresh_token" : "refreshtoken",
+    "token_type" : "bearer",
+    "user" : {
+      "app_metadata" : {
+        "provider" : "email",
+        "providers" : [
+          "email"
+        ]
+      },
+      "aud" : "authenticated",
+      "confirmation_sent_at" : "2022-04-09T11:57:01.000Z",
+      "created_at" : "2022-04-09T11:57:01.000Z",
+      "email" : "johndoe@supabsae.com",
+      "id" : "859F402D-B3DE-4105-A1B9-932836D9193B",
+      "identities" : [
+        {
+          "created_at" : "2022-04-09T11:57:01.000Z",
+          "id" : "859f402d-b3de-4105-a1b9-932836d9193b",
+          "identity_data" : {
+            "sub" : "859f402d-b3de-4105-a1b9-932836d9193b"
+          },
+          "identity_id" : "859F402D-B3DE-4105-A1B9-932836D9193B",
+          "last_sign_in_at" : "2022-04-09T11:57:01.000Z",
           "provider" : "email",
-          "providers" : [
-            "email"
-          ]
-        },
-        "aud" : "authenticated",
-        "confirmation_sent_at" : "2022-04-09T11:57:01.000Z",
-        "created_at" : "2022-04-09T11:57:01.000Z",
-        "email" : "johndoe@supabsae.com",
-        "id" : "859F402D-B3DE-4105-A1B9-932836D9193B",
-        "identities" : [
-          {
-            "created_at" : "2022-04-09T11:57:01.000Z",
-            "id" : "859f402d-b3de-4105-a1b9-932836d9193b",
-            "identity_data" : {
-              "sub" : "859f402d-b3de-4105-a1b9-932836d9193b"
-            },
-            "identity_id" : "859F402D-B3DE-4105-A1B9-932836D9193B",
-            "last_sign_in_at" : "2022-04-09T11:57:01.000Z",
-            "provider" : "email",
-            "updated_at" : "2022-04-09T11:57:01.000Z",
-            "user_id" : "859F402D-B3DE-4105-A1B9-932836D9193B"
-          }
-        ],
-        "is_anonymous" : false,
-        "phone" : "",
-        "role" : "authenticated",
-        "updated_at" : "2022-04-09T11:57:01.000Z",
-        "user_metadata" : {
-          "referrer_id" : null
+          "updated_at" : "2022-04-09T11:57:01.000Z",
+          "user_id" : "859F402D-B3DE-4105-A1B9-932836D9193B"
         }
+      ],
+      "is_anonymous" : false,
+      "phone" : "",
+      "role" : "authenticated",
+      "updated_at" : "2022-04-09T11:57:01.000Z",
+      "user_metadata" : {
+        "referrer_id" : null
       }
     }
   }
