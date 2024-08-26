@@ -222,6 +222,11 @@ final class BuildURLRequestTests: XCTestCase {
           .select()
           .eq("to", value: "+16505555555")
       },
+      TestCase(name: "filter using Date") { client in
+        client.from("users")
+          .select()
+          .gt("created_at", value: Date(timeIntervalSince1970: 0))
+      },
     ]
 
     for testCase in testCases {
