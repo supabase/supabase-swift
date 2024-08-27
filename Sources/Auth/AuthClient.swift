@@ -449,9 +449,7 @@ public final class AuthClient: Sendable {
 
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
   public func exchangeCodeForSession(authCode: String) async throws -> Session {
-    guard let codeVerifier = codeVerifierStorage.get() else {
-      throw AuthError.pkce(.codeVerifierNotFound)
-    }
+    let codeVerifier = codeVerifierStorage.get() ?? ""
 
     let session: Session = try await api.execute(
       .init(
@@ -519,14 +517,10 @@ public final class AuthClient: Sendable {
     queryParams: [(name: String, value: String?)] = [],
     launchFlow: @MainActor @Sendable (_ url: URL) async throws -> URL
   ) async throws -> Session {
-    guard let redirectTo = (redirectTo ?? configuration.redirectToURL) else {
-      throw AuthError.invalidRedirectScheme
-    }
-
     let url = try getOAuthSignInURL(
       provider: provider,
       scopes: scopes,
-      redirectTo: redirectTo,
+      redirectTo: redirectTo ?? configuration.redirectToURL,
       queryParams: queryParams
     )
 
@@ -566,8 +560,9 @@ public final class AuthClient: Sendable {
       ) { @MainActor url in
         try await withCheckedThrowingContinuation { continuation in
           guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
-            continuation.resume(throwing: AuthError.invalidRedirectScheme)
-            return
+            preconditionFailure(
+              "Please, provide a valid redirect URL, either thorugh `redirectTo` param, or globally thorugh `AuthClient.Configuration.redirectToURL`."
+            )
           }
 
           #if !os(tvOS) && !os(watchOS)
@@ -583,7 +578,7 @@ public final class AuthClient: Sendable {
             } else if let url {
               continuation.resume(returning: url)
             } else {
-              continuation.resume(throwing: AuthError.missingURL)
+              fatalError("Expected url or error, but got none.")
             }
 
             #if !os(tvOS) && !os(watchOS)
@@ -674,24 +669,38 @@ public final class AuthClient: Sendable {
     let params = extractParams(from: url)
 
     if configuration.flowType == .implicit, !isImplicitGrantFlow(params: params) {
-      throw AuthError.invalidImplicitGrantFlowURL
+      throw SupabaseAuthImplicitGrantRedirectError(
+        message: "Not a valid implicit grant flow url: \(url)"
+      )
     }
 
     if configuration.flowType == .pkce, !isPKCEFlow(params: params) {
-      throw AuthError.pkce(.invalidPKCEFlowURL)
+      throw SupabaseAuthPKCEGrantCodeExchangeError(
+        message: "Not a valid PKCE flow url: \(url)",
+        error: nil,
+        code: nil
+      )
     }
 
     if isPKCEFlow(params: params) {
       guard let code = params["code"] else {
-        throw AuthError.pkce(.codeVerifierNotFound)
+        throw SupabaseAuthPKCEGrantCodeExchangeError(
+          message: "No code detected.",
+          error: nil,
+          code: nil
+        )
       }
 
       let session = try await exchangeCodeForSession(authCode: code)
       return session
     }
 
-    if let errorDescription = params["error_description"] {
-      throw AuthError.api(.init(errorDescription: errorDescription))
+    if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
+      throw SupabaseAuthPKCEGrantCodeExchangeError(
+        message: params["error_description"] ?? "Error in URL with unspecified error_description.",
+        error: params["error"] ?? "unspecified_error",
+        code: params["error_code"] ?? "unspecified_code"
+      )
     }
 
     guard
@@ -700,7 +709,7 @@ public final class AuthClient: Sendable {
       let refreshToken = params["refresh_token"],
       let tokenType = params["token_type"]
     else {
-      throw URLError(.badURL)
+      throw SupabaseAuthImplicitGrantRedirectError(message: "No session defined in URL")
     }
 
     let expiresAt = params["expires_at"].flatMap(TimeInterval.init)
@@ -753,11 +762,9 @@ public final class AuthClient: Sendable {
     var session: Session
 
     let jwt = try decode(jwt: accessToken)
-    if let exp = jwt["exp"] as? TimeInterval {
+    if let exp = jwt?["exp"] as? TimeInterval {
       expiresAt = Date(timeIntervalSince1970: exp)
       hasExpired = expiresAt <= now
-    } else {
-      throw AuthError.missingExpClaim
     }
 
     if hasExpired {
@@ -803,14 +810,12 @@ public final class AuthClient: Sendable {
           headers: [.init(name: "Authorization", value: "Bearer \(accessToken)")]
         )
       )
-    } catch {
+    } catch let error as SupabaseAuthAPIError {
       // ignore 404s since user might not exist anymore
       // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.
       let ignoredCodes = Set([404, 403, 401])
 
-      if case let AuthError.api(apiError) = error, let code = apiError.code,
-         !ignoredCodes.contains(code)
-      {
+      if !ignoredCodes.contains(error.status) {
         throw error
       }
     }
@@ -1169,7 +1174,7 @@ public final class AuthClient: Sendable {
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {
     guard let refreshToken = refreshToken ?? currentSession?.refreshToken else {
-      throw AuthError.sessionNotFound
+      throw SupabaseAuthSessionMissingError()
     }
 
     return try await sessionManager.refreshSession(refreshToken)

@@ -24,8 +24,8 @@ public typealias GoTrueLocalStorage = AuthLocalStorage
 @available(*, deprecated, renamed: "AuthMetaSecurity")
 public typealias GoTrueMetaSecurity = AuthMetaSecurity
 
-@available(*, deprecated, renamed: "AuthError")
-public typealias GoTrueError = AuthError
+// @available(*, deprecated, renamed: "AuthError")
+// public typealias GoTrueError = AuthError
 
 extension JSONEncoder {
   @available(
