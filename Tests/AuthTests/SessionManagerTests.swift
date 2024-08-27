@@ -12,6 +12,7 @@ import Helpers
 import TestHelpers
 import XCTest
 import XCTestDynamicOverlay
+import InlineSnapshotTesting
 
 final class SessionManagerTests: XCTestCase {
   var http: HTTPClientMock!
@@ -45,10 +46,17 @@ final class SessionManagerTests: XCTestCase {
   func testSession_shouldFailWithSessionNotFound() async {
     do {
       _ = try await sut.session()
-      XCTFail("Expected a \(AuthError.sessionNotFound) failure")
-    } catch AuthError.sessionNotFound {
+      XCTFail("Expected a \(SupabaseAuthSessionMissingError()) failure")
     } catch {
-      XCTFail("Unexpected error \(error)")
+      assertInlineSnapshot(of: error, as: .dump) {
+        """
+        ▿ SupabaseAuthSessionMissingError
+          ▿ errorCode: ErrorCode
+            - rawValue: "session_not_found"
+          - message: "Auth session missing."
+
+        """
+      }
     }
   }
 

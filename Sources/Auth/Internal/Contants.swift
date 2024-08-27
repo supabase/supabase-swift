@@ -22,11 +22,17 @@ struct APIVersion {
   enum Name: String {
     case _20240101 = "2024-01-01"
   }
+
+  static func date(for name: Name) -> Date {
+    let formattar = ISO8601DateFormatter()
+    formattar.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formattar.date(from: "\(name.rawValue)T00:00:00.0Z")!
+  }
 }
 
 extension APIVersion {
   static let _20240101 = APIVersion(
-    timestamp: ISO8601DateFormatter().date(from: "\(Name._20240101)T00:00:00.0Z")!,
+    timestamp: APIVersion.date(for: ._20240101),
     name: ._20240101
   )
 }
