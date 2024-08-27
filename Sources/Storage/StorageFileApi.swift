@@ -422,15 +422,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   }
 
   /// Retrieves the details of an existing file.
-//  public func info(path: String) async throws -> FileObjectV2 {
-//    try await execute(
-//      HTTPRequest(
-//        url: configuration.url.appendingPathComponent("object/info/public/\(bucketId)/\(path)"),
-//        method: .get
-//      )
-//    )
-//    .decoded(decoder: configuration.decoder)
-//  }
+  public func info(path: String) async throws -> FileObjectV2 {
+    try await execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/info/authenticated/\(bucketId)/\(path)"),
+        method: .get
+      )
+    )
+    .decoded(decoder: configuration.decoder)
+  }
 
   /// Checks the existence of file.
   public func exists(path: String) async throws -> Bool {
