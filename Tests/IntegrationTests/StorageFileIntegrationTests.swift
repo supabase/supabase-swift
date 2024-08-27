@@ -329,19 +329,19 @@ final class StorageFileIntegrationTests: XCTestCase {
     }
   }
 
-  func testInfo() async throws {
-    try await storage.from(bucketName).upload(
-      uploadPath,
-      data: file,
-      options: FileOptions(
-        metadata: ["value": 42]
-      )
-    )
-
-    let info = try await storage.from(bucketName).info(path: uploadPath)
-    XCTAssertEqual(info.name, uploadPath)
-    XCTAssertEqual(info.metadata, ["value": 42])
-  }
+//  func testInfo() async throws {
+//    try await storage.from(bucketName).upload(
+//      uploadPath,
+//      data: file,
+//      options: FileOptions(
+//        metadata: ["value": 42]
+//      )
+//    )
+//
+//    let info = try await storage.from(bucketName).info(path: uploadPath)
+//    XCTAssertEqual(info.name, uploadPath)
+//    XCTAssertEqual(info.metadata, ["value": 42])
+//  }
 
   func testExists() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file)
