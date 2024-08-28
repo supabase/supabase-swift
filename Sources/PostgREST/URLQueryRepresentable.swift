@@ -27,6 +27,14 @@ extension UUID: URLQueryRepresentable {
   public var queryValue: String { uuidString }
 }
 
+extension Date: URLQueryRepresentable {
+  public var queryValue: String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.string(from: self)
+  }
+}
+
 extension Array: URLQueryRepresentable where Element: URLQueryRepresentable {
   public var queryValue: String {
     "{\(map(\.queryValue).joined(separator: ","))}"
