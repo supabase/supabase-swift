@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.17.0](https://github.com/supabase/supabase-swift/compare/v2.16.1...v2.17.0) (2024-08-28)
+
+
+### Features
+
+* **postgrest:** set header on a per call basis ([#508](https://github.com/supabase/supabase-swift/issues/508)) ([a15efb1](https://github.com/supabase/supabase-swift/commit/a15efb15a26c76d4bbc13e570c4841633ccd6177))
+* **postgrest:** use `Date` when filtering columns ([#514](https://github.com/supabase/supabase-swift/issues/514)) ([1b0155c](https://github.com/supabase/supabase-swift/commit/1b0155c3d35c23ccefceffbb13eb36f2c5ec513f))
+
+
+### Bug Fixes
+
+* **auth:** store session directly without wrapping in StoredSession type ([#513](https://github.com/supabase/supabase-swift/issues/513)) ([5de2d8d](https://github.com/supabase/supabase-swift/commit/5de2d8da722183a3be80bfddd48637932e9cbc23))
+
 ## [2.16.1](https://github.com/supabase/supabase-swift/compare/v2.16.0...v2.16.1) (2024-08-14)
 
 
