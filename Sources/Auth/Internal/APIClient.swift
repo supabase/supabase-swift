@@ -69,7 +69,7 @@ struct APIClient: Sendable {
     ) else {
       return .api(
         message: "Unexpected error",
-        errorCode: .UnexpectedFailure,
+        errorCode: .unexpectedFailure,
         underlyingData: response.data,
         underlyingResponse: response.underlyingResponse
       )
@@ -88,17 +88,17 @@ struct APIClient: Sendable {
         message: error._getErrorMessage(),
         reasons: weakPassword.reasons ?? []
       )
-    } else if errorCode == .WeakPassword {
+    } else if errorCode == .weakPassword {
       return .weakPassword(
         message: error._getErrorMessage(),
         reasons: error.weakPassword?.reasons ?? []
       )
-    } else if errorCode == .SessionNotFound {
+    } else if errorCode == .sessionNotFound {
       return .sessionMissing
     } else {
       return .api(
         message: error._getErrorMessage(),
-        errorCode: errorCode ?? .Unknown,
+        errorCode: errorCode ?? .unknown,
         underlyingData: response.data,
         underlyingResponse: response.underlyingResponse
       )

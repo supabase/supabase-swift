@@ -800,7 +800,7 @@ public final class AuthClient: Sendable {
           headers: [.init(name: "Authorization", value: "Bearer \(accessToken)")]
         )
       )
-    } catch let AuthError.api(_, _, _, response) where ![404, 403, 401].contains(response.statusCode) {
+    } catch let AuthError.api(_, _, _, response) where [404, 403, 401].contains(response.statusCode) {
       // ignore 404s since user might not exist anymore
       // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.
     }

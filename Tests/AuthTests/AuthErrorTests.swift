@@ -11,28 +11,28 @@ import XCTest
 final class AuthErrorTests: XCTestCase {
   func testErrors() {
     let sessionMissing = AuthError.sessionMissing
-    XCTAssertEqual(sessionMissing.errorCode, .SessionNotFound)
+    XCTAssertEqual(sessionMissing.errorCode, .sessionNotFound)
     XCTAssertEqual(sessionMissing.message, "Auth session missing.")
 
     let weakPassword = AuthError.weakPassword(message: "Weak password", reasons: [])
-    XCTAssertEqual(weakPassword.errorCode, .WeakPassword)
+    XCTAssertEqual(weakPassword.errorCode, .weakPassword)
     XCTAssertEqual(weakPassword.message, "Weak password")
 
     let api = AuthError.api(
       message: "API Error",
-      errorCode: .EmailConflictIdentityNotDeletable,
+      errorCode: .emailConflictIdentityNotDeletable,
       underlyingData: Data(),
       underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 400, httpVersion: nil, headerFields: nil)!
     )
-    XCTAssertEqual(api.errorCode, .EmailConflictIdentityNotDeletable)
+    XCTAssertEqual(api.errorCode, .emailConflictIdentityNotDeletable)
     XCTAssertEqual(api.message, "API Error")
 
     let pkceGrantCodeExchange = AuthError.pkceGrantCodeExchange(message: "PKCE failure", error: nil, code: nil)
-    XCTAssertEqual(pkceGrantCodeExchange.errorCode, .Unknown)
+    XCTAssertEqual(pkceGrantCodeExchange.errorCode, .unknown)
     XCTAssertEqual(pkceGrantCodeExchange.message, "PKCE failure")
 
     let implicitGrantRedirect = AuthError.implicitGrantRedirect(message: "Implicit grant failure")
-    XCTAssertEqual(implicitGrantRedirect.errorCode, .Unknown)
+    XCTAssertEqual(implicitGrantRedirect.errorCode, .unknown)
     XCTAssertEqual(implicitGrantRedirect.message, "Implicit grant failure")
   }
 }

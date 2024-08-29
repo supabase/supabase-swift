@@ -124,7 +124,7 @@ final class AuthClientTests: XCTestCase {
     sut = makeSUT { _ in
       throw AuthError.api(
         message: "",
-        errorCode: .Unknown,
+        errorCode: .unknown,
         underlyingData: Data(),
         underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 404, httpVersion: nil, headerFields: nil)!
       )
@@ -155,7 +155,7 @@ final class AuthClientTests: XCTestCase {
     sut = makeSUT { _ in
       throw AuthError.api(
         message: "",
-        errorCode: .InvalidCredentials,
+        errorCode: .invalidCredentials,
         underlyingData: Data(),
         underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
       )
@@ -186,7 +186,7 @@ final class AuthClientTests: XCTestCase {
     sut = makeSUT { _ in
       throw AuthError.api(
         message: "",
-        errorCode: .InvalidCredentials,
+        errorCode: .invalidCredentials,
         underlyingData: Data(),
         underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 403, httpVersion: nil, headerFields: nil)!
       )
