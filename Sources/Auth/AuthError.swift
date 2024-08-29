@@ -101,6 +101,125 @@ extension ErrorCode {
 }
 
 public enum AuthError: LocalizedError {
+  @available(
+    *,
+    deprecated,
+    message: "Error used to be thrown when no exp claim was found in JWT during setSession(accessToken:refreshToken:) method."
+  )
+  case missingExpClaim
+
+  @available(
+    *,
+    deprecated,
+    message: "Error used to be thrown when provided JWT wasn't valid during setSession(accessToken:refreshToken:) method."
+  )
+  case malformedJWT
+
+  @available(*, deprecated, renamed: "sessionMissing")
+  public static var sessionNotFound: AuthError { .sessionMissing }
+
+  /// Error thrown during PKCE flow.
+  @available(
+    *,
+    deprecated,
+    renamed: "pkceGrantCodeExchange",
+    message: "Error was grouped in `pkceGrantCodeExchange`, please use it instead of `pkce`."
+  )
+  public static func pkce(_ reason: PKCEFailureReason) -> AuthError {
+    switch reason {
+    case .codeVerifierNotFound:
+      .pkceGrantCodeExchange(message: "A code verifier wasn't found in PKCE flow.")
+    case .invalidPKCEFlowURL:
+      .pkceGrantCodeExchange(message: "Not a valid PKCE flow url.")
+    }
+  }
+
+  @available(*, deprecated, message: "Use `pkceGrantCodeExchange` instead.")
+  public enum PKCEFailureReason: Sendable {
+    /// Code verifier not found in the URL.
+    case codeVerifierNotFound
+
+    /// Not a valid PKCE flow URL.
+    case invalidPKCEFlowURL
+  }
+
+  @available(*, deprecated, renamed: "implicitGrantRedirect")
+  public static var invalidImplicitGrantFlowURL: AuthError {
+    .implicitGrantRedirect(message: "Not a valid implicit grant flow url.")
+  }
+
+  @available(
+    *,
+    deprecated,
+    message: "This error is never thrown, if you depend on it, you can remove the logic as it never happens."
+  )
+  case missingURL
+
+  @available(
+    *,
+    deprecated,
+    message: "Error used to be thrown on methods which required a valid redirect scheme, such as signInWithOAuth. This is now considered a programming error an a assertion is triggered in case redirect scheme isn't provided."
+  )
+  case invalidRedirectScheme
+
+  @available(
+    *,
+    deprecated,
+    renamed: "api(message:errorCode:underlyingData:underlyingResponse:)"
+  )
+  public static func api(_ error: APIError) -> AuthError {
+    let message = error.msg ?? error.error ?? error.errorDescription ?? "Unexpected API error."
+    if let weakPassword = error.weakPassword {
+      return .weakPassword(message: message, reasons: weakPassword.reasons)
+    }
+
+    return .api(
+      message: message,
+      errorCode: .Unknown,
+      underlyingData: (try? AuthClient.Configuration.jsonEncoder.encode(error)) ?? Data(),
+      underlyingResponse: HTTPURLResponse(
+        url: URL(string: "http://localhost")!,
+        statusCode: error.code ?? 500,
+        httpVersion: nil,
+        headerFields: nil
+      )!
+    )
+  }
+
+  /// An error returned by the API.
+  @available(
+    *,
+    deprecated,
+    renamed: "api(message:errorCode:underlyingData:underlyingResponse:)"
+  )
+  public struct APIError: Error, Codable, Sendable, Equatable {
+    /// A basic message describing the problem with the request. Usually missing if
+    /// ``AuthError/APIError/error`` is present.
+    public var msg: String?
+
+    /// The HTTP status code. Usually missing if ``AuthError/APIError/error`` is present.
+    public var code: Int?
+
+    /// Certain responses will contain this property with the provided values.
+    ///
+    /// Usually one of these:
+    ///   - `invalid_request`
+    ///   - `unauthorized_client`
+    ///   - `access_denied`
+    ///   - `server_error`
+    ///   - `temporarily_unavailable`
+    ///   - `unsupported_otp_type`
+    public var error: String?
+
+    /// Certain responses that have an ``AuthError/APIError/error`` property may have this property
+    /// which describes the error.
+    public var errorDescription: String?
+
+    /// Only returned when signing up if the password used is too weak. Inspect the
+    /// ``WeakPassword/reasons`` and ``AuthError/APIError/msg`` property to identify the causes.
+    public var weakPassword: WeakPassword?
+  }
+
   case sessionMissing
   case weakPassword(message: String, reasons: [String])
   case api(
@@ -120,6 +239,11 @@ public enum AuthError: LocalizedError {
          let .pkceGrantCodeExchange(message, _, _),
          let .implicitGrantRedirect(message):
       message
+    // Deprecated cases
+    case .missingExpClaim: "Missing expiration claim in the access token."
+    case .malformedJWT: "A malformed JWT received."
+    case .invalidRedirectScheme: "Invalid redirect scheme."
+    case .missingURL: "Missing URL."
     }
   }
 
@@ -129,6 +253,8 @@ public enum AuthError: LocalizedError {
     case .weakPassword: .WeakPassword
     case let .api(_, errorCode, _, _): errorCode
     case .pkceGrantCodeExchange, .implicitGrantRedirect: .Unknown
+    // Deprecated cases
+    case .missingExpClaim, .malformedJWT, .invalidRedirectScheme, .missingURL: .Unknown
     }
   }
 
