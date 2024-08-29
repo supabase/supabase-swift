@@ -669,26 +669,16 @@ public final class AuthClient: Sendable {
     let params = extractParams(from: url)
 
     if configuration.flowType == .implicit, !isImplicitGrantFlow(params: params) {
-      throw SupabaseAuthImplicitGrantRedirectError(
-        message: "Not a valid implicit grant flow url: \(url)"
-      )
+      throw AuthError.implicitGrantRedirect(message: "Not a valid implicit grant flow url: \(url)")
     }
 
     if configuration.flowType == .pkce, !isPKCEFlow(params: params) {
-      throw SupabaseAuthPKCEGrantCodeExchangeError(
-        message: "Not a valid PKCE flow url: \(url)",
-        error: nil,
-        code: nil
-      )
+      throw AuthError.pkceGrantCodeExchange(message: "Not a valid PKCE flow url: \(url)")
     }
 
     if isPKCEFlow(params: params) {
       guard let code = params["code"] else {
-        throw SupabaseAuthPKCEGrantCodeExchangeError(
-          message: "No code detected.",
-          error: nil,
-          code: nil
-        )
+        throw AuthError.pkceGrantCodeExchange(message: "No code detected.")
       }
 
       let session = try await exchangeCodeForSession(authCode: code)
@@ -696,7 +686,7 @@ public final class AuthClient: Sendable {
     }
 
     if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
-      throw SupabaseAuthPKCEGrantCodeExchangeError(
+      throw AuthError.pkceGrantCodeExchange(
         message: params["error_description"] ?? "Error in URL with unspecified error_description.",
         error: params["error"] ?? "unspecified_error",
         code: params["error_code"] ?? "unspecified_code"
@@ -709,7 +699,7 @@ public final class AuthClient: Sendable {
       let refreshToken = params["refresh_token"],
       let tokenType = params["token_type"]
     else {
-      throw SupabaseAuthImplicitGrantRedirectError(message: "No session defined in URL")
+      throw AuthError.implicitGrantRedirect(message: "No session defined in URL")
     }
 
     let expiresAt = params["expires_at"].flatMap(TimeInterval.init)
@@ -810,14 +800,9 @@ public final class AuthClient: Sendable {
           headers: [.init(name: "Authorization", value: "Bearer \(accessToken)")]
         )
       )
-    } catch let error as SupabaseAuthAPIError {
+    } catch let AuthError.api(_, _, _, response) where ![404, 403, 401].contains(response.statusCode) {
       // ignore 404s since user might not exist anymore
       // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.
-      let ignoredCodes = Set([404, 403, 401])
-
-      if !ignoredCodes.contains(error.status) {
-        throw error
-      }
     }
   }
 
@@ -1174,7 +1159,7 @@ public final class AuthClient: Sendable {
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {
     guard let refreshToken = refreshToken ?? currentSession?.refreshToken else {
-      throw SupabaseAuthSessionMissingError()
+      throw AuthError.sessionMissing
     }
 
     return try await sessionManager.refreshSession(refreshToken)

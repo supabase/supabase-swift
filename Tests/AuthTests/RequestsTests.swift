@@ -181,10 +181,9 @@ final class RequestsTests: XCTestCase {
     } catch {
       assertInlineSnapshot(of: error, as: .dump) {
         """
-        ▿ SupabaseAuthImplicitGrantRedirectError
-          ▿ errorCode: ErrorCode
-            - rawValue: "unknown"
-          - message: "No session defined in URL"
+        ▿ AuthError
+          ▿ implicitGrantRedirect: (1 element)
+            - message: "No session defined in URL"
 
         """
       }

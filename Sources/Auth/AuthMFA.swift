@@ -151,14 +151,12 @@ public struct AuthMFA: Sendable {
         nextLevel: nextLevel,
         currentAuthenticationMethods: currentAuthenticationMethods
       )
-    } catch is SupabaseAuthSessionMissingError {
+    } catch AuthError.sessionMissing {
       return AuthMFAGetAuthenticatorAssuranceLevelResponse(
         currentLevel: nil,
         nextLevel: nil,
         currentAuthenticationMethods: []
       )
-    } catch {
-      throw error
     }
   }
 }

@@ -97,10 +97,7 @@ final class AuthClientTests: XCTestCase {
     } catch {
       assertInlineSnapshot(of: error, as: .dump) {
         """
-        ▿ SupabaseAuthSessionMissingError
-          ▿ errorCode: ErrorCode
-            - rawValue: "session_not_found"
-          - message: "Auth session missing."
+        - AuthError.sessionMissing
 
         """
       }
@@ -125,10 +122,10 @@ final class AuthClientTests: XCTestCase {
 
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
     sut = makeSUT { _ in
-      throw SupabaseAuthAPIError(
+      throw AuthError.api(
         message: "",
         errorCode: .Unknown,
-        underlyngData: Data(),
+        underlyingData: Data(),
         underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 404, httpVersion: nil, headerFields: nil)!
       )
     }
@@ -156,10 +153,10 @@ final class AuthClientTests: XCTestCase {
 
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
     sut = makeSUT { _ in
-      throw SupabaseAuthAPIError(
+      throw AuthError.api(
         message: "",
         errorCode: .InvalidCredentials,
-        underlyngData: Data(),
+        underlyingData: Data(),
         underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
       )
     }
@@ -187,10 +184,10 @@ final class AuthClientTests: XCTestCase {
 
   func testSignOutShouldRemoveSessionIf403Returned() async throws {
     sut = makeSUT { _ in
-      throw SupabaseAuthAPIError(
+      throw AuthError.api(
         message: "",
         errorCode: .InvalidCredentials,
-        underlyngData: Data(),
+        underlyingData: Data(),
         underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 403, httpVersion: nil, headerFields: nil)!
       )
     }

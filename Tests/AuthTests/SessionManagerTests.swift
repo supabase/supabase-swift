@@ -9,10 +9,10 @@
 import ConcurrencyExtras
 import CustomDump
 import Helpers
+import InlineSnapshotTesting
 import TestHelpers
 import XCTest
 import XCTestDynamicOverlay
-import InlineSnapshotTesting
 
 final class SessionManagerTests: XCTestCase {
   var http: HTTPClientMock!
@@ -46,14 +46,11 @@ final class SessionManagerTests: XCTestCase {
   func testSession_shouldFailWithSessionNotFound() async {
     do {
       _ = try await sut.session()
-      XCTFail("Expected a \(SupabaseAuthSessionMissingError()) failure")
+      XCTFail("Expected a \(AuthError.sessionMissing) failure")
     } catch {
       assertInlineSnapshot(of: error, as: .dump) {
         """
-        ▿ SupabaseAuthSessionMissingError
-          ▿ errorCode: ErrorCode
-            - rawValue: "session_not_found"
-          - message: "Auth session missing."
+        - AuthError.sessionMissing
 
         """
       }

@@ -100,50 +100,43 @@ extension ErrorCode {
   public static let InvalidCredentials = ErrorCode("invalid_credentials")
 }
 
-/// Represents an error thrown by Auth, either by the client or the server.
-public protocol SupabaseAuthError: LocalizedError {
-  var message: String { get }
-  var errorCode: ErrorCode { get }
-}
+public enum AuthError: LocalizedError {
+  case sessionMissing
+  case weakPassword(message: String, reasons: [String])
+  case api(
+    message: String,
+    errorCode: ErrorCode,
+    underlyingData: Data,
+    underlyingResponse: HTTPURLResponse
+  )
+  case pkceGrantCodeExchange(message: String, error: String? = nil, code: String? = nil)
+  case implicitGrantRedirect(message: String)
 
-public struct SupabaseAuthSessionMissingError: SupabaseAuthError {
-  public let errorCode: ErrorCode = .SessionNotFound
+  public var message: String {
+    switch self {
+    case .sessionMissing: "Auth session missing."
+    case let .weakPassword(message, _),
+         let .api(message, _, _, _),
+         let .pkceGrantCodeExchange(message, _, _),
+         let .implicitGrantRedirect(message):
+      message
+    }
+  }
 
-  public let message: String = "Auth session missing."
-}
+  public var errorCode: ErrorCode {
+    switch self {
+    case .sessionMissing: .SessionNotFound
+    case .weakPassword: .WeakPassword
+    case let .api(_, errorCode, _, _): errorCode
+    case .pkceGrantCodeExchange, .implicitGrantRedirect: .Unknown
+    }
+  }
 
-/// Error thrown on certain methods when the password used is deemed weak.
-/// Inspect the reasons to identify what password strength rules are inadequate.
-public struct SupabaseAuthWeakPasswordError: SupabaseAuthError {
-  public let errorCode: ErrorCode = .WeakPassword
-
-  public let message: String
-  public let reasons: [String]
-}
-
-public struct SupabaseAuthAPIError: SupabaseAuthError {
-  public let message: String
-  public let errorCode: ErrorCode
-
-  /// The Data response for the underlysing request which caused this error to be thrown.
-  public let underlyngData: Data
-
-  /// The response for the underlysing request which caused this error to be thrown.
-  public let underlyingResponse: HTTPURLResponse
-
-  /// The HTTP status code for the response which caused this error to be thrown.
-  public var status: Int { underlyingResponse.statusCode }
-}
-
-public struct SupabaseAuthPKCEGrantCodeExchangeError: SupabaseAuthError {
-  public let errorCode: ErrorCode = .Unknown
-
-  public let message: String
-  public let error: String?
-  public let code: String?
-}
-
-public struct SupabaseAuthImplicitGrantRedirectError: SupabaseAuthError {
-  public let errorCode: ErrorCode = .Unknown
-  public var message: String
+  public var errorDescription: String? {
+    if errorCode == .Unknown {
+      message
+    } else {
+      "\(errorCode.rawValue): \(message)"
+    }
+  }
 }

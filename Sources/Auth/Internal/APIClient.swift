@@ -62,15 +62,15 @@ struct APIClient: Sendable {
     return try await execute(request)
   }
 
-  func handleError(response: HTTPResponse) -> any SupabaseAuthError {
+  func handleError(response: HTTPResponse) -> AuthError {
     guard let error = try? response.decoded(
       as: _RawAPIErrorResponse.self,
       decoder: configuration.decoder
     ) else {
-      return SupabaseAuthAPIError(
+      return .api(
         message: "Unexpected error",
         errorCode: .UnexpectedFailure,
-        underlyngData: response.data,
+        underlyingData: response.data,
         underlyingResponse: response.underlyingResponse
       )
     }
@@ -84,22 +84,22 @@ struct APIClient: Sendable {
     }
 
     if errorCode == nil, let weakPassword = error.weakPassword {
-      return SupabaseAuthWeakPasswordError(
+      return .weakPassword(
         message: error._getErrorMessage(),
         reasons: weakPassword.reasons ?? []
       )
     } else if errorCode == .WeakPassword {
-      return SupabaseAuthWeakPasswordError(
+      return .weakPassword(
         message: error._getErrorMessage(),
         reasons: error.weakPassword?.reasons ?? []
       )
     } else if errorCode == .SessionNotFound {
-      return SupabaseAuthSessionMissingError()
+      return .sessionMissing
     } else {
-      return SupabaseAuthAPIError(
+      return .api(
         message: error._getErrorMessage(),
         errorCode: errorCode ?? .Unknown,
-        underlyngData: response.data,
+        underlyingData: response.data,
         underlyingResponse: response.underlyingResponse
       )
     }
