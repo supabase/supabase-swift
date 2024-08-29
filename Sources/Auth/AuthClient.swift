@@ -449,7 +449,11 @@ public final class AuthClient: Sendable {
 
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
   public func exchangeCodeForSession(authCode: String) async throws -> Session {
-    let codeVerifier = codeVerifierStorage.get() ?? ""
+    let codeVerifier = codeVerifierStorage.get()
+
+    if codeVerifier == nil {
+      logger?.error("code verifier not found, a code verifier should exist when calling this method.")
+    }
 
     let session: Session = try await api.execute(
       .init(
