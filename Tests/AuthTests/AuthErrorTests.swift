@@ -8,6 +8,10 @@
 @testable import Auth
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class AuthErrorTests: XCTestCase {
   func testErrors() {
     let sessionMissing = AuthError.sessionMissing
