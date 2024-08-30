@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// An error code thrown by the server.
 public struct ErrorCode: Decodable, RawRepresentable, Sendable, Hashable {
   public var rawValue: String
@@ -259,10 +263,6 @@ public enum AuthError: LocalizedError {
   }
 
   public var errorDescription: String? {
-    if errorCode == .unknown {
-      message
-    } else {
-      "\(errorCode.rawValue): \(message)"
-    }
+    message
   }
 }

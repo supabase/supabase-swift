@@ -107,7 +107,10 @@ struct APIClient: Sendable {
 
   private func parseResponseAPIVersion(_ response: HTTPResponse) -> Date? {
     guard let apiVersion = response.headers[API_VERSION_HEADER_NAME] else { return nil }
-    return ISO8601DateFormatter().date(from: "\(apiVersion)T00:00:00.0Z")
+
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: "\(apiVersion)T00:00:00.0Z")
   }
 }
 
