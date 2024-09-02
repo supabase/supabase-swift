@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.17.1](https://github.com/supabase/supabase-swift/compare/v2.17.0...v2.17.1) (2024-09-02)
+
+
+### Bug Fixes
+
+* **auth:** expose KeychainLocalStorage with default init params ([#519](https://github.com/supabase/supabase-swift/issues/519)) ([c1095c9](https://github.com/supabase/supabase-swift/commit/c1095c95a2b01a3ad76a996e6c81ed8b25dab214))
+
 ## [2.17.0](https://github.com/supabase/supabase-swift/compare/v2.16.1...v2.17.0) (2024-08-28)
 
 
