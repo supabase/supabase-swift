@@ -8,12 +8,8 @@ public protocol AuthLocalStorage: Sendable {
 
 extension AuthClient.Configuration {
   #if !os(Linux) && !os(Windows)
-    public static let defaultLocalStorage: any AuthLocalStorage = KeychainLocalStorage(
-      service: "supabase.gotrue.swift",
-      accessGroup: nil
-    )
+    public static let defaultLocalStorage: any AuthLocalStorage = KeychainLocalStorage()
   #elseif os(Windows)
-    public static let defaultLocalStorage: any AuthLocalStorage =
-      WinCredLocalStorage(service: "supabase.gotrue.swift")
+    public static let defaultLocalStorage: any AuthLocalStorage = WinCredLocalStorage()
   #endif
 }

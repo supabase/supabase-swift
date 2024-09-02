@@ -1,10 +1,11 @@
 #if !os(Windows) && !os(Linux)
   import Foundation
 
+  /// ``AuthLocalStorage`` implementation using Keychain. This is the default local storage used by the library.
   public struct KeychainLocalStorage: AuthLocalStorage {
     private let keychain: Keychain
 
-    public init(service: String, accessGroup: String?) {
+    public init(service: String = "supabase.gotrue.swift", accessGroup: String? = nil) {
       keychain = Keychain(service: service, accessGroup: accessGroup)
     }
 
