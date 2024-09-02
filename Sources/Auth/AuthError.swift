@@ -224,15 +224,25 @@ public enum AuthError: LocalizedError {
     public var weakPassword: WeakPassword?
   }
 
+  /// Error thrown when a session is required to proceed, but none was found, either thrown by the client, or returned by the server.
   case sessionMissing
+
+  /// Error thrown when password is deemed weak, check associated reasons to know why.
   case weakPassword(message: String, reasons: [String])
+
+  /// Error thrown by API when an error occurs, check `errorCode` to know more,
+  /// or use `underlyingData` or `underlyingResponse` for access to the response which originated this error.
   case api(
     message: String,
     errorCode: ErrorCode,
     underlyingData: Data,
     underlyingResponse: HTTPURLResponse
   )
+
+  /// Error thrown when an error happens during PKCE grant flow.
   case pkceGrantCodeExchange(message: String, error: String? = nil, code: String? = nil)
+
+  /// Error thrown when an error happens during implicit grant flow.
   case implicitGrantRedirect(message: String)
 
   public var message: String {
