@@ -13,7 +13,7 @@
     private let credentialType: DWORD
     private let credentialPersistence: DWORD
 
-    public init(service: String) {
+    public init(service: String = "supabase.gotrue.swift") {
       self.service = service
       credentialType = DWORD(CRED_TYPE_GENERIC)
       credentialPersistence = DWORD(CRED_PERSIST_LOCAL_MACHINE)
