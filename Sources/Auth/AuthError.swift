@@ -104,7 +104,7 @@ extension ErrorCode {
   public static let invalidCredentials = ErrorCode("invalid_credentials")
 }
 
-public enum AuthError: LocalizedError {
+public enum AuthError: LocalizedError, Equatable {
   @available(
     *,
     deprecated,
@@ -274,5 +274,10 @@ public enum AuthError: LocalizedError {
 
   public var errorDescription: String? {
     message
+  }
+
+  public static func ~= (lhs: AuthError, rhs: any Error) -> Bool {
+    guard let rhs = rhs as? AuthError else { return false }
+    return lhs == rhs
   }
 }
