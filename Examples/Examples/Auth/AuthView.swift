@@ -11,6 +11,7 @@ struct AuthView: View {
   enum Option: CaseIterable {
     case emailAndPassword
     case magicLink
+    case signInWithPhone
     case signInWithApple
     case signInWithOAuth
     case signInWithOAuthUsingUIKit
@@ -21,6 +22,7 @@ struct AuthView: View {
       switch self {
       case .emailAndPassword: "Auth with Email & Password"
       case .magicLink: "Auth with Magic Link"
+      case .signInWithPhone: "Sign in with Phone"
       case .signInWithApple: "Sign in with Apple"
       case .signInWithOAuth: "Sign in with OAuth flow"
       case .signInWithOAuthUsingUIKit: "Sign in with OAuth flow (UIKit)"
@@ -51,6 +53,7 @@ extension AuthView.Option: View {
     switch self {
     case .emailAndPassword: AuthWithEmailAndPassword()
     case .magicLink: AuthWithMagicLink()
+    case .signInWithPhone: SignInWithPhone()
     case .signInWithApple: SignInWithApple()
     case .signInWithOAuth: SignInWithOAuth()
     case .signInWithOAuthUsingUIKit: UIViewControllerWrapper(SignInWithOAuthViewController())

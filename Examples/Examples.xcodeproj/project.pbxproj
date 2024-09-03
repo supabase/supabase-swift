@@ -37,6 +37,7 @@
 		797EFB6C2BABE1B800098D6B /* FileObjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797EFB6B2BABE1B800098D6B /* FileObjectDetailView.swift */; };
 		7993B8A92B3C673A009B610B /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993B8A82B3C673A009B610B /* AuthView.swift */; };
 		7993B8AB2B3C67E0009B610B /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993B8AA2B3C67E0009B610B /* Toast.swift */; };
+		799EE6A32C877BFB00FD9DD7 /* SignInWithPhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799EE6A22C877BF900FD9DD7 /* SignInWithPhone.swift */; };
 		79AF047F2B2CE207008761AD /* AuthWithEmailAndPassword.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */; };
 		79AF04812B2CE261008761AD /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04802B2CE261008761AD /* AuthView.swift */; };
 		79AF04842B2CE408008761AD /* AuthWithMagicLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */; };
@@ -106,6 +107,7 @@
 		7993B8A82B3C673A009B610B /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		7993B8AA2B3C67E0009B610B /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
 		7993B8AC2B3C97B6009B610B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		799EE6A22C877BF900FD9DD7 /* SignInWithPhone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInWithPhone.swift; sourceTree = "<group>"; };
 		79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthWithEmailAndPassword.swift; sourceTree = "<group>"; };
 		79AF04802B2CE261008761AD /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		79AF04832B2CE408008761AD /* AuthWithMagicLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthWithMagicLink.swift; sourceTree = "<group>"; };
@@ -258,6 +260,7 @@
 		79AF04822B2CE3BD008761AD /* Auth */ = {
 			isa = PBXGroup;
 			children = (
+				799EE6A22C877BF900FD9DD7 /* SignInWithPhone.swift */,
 				7956405F2954AE140088A06F /* AuthController.swift */,
 				79AF04802B2CE261008761AD /* AuthView.swift */,
 				79AF047E2B2CE207008761AD /* AuthWithEmailAndPassword.swift */,
@@ -490,6 +493,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */,
+				799EE6A32C877BFB00FD9DD7 /* SignInWithPhone.swift in Sources */,
 				79AF04862B2CE586008761AD /* Debug.swift in Sources */,
 				79AF04842B2CE408008761AD /* AuthWithMagicLink.swift in Sources */,
 				79401F352BC708C8004C9C0F /* UIViewControllerWrapper.swift in Sources */,
