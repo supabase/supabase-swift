@@ -26,7 +26,7 @@ final class AuthController {
 
   init() {
     observeAuthStateChangesTask = Task {
-      for await (event, session) in await supabase.auth.authStateChanges {
+      for await (event, session) in supabase.auth.authStateChanges {
         guard [.initialSession, .signedIn, .signedOut].contains(event) else { return }
 
         self.session = session
