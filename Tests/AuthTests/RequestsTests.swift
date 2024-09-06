@@ -7,6 +7,7 @@
 
 @testable import Auth
 import Helpers
+import InlineSnapshotTesting
 import SnapshotTesting
 import TestHelpers
 import XCTest
@@ -177,10 +178,15 @@ final class RequestsTests: XCTestCase {
 
     do {
       _ = try await sut.session(from: url)
-    } catch let error as URLError {
-      XCTAssertEqual(error.code, .badURL)
     } catch {
-      XCTFail("Unexpected error thrown: \(error.localizedDescription)")
+      assertInlineSnapshot(of: error, as: .dump) {
+        """
+        ▿ AuthError
+          ▿ implicitGrantRedirect: (1 element)
+            - message: "No session defined in URL"
+
+        """
+      }
     }
   }
 

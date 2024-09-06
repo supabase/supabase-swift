@@ -35,27 +35,14 @@ struct APIClient: Sendable {
     var request = request
     request.headers = HTTPHeaders(configuration.headers).merged(with: request.headers)
 
+    if request.headers[API_VERSION_HEADER_NAME] == nil {
+      request.headers[API_VERSION_HEADER_NAME] = API_VERSIONS[._20240101]!.name.rawValue
+    }
+
     let response = try await http.send(request)
 
-    guard (200 ..< 300).contains(response.statusCode) else {
-      if let apiError = try? configuration.decoder.decode(
-        AuthError.APIError.self,
-        from: response.data
-      ) {
-        throw AuthError.api(apiError)
-      }
-
-      /// There are some GoTrue endpoints that can return a `PostgrestError`, for example the
-      /// ``AuthAdmin/deleteUser(id:shouldSoftDelete:)`` that could return an error in case the
-      /// user is referenced by other schemas.
-      if let postgrestError = try? configuration.decoder.decode(
-        PostgrestError.self,
-        from: response.data
-      ) {
-        throw postgrestError
-      }
-
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
+    guard 200 ..< 300 ~= response.statusCode else {
+      throw handleError(response: response)
     }
 
     return response
@@ -73,5 +60,75 @@ struct APIClient: Sendable {
     request.headers["Authorization"] = "Bearer \(session.accessToken)"
 
     return try await execute(request)
+  }
+
+  func handleError(response: HTTPResponse) -> AuthError {
+    guard let error = try? response.decoded(
+      as: _RawAPIErrorResponse.self,
+      decoder: configuration.decoder
+    ) else {
+      return .api(
+        message: "Unexpected error",
+        errorCode: .unexpectedFailure,
+        underlyingData: response.data,
+        underlyingResponse: response.underlyingResponse
+      )
+    }
+
+    let responseAPIVersion = parseResponseAPIVersion(response)
+
+    let errorCode: ErrorCode? = if let responseAPIVersion, responseAPIVersion >= API_VERSIONS[._20240101]!.timestamp, let code = error.code {
+      ErrorCode(code)
+    } else {
+      error.errorCode
+    }
+
+    if errorCode == nil, let weakPassword = error.weakPassword {
+      return .weakPassword(
+        message: error._getErrorMessage(),
+        reasons: weakPassword.reasons ?? []
+      )
+    } else if errorCode == .weakPassword {
+      return .weakPassword(
+        message: error._getErrorMessage(),
+        reasons: error.weakPassword?.reasons ?? []
+      )
+    } else if errorCode == .sessionNotFound {
+      return .sessionMissing
+    } else {
+      return .api(
+        message: error._getErrorMessage(),
+        errorCode: errorCode ?? .unknown,
+        underlyingData: response.data,
+        underlyingResponse: response.underlyingResponse
+      )
+    }
+  }
+
+  private func parseResponseAPIVersion(_ response: HTTPResponse) -> Date? {
+    guard let apiVersion = response.headers[API_VERSION_HEADER_NAME] else { return nil }
+
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: "\(apiVersion)T00:00:00.0Z")
+  }
+}
+
+// Struct for mapping all fields possibly returned by API.
+struct _RawAPIErrorResponse: Decodable {
+  let msg: String?
+  let message: String?
+  let errorDescription: String?
+  let error: String?
+  let code: String?
+  let errorCode: ErrorCode?
+  let weakPassword: _WeakPassword?
+
+  struct _WeakPassword: Decodable {
+    let reasons: [String]?
+  }
+
+  func _getErrorMessage() -> String {
+    msg ?? message ?? errorDescription ?? error ?? "Unknown"
   }
 }

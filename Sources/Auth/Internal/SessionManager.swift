@@ -40,7 +40,7 @@ private actor LiveSessionManager {
   func session() async throws -> Session {
     try await trace(using: logger) {
       guard let currentSession = try sessionStorage.get() else {
-        throw AuthError.sessionNotFound
+        throw AuthError.sessionMissing
       }
 
       if !currentSession.isExpired {

@@ -9,6 +9,7 @@
 import ConcurrencyExtras
 import CustomDump
 @testable import Helpers
+import InlineSnapshotTesting
 import TestHelpers
 import XCTest
 
@@ -93,9 +94,13 @@ final class AuthClientTests: XCTestCase {
 
     do {
       _ = try await sut.session
-    } catch AuthError.sessionNotFound {
     } catch {
-      XCTFail("Unexpected error.")
+      assertInlineSnapshot(of: error, as: .dump) {
+        """
+        - AuthError.sessionMissing
+
+        """
+      }
     }
 
     let events = await eventsTask.value.map(\.event)
@@ -117,7 +122,12 @@ final class AuthClientTests: XCTestCase {
 
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
     sut = makeSUT { _ in
-      throw AuthError.api(AuthError.APIError(code: 404))
+      throw AuthError.api(
+        message: "",
+        errorCode: .unknown,
+        underlyingData: Data(),
+        underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+      )
     }
 
     let validSession = Session.validSession
@@ -129,12 +139,7 @@ final class AuthClientTests: XCTestCase {
 
     await Task.megaYield()
 
-    do {
-      try await sut.signOut()
-    } catch AuthError.api {
-    } catch {
-      XCTFail("Unexpected error: \(error)")
-    }
+    try await sut.signOut()
 
     let events = await eventsTask.value.map(\.event)
     let sessions = await eventsTask.value.map(\.session)
@@ -148,7 +153,12 @@ final class AuthClientTests: XCTestCase {
 
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
     sut = makeSUT { _ in
-      throw AuthError.api(AuthError.APIError(code: 401))
+      throw AuthError.api(
+        message: "",
+        errorCode: .invalidCredentials,
+        underlyingData: Data(),
+        underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
+      )
     }
 
     let validSession = Session.validSession
@@ -160,12 +170,7 @@ final class AuthClientTests: XCTestCase {
 
     await Task.megaYield()
 
-    do {
-      try await sut.signOut()
-    } catch AuthError.api {
-    } catch {
-      XCTFail("Unexpected error: \(error)")
-    }
+    try await sut.signOut()
 
     let events = await eventsTask.value.map(\.event)
     let sessions = await eventsTask.value.map(\.session)
@@ -179,7 +184,12 @@ final class AuthClientTests: XCTestCase {
 
   func testSignOutShouldRemoveSessionIf403Returned() async throws {
     sut = makeSUT { _ in
-      throw AuthError.api(AuthError.APIError(code: 403))
+      throw AuthError.api(
+        message: "",
+        errorCode: .invalidCredentials,
+        underlyingData: Data(),
+        underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 403, httpVersion: nil, headerFields: nil)!
+      )
     }
 
     let validSession = Session.validSession
@@ -191,12 +201,7 @@ final class AuthClientTests: XCTestCase {
 
     await Task.megaYield()
 
-    do {
-      try await sut.signOut()
-    } catch AuthError.api {
-    } catch {
-      XCTFail("Unexpected error: \(error)")
-    }
+    try await sut.signOut()
 
     let events = await eventsTask.value.map(\.event)
     let sessions = await eventsTask.value.map(\.session)
@@ -251,25 +256,6 @@ final class AuthClientTests: XCTestCase {
     let events = await eventsTask.value.map(\.event)
 
     XCTAssertEqual(events, [.initialSession, .signedIn])
-  }
-
-  func testSignInWithOAuthWithInvalidRedirecTo() async {
-    let sut = makeSUT()
-
-    do {
-      try await sut.signInWithOAuth(
-        provider: .google,
-        redirectTo: nil,
-        launchFlow: { _ in
-          XCTFail("Should not call launchFlow.")
-          return URL(string: "https://supabase.com")!
-        }
-      )
-    } catch let error as AuthError {
-      XCTAssertEqual(error, .invalidRedirectScheme)
-    } catch {
-      XCTFail("Unexcpted error: \(error)")
-    }
   }
 
   func testGetLinkIdentityURL() async throws {

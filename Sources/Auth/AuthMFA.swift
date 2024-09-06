@@ -129,7 +129,7 @@ public struct AuthMFA: Sendable {
 
       var currentLevel: AuthenticatorAssuranceLevels?
 
-      if let aal = payload["aal"] as? AuthenticatorAssuranceLevels {
+      if let aal = payload?["aal"] as? AuthenticatorAssuranceLevels {
         currentLevel = aal
       }
 
@@ -142,7 +142,7 @@ public struct AuthMFA: Sendable {
 
       var currentAuthenticationMethods: [AMREntry] = []
 
-      if let amr = payload["amr"] as? [Any] {
+      if let amr = payload?["amr"] as? [Any] {
         currentAuthenticationMethods = amr.compactMap(AMREntry.init(value:))
       }
 
@@ -151,14 +151,12 @@ public struct AuthMFA: Sendable {
         nextLevel: nextLevel,
         currentAuthenticationMethods: currentAuthenticationMethods
       )
-    } catch AuthError.sessionNotFound {
+    } catch AuthError.sessionMissing {
       return AuthMFAGetAuthenticatorAssuranceLevelResponse(
         currentLevel: nil,
         nextLevel: nil,
         currentAuthenticationMethods: []
       )
-    } catch {
-      throw error
     }
   }
 }

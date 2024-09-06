@@ -40,19 +40,19 @@ private func extractParams(from fragment: String) -> [URLQueryItem] {
       }
 }
 
-func decode(jwt: String) throws -> [String: Any] {
+func decode(jwt: String) throws -> [String: Any]? {
   let parts = jwt.split(separator: ".")
   guard parts.count == 3 else {
-    throw AuthError.malformedJWT
+    return nil
   }
 
   let payload = String(parts[1])
   guard let data = base64URLDecode(payload) else {
-    throw AuthError.malformedJWT
+    return nil
   }
   let json = try JSONSerialization.jsonObject(with: data, options: [])
   guard let decodedPayload = json as? [String: Any] else {
-    throw AuthError.malformedJWT
+    return nil
   }
   return decodedPayload
 }

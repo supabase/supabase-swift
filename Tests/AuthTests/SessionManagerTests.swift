@@ -9,6 +9,7 @@
 import ConcurrencyExtras
 import CustomDump
 import Helpers
+import InlineSnapshotTesting
 import TestHelpers
 import XCTest
 import XCTestDynamicOverlay
@@ -45,10 +46,14 @@ final class SessionManagerTests: XCTestCase {
   func testSession_shouldFailWithSessionNotFound() async {
     do {
       _ = try await sut.session()
-      XCTFail("Expected a \(AuthError.sessionNotFound) failure")
-    } catch AuthError.sessionNotFound {
+      XCTFail("Expected a \(AuthError.sessionMissing) failure")
     } catch {
-      XCTFail("Unexpected error \(error)")
+      assertInlineSnapshot(of: error, as: .dump) {
+        """
+        - AuthError.sessionMissing
+
+        """
+      }
     }
   }
 
