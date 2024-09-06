@@ -198,24 +198,7 @@ public final class FunctionsClient: Sendable {
 
     let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
 
-    let task = session.dataTask(with: urlRequest) { data, response, _ in
-      guard let httpResponse = response as? HTTPURLResponse else {
-        continuation.finish(throwing: URLError(.badServerResponse))
-        return
-      }
-
-      guard 200 ..< 300 ~= httpResponse.statusCode else {
-        let error = FunctionsError.httpError(code: httpResponse.statusCode, data: data ?? Data())
-        continuation.finish(throwing: error)
-        return
-      }
-
-      let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
-      if isRelayError {
-        continuation.finish(throwing: FunctionsError.relayError)
-      }
-    }
-
+    let task = session.dataTask(with: urlRequest)
     task.resume()
 
     continuation.onTermination = { _ in
@@ -258,5 +241,24 @@ final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
 
   func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
     continuation.finish(throwing: error)
+  }
+
+  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+    guard let httpResponse = response as? HTTPURLResponse else {
+      continuation.finish(throwing: URLError(.badServerResponse))
+      return
+    }
+
+    guard 200 ..< 300 ~= httpResponse.statusCode else {
+      let error = FunctionsError.httpError(code: httpResponse.statusCode, data: Data())
+      continuation.finish(throwing: error)
+      return
+    }
+
+    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
+    if isRelayError {
+      continuation.finish(throwing: FunctionsError.relayError)
+    }
+    completionHandler(.allow)
   }
 }
