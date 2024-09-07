@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.18.0](https://github.com/supabase/supabase-swift/compare/v2.17.1...v2.18.0) (2024-09-07)
+
+
+### Features
+
+* **auth:** add support for error codes and refactor `AuthError` ([#518](https://github.com/supabase/supabase-swift/issues/518)) ([7601e17](https://github.com/supabase/supabase-swift/commit/7601e17aa87cd832aee125095a89db2175364e35))
+
+
+### Bug Fixes
+
+* **functions:** fix streamed responses ([#525](https://github.com/supabase/supabase-swift/issues/525)) ([0631069](https://github.com/supabase/supabase-swift/commit/0631069ec71cfce0e1a56bb386a679c72e862c48))
+
 ## [2.17.1](https://github.com/supabase/supabase-swift/compare/v2.17.0...v2.17.1) (2024-09-02)
 
 
