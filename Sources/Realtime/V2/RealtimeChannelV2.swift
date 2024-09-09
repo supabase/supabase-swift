@@ -474,6 +474,24 @@ public final class RealtimeChannelV2: Sendable {
 
   /// Listen for postgres changes in a channel.
   public func onPostgresChange(
+    _: AnyAction.Type,
+    schema: String = "public",
+    table: String? = nil,
+    filter: String? = nil,
+    callback: @escaping @Sendable (AnyAction) -> Void
+  ) -> Subscription {
+    _onPostgresChange(
+      event: .insert,
+      schema: schema,
+      table: table,
+      filter: filter
+    ) {
+      callback($0)
+    }
+  }
+
+  /// Listen for postgres changes in a channel.
+  public func onPostgresChange(
     _: InsertAction.Type,
     schema: String = "public",
     table: String? = nil,
