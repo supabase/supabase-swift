@@ -18,12 +18,14 @@ import XCTest
 final class AuthClientIntegrationTests: XCTestCase {
   let authClient = makeClient()
 
-  static func makeClient() -> AuthClient {
-    AuthClient(
+  static func makeClient(serviceRole: Bool = false) -> AuthClient {
+    let key = serviceRole ? DotEnv.SUPABASE_SERVICE_ROLE_KEY : DotEnv.SUPABASE_ANON_KEY
+    return AuthClient(
       configuration: AuthClient.Configuration(
         url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
         headers: [
-          "apikey": DotEnv.SUPABASE_ANON_KEY,
+          "apikey": key,
+          "Authorization": "Bearer \(key)",
         ],
         localStorage: InMemoryLocalStorage(),
         logger: nil
@@ -247,6 +249,13 @@ final class AuthClientIntegrationTests: XCTestCase {
     try await authClient.linkIdentity(provider: .github) { url in
       XCTAssertTrue(url.absoluteString.contains("github.com"))
     }
+  }
+
+  func testListUsers() async throws {
+    let client = Self.makeClient(serviceRole: true)
+    let pagination = try await client.admin.listUsers()
+    XCTAssertFalse(pagination.users.isEmpty)
+    XCTAssertEqual(pagination.aud, "authenticated")
   }
 
   @discardableResult

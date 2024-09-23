@@ -306,6 +306,40 @@ final class AuthClientTests: XCTestCase {
     XCTAssertEqual(receivedURL.value?.absoluteString, url)
   }
 
+  func testAdminListUsers() async throws {
+    let sut = makeSUT { _ in
+      .stub(
+        fromFileName: "list-users-response",
+        headers: [
+          "X-Total-Count": "669",
+          "Link": "</admin/users?page=2&per_page=>; rel=\"next\", </admin/users?page=14&per_page=>; rel=\"last\"",
+        ]
+      )
+    }
+
+    let response = try await sut.admin.listUsers()
+    XCTAssertEqual(response.total, 669)
+    XCTAssertEqual(response.nextPage, 2)
+    XCTAssertEqual(response.lastPage, 14)
+  }
+
+  func testAdminListUsers_noNextPage() async throws {
+    let sut = makeSUT { _ in
+      .stub(
+        fromFileName: "list-users-response",
+        headers: [
+          "X-Total-Count": "669",
+          "Link": "</admin/users?page=14&per_page=>; rel=\"last\"",
+        ]
+      )
+    }
+
+    let response = try await sut.admin.listUsers()
+    XCTAssertEqual(response.total, 669)
+    XCTAssertNil(response.nextPage)
+    XCTAssertEqual(response.lastPage, 14)
+  }
+
   private func makeSUT(
     fetch: ((URLRequest) async throws -> HTTPResponse)? = nil
   ) -> AuthClient {
@@ -331,38 +365,50 @@ final class AuthClientTests: XCTestCase {
 }
 
 extension HTTPResponse {
-  static func stub(_ body: String = "", code: Int = 200) -> HTTPResponse {
+  static func stub(
+    _ body: String = "",
+    code: Int = 200,
+    headers: [String: String]? = nil
+  ) -> HTTPResponse {
     HTTPResponse(
       data: body.data(using: .utf8)!,
       response: HTTPURLResponse(
         url: clientURL,
         statusCode: code,
         httpVersion: nil,
-        headerFields: nil
+        headerFields: headers
       )!
     )
   }
 
-  static func stub(fromFileName fileName: String, code: Int = 200) -> HTTPResponse {
+  static func stub(
+    fromFileName fileName: String,
+    code: Int = 200,
+    headers: [String: String]? = nil
+  ) -> HTTPResponse {
     HTTPResponse(
       data: json(named: fileName),
       response: HTTPURLResponse(
         url: clientURL,
         statusCode: code,
         httpVersion: nil,
-        headerFields: nil
+        headerFields: headers
       )!
     )
   }
 
-  static func stub(_ value: some Encodable, code: Int = 200) -> HTTPResponse {
+  static func stub(
+    _ value: some Encodable,
+    code: Int = 200,
+    headers: [String: String]? = nil
+  ) -> HTTPResponse {
     HTTPResponse(
       data: try! AuthClient.Configuration.jsonEncoder.encode(value),
       response: HTTPURLResponse(
         url: clientURL,
         statusCode: code,
         httpVersion: nil,
-        headerFields: nil
+        headerFields: headers
       )!
     )
   }
