@@ -13,7 +13,7 @@ import XCTestDynamicOverlay
 final class RealtimeChannelTests: XCTestCase {
   var sut: RealtimeChannelV2!
 
-  func test() {
+  func testOnPostgresChange() {
     sut = RealtimeChannelV2(
       topic: "topic",
       config: RealtimeChannelConfig(
@@ -30,7 +30,7 @@ final class RealtimeChannelTests: XCTestCase {
     sut.onPostgresChange(UpdateAction.self) { _ in }.store(in: &subscriptions)
     sut.onPostgresChange(DeleteAction.self) { _ in }.store(in: &subscriptions)
 
-    assertInlineSnapshot(of: sut.callbackManager.callbacks, as: .dump, record: true) {
+    assertInlineSnapshot(of: sut.callbackManager.callbacks, as: .dump) {
       """
       ▿ 4 elements
         ▿ RealtimeCallback
