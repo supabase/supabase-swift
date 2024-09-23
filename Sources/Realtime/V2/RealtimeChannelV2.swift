@@ -86,7 +86,7 @@ public final class RealtimeChannelV2: Sendable {
   let logger: (any SupabaseLogger)?
   let socket: Socket
 
-  private let callbackManager = CallbackManager()
+  let callbackManager = CallbackManager()
   private let statusEventEmitter = EventEmitter<Status>(initialEvent: .unsubscribed)
 
   public private(set) var status: Status {
@@ -481,7 +481,7 @@ public final class RealtimeChannelV2: Sendable {
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> Subscription {
     _onPostgresChange(
-      event: .insert,
+      event: .all,
       schema: schema,
       table: table,
       filter: filter

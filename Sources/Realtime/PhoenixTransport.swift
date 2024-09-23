@@ -200,8 +200,8 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
     session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
     var request = URLRequest(url: url)
 
-    headers.forEach { (key: String, value: Any) in
-      guard let value = value as? String else { return }
+    for (key, value) in headers {
+      guard let value = value as? String else { continue }
       request.addValue(value, forHTTPHeaderField: key)
     }
 
