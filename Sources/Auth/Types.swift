@@ -823,7 +823,7 @@ public struct PageParams {
   /// Number of items returned per page.
   public let perPage: Int?
 
-  public init(page: Int?, perPage: Int?) {
+  public init(page: Int? = nil, perPage: Int? = nil) {
     self.page = page
     self.perPage = perPage
   }

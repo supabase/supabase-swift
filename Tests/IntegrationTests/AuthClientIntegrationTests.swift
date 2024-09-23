@@ -253,9 +253,10 @@ final class AuthClientIntegrationTests: XCTestCase {
 
   func testListUsers() async throws {
     let client = Self.makeClient(serviceRole: true)
-    let pagination = try await client.admin.listUsers()
-    XCTAssertFalse(pagination.users.isEmpty)
+    let pagination = try await client.admin.listUsers(params: PageParams(perPage: 10))
+    XCTAssertEqual(pagination.users.count, 10)
     XCTAssertEqual(pagination.aud, "authenticated")
+    XCTAssertEqual(pagination.nextPage, 2)
   }
 
   @discardableResult
