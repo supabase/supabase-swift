@@ -6,24 +6,17 @@ Supabase client for swift. Mirrors the design of [supabase-js](https://github.co
 
 * Documentation: [https://supabase.com/docs/reference/swift/introduction](https://supabase.com/docs/reference/swift/introduction)
 
-## Supported Platforms
-
-| Platform | Support |
-|--------|--------|
-| iOS | ✅ |
-| macOS | ✅ |
-| watchOS | ✅ |
-| tvOS | ✅ |
-| visionOS | ✅ | 
-| Linux | ☑️ |
-| Windows | ☑️ |
-
-> ✅ Official support
-> 
-> ☑️ Works but not officially supported, and not guaranttee to keep working on future versions of the library.
-
 ## Usage
 
+### Requirements
+- iOS 13.0+ / macOS 10.15+ / tvOS 13+ / watchOS 6+ / visionOS 1+
+- Xcode 15.4+
+- Swift 5.9+
+
+> [!IMPORTANT]
+> Check the [Support Policy](#support-policy) to learn when dropping Xcode, Swift, and platform versions will not be considered a **breaking change**.
+
+### Installation
 Install the library using the Swift Package Manager.
 
 ```swift
@@ -77,6 +70,26 @@ let client = SupabaseClient(
     )
 )
 ```
+
+## Support Policy
+
+This document outlines the scope of support for Xcode, Swift, and the various platforms (iOS, macOS, tvOS, watchOS, and visionOS) in Supabase.
+
+### Xcode
+We only support Xcode versions that are currently eligible for submitting apps to the App Store. Once a specific version of Xcode is no longer supported, its removal from Supabase **won't be treated as a breaking change** and will occur in a minor release.
+
+### Swift
+The minimum supported Swift version corresponds to the minor version released with the oldest-supported Xcode version. When a Swift version reaches its end of support, it will be dropped from Supabase in a **minor release**, and **this won't be considered a breaking change**.
+
+### Platforms
+We maintain support for the four latest major versions of each platform, including the current version.
+
+When a platform version is no longer supported, Supabase will drop it in a **minor release**, and **this won't count as a breaking change**. For instance, iOS 14 will no longer be supported after the release of iOS 18, allowing its removal in a minor update.
+
+For macOS, the named yearly releases are treated as major versions for this policy, regardless of their version numbers.
+
+> [!IMPORTANT]
+> Linux and Windows works but aren't supported, and may stop working on future versions of the library.
 
 ## Contributing
 
