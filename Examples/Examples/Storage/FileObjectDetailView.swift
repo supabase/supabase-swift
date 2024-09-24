@@ -45,6 +45,15 @@ struct FileObjectDetailView: View {
             } catch {}
           }
         }
+
+        Button("Get info") {
+          Task {
+            do {
+              let info = try await api.info(path: fileObject.name)
+              lastActionResult = ("info", info)
+            } catch {}
+          }
+        }
       }
 
       if let lastActionResult {
