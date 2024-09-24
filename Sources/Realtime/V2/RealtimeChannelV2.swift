@@ -86,7 +86,7 @@ public final class RealtimeChannelV2: Sendable {
   let logger: (any SupabaseLogger)?
   let socket: Socket
 
-  private let callbackManager = CallbackManager()
+  let callbackManager = CallbackManager()
   private let statusEventEmitter = EventEmitter<Status>(initialEvent: .unsubscribed)
 
   public private(set) var status: Status {
@@ -469,6 +469,24 @@ public final class RealtimeChannelV2: Sendable {
     return Subscription { [weak callbackManager, logger] in
       logger?.debug("Removing presence callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
+    }
+  }
+
+  /// Listen for postgres changes in a channel.
+  public func onPostgresChange(
+    _: AnyAction.Type,
+    schema: String = "public",
+    table: String? = nil,
+    filter: String? = nil,
+    callback: @escaping @Sendable (AnyAction) -> Void
+  ) -> Subscription {
+    _onPostgresChange(
+      event: .all,
+      schema: schema,
+      table: table,
+      filter: filter
+    ) {
+      callback($0)
     }
   }
 
