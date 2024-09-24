@@ -193,8 +193,8 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
-    appMetadata = try container.decode([String: AnyJSON].self, forKey: .appMetadata)
-    userMetadata = try container.decode([String: AnyJSON].self, forKey: .userMetadata)
+    appMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .appMetadata) ?? [:]
+    userMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .userMetadata) ?? [:]
     aud = try container.decode(String.self, forKey: .aud)
     confirmationSentAt = try container.decodeIfPresent(Date.self, forKey: .confirmationSentAt)
     recoverySentAt = try container.decodeIfPresent(Date.self, forKey: .recoverySentAt)
@@ -815,4 +815,24 @@ public struct SSOResponse: Codable, Hashable, Sendable {
 public struct OAuthResponse: Codable, Hashable, Sendable {
   public let provider: Provider
   public let url: URL
+}
+
+public struct PageParams {
+  /// The page number.
+  public let page: Int?
+  /// Number of items returned per page.
+  public let perPage: Int?
+
+  public init(page: Int? = nil, perPage: Int? = nil) {
+    self.page = page
+    self.perPage = perPage
+  }
+}
+
+public struct ListUsersPaginatedResponse: Hashable, Sendable {
+  public let users: [User]
+  public let aud: String
+  public var nextPage: Int?
+  public var lastPage: Int
+  public var total: Int
 }
