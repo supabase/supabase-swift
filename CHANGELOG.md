@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.19.0](https://github.com/supabase/supabase-swift/compare/v2.18.0...v2.19.0) (2024-09-24)
+
+
+### Features
+
+* **auth:** add listUsers admin method ([#539](https://github.com/supabase/supabase-swift/issues/539)) ([1851262](https://github.com/supabase/supabase-swift/commit/1851262b5c4eb8247c10e768be3f9110938db892))
+
+
+### Bug Fixes
+
+* **realtime:** add missing `onPostgresChange` overload ([#528](https://github.com/supabase/supabase-swift/issues/528)) ([95e249f](https://github.com/supabase/supabase-swift/commit/95e249f135702c502ac8c0edc7f437337458796b))
+
 ## [2.18.0](https://github.com/supabase/supabase-swift/compare/v2.17.1...v2.18.0) (2024-09-07)
 
 
