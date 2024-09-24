@@ -75,9 +75,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let Id: String
     }
 
+    let cleanPath = _removeEmptyFolders(path)
+    let _path = _getFinalPath(cleanPath)
+
     let response = try await execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/\(bucketId)/\(path)"),
+        url: configuration.url.appendingPathComponent("object/\(_path)"),
         method: method,
         query: [],
         formData: formData,
@@ -423,9 +426,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
   /// Retrieves the details of an existing file.
   public func info(path: String) async throws -> FileObjectV2 {
-    try await execute(
+    let _path = _getFinalPath(path)
+
+    return try await execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/info/authenticated/\(bucketId)/\(path)"),
+        url: configuration.url.appendingPathComponent("object/info/\(_path)"),
         method: .get
       )
     )
@@ -651,5 +656,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     .Key
 
     return SignedURLUploadResponse(path: path, fullPath: fullPath)
+  }
+
+  private func _getFinalPath(_ path: String) -> String {
+    "\(bucketId)/\(path)"
+  }
+
+  private func _removeEmptyFolders(_ path: String) -> String {
+    let trimmedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    let cleanedPath = trimmedPath.replacingOccurrences(of: "/+", with: "/", options: .regularExpression)
+    return cleanedPath
   }
 }
