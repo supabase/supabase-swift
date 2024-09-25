@@ -20,7 +20,7 @@ struct Logger: SupabaseLogger {
 }
 
 final class RealtimeIntegrationTests: XCTestCase {
-  let realtime = RealtimeClientV2(
+  let realtime = RealtimeClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
     options: RealtimeClientOptions(
       headers: ["apikey": DotEnv.SUPABASE_ANON_KEY],
@@ -46,14 +46,14 @@ final class RealtimeIntegrationTests: XCTestCase {
     let expectation = expectation(description: "receivedBroadcastMessages")
     expectation.expectedFulfillmentCount = 3
 
-    let channel = realtime.channel("integration") {
+    let channel = await realtime.channel("integration") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
     let receivedMessages = LockIsolated<[JSONObject]>([])
 
     Task {
-      for await message in channel.broadcastStream(event: "test") {
+      for await message in await channel.broadcastStream(event: "test") {
         receivedMessages.withValue {
           $0.append(message)
         }
@@ -107,7 +107,7 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testBroadcastWithUnsubscribedChannel() async throws {
-    let channel = realtime.channel("integration") {
+    let channel = await realtime.channel("integration") {
       $0.broadcast.acknowledgeBroadcasts = true
     }
 
@@ -121,7 +121,7 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testPresence() async throws {
-    let channel = realtime.channel("integration") {
+    let channel = await realtime.channel("integration") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
@@ -131,7 +131,7 @@ final class RealtimeIntegrationTests: XCTestCase {
     let receivedPresenceChanges = LockIsolated<[any PresenceAction]>([])
 
     Task {
-      for await presence in channel.presenceChange() {
+      for await presence in await channel.presenceChange() {
         receivedPresenceChanges.withValue {
           $0.append(presence)
         }

@@ -139,5 +139,5 @@ extension PresenceAction {
 struct PresenceActionImpl: PresenceAction {
   var joins: [String: PresenceV2]
   var leaves: [String: PresenceV2]
-  var rawMessage: RealtimeMessageV2
+  var rawMessage: RealtimeMessage
 }

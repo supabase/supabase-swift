@@ -103,7 +103,7 @@ final class MessageStore {
 
   private init() {
     Task {
-      let channel = await supabase.realtimeV2.channel("public:messages")
+      let channel = await supabase.realtime.channel("public:messages")
 
       let insertions = await channel.postgresChange(InsertAction.self, table: "messages")
       let updates = await channel.postgresChange(UpdateAction.self, table: "messages")

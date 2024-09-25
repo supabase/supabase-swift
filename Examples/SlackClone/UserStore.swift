@@ -19,7 +19,7 @@ final class UserStore {
 
   private init() {
     Task {
-      let channel = await supabase.realtimeV2.channel("public:users")
+      let channel = await supabase.realtime.channel("public:users")
       let changes = await channel.postgresChange(AnyAction.self, table: "users")
 
       let presences = await channel.presenceChange()

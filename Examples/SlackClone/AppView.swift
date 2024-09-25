@@ -14,16 +14,16 @@ final class AppViewModel {
   var session: Session?
   var selectedChannel: Channel?
 
-  var realtimeConnectionStatus: RealtimeClientV2.Status?
+  var realtimeConnectionStatus: RealtimeClient.Status?
 
   init() {
     Task { [weak self] in
-      for await (event, session) in await supabase.auth.authStateChanges {
+      for await (event, session) in supabase.auth.authStateChanges {
         guard [.signedIn, .signedOut, .initialSession].contains(event) else { return }
         self?.session = session
 
         if session == nil {
-          for subscription in await supabase.realtimeV2.subscriptions.values {
+          for subscription in supabase.realtime.subscriptions.values {
             await subscription.unsubscribe()
           }
         }
@@ -31,7 +31,7 @@ final class AppViewModel {
     }
 
     Task {
-      for await status in await supabase.realtimeV2.statusChange {
+      for await status in supabase.realtime.statusChange {
         realtimeConnectionStatus = status
       }
     }
