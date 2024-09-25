@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.20.0](https://github.com/supabase/supabase-swift/compare/v2.19.0...v2.20.0) (2024-09-25)
+
+
+### Features
+
+* **storage:** add info, exists, custom metadata, and methods for uploading file URL ([#510](https://github.com/supabase/supabase-swift/issues/510)) ([d9ba673](https://github.com/supabase/supabase-swift/commit/d9ba673b882c84e5fae277510d147f52e22b861b))
+
 ## [2.19.0](https://github.com/supabase/supabase-swift/compare/v2.18.0...v2.19.0) (2024-09-24)
 
 
