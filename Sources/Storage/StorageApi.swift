@@ -1,5 +1,6 @@
 import Foundation
 import Helpers
+import class MultipartFormData.MultipartFormData
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -36,7 +37,10 @@ public class StorageApi: @unchecked Sendable {
     let response = try await http.send(request)
 
     guard (200 ..< 300).contains(response.statusCode) else {
-      if let error = try? configuration.decoder.decode(StorageError.self, from: response.data) {
+      if let error = try? configuration.decoder.decode(
+        StorageError.self,
+        from: response.data
+      ) {
         throw error
       }
 
@@ -52,10 +56,10 @@ extension HTTPRequest {
     url: URL,
     method: HTTPMethod,
     query: [URLQueryItem],
-    formData: FormData,
+    formData: MultipartFormData,
     options: FileOptions,
     headers: HTTPHeaders = [:]
-  ) {
+  ) throws {
     var headers = headers
     if headers["Content-Type"] == nil {
       headers["Content-Type"] = formData.contentType
@@ -63,12 +67,12 @@ extension HTTPRequest {
     if headers["Cache-Control"] == nil {
       headers["Cache-Control"] = "max-age=\(options.cacheControl)"
     }
-    self.init(
+    try self.init(
       url: url,
       method: method,
       query: query,
       headers: headers,
-      body: formData.data
+      body: formData.encode()
     )
   }
 }

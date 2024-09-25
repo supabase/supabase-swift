@@ -1,5 +1,6 @@
 import Foundation
 import Helpers
+import class MultipartFormData.MultipartFormData
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -14,10 +15,16 @@ let DEFAULT_SEARCH_OPTIONS = SearchOptions(
   )
 )
 
+private let defaultFileOptions = FileOptions(
+  cacheControl: "3600",
+  contentType: "text/plain;charset=UTF-8",
+  upsert: false
+)
+
 /// Supabase Storage File API
-public class StorageFileApi: StorageApi {
+public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// The bucket id to operate on.
-  var bucketId: String
+  let bucketId: String
 
   init(bucketId: String, configuration: StorageClientConfiguration) {
     self.bucketId = bucketId
@@ -32,24 +39,35 @@ public class StorageFileApi: StorageApi {
     let signedURL: URL
   }
 
-  func uploadOrUpdate(
+  private func encodeMetadata(_ metadata: JSONObject) -> Data {
+    let encoder = AnyJSON.encoder
+    return (try? encoder.encode(metadata)) ?? "{}".data(using: .utf8)!
+  }
+
+  private func _uploadOrUpdate(
     method: HTTPMethod,
     path: String,
-    file: Data,
-    options: FileOptions
+    formData: MultipartFormData,
+    options: FileOptions?
   ) async throws -> FileUploadResponse {
-    let contentType = options.contentType ?? mimeTypeForExtension(path.pathExtension)
-    var headers = HTTPHeaders([
-      "x-upsert": "\(options.upsert)",
-    ])
+    let options = options ?? defaultFileOptions
+    var headers = options.headers.map { HTTPHeaders($0) } ?? HTTPHeaders()
+
+    let metadata = options.metadata
+
+    if method == .post {
+      headers.update(name: "x-upsert", value: "\(options.upsert)")
+    }
 
     headers["duplex"] = options.duplex
 
-    let fileName = path.fileName
+    if let metadata {
+      formData.append(encodeMetadata(metadata), withName: "metadata")
+    }
 
-    let form = FormData()
-    form.append(
-      file: File(name: fileName, data: file, fileName: fileName, contentType: contentType)
+    formData.append(
+      options.cacheControl.data(using: .utf8)!,
+      withName: "cacheControl"
     )
 
     struct UploadResponse: Decodable {
@@ -57,12 +75,15 @@ public class StorageFileApi: StorageApi {
       let Id: String
     }
 
+    let cleanPath = _removeEmptyFolders(path)
+    let _path = _getFinalPath(cleanPath)
+
     let response = try await execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/\(bucketId)/\(path)"),
+        url: configuration.url.appendingPathComponent("object/\(_path)"),
         method: method,
         query: [],
-        formData: form,
+        formData: formData,
         options: options,
         headers: headers
       )
@@ -80,30 +101,75 @@ public class StorageFileApi: StorageApi {
   /// - Parameters:
   ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`. The
   /// bucket must already exist before attempting to upload.
-  ///   - file: The Data to be stored in the bucket.
+  ///   - data: The Data to be stored in the bucket.
   ///   - options: HTTP headers. For example `cacheControl`
   @discardableResult
   public func upload(
-    path: String,
-    file: Data,
+    _ path: String,
+    data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await uploadOrUpdate(method: .post, path: path, file: file, options: options)
+    let fileName = path.fileName
+    let formData = MultipartFormData()
+    formData.append(
+      data,
+      withName: fileName,
+      fileName: fileName,
+      mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
+    )
+    return try await _uploadOrUpdate(method: .post, path: path, formData: formData, options: options)
+  }
+
+  @discardableResult
+  public func upload(
+    _ path: String,
+    fileURL: Data,
+    options: FileOptions = FileOptions()
+  ) async throws -> FileUploadResponse {
+    let fileName = path.fileName
+    let formData = MultipartFormData()
+    formData.append(fileURL, withName: fileName, fileName: fileName)
+    return try await _uploadOrUpdate(method: .post, path: path, formData: formData, options: options)
   }
 
   /// Replaces an existing file at the specified path with a new one.
   /// - Parameters:
   ///   - path: The relative file path. Should be of the format `folder/subfolder`. The bucket
   /// already exist before attempting to upload.
-  ///   - file: The Data to be stored in the bucket.
+  ///   - data: The Data to be stored in the bucket.
   ///   - options: HTTP headers. For example `cacheControl`
   @discardableResult
   public func update(
-    path: String,
-    file: Data,
+    _ path: String,
+    data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await uploadOrUpdate(method: .put, path: path, file: file, options: options)
+    let fileName = path.fileName
+    let formData = MultipartFormData()
+    formData.append(
+      data,
+      withName: fileName,
+      fileName: fileName,
+      mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
+    )
+    return try await _uploadOrUpdate(method: .put, path: path, formData: formData, options: options)
+  }
+
+  /// Replaces an existing file at the specified path with a new one.
+  /// - Parameters:
+  ///   - path: The relative file path. Should be of the format `folder/subfolder`. The bucket
+  /// already exist before attempting to upload.
+  ///   - fileURL: The file URL to be stored in the bucket.
+  ///   - options: HTTP headers. For example `cacheControl`
+  @discardableResult
+  public func update(
+    _ path: String,
+    fileURL: URL,
+    options: FileOptions = FileOptions()
+  ) async throws -> FileUploadResponse {
+    let formData = MultipartFormData()
+    formData.append(fileURL, withName: path.fileName)
+    return try await _uploadOrUpdate(method: .put, path: path, formData: formData, options: options)
   }
 
   /// Moves an existing file, optionally renaming it at the same time.
@@ -358,6 +424,46 @@ public class StorageFileApi: StorageApi {
     .data
   }
 
+  /// Retrieves the details of an existing file.
+  public func info(path: String) async throws -> FileObjectV2 {
+    let _path = _getFinalPath(path)
+
+    return try await execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/info/\(_path)"),
+        method: .get
+      )
+    )
+    .decoded(decoder: configuration.decoder)
+  }
+
+  /// Checks the existence of file.
+  public func exists(path: String) async throws -> Bool {
+    do {
+      try await execute(
+        HTTPRequest(
+          url: configuration.url.appendingPathComponent("object/\(bucketId)/\(path)"),
+          method: .head
+        )
+      )
+      return true
+    } catch {
+      var statusCode: Int?
+
+      if let error = error as? StorageError {
+        statusCode = error.statusCode.flatMap(Int.init)
+      } else if let error = error as? HTTPError {
+        statusCode = error.response.statusCode
+      }
+
+      if let statusCode, [400, 404].contains(statusCode) {
+        return false
+      }
+
+      throw error
+    }
+  }
+
   /// Returns a public url for an asset.
   /// - Parameters:
   ///  - path: The file path to the asset. For example `folder/image.png`.
@@ -461,34 +567,75 @@ public class StorageFileApi: StorageApi {
 
   /// Upload a file with a token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
   /// - Parameters:
-  ///   - path: The file path, including the file name. Should be of the format
-  /// `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
+  ///   - path: The file path, including the file name. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
   ///   - token: The token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
-  ///   - file: The Data to be stored in the bucket.
+  ///   - data: The Data to be stored in the bucket.
   ///   - options: HTTP headers, for example `cacheControl`.
   /// - Returns: A key pointing to stored location.
   @discardableResult
   public func uploadToSignedURL(
+    _ path: String,
+    token: String,
+    data: Data,
+    options: FileOptions? = nil
+  ) async throws -> SignedURLUploadResponse {
+    let fileName = path.fileName
+    let formData = MultipartFormData()
+    formData.append(
+      data,
+      withName: fileName,
+      fileName: fileName,
+      mimeType: options?.contentType ?? mimeType(forPathExtension: path.pathExtension)
+    )
+    return try await _uploadToSignedURL(
+      path: path,
+      token: token,
+      formData: formData,
+      options: options
+    )
+  }
+
+  /// Upload a file with a token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
+  /// - Parameters:
+  ///   - path: The file path, including the file name. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
+  ///   - token: The token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
+  ///   - fileURL: The file URL to be stored in the bucket.
+  ///   - options: HTTP headers, for example `cacheControl`.
+  /// - Returns: A key pointing to stored location.
+  @discardableResult
+  public func uploadToSignedURL(
+    _ path: String,
+    token: String,
+    fileURL: Data,
+    options: FileOptions? = nil
+  ) async throws -> SignedURLUploadResponse {
+    let formData = MultipartFormData()
+    formData.append(fileURL, withName: path.fileName)
+    return try await _uploadToSignedURL(
+      path: path,
+      token: token,
+      formData: formData,
+      options: options
+    )
+  }
+
+  private func _uploadToSignedURL(
     path: String,
     token: String,
-    file: Data,
-    options: FileOptions = FileOptions()
+    formData: MultipartFormData,
+    options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
-    let contentType = options.contentType ?? mimeTypeForExtension(path.pathExtension)
-    var headers = HTTPHeaders([
-      "x-upsert": "\(options.upsert)",
-    ])
+    let options = options ?? defaultFileOptions
+    var headers = options.headers.map { HTTPHeaders($0) } ?? HTTPHeaders()
+
+    headers["x-upsert"] = "\(options.upsert)"
     headers["duplex"] = options.duplex
 
-    let fileName = path.fileName
+    if let metadata = options.metadata {
+      formData.append(encodeMetadata(metadata), withName: "metadata")
+    }
 
-    let form = FormData()
-    form.append(file: File(
-      name: fileName,
-      data: file,
-      fileName: fileName,
-      contentType: contentType
-    ))
+    formData.append(options.cacheControl.data(using: .utf8)!, withName: "cacheControl")
 
     struct UploadResponse: Decodable {
       let Key: String
@@ -500,7 +647,7 @@ public class StorageFileApi: StorageApi {
           .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
         method: .put,
         query: [URLQueryItem(name: "token", value: token)],
-        formData: form,
+        formData: formData,
         options: options,
         headers: headers
       )
@@ -509,5 +656,15 @@ public class StorageFileApi: StorageApi {
     .Key
 
     return SignedURLUploadResponse(path: path, fullPath: fullPath)
+  }
+
+  private func _getFinalPath(_ path: String) -> String {
+    "\(bucketId)/\(path)"
+  }
+
+  private func _removeEmptyFolders(_ path: String) -> String {
+    let trimmedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    let cleanedPath = trimmedPath.replacingOccurrences(of: "/+", with: "/", options: .regularExpression)
+    return cleanedPath
   }
 }

@@ -37,6 +37,15 @@
       }
     },
     {
+      "identity" : "multipartformdata",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/grdsdev/MultipartFormData",
+      "state" : {
+        "revision" : "ed7abea9cfc6c3b5e77a73fe6842c57a372d2017",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "svgview",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/exyte/SVGView",
