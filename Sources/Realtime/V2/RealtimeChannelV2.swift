@@ -64,6 +64,7 @@ extension Socket {
 }
 
 public final class RealtimeChannelV2: Sendable {
+  @available(*, deprecated, renamed: "RealtimeSubscription")
   public typealias Subscription = ObservationToken
 
   public enum Status: Sendable {
@@ -464,9 +465,9 @@ public final class RealtimeChannelV2: Sendable {
   /// Listen for clients joining / leaving the channel using presences.
   public func onPresenceChange(
     _ callback: @escaping @Sendable (any PresenceAction) -> Void
-  ) -> Subscription {
+  ) -> RealtimeSubscription {
     let id = callbackManager.addPresenceCallback(callback: callback)
-    return Subscription { [weak callbackManager, logger] in
+    return RealtimeSubscription { [weak callbackManager, logger] in
       logger?.debug("Removing presence callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
@@ -479,7 +480,7 @@ public final class RealtimeChannelV2: Sendable {
     table: String? = nil,
     filter: String? = nil,
     callback: @escaping @Sendable (AnyAction) -> Void
-  ) -> Subscription {
+  ) -> RealtimeSubscription {
     _onPostgresChange(
       event: .all,
       schema: schema,
@@ -497,7 +498,7 @@ public final class RealtimeChannelV2: Sendable {
     table: String? = nil,
     filter: String? = nil,
     callback: @escaping @Sendable (InsertAction) -> Void
-  ) -> Subscription {
+  ) -> RealtimeSubscription {
     _onPostgresChange(
       event: .insert,
       schema: schema,
@@ -516,7 +517,7 @@ public final class RealtimeChannelV2: Sendable {
     table: String? = nil,
     filter: String? = nil,
     callback: @escaping @Sendable (UpdateAction) -> Void
-  ) -> Subscription {
+  ) -> RealtimeSubscription {
     _onPostgresChange(
       event: .update,
       schema: schema,
@@ -535,7 +536,7 @@ public final class RealtimeChannelV2: Sendable {
     table: String? = nil,
     filter: String? = nil,
     callback: @escaping @Sendable (DeleteAction) -> Void
-  ) -> Subscription {
+  ) -> RealtimeSubscription {
     _onPostgresChange(
       event: .delete,
       schema: schema,
@@ -553,7 +554,7 @@ public final class RealtimeChannelV2: Sendable {
     table: String?,
     filter: String?,
     callback: @escaping @Sendable (AnyAction) -> Void
-  ) -> Subscription {
+  ) -> RealtimeSubscription {
     precondition(
       status != .subscribed,
       "You cannot call postgresChange after joining the channel"
@@ -571,7 +572,7 @@ public final class RealtimeChannelV2: Sendable {
     }
 
     let id = callbackManager.addPostgresCallback(filter: config, callback: callback)
-    return Subscription { [weak callbackManager, logger] in
+    return RealtimeSubscription { [weak callbackManager, logger] in
       logger?.debug("Removing postgres callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
@@ -581,9 +582,9 @@ public final class RealtimeChannelV2: Sendable {
   public func onBroadcast(
     event: String,
     callback: @escaping @Sendable (JSONObject) -> Void
-  ) -> Subscription {
+  ) -> RealtimeSubscription {
     let id = callbackManager.addBroadcastCallback(event: event, callback: callback)
-    return Subscription { [weak callbackManager, logger] in
+    return RealtimeSubscription { [weak callbackManager, logger] in
       logger?.debug("Removing broadcast callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }

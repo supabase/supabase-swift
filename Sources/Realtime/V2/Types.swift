@@ -60,3 +60,5 @@ public struct RealtimeClientOptions: Sendable {
     return String(accessToken)
   }
 }
+
+public typealias RealtimeSubscription = ObservationToken
