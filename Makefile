@@ -107,7 +107,11 @@ build-examples:
 	done
 
 format:
-	@swiftformat .
+	find . \
+		-path '*/Documentation.docc' -prune -o \
+		-name '*.swift' \
+		-not -path '*/.*' -print0 \
+		| xargs -0 swift format --ignore-unparsable-files --in-place
 
 .PHONY: test-library test-linux build-example format
 
