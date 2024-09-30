@@ -108,7 +108,7 @@ public final class RealtimeClientV2: Sendable {
   /// - Note: Use ``statusChange`` if you prefer to use Async/Await.
   public func onStatusChange(
     _ listener: @escaping @Sendable (Status) -> Void
-  ) -> ObservationToken {
+  ) -> RealtimeSubscription {
     statusEventEmitter.attach(listener)
   }
 
