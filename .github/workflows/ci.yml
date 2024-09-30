@@ -45,7 +45,7 @@ jobs:
         if: matrix.skip_release != '1'
         run: make COMMAND="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
-   linux:
+  linux:
     name: linux
     strategy:
       matrix:
