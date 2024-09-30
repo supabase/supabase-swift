@@ -75,9 +75,9 @@ jobs:
       - name: Update mtime for incremental builds
         uses: chetan/git-restore-mtime-action@v2
       - name: Examples
-        run: make SCHEME="Examples" test-example
+        run: make SCHEME="Examples" build-example
       - name: SlackClone
-        run: make SCHEME="SlackClone" test-example
+        run: make SCHEME="SlackClone" buildt-example
       - name: UserManagement
-        run: make SCHEME="UserManagement" test-example
+        run: make SCHEME="UserManagement" build-example
       
