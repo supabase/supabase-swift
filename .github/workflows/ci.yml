@@ -77,7 +77,7 @@ jobs:
       - name: Examples
         run: make SCHEME="Examples" build-example
       - name: SlackClone
-        run: make SCHEME="SlackClone" buildt-example
+        run: make SCHEME="SlackClone" build-example
       - name: UserManagement
         run: make SCHEME="UserManagement" build-example
       
