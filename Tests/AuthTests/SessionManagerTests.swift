@@ -32,7 +32,6 @@ final class SessionManagerTests: XCTestCase {
       configuration: .init(
         url: clientURL,
         localStorage: InMemoryLocalStorage(),
-        logger: TestLogger(),
         autoRefreshToken: false
       ),
       http: http,
@@ -110,11 +109,5 @@ final class SessionManagerTests: XCTestCase {
       XCTAssertEqual(refreshSessionCallCount.value, 1)
       XCTAssertEqual(try result.map { try $0.get() }, (0 ..< 10).map { _ in validSession })
     }
-  }
-}
-
-struct TestLogger: SupabaseLogger {
-  func log(message: SupabaseLogMessage) {
-    print(message.description)
   }
 }

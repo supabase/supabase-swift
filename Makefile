@@ -1,13 +1,11 @@
 CONFIG = debug
-PLATFORM_IOS = iOS Simulator,id=$(call udid_for,iOS 17.5,iPhone \d\+ Pro [^M])
+PLATFORM = iOS
+PLATFORM_IOS = iOS Simulator,id=$(call udid_for,iOS,iPhone \d\+ Pro [^M])
 PLATFORM_MACOS = macOS
 PLATFORM_MAC_CATALYST = macOS,variant=Mac Catalyst
-PLATFORM_TVOS = tvOS Simulator,id=$(call udid_for,tvOS 17.5,TV)
-PLATFORM_VISIONOS = visionOS Simulator,id=$(call udid_for,visionOS 1.2,Vision)
-PLATFORM_WATCHOS = watchOS Simulator,id=$(call udid_for,watchOS 10.5,Watch)
-
-SCHEME ?= Supabase
-PLATFORM ?= $(PLATFORM_IOS)
+PLATFORM_TVOS = tvOS Simulator,id=$(call udid_for,tvOS,TV)
+PLATFORM_VISIONOS = visionOS Simulator,id=$(call udid_for,visionOS,Vision)
+PLATFORM_WATCHOS = watchOS Simulator,id=$(call udid_for,watchOS,Watch)
 
 export SECRETS
 define SECRETS
@@ -17,6 +15,64 @@ enum DotEnv {
   static let SUPABASE_SERVICE_ROLE_KEY = "$(SUPABASE_SERVICE_ROLE_KEY)"
 }
 endef
+
+default: test-all
+
+test-all:
+	$(MAKE) CONFIG=debug test-library
+	$(MAKE) CONFIG=release test-library
+
+xcodebuild:
+	if test "$(PLATFORM)" = "iOS"; \
+		then xcodebuild $(COMMAND) \
+			-skipMacroValidation \
+			-configuration $(CONFIG) \
+			-workspace Supabase.xcworkspace \
+			-scheme Supabase \
+			-destination platform="$(PLATFORM_IOS)" \
+			-derivedDataPath ~/.derivedData/$(CONFIG) | xcpretty; \
+		elif test "$(PLATFORM)" = "macOS"; \
+		then xcodebuild $(COMMAND) \
+			-skipMacroValidation \
+			-configuration $(CONFIG) \
+			-workspace Supabase.xcworkspace \
+			-scheme Supabase \
+			-destination platform="$(PLATFORM_MACOS)" \
+			-derivedDataPath ~/.derivedData/$(CONFIG) | xcpretty; \
+		elif test "$(PLATFORM)" = "tvOS"; \
+		then xcodebuild $(COMMAND) \
+			-skipMacroValidation \
+			-configuration $(CONFIG) \
+			-workspace Supabase.xcworkspace \
+			-scheme Supabase \
+			-destination platform="$(PLATFORM_TVOS)" \
+			-derivedDataPath ~/.derivedData/$(CONFIG) | xcpretty; \
+		elif test "$(PLATFORM)" = "watchOS"; \
+		then xcodebuild $(COMMAND) \
+			-skipMacroValidation \
+			-configuration $(CONFIG) \
+			-workspace Supabase.xcworkspace \
+			-scheme Supabase \
+			-destination platform="$(PLATFORM_WATCHOS)" \
+			-derivedDataPath ~/.derivedData/$(CONFIG) | xcpretty; \
+		elif test "$(PLATFORM)" = "visionOS"; \
+		then xcodebuild $(COMMAND) \
+			-skipMacroValidation \
+			-configuration $(CONFIG) \
+			-workspace Supabase.xcworkspace \
+			-scheme Supabase \
+			-destination platform="$(PLATFORM_VISIONOS)" \
+			-derivedDataPath ~/.derivedData/$(CONFIG) | xcpretty; \
+		elif test "$(PLATFORM)" = "macCatalyst"; \
+		then xcodebuild $(COMMAND) \
+			-skipMacroValidation \
+			-configuration $(CONFIG) \
+			-workspace Supabase.xcworkspace \
+			-scheme Supabase \
+			-destination platform="$(PLATFORM_MAC_CATALYST)" \
+			-derivedDataPath ~/.derivedData/$(CONFIG) | xcpretty; \
+		else exit 1; \
+		fi;	
 
 load-env:
 	@. ./scripts/load_env.sh
@@ -33,16 +89,6 @@ build-all-platforms:
 			-workspace Supabase.xcworkspace \
 			-scheme "$(SCHEME)" \
 			-testPlan AllTests \
-			-destination platform="$$platform" | xcpretty || exit 1; \
-	done
-
-test-library: dot-env
-	for platform in "$(PLATFORM_IOS)" "$(PLATFORM_MACOS)" "$(PLATFORM_MAC_CATALYST)" "$(PLATFORM_TVOS)" "$(PLATFORM_VISIONOS)" "$(PLATFORM_WATCHOS)"; do \
-		xcodebuild test \
-			-skipMacroValidation \
-			-configuration "$(CONFIG)" \
-			-workspace Supabase.xcworkspace \
-			-scheme "$(SCHEME)" \
 			-destination platform="$$platform" | xcpretty || exit 1; \
 	done
 
@@ -82,7 +128,6 @@ build-for-library-evolution:
 		-Xswiftc -emit-module-interface \
 		-Xswiftc -enable-library-evolution
 
-
 DOC_WARNINGS = $(shell xcodebuild clean docbuild \
 	-scheme Supabase \
 	-destination platform="$(PLATFORM_MACOS)" \
@@ -96,15 +141,13 @@ test-docs:
 		|| (echo "xcodebuild docbuild failed:\n\n$(DOC_WARNINGS)" | tr '\1' '\n' \
 		&& exit 1)
 
-build-examples:
-	for scheme in Examples UserManagement SlackClone; do \
-		set -o pipefail && \
-			xcodebuild build \
-				-skipMacroValidation \
-				-workspace Supabase.xcworkspace \
-				-scheme "$$scheme" \
-				-destination platform="$(PLATFORM_IOS)" | xcpretty; \
-	done
+build-example:
+	xcodebuild build \
+		-skipMacroValidation \
+		-workspace Supabase.xcworkspace \
+		-scheme "$(SCHEME)" \
+		-destination platform="$(PLATFORM_IOS)" \
+		-derivedDataPath ~/.derivedData | xcpretty;
 
 format:
 	@swiftformat .

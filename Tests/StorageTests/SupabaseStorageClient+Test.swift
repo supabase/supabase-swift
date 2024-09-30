@@ -21,8 +21,7 @@ extension SupabaseStorageClient {
           "Authorization": "Bearer \(apiKey)",
           "Apikey": apiKey,
         ],
-        session: session,
-        logger: ConsoleLogger()
+        session: session
       )
     )
   }

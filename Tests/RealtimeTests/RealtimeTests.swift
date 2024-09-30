@@ -34,8 +34,7 @@ final class RealtimeTests: XCTestCase {
         headers: ["apikey": apiKey],
         heartbeatInterval: 1,
         reconnectDelay: 1,
-        timeoutInterval: 2,
-        logger: TestLogger()
+        timeoutInterval: 2
       ),
       ws: ws,
       http: http

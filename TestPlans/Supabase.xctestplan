@@ -15,8 +15,50 @@
     {
       "target" : {
         "containerPath" : "container:",
+        "identifier" : "AuthTests",
+        "name" : "AuthTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "HelpersTests",
+        "name" : "HelpersTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
         "identifier" : "SupabaseTests",
         "name" : "SupabaseTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "StorageTests",
+        "name" : "StorageTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "PostgRESTTests",
+        "name" : "PostgRESTTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "FunctionsTests",
+        "name" : "FunctionsTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "RealtimeTests",
+        "name" : "RealtimeTests"
       }
     }
   ],

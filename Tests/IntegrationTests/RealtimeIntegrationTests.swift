@@ -13,18 +13,11 @@ import Supabase
 import TestHelpers
 import XCTest
 
-struct Logger: SupabaseLogger {
-  func log(message: SupabaseLogMessage) {
-    print(message.description)
-  }
-}
-
 final class RealtimeIntegrationTests: XCTestCase {
   let realtime = RealtimeClientV2(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
     options: RealtimeClientOptions(
-      headers: ["apikey": DotEnv.SUPABASE_ANON_KEY],
-      logger: Logger()
+      headers: ["apikey": DotEnv.SUPABASE_ANON_KEY]
     )
   )
 
@@ -32,8 +25,7 @@ final class RealtimeIntegrationTests: XCTestCase {
     url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
     headers: [
       "apikey": DotEnv.SUPABASE_ANON_KEY,
-    ],
-    logger: Logger()
+    ]
   )
 
   override func invokeTest() {
