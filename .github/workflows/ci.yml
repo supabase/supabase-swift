@@ -56,11 +56,11 @@ jobs:
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: ${{ matrix.swift-version }}
-      - name: Cache derived data
+      - name: Cache build
         uses: actions/cache@v3
         with:
           path: |
-            ~/.build
+            .build
           key: |
             build-spm-linux-${{ matrix.swift-verion }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Package.resolved') }}
           restore-keys: |
