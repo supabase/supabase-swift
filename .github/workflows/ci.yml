@@ -62,9 +62,9 @@ jobs:
           path: |
             ~/.build
           key: |
-            ${{ runner.os }-spm-linux-${{ matrix.swift-verion }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Package.resolved') }}
+            build-spm-linux-${{ matrix.swift-verion }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Package.resolved') }}
           restore-keys: |
-            ${{ runner.os }-spm-linux-${{ matrix.swift-verion }}-
+            build-spm-linux-${{ matrix.swift-verion }}-
       - run: make dot-env
       - name: Run tests
         run: swift test --skip IntegrationTests
