@@ -92,16 +92,6 @@ build-all-platforms:
 			-destination platform="$$platform" | xcpretty || exit 1; \
 	done
 
-test-library: dot-env
-	for platform in "$(PLATFORM_IOS)" "$(PLATFORM_MACOS)" "$(PLATFORM_MAC_CATALYST)" "$(PLATFORM_TVOS)" "$(PLATFORM_VISIONOS)" "$(PLATFORM_WATCHOS)"; do \
-		xcodebuild test \
-			-skipMacroValidation \
-			-configuration "$(CONFIG)" \
-			-workspace Supabase.xcworkspace \
-			-scheme "$(SCHEME)" \
-			-destination platform="$$platform" | xcpretty || exit 1; \
-	done
-
 test-auth:
 	$(MAKE) SCHEME=Auth test-library
 
@@ -151,15 +141,13 @@ test-docs:
 		|| (echo "xcodebuild docbuild failed:\n\n$(DOC_WARNINGS)" | tr '\1' '\n' \
 		&& exit 1)
 
-build-examples:
-	for scheme in Examples UserManagement SlackClone; do \
-		set -o pipefail && \
-			xcodebuild build \
-				-skipMacroValidation \
-				-workspace Supabase.xcworkspace \
-				-scheme "$$scheme" \
-				-destination platform="$(PLATFORM_IOS)" | xcpretty; \
-	done
+build-example:
+	xcodebuild build \
+		-skipMacroValidation \
+		-workspace Supabase.xcworkspace \
+		-scheme "$(SCHEME)" \
+		-destination platform="$(PLATFORM_IOS)" \
+		-derivedDataPath ~/.derivedData | xcpretty;
 
 format:
 	@swiftformat .
