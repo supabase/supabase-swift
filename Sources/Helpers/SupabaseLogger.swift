@@ -193,6 +193,7 @@ extension SupabaseLogger {
     }
   }
 #else
+  @_unsafeInheritExecutor
   @inlinable
   @discardableResult
   package func trace<R: Sendable>(

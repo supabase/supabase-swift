@@ -29,6 +29,7 @@ import Foundation
   }
 #else
   extension TaskLocal where Value == JSONObject {
+    @_unsafeInheritExecutor
     @discardableResult
     @inlinable package final func withValue<R>(
       merging valueDuringOperation: Value,
