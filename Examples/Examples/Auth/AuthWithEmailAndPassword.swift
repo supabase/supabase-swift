@@ -23,6 +23,8 @@ struct AuthWithEmailAndPassword: View {
   @State var mode: Mode = .signIn
   @State var actionState = ActionState<Result, Error>.idle
 
+  @State var isPresentingResetPassword: Bool = false
+
   var body: some View {
     Form {
       Section {
@@ -73,6 +75,14 @@ struct AuthWithEmailAndPassword: View {
           actionState = .idle
         }
       }
+
+      if mode == .signIn {
+        Section {
+          Button("Forgot password? Reset it.") {
+            isPresentingResetPassword = true
+          }
+        }
+      }
     }
     .onOpenURL { url in
       Task {
@@ -80,6 +90,9 @@ struct AuthWithEmailAndPassword: View {
       }
     }
     .animation(.default, value: mode)
+    .sheet(isPresented: $isPresentingResetPassword) {
+      ResetPasswordView()
+    }
   }
 
   @MainActor

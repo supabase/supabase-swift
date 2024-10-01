@@ -12,6 +12,7 @@ import SwiftUI
 @MainActor
 final class AuthController {
   var session: Session?
+  var isPasswordRecoveryFlow: Bool = false
 
   var currentUserID: UUID {
     guard let id = session?.user.id else {
@@ -27,9 +28,13 @@ final class AuthController {
   init() {
     observeAuthStateChangesTask = Task {
       for await (event, session) in supabase.auth.authStateChanges {
-        guard [.initialSession, .signedIn, .signedOut].contains(event) else { return }
+        if [.initialSession, .signedIn, .signedOut].contains(event) {
+          self.session = session
+        }
 
-        self.session = session
+        if event == .passwordRecovery {
+          self.isPasswordRecoveryFlow = true
+        }
       }
     }
   }

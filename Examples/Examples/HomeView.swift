@@ -14,6 +14,8 @@ struct HomeView: View {
   @State private var mfaStatus: MFAStatus?
 
   var body: some View {
+    @Bindable var auth = auth
+
     TabView {
       ProfileView()
         .tabItem {
@@ -28,11 +30,8 @@ struct HomeView: View {
         Label("Storage", systemImage: "externaldrive")
       }
     }
-    .task {
-//        mfaStatus = await verifyMFAStatus()
-    }
-    .sheet(unwrapping: $mfaStatus) { $mfaStatus in
-      MFAFlow(status: mfaStatus)
+    .sheet(isPresented: $auth.isPasswordRecoveryFlow) {
+      UpdatePasswordView()
     }
   }
 
@@ -53,6 +52,28 @@ struct HomeView: View {
       }
     } catch {
       return nil
+    }
+  }
+
+  struct UpdatePasswordView: View {
+    @Environment(\.dismiss) var dismiss
+
+    @State var password: String = ""
+
+    var body: some View {
+      Form {
+        SecureField("Password", text: $password)
+          .textContentType(.newPassword)
+
+        Button("Update password") {
+          Task {
+            do {
+              try await supabase.auth.update(user: UserAttributes(password: password))
+              dismiss()
+            } catch {}
+          }
+        }
+      }
     }
   }
 }

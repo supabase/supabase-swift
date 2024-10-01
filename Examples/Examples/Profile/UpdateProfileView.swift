@@ -13,12 +13,13 @@ struct UpdateProfileView: View {
 
   @State var email = ""
   @State var phone = ""
+  @State var password = ""
 
   @State var otp = ""
   @State var showTokenField = false
 
   var formUpdated: Bool {
-    emailChanged || phoneChanged
+    emailChanged || phoneChanged || !password.isEmpty
   }
 
   var emailChanged: Bool {
@@ -42,6 +43,8 @@ struct UpdateProfileView: View {
           .keyboardType(.phonePad)
           .autocorrectionDisabled()
           .textInputAutocapitalization(.never)
+        SecureField("New password", text: $password)
+          .textContentType(.newPassword)
       }
 
       Section {
@@ -79,6 +82,10 @@ struct UpdateProfileView: View {
 
     if phoneChanged {
       attributes.phone = phone
+    }
+
+    if password.isEmpty == false {
+      attributes.password = password
     }
 
     do {
