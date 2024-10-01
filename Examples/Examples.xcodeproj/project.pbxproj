@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7928145D2CAB2CE2000B4ADB /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7928145C2CAB2CDE000B4ADB /* ResetPasswordView.swift */; };
 		793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895C92954ABFF0044F2B8 /* ExamplesApp.swift */; };
 		793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895CB2954ABFF0044F2B8 /* RootView.swift */; };
 		793895CE2954AC000044F2B8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 793895CD2954AC000044F2B8 /* Assets.xcassets */; };
@@ -77,6 +78,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		7928145C2CAB2CDE000B4ADB /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
 		793895C62954ABFF0044F2B8 /* Examples.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Examples.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		793895C92954ABFF0044F2B8 /* ExamplesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExamplesApp.swift; sourceTree = "<group>"; };
 		793895CB2954ABFF0044F2B8 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -276,6 +278,7 @@
 		79B1C80A2BABFF6F00D991AA /* Profile */ = {
 			isa = PBXGroup;
 			children = (
+				7928145C2CAB2CDE000B4ADB /* ResetPasswordView.swift */,
 				79B1C80B2BABFF8000D991AA /* ProfileView.swift */,
 				794C61D52BAD1E12000E6B0F /* UserIdentityList.swift */,
 				79B3261B2BF359A50023661C /* UpdateProfileView.swift */,
@@ -510,6 +513,7 @@
 				797EFB662BABD82A00098D6B /* BucketList.swift in Sources */,
 				79E2B55C2B97A2310042CD21 /* UIApplicationExtensions.swift in Sources */,
 				794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */,
+				7928145D2CAB2CE2000B4ADB /* ResetPasswordView.swift in Sources */,
 				7956405E2954ADE00088A06F /* Secrets.swift in Sources */,
 				795640682955AEB30088A06F /* Models.swift in Sources */,
 				79B1C80C2BABFF8000D991AA /* ProfileView.swift in Sources */,

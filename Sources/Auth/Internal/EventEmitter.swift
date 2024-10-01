@@ -4,11 +4,14 @@ import Helpers
 
 struct AuthStateChangeEventEmitter {
   var emitter = EventEmitter<(AuthChangeEvent, Session?)?>(initialEvent: nil, emitsLastEventWhenAttaching: false)
+  var logger: (any SupabaseLogger)?
 
   func attach(_ listener: @escaping AuthStateChangeListener) -> ObservationToken {
     emitter.attach { event in
       guard let event else { return }
       listener(event.0, event.1)
+
+      logger?.verbose("Auth state changed: \(event)")
     }
   }
 

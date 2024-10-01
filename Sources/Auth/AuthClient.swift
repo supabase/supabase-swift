@@ -670,6 +670,8 @@ public final class AuthClient: Sendable {
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
   public func session(from url: URL) async throws -> Session {
+    logger?.debug("received \(url)")
+
     let params = extractParams(from: url)
 
     if configuration.flowType == .implicit, !isImplicitGrantFlow(params: params) {
