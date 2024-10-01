@@ -173,10 +173,10 @@ extension SupabaseLogger {
 
 @inlinable
 @discardableResult
-@_unsafeInheritExecutor
-package func trace<R>(
+package func trace<R: Sendable>(
   using logger: (any SupabaseLogger)?,
-  @_inheritActorContext _ operation: @Sendable () async throws -> R,
+  _ operation: () async throws -> R,
+  isolation _: isolated (any Actor)? = #isolation,
   fileID: StaticString = #fileID,
   function: StaticString = #function,
   line: UInt = #line

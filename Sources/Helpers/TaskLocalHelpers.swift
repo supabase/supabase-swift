@@ -8,12 +8,11 @@
 import Foundation
 
 extension TaskLocal where Value == JSONObject {
-  @inlinable
   @discardableResult
-  @_unsafeInheritExecutor
-  package func withValue<R>(
+  @inlinable package final func withValue<R>(
     merging valueDuringOperation: Value,
-    @_inheritActorContext operation: @Sendable () async throws -> R,
+    operation: () async throws -> R,
+    isolation: isolated (any Actor)? = #isolation,
     file: String = #fileID,
     line: UInt = #line
   ) async rethrows -> R {
@@ -21,6 +20,7 @@ extension TaskLocal where Value == JSONObject {
     return try await withValue(
       currentValue.merging(valueDuringOperation) { _, new in new },
       operation: operation,
+      isolation: isolation,
       file: file,
       line: line
     )
