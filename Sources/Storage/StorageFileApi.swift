@@ -48,11 +48,6 @@ enum FileUpload {
       formData.append(url, withName: "")
     }
   }
-
-  private func encodeMetadata(_ metadata: JSONObject) -> Data {
-    let encoder = AnyJSON.encoder
-    return (try? encoder.encode(metadata)) ?? "{}".data(using: .utf8)!
-  }
 }
 
 /// Supabase Storage File API
