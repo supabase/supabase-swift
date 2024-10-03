@@ -6,7 +6,7 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
-let DEFAULT_SEARCH_OPTIONS = SearchOptions(
+let defaultSearchOptions = SearchOptions(
   limit: 100,
   offset: 0,
   sortBy: SortBy(
@@ -20,6 +20,40 @@ private let defaultFileOptions = FileOptions(
   contentType: "text/plain;charset=UTF-8",
   upsert: false
 )
+
+enum FileUpload {
+  case data(Data)
+  case url(URL)
+
+  func encode(to formData: MultipartFormData, withPath path: String, options: FileOptions) {
+    formData.append(
+      options.cacheControl.data(using: .utf8)!,
+      withName: "cacheControl"
+    )
+
+    if let metadata = options.metadata {
+      formData.append(encodeMetadata(metadata), withName: "metadata")
+    }
+
+    switch self {
+    case let .data(data):
+      formData.append(
+        data,
+        withName: "",
+        fileName: path.fileName,
+        mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
+      )
+
+    case let .url(url):
+      formData.append(url, withName: "")
+    }
+  }
+
+  private func encodeMetadata(_ metadata: JSONObject) -> Data {
+    let encoder = AnyJSON.encoder
+    return (try? encoder.encode(metadata)) ?? "{}".data(using: .utf8)!
+  }
+}
 
 /// Supabase Storage File API
 public class StorageFileApi: StorageApi, @unchecked Sendable {
@@ -39,21 +73,14 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let signedURL: URL
   }
 
-  private func encodeMetadata(_ metadata: JSONObject) -> Data {
-    let encoder = AnyJSON.encoder
-    return (try? encoder.encode(metadata)) ?? "{}".data(using: .utf8)!
-  }
-
   private func _uploadOrUpdate(
     method: HTTPTypes.HTTPRequest.Method,
     path: String,
-    formData: MultipartFormData,
+    file: FileUpload,
     options: FileOptions?
   ) async throws -> FileUploadResponse {
     let options = options ?? defaultFileOptions
     var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
-
-    let metadata = options.metadata
 
     if method == .post {
       headers[.xUpsert] = "\(options.upsert)"
@@ -61,14 +88,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     headers[.duplex] = options.duplex
 
-    if let metadata {
-      formData.append(encodeMetadata(metadata), withName: "metadata")
-    }
-
-    formData.append(
-      options.cacheControl.data(using: .utf8)!,
-      withName: "cacheControl"
-    )
+    let formData = MultipartFormData()
+    file.encode(to: formData, withPath: path, options: options)
 
     struct UploadResponse: Decodable {
       let Key: String
@@ -109,27 +130,26 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    let fileName = path.fileName
-    let formData = MultipartFormData()
-    formData.append(
-      data,
-      withName: fileName,
-      fileName: fileName,
-      mimeType: options.contentType ?? MultipartFormData.mimeType(forPathExtension: path.pathExtension)
+    try await _uploadOrUpdate(
+      method: .post,
+      path: path,
+      file: .data(data),
+      options: options
     )
-    return try await _uploadOrUpdate(method: .post, path: path, formData: formData, options: options)
   }
 
   @discardableResult
   public func upload(
     _ path: String,
-    fileURL: Data,
+    fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    let fileName = path.fileName
-    let formData = MultipartFormData()
-    formData.append(fileURL, withName: fileName, fileName: fileName)
-    return try await _uploadOrUpdate(method: .post, path: path, formData: formData, options: options)
+    try await _uploadOrUpdate(
+      method: .post,
+      path: path,
+      file: .url(fileURL),
+      options: options
+    )
   }
 
   /// Replaces an existing file at the specified path with a new one.
@@ -144,15 +164,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    let fileName = path.fileName
-    let formData = MultipartFormData()
-    formData.append(
-      data,
-      withName: fileName,
-      fileName: fileName,
-      mimeType: options.contentType ?? MultipartFormData.mimeType(forPathExtension: path.pathExtension)
+    try await _uploadOrUpdate(
+      method: .put,
+      path: path,
+      file: .data(data),
+      options: options
     )
-    return try await _uploadOrUpdate(method: .put, path: path, formData: formData, options: options)
   }
 
   /// Replaces an existing file at the specified path with a new one.
@@ -167,9 +184,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    let formData = MultipartFormData()
-    formData.append(fileURL, withName: path.fileName)
-    return try await _uploadOrUpdate(method: .put, path: path, formData: formData, options: options)
+    try await _uploadOrUpdate(
+      method: .put,
+      path: path,
+      file: .url(fileURL),
+      options: options
+    )
   }
 
   /// Moves an existing file, optionally renaming it at the same time.
@@ -388,7 +408,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ) async throws -> [FileObject] {
     let encoder = JSONEncoder()
 
-    var options = options ?? DEFAULT_SEARCH_OPTIONS
+    var options = options ?? defaultSearchOptions
     options.prefix = path ?? ""
 
     return try await execute(
@@ -579,18 +599,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     data: Data,
     options: FileOptions? = nil
   ) async throws -> SignedURLUploadResponse {
-    let fileName = path.fileName
-    let formData = MultipartFormData()
-    formData.append(
-      data,
-      withName: fileName,
-      fileName: fileName,
-      mimeType: options?.contentType ?? MultipartFormData.mimeType(forPathExtension: path.pathExtension)
-    )
-    return try await _uploadToSignedURL(
+    try await _uploadToSignedURL(
       path: path,
       token: token,
-      formData: formData,
+      file: .data(data),
       options: options
     )
   }
@@ -606,15 +618,13 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   public func uploadToSignedURL(
     _ path: String,
     token: String,
-    fileURL: Data,
+    fileURL: URL,
     options: FileOptions? = nil
   ) async throws -> SignedURLUploadResponse {
-    let formData = MultipartFormData()
-    formData.append(fileURL, withName: path.fileName)
-    return try await _uploadToSignedURL(
+    try await _uploadToSignedURL(
       path: path,
       token: token,
-      formData: formData,
+      file: .url(fileURL),
       options: options
     )
   }
@@ -622,7 +632,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   private func _uploadToSignedURL(
     path: String,
     token: String,
-    formData: MultipartFormData,
+    file: FileUpload,
     options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
     let options = options ?? defaultFileOptions
@@ -631,11 +641,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     headers[.xUpsert] = "\(options.upsert)"
     headers[.duplex] = options.duplex
 
-    if let metadata = options.metadata {
-      formData.append(encodeMetadata(metadata), withName: "metadata")
-    }
-
-    formData.append(options.cacheControl.data(using: .utf8)!, withName: "cacheControl")
+    let formData = MultipartFormData()
+    file.encode(to: formData, withPath: path, options: options)
 
     struct UploadResponse: Decodable {
       let Key: String
@@ -664,7 +671,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
   private func _removeEmptyFolders(_ path: String) -> String {
     let trimmedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-    let cleanedPath = trimmedPath.replacingOccurrences(of: "/+", with: "/", options: .regularExpression)
+    let cleanedPath = trimmedPath.replacingOccurrences(
+      of: "/+", with: "/", options: .regularExpression)
     return cleanedPath
   }
 }
