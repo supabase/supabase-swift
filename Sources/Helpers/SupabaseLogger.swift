@@ -171,23 +171,46 @@ extension SupabaseLogger {
   }
 }
 
-@inlinable
-@discardableResult
-@_unsafeInheritExecutor
-package func trace<R>(
-  using logger: (any SupabaseLogger)?,
-  @_inheritActorContext _ operation: @Sendable () async throws -> R,
-  fileID: StaticString = #fileID,
-  function: StaticString = #function,
-  line: UInt = #line
-) async rethrows -> R {
-  logger?.debug("begin", fileID: fileID, function: function, line: line)
-  defer { logger?.debug("end", fileID: fileID, function: function, line: line) }
+#if compiler(>=6.0)
+  @inlinable
+  @discardableResult
+  package func trace<R: Sendable>(
+    using logger: (any SupabaseLogger)?,
+    _ operation: () async throws -> R,
+    isolation _: isolated (any Actor)? = #isolation,
+    fileID: StaticString = #fileID,
+    function: StaticString = #function,
+    line: UInt = #line
+  ) async rethrows -> R {
+    logger?.debug("begin", fileID: fileID, function: function, line: line)
+    defer { logger?.debug("end", fileID: fileID, function: function, line: line) }
 
-  do {
-    return try await operation()
-  } catch {
-    logger?.debug("error: \(error)", fileID: fileID, function: function, line: line)
-    throw error
+    do {
+      return try await operation()
+    } catch {
+      logger?.debug("error: \(error)", fileID: fileID, function: function, line: line)
+      throw error
+    }
   }
-}
+#else
+  @_unsafeInheritExecutor
+  @inlinable
+  @discardableResult
+  package func trace<R: Sendable>(
+    using logger: (any SupabaseLogger)?,
+    _ operation: () async throws -> R,
+    fileID: StaticString = #fileID,
+    function: StaticString = #function,
+    line: UInt = #line
+  ) async rethrows -> R {
+    logger?.debug("begin", fileID: fileID, function: function, line: line)
+    defer { logger?.debug("end", fileID: fileID, function: function, line: line) }
+
+    do {
+      return try await operation()
+    } catch {
+      logger?.debug("error: \(error)", fileID: fileID, function: function, line: line)
+      throw error
+    }
+  }
+#endif
