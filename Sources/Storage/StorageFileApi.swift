@@ -667,7 +667,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   private func _removeEmptyFolders(_ path: String) -> String {
     let trimmedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     let cleanedPath = trimmedPath.replacingOccurrences(
-      of: "/+", with: "/", options: .regularExpression)
+      of: "/+", with: "/", options: .regularExpression
+    )
     return cleanedPath
   }
 }
