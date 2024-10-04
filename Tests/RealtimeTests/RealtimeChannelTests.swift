@@ -11,38 +11,58 @@ import XCTest
 import XCTestDynamicOverlay
 
 final class RealtimeChannelTests: XCTestCase {
-  var sut: RealtimeChannelV2!
+  let sut = RealtimeChannelV2(
+    topic: "topic",
+    config: RealtimeChannelConfig(
+      broadcast: BroadcastJoinConfig(),
+      presence: PresenceJoinConfig(),
+      isPrivate: false
+    ),
+    socket: .mock,
+    logger: nil
+  )
 
-  func testOnPostgresChange() {
-    sut = RealtimeChannelV2(
-      topic: "topic",
-      config: RealtimeChannelConfig(
-        broadcast: BroadcastJoinConfig(),
-        presence: PresenceJoinConfig(),
-        isPrivate: false
-      ),
-      socket: .mock,
-      logger: nil
-    )
-    var subscriptions = Set<RealtimeChannelV2.Subscription>()
-    sut.onPostgresChange(AnyAction.self) { _ in }.store(in: &subscriptions)
-    sut.onPostgresChange(InsertAction.self) { _ in }.store(in: &subscriptions)
-    sut.onPostgresChange(UpdateAction.self) { _ in }.store(in: &subscriptions)
-    sut.onPostgresChange(DeleteAction.self) { _ in }.store(in: &subscriptions)
+  func testAttachCallbacks() {
+    var subscriptions = Set<RealtimeSubscription>()
+
+    sut.onPostgresChange(
+      AnyAction.self,
+      schema: "public",
+      table: "users",
+      filter: "id=eq.1"
+    ) { _ in }.store(in: &subscriptions)
+    sut.onPostgresChange(
+      InsertAction.self,
+      schema: "private"
+    ) { _ in }.store(in: &subscriptions)
+    sut.onPostgresChange(
+      UpdateAction.self,
+      table: "messages"
+    ) { _ in }.store(in: &subscriptions)
+    sut.onPostgresChange(
+      DeleteAction.self
+    ) { _ in }.store(in: &subscriptions)
+
+    sut.onBroadcast(event: "test") { _ in }.store(in: &subscriptions)
+    sut.onBroadcast(event: "cursor-pos") { _ in }.store(in: &subscriptions)
+
+    sut.onPresenceChange { _ in }.store(in: &subscriptions)
 
     assertInlineSnapshot(of: sut.callbackManager.callbacks, as: .dump) {
       """
-      ▿ 4 elements
+      ▿ 7 elements
         ▿ RealtimeCallback
           ▿ postgres: PostgresCallback
             - callback: (Function)
             ▿ filter: PostgresJoinConfig
               ▿ event: Optional<PostgresChangeEvent>
                 - some: PostgresChangeEvent.all
-              - filter: Optional<String>.none
+              ▿ filter: Optional<String>
+                - some: "id=eq.1"
               - id: 0
               - schema: "public"
-              - table: Optional<String>.none
+              ▿ table: Optional<String>
+                - some: "users"
             - id: 1
         ▿ RealtimeCallback
           ▿ postgres: PostgresCallback
@@ -52,7 +72,7 @@ final class RealtimeChannelTests: XCTestCase {
                 - some: PostgresChangeEvent.insert
               - filter: Optional<String>.none
               - id: 0
-              - schema: "public"
+              - schema: "private"
               - table: Optional<String>.none
             - id: 2
         ▿ RealtimeCallback
@@ -64,7 +84,8 @@ final class RealtimeChannelTests: XCTestCase {
               - filter: Optional<String>.none
               - id: 0
               - schema: "public"
-              - table: Optional<String>.none
+              ▿ table: Optional<String>
+                - some: "messages"
             - id: 3
         ▿ RealtimeCallback
           ▿ postgres: PostgresCallback
@@ -77,6 +98,20 @@ final class RealtimeChannelTests: XCTestCase {
               - schema: "public"
               - table: Optional<String>.none
             - id: 4
+        ▿ RealtimeCallback
+          ▿ broadcast: BroadcastCallback
+            - callback: (Function)
+            - event: "test"
+            - id: 5
+        ▿ RealtimeCallback
+          ▿ broadcast: BroadcastCallback
+            - callback: (Function)
+            - event: "cursor-pos"
+            - id: 6
+        ▿ RealtimeCallback
+          ▿ presence: PresenceCallback
+            - callback: (Function)
+            - id: 7
 
       """
     }
