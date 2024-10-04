@@ -115,7 +115,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       data,
       withName: fileName,
       fileName: fileName,
-      mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
+      mimeType: options.contentType ?? MultipartFormData.mimeType(forPathExtension: path.pathExtension)
     )
     return try await _uploadOrUpdate(method: .post, path: path, formData: formData, options: options)
   }
@@ -150,7 +150,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       data,
       withName: fileName,
       fileName: fileName,
-      mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
+      mimeType: options.contentType ?? MultipartFormData.mimeType(forPathExtension: path.pathExtension)
     )
     return try await _uploadOrUpdate(method: .put, path: path, formData: formData, options: options)
   }
@@ -585,7 +585,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       data,
       withName: fileName,
       fileName: fileName,
-      mimeType: options?.contentType ?? mimeType(forPathExtension: path.pathExtension)
+      mimeType: options?.contentType ?? MultipartFormData.mimeType(forPathExtension: path.pathExtension)
     )
     return try await _uploadToSignedURL(
       path: path,

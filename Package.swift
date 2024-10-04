@@ -22,7 +22,6 @@ let package = Package(
     .library(name: "Supabase", targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/grdsdev/MultipartFormData", from: "0.1.0"),
     .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "4.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
@@ -131,7 +130,6 @@ let package = Package(
     .target(
       name: "Storage",
       dependencies: [
-        "MultipartFormData",
         "Helpers",
       ]
     ),
