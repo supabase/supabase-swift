@@ -32,7 +32,7 @@ public struct RealtimeChannelConfig: Sendable {
 
 struct Socket: Sendable {
   var broadcastURL: @Sendable () -> URL
-  var status: @Sendable () -> RealtimeClientV2.Status
+  var status: @Sendable () -> RealtimeClientStatus
   var options: @Sendable () -> RealtimeClientOptions
   var accessToken: @Sendable () -> String?
   var apiKey: @Sendable () -> String?
@@ -64,16 +64,6 @@ extension Socket {
 }
 
 public final class RealtimeChannelV2: Sendable {
-  @available(*, deprecated, renamed: "RealtimeSubscription")
-  public typealias Subscription = ObservationToken
-
-  public enum Status: Sendable {
-    case unsubscribed
-    case subscribing
-    case subscribed
-    case unsubscribing
-  }
-
   struct MutableState {
     var clientChanges: [PostgresJoinConfig] = []
     var joinRef: String?
@@ -88,14 +78,14 @@ public final class RealtimeChannelV2: Sendable {
   let socket: Socket
 
   let callbackManager = CallbackManager()
-  private let statusEventEmitter = EventEmitter<Status>(initialEvent: .unsubscribed)
+  private let statusEventEmitter = EventEmitter<RealtimeChannelStatus>(initialEvent: .unsubscribed)
 
-  public private(set) var status: Status {
+  public private(set) var status: RealtimeChannelStatus {
     get { statusEventEmitter.lastEvent }
     set { statusEventEmitter.emit(newValue) }
   }
 
-  public var statusChange: AsyncStream<Status> {
+  public var statusChange: AsyncStream<RealtimeChannelStatus> {
     statusEventEmitter.stream()
   }
 
@@ -105,7 +95,7 @@ public final class RealtimeChannelV2: Sendable {
   ///
   /// - Note: Use ``statusChange`` if you prefer to use Async/Await.
   public func onStatusChange(
-    _ listener: @escaping @Sendable (Status) -> Void
+    _ listener: @escaping @Sendable (RealtimeChannelStatus) -> Void
   ) -> ObservationToken {
     statusEventEmitter.attach(listener)
   }
@@ -137,10 +127,15 @@ public final class RealtimeChannelV2: Sendable {
       await socket.connect()
     }
 
+    guard status != .subscribed else {
+      logger?.warning("Channel \(topic) is already subscribed")
+      return
+    }
+
     socket.addChannel(self)
 
     status = .subscribing
-    logger?.debug("subscribing to channel \(topic)")
+    logger?.debug("Subscribing to channel \(topic)")
 
     let joinConfig = RealtimeJoinConfig(
       broadcast: config.broadcast,
@@ -157,7 +152,7 @@ public final class RealtimeChannelV2: Sendable {
     let joinRef = socket.makeRef().description
     mutableState.withValue { $0.joinRef = joinRef }
 
-    logger?.debug("subscribing to channel with body: \(joinConfig)")
+    logger?.debug("Subscribing to channel with body: \(joinConfig)")
 
     await push(
       RealtimeMessageV2(
@@ -175,17 +170,17 @@ public final class RealtimeChannelV2: Sendable {
       }
     } catch {
       if error is TimeoutError {
-        logger?.debug("subscribe timed out.")
+        logger?.debug("Subscribe timed out.")
         await subscribe()
       } else {
-        logger?.error("subscribe failed: \(error)")
+        logger?.error("Subscribe failed: \(error)")
       }
     }
   }
 
   public func unsubscribe() async {
     status = .unsubscribing
-    logger?.debug("unsubscribing from channel \(topic)")
+    logger?.debug("Unsubscribing from channel \(topic)")
 
     await push(
       RealtimeMessageV2(
@@ -324,7 +319,7 @@ public final class RealtimeChannelV2: Sendable {
     )
   }
 
-  func onMessage(_ message: RealtimeMessageV2) {
+  func onMessage(_ message: RealtimeMessageV2) async {
     do {
       guard let eventType = message.eventType else {
         logger?.debug("Received message without event type: \(message)")
@@ -349,7 +344,7 @@ public final class RealtimeChannelV2: Sendable {
           throw RealtimeError("Received a reply with unexpected payload: \(message)")
         }
 
-        didReceiveReply(ref: ref, status: status)
+        await didReceiveReply(ref: ref, status: status)
 
         if message.payload["response"]?.objectValue?.keys
           .contains(ChannelEvent.postgresChanges) == true
@@ -435,13 +430,9 @@ public final class RealtimeChannelV2: Sendable {
         callbackManager.triggerBroadcast(event: event, json: payload)
 
       case .close:
-        Task { [weak self] in
-          guard let self else { return }
-
-          await socket.removeChannel(self)
-          logger?.debug("Unsubscribed from channel \(message.topic)")
-          status = .unsubscribed
-        }
+        await socket.removeChannel(self)
+        logger?.debug("Unsubscribed from channel \(message.topic)")
+        status = .unsubscribed
 
       case .error:
         logger?.debug(
@@ -601,12 +592,10 @@ public final class RealtimeChannelV2: Sendable {
     return await push.send()
   }
 
-  private func didReceiveReply(ref: String, status: String) {
-    Task {
-      let push = mutableState.withValue {
-        $0.pushes.removeValue(forKey: ref)
-      }
-      await push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
+  private func didReceiveReply(ref: String, status: String) async {
+    let push = mutableState.withValue {
+      $0.pushes.removeValue(forKey: ref)
     }
+    await push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
   }
 }
