@@ -1,6 +1,5 @@
 import Foundation
 import Helpers
-import class MultipartFormData.MultipartFormData
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
