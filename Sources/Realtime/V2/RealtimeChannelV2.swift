@@ -404,16 +404,6 @@ public final class RealtimeChannelV2: Sendable {
             )
           )
 
-        case "SELECT":
-          action = .select(
-            SelectAction(
-              columns: postgresActions.columns,
-              commitTimestamp: postgresActions.commitTimestamp,
-              record: postgresActions.record ?? [:],
-              rawMessage: message
-            )
-          )
-
         default:
           throw RealtimeError("Unknown event type: \(postgresActions.type)")
         }

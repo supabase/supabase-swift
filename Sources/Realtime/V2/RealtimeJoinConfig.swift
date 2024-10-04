@@ -52,7 +52,6 @@ public enum PostgresChangeEvent: String, Codable, Sendable {
   case insert = "INSERT"
   case update = "UPDATE"
   case delete = "DELETE"
-  case select = "SELECT"
   case all = "*"
 }
 

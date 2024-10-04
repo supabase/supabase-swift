@@ -61,18 +61,6 @@ extension RealtimeChannelV2 {
 
   /// Listen for postgres changes in a channel.
   public func postgresChange(
-    _: SelectAction.Type,
-    schema: String = "public",
-    table: String? = nil,
-    filter: String? = nil
-  ) -> AsyncStream<SelectAction> {
-    postgresChange(event: .select, schema: schema, table: table, filter: filter)
-      .compactMap { $0.wrappedAction as? SelectAction }
-      .eraseToStream()
-  }
-
-  /// Listen for postgres changes in a channel.
-  public func postgresChange(
     _: AnyAction.Type,
     schema: String = "public",
     table: String? = nil,
