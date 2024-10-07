@@ -6,12 +6,15 @@
 //
 
 import Foundation
+import Logging
 
 package struct LoggerInterceptor: HTTPClientInterceptor {
   let logger: any SupabaseLogger
+  let log: Logger
 
-  package init(logger: any SupabaseLogger) {
+  package init(logger: any SupabaseLogger, log: Logger) {
     self.logger = logger
+    self.log = log
   }
 
   package func intercept(

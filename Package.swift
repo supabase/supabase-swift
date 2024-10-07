@@ -69,7 +69,13 @@ let package = Package(
       ],
       resources: [.process("Resources")]
     ),
-    .target(name: "Functions", dependencies: ["Helpers"]),
+    .target(
+      name: "Functions",
+      dependencies: [
+        "Helpers",
+        .product(name: "Logging", package: "swift-log"),
+      ]
+    ),
     .testTarget(
       name: "FunctionsTests",
       dependencies: [
@@ -100,6 +106,7 @@ let package = Package(
       name: "PostgREST",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),
@@ -116,6 +123,7 @@ let package = Package(
       name: "Realtime",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),
@@ -133,6 +141,7 @@ let package = Package(
     .target(
       name: "Storage",
       dependencies: [
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),

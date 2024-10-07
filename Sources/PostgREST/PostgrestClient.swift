@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import Logging
 
 public typealias PostgrestError = Helpers.PostgrestError
 public typealias HTTPError = Helpers.HTTPError
@@ -9,6 +10,8 @@ public typealias AnyJSON = Helpers.AnyJSON
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
+
+let log = Logger(label: "supabase.postgrest")
 
 /// PostgREST client.
 public final class PostgrestClient: Sendable {

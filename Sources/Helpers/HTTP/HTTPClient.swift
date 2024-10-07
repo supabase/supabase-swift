@@ -12,8 +12,6 @@ import Logging
   import FoundationNetworking
 #endif
 
-let log = Logger(label: "supabase.http")
-
 package protocol HTTPClientType: Sendable {
   func send(_ request: HTTPRequest) async throws -> HTTPResponse
 }

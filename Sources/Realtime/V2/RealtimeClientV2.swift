@@ -8,10 +8,13 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import Logging
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
+
+let log = Logger(label: "supabase.realtime")
 
 public typealias JSONObject = Helpers.JSONObject
 
@@ -132,7 +135,7 @@ public final class RealtimeClientV2: Sendable {
     var interceptors: [any HTTPClientInterceptor] = []
 
     if let logger = options.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
+      interceptors.append(LoggerInterceptor(logger: logger, log: log))
     }
 
     self.init(
