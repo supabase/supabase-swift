@@ -28,9 +28,23 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
         Body: \(stringfy(request.body))
         """
       )
+      log.trace(
+        """
+        Request: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
+        Body: \(stringfy(request.body))
+        """
+      )
 
       do {
         let response = try await next(request)
+        log.trace(
+          """
+          Response: Status code: \(response.statusCode) Content-Length: \(
+            response.underlyingResponse.expectedContentLength
+          )
+          Body: \(stringfy(response.data))
+          """
+        )
         logger.verbose(
           """
           Response: Status code: \(response.statusCode) Content-Length: \(
@@ -41,6 +55,7 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
         )
         return response
       } catch {
+        log.error("Response: Failure \(error)")
         logger.error("Response: Failure \(error)")
         throw error
       }

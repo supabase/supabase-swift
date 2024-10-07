@@ -28,6 +28,7 @@ extension AuthClient {
     /// Optional key name used for storing tokens in local storage.
     public var storageKey: String?
     public let localStorage: any AuthLocalStorage
+    @available(*, deprecated, message: "SupabaseLogger is deprecated in favor of Logging from apple/swift-log")
     public let logger: (any SupabaseLogger)?
     public let encoder: JSONEncoder
     public let decoder: JSONDecoder

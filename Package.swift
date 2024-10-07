@@ -23,6 +23,7 @@ let package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "4.0.0"),
+    .package(url: "https://github.com/apple/swift-log", from: "1.6.1"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.2"),
@@ -32,6 +33,7 @@ let package = Package(
     .target(
       name: "Helpers",
       dependencies: [
+        .product(name: "Logging", package: "swift-log"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
       ]
     ),
@@ -47,6 +49,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Crypto", package: "swift-crypto"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),
@@ -146,6 +149,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(name: "Logging", package: "swift-log"),
         "Auth",
         "Functions",
         "PostgREST",

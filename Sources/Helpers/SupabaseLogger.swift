@@ -1,5 +1,6 @@
 import Foundation
 
+@available(*, deprecated, message: "SupabaseLogger is deprecated in favor of Logging from apple/swift-log")
 public enum SupabaseLogLevel: Int, Codable, CustomStringConvertible, Sendable {
   case verbose
   case debug
@@ -23,6 +24,7 @@ package enum SupabaseLoggerTaskLocal {
   package static var additionalContext: JSONObject = [:]
 }
 
+@available(*, deprecated, message: "SupabaseLogger is deprecated in favor of Logging from apple/swift-log")
 public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
   public let system: String
   public let level: SupabaseLogLevel
@@ -65,6 +67,7 @@ public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
   }
 }
 
+@available(*, deprecated, message: "SupabaseLogger is deprecated in favor of Logging from apple/swift-log")
 public protocol SupabaseLogger: Sendable {
   func log(message: SupabaseLogMessage)
 }
