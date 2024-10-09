@@ -259,6 +259,25 @@ final class AuthClientIntegrationTests: XCTestCase {
     XCTAssertEqual(pagination.nextPage, 2)
   }
 
+  func testSignOut() async throws {
+    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .signedOut]) {
+      try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+
+      _ = try await authClient.session
+      XCTAssertNotNil(authClient.currentSession)
+
+      try await authClient.signOut()
+
+      do {
+        _ = try await authClient.session
+        XCTFail("Expected to throw AuthError.sessionMissing")
+      } catch let error as AuthError {
+        XCTAssertEqual(error, .sessionMissing)
+      }
+      XCTAssertNil(authClient.currentSession)
+    }
+  }
+
   @discardableResult
   private func signUpIfNeededOrSignIn(
     email: String,
