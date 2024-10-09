@@ -31,7 +31,6 @@ final class AuthViewModel {
   }
 }
 
-@MainActor
 struct AuthView: View {
   @Bindable var model = AuthViewModel()
 

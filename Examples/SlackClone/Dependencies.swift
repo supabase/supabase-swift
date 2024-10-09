@@ -8,6 +8,7 @@
 import Foundation
 import Supabase
 
+@MainActor
 class Dependencies {
   static let shared = Dependencies()
 

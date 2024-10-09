@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-@MainActor
 struct ChannelListView: View {
   @Bindable var store = Dependencies.shared.channel
   @Binding var channel: Channel?

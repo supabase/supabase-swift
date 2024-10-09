@@ -103,11 +103,11 @@ final class MessageStore {
 
   private init() {
     Task {
-      let channel = await supabase.realtimeV2.channel("public:messages")
+      let channel = supabase.channel("public:messages")
 
-      let insertions = await channel.postgresChange(InsertAction.self, table: "messages")
-      let updates = await channel.postgresChange(UpdateAction.self, table: "messages")
-      let deletions = await channel.postgresChange(DeleteAction.self, table: "messages")
+      let insertions = channel.postgresChange(InsertAction.self, table: "messages")
+      let updates = channel.postgresChange(UpdateAction.self, table: "messages")
+      let deletions = channel.postgresChange(DeleteAction.self, table: "messages")
 
       await channel.subscribe()
 
@@ -176,7 +176,7 @@ final class MessageStore {
 
   /// Fetch all messages and their authors.
   private func fetchMessages(_ channelId: Channel.ID) async throws -> [Message] {
-    try await supabase.database
+    try await supabase
       .from("messages")
       .select("*,user:user_id(*),channel:channel_id(*)")
       .eq("channel_id", value: channelId)
