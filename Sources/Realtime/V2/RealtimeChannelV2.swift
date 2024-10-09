@@ -193,7 +193,7 @@ public final class RealtimeChannelV2: Sendable {
     )
   }
 
-  public func updateAuth(jwt: String) async {
+  public func updateAuth(jwt: String?) async {
     logger?.debug("Updating auth token for channel \(topic)")
     await push(
       RealtimeMessageV2(
@@ -201,7 +201,7 @@ public final class RealtimeChannelV2: Sendable {
         ref: socket.makeRef().description,
         topic: topic,
         event: ChannelEvent.accessToken,
-        payload: ["access_token": .string(jwt)]
+        payload: ["access_token": jwt.map { .string($0) } ?? .null]
       )
     )
   }

@@ -347,7 +347,7 @@ public final class RealtimeClientV2: Sendable {
     }
 
     for channel in channels.values {
-      if let token, channel.status == .subscribed {
+      if channel.status == .subscribed {
         await channel.updateAuth(jwt: token)
       }
     }
