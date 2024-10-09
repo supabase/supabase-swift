@@ -19,15 +19,15 @@ final class UserStore {
 
   private init() {
     Task {
-      let channel = await supabase.realtimeV2.channel("public:users")
-      let changes = await channel.postgresChange(AnyAction.self, table: "users")
+      let channel = supabase.channel("public:users")
+      let changes = channel.postgresChange(AnyAction.self, table: "users")
 
-      let presences = await channel.presenceChange()
+      let presences = channel.presenceChange()
 
       await channel.subscribe()
 
       Task {
-        let statusChange = await channel.statusChange
+        let statusChange = channel.statusChange
         for await _ in statusChange.filter({ $0 == .subscribed }) {
           let userId = try await supabase.auth.session.user.id
           try await channel.track(UserPresence(userId: userId, onlineAt: Date()))
@@ -45,14 +45,14 @@ final class UserStore {
           let joins = try presence.decodeJoins(as: UserPresence.self)
           let leaves = try presence.decodeLeaves(as: UserPresence.self)
 
-          for join in joins {
-            self.presences[join.userId] = join
-            Logger.main.debug("User \(join.userId) joined")
-          }
-
           for leave in leaves {
             self.presences[leave.userId] = nil
             Logger.main.debug("User \(leave.userId) leaved")
+          }
+
+          for join in joins {
+            self.presences[join.userId] = join
+            Logger.main.debug("User \(join.userId) joined")
           }
         }
       }
@@ -64,7 +64,7 @@ final class UserStore {
       return user
     }
 
-    let user: User = try await supabase.database
+    let user: User = try await supabase
       .from("users")
       .select()
       .eq("id", value: id)

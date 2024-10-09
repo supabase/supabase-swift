@@ -22,10 +22,10 @@ final class ChannelStore {
     Task {
       channels = await fetchChannels()
 
-      let channel = await supabase.realtimeV2.channel("public:channels")
+      let channel = supabase.channel("public:channels")
 
-      let insertions = await channel.postgresChange(InsertAction.self, table: "channels")
-      let deletions = await channel.postgresChange(DeleteAction.self, table: "channels")
+      let insertions = channel.postgresChange(InsertAction.self, table: "channels")
+      let deletions = channel.postgresChange(DeleteAction.self, table: "channels")
 
       await channel.subscribe()
 
@@ -47,7 +47,7 @@ final class ChannelStore {
     do {
       let userId = try await supabase.auth.session.user.id
       let channel = AddChannel(slug: name, createdBy: userId)
-      try await supabase.database
+      try await supabase
         .from("channels")
         .insert(channel)
         .execute()
@@ -62,7 +62,7 @@ final class ChannelStore {
       return channel
     }
 
-    let channel: Channel = try await supabase.database
+    let channel: Channel = try await supabase
       .from("channels")
       .select()
       .eq("id", value: id)
@@ -90,7 +90,7 @@ final class ChannelStore {
 
   private func fetchChannels() async -> [Channel] {
     do {
-      return try await supabase.database.from("channels").select().execute().value
+      return try await supabase.from("channels").select().execute().value
     } catch {
       dump(error)
       toast = .init(status: .error, title: "Error", description: error.localizedDescription)

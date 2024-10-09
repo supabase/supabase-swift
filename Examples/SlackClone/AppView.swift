@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 27/12/23.
 //
 
+import OSLog
 import Supabase
 import SwiftUI
 
@@ -17,13 +18,14 @@ final class AppViewModel {
   var realtimeConnectionStatus: RealtimeClientV2.Status?
 
   init() {
-    Task { [weak self] in
-      for await (event, session) in await supabase.auth.authStateChanges {
-        guard [.signedIn, .signedOut, .initialSession].contains(event) else { return }
-        self?.session = session
+    Task {
+      for await (event, session) in supabase.auth.authStateChanges {
+        Logger.main.debug("AuthStateChange: \(event.rawValue)")
+        guard [.signedIn, .signedOut, .initialSession, .tokenRefreshed].contains(event) else { return }
+        self.session = session
 
         if session == nil {
-          for subscription in await supabase.realtimeV2.subscriptions.values {
+          for subscription in supabase.channels {
             await subscription.unsubscribe()
           }
         }
@@ -31,18 +33,15 @@ final class AppViewModel {
     }
 
     Task {
-      for await status in await supabase.realtimeV2.statusChange {
+      for await status in supabase.realtimeV2.statusChange {
         realtimeConnectionStatus = status
       }
     }
   }
 }
 
-@MainActor
 struct AppView: View {
   @Bindable var model: AppViewModel
-  let log = LogStore.shared
-
   @State var logPresented = false
 
   @ViewBuilder
@@ -50,23 +49,9 @@ struct AppView: View {
     if model.session != nil {
       NavigationSplitView {
         ChannelListView(channel: $model.selectedChannel)
-          .toolbar {
-            ToolbarItem {
-              Button("Log") {
-                logPresented = true
-              }
-            }
-          }
       } detail: {
         if let channel = model.selectedChannel {
           MessagesView(channel: channel).id(channel.id)
-        }
-      }
-      .sheet(isPresented: $logPresented) {
-        List {
-          ForEach(0 ..< log.messages.count, id: \.self) { i in
-            Text(log.messages[i].description)
-          }
         }
       }
     } else {

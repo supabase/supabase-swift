@@ -9,7 +9,6 @@ import Realtime
 import Supabase
 import SwiftUI
 
-@MainActor
 struct MessagesView: View {
   let store = Dependencies.shared.messages
   let userStore = Dependencies.shared.users
@@ -74,7 +73,7 @@ struct MessagesView: View {
         channelId: channel.id
       )
 
-      try await supabase.database.from("messages").insert(message).execute()
+      try await supabase.from("messages").insert(message).execute()
       newMessage = ""
     } catch {
       dump(error)
