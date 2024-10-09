@@ -32,6 +32,7 @@ struct RealtimeJoinConfig: Codable, Hashable {
 }
 
 public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
+  /// Instructs server to acknowledge that broadcast message was received.
   public var acknowledgeBroadcasts: Bool = false
   /// Broadcast messages back to the sender.
   ///
@@ -45,6 +46,7 @@ public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
 }
 
 public struct PresenceJoinConfig: Codable, Hashable, Sendable {
+  /// Track presence payload across clients.
   public var key: String = ""
 }
 

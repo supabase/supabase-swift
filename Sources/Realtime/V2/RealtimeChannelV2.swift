@@ -155,13 +155,9 @@ public final class RealtimeChannelV2: Sendable {
     logger?.debug("Subscribing to channel with body: \(joinConfig)")
 
     await push(
-      RealtimeMessageV2(
-        joinRef: joinRef,
-        ref: joinRef,
-        topic: topic,
-        event: ChannelEvent.join,
-        payload: try! JSONObject(payload)
-      )
+      ChannelEvent.join,
+      ref: joinRef,
+      payload: try! JSONObject(payload)
     )
 
     do {
@@ -182,27 +178,19 @@ public final class RealtimeChannelV2: Sendable {
     status = .unsubscribing
     logger?.debug("Unsubscribing from channel \(topic)")
 
-    await push(
-      RealtimeMessageV2(
-        joinRef: mutableState.joinRef,
-        ref: socket.makeRef().description,
-        topic: topic,
-        event: ChannelEvent.leave,
-        payload: [:]
-      )
-    )
+    await push(ChannelEvent.leave)
   }
 
+  @available(
+    *,
+    deprecated,
+    message: "manually updating auth token per channel is not recommended, please use `setAuth` in RealtimeClient instead."
+  )
   public func updateAuth(jwt: String?) async {
     logger?.debug("Updating auth token for channel \(topic)")
     await push(
-      RealtimeMessageV2(
-        joinRef: mutableState.joinRef,
-        ref: socket.makeRef().description,
-        topic: topic,
-        event: ChannelEvent.accessToken,
-        payload: ["access_token": jwt.map { .string($0) } ?? .null]
-      )
+      ChannelEvent.accessToken,
+      payload: ["access_token": jwt.map { .string($0) } ?? .null]
     )
   }
 
@@ -264,17 +252,12 @@ public final class RealtimeChannelV2: Sendable {
       }
     } else {
       await push(
-        RealtimeMessageV2(
-          joinRef: mutableState.joinRef,
-          ref: socket.makeRef().description,
-          topic: topic,
-          event: ChannelEvent.broadcast,
-          payload: [
-            "type": "broadcast",
-            "event": .string(event),
-            "payload": .object(message),
-          ]
-        )
+        ChannelEvent.broadcast,
+        payload: [
+          "type": "broadcast",
+          "event": .string(event),
+          "payload": .object(message),
+        ]
       )
     }
   }
@@ -290,32 +273,22 @@ public final class RealtimeChannelV2: Sendable {
     )
 
     await push(
-      RealtimeMessageV2(
-        joinRef: mutableState.joinRef,
-        ref: socket.makeRef().description,
-        topic: topic,
-        event: ChannelEvent.presence,
-        payload: [
-          "type": "presence",
-          "event": "track",
-          "payload": .object(state),
-        ]
-      )
+      ChannelEvent.presence,
+      payload: [
+        "type": "presence",
+        "event": "track",
+        "payload": .object(state),
+      ]
     )
   }
 
   public func untrack() async {
     await push(
-      RealtimeMessageV2(
-        joinRef: mutableState.joinRef,
-        ref: socket.makeRef().description,
-        topic: topic,
-        event: ChannelEvent.presence,
-        payload: [
-          "type": "presence",
-          "event": "untrack",
-        ]
-      )
+      ChannelEvent.presence,
+      payload: [
+        "type": "presence",
+        "event": "untrack",
+      ]
     )
   }
 
@@ -572,13 +545,24 @@ public final class RealtimeChannelV2: Sendable {
   }
 
   @discardableResult
-  private func push(_ message: RealtimeMessageV2) async -> PushStatus {
-    let push = PushV2(channel: self, message: message)
-    if let ref = message.ref {
-      mutableState.withValue {
+  func push(_ event: String, ref: String? = nil, payload: JSONObject = [:]) async -> PushStatus {
+    let push = mutableState.withValue {
+      let message = RealtimeMessageV2(
+        joinRef: $0.joinRef,
+        ref: ref ?? socket.makeRef().description,
+        topic: self.topic,
+        event: event,
+        payload: payload
+      )
+
+      let push = PushV2(channel: self, message: message)
+      if let ref = message.ref {
         $0.pushes[ref] = push
       }
+
+      return push
     }
+
     return await push.send()
   }
 

@@ -348,7 +348,11 @@ public final class RealtimeClientV2: Sendable {
 
     for channel in channels.values {
       if channel.status == .subscribed {
-        await channel.updateAuth(jwt: token)
+        options.logger?.debug("Updating auth token for channel \(channel.topic)")
+        await channel.push(
+          ChannelEvent.accessToken,
+          payload: ["access_token": token.map { .string($0) } ?? .null]
+        )
       }
     }
   }
