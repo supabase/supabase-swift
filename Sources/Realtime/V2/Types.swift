@@ -62,3 +62,24 @@ public struct RealtimeClientOptions: Sendable {
 }
 
 public typealias RealtimeSubscription = ObservationToken
+
+public enum RealtimeChannelStatus: Sendable {
+  case unsubscribed
+  case subscribing
+  case subscribed
+  case unsubscribing
+}
+
+public enum RealtimeClientStatus: Sendable, CustomStringConvertible {
+  case disconnected
+  case connecting
+  case connected
+
+  public var description: String {
+    switch self {
+    case .disconnected: "Disconnected"
+    case .connecting: "Connecting"
+    case .connected: "Connected"
+    }
+  }
+}

@@ -56,29 +56,18 @@ public struct DeleteAction: PostgresAction, HasOldRecord, HasRawMessage {
   public let rawMessage: RealtimeMessageV2
 }
 
-public struct SelectAction: PostgresAction, HasRecord, HasRawMessage {
-  public static let eventType: PostgresChangeEvent = .select
-
-  public let columns: [Column]
-  public let commitTimestamp: Date
-  public let record: [String: AnyJSON]
-  public let rawMessage: RealtimeMessageV2
-}
-
 public enum AnyAction: PostgresAction, HasRawMessage {
   public static let eventType: PostgresChangeEvent = .all
 
   case insert(InsertAction)
   case update(UpdateAction)
   case delete(DeleteAction)
-  case select(SelectAction)
 
   var wrappedAction: any PostgresAction & HasRawMessage {
     switch self {
     case let .insert(action): action
     case let .update(action): action
     case let .delete(action): action
-    case let .select(action): action
     }
   }
 
