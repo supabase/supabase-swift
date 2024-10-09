@@ -4,6 +4,7 @@ import Foundation
 @_exported import Functions
 import Helpers
 import IssueReporting
+import Logging
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
@@ -17,6 +18,8 @@ public typealias SupabaseLogLevel = Helpers.SupabaseLogLevel
 public typealias SupabaseLogMessage = Helpers.SupabaseLogMessage
 
 let version = Helpers.version
+
+let logger = Logger(label: "supabase")
 
 /// Supabase Client.
 public final class SupabaseClient: Sendable {
@@ -145,6 +148,8 @@ public final class SupabaseClient: Sendable {
     supabaseKey: String,
     options: SupabaseClientOptions
   ) {
+    logger.info("SupabaseClient initialized")
+
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options

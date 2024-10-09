@@ -59,15 +59,18 @@ private actor LiveSessionManager {
     ) {
       try await trace(using: logger) {
         if let inFlightRefreshTask {
+          log.debug("refresh already in flight")
           logger?.debug("refresh already in flight")
           return try await inFlightRefreshTask.value
         }
 
         inFlightRefreshTask = Task {
+          log.debug("refresh task started")
           logger?.debug("refresh task started")
 
           defer {
             inFlightRefreshTask = nil
+            log.debug("refresh task ended")
             logger?.debug("refresh task ended")
           }
 
@@ -100,6 +103,7 @@ private actor LiveSessionManager {
     do {
       try sessionStorage.store(session)
     } catch {
+      log.error("Failed to store session: \(error)")
       logger?.error("Failed to store session: \(error)")
     }
   }
@@ -108,6 +112,7 @@ private actor LiveSessionManager {
     do {
       try sessionStorage.delete()
     } catch {
+      log.error("Failed to remove session: \(error)")
       logger?.error("Failed to remove session: \(error)")
     }
   }
@@ -117,11 +122,13 @@ private actor LiveSessionManager {
       merging: ["caller": .string("\(caller)")]
     ) {
       guard configuration.autoRefreshToken else {
+        log.debug("auto refresh token disabled")
         logger?.debug("auto refresh token disabled")
         return
       }
 
       guard scheduledNextRefreshTask == nil else {
+        log.debug("refresh task already scheduled")
         logger?.debug("refresh task already scheduled")
         return
       }
@@ -136,6 +143,7 @@ private actor LiveSessionManager {
           // if expiresIn < 0, it will refresh right away.
           let timeToRefresh = max(expiresIn * 0.9, 0)
 
+          log.debug("scheduled next token refresh in: \(timeToRefresh)s")
           logger?.debug("scheduled next token refresh in: \(timeToRefresh)s")
 
           try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeToRefresh))

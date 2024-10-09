@@ -1,12 +1,15 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import Logging
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
 let version = Helpers.version
+
+let log = Logger(label: "supabase.functions")
 
 /// An actor representing a client for invoking functions.
 public final class FunctionsClient: Sendable {
@@ -52,7 +55,7 @@ public final class FunctionsClient: Sendable {
   ) {
     var interceptors: [any HTTPClientInterceptor] = []
     if let logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
+      interceptors.append(LoggerInterceptor(logger: logger, log: log))
     }
 
     let http = HTTPClient(fetch: fetch, interceptors: interceptors)

@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import Logging
 
 #if canImport(AuthenticationServices)
   import AuthenticationServices
@@ -11,6 +12,8 @@ import Helpers
 #endif
 
 typealias AuthClientID = UUID
+
+let log = Logger(label: "supabase.auth")
 
 public final class AuthClient: Sendable {
   let clientID = AuthClientID()
@@ -452,6 +455,7 @@ public final class AuthClient: Sendable {
     let codeVerifier = codeVerifierStorage.get()
 
     if codeVerifier == nil {
+      log.error("code verifier not found, a code verifier should exist when calling this method.")
       logger?.error("code verifier not found, a code verifier should exist when calling this method.")
     }
 
@@ -662,6 +666,7 @@ public final class AuthClient: Sendable {
       do {
         try await session(from: url)
       } catch {
+        log.error("Failure loading session from url '\(url)' error: \(error)")
         logger?.error("Failure loading session from url '\(url)' error: \(error)")
       }
     }
@@ -670,6 +675,7 @@ public final class AuthClient: Sendable {
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
   public func session(from url: URL) async throws -> Session {
+    log.debug("received \(url)")
     logger?.debug("received \(url)")
 
     let params = extractParams(from: url)

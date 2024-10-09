@@ -1,9 +1,12 @@
 import Foundation
 import Helpers
+import Logging
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
+
+let log = Logger(label: "supabase.storage")
 
 public class StorageApi: @unchecked Sendable {
   public let configuration: StorageClientConfiguration
@@ -19,7 +22,7 @@ public class StorageApi: @unchecked Sendable {
 
     var interceptors: [any HTTPClientInterceptor] = []
     if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
+      interceptors.append(LoggerInterceptor(logger: logger, log: log))
     }
 
     http = HTTPClient(

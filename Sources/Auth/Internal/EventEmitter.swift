@@ -11,6 +11,7 @@ struct AuthStateChangeEventEmitter {
       guard let event else { return }
       listener(event.0, event.1)
 
+      log.debug("Auth state changed: \(event)")
       logger?.verbose("Auth state changed: \(event)")
     }
   }

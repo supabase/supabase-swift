@@ -7,11 +7,11 @@
 
 import Foundation
 
-let EXPIRY_MARGIN: TimeInterval = 30
-let STORAGE_KEY = "supabase.auth.token"
+let defaultExpiryMargin: TimeInterval = 30
+let defaultStorageKey = "supabase.auth.token"
 
-let API_VERSION_HEADER_NAME = "X-Supabase-Api-Version"
-let API_VERSIONS: [APIVersion.Name: APIVersion] = [
+let apiVersionHeaderName = "X-Supabase-Api-Version"
+let apiVersions: [APIVersion.Name: APIVersion] = [
   ._20240101: ._20240101,
 ]
 
