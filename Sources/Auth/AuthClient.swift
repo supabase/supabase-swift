@@ -80,67 +80,72 @@ public final class AuthClient: Sendable {
     observeAppLifecycleChanges()
   }
 
-  private func observeAppLifecycleChanges() {
-    #if canImport(UIKit)
-      #if canImport(WatchKit)
-        if #available(watchOS 7.0, *) {
+  #if canImport(ObjectiveC)
+    private func observeAppLifecycleChanges() {
+      #if canImport(UIKit)
+        #if canImport(WatchKit)
+          if #available(watchOS 7.0, *) {
+            NotificationCenter.default.addObserver(
+              self,
+              selector: #selector(handleDidBecomeActive),
+              name: WKExtension.applicationDidBecomeActiveNotification,
+              object: nil
+            )
+            NotificationCenter.default.addObserver(
+              self,
+              selector: #selector(handleWillResignActive),
+              name: WKExtension.applicationWillResignActiveNotification,
+              object: nil
+            )
+          }
+        #else
           NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleDidBecomeActive),
-            name: WKExtension.applicationDidBecomeActiveNotification,
+            name: UIApplication.didBecomeActiveNotification,
             object: nil
           )
           NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleWillResignActive),
-            name: WKExtension.applicationWillResignActiveNotification,
+            name: UIApplication.willResignActiveNotification,
             object: nil
           )
-        }
-      #else
+        #endif
+      #elseif canImport(AppKit)
         NotificationCenter.default.addObserver(
           self,
           selector: #selector(handleDidBecomeActive),
-          name: UIApplication.didBecomeActiveNotification,
+          name: NSApplication.didBecomeActiveNotification,
           object: nil
         )
         NotificationCenter.default.addObserver(
           self,
           selector: #selector(handleWillResignActive),
-          name: UIApplication.willResignActiveNotification,
+          name: NSApplication.willResignActiveNotification,
           object: nil
         )
       #endif
-    #elseif canImport(AppKit)
-      NotificationCenter.default.addObserver(
-        self,
-        selector: #selector(handleDidBecomeActive),
-        name: NSApplication.didBecomeActiveNotification,
-        object: nil
-      )
-      NotificationCenter.default.addObserver(
-        self,
-        selector: #selector(handleWillResignActive),
-        name: NSApplication.willResignActiveNotification,
-        object: nil
-      )
-    #endif
-  }
-
-  @objc
-  private func handleDidBecomeActive() {
-    if configuration.autoRefreshToken {
-      startAutoRefresh()
     }
-  }
 
-  @objc
-  private func handleWillResignActive() {
-    if configuration.autoRefreshToken {
-      stopAutoRefresh()
+    @objc
+    private func handleDidBecomeActive() {
+      if configuration.autoRefreshToken {
+        startAutoRefresh()
+      }
     }
-  }
 
+    @objc
+    private func handleWillResignActive() {
+      if configuration.autoRefreshToken {
+        stopAutoRefresh()
+      }
+    }
+  #else
+    private func observeAppLifecycleChanges() {
+      // no-op
+    }
+  #endif
   /// Listen for auth state changes.
   /// - Parameter listener: Block that executes when a new event is emitted.
   /// - Returns: A handle that can be used to manually unsubscribe.
