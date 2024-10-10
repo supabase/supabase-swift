@@ -192,7 +192,7 @@ final class RequestsTests: XCTestCase {
 
   func testSetSessionWithAFutureExpirationDate() async throws {
     let sut = makeSUT()
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
@@ -215,7 +215,7 @@ final class RequestsTests: XCTestCase {
 
   func testSignOut() async throws {
     let sut = makeSUT()
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.signOut()
@@ -224,7 +224,7 @@ final class RequestsTests: XCTestCase {
 
   func testSignOutWithLocalScope() async throws {
     let sut = makeSUT()
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.signOut(scope: .local)
@@ -234,7 +234,7 @@ final class RequestsTests: XCTestCase {
   func testSignOutWithOthersScope() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.signOut(scope: .others)
@@ -282,7 +282,7 @@ final class RequestsTests: XCTestCase {
   func testUpdateUser() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.update(
@@ -346,7 +346,7 @@ final class RequestsTests: XCTestCase {
   func testReauthenticate() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.reauthenticate()
@@ -356,7 +356,7 @@ final class RequestsTests: XCTestCase {
   func testUnlinkIdentity() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       try await sut.unlinkIdentity(
@@ -412,7 +412,7 @@ final class RequestsTests: XCTestCase {
   func testGetLinkIdentityURL() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       _ = try await sut.getLinkIdentityURL(
@@ -427,7 +427,7 @@ final class RequestsTests: XCTestCase {
   func testMFAEnrollLegacy() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       _ = try await sut.mfa.enroll(params: MFAEnrollParams(issuer: "supabase.com", friendlyName: "test"))
@@ -437,7 +437,7 @@ final class RequestsTests: XCTestCase {
   func testMFAEnrollTotp() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       _ = try await sut.mfa.enroll(params: .totp(issuer: "supabase.com", friendlyName: "test"))
@@ -447,7 +447,7 @@ final class RequestsTests: XCTestCase {
   func testMFAEnrollPhone() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       _ = try await sut.mfa.enroll(params: .phone(friendlyName: "test", phone: "+1 202-918-2132"))
@@ -457,7 +457,7 @@ final class RequestsTests: XCTestCase {
   func testMFAChallenge() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       _ = try await sut.mfa.challenge(params: .init(factorId: "123"))
@@ -467,7 +467,7 @@ final class RequestsTests: XCTestCase {
   func testMFAChallengePhone() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       _ = try await sut.mfa.challenge(params: .init(factorId: "123", channel: .whatsapp))
@@ -477,7 +477,7 @@ final class RequestsTests: XCTestCase {
   func testMFAVerify() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       _ = try await sut.mfa.verify(params: .init(factorId: "123", challengeId: "123", code: "123456"))
@@ -487,7 +487,7 @@ final class RequestsTests: XCTestCase {
   func testMFAUnenroll() async throws {
     let sut = makeSUT()
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
       _ = try await sut.mfa.unenroll(params: .init(factorId: "123"))

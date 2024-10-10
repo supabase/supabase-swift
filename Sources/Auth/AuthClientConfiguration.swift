@@ -20,17 +20,28 @@ extension AuthClient {
 
   /// Configuration struct represents the client configuration.
   public struct Configuration: Sendable {
+    /// The URL of the Auth server.
     public let url: URL
+
+    /// Any additional headers to send to the Auth server.
     public var headers: [String: String]
     public let flowType: AuthFlowType
+
+    /// Default URL to be used for redirect on the flows that requires it.
     public let redirectToURL: URL?
 
     /// Optional key name used for storing tokens in local storage.
     public var storageKey: String?
+
+    /// Provider your own local storage implementation to use instead of the default one.
     public let localStorage: any AuthLocalStorage
+
+    /// Custom SupabaseLogger implementation used to inspecting log messages from the Auth library.
     public let logger: (any SupabaseLogger)?
     public let encoder: JSONEncoder
     public let decoder: JSONDecoder
+
+    /// A custom fetch implementation.
     public let fetch: FetchHandler
 
     /// Set to `true` if you want to automatically refresh the token before expiring.
@@ -51,7 +62,7 @@ extension AuthClient {
     ///   - fetch: The asynchronous fetch handler for network requests.
     ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
     public init(
-      url: URL,
+      url: URL? = nil,
       headers: [String: String] = [:],
       flowType: AuthFlowType = Configuration.defaultFlowType,
       redirectToURL: URL? = nil,
@@ -65,7 +76,7 @@ extension AuthClient {
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
 
-      self.url = url
+      self.url = url ?? defaultAuthURL
       self.headers = headers
       self.flowType = flowType
       self.redirectToURL = redirectToURL
@@ -94,7 +105,7 @@ extension AuthClient {
   ///   - fetch: The asynchronous fetch handler for network requests.
   ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
   public convenience init(
-    url: URL,
+    url: URL? = nil,
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
     redirectToURL: URL? = nil,

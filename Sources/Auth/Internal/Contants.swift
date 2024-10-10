@@ -7,7 +7,8 @@
 
 import Foundation
 
-let EXPIRY_MARGIN: TimeInterval = 30
+let defaultAuthURL = URL(string: "http://localhost:9999")!
+let defaultExpiryMargin: TimeInterval = 30
 let STORAGE_KEY = "supabase.auth.token"
 
 let API_VERSION_HEADER_NAME = "X-Supabase-Api-Version"

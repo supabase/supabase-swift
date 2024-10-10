@@ -182,7 +182,7 @@ public enum AuthError: LocalizedError, Equatable {
       errorCode: .unknown,
       underlyingData: (try? AuthClient.Configuration.jsonEncoder.encode(error)) ?? Data(),
       underlyingResponse: HTTPURLResponse(
-        url: URL(string: "http://localhost")!,
+        url: defaultAuthURL,
         statusCode: error.code ?? 500,
         httpVersion: nil,
         headerFields: nil

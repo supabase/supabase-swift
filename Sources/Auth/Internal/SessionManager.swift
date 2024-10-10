@@ -39,7 +39,7 @@ private actor LiveSessionManager {
 
   func session() async throws -> Session {
     try await trace(using: logger) {
-      guard let currentSession = try sessionStorage.get() else {
+      guard let currentSession = sessionStorage.get() else {
         throw AuthError.sessionMissing
       }
 
@@ -78,7 +78,9 @@ private actor LiveSessionManager {
               query: [
                 URLQueryItem(name: "grant_type", value: "refresh_token"),
               ],
-              body: configuration.encoder.encode(UserCredentials(refreshToken: refreshToken))
+              body: configuration.encoder.encode(
+                UserCredentials(refreshToken: refreshToken)
+              )
             )
           )
           .decoded(as: Session.self, decoder: configuration.decoder)
@@ -97,22 +99,17 @@ private actor LiveSessionManager {
   }
 
   func update(_ session: Session) {
-    do {
-      try sessionStorage.store(session)
-    } catch {
-      logger?.error("Failed to store session: \(error)")
-    }
+    sessionStorage.store(session)
   }
 
   func remove() {
-    do {
-      try sessionStorage.delete()
-    } catch {
-      logger?.error("Failed to remove session: \(error)")
-    }
+    sessionStorage.delete()
   }
 
-  private func scheduleNextTokenRefresh(_ refreshedSession: Session, caller: StaticString = #function) async {
+  private func scheduleNextTokenRefresh(
+    _ refreshedSession: Session,
+    caller: StaticString = #function
+  ) async {
     await SupabaseLoggerTaskLocal.$additionalContext.withValue(
       merging: ["caller": .string("\(caller)")]
     ) {
