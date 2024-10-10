@@ -55,42 +55,50 @@ private actor LiveSessionManager {
 
   func refreshSession(_ refreshToken: String) async throws -> Session {
     try await SupabaseLoggerTaskLocal.$additionalContext.withValue(
-      merging: ["refreshID": .string(UUID().uuidString)]
+      merging: ["refresh_id": .string(UUID().uuidString)]
     ) {
       try await trace(using: logger) {
         if let inFlightRefreshTask {
-          logger?.debug("refresh already in flight")
+          logger?.debug("Refresh already in flight")
           return try await inFlightRefreshTask.value
         }
 
         inFlightRefreshTask = Task {
-          logger?.debug("refresh task started")
+          logger?.debug("Refresh task started")
 
           defer {
             inFlightRefreshTask = nil
-            logger?.debug("refresh task ended")
+            logger?.debug("Refresh task ended")
           }
 
-          let session = try await api.execute(
-            HTTPRequest(
-              url: configuration.url.appendingPathComponent("token"),
-              method: .post,
-              query: [
-                URLQueryItem(name: "grant_type", value: "refresh_token"),
-              ],
-              body: configuration.encoder.encode(
-                UserCredentials(refreshToken: refreshToken)
+          do {
+            let session = try await api.execute(
+              HTTPRequest(
+                url: configuration.url.appendingPathComponent("token"),
+                method: .post,
+                query: [
+                  URLQueryItem(name: "grant_type", value: "refresh_token"),
+                ],
+                body: configuration.encoder.encode(
+                  UserCredentials(refreshToken: refreshToken)
+                )
               )
             )
-          )
-          .decoded(as: Session.self, decoder: configuration.decoder)
+            .decoded(as: Session.self, decoder: configuration.decoder)
 
-          update(session)
-          eventEmitter.emit(.tokenRefreshed, session: session)
+            update(session)
+            eventEmitter.emit(.tokenRefreshed, session: session)
 
-          await scheduleNextTokenRefresh(session)
+            await scheduleNextTokenRefresh(session)
 
-          return session
+            return session
+          } catch {
+            logger?.debug("Failed to refresh token: \(error)")
+            remove()
+            eventEmitter.emit(.signedOut, session: nil)
+
+            throw error
+          }
         }
 
         return try await inFlightRefreshTask!.value
@@ -114,12 +122,12 @@ private actor LiveSessionManager {
       merging: ["caller": .string("\(caller)")]
     ) {
       guard configuration.autoRefreshToken else {
-        logger?.debug("auto refresh token disabled")
+        logger?.debug("Auto refresh token disabled")
         return
       }
 
       guard scheduledNextRefreshTask == nil else {
-        logger?.debug("refresh task already scheduled")
+        logger?.debug("Refresh task already scheduled")
         return
       }
 
@@ -133,7 +141,7 @@ private actor LiveSessionManager {
           // if expiresIn < 0, it will refresh right away.
           let timeToRefresh = max(expiresIn * 0.9, 0)
 
-          logger?.debug("scheduled next token refresh in: \(timeToRefresh)s")
+          logger?.debug("Scheduled next token refresh in: \(timeToRefresh)s")
 
           try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(timeToRefresh))
 
