@@ -66,7 +66,12 @@ let package = Package(
       ],
       resources: [.process("Resources")]
     ),
-    .target(name: "Functions", dependencies: ["Helpers"]),
+    .target(
+      name: "Functions",
+      dependencies: [
+        "Helpers",
+      ]
+    ),
     .testTarget(
       name: "FunctionsTests",
       dependencies: [
