@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.20.1](https://github.com/supabase/supabase-swift/compare/v2.20.0...v2.20.1) (2024-10-09)
+
+
+### Bug Fixes
+
+* **realtime:** add RealtimeSubscription and deprecate Subscription ([#542](https://github.com/supabase/supabase-swift/issues/542)) ([3a44f30](https://github.com/supabase/supabase-swift/commit/3a44f306f32aaf0a096c316f02995f0de649b991))
+* **realtime:** allow to nullify access token ([45273e5](https://github.com/supabase/supabase-swift/commit/45273e5325f57c040030901cb269fff5c0a66974))
+* **realtime:** deprecate `updateAuth` from channel ([45273e5](https://github.com/supabase/supabase-swift/commit/45273e5325f57c040030901cb269fff5c0a66974))
+* Swift 6 warnings related to `@_unsafeInheritExecutor` attribute ([#549](https://github.com/supabase/supabase-swift/issues/549)) ([eab7a4a](https://github.com/supabase/supabase-swift/commit/eab7a4a7a494cfdf354ecd16373bbc05d4a0977f))
+
 ## [2.20.0](https://github.com/supabase/supabase-swift/compare/v2.19.0...v2.20.0) (2024-09-25)
 
 
