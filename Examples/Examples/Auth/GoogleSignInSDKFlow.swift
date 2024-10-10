@@ -19,7 +19,7 @@ struct GoogleSignInSDKFlow: View {
   func handleSignIn() {
     Task {
       do {
-        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: root)
 
         guard let idToken = result.user.idToken?.tokenString else {
           debug("No 'idToken' returned by GIDSignIn call.")
@@ -38,9 +38,15 @@ struct GoogleSignInSDKFlow: View {
     }
   }
 
-  var rootViewController: UIViewController {
-    UIApplication.shared.firstKeyWindow?.rootViewController ?? UIViewController()
-  }
+  #if canImport(UIKit)
+    var root: UIViewController {
+      UIApplication.shared.firstKeyWindow?.rootViewController ?? UIViewController()
+    }
+  #else
+    var root: NSWindow {
+      NSApplication.shared.keyWindow ?? NSWindow()
+    }
+  #endif
 }
 
 #Preview {

@@ -10,6 +10,10 @@ import Helpers
   import FoundationNetworking
 #endif
 
+#if canImport(WatchKit)
+  import WatchKit
+#endif
+
 typealias AuthClientID = UUID
 
 public final class AuthClient: Sendable {
@@ -72,6 +76,69 @@ public final class AuthClient: Sendable {
       sessionStorage: .live(clientID: clientID),
       sessionManager: .live(clientID: clientID)
     )
+
+    observeAppLifecycleChanges()
+  }
+
+  private func observeAppLifecycleChanges() {
+    #if canImport(UIKit)
+      #if canImport(WatchKit)
+        if #available(watchOS 7.0, *) {
+          NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleDidBecomeActive),
+            name: WKExtension.applicationDidBecomeActiveNotification,
+            object: nil
+          )
+          NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWillResignActive),
+            name: WKExtension.applicationWillResignActiveNotification,
+            object: nil
+          )
+        }
+      #else
+        NotificationCenter.default.addObserver(
+          self,
+          selector: #selector(handleDidBecomeActive),
+          name: UIApplication.didBecomeActiveNotification,
+          object: nil
+        )
+        NotificationCenter.default.addObserver(
+          self,
+          selector: #selector(handleWillResignActive),
+          name: UIApplication.willResignActiveNotification,
+          object: nil
+        )
+      #endif
+    #elseif canImport(AppKit)
+      NotificationCenter.default.addObserver(
+        self,
+        selector: #selector(handleDidBecomeActive),
+        name: NSApplication.didBecomeActiveNotification,
+        object: nil
+      )
+      NotificationCenter.default.addObserver(
+        self,
+        selector: #selector(handleWillResignActive),
+        name: NSApplication.willResignActiveNotification,
+        object: nil
+      )
+    #endif
+  }
+
+  @objc
+  private func handleDidBecomeActive() {
+    if configuration.autoRefreshToken {
+      startAutoRefresh()
+    }
+  }
+
+  @objc
+  private func handleWillResignActive() {
+    if configuration.autoRefreshToken {
+      stopAutoRefresh()
+    }
   }
 
   /// Listen for auth state changes.
@@ -1169,6 +1236,18 @@ public final class AuthClient: Sendable {
     }
 
     return try await sessionManager.refreshSession(refreshToken)
+  }
+
+  /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
+  ///
+  /// If you set ``Configuration/autoRefreshToken`` you don't need to call this function, it will be called for you.
+  public func startAutoRefresh() {
+    Task { await sessionManager.startAutoRefresh() }
+  }
+
+  /// Stops an active auto refresh process running in the background (if any).
+  public func stopAutoRefresh() {
+    Task { await sessionManager.stopAutoRefresh() }
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {

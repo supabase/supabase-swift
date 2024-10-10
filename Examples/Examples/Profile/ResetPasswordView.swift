@@ -21,8 +21,10 @@ struct ResetPasswordView: View {
 
       TextField("Enter your email", text: $email)
         .textFieldStyle(RoundedBorderTextFieldStyle())
+      #if !os(macOS)
         .autocapitalization(.none)
         .keyboardType(.emailAddress)
+      #endif
 
       Button(action: resetPassword) {
         Text("Send Reset Link")
