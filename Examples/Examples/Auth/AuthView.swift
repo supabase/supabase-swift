@@ -14,7 +14,9 @@ struct AuthView: View {
     case signInWithPhone
     case signInWithApple
     case signInWithOAuth
-    case signInWithOAuthUsingUIKit
+    #if canImport(UIKit)
+      case signInWithOAuthUsingUIKit
+    #endif
     case googleSignInSDKFlow
     case signInAnonymously
 
@@ -25,7 +27,9 @@ struct AuthView: View {
       case .signInWithPhone: "Sign in with Phone"
       case .signInWithApple: "Sign in with Apple"
       case .signInWithOAuth: "Sign in with OAuth flow"
-      case .signInWithOAuthUsingUIKit: "Sign in with OAuth flow (UIKit)"
+      #if canImport(UIKit)
+        case .signInWithOAuthUsingUIKit: "Sign in with OAuth flow (UIKit)"
+      #endif
       case .googleSignInSDKFlow: "Google Sign in (GIDSignIn SDK Flow)"
       case .signInAnonymously: "Sign in Anonymously"
       }
@@ -43,7 +47,9 @@ struct AuthView: View {
         options
           .navigationTitle(options.title)
       }
+      #if !os(macOS)
       .navigationBarTitleDisplayMode(.inline)
+      #endif
     }
   }
 }
@@ -56,8 +62,10 @@ extension AuthView.Option: View {
     case .signInWithPhone: SignInWithPhone()
     case .signInWithApple: SignInWithApple()
     case .signInWithOAuth: SignInWithOAuth()
-    case .signInWithOAuthUsingUIKit: UIViewControllerWrapper(SignInWithOAuthViewController())
-      .edgesIgnoringSafeArea(.all)
+    #if canImport(UIKit)
+      case .signInWithOAuthUsingUIKit: UIViewControllerWrapper(SignInWithOAuthViewController())
+        .edgesIgnoringSafeArea(.all)
+    #endif
     case .googleSignInSDKFlow: GoogleSignInSDKFlow()
     case .signInAnonymously: SignInAnonymously()
     }

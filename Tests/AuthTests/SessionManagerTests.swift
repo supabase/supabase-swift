@@ -59,7 +59,7 @@ final class SessionManagerTests: XCTestCase {
   func testSession_shouldReturnValidSession() async throws {
     try await withMainSerialExecutor {
       let session = Session.validSession
-      try Dependencies[clientID].sessionStorage.store(session)
+      Dependencies[clientID].sessionStorage.store(session)
 
       let returnedSession = try await sut.session()
       expectNoDifference(returnedSession, session)
@@ -69,7 +69,7 @@ final class SessionManagerTests: XCTestCase {
   func testSession_shouldRefreshSession_whenCurrentSessionExpired() async throws {
     try await withMainSerialExecutor {
       let currentSession = Session.expiredSession
-      try Dependencies[clientID].sessionStorage.store(currentSession)
+      Dependencies[clientID].sessionStorage.store(currentSession)
 
       let validSession = Session.validSession
 

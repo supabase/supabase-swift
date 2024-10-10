@@ -24,7 +24,7 @@ final class StoredSessionTests: XCTestCase {
 
     let sut = Dependencies[clientID].sessionStorage
 
-    let _ = try sut.get()
+    XCTAssertNotNil(sut.get())
 
     let session = Session(
       accessToken: "accesstoken",
@@ -77,7 +77,8 @@ final class StoredSessionTests: XCTestCase {
       )
     )
 
-    try sut.store(session)
+    sut.store(session)
+    XCTAssertNotNil(sut.get())
   }
 
   private final class DiskTestStorage: AuthLocalStorage {

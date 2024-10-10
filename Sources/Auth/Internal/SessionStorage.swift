@@ -9,9 +9,9 @@ import Foundation
 import Helpers
 
 struct SessionStorage {
-  var get: @Sendable () throws -> Session?
-  var store: @Sendable (_ session: Session) throws -> Void
-  var delete: @Sendable () throws -> Void
+  var get: @Sendable () -> Session?
+  var store: @Sendable (_ session: Session) -> Void
+  var delete: @Sendable () -> Void
 }
 
 extension SessionStorage {
@@ -19,7 +19,7 @@ extension SessionStorage {
   ///
   /// It uses value from ``AuthClient/Configuration/storageKey`` or default to `supabase.auth.token` if not provided.
   static func key(_ clientID: AuthClientID) -> String {
-    Dependencies[clientID].configuration.storageKey ?? STORAGE_KEY
+    Dependencies[clientID].configuration.storageKey ?? defaultStorageKey
   }
 
   static func live(clientID: AuthClientID) -> SessionStorage {
@@ -50,19 +50,32 @@ extension SessionStorage {
           }
         }
 
-        let storedData = try storage.retrieve(key: key)
-        return try storedData.flatMap {
-          try AuthClient.Configuration.jsonDecoder.decode(Session.self, from: $0)
+        do {
+          let storedData = try storage.retrieve(key: key)
+          return try storedData.flatMap {
+            try AuthClient.Configuration.jsonDecoder.decode(Session.self, from: $0)
+          }
+        } catch {
+          logger?.error("Failed to retrieve session: \(error.localizedDescription)")
+          return nil
         }
       },
       store: { session in
-        try storage.store(
-          key: key,
-          value: AuthClient.Configuration.jsonEncoder.encode(session)
-        )
+        do {
+          try storage.store(
+            key: key,
+            value: AuthClient.Configuration.jsonEncoder.encode(session)
+          )
+        } catch {
+          logger?.error("Failed to store session: \(error.localizedDescription)")
+        }
       },
       delete: {
-        try storage.remove(key: key)
+        do {
+          try storage.remove(key: key)
+        } catch {
+          logger?.error("Failed to delete session: \(error.localizedDescription)")
+        }
       }
     )
   }

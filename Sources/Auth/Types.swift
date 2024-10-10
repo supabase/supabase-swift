@@ -114,7 +114,7 @@ public struct Session: Codable, Hashable, Sendable {
   /// The 30 second buffer is to account for latency issues.
   public var isExpired: Bool {
     let expiresAt = Date(timeIntervalSince1970: expiresAt)
-    return expiresAt.timeIntervalSinceNow < EXPIRY_MARGIN
+    return expiresAt.timeIntervalSinceNow < defaultExpiryMargin
   }
 }
 
@@ -286,6 +286,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   }
 }
 
+/// One of the providers supported by Auth.
 public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {
   case apple
   case azure
@@ -478,6 +479,7 @@ public struct UserAttributes: Codable, Hashable, Sendable {
   public var nonce: String?
 
   /// An email change token.
+  @available(*, deprecated, message: "This is an old field, stop relying on it.")
   public var emailChangeToken: String?
   /// A custom data object to store the user's metadata. This maps to the `auth.users.user_metadata`
   /// column. The `data` should be a JSON object that includes user-specific info, such as their
