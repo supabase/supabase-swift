@@ -35,14 +35,18 @@ struct UpdateProfileView: View {
       Section {
         TextField("Email", text: $email)
           .textContentType(.emailAddress)
-          .keyboardType(.emailAddress)
           .autocorrectionDisabled()
+        #if !os(macOS)
+          .keyboardType(.emailAddress)
           .textInputAutocapitalization(.never)
+        #endif
         TextField("Phone", text: $phone)
           .textContentType(.telephoneNumber)
-          .keyboardType(.phonePad)
           .autocorrectionDisabled()
+        #if !os(macOS)
+          .keyboardType(.phonePad)
           .textInputAutocapitalization(.never)
+        #endif
         SecureField("New password", text: $password)
           .textContentType(.newPassword)
       }

@@ -37,7 +37,7 @@ struct APIClient: Sendable {
     request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
 
     if request.headers[.apiVersionHeaderName] == nil {
-      request.headers[.apiVersionHeaderName] = API_VERSIONS[._20240101]!.name.rawValue
+      request.headers[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
     }
 
     let response = try await http.send(request)
@@ -78,7 +78,7 @@ struct APIClient: Sendable {
 
     let responseAPIVersion = parseResponseAPIVersion(response)
 
-    let errorCode: ErrorCode? = if let responseAPIVersion, responseAPIVersion >= API_VERSIONS[._20240101]!.timestamp, let code = error.code {
+    let errorCode: ErrorCode? = if let responseAPIVersion, responseAPIVersion >= apiVersions[._20240101]!.timestamp, let code = error.code {
       ErrorCode(code)
     } else {
       error.errorCode
@@ -106,7 +106,7 @@ struct APIClient: Sendable {
     }
   }
 
-  private func parseResponseAPIVersion(_ response: Helpers.HTTPResponse) -> Date? {
+  private func parseResponseAPIVersion(_ response: HTTPResponse) -> Date? {
     guard let apiVersion = response.headers[.apiVersionHeaderName] else { return nil }
 
     let formatter = ISO8601DateFormatter()

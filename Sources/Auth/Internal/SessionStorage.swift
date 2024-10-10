@@ -19,7 +19,7 @@ extension SessionStorage {
   ///
   /// It uses value from ``AuthClient/Configuration/storageKey`` or default to `supabase.auth.token` if not provided.
   static func key(_ clientID: AuthClientID) -> String {
-    Dependencies[clientID].configuration.storageKey ?? STORAGE_KEY
+    Dependencies[clientID].configuration.storageKey ?? defaultStorageKey
   }
 
   static func live(clientID: AuthClientID) -> SessionStorage {

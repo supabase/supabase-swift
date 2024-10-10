@@ -10,7 +10,7 @@ struct CodeVerifierStorage: Sendable {
 extension CodeVerifierStorage {
   static func live(clientID: AuthClientID) -> Self {
     var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-    var key: String { "\(configuration.storageKey ?? STORAGE_KEY)-code-verifier" }
+    var key: String { "\(configuration.storageKey ?? defaultStorageKey)-code-verifier" }
 
     return Self(
       get: {

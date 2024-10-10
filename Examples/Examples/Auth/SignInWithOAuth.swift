@@ -45,78 +45,81 @@ struct SignInWithOAuth: View {
   }
 }
 
-final class SignInWithOAuthViewController: UIViewController, UIPickerViewDataSource,
-  UIPickerViewDelegate
-{
-  let providers = Provider.allCases
-  var provider = Provider.allCases[0]
+#if canImport(UIKit)
+  final class SignInWithOAuthViewController: UIViewController, UIPickerViewDataSource,
+    UIPickerViewDelegate
+  {
+    let providers = Provider.allCases
+    var provider = Provider.allCases[0]
 
-  let providerPicker = UIPickerView()
-  let signInButton = UIButton(type: .system)
+    let providerPicker = UIPickerView()
+    let signInButton = UIButton(type: .system)
 
-  override func viewDidLoad() {
-    super.viewDidLoad()
-    setupViews()
-  }
+    override func viewDidLoad() {
+      super.viewDidLoad()
+      setupViews()
+    }
 
-  func setupViews() {
-    view.backgroundColor = .white
+    func setupViews() {
+      view.backgroundColor = .white
 
-    providerPicker.dataSource = self
-    providerPicker.delegate = self
-    view.addSubview(providerPicker)
-    providerPicker.translatesAutoresizingMaskIntoConstraints = false
-    NSLayoutConstraint.activate([
-      providerPicker.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-      providerPicker.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-      providerPicker.widthAnchor.constraint(equalToConstant: 200),
-      providerPicker.heightAnchor.constraint(equalToConstant: 100),
-    ])
+      providerPicker.dataSource = self
+      providerPicker.delegate = self
+      view.addSubview(providerPicker)
+      providerPicker.translatesAutoresizingMaskIntoConstraints = false
+      NSLayoutConstraint.activate([
+        providerPicker.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+        providerPicker.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        providerPicker.widthAnchor.constraint(equalToConstant: 200),
+        providerPicker.heightAnchor.constraint(equalToConstant: 100),
+      ])
 
-    signInButton.setTitle("Start Sign-in Flow", for: .normal)
-    signInButton.addTarget(self, action: #selector(signInButtonTapped), for: .touchUpInside)
-    view.addSubview(signInButton)
-    signInButton.translatesAutoresizingMaskIntoConstraints = false
-    NSLayoutConstraint.activate([
-      signInButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-      signInButton.topAnchor.constraint(equalTo: providerPicker.bottomAnchor, constant: 20),
-    ])
-  }
+      signInButton.setTitle("Start Sign-in Flow", for: .normal)
+      signInButton.addTarget(self, action: #selector(signInButtonTapped), for: .touchUpInside)
+      view.addSubview(signInButton)
+      signInButton.translatesAutoresizingMaskIntoConstraints = false
+      NSLayoutConstraint.activate([
+        signInButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+        signInButton.topAnchor.constraint(equalTo: providerPicker.bottomAnchor, constant: 20),
+      ])
+    }
 
-  @objc func signInButtonTapped() {
-    Task {
-      do {
-        try await supabase.auth.signInWithOAuth(
-          provider: provider,
-          redirectTo: Constants.redirectToURL
-        )
-      } catch {
-        debug("Failed to sign-in with OAuth flow: \(error)")
+    @objc func signInButtonTapped() {
+      Task {
+        do {
+          try await supabase.auth.signInWithOAuth(
+            provider: provider,
+            redirectTo: Constants.redirectToURL
+          )
+        } catch {
+          debug("Failed to sign-in with OAuth flow: \(error)")
+        }
       }
+    }
+
+    func numberOfComponents(in _: UIPickerView) -> Int {
+      1
+    }
+
+    func pickerView(_: UIPickerView, numberOfRowsInComponent _: Int) -> Int {
+      providers.count
+    }
+
+    func pickerView(_: UIPickerView, titleForRow row: Int, forComponent _: Int) -> String? {
+      "\(providers[row])"
+    }
+
+    func pickerView(_: UIPickerView, didSelectRow row: Int, inComponent _: Int) {
+      provider = providers[row]
     }
   }
 
-  func numberOfComponents(in _: UIPickerView) -> Int {
-    1
+  #Preview("UIKit") {
+    SignInWithOAuthViewController()
   }
 
-  func pickerView(_: UIPickerView, numberOfRowsInComponent _: Int) -> Int {
-    providers.count
-  }
-
-  func pickerView(_: UIPickerView, titleForRow row: Int, forComponent _: Int) -> String? {
-    "\(providers[row])"
-  }
-
-  func pickerView(_: UIPickerView, didSelectRow row: Int, inComponent _: Int) {
-    provider = providers[row]
-  }
-}
+#endif
 
 #Preview("SwiftUI") {
   SignInWithOAuth()
-}
-
-#Preview("UIKit") {
-  SignInWithOAuthViewController()
 }

@@ -33,10 +33,12 @@ struct SignInWithPhone: View {
     Form {
       Section {
         TextField("Phone", text: $phone)
-          .keyboardType(.phonePad)
           .textContentType(.telephoneNumber)
           .autocorrectionDisabled()
+        #if !os(macOS)
+          .keyboardType(.phonePad)
           .textInputAutocapitalization(.never)
+        #endif
       }
 
       Section {
@@ -62,10 +64,12 @@ struct SignInWithPhone: View {
     Form {
       Section {
         TextField("Code", text: $code)
-          .keyboardType(.numberPad)
           .textContentType(.oneTimeCode)
           .autocorrectionDisabled()
+        #if !os(macOS)
+          .keyboardType(.numberPad)
           .textInputAutocapitalization(.never)
+        #endif
       }
 
       Section {
