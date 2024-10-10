@@ -22,17 +22,34 @@ public final class FunctionsClient: Sendable {
   /// The Region to invoke the functions in.
   let region: String?
 
-  private let http: any HTTPClientType
-
   struct MutableState {
     /// Headers to be included in the requests.
     var headers = HTTPFields()
   }
 
+  private let http: any HTTPClientType
   private let mutableState = LockIsolated(MutableState())
 
   var headers: HTTPFields {
     mutableState.headers
+  }
+
+  init(
+    url: URL,
+    headers: [String: String],
+    region: String?,
+    http: any HTTPClientType
+  ) {
+    self.url = url
+    self.region = region
+    self.http = http
+
+    mutableState.withValue {
+      $0.headers = HTTPHeaders(headers)
+      if $0.headers["X-Client-Info"] == nil {
+        $0.headers["X-Client-Info"] = "functions-swift/\(version)"
+      }
+    }
   }
 
   /// Initializes a new instance of `FunctionsClient`.
