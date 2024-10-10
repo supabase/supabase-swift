@@ -21,14 +21,10 @@ extension SupabaseStorageClient {
           "Authorization": "Bearer \(apiKey)",
           "Apikey": apiKey,
         ],
-        session: session
+        session: session,
+        logger: nil
       )
     )
   }
 }
 
-struct ConsoleLogger: SupabaseLogger {
-  func log(message: SupabaseLogMessage) {
-    print(message.description)
-  }
-}
