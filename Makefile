@@ -149,10 +149,11 @@ build-example:
 		-destination platform="$(PLATFORM_IOS)" \
 		-derivedDataPath ~/.derivedData | xcpretty;
 
-format:
-	@swiftformat .
 
-.PHONY: test-library test-linux build-example format
+format:
+	@swift format -i -r --ignore-unparsable-files .
+
+.PHONY: test-library test-linux build-example
 
 define udid_for
 $(shell xcrun simctl list devices available '$(1)' | grep '$(2)' | sort -r | head -1 | awk -F '[()]' '{ print $$(NF-3) }')
