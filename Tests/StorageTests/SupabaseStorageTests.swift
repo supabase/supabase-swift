@@ -1,5 +1,6 @@
 import CustomDump
 import Foundation
+import InlineSnapshotTesting
 @testable import Storage
 import XCTest
 import XCTestDynamicOverlay
@@ -17,7 +18,7 @@ final class SupabaseStorageTests: XCTestCase {
     upload: unimplemented("StorageHTTPSession.upload")
   )
 
-  func testGetPublicURL() async throws {
+  func testGetPublicURL() throws {
     let sut = makeSUT()
 
     let path = "README.md"
@@ -29,27 +30,30 @@ final class SupabaseStorageTests: XCTestCase {
       path: path,
       download: true
     )
-    XCTAssertEqual(
-      baseUrlWithDownload.absoluteString,
-      "\(supabaseURL)/object/public/\(bucketId)/\(path)?download="
-    )
+    assertInlineSnapshot(of: baseUrlWithDownload, as: .description) {
+      """
+      http://localhost:54321/storage/v1/object/public/tests/README.md?download=
+      """
+    }
 
     let baseUrlWithDownloadAndFileName = try sut.from(bucketId).getPublicURL(
       path: path, download: "test"
     )
-    XCTAssertEqual(
-      baseUrlWithDownloadAndFileName.absoluteString,
-      "\(supabaseURL)/object/public/\(bucketId)/\(path)?download=test"
-    )
+    assertInlineSnapshot(of: baseUrlWithDownloadAndFileName, as: .description) {
+      """
+      http://localhost:54321/storage/v1/object/public/tests/README.md?download=test
+      """
+    }
 
     let baseUrlWithAllOptions = try sut.from(bucketId).getPublicURL(
       path: path, download: "test",
       options: TransformOptions(width: 300, height: 300)
     )
-    XCTAssertEqual(
-      baseUrlWithAllOptions.absoluteString,
-      "\(supabaseURL)/render/image/public/\(bucketId)/\(path)?download=test&width=300&height=300&quality=80"
-    )
+    assertInlineSnapshot(of: baseUrlWithAllOptions, as: .description) {
+      """
+      http://localhost:54321/storage/v1/render/image/public/tests/README.md?download=test&width=300&height=300&quality=80
+      """
+    }
   }
 
   func testCreateSignedURLs() async throws {
@@ -80,13 +84,11 @@ final class SupabaseStorageTests: XCTestCase {
       expiresIn: 60
     )
 
-    expectNoDifference(
-      urls.map(\.absoluteString),
-      [
-        "\(supabaseURL.absoluteString)/sign/file1.txt?token=abc.def.ghi",
-        "\(supabaseURL.absoluteString)/sign/file2.txt?token=abc.def.ghi",
-      ]
-    )
+    assertInlineSnapshot(of: urls, as: .description) {
+      """
+      [http://localhost:54321/storage/v1/sign/file1.txt?token=abc.def.ghi, http://localhost:54321/storage/v1/sign/file2.txt?token=abc.def.ghi]
+      """
+    }
   }
 
   private func makeSUT() -> SupabaseStorageClient {
