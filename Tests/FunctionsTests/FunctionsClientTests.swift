@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 @testable import Functions
 import Helpers
+import HTTPTypes
 import TestHelpers
 import XCTest
 
@@ -22,8 +23,8 @@ final class FunctionsClientTests: XCTestCase {
     )
     XCTAssertEqual(client.region, "sa-east-1")
 
-    XCTAssertEqual(client.headers["Apikey"], apiKey)
-    XCTAssertNotNil(client.headers["X-Client-Info"])
+    XCTAssertEqual(client.headers[.init("Apikey")!], apiKey)
+    XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
   }
 
   func testInvoke() async throws {
@@ -53,9 +54,9 @@ final class FunctionsClientTests: XCTestCase {
 
     XCTAssertEqual(request?.url, url)
     XCTAssertEqual(request?.method, .post)
-    XCTAssertEqual(request?.headers["Apikey"], apiKey)
-    XCTAssertEqual(request?.headers["X-Custom-Key"], "value")
-    XCTAssertEqual(request?.headers["X-Client-Info"], "functions-swift/\(Functions.version)")
+    XCTAssertEqual(request?.headers[.init("Apikey")!], apiKey)
+    XCTAssertEqual(request?.headers[.init("X-Custom-Key")!], "value")
+    XCTAssertEqual(request?.headers[.init("X-Client-Info")!], "functions-swift/\(Functions.version)")
   }
 
   func testInvokeWithCustomMethod() async throws {
@@ -109,7 +110,7 @@ final class FunctionsClientTests: XCTestCase {
     try await sut.invoke("hello-world")
 
     let request = await http.receivedRequests.last
-    XCTAssertEqual(request?.headers["x-region"], "ca-central-1")
+    XCTAssertEqual(request?.headers[.xRegion], "ca-central-1")
   }
 
   func testInvokeWithRegion() async throws {
@@ -126,7 +127,7 @@ final class FunctionsClientTests: XCTestCase {
     try await sut.invoke("hello-world", options: .init(region: .caCentral1))
 
     let request = await http.receivedRequests.last
-    XCTAssertEqual(request?.headers["x-region"], "ca-central-1")
+    XCTAssertEqual(request?.headers[.xRegion], "ca-central-1")
   }
 
   func testInvokeWithoutRegion() async throws {
@@ -143,7 +144,7 @@ final class FunctionsClientTests: XCTestCase {
     try await sut.invoke("hello-world")
 
     let request = await http.receivedRequests.last
-    XCTAssertNil(request?.headers["x-region"])
+    XCTAssertNil(request?.headers[.xRegion])
   }
 
   func testInvoke_shouldThrow_URLError_badServerResponse() async {
@@ -190,7 +191,7 @@ final class FunctionsClientTests: XCTestCase {
       http: HTTPClientMock().any { _ in
         try .stub(
           body: Empty(),
-          headers: ["x-relay-error": "true"]
+          headers: [.xRelayError: "true"]
         )
       }
     )
@@ -206,16 +207,16 @@ final class FunctionsClientTests: XCTestCase {
 
   func test_setAuth() {
     sut.setAuth(token: "access.token")
-    XCTAssertEqual(sut.headers["Authorization"], "Bearer access.token")
+    XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
   }
 }
 
-extension HTTPResponse {
+extension Helpers.HTTPResponse {
   static func stub(
     body: any Encodable,
     statusCode: Int = 200,
-    headers: HTTPHeaders = .init()
-  ) throws -> HTTPResponse {
+    headers: HTTPFields = .init()
+  ) throws -> Helpers.HTTPResponse {
     let data = try JSONEncoder().encode(body)
     let response = HTTPURLResponse(
       url: URL(string: "http://127.0.0.1")!,
