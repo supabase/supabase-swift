@@ -23,7 +23,7 @@ package struct HTTPHeaders {
   }
 
   package mutating func update(_ field: HTTPHeader) {
-    if let index = fields.firstIndex(where: { $0.name.lowercased() == field.name.lowercased() }) {
+    if let index = fields.firstIndex(where: { $0.canonicalName == field.canonicalName }) {
       fields[index] = field
     } else {
       fields.append(field)
@@ -35,12 +35,12 @@ package struct HTTPHeaders {
   }
 
   package mutating func remove(name: String) {
-    fields.removeAll { $0.name.lowercased() == name.lowercased() }
+    fields.removeAll { $0.canonicalName == name.lowercased() }
   }
 
   package func value(for name: String) -> String? {
     fields
-      .firstIndex(where: { $0.name.lowercased() == name.lowercased() })
+      .firstIndex(where: { $0.canonicalName == name.lowercased() })
       .map { fields[$0].value }
   }
 
@@ -68,6 +68,11 @@ package struct HTTPHeaders {
 
   package var dictionary: [String: String] {
     let namesAndValues = fields.map { ($0.name, $0.value) }
+    return Dictionary(namesAndValues, uniquingKeysWith: { _, last in last })
+  }
+
+  var canonicalDictionary: [String: String] {
+    let namesAndValues = fields.map { ($0.canonicalName, $0.value) }
     return Dictionary(namesAndValues, uniquingKeysWith: { _, last in last })
   }
 
@@ -137,9 +142,13 @@ package struct HTTPHeader: Sendable, Hashable {
   package let name: String
   package let value: String
 
+  package let canonicalName: String
+
   package init(name: String, value: String) {
     self.name = name
     self.value = value
+
+    canonicalName = name.lowercased()
   }
 }
 
@@ -152,6 +161,6 @@ extension HTTPHeader: CustomStringConvertible {
 
 extension HTTPHeaders: Equatable {
   package static func == (lhs: Self, rhs: Self) -> Bool {
-    lhs.dictionary == rhs.dictionary
+    lhs.canonicalDictionary == rhs.canonicalDictionary
   }
 }

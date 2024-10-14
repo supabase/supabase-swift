@@ -17,6 +17,9 @@ import Foundation
 /// of failure, with exponential backoff between retries. You can configure the retry behavior by specifying
 /// the retry limit, exponential backoff base, scale, retryable HTTP methods, HTTP status codes, and URL error codes.
 package actor RetryRequestInterceptor: HTTPClientInterceptor {
+  /// A ``RetryRequestInterceptor`` instance with default values.
+  package static let `default` = RetryRequestInterceptor()
+
   /// The default retry limit for the interceptor.
   package static let defaultRetryLimit = 2
   /// The default base value for exponential backoff.
