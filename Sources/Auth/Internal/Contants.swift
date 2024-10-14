@@ -15,10 +15,9 @@ let autoRefreshTickDuration: TimeInterval = 30
 let autoRefreshTickThreshold = 3
 
 let defaultStorageKey = "supabase.auth.token"
-let apiVersionHeaderName = "X-Supabase-Api-Version"
 
 extension HTTPField.Name {
-  static let apiVersionHeaderName = HTTPField.Name(apiVersionHeaderName)!
+  static let apiVersionHeaderName = HTTPField.Name("X-Supabase-Api-Version")!
 }
 
 let apiVersions: [APIVersion.Name: APIVersion] = [

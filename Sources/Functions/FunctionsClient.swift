@@ -34,24 +34,6 @@ public final class FunctionsClient: Sendable {
     mutableState.headers
   }
 
-  init(
-    url: URL,
-    headers: [String: String],
-    region: String?,
-    http: any HTTPClientType
-  ) {
-    self.url = url
-    self.region = region
-    self.http = http
-
-    mutableState.withValue {
-      $0.headers = HTTPHeaders(headers)
-      if $0.headers["X-Client-Info"] == nil {
-        $0.headers["X-Client-Info"] = "functions-swift/\(version)"
-      }
-    }
-  }
-
   /// Initializes a new instance of `FunctionsClient`.
   ///
   /// - Parameters:
