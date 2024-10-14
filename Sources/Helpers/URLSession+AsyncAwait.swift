@@ -1,4 +1,4 @@
-#if canImport(FoundationNetworking)
+#if canImport(FoundationNetworking) && compiler(<6)
   import Foundation
   import FoundationNetworking
 
