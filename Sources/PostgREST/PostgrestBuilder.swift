@@ -52,7 +52,13 @@ public class PostgrestBuilder: @unchecked Sendable {
 
   /// Set a HTTP header for the request.
   @discardableResult
-  public func setHeader(name: HTTPField.Name, value: String) -> Self {
+  public func setHeader(name: String, value: String) -> Self {
+    return self.setHeader(name: .init(name)!, value: value)
+  }
+
+  /// Set a HTTP header for the request.
+  @discardableResult
+  internal func setHeader(name: HTTPField.Name, value: String) -> Self {
     mutableState.withValue {
       $0.request.headers[name] = value
     }
