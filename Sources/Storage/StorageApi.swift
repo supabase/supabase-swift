@@ -54,7 +54,7 @@ public class StorageApi: @unchecked Sendable {
 extension Helpers.HTTPRequest {
   init(
     url: URL,
-    method: HTTPMethod,
+    method: HTTPTypes.HTTPRequest.Method,
     query: [URLQueryItem],
     formData: MultipartFormData,
     options: FileOptions,

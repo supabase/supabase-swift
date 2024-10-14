@@ -14,14 +14,14 @@ import HTTPTypes
 
 package struct HTTPRequest: Sendable {
   package var url: URL
-  package var method: HTTPMethod
+  package var method: HTTPTypes.HTTPRequest.Method
   package var query: [URLQueryItem]
   package var headers: HTTPFields
   package var body: Data?
 
   package init(
     url: URL,
-    method: HTTPMethod,
+    method: HTTPTypes.HTTPRequest.Method,
     query: [URLQueryItem] = [],
     headers: HTTPFields = [:],
     body: Data? = nil
@@ -35,7 +35,7 @@ package struct HTTPRequest: Sendable {
 
   package init?(
     urlString: String,
-    method: HTTPMethod,
+    method: HTTPTypes.HTTPRequest.Method,
     query: [URLQueryItem] = [],
     headers: HTTPFields = [:],
     body: Data?
@@ -56,18 +56,6 @@ package struct HTTPRequest: Sendable {
 
     return urlRequest
   }
-}
-
-package enum HTTPMethod: String, Sendable {
-  case get = "GET"
-  case head = "HEAD"
-  case post = "POST"
-  case put = "PUT"
-  case delete = "DELETE"
-  case connect = "CONNECT"
-  case trace = "TRACE"
-  case patch = "PATCH"
-  case options = "OPTIONS"
 }
 
 extension [URLQueryItem] {

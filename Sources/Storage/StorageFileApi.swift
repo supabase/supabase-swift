@@ -45,7 +45,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   }
 
   private func _uploadOrUpdate(
-    method: HTTPMethod,
+    method: HTTPTypes.HTTPRequest.Method,
     path: String,
     formData: MultipartFormData,
     options: FileOptions?
