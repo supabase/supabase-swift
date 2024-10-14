@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -15,14 +16,14 @@ package struct HTTPRequest: Sendable {
   package var url: URL
   package var method: HTTPMethod
   package var query: [URLQueryItem]
-  package var headers: HTTPHeaders
+  package var headers: HTTPFields
   package var body: Data?
 
   package init(
     url: URL,
     method: HTTPMethod,
     query: [URLQueryItem] = [],
-    headers: HTTPHeaders = [:],
+    headers: HTTPFields = [:],
     body: Data? = nil
   ) {
     self.url = url
@@ -36,7 +37,7 @@ package struct HTTPRequest: Sendable {
     urlString: String,
     method: HTTPMethod,
     query: [URLQueryItem] = [],
-    headers: HTTPHeaders = [:],
+    headers: HTTPFields = [:],
     body: Data?
   ) {
     guard let url = URL(string: urlString) else { return nil }
@@ -46,7 +47,7 @@ package struct HTTPRequest: Sendable {
   package var urlRequest: URLRequest {
     var urlRequest = URLRequest(url: query.isEmpty ? url : url.appendingQueryItems(query))
     urlRequest.httpMethod = method.rawValue
-    urlRequest.allHTTPHeaderFields = headers.dictionary
+    urlRequest.allHTTPHeaderFields = .init(headers.map { ($0.name.rawName, $0.value) }) { $1 }
     urlRequest.httpBody = body
 
     if urlRequest.httpBody != nil, urlRequest.value(forHTTPHeaderField: "Content-Type") == nil {

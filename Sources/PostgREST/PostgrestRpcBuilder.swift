@@ -1,5 +1,6 @@
 import Foundation
 import Helpers
+import HTTPTypes
 
 struct NoParams: Encodable {}
 
@@ -30,14 +31,18 @@ public final class PostgrestRpcBuilder: PostgrestBuilder {
       }
 
       if let count {
-        if let prefer = $0.request.headers["Prefer"] {
-          $0.request.headers["Prefer"] = "\(prefer),count=\(count.rawValue)"
+        if let prefer = $0.request.headers[.prefer] {
+          $0.request.headers[.prefer] = "\(prefer),count=\(count.rawValue)"
         } else {
-          $0.request.headers["Prefer"] = "count=\(count.rawValue)"
+          $0.request.headers[.prefer] = "count=\(count.rawValue)"
         }
       }
     }
 
     return PostgrestFilterBuilder(self)
   }
+}
+
+extension HTTPField.Name {
+  static let prefer = Self("Prefer")!
 }

@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import HTTPTypes
 
 public typealias PostgrestError = Helpers.PostgrestError
 public typealias HTTPError = Helpers.HTTPError
@@ -119,7 +120,7 @@ public final class PostgrestClient: Sendable {
       request: .init(
         url: configuration.url.appendingPathComponent(table),
         method: .get,
-        headers: HTTPHeaders(configuration.headers)
+        headers: HTTPFields(configuration.headers)
       )
     )
   }
@@ -139,7 +140,7 @@ public final class PostgrestClient: Sendable {
       request: HTTPRequest(
         url: configuration.url.appendingPathComponent("rpc/\(fn)"),
         method: .post,
-        headers: HTTPHeaders(configuration.headers)
+        headers: HTTPFields(configuration.headers)
       )
     ).rpc(params: params, count: count)
   }

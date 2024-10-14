@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -25,12 +26,12 @@ public final class FunctionsClient: Sendable {
 
   struct MutableState {
     /// Headers to be included in the requests.
-    var headers = HTTPHeaders()
+    var headers = HTTPFields()
   }
 
   private let mutableState = LockIsolated(MutableState())
 
-  var headers: HTTPHeaders {
+  var headers: HTTPFields {
     mutableState.headers
   }
 
@@ -71,9 +72,9 @@ public final class FunctionsClient: Sendable {
     self.http = http
 
     mutableState.withValue {
-      $0.headers = HTTPHeaders(headers)
-      if $0.headers["X-Client-Info"] == nil {
-        $0.headers["X-Client-Info"] = "functions-swift/\(version)"
+      $0.headers = HTTPFields(headers)
+      if $0.headers[.xClientInfo] == nil {
+        $0.headers[.xClientInfo] = "functions-swift/\(version)"
       }
     }
   }
@@ -102,9 +103,9 @@ public final class FunctionsClient: Sendable {
   public func setAuth(token: String?) {
     mutableState.withValue {
       if let token {
-        $0.headers["Authorization"] = "Bearer \(token)"
+        $0.headers[.authorization] = "Bearer \(token)"
       } else {
-        $0.headers["Authorization"] = nil
+        $0.headers[.authorization] = nil
       }
     }
   }
@@ -160,7 +161,7 @@ public final class FunctionsClient: Sendable {
   private func rawInvoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) async throws -> HTTPResponse {
+  ) async throws -> Helpers.HTTPResponse {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
     let response = try await http.send(request)
 
@@ -168,7 +169,7 @@ public final class FunctionsClient: Sendable {
       throw FunctionsError.httpError(code: response.statusCode, data: response.data)
     }
 
-    let isRelayError = response.headers["x-relay-error"] == "true"
+    let isRelayError = response.headers[.xRelayError] == "true"
     if isRelayError {
       throw FunctionsError.relayError
     }
@@ -211,17 +212,17 @@ public final class FunctionsClient: Sendable {
     return stream
   }
 
-  private func buildRequest(functionName: String, options: FunctionInvokeOptions) -> HTTPRequest {
+  private func buildRequest(functionName: String, options: FunctionInvokeOptions) -> Helpers.HTTPRequest {
     var request = HTTPRequest(
       url: url.appendingPathComponent(functionName),
       method: options.httpMethod ?? .post,
       query: options.query,
-      headers: mutableState.headers.merged(with: options.headers),
+      headers: mutableState.headers.merging(with: options.headers),
       body: options.body
     )
 
     if let region = options.region ?? region {
-      request.headers["x-region"] = region
+      request.headers[.xRegion] = region
     }
 
     return request

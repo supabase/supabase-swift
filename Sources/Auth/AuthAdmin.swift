@@ -7,6 +7,7 @@
 
 import Foundation
 import Helpers
+import HTTPTypes
 
 public struct AuthAdmin: Sendable {
   let clientID: AuthClientID
@@ -62,10 +63,10 @@ public struct AuthAdmin: Sendable {
       users: response.users,
       aud: response.aud,
       lastPage: 0,
-      total: httpResponse.headers["x-total-count"].flatMap(Int.init) ?? 0
+      total: httpResponse.headers[.xTotalCount].flatMap(Int.init) ?? 0
     )
 
-    let links = httpResponse.headers["link"]?.components(separatedBy: ",") ?? []
+    let links = httpResponse.headers[.link]?.components(separatedBy: ",") ?? []
     if !links.isEmpty {
       for link in links {
         let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(while: \.isNumber)
@@ -81,4 +82,9 @@ public struct AuthAdmin: Sendable {
 
     return pagination
   }
+}
+
+extension HTTPField.Name {
+  static let xTotalCount = Self("x-total-count")!
+  static let link = Self("link")!
 }

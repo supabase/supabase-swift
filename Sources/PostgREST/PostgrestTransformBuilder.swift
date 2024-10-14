@@ -24,7 +24,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     mutableState.withValue {
       $0.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
 
-      if let prefer = $0.request.headers["Prefer"] {
+      if let prefer = $0.request.headers[.prefer] {
         var components = prefer.components(separatedBy: ",")
 
         if let index = components.firstIndex(where: { $0.hasPrefix("return=") }) {
@@ -33,9 +33,9 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
           components.append("return=representation")
         }
 
-        $0.request.headers["Prefer"] = components.joined(separator: ",")
+        $0.request.headers[.prefer] = components.joined(separator: ",")
       } else {
-        $0.request.headers["Prefer"] = "return=representation"
+        $0.request.headers[.prefer] = "return=representation"
       }
     }
     return self
@@ -141,7 +141,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   /// Query result must be one row (e.g. using `.limit(1)`), otherwise this returns an error.
   public func single() -> PostgrestTransformBuilder {
     mutableState.withValue {
-      $0.request.headers["Accept"] = "application/vnd.pgrst.object+json"
+      $0.request.headers[.accept] = "application/vnd.pgrst.object+json"
     }
     return self
   }
@@ -149,7 +149,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   ///  Return `value` as a string in CSV format.
   public func csv() -> PostgrestTransformBuilder {
     mutableState.withValue {
-      $0.request.headers["Accept"] = "text/csv"
+      $0.request.headers[.accept] = "text/csv"
     }
     return self
   }
@@ -157,7 +157,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   /// Return `value` as an object in [GeoJSON](https://geojson.org) format.
   public func geojson() -> PostgrestTransformBuilder {
     mutableState.withValue {
-      $0.request.headers["Accept"] = "application/geo+json"
+      $0.request.headers[.accept] = "application/geo+json"
     }
     return self
   }
@@ -194,10 +194,8 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
       ]
       .compactMap { $0 }
       .joined(separator: "|")
-      let forMediaType = $0.request.headers["Accept"] ?? "application/json"
-      $0.request
-        .headers["Accept"] =
-        "application/vnd.pgrst.plan+\"\(format)\"; for=\(forMediaType); options=\(options);"
+      let forMediaType = $0.request.headers[.accept] ?? "application/json"
+      $0.request.headers[.accept] = "application/vnd.pgrst.plan+\"\(format)\"; for=\(forMediaType); options=\(options);"
     }
 
     return self

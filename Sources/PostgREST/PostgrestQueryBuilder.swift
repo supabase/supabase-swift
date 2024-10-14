@@ -30,7 +30,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
       $0.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
 
       if let count {
-        $0.request.headers["Prefer"] = "count=\(count.rawValue)"
+        $0.request.headers[.prefer] = "count=\(count.rawValue)"
       }
       if head {
         $0.request.method = .head
@@ -62,11 +62,11 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
       if let count {
         prefersHeaders.append("count=\(count.rawValue)")
       }
-      if let prefer = $0.request.headers["Prefer"] {
+      if let prefer = $0.request.headers[.prefer] {
         prefersHeaders.insert(prefer, at: 0)
       }
       if !prefersHeaders.isEmpty {
-        $0.request.headers["Prefer"] = prefersHeaders.joined(separator: ",")
+        $0.request.headers[.prefer] = prefersHeaders.joined(separator: ",")
       }
       if let body = $0.request.body,
          let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
@@ -114,11 +114,11 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
       if let count {
         prefersHeaders.append("count=\(count.rawValue)")
       }
-      if let prefer = $0.request.headers["Prefer"] {
+      if let prefer = $0.request.headers[.prefer] {
         prefersHeaders.insert(prefer, at: 0)
       }
       if !prefersHeaders.isEmpty {
-        $0.request.headers["Prefer"] = prefersHeaders.joined(separator: ",")
+        $0.request.headers[.prefer] = prefersHeaders.joined(separator: ",")
       }
 
       if let body = $0.request.body,
@@ -154,11 +154,11 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
       if let count {
         preferHeaders.append("count=\(count.rawValue)")
       }
-      if let prefer = $0.request.headers["Prefer"] {
+      if let prefer = $0.request.headers[.prefer] {
         preferHeaders.insert(prefer, at: 0)
       }
       if !preferHeaders.isEmpty {
-        $0.request.headers["Prefer"] = preferHeaders.joined(separator: ",")
+        $0.request.headers[.prefer] = preferHeaders.joined(separator: ",")
       }
     }
     return PostgrestFilterBuilder(self)
@@ -180,11 +180,11 @@ public final class PostgrestQueryBuilder: PostgrestBuilder {
       if let count {
         preferHeaders.append("count=\(count.rawValue)")
       }
-      if let prefer = $0.request.headers["Prefer"] {
+      if let prefer = $0.request.headers[.prefer] {
         preferHeaders.insert(prefer, at: 0)
       }
       if !preferHeaders.isEmpty {
-        $0.request.headers["Prefer"] = preferHeaders.joined(separator: ",")
+        $0.request.headers[.prefer] = preferHeaders.joined(separator: ",")
       }
     }
     return PostgrestFilterBuilder(self)

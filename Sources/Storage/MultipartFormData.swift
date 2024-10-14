@@ -26,6 +26,7 @@
 
 import Foundation
 import Helpers
+import HTTPTypes
 
 #if canImport(MobileCoreServices)
   import MobileCoreServices
@@ -79,13 +80,13 @@ class MultipartFormData {
   }
 
   class BodyPart {
-    let headers: HTTPHeaders
+    let headers: HTTPFields
     let bodyStream: InputStream
     let bodyContentLength: UInt64
     var hasInitialBoundary = false
     var hasFinalBoundary = false
 
-    init(headers: HTTPHeaders, bodyStream: InputStream, bodyContentLength: UInt64) {
+    init(headers: HTTPFields, bodyStream: InputStream, bodyContentLength: UInt64) {
       self.headers = headers
       self.bodyStream = bodyStream
       self.bodyContentLength = bodyContentLength
@@ -310,7 +311,7 @@ class MultipartFormData {
   ///   - stream:  `InputStream` to encode into the instance.
   ///   - length:  Length, in bytes, of the stream.
   ///   - headers: `HTTPHeaders` for the body part.
-  func append(_ stream: InputStream, withLength length: UInt64, headers: HTTPHeaders) {
+  func append(_ stream: InputStream, withLength length: UInt64, headers: HTTPFields) {
     let bodyPart = BodyPart(headers: headers, bodyStream: stream, bodyContentLength: length)
     bodyParts.append(bodyPart)
   }
@@ -528,12 +529,12 @@ class MultipartFormData {
 
   private func contentHeaders(
     withName name: String, fileName: String? = nil, mimeType: String? = nil
-  ) -> HTTPHeaders {
+  ) -> HTTPFields {
     var disposition = "form-data; name=\"\(name)\""
     if let fileName { disposition += "; filename=\"\(fileName)\"" }
 
-    var headers: HTTPHeaders = ["Content-Disposition": disposition]
-    if let mimeType { headers["Content-Type"] = mimeType }
+    var headers: HTTPFields = [.contentDisposition: disposition]
+    if let mimeType { headers[.contentType] = mimeType }
 
     return headers
   }

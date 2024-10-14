@@ -6,11 +6,17 @@
 //
 
 import Foundation
+import HTTPTypes
 
 let EXPIRY_MARGIN: TimeInterval = 30
 let STORAGE_KEY = "supabase.auth.token"
 
 let API_VERSION_HEADER_NAME = "X-Supabase-Api-Version"
+
+extension HTTPField.Name {
+  static let apiVersionHeaderName = HTTPField.Name(API_VERSION_HEADER_NAME)!
+}
+
 let API_VERSIONS: [APIVersion.Name: APIVersion] = [
   ._20240101: ._20240101,
 ]

@@ -716,7 +716,7 @@ public final class AuthClient: Sendable {
       .init(
         url: configuration.url.appendingPathComponent("user"),
         method: .get,
-        headers: ["Authorization": "\(tokenType) \(accessToken)"]
+        headers: [.authorization: "\(tokenType) \(accessToken)"]
       )
     ).decoded(as: User.self, decoder: configuration.decoder)
 
@@ -803,7 +803,7 @@ public final class AuthClient: Sendable {
           url: configuration.url.appendingPathComponent("logout"),
           method: .post,
           query: [URLQueryItem(name: "scope", value: scope.rawValue)],
-          headers: [.init(name: "Authorization", value: "Bearer \(accessToken)")]
+          headers: [.authorization: "Bearer \(accessToken)"]
         )
       )
     } catch let AuthError.api(_, _, _, response) where [404, 403, 401].contains(response.statusCode) {
@@ -982,7 +982,7 @@ public final class AuthClient: Sendable {
     var request = HTTPRequest(url: configuration.url.appendingPathComponent("user"), method: .get)
 
     if let jwt {
-      request.headers["Authorization"] = "Bearer \(jwt)"
+      request.headers[.authorization] = "Bearer \(jwt)"
       return try await api.execute(request).decoded(decoder: configuration.decoder)
     }
 

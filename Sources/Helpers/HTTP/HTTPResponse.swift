@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -13,14 +14,14 @@ import Foundation
 
 package struct HTTPResponse: Sendable {
   package let data: Data
-  package let headers: HTTPHeaders
+  package let headers: HTTPFields
   package let statusCode: Int
 
   package let underlyingResponse: HTTPURLResponse
 
   package init(data: Data, response: HTTPURLResponse) {
     self.data = data
-    headers = HTTPHeaders(response.allHeaderFields as? [String: String] ?? [:])
+    headers = HTTPFields(response.allHeaderFields as? [String: String] ?? [:])
     statusCode = response.statusCode
     underlyingResponse = response
   }
