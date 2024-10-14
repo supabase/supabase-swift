@@ -7,6 +7,7 @@ import IssueReporting
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -98,7 +99,7 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  let _headers: HTTPHeaders
+  let _headers: HTTPFields
   /// Headers provided to the inner clients on initialization.
   ///
   /// - Note: This collection is non-mutable, if you want to provide different headers, pass it in ``SupabaseClientOptions/GlobalOptions/headers``.
@@ -153,12 +154,12 @@ public final class SupabaseClient: Sendable {
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
-    _headers = HTTPHeaders([
+    _headers = HTTPFields([
       "X-Client-Info": "supabase-swift/\(version)",
       "Authorization": "Bearer \(supabaseKey)",
       "Apikey": supabaseKey,
     ])
-    .merged(with: HTTPHeaders(options.global.headers))
+    .merging(with: HTTPFields(options.global.headers))
 
     // default storage key uses the supabase project ref as a namespace
     let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"

@@ -265,9 +265,9 @@ final class RealtimeTests: XCTestCase {
     expectNoDifference(
       request?.headers,
       [
-        "content-type": "application/json",
-        "apikey": "anon.api.key",
-        "authorization": "Bearer anon.api.key",
+        .contentType: "application/json",
+        .apiKey: "anon.api.key",
+        .authorization: "Bearer anon.api.key",
       ]
     )
 

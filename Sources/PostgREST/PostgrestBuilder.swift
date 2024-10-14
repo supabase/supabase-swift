@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -13,7 +14,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   let http: any HTTPClientType
 
   struct MutableState {
-    var request: HTTPRequest
+    var request: Helpers.HTTPRequest
 
     /// The options for fetching data from the PostgREST server.
     var fetchOptions: FetchOptions
@@ -23,7 +24,7 @@ public class PostgrestBuilder: @unchecked Sendable {
 
   init(
     configuration: PostgrestClient.Configuration,
-    request: HTTPRequest
+    request: Helpers.HTTPRequest
   ) {
     self.configuration = configuration
 
@@ -52,8 +53,14 @@ public class PostgrestBuilder: @unchecked Sendable {
   /// Set a HTTP header for the request.
   @discardableResult
   public func setHeader(name: String, value: String) -> Self {
+    return self.setHeader(name: .init(name)!, value: value)
+  }
+
+  /// Set a HTTP header for the request.
+  @discardableResult
+  internal func setHeader(name: HTTPField.Name, value: String) -> Self {
     mutableState.withValue {
-      $0.request.headers.update(name: name, value: value)
+      $0.request.headers[name] = value
     }
     return self
   }
@@ -99,23 +106,23 @@ public class PostgrestBuilder: @unchecked Sendable {
       }
 
       if let count = $0.fetchOptions.count {
-        if let prefer = $0.request.headers["Prefer"] {
-          $0.request.headers["Prefer"] = "\(prefer),count=\(count.rawValue)"
+        if let prefer = $0.request.headers[.prefer] {
+          $0.request.headers[.prefer] = "\(prefer),count=\(count.rawValue)"
         } else {
-          $0.request.headers["Prefer"] = "count=\(count.rawValue)"
+          $0.request.headers[.prefer] = "count=\(count.rawValue)"
         }
       }
 
-      if $0.request.headers["Accept"] == nil {
-        $0.request.headers["Accept"] = "application/json"
+      if $0.request.headers[.accept] == nil {
+        $0.request.headers[.accept] = "application/json"
       }
-      $0.request.headers["Content-Type"] = "application/json"
+      $0.request.headers[.contentType] = "application/json"
 
       if let schema = configuration.schema {
         if $0.request.method == .get || $0.request.method == .head {
-          $0.request.headers["Accept-Profile"] = schema
+          $0.request.headers[.acceptProfile] = schema
         } else {
-          $0.request.headers["Content-Profile"] = schema
+          $0.request.headers[.contentProfile] = schema
         }
       }
 
@@ -135,4 +142,9 @@ public class PostgrestBuilder: @unchecked Sendable {
     let value = try decode(response.data)
     return PostgrestResponse(data: response.data, response: response.underlyingResponse, value: value)
   }
+}
+
+extension HTTPField.Name {
+  static let acceptProfile = Self("Accept-Profile")!
+  static let contentProfile = Self("Content-Profile")!
 }

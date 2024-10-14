@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -42,7 +43,7 @@ struct Socket: Sendable {
   var addChannel: @Sendable (_ channel: RealtimeChannelV2) -> Void
   var removeChannel: @Sendable (_ channel: RealtimeChannelV2) async -> Void
   var push: @Sendable (_ message: RealtimeMessageV2) async -> Void
-  var httpSend: @Sendable (_ request: HTTPRequest) async throws -> HTTPResponse
+  var httpSend: @Sendable (_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse
 }
 
 extension Socket {
@@ -215,12 +216,12 @@ public final class RealtimeChannelV2: Sendable {
         let `private`: Bool
       }
 
-      var headers = HTTPHeaders(["content-type": "application/json"])
+      var headers: HTTPFields = [.contentType: "application/json"]
       if let apiKey = socket.apiKey() {
-        headers["apikey"] = apiKey
+        headers[.apiKey] = apiKey
       }
       if let accessToken = socket.accessToken() {
-        headers["authorization"] = "Bearer \(accessToken)"
+        headers[.authorization] = "Bearer \(accessToken)"
       }
 
       let task = Task { [headers] in

@@ -1,5 +1,6 @@
 import Foundation
 import Helpers
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -29,9 +30,9 @@ public class StorageApi: @unchecked Sendable {
   }
 
   @discardableResult
-  func execute(_ request: HTTPRequest) async throws -> HTTPResponse {
+  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
     var request = request
-    request.headers = HTTPHeaders(configuration.headers).merged(with: request.headers)
+    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
 
     let response = try await http.send(request)
 
@@ -50,21 +51,21 @@ public class StorageApi: @unchecked Sendable {
   }
 }
 
-extension HTTPRequest {
+extension Helpers.HTTPRequest {
   init(
     url: URL,
-    method: HTTPMethod,
+    method: HTTPTypes.HTTPRequest.Method,
     query: [URLQueryItem],
     formData: MultipartFormData,
     options: FileOptions,
-    headers: HTTPHeaders = [:]
+    headers: HTTPFields = [:]
   ) throws {
     var headers = headers
-    if headers["Content-Type"] == nil {
-      headers["Content-Type"] = formData.contentType
+    if headers[.contentType] == nil {
+      headers[.contentType] = formData.contentType
     }
-    if headers["Cache-Control"] == nil {
-      headers["Cache-Control"] = "max-age=\(options.cacheControl)"
+    if headers[.cacheControl] == nil {
+      headers[.cacheControl] = "max-age=\(options.cacheControl)"
     }
     try self.init(
       url: url,

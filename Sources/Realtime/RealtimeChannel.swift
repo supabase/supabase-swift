@@ -22,6 +22,7 @@ import ConcurrencyExtras
 import Foundation
 import Helpers
 import Swift
+import HTTPTypes
 
 /// Container class of bindings to the channel
 struct Binding {
@@ -745,7 +746,7 @@ public class RealtimeChannel {
         let request = try HTTPRequest(
           url: broadcastEndpointURL,
           method: .post,
-          headers: HTTPHeaders(headers.mapValues { "\($0)" }),
+          headers: HTTPFields(headers.compactMapValues { $0 }),
           body: JSONSerialization.data(withJSONObject: body)
         )
 

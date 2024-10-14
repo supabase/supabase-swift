@@ -7,6 +7,7 @@
 
 import Foundation
 import Helpers
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -14,7 +15,7 @@ import Helpers
 
 /// Options for initializing ``RealtimeClientV2``.
 public struct RealtimeClientOptions: Sendable {
-  package var headers: HTTPHeaders
+  package var headers: HTTPFields
   var heartbeatInterval: TimeInterval
   var reconnectDelay: TimeInterval
   var timeoutInterval: TimeInterval
@@ -39,7 +40,7 @@ public struct RealtimeClientOptions: Sendable {
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     logger: (any SupabaseLogger)? = nil
   ) {
-    self.headers = HTTPHeaders(headers)
+    self.headers = HTTPFields(headers)
     self.heartbeatInterval = heartbeatInterval
     self.reconnectDelay = reconnectDelay
     self.timeoutInterval = timeoutInterval
@@ -50,11 +51,11 @@ public struct RealtimeClientOptions: Sendable {
   }
 
   var apikey: String? {
-    headers["apikey"]
+    headers[.apiKey]
   }
 
   var accessToken: String? {
-    guard let accessToken = headers["Authorization"]?.split(separator: " ").last else {
+    guard let accessToken = headers[.authorization]?.split(separator: " ").last else {
       return nil
     }
     return String(accessToken)
@@ -82,4 +83,8 @@ public enum RealtimeClientStatus: Sendable, CustomStringConvertible {
     case .connected: "Connected"
     }
   }
+}
+
+extension HTTPField.Name {
+  static let apiKey = Self("apiKey")!
 }

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -25,7 +26,7 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
   package static let defaultExponentialBackoffScale: Double = 0.5
 
   /// The default set of retryable HTTP methods.
-  package static let defaultRetryableHTTPMethods: Set<HTTPMethod> = [
+  package static let defaultRetryableHTTPMethods: Set<HTTPTypes.HTTPRequest.Method> = [
     .delete, .get, .head, .options, .put, .trace,
   ]
 
@@ -52,7 +53,7 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
   /// The scale factor for exponential backoff.
   package let exponentialBackoffScale: Double
   /// The set of retryable HTTP methods.
-  package let retryableHTTPMethods: Set<HTTPMethod>
+  package let retryableHTTPMethods: Set<HTTPTypes.HTTPRequest.Method>
   /// The set of retryable HTTP status codes.
   package let retryableHTTPStatusCodes: Set<Int>
   /// The set of retryable URL error codes.
@@ -71,7 +72,7 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
     retryLimit: Int = RetryRequestInterceptor.defaultRetryLimit,
     exponentialBackoffBase: UInt = RetryRequestInterceptor.defaultExponentialBackoffBase,
     exponentialBackoffScale: Double = RetryRequestInterceptor.defaultExponentialBackoffScale,
-    retryableHTTPMethods: Set<HTTPMethod> = RetryRequestInterceptor.defaultRetryableHTTPMethods,
+    retryableHTTPMethods: Set<HTTPTypes.HTTPRequest.Method> = RetryRequestInterceptor.defaultRetryableHTTPMethods,
     retryableHTTPStatusCodes: Set<Int> = RetryRequestInterceptor.defaultRetryableHTTPStatusCodes,
     retryableErrorCodes: Set<URLError.Code> = RetryRequestInterceptor.defaultRetryableURLErrorCodes
   ) {

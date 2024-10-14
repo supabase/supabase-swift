@@ -1,5 +1,6 @@
 import Foundation
 import Helpers
+import HTTPTypes
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
@@ -31,12 +32,12 @@ struct APIClient: Sendable {
     Dependencies[clientID].http
   }
 
-  func execute(_ request: HTTPRequest) async throws -> HTTPResponse {
+  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
     var request = request
-    request.headers = HTTPHeaders(configuration.headers).merged(with: request.headers)
+    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
 
-    if request.headers[API_VERSION_HEADER_NAME] == nil {
-      request.headers[API_VERSION_HEADER_NAME] = API_VERSIONS[._20240101]!.name.rawValue
+    if request.headers[.apiVersionHeaderName] == nil {
+      request.headers[.apiVersionHeaderName] = API_VERSIONS[._20240101]!.name.rawValue
     }
 
     let response = try await http.send(request)
@@ -49,7 +50,7 @@ struct APIClient: Sendable {
   }
 
   @discardableResult
-  func authorizedExecute(_ request: HTTPRequest) async throws -> HTTPResponse {
+  func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
     var sessionManager: SessionManager {
       Dependencies[clientID].sessionManager
     }
@@ -57,12 +58,12 @@ struct APIClient: Sendable {
     let session = try await sessionManager.session()
 
     var request = request
-    request.headers["Authorization"] = "Bearer \(session.accessToken)"
+    request.headers[.authorization] = "Bearer \(session.accessToken)"
 
     return try await execute(request)
   }
 
-  func handleError(response: HTTPResponse) -> AuthError {
+  func handleError(response: Helpers.HTTPResponse) -> AuthError {
     guard let error = try? response.decoded(
       as: _RawAPIErrorResponse.self,
       decoder: configuration.decoder
@@ -105,8 +106,8 @@ struct APIClient: Sendable {
     }
   }
 
-  private func parseResponseAPIVersion(_ response: HTTPResponse) -> Date? {
-    guard let apiVersion = response.headers[API_VERSION_HEADER_NAME] else { return nil }
+  private func parseResponseAPIVersion(_ response: Helpers.HTTPResponse) -> Date? {
+    guard let apiVersion = response.headers[.apiVersionHeaderName] else { return nil }
 
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

@@ -1,5 +1,6 @@
 import Foundation
 import Helpers
+import HTTPTypes
 
 /// An error type representing various errors that can occur while invoking functions.
 public enum FunctionsError: Error, LocalizedError {
@@ -24,7 +25,7 @@ public struct FunctionInvokeOptions: Sendable {
   /// Method to use in the function invocation.
   let method: Method?
   /// Headers to be included in the function invocation.
-  let headers: HTTPHeaders
+  let headers: HTTPFields
   /// Body data to be sent with the function invocation.
   let body: Data?
   /// The Region to invoke the function in.
@@ -48,23 +49,23 @@ public struct FunctionInvokeOptions: Sendable {
     region: String? = nil,
     body: some Encodable
   ) {
-    var defaultHeaders = HTTPHeaders()
+    var defaultHeaders = HTTPFields()
 
     switch body {
     case let string as String:
-      defaultHeaders["Content-Type"] = "text/plain"
+      defaultHeaders[.contentType] = "text/plain"
       self.body = string.data(using: .utf8)
     case let data as Data:
-      defaultHeaders["Content-Type"] = "application/octet-stream"
+      defaultHeaders[.contentType] = "application/octet-stream"
       self.body = data
     default:
       // default, assume this is JSON
-      defaultHeaders["Content-Type"] = "application/json"
+      defaultHeaders[.contentType] = "application/json"
       self.body = try? JSONEncoder().encode(body)
     }
 
     self.method = method
-    self.headers = defaultHeaders.merged(with: HTTPHeaders(headers))
+    self.headers = defaultHeaders.merging(with: HTTPFields(headers))
     self.region = region
     self.query = query
   }
@@ -84,7 +85,7 @@ public struct FunctionInvokeOptions: Sendable {
     region: String? = nil
   ) {
     self.method = method
-    self.headers = HTTPHeaders(headers)
+    self.headers = HTTPFields(headers)
     self.region = region
     self.query = query
     body = nil
@@ -98,7 +99,7 @@ public struct FunctionInvokeOptions: Sendable {
     case delete = "DELETE"
   }
 
-  var httpMethod: HTTPMethod? {
+  var httpMethod: HTTPTypes.HTTPRequest.Method? {
     switch method {
     case .get:
       .get

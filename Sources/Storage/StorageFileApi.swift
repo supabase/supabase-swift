@@ -1,5 +1,6 @@
 import Foundation
 import Helpers
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -44,21 +45,21 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   }
 
   private func _uploadOrUpdate(
-    method: HTTPMethod,
+    method: HTTPTypes.HTTPRequest.Method,
     path: String,
     formData: MultipartFormData,
     options: FileOptions?
   ) async throws -> FileUploadResponse {
     let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPHeaders($0) } ?? HTTPHeaders()
+    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
 
     let metadata = options.metadata
 
     if method == .post {
-      headers.update(name: "x-upsert", value: "\(options.upsert)")
+      headers[.xUpsert] = "\(options.upsert)"
     }
 
-    headers["duplex"] = options.duplex
+    headers[.duplex] = options.duplex
 
     if let metadata {
       formData.append(encodeMetadata(metadata), withName: "metadata")
@@ -529,9 +530,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let url: URL
     }
 
-    var headers = HTTPHeaders()
+    var headers = HTTPFields()
     if let upsert = options?.upsert, upsert {
-      headers["x-upsert"] = "true"
+      headers[.xUpsert] = "true"
     }
 
     let response = try await execute(
@@ -625,10 +626,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
     let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPHeaders($0) } ?? HTTPHeaders()
+    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
 
-    headers["x-upsert"] = "\(options.upsert)"
-    headers["duplex"] = options.duplex
+    headers[.xUpsert] = "\(options.upsert)"
+    headers[.duplex] = options.duplex
 
     if let metadata = options.metadata {
       formData.append(encodeMetadata(metadata), withName: "metadata")
@@ -666,4 +667,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let cleanedPath = trimmedPath.replacingOccurrences(of: "/+", with: "/", options: .regularExpression)
     return cleanedPath
   }
+}
+
+extension HTTPField.Name {
+  static let duplex = Self("duplex")!
+  static let xUpsert = Self("x-upsert")!
 }
