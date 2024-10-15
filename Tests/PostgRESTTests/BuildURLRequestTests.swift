@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Helpers
 import SnapshotTesting
 import XCTest
@@ -51,13 +52,15 @@ final class BuildURLRequestTests: XCTestCase {
       schema: nil,
       headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
       logger: nil,
-      fetch: { request in
+      fetch: { request, body in
         guard let runningTestCase = await runningTestCase.value else {
           XCTFail("execute called without a runningTestCase set.")
-          return (Data(), URLResponse.empty())
+          return (Data(), HTTPResponse.empty())
         }
 
         await MainActor.run { [runningTestCase] in
+          var request = URLRequest(httpRequest: request)!
+          request.httpBody = body
           assertSnapshot(
             of: request,
             as: .curl,
@@ -69,7 +72,7 @@ final class BuildURLRequestTests: XCTestCase {
           )
         }
 
-        return (Data(), URLResponse.empty())
+        return (Data(), HTTPResponse.empty())
       },
       encoder: encoder
     )
@@ -243,21 +246,8 @@ final class BuildURLRequestTests: XCTestCase {
   }
 }
 
-extension URLResponse {
-  // Windows and Linux don't have the ability to empty initialize a URLResponse like `URLResponse()`
-  // so
-  // We provide a function that can give us the right value on an platform.
-  // See https://github.com/apple/swift-corelibs-foundation/pull/4778
-  fileprivate static func empty() -> URLResponse {
-    #if os(Windows) || os(Linux)
-      URLResponse(
-        url: .init(string: "https://supabase.com")!,
-        mimeType: nil,
-        expectedContentLength: 0,
-        textEncodingName: nil
-      )
-    #else
-      URLResponse()
-    #endif
+extension HTTPResponse {
+  fileprivate static func empty() -> Self {
+    HTTPResponse(status: .ok)
   }
 }

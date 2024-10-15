@@ -5,17 +5,24 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
-@testable import Auth
 import ConcurrencyExtras
 import CustomDump
-@testable import Helpers
+import HTTPTypes
 import InlineSnapshotTesting
 import TestHelpers
 import XCTest
 
+@testable import Auth
+@testable import Helpers
+
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
+
+struct Response {
+  var data: Data
+  var response: HTTPResponse
+}
 
 final class AuthClientTests: XCTestCase {
   var sessionManager: SessionManager!
@@ -79,7 +86,7 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOut() async throws {
-    sut = makeSUT { _ in
+    sut = makeSUT { _, _ in
       .stub()
     }
 
@@ -108,7 +115,7 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
-    sut = makeSUT { _ in
+    sut = makeSUT { _, _ in
       .stub()
     }
 
@@ -121,12 +128,12 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
-    sut = makeSUT { _ in
+    sut = makeSUT { _, _ in
       throw AuthError.api(
         message: "",
         errorCode: .unknown,
         underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+        underlyingResponse: HTTPResponse(status: .init(code: 404))
       )
     }
 
@@ -152,12 +159,12 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
-    sut = makeSUT { _ in
+    sut = makeSUT { _, _ in
       throw AuthError.api(
         message: "",
         errorCode: .invalidCredentials,
         underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
+        underlyingResponse: HTTPResponse(status: .init(code: 401))
       )
     }
 
@@ -183,12 +190,12 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutShouldRemoveSessionIf403Returned() async throws {
-    sut = makeSUT { _ in
+    sut = makeSUT { _, _ in
       throw AuthError.api(
         message: "",
         errorCode: .invalidCredentials,
         underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 403, httpVersion: nil, headerFields: nil)!
+        underlyingResponse: HTTPResponse(status: .init(code: 403))
       )
     }
 
@@ -216,7 +223,7 @@ final class AuthClientTests: XCTestCase {
   func testSignInAnonymously() async throws {
     let session = Session(fromMockNamed: "anonymous-sign-in-response")
 
-    let sut = makeSUT { _ in
+    let sut = makeSUT { _, _ in
       .stub(fromFileName: "anonymous-sign-in-response")
     }
 
@@ -236,7 +243,7 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignInWithOAuth() async throws {
-    let sut = makeSUT { _ in
+    let sut = makeSUT { _, _ in
       .stub(fromFileName: "session")
     }
 
@@ -259,7 +266,7 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testGetLinkIdentityURL() async throws {
-    let sut = makeSUT { _ in
+    let sut = makeSUT { _, _ in
       .stub(
         """
         {
@@ -284,7 +291,7 @@ final class AuthClientTests: XCTestCase {
 
   func testLinkIdentity() async throws {
     let url = "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
-    let sut = makeSUT { _ in
+    let sut = makeSUT { _, _ in
       .stub(
         """
         {
@@ -307,7 +314,7 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testAdminListUsers() async throws {
-    let sut = makeSUT { _ in
+    let sut = makeSUT { _, _ in
       .stub(
         fromFileName: "list-users-response",
         headers: [
@@ -324,7 +331,7 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testAdminListUsers_noNextPage() async throws {
-    let sut = makeSUT { _ in
+    let sut = makeSUT { _, _ in
       .stub(
         fromFileName: "list-users-response",
         headers: [
@@ -341,20 +348,20 @@ final class AuthClientTests: XCTestCase {
   }
 
   private func makeSUT(
-    fetch: ((URLRequest) async throws -> HTTPResponse)? = nil
+    fetch: ((HTTPRequest, Data?) async throws -> Response)? = nil
   ) -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["Apikey": "dummy.api.key"],
       localStorage: storage,
       logger: nil,
-      fetch: { request in
+      fetch: { request, body in
         guard let fetch else {
           throw UnimplementedError()
         }
 
-        let response = try await fetch(request)
-        return (response.data, response.underlyingResponse)
+        let response = try await fetch(request, body)
+        return (response.data, response.response)
       }
     )
 
@@ -364,20 +371,18 @@ final class AuthClientTests: XCTestCase {
   }
 }
 
-extension HTTPResponse {
+extension Response {
   static func stub(
     _ body: String = "",
     code: Int = 200,
     headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: body.data(using: .utf8)!,
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
+  ) -> Self {
+    .init(
+      data: Data(body.utf8),
+      response: HTTPResponse(
+        status: .init(code: code),
+        headerFields: .init(headers ?? [:])
+      )
     )
   }
 
@@ -385,15 +390,13 @@ extension HTTPResponse {
     fromFileName fileName: String,
     code: Int = 200,
     headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
+  ) -> Self {
+    .init(
       data: json(named: fileName),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
+      response: HTTPResponse(
+        status: .init(code: code),
+        headerFields: .init(headers ?? [:])
+      )
     )
   }
 
@@ -401,15 +404,13 @@ extension HTTPResponse {
     _ value: some Encodable,
     code: Int = 200,
     headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
+  ) -> Self {
+    .init(
       data: try! AuthClient.Configuration.jsonEncoder.encode(value),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
+      response: HTTPResponse(
+        status: .init(code: code),
+        headerFields: .init(headers ?? [:])
+      )
     )
   }
 }

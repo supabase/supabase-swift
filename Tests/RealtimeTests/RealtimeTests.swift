@@ -1,9 +1,11 @@
 import ConcurrencyExtras
 import CustomDump
+import HTTPTypes
 import Helpers
-@testable import Realtime
 import TestHelpers
 import XCTest
+
+@testable import Realtime
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -241,17 +243,12 @@ final class RealtimeTests: XCTestCase {
   }
 
   func testBroadcastWithHTTP() async throws {
-    await http.when {
-      $0.url.path.hasSuffix("broadcast")
-    } return: { _ in
-      HTTPResponse(
-        data: "{}".data(using: .utf8)!,
-        response: HTTPURLResponse(
-          url: self.sut.broadcastURL,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
+    await http.when { request, body in
+      request.url?.path.hasSuffix("broadcast") ?? false
+    } return: { _, _ in
+      (
+        Data("{}".utf8),
+        HTTPResponse(status: .init(code: 200))
       )
     }
 
@@ -263,7 +260,7 @@ final class RealtimeTests: XCTestCase {
 
     let request = await http.receivedRequests.last
     expectNoDifference(
-      request?.headers,
+      request?.0.headerFields,
       [
         .contentType: "application/json",
         .apiKey: "anon.api.key",
@@ -271,8 +268,8 @@ final class RealtimeTests: XCTestCase {
       ]
     )
 
-    let body = try XCTUnwrap(request?.body)
-    let json = try JSONDecoder().decode(JSONObject.self, from: body)
+    let bodyData = try XCTUnwrap(request?.bodyData)
+    let json = try JSONDecoder().decode(JSONObject.self, from: bodyData)
     expectNoDifference(
       json,
       [

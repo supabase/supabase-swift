@@ -7,8 +7,9 @@
 
 import ConcurrencyExtras
 import Foundation
-@testable import Realtime
 import XCTestDynamicOverlay
+
+@testable import Realtime
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

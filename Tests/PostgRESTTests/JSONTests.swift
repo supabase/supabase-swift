@@ -5,8 +5,9 @@
 //  Created by Guilherme Souza on 01/07/24.
 //
 
-@testable import PostgREST
 import XCTest
+
+@testable import PostgREST
 
 final class JSONTests: XCTestCase {
   func testDecodeJSON() throws {

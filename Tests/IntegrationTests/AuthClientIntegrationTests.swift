@@ -5,11 +5,13 @@
 //  Created by Guilherme Souza on 27/03/24.
 //
 
-@testable import Auth
 import ConcurrencyExtras
 import CustomDump
+import HTTPTypes
 import TestHelpers
 import XCTest
+
+@testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -55,7 +57,7 @@ final class AuthClientIntegrationTests: XCTestCase {
       let password = mockPassword()
 
       let metadata: [String: AnyJSON] = [
-        "test": .integer(42),
+        "test": .integer(42)
       ]
 
       let response = try await authClient.signUp(
@@ -231,10 +233,14 @@ final class AuthClientIntegrationTests: XCTestCase {
 
     let session = try XCTUnwrap(response.session)
 
-    var request = URLRequest(url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1/rpc/delete_user")!)
-    request.httpMethod = "POST"
-    request.setValue(DotEnv.SUPABASE_ANON_KEY, forHTTPHeaderField: "apikey")
-    request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+    let request = HTTPRequest(
+      method: .post,
+      url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1/rpc/delete_user")!,
+      headerFields: [
+        .init("apikey")!: DotEnv.SUPABASE_ANON_KEY,
+        .authorization: "Bearer \(session.accessToken)"
+      ]
+    )
 
     _ = try await URLSession.shared.data(for: request)
 

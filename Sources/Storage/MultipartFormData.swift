@@ -25,8 +25,8 @@
 //
 
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 #if canImport(MobileCoreServices)
   import MobileCoreServices
@@ -492,7 +492,10 @@ class MultipartFormData {
     }
   }
 
-  private func writeFinalBoundaryData(for bodyPart: BodyPart, to outputStream: OutputStream) throws {
+  private func writeFinalBoundaryData(
+    for bodyPart: BodyPart,
+    to outputStream: OutputStream
+  ) throws {
     if bodyPart.hasFinalBoundary {
       try write(finalBoundaryData(), to: outputStream)
     }
@@ -528,7 +531,9 @@ class MultipartFormData {
   // MARK: - Private - Content Headers
 
   private func contentHeaders(
-    withName name: String, fileName: String? = nil, mimeType: String? = nil
+    withName name: String,
+    fileName: String? = nil,
+    mimeType: String? = nil
   ) -> HTTPFields {
     var disposition = "form-data; name=\"\(name)\""
     if let fileName { disposition += "; filename=\"\(fileName)\"" }

@@ -22,9 +22,9 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     }
     .joined(separator: "")
     mutableState.withValue {
-      $0.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
+      $0.request.url?.appendQueryItems([URLQueryItem(name: "select", value: cleanedColumns)])
 
-      if let prefer = $0.request.headers[.prefer] {
+      if let prefer = $0.request.headerFields[.prefer] {
         var components = prefer.components(separatedBy: ",")
 
         if let index = components.firstIndex(where: { $0.hasPrefix("return=") }) {
@@ -33,9 +33,9 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
           components.append("return=representation")
         }
 
-        $0.request.headers[.prefer] = components.joined(separator: ",")
+        $0.request.headerFields[.prefer] = components.joined(separator: ",")
       } else {
-        $0.request.headers[.prefer] = "return=representation"
+        $0.request.headerFields[.prefer] = "return=representation"
       }
     }
     return self
@@ -59,19 +59,19 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   ) -> PostgrestTransformBuilder {
     mutableState.withValue {
       let key = referencedTable.map { "\($0).order" } ?? "order"
-      let existingOrderIndex = $0.request.query.firstIndex { $0.name == key }
+      let existingOrderIndex = $0.request.url?.queryItems.firstIndex { $0.name == key }
       let value =
         "\(column).\(ascending ? "asc" : "desc").\(nullsFirst ? "nullsfirst" : "nullslast")"
 
       if let existingOrderIndex,
-         let currentValue = $0.request.query[existingOrderIndex].value
+         let currentValue = $0.request.url?.queryItems[existingOrderIndex].value
       {
-        $0.request.query[existingOrderIndex] = URLQueryItem(
+        $0.request.url?.queryItems[existingOrderIndex] = URLQueryItem(
           name: key,
           value: "\(currentValue),\(value)"
         )
       } else {
-        $0.request.query.append(URLQueryItem(name: key, value: value))
+        $0.request.url?.queryItems.append(URLQueryItem(name: key, value: value))
       }
     }
 
@@ -85,10 +85,10 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   public func limit(_ count: Int, referencedTable: String? = nil) -> PostgrestTransformBuilder {
     mutableState.withValue {
       let key = referencedTable.map { "\($0).limit" } ?? "limit"
-      if let index = $0.request.query.firstIndex(where: { $0.name == key }) {
-        $0.request.query[index] = URLQueryItem(name: key, value: "\(count)")
+      if let index = $0.request.url?.queryItems.firstIndex(where: { $0.name == key }) {
+        $0.request.url?.queryItems[index] = URLQueryItem(name: key, value: "\(count)")
       } else {
-        $0.request.query.append(URLQueryItem(name: key, value: "\(count)"))
+        $0.request.url?.queryItems.append(URLQueryItem(name: key, value: "\(count)"))
       }
     }
     return self
@@ -113,20 +113,20 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
     let keyLimit = referencedTable.map { "\($0).limit" } ?? "limit"
 
     mutableState.withValue {
-      if let index = $0.request.query.firstIndex(where: { $0.name == keyOffset }) {
-        $0.request.query[index] = URLQueryItem(name: keyOffset, value: "\(from)")
+      if let index = $0.request.url?.queryItems.firstIndex(where: { $0.name == keyOffset }) {
+        $0.request.url?.queryItems[index] = URLQueryItem(name: keyOffset, value: "\(from)")
       } else {
-        $0.request.query.append(URLQueryItem(name: keyOffset, value: "\(from)"))
+        $0.request.url?.queryItems.append(URLQueryItem(name: keyOffset, value: "\(from)"))
       }
 
       // Range is inclusive, so add 1
-      if let index = $0.request.query.firstIndex(where: { $0.name == keyLimit }) {
-        $0.request.query[index] = URLQueryItem(
+      if let index = $0.request.url?.queryItems.firstIndex(where: { $0.name == keyLimit }) {
+        $0.request.url?.queryItems[index] = URLQueryItem(
           name: keyLimit,
           value: "\(to - from + 1)"
         )
       } else {
-        $0.request.query.append(URLQueryItem(
+        $0.request.url?.queryItems.append(URLQueryItem(
           name: keyLimit,
           value: "\(to - from + 1)"
         ))
@@ -141,7 +141,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   /// Query result must be one row (e.g. using `.limit(1)`), otherwise this returns an error.
   public func single() -> PostgrestTransformBuilder {
     mutableState.withValue {
-      $0.request.headers[.accept] = "application/vnd.pgrst.object+json"
+      $0.request.headerFields[.accept] = "application/vnd.pgrst.object+json"
     }
     return self
   }
@@ -149,7 +149,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   ///  Return `value` as a string in CSV format.
   public func csv() -> PostgrestTransformBuilder {
     mutableState.withValue {
-      $0.request.headers[.accept] = "text/csv"
+      $0.request.headerFields[.accept] = "text/csv"
     }
     return self
   }
@@ -157,7 +157,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
   /// Return `value` as an object in [GeoJSON](https://geojson.org) format.
   public func geojson() -> PostgrestTransformBuilder {
     mutableState.withValue {
-      $0.request.headers[.accept] = "application/geo+json"
+      $0.request.headerFields[.accept] = "application/geo+json"
     }
     return self
   }
@@ -194,8 +194,8 @@ public class PostgrestTransformBuilder: PostgrestBuilder {
       ]
       .compactMap { $0 }
       .joined(separator: "|")
-      let forMediaType = $0.request.headers[.accept] ?? "application/json"
-      $0.request.headers[.accept] = "application/vnd.pgrst.plan+\"\(format)\"; for=\(forMediaType); options=\(options);"
+      let forMediaType = $0.request.headerFields[.accept] ?? "application/json"
+      $0.request.headerFields[.accept] = "application/vnd.pgrst.plan+\"\(format)\"; for=\(forMediaType); options=\(options);"
     }
 
     return self

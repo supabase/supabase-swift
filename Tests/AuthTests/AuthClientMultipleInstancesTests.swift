@@ -5,9 +5,10 @@
 //  Created by Guilherme Souza on 05/07/24.
 //
 
-@testable import Auth
 import TestHelpers
 import XCTest
+
+@testable import Auth
 
 final class AuthClientMultipleInstancesTests: XCTestCase {
   func testMultipleAuthClientInstances() {

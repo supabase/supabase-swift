@@ -1,8 +1,10 @@
 import CustomDump
 import Foundation
-@testable import Storage
+import HTTPTypes
 import XCTest
 import XCTestDynamicOverlay
+
+@testable import Storage
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -13,8 +15,7 @@ final class SupabaseStorageTests: XCTestCase {
   let bucketId = "tests"
 
   var sessionMock = StorageHTTPSession(
-    fetch: unimplemented("StorageHTTPSession.fetch"),
-    upload: unimplemented("StorageHTTPSession.upload")
+    fetch: unimplemented("StorageHTTPSession.fetch")
   )
 
   func testGetPublicURL() async throws {
@@ -53,9 +54,9 @@ final class SupabaseStorageTests: XCTestCase {
   }
 
   func testCreateSignedURLs() async throws {
-    sessionMock.fetch = { _ in
+    sessionMock.fetch = { _, _ in
       (
-        """
+        Data("""
         [
           {
             "signedURL": "/sign/file1.txt?token=abc.def.ghi"
@@ -64,13 +65,9 @@ final class SupabaseStorageTests: XCTestCase {
             "signedURL": "/sign/file2.txt?token=abc.def.ghi"
           },
         ]
-        """.data(using: .utf8)!,
-        HTTPURLResponse(
-          url: self.supabaseURL,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
+        """.utf8
+        ),
+        HTTPResponse(status: .init(code: 200))
       )
     }
 

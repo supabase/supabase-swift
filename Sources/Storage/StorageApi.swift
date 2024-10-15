@@ -1,6 +1,6 @@
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -30,28 +30,28 @@ public class StorageApi: @unchecked Sendable {
   }
 
   @discardableResult
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  func execute(for request: HTTPRequest, from body: Data?) async throws -> (Data, HTTPResponse) {
     var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+    request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
 
-    let response = try await http.send(request)
+    let (data, response) = try await http.send(for: request, from: body)
 
-    guard (200 ..< 300).contains(response.statusCode) else {
+    guard (200 ..< 300).contains(response.status.code) else {
       if let error = try? configuration.decoder.decode(
         StorageError.self,
-        from: response.data
+        from: data
       ) {
         throw error
       }
 
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
+      throw HTTPError(data: data, response: response)
     }
 
-    return response
+    return (data, response)
   }
 }
 
-extension Helpers.HTTPRequest {
+extension HTTPRequest {
   init(
     url: URL,
     method: HTTPTypes.HTTPRequest.Method,
@@ -67,12 +67,10 @@ extension Helpers.HTTPRequest {
     if headers[.cacheControl] == nil {
       headers[.cacheControl] = "max-age=\(options.cacheControl)"
     }
-    try self.init(
-      url: url,
+    self.init(
       method: method,
-      query: query,
-      headers: headers,
-      body: formData.encode()
+      url: url.appendingQueryItems(query),
+      headerFields: headers
     )
   }
 }
