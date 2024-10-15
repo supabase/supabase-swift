@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -181,12 +182,7 @@ public enum AuthError: LocalizedError, Equatable {
       message: message,
       errorCode: .unknown,
       underlyingData: (try? AuthClient.Configuration.jsonEncoder.encode(error)) ?? Data(),
-      underlyingResponse: HTTPURLResponse(
-        url: URL(string: "http://localhost")!,
-        statusCode: error.code ?? 500,
-        httpVersion: nil,
-        headerFields: nil
-      )!
+      underlyingResponse: HTTPResponse(status: .init(code: error.code ?? 500))
     )
   }
 
@@ -236,7 +232,7 @@ public enum AuthError: LocalizedError, Equatable {
     message: String,
     errorCode: ErrorCode,
     underlyingData: Data,
-    underlyingResponse: HTTPURLResponse
+    underlyingResponse: HTTPResponse
   )
 
   /// Error thrown when an error happens during PKCE grant flow.

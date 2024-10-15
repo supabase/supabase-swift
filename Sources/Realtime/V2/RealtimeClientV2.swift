@@ -7,6 +7,8 @@
 
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
+import HTTPTypesFoundation
 import Helpers
 
 #if canImport(FoundationNetworking)
@@ -82,7 +84,13 @@ public final class RealtimeClientV2: Sendable {
         options: options
       ),
       http: HTTPClient(
-        fetch: options.fetch ?? { try await URLSession.shared.data(for: $0) },
+        fetch: options.fetch ?? { request, body in
+          if let body {
+            return try await URLSession.shared.upload(for: request, from: body)
+          } else {
+            return try await URLSession.shared.data(for: request)
+          }
+        },
         interceptors: interceptors
       )
     )

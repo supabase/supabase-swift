@@ -20,9 +20,9 @@
 
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Helpers
 import Swift
-import HTTPTypes
 
 /// Container class of bindings to the channel
 struct Binding {
@@ -95,13 +95,13 @@ public struct RealtimeChannelOptions {
     [
       "config": [
         "presence": [
-          "key": presenceKey ?? "",
+          "key": presenceKey ?? ""
         ],
         "broadcast": [
           "ack": broadcastAcknowledge,
           "self": broadcastSelf,
         ],
-      ],
+      ]
     ]
   }
 }
@@ -378,7 +378,7 @@ public class RealtimeChannel {
 
     var accessTokenPayload: Payload = [:]
     var config: Payload = [
-      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? [],
+      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? []
     ]
 
     config["broadcast"] = broadcast
@@ -739,19 +739,22 @@ public class RealtimeChannel {
           "topic": subTopic,
           "payload": payload,
           "event": event as Any,
-        ],
+        ]
       ]
 
       do {
-        let request = try HTTPRequest(
-          url: broadcastEndpointURL,
+        let request = HTTPRequest(
           method: .post,
-          headers: HTTPFields(headers.compactMapValues { $0 }),
-          body: JSONSerialization.data(withJSONObject: body)
+          url: broadcastEndpointURL,
+          headerFields: HTTPFields(headers.compactMapValues { $0 })
         )
 
-        let response = try await socket?.http.send(request)
-        guard let response, 200 ..< 300 ~= response.statusCode else {
+        guard let socket else { return .error }
+        let (_, response) = try await socket.http.send(
+          for: request,
+          from: JSONSerialization.data(withJSONObject: body)
+        )
+        guard 200 ..< 300 ~= response.status.code else {
           return .error
         }
         return .ok

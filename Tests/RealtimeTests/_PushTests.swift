@@ -6,9 +6,10 @@
 //
 
 import ConcurrencyExtras
-@testable import Realtime
 import TestHelpers
 import XCTest
+
+@testable import Realtime
 
 final class _PushTests: XCTestCase {
   var ws: MockWebSocketClient!

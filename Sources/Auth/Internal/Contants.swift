@@ -18,7 +18,7 @@ extension HTTPField.Name {
 }
 
 let API_VERSIONS: [APIVersion.Name: APIVersion] = [
-  ._20240101: ._20240101,
+  ._20240101: ._20240101
 ]
 
 struct APIVersion {

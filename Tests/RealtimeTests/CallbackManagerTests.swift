@@ -8,8 +8,9 @@
 import ConcurrencyExtras
 import CustomDump
 import Helpers
-@testable import Realtime
 import XCTest
+
+@testable import Realtime
 
 final class CallbackManagerTests: XCTestCase {
   func testIntegration() {
@@ -52,13 +53,15 @@ final class CallbackManagerTests: XCTestCase {
     let callbackManager = CallbackManager()
     XCTAssertNoLeak(callbackManager)
 
-    let changes = [PostgresJoinConfig(
-      event: .update,
-      schema: "public",
-      table: "users",
-      filter: nil,
-      id: 1
-    )]
+    let changes = [
+      PostgresJoinConfig(
+        event: .update,
+        schema: "public",
+        table: "users",
+        filter: nil,
+        id: 1
+      )
+    ]
 
     callbackManager.setServerChanges(changes: changes)
 

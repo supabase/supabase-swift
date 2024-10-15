@@ -1,10 +1,11 @@
-@testable import Auth
 import CustomDump
-@testable import Functions
 import IssueReporting
+import XCTest
+
+@testable import Auth
+@testable import Functions
 @testable import Realtime
 @testable import Supabase
-import XCTest
 
 final class AuthLocalStorageMock: AuthLocalStorage {
   func store(key _: String, value _: Data) throws {}

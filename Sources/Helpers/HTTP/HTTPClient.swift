@@ -6,51 +6,55 @@
 //
 
 import Foundation
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
 package protocol HTTPClientType: Sendable {
-  func send(_ request: HTTPRequest) async throws -> HTTPResponse
+  func send(for request: HTTPRequest, from bodyData: Data?) async throws -> (Data, HTTPResponse)
 }
 
 package actor HTTPClient: HTTPClientType {
-  let fetch: @Sendable (URLRequest) async throws -> (Data, URLResponse)
+  let fetch: @Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse)
   let interceptors: [any HTTPClientInterceptor]
 
   package init(
-    fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse),
+    fetch: @escaping @Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse),
     interceptors: [any HTTPClientInterceptor]
   ) {
     self.fetch = fetch
     self.interceptors = interceptors
   }
 
-  package func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-    var next: @Sendable (HTTPRequest) async throws -> HTTPResponse = { _request in
-      let urlRequest = _request.urlRequest
-      let (data, response) = try await self.fetch(urlRequest)
-      guard let httpURLResponse = response as? HTTPURLResponse else {
-        throw URLError(.badServerResponse)
+  package func send(
+    for request: HTTPRequest,
+    from bodyData: Data?
+  ) async throws -> (Data, HTTPResponse) {
+    var next: @Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse) = { _request, _bodyData in
+      var _request = _request
+      if _bodyData != nil, _request.headerFields[.contentType] == nil {
+        _request.headerFields[.contentType] = "application/json"
       }
-      return HTTPResponse(data: data, response: httpURLResponse)
+      return try await self.fetch(_request, _bodyData)
     }
 
     for interceptor in interceptors.reversed() {
       let tmp = next
       next = {
-        try await interceptor.intercept($0, next: tmp)
+        try await interceptor.intercept(for: $0, from: $1, next: tmp)
       }
     }
 
-    return try await next(request)
+    return try await next(request, bodyData)
   }
 }
 
 package protocol HTTPClientInterceptor: Sendable {
   func intercept(
-    _ request: HTTPRequest,
-    next: @Sendable (HTTPRequest) async throws -> HTTPResponse
-  ) async throws -> HTTPResponse
+    for request: HTTPRequest,
+    from bodyData: Data?,
+    next: @Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse)
+  ) async throws -> (Data, HTTPResponse)
 }

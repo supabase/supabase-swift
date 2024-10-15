@@ -1,6 +1,6 @@
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 struct NoParams: Encodable {}
 
@@ -27,14 +27,14 @@ public final class PostgrestRpcBuilder: PostgrestBuilder {
       if params is NoParams {
         // noop
       } else {
-        $0.request.body = try configuration.encoder.encode(params)
+        $0.body = try configuration.encoder.encode(params)
       }
 
       if let count {
-        if let prefer = $0.request.headers[.prefer] {
-          $0.request.headers[.prefer] = "\(prefer),count=\(count.rawValue)"
+        if let prefer = $0.request.headerFields[.prefer] {
+          $0.request.headerFields[.prefer] = "\(prefer),count=\(count.rawValue)"
         } else {
-          $0.request.headers[.prefer] = "count=\(count.rawValue)"
+          $0.request.headerFields[.prefer] = "count=\(count.rawValue)"
         }
       }
     }

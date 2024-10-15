@@ -14,7 +14,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
       headers: [
-        "Authorization": "Bearer \(DotEnv.SUPABASE_SERVICE_ROLE_KEY)",
+        "Authorization": "Bearer \(DotEnv.SUPABASE_SERVICE_ROLE_KEY)"
       ],
       logger: nil
     )
@@ -56,7 +56,10 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testGetPublicURLWithCustomDownload() throws {
-    let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath, download: "test.jpg")
+    let publicURL = try storage.from(bucketName).getPublicURL(
+      path: uploadPath,
+      download: "test.jpg"
+    )
     XCTAssertEqual(
       publicURL.absoluteString,
       "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download=test.jpg"
@@ -85,7 +88,11 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testSignURL_withCustomFilenameForDownload() async throws {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    let url = try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000, download: "test.jpg")
+    let url = try await storage.from(bucketName).createSignedURL(
+      path: uploadPath,
+      expiresIn: 2000,
+      download: "test.jpg"
+    )
     XCTAssertTrue(
       url.absoluteString.contains("\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
     )
@@ -192,15 +199,26 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testCanUploadWithSignedURLForUpload() async throws {
     let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
 
-    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
+    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(
+      res.path,
+      token: res.token,
+      data: file
+    )
     XCTAssertEqual(uploadRes.path, uploadPath)
   }
 
   func testCanUploadOverwritingFilesWithSignedURL() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath, options: CreateSignedUploadURLOptions(upsert: true))
-    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
+    let res = try await storage.from(bucketName).createSignedUploadURL(
+      path: uploadPath,
+      options: CreateSignedUploadURLOptions(upsert: true)
+    )
+    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(
+      res.path,
+      token: res.token,
+      data: file
+    )
     XCTAssertEqual(uploadRes.path, uploadPath)
   }
 

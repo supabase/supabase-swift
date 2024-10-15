@@ -1,7 +1,7 @@
 import ConcurrencyExtras
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -14,17 +14,29 @@ public class PostgrestBuilder: @unchecked Sendable {
   let http: any HTTPClientType
 
   struct MutableState {
-    var request: Helpers.HTTPRequest
+    var request: HTTPRequest
+    var body: Data?
 
     /// The options for fetching data from the PostgREST server.
     var fetchOptions: FetchOptions
+
+    init(
+      request: HTTPRequest,
+      body: Data?,
+      fetchOptions: FetchOptions
+    ) {
+      self.request = request
+      self.body = body
+      self.fetchOptions = fetchOptions
+    }
   }
 
   let mutableState: LockIsolated<MutableState>
 
   init(
     configuration: PostgrestClient.Configuration,
-    request: Helpers.HTTPRequest
+    request: HTTPRequest,
+    body: Data?
   ) {
     self.configuration = configuration
 
@@ -38,6 +50,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     mutableState = LockIsolated(
       MutableState(
         request: request,
+        body: body,
         fetchOptions: FetchOptions()
       )
     )
@@ -46,7 +59,8 @@ public class PostgrestBuilder: @unchecked Sendable {
   convenience init(_ other: PostgrestBuilder) {
     self.init(
       configuration: other.configuration,
-      request: other.mutableState.value.request
+      request: other.mutableState.value.request,
+      body: other.mutableState.value.body
     )
   }
 
@@ -60,7 +74,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   @discardableResult
   internal func setHeader(name: HTTPField.Name, value: String) -> Self {
     mutableState.withValue {
-      $0.request.headers[name] = value
+      $0.request.headerFields[name] = value
     }
     return self
   }
@@ -98,7 +112,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     options: FetchOptions,
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    let request = mutableState.withValue {
+    let (request, body) = mutableState.withValue {
       $0.fetchOptions = options
 
       if $0.fetchOptions.head {
@@ -106,41 +120,41 @@ public class PostgrestBuilder: @unchecked Sendable {
       }
 
       if let count = $0.fetchOptions.count {
-        if let prefer = $0.request.headers[.prefer] {
-          $0.request.headers[.prefer] = "\(prefer),count=\(count.rawValue)"
+        if let prefer = $0.request.headerFields[.prefer] {
+          $0.request.headerFields[.prefer] = "\(prefer),count=\(count.rawValue)"
         } else {
-          $0.request.headers[.prefer] = "count=\(count.rawValue)"
+          $0.request.headerFields[.prefer] = "count=\(count.rawValue)"
         }
       }
 
-      if $0.request.headers[.accept] == nil {
-        $0.request.headers[.accept] = "application/json"
+      if $0.request.headerFields[.accept] == nil {
+        $0.request.headerFields[.accept] = "application/json"
       }
-      $0.request.headers[.contentType] = "application/json"
+      $0.request.headerFields[.contentType] = "application/json"
 
       if let schema = configuration.schema {
         if $0.request.method == .get || $0.request.method == .head {
-          $0.request.headers[.acceptProfile] = schema
+          $0.request.headerFields[.acceptProfile] = schema
         } else {
-          $0.request.headers[.contentProfile] = schema
+          $0.request.headerFields[.contentProfile] = schema
         }
       }
 
-      return $0.request
+      return ($0.request, $0.body)
     }
 
-    let response = try await http.send(request)
+    let (data, response) = try await http.send(for: request, from: body)
 
-    guard 200 ..< 300 ~= response.statusCode else {
-      if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
+    guard 200 ..< 300 ~= response.status.code else {
+      if let error = try? configuration.decoder.decode(PostgrestError.self, from: data) {
         throw error
       }
 
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
+      throw HTTPError(data: data, response: response)
     }
 
-    let value = try decode(response.data)
-    return PostgrestResponse(data: response.data, response: response.underlyingResponse, value: value)
+    let value = try decode(data)
+    return PostgrestResponse(data: data, response: response, value: value)
   }
 }
 

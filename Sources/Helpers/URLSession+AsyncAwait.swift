@@ -1,10 +1,60 @@
+#if compiler(<6)
+  import HTTPTypes
+  import HTTPTypesFoundation
+
+  #if canImport(FoundationNetworking)
+    import FoundationNetworking
+  #endif
+
+  private enum HTTPTypeConversionError: Error {
+    case failedToConvertHTTPRequestToURLRequest
+    case failedToConvertURLResponseToHTTPResponse
+  }
+
+  extension URLSession {
+    /// Convenience method to load data using an `HTTPRequest`; creates and resumes a `URLSessionDataTask` internally.
+    ///
+    /// - Parameter request: The `HTTPRequest` for which to load data.
+    /// - Returns: Data and response.
+    public func data(for request: HTTPRequest) async throws -> (Data, HTTPResponse) {
+      guard let urlRequest = URLRequest(httpRequest: request) else {
+        throw HTTPTypeConversionError.failedToConvertHTTPRequestToURLRequest
+      }
+      let (data, urlResponse) = try await self.data(for: urlRequest)
+      guard let response = (urlResponse as? HTTPURLResponse)?.httpResponse else {
+        throw HTTPTypeConversionError.failedToConvertURLResponseToHTTPResponse
+      }
+      return (data, response)
+    }
+
+    /// Convenience method to upload data using an `HTTPRequest`, creates and resumes a `URLSessionUploadTask` internally.
+    ///
+    /// - Parameter request: The `HTTPRequest` for which to upload data.
+    /// - Parameter bodyData: Data to upload.
+    /// - Returns: Data and response.
+    public func upload(
+      for request: HTTPRequest,
+      from bodyData: Data
+    ) async throws -> (Data, HTTPResponse) {
+      guard let urlRequest = URLRequest(httpRequest: request) else {
+        throw HTTPTypeConversionError.failedToConvertHTTPRequestToURLRequest
+      }
+      let (data, urlResponse) = try await self.upload(for: urlRequest, from: bodyData)
+      guard let response = (urlResponse as? HTTPURLResponse)?.httpResponse else {
+        throw HTTPTypeConversionError.failedToConvertURLResponseToHTTPResponse
+      }
+      return (data, response)
+    }
+  }
+#endif
+
 #if canImport(FoundationNetworking) && compiler(<6)
   import Foundation
   import FoundationNetworking
 
   /// A set of errors that can be returned from the
   /// polyfilled extensions on ``URLSession``
-  public enum URLSessionPolyfillError: Error {
+  private enum URLSessionPolyfillError: Error {
     /// Returned when no data and no error are provided.
     case noDataNoErrorReturned
   }
@@ -77,25 +127,31 @@
     ) async throws -> (Data, URLResponse) {
       let helper = URLSessionTaskCancellationHelper()
 
-      return try await withTaskCancellationHandler(operation: {
-        try await withCheckedThrowingContinuation { continuation in
-          let task = dataTask(with: request, completionHandler: { data, response, error in
-            if let error {
-              continuation.resume(throwing: error)
-            } else if let data, let response {
-              continuation.resume(returning: (data, response))
-            } else {
-              continuation.resume(throwing: URLSessionPolyfillError.noDataNoErrorReturned)
-            }
-          })
+      return try await withTaskCancellationHandler(
+        operation: {
+          try await withCheckedThrowingContinuation { continuation in
+            let task = dataTask(
+              with: request,
+              completionHandler: { data, response, error in
+                if let error {
+                  continuation.resume(throwing: error)
+                } else if let data, let response {
+                  continuation.resume(returning: (data, response))
+                } else {
+                  continuation.resume(throwing: URLSessionPolyfillError.noDataNoErrorReturned)
+                }
+              }
+            )
 
-          helper.register(task)
+            helper.register(task)
 
-          task.resume()
+            task.resume()
+          }
+        },
+        onCancel: {
+          helper.cancel()
         }
-      }, onCancel: {
-        helper.cancel()
-      })
+      )
     }
 
     public func upload(
@@ -105,29 +161,32 @@
     ) async throws -> (Data, URLResponse) {
       let helper = URLSessionTaskCancellationHelper()
 
-      return try await withTaskCancellationHandler(operation: {
-        try await withCheckedThrowingContinuation { continuation in
-          let task = uploadTask(
-            with: request,
-            from: bodyData,
-            completionHandler: { data, response, error in
-              if let error {
-                continuation.resume(throwing: error)
-              } else if let data, let response {
-                continuation.resume(returning: (data, response))
-              } else {
-                continuation.resume(throwing: URLSessionPolyfillError.noDataNoErrorReturned)
+      return try await withTaskCancellationHandler(
+        operation: {
+          try await withCheckedThrowingContinuation { continuation in
+            let task = uploadTask(
+              with: request,
+              from: bodyData,
+              completionHandler: { data, response, error in
+                if let error {
+                  continuation.resume(throwing: error)
+                } else if let data, let response {
+                  continuation.resume(returning: (data, response))
+                } else {
+                  continuation.resume(throwing: URLSessionPolyfillError.noDataNoErrorReturned)
+                }
               }
-            }
-          )
+            )
 
-          helper.register(task)
+            helper.register(task)
 
-          task.resume()
+            task.resume()
+          }
+        },
+        onCancel: {
+          helper.cancel()
         }
-      }, onCancel: {
-        helper.cancel()
-      })
+      )
     }
   }
 

@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
-@testable import Auth
 import ConcurrencyExtras
 import CustomDump
 import Helpers
@@ -13,6 +12,8 @@ import InlineSnapshotTesting
 import TestHelpers
 import XCTest
 import XCTestDynamicOverlay
+
+@testable import Auth
 
 final class SessionManagerTests: XCTestCase {
   var http: HTTPClientMock!
@@ -78,11 +79,12 @@ final class SessionManagerTests: XCTestCase {
       let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
       await http.when(
-        { $0.url.path.contains("/token") },
-        return: { _ in
+        { request, _ in request.url?.path.contains("/token") ?? false },
+        return: { _, _ in
           refreshSessionCallCount.withValue { $0 += 1 }
           let session = await refreshSessionStream.first(where: { _ in true })!
-          return .stub(session)
+          let response = Response.stub(session)
+          return (response.data, response.response)
         }
       )
 
