@@ -84,7 +84,7 @@ private actor LiveSessionManager {
                 url: configuration.url.appendingPathComponent("token"),
                 method: .post,
                 query: [
-                  URLQueryItem(name: "grant_type", value: "refresh_token"),
+                  URLQueryItem(name: "grant_type", value: "refresh_token")
                 ],
                 body: configuration.encoder.encode(
                   UserCredentials(refreshToken: refreshToken)
@@ -97,10 +97,13 @@ private actor LiveSessionManager {
             eventEmitter.emit(.tokenRefreshed, session: session)
 
             return session
+          } catch let error as RetryableError {
+            logger?.debug("Refresh token failed with a retryable error: \(error)")
+            throw error
           } catch {
-            logger?.debug("Failed to refresh token: \(error)")
+            logger?.debug("Refresh token failed with a non-retryable error: \(error)")
+
             remove()
-            eventEmitter.emit(.signedOut, session: nil)
 
             throw error
           }
@@ -146,7 +149,9 @@ private actor LiveSessionManager {
       }
 
       let expiresInTicks = Int((session.expiresAt - now) / autoRefreshTickDuration)
-      logger?.debug("access token expires in \(expiresInTicks) ticks, a tick lasts \(autoRefreshTickDuration)s, refresh threshold is \(autoRefreshTickThreshold) ticks")
+      logger?.debug(
+        "access token expires in \(expiresInTicks) ticks, a tick lasts \(autoRefreshTickDuration)s, refresh threshold is \(autoRefreshTickThreshold) ticks"
+      )
 
       if expiresInTicks <= autoRefreshTickThreshold {
         _ = try? await refreshSession(session.refreshToken)
