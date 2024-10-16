@@ -20,12 +20,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     return true
   }
 
-  func application(_: UIApplication, open url: URL, options _: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+  func application(
+    _: UIApplication, open url: URL, options _: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
     supabase.handle(url)
     return true
   }
 
-  func application(_: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options _: UIScene.ConnectionOptions) -> UISceneConfiguration {
+  func application(
+    _: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
+    options _: UIScene.ConnectionOptions
+  ) -> UISceneConfiguration {
     let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
     configuration.delegateClass = SceneDelegate.self
     return configuration
@@ -53,8 +58,8 @@ struct ExamplesApp: App {
 }
 
 let supabase = SupabaseClient(
-  supabaseURL: Secrets.supabaseURL,
-  supabaseKey: Secrets.supabaseAnonKey,
+  supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
+  supabaseKey: SupabaseConfig["SUPABASE_ANON_KEY"]!,
   options: .init(
     auth: .init(redirectToURL: Constants.redirectToURL),
     global: .init(

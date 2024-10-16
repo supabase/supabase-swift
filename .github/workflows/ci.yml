@@ -20,7 +20,7 @@ jobs:
     strategy:
       matrix:
         command: [test, '']
-        platform: [iOS, macOS, tvOS, watchOS, visionOS, macCatalyst]
+        platform: [IOS, MAC_CATALYST, MACOS, TVOS, VISIONOS, WATCHOS]
         xcode: [15.4, '16.0']
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +39,7 @@ jobs:
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds 
         uses: chetan/git-restore-mtime-action@v2
+      - run: make dot-env
       - name: Debug
         run: make COMMAND="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
       - name: Release
@@ -100,9 +101,9 @@ jobs:
       - name: Update mtime for incremental builds
         uses: chetan/git-restore-mtime-action@v2
       - name: Examples
-        run: make SCHEME="Examples" build-example
+        run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="Examples" XCODEBUILD_ARGUMENT=build xcodebuild
       - name: SlackClone
-        run: make SCHEME="SlackClone" build-example
+        run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="SlackClone" XCODEBUILD_ARGUMENT=build xcodebuild
       - name: UserManagement
-        run: make SCHEME="UserManagement" build-example
+        run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="UserManagement" XCODEBUILD_ARGUMENT=build xcodebuild
       
