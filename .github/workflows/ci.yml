@@ -39,6 +39,7 @@ jobs:
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds 
         uses: chetan/git-restore-mtime-action@v2
+      - run: make dot-env
       - name: Debug
         run: make COMMAND="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
       - name: Release
