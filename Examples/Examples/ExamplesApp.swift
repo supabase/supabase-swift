@@ -23,8 +23,8 @@ struct ExamplesApp: App {
 }
 
 let supabase = SupabaseClient(
-  supabaseURL: Secrets.supabaseURL,
-  supabaseKey: Secrets.supabaseAnonKey,
+  supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
+  supabaseKey: SupabaseConfig["SUPABASE_ANON_KEY"]!,
   options: .init(
     auth: .init(redirectToURL: Constants.redirectToURL),
     global: .init(

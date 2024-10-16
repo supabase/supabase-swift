@@ -20,7 +20,7 @@
 		794C61D62BAD1E12000E6B0F /* UserIdentityList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794C61D52BAD1E12000E6B0F /* UserIdentityList.swift */; };
 		794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1212955F26A008C9526 /* AddTodoListView.swift */; };
 		794EF1242955F3DE008C9526 /* TodoListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794EF1232955F3DE008C9526 /* TodoListRow.swift */; };
-		7956405E2954ADE00088A06F /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405D2954ADE00088A06F /* Secrets.swift */; };
+		7956405E2954ADE00088A06F /* SupabaseConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405D2954ADE00088A06F /* SupabaseConfig.swift */; };
 		795640602954AE140088A06F /* AuthController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956405F2954AE140088A06F /* AuthController.swift */; };
 		795640622955AD2B0088A06F /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640612955AD2B0088A06F /* HomeView.swift */; };
 		795640662955AE9C0088A06F /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640652955AE9C0088A06F /* TodoListView.swift */; };
@@ -75,6 +75,7 @@
 		79FEFFC52B078D7900D36347 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFC42B078D7900D36347 /* Models.swift */; };
 		79FEFFC72B078FB000D36347 /* SwiftUIHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFC62B078FB000D36347 /* SwiftUIHelpers.swift */; };
 		79FEFFC92B0797F600D36347 /* AvatarImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFC82B0797F600D36347 /* AvatarImage.swift */; };
+		79FFA5B32CC04F8B00F8A807 /* Supabase.plist in Resources */ = {isa = PBXBuildFile; fileRef = 79FFA5B22CC04F8B00F8A807 /* Supabase.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -93,7 +94,7 @@
 		794C61D52BAD1E12000E6B0F /* UserIdentityList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserIdentityList.swift; sourceTree = "<group>"; };
 		794EF1212955F26A008C9526 /* AddTodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTodoListView.swift; sourceTree = "<group>"; };
 		794EF1232955F3DE008C9526 /* TodoListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListRow.swift; sourceTree = "<group>"; };
-		7956405D2954ADE00088A06F /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		7956405D2954ADE00088A06F /* SupabaseConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseConfig.swift; sourceTree = "<group>"; };
 		7956405F2954AE140088A06F /* AuthController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthController.swift; sourceTree = "<group>"; };
 		795640612955AD2B0088A06F /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		795640652955AE9C0088A06F /* TodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListView.swift; sourceTree = "<group>"; };
@@ -146,6 +147,7 @@
 		79FEFFC42B078D7900D36347 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		79FEFFC62B078FB000D36347 /* SwiftUIHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftUIHelpers.swift; sourceTree = "<group>"; };
 		79FEFFC82B0797F600D36347 /* AvatarImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarImage.swift; sourceTree = "<group>"; };
+		79FFA5B22CC04F8B00F8A807 /* Supabase.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Supabase.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -215,7 +217,7 @@
 				793895C92954ABFF0044F2B8 /* ExamplesApp.swift */,
 				793895D02954AC000044F2B8 /* Preview Content */,
 				793895CB2954ABFF0044F2B8 /* RootView.swift */,
-				7956405D2954ADE00088A06F /* Secrets.swift */,
+				7956405D2954ADE00088A06F /* SupabaseConfig.swift */,
 				795640612955AD2B0088A06F /* HomeView.swift */,
 				795640652955AE9C0088A06F /* TodoListView.swift */,
 				795640672955AEB30088A06F /* Models.swift */,
@@ -230,6 +232,7 @@
 				797EFB672BABD90500098D6B /* Stringfy.swift */,
 				79B1C80D2BAC017C00D991AA /* AnyJSONView.swift */,
 				79401F342BC708C8004C9C0F /* UIViewControllerWrapper.swift */,
+				79FFA5B22CC04F8B00F8A807 /* Supabase.plist */,
 			);
 			path = Examples;
 			sourceTree = "<group>";
@@ -465,6 +468,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				79FFA5B32CC04F8B00F8A807 /* Supabase.plist in Resources */,
 				793895D22954AC000044F2B8 /* Preview Assets.xcassets in Resources */,
 				793895CE2954AC000044F2B8 /* Assets.xcassets in Resources */,
 			);
@@ -514,7 +518,7 @@
 				79E2B55C2B97A2310042CD21 /* UIApplicationExtensions.swift in Sources */,
 				794EF1222955F26A008C9526 /* AddTodoListView.swift in Sources */,
 				7928145D2CAB2CE2000B4ADB /* ResetPasswordView.swift in Sources */,
-				7956405E2954ADE00088A06F /* Secrets.swift in Sources */,
+				7956405E2954ADE00088A06F /* SupabaseConfig.swift in Sources */,
 				795640682955AEB30088A06F /* Models.swift in Sources */,
 				79B1C80C2BABFF8000D991AA /* ProfileView.swift in Sources */,
 				795640662955AE9C0088A06F /* TodoListView.swift in Sources */,
