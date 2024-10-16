@@ -6,7 +6,9 @@
 //
 import Foundation
 
+/// An error type that can be retried.
 package protocol RetryableError: Error {
+  /// Whether this error instance should be retried or not.
   var shouldRetry: Bool { get }
 }
 

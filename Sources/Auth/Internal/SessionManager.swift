@@ -97,15 +97,21 @@ private actor LiveSessionManager {
             eventEmitter.emit(.tokenRefreshed, session: session)
 
             return session
-          } catch let error as RetryableError {
-            logger?.debug("Refresh token failed with a retryable error: \(error)")
-            throw error
           } catch {
-            logger?.debug("Refresh token failed with a non-retryable error: \(error)")
+            logger?.debug("Refresh token failed with error: \(error)")
 
-            remove()
-
-            throw error
+            // DO NOT remove session in case it is an error that should be retried.
+            // i.e. server instability, connection issues, ...
+            //
+            // Need to do this check here, because not all RetryableError's should be retried.
+            // URLError conforms to RetryableError, but only a subset of URLError should be retried,
+            // the same is true for AuthError.
+            if let error = error as? any RetryableError, error.shouldRetry {
+              throw error
+            } else {
+              remove()
+              throw error
+            }
           }
         }
 
