@@ -100,9 +100,9 @@ jobs:
       - name: Update mtime for incremental builds
         uses: chetan/git-restore-mtime-action@v2
       - name: Examples
-        run: make SCHEME="Examples" build-example
+        run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="Examples" XCODEBUILD_ARGUMENT=build xcodebuild
       - name: SlackClone
-        run: make SCHEME="SlackClone" build-example
+        run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="SlackClone" XCODEBUILD_ARGUMENT=build xcodebuild
       - name: UserManagement
-        run: make SCHEME="UserManagement" build-example
+        run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="UserManagement" XCODEBUILD_ARGUMENT=build xcodebuild
       
