@@ -545,6 +545,14 @@ public final class RealtimeChannelV2: Sendable {
     }
   }
 
+  public func onSystem(callback: @escaping @Sendable (RealtimeMessageV2) -> Void) -> Subscription {
+    let id = callbackManager.addSystemCallback(callback: callback)
+    return Subscription { [weak callbackManager, logger] in
+      logger?.debug("Removing system callback with id: \(id)")
+      callbackManager?.removeCallback(id: id)
+    }
+  }
+
   @discardableResult
   func push(_ event: String, ref: String? = nil, payload: JSONObject = [:]) async -> PushStatus {
     let push = mutableState.withValue {

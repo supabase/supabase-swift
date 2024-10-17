@@ -75,6 +75,15 @@ final class CallbackManager: Sendable {
     }
   }
 
+  @discardableResult
+  func addSystemCallback(callback: @escaping @Sendable (RealtimeMessageV2) -> Void) -> Int {
+    mutableState.withValue {
+      $0.id += 1
+      $0.callbacks.append(.system(SystemCallback(id: $0.id, callback: callback)))
+      return $0.id
+    }
+  }
+
   func setServerChanges(changes: [PostgresJoinConfig]) {
     mutableState.withValue {
       $0.serverChanges = changes
@@ -167,16 +176,23 @@ struct PresenceCallback {
   var callback: @Sendable (any PresenceAction) -> Void
 }
 
+struct SystemCallback {
+  var id: Int
+  var callback: @Sendable (RealtimeMessageV2) -> Void
+}
+
 enum RealtimeCallback {
   case postgres(PostgresCallback)
   case broadcast(BroadcastCallback)
   case presence(PresenceCallback)
+  case system(SystemCallback)
 
   var id: Int {
     switch self {
     case let .postgres(callback): callback.id
     case let .broadcast(callback): callback.id
     case let .presence(callback): callback.id
+    case let .system(callback): callback.id
     }
   }
 }
