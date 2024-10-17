@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.20.2](https://github.com/supabase/supabase-swift/compare/v2.20.1...v2.20.2) (2024-10-17)
+
+
+### Bug Fixes
+
+* general auth improvements ([#561](https://github.com/supabase/supabase-swift/issues/561)) ([5f4c0f2](https://github.com/supabase/supabase-swift/commit/5f4c0f256c74beb47ce2a42951014504ba798dd6))
+* replace to HTTPTypes Components from Helpers Components ([#564](https://github.com/supabase/supabase-swift/issues/564)) ([71dee2a](https://github.com/supabase/supabase-swift/commit/71dee2ac35204c40e11d7aa3c3c6f5def95520f9))
+* Swift 6 now has URLSession async method ([#565](https://github.com/supabase/supabase-swift/issues/565)) ([5786dd6](https://github.com/supabase/supabase-swift/commit/5786dd6c06ceead5851fb6527a48d0cee48654af))
+
 ## [2.20.1](https://github.com/supabase/supabase-swift/compare/v2.20.0...v2.20.1) (2024-10-09)
 
 
