@@ -30,22 +30,6 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
     .delete, .get, .head, .options, .put, .trace,
   ]
 
-  /// The default set of retryable HTTP status codes.
-  package static let defaultRetryableHTTPStatusCodes: Set<Int> = [
-    408, 500, 502, 503, 504,
-  ]
-
-  /// The default set of retryable URL error codes.
-  package static let defaultRetryableURLErrorCodes: Set<URLError.Code> = [
-    .backgroundSessionInUseByAnotherProcess, .backgroundSessionWasDisconnected,
-    .badServerResponse, .callIsActive, .cannotConnectToHost, .cannotFindHost,
-    .cannotLoadFromNetwork, .dataNotAllowed, .dnsLookupFailed,
-    .downloadDecodingFailedMidStream, .downloadDecodingFailedToComplete,
-    .internationalRoamingOff, .networkConnectionLost, .notConnectedToInternet,
-    .secureConnectionFailed, .serverCertificateHasBadDate,
-    .serverCertificateNotYetValid, .timedOut,
-  ]
-
   /// The maximum number of retries.
   package let retryLimit: Int
   /// The base value for exponential backoff.
@@ -73,8 +57,8 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
     exponentialBackoffBase: UInt = RetryRequestInterceptor.defaultExponentialBackoffBase,
     exponentialBackoffScale: Double = RetryRequestInterceptor.defaultExponentialBackoffScale,
     retryableHTTPMethods: Set<HTTPTypes.HTTPRequest.Method> = RetryRequestInterceptor.defaultRetryableHTTPMethods,
-    retryableHTTPStatusCodes: Set<Int> = RetryRequestInterceptor.defaultRetryableHTTPStatusCodes,
-    retryableErrorCodes: Set<URLError.Code> = RetryRequestInterceptor.defaultRetryableURLErrorCodes
+    retryableHTTPStatusCodes: Set<Int> = defaultRetryableHTTPStatusCodes,
+    retryableErrorCodes: Set<URLError.Code> = defaultRetryableURLErrorCodes
   ) {
     precondition(
       exponentialBackoffBase >= 2, "The `exponentialBackoffBase` must be a minimum of 2."

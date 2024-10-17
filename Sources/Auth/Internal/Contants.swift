@@ -8,16 +8,19 @@
 import Foundation
 import HTTPTypes
 
-let EXPIRY_MARGIN: TimeInterval = 30
-let STORAGE_KEY = "supabase.auth.token"
+let defaultAuthURL = URL(string: "http://localhost:9999")!
+let defaultExpiryMargin: TimeInterval = 30
 
-let API_VERSION_HEADER_NAME = "X-Supabase-Api-Version"
+let autoRefreshTickDuration: TimeInterval = 30
+let autoRefreshTickThreshold = 3
+
+let defaultStorageKey = "supabase.auth.token"
 
 extension HTTPField.Name {
-  static let apiVersionHeaderName = HTTPField.Name(API_VERSION_HEADER_NAME)!
+  static let apiVersionHeaderName = HTTPField.Name("X-Supabase-Api-Version")!
 }
 
-let API_VERSIONS: [APIVersion.Name: APIVersion] = [
+let apiVersions: [APIVersion.Name: APIVersion] = [
   ._20240101: ._20240101,
 ]
 

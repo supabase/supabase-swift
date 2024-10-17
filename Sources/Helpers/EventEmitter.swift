@@ -8,11 +8,16 @@
 import ConcurrencyExtras
 import Foundation
 
-public final class ObservationToken: Sendable, Hashable {
-  let _onCancel = LockIsolated((@Sendable () -> Void)?.none)
+public final class ObservationToken: @unchecked Sendable, Hashable {
+  private let _isCancelled = LockIsolated(false)
+  package var onCancel: @Sendable () -> Void
 
-  package init(_ onCancel: (@Sendable () -> Void)? = nil) {
-    _onCancel.setValue(onCancel)
+  public var isCancelled: Bool {
+    _isCancelled.withValue { $0 }
+  }
+
+  package init(onCancel: @escaping @Sendable () -> Void = {}) {
+    self.onCancel = onCancel
   }
 
   @available(*, deprecated, renamed: "cancel")
@@ -21,13 +26,10 @@ public final class ObservationToken: Sendable, Hashable {
   }
 
   public func cancel() {
-    _onCancel.withValue {
-      if $0 == nil {
-        return
-      }
-
-      $0?()
-      $0 = nil
+    _isCancelled.withValue { isCancelled in
+      guard !isCancelled else { return }
+      defer { isCancelled = true }
+      onCancel()
     }
   }
 
@@ -36,7 +38,7 @@ public final class ObservationToken: Sendable, Hashable {
   }
 
   public static func == (lhs: ObservationToken, rhs: ObservationToken) -> Bool {
-    ObjectIdentifier(lhs) == ObjectIdentifier(rhs)
+    lhs === rhs
   }
 
   public func hash(into hasher: inout Hasher) {
@@ -45,6 +47,10 @@ public final class ObservationToken: Sendable, Hashable {
 }
 
 extension ObservationToken {
+  public func store(in collection: inout some RangeReplaceableCollection<ObservationToken>) {
+    collection.append(self)
+  }
+
   public func store(in set: inout Set<ObservationToken>) {
     set.insert(self)
   }
@@ -53,7 +59,7 @@ extension ObservationToken {
 package final class EventEmitter<Event: Sendable>: Sendable {
   public typealias Listener = @Sendable (Event) -> Void
 
-  private let listeners = LockIsolated<[ObjectIdentifier: Listener]>([:])
+  private let listeners = LockIsolated<[(key: ObjectIdentifier, listener: Listener)]>([])
   private let _lastEvent: LockIsolated<Event>
   package var lastEvent: Event { _lastEvent.value }
 
@@ -77,14 +83,14 @@ package final class EventEmitter<Event: Sendable>: Sendable {
     let token = ObservationToken()
     let key = ObjectIdentifier(token)
 
-    token._onCancel.setValue { [weak self] in
+    token.onCancel = { [weak self] in
       self?.listeners.withValue {
-        $0[key] = nil
+        $0.removeAll { $0.key == key }
       }
     }
 
     listeners.withValue {
-      $0[key] = listener
+      $0.append((key, listener))
     }
 
     return token
@@ -95,9 +101,9 @@ package final class EventEmitter<Event: Sendable>: Sendable {
     let listeners = listeners.value
 
     if let token {
-      listeners[ObjectIdentifier(token)]?(event)
+      listeners.first { $0.key == ObjectIdentifier(token) }?.listener(event)
     } else {
-      for listener in listeners.values {
+      for (_, listener) in listeners {
         listener(event)
       }
     }

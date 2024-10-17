@@ -1,4 +1,5 @@
 import Foundation
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -47,7 +48,8 @@ extension ErrorCode {
   public static let oauthProviderNotSupported = ErrorCode("oauth_provider_not_supported")
   public static let unexpectedAudience = ErrorCode("unexpected_audience")
   public static let singleIdentityNotDeletable = ErrorCode("single_identity_not_deletable")
-  public static let emailConflictIdentityNotDeletable = ErrorCode("email_conflict_identity_not_deletable")
+  public static let emailConflictIdentityNotDeletable = ErrorCode(
+    "email_conflict_identity_not_deletable")
   public static let identityAlreadyExists = ErrorCode("identity_already_exists")
   public static let emailProviderDisabled = ErrorCode("email_provider_disabled")
   public static let phoneProviderDisabled = ErrorCode("phone_provider_disabled")
@@ -108,14 +110,16 @@ public enum AuthError: LocalizedError, Equatable {
   @available(
     *,
     deprecated,
-    message: "Error used to be thrown when no exp claim was found in JWT during setSession(accessToken:refreshToken:) method."
+    message:
+      "Error used to be thrown when no exp claim was found in JWT during setSession(accessToken:refreshToken:) method."
   )
   case missingExpClaim
 
   @available(
     *,
     deprecated,
-    message: "Error used to be thrown when provided JWT wasn't valid during setSession(accessToken:refreshToken:) method."
+    message:
+      "Error used to be thrown when provided JWT wasn't valid during setSession(accessToken:refreshToken:) method."
   )
   case malformedJWT
 
@@ -155,14 +159,16 @@ public enum AuthError: LocalizedError, Equatable {
   @available(
     *,
     deprecated,
-    message: "This error is never thrown, if you depend on it, you can remove the logic as it never happens."
+    message:
+      "This error is never thrown, if you depend on it, you can remove the logic as it never happens."
   )
   case missingURL
 
   @available(
     *,
     deprecated,
-    message: "Error used to be thrown on methods which required a valid redirect scheme, such as signInWithOAuth. This is now considered a programming error an a assertion is triggered in case redirect scheme isn't provided."
+    message:
+      "Error used to be thrown on methods which required a valid redirect scheme, such as signInWithOAuth. This is now considered a programming error an a assertion is triggered in case redirect scheme isn't provided."
   )
   case invalidRedirectScheme
 
@@ -182,7 +188,7 @@ public enum AuthError: LocalizedError, Equatable {
       errorCode: .unknown,
       underlyingData: (try? AuthClient.Configuration.jsonEncoder.encode(error)) ?? Data(),
       underlyingResponse: HTTPURLResponse(
-        url: URL(string: "http://localhost")!,
+        url: defaultAuthURL,
         statusCode: error.code ?? 500,
         httpVersion: nil,
         headerFields: nil
@@ -249,9 +255,9 @@ public enum AuthError: LocalizedError, Equatable {
     switch self {
     case .sessionMissing: "Auth session missing."
     case let .weakPassword(message, _),
-         let .api(message, _, _, _),
-         let .pkceGrantCodeExchange(message, _, _),
-         let .implicitGrantRedirect(message):
+      let .api(message, _, _, _),
+      let .pkceGrantCodeExchange(message, _, _),
+      let .implicitGrantRedirect(message):
       message
     // Deprecated cases
     case .missingExpClaim: "Missing expiration claim in the access token."
@@ -279,5 +285,15 @@ public enum AuthError: LocalizedError, Equatable {
   public static func ~= (lhs: AuthError, rhs: any Error) -> Bool {
     guard let rhs = rhs as? AuthError else { return false }
     return lhs == rhs
+  }
+}
+
+extension AuthError: RetryableError {
+  package var shouldRetry: Bool {
+    switch self {
+    case .api(_, _, _, let response):
+      defaultRetryableHTTPStatusCodes.contains(response.statusCode)
+    default: false
+    }
   }
 }

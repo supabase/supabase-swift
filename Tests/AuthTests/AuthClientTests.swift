@@ -53,7 +53,7 @@ final class AuthClientTests: XCTestCase {
   func testOnAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
-    try Dependencies[sut.clientID].sessionStorage.store(session)
+    Dependencies[sut.clientID].sessionStorage.store(session)
 
     let events = LockIsolated([AuthChangeEvent]())
 
@@ -71,7 +71,7 @@ final class AuthClientTests: XCTestCase {
   func testAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
-    try Dependencies[sut.clientID].sessionStorage.store(session)
+    Dependencies[sut.clientID].sessionStorage.store(session)
 
     let stateChange = await sut.authStateChanges.first { _ in true }
     expectNoDifference(stateChange?.event, .initialSession)
@@ -83,7 +83,7 @@ final class AuthClientTests: XCTestCase {
       .stub()
     }
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -112,11 +112,11 @@ final class AuthClientTests: XCTestCase {
       .stub()
     }
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     try await sut.signOut(scope: .others)
 
-    let sessionRemoved = try Dependencies[sut.clientID].sessionStorage.get() == nil
+    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertFalse(sessionRemoved)
   }
 
@@ -131,7 +131,7 @@ final class AuthClientTests: XCTestCase {
     }
 
     let validSession = Session.validSession
-    try Dependencies[sut.clientID].sessionStorage.store(validSession)
+    Dependencies[sut.clientID].sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -147,7 +147,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [.validSession, nil])
 
-    let sessionRemoved = try Dependencies[sut.clientID].sessionStorage.get() == nil
+    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -162,7 +162,7 @@ final class AuthClientTests: XCTestCase {
     }
 
     let validSession = Session.validSession
-    try Dependencies[sut.clientID].sessionStorage.store(validSession)
+    Dependencies[sut.clientID].sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -178,7 +178,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = try Dependencies[sut.clientID].sessionStorage.get() == nil
+    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -193,7 +193,7 @@ final class AuthClientTests: XCTestCase {
     }
 
     let validSession = Session.validSession
-    try Dependencies[sut.clientID].sessionStorage.store(validSession)
+    Dependencies[sut.clientID].sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -209,7 +209,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = try Dependencies[sut.clientID].sessionStorage.get() == nil
+    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -269,7 +269,7 @@ final class AuthClientTests: XCTestCase {
       )
     }
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let response = try await sut.getLinkIdentityURL(provider: .github)
 
@@ -294,7 +294,7 @@ final class AuthClientTests: XCTestCase {
       )
     }
 
-    try Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let receivedURL = LockIsolated<URL?>(nil)
     Dependencies[sut.clientID].urlOpener.open = { url in

@@ -22,13 +22,12 @@ public final class FunctionsClient: Sendable {
   /// The Region to invoke the functions in.
   let region: String?
 
-  private let http: any HTTPClientType
-
   struct MutableState {
     /// Headers to be included in the requests.
     var headers = HTTPFields()
   }
 
+  private let http: any HTTPClientType
   private let mutableState = LockIsolated(MutableState())
 
   var headers: HTTPFields {
