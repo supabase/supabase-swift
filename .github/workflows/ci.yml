@@ -21,25 +21,22 @@ jobs:
       matrix:
         command: [test, ""]
         platform: [IOS, MAC_CATALYST, MACOS, TVOS, VISIONOS, WATCHOS]
-        xcode: [15.2, 15.4, "16.0"]
-        exclude:
-          - { xcode: 15.2, command: test }
-          - { xcode: 15.4, command: "" }
-          - { xcode: 15.2, platform: MAC_CATALYST }
-          - { xcode: 15.2, platform: TVOS }
-          - { xcode: 15.2, platform: VISIONOS }
-          - { xcode: 15.2, platform: WATCHOS }
-          - { xcode: "16.0", command: "" }
-          - { xcode: "16.0", platform: MAC_CATALYST }
-          - { xcode: "16.0", platform: TVOS }
-          - { xcode: "16.0", platform: VISIONOS }
-          - { xcode: "16.0", platform: WATCHOS }
+        xcode: [15.4, "16.0"]
         include:
-          - { xcode: 15.2, skip_release: 1 }
+          - { command: test, skip_release: 1 }
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+      - name: Install visionOS runtime
+        if: matrix.platform == 'visionOS'
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          sudo xcrun simctl list
+          sudo xcodebuild -downloadPlatform visionOS
+          sudo xcodebuild -runFirstLaunch
+      - name: List available devices
+        run: xcrun simctl list devices available
       - name: Cache derived data
         uses: actions/cache@v3
         with:
