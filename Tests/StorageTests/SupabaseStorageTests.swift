@@ -1,9 +1,10 @@
 import CustomDump
 import Foundation
 import InlineSnapshotTesting
-@testable import Storage
 import XCTest
 import XCTestDynamicOverlay
+
+@testable import Storage
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -91,85 +92,113 @@ final class SupabaseStorageTests: XCTestCase {
     }
   }
 
-  func testUploadData() async {
-    testingBoundary = "alamofire.boundary.c21f947c1c7b0c57"
+  #if !os(Linux)
+    func testUploadData() async throws {
+      testingBoundary = "alamofire.boundary.c21f947c1c7b0c57"
 
-    sessionMock.fetch = { request in
-      assertInlineSnapshot(of: request, as: .curl) {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Apikey: test.api.key" \
-        	--header "Authorization: Bearer test.api.key" \
-        	--header "Cache-Control: max-age=14400" \
-        	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
-        	--header "X-Client-Info: storage-swift/x.y.z" \
-        	--header "x-upsert: false" \
-        	--data "--alamofire.boundary.c21f947c1c7b0c57\#r
-        Content-Disposition: form-data; name=\"cacheControl\"\#r
-        \#r
-        14400\#r
-        --alamofire.boundary.c21f947c1c7b0c57\#r
-        Content-Disposition: form-data; name=\"metadata\"\#r
-        \#r
-        {\"key\":\"value\"}\#r
-        --alamofire.boundary.c21f947c1c7b0c57\#r
-        Content-Disposition: form-data; name=\"\"; filename=\"file1.txt\"\#r
-        Content-Type: text/plain\#r
-        \#r
-        test data\#r
-        --alamofire.boundary.c21f947c1c7b0c57--\#r
-        " \
-        	"http://localhost:54321/storage/v1/object/tests/file1.txt"
-        """#
+      sessionMock.fetch = { request in
+        assertInlineSnapshot(of: request, as: .curl) {
+          #"""
+          curl \
+          	--request POST \
+          	--header "Apikey: test.api.key" \
+          	--header "Authorization: Bearer test.api.key" \
+          	--header "Cache-Control: max-age=14400" \
+          	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
+          	--header "X-Client-Info: storage-swift/x.y.z" \
+          	--header "x-upsert: false" \
+          	--data "--alamofire.boundary.c21f947c1c7b0c57\#r
+          Content-Disposition: form-data; name=\"cacheControl\"\#r
+          \#r
+          14400\#r
+          --alamofire.boundary.c21f947c1c7b0c57\#r
+          Content-Disposition: form-data; name=\"metadata\"\#r
+          \#r
+          {\"key\":\"value\"}\#r
+          --alamofire.boundary.c21f947c1c7b0c57\#r
+          Content-Disposition: form-data; name=\"\"; filename=\"file1.txt\"\#r
+          Content-Type: text/plain\#r
+          \#r
+          test data\#r
+          --alamofire.boundary.c21f947c1c7b0c57--\#r
+          " \
+          	"http://localhost:54321/storage/v1/object/tests/file1.txt"
+          """#
+        }
+        return (
+          """
+          {
+            "Id": "tests/file1.txt",
+            "Key": "tests/file1.txt"
+          }
+          """.data(using: .utf8)!,
+          HTTPURLResponse(
+            url: self.supabaseURL,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+          )!
+        )
       }
-      throw UnimplementedFailure(description: "unimplemented")
+
+      let sut = makeSUT()
+
+      try await sut.from(bucketId)
+        .upload(
+          "file1.txt",
+          data: "test data".data(using: .utf8)!,
+          options: FileOptions(
+            cacheControl: "14400",
+            metadata: ["key": "value"]
+          )
+        )
     }
 
-    let sut = makeSUT()
+    func testUploadFileURL() async throws {
+      testingBoundary = "alamofire.boundary.c21f947c1c7b0c57"
 
-    _ = try? await sut.from(bucketId)
-      .upload(
-        "file1.txt",
-        data: "test data".data(using: .utf8)!,
-        options: FileOptions(
-          cacheControl: "14400",
-          metadata: ["key": "value"]
+      sessionMock.fetch = { request in
+        assertInlineSnapshot(of: request, as: .curl) {
+          #"""
+          curl \
+          	--request POST \
+          	--header "Apikey: test.api.key" \
+          	--header "Authorization: Bearer test.api.key" \
+          	--header "Cache-Control: max-age=3600" \
+          	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
+          	--header "X-Client-Info: storage-swift/x.y.z" \
+          	--header "x-upsert: false" \
+          	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
+          """#
+        }
+        return (
+          """
+          {
+            "Id": "tests/file1.txt",
+            "Key": "tests/file1.txt"
+          }
+          """.data(using: .utf8)!,
+          HTTPURLResponse(
+            url: self.supabaseURL,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+          )!
         )
-      )
-  }
-
-  func testUploadFileURL() async {
-    testingBoundary = "alamofire.boundary.c21f947c1c7b0c57"
-
-    sessionMock.fetch = { request in
-      assertInlineSnapshot(of: request, as: .curl) {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Apikey: test.api.key" \
-        	--header "Authorization: Bearer test.api.key" \
-        	--header "Cache-Control: max-age=3600" \
-        	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
-        	--header "X-Client-Info: storage-swift/x.y.z" \
-        	--header "x-upsert: false" \
-        	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
-        """#
       }
-      throw UnimplementedFailure(description: "unimplemented")
-    }
 
-    let sut = makeSUT()
+      let sut = makeSUT()
 
-    _ = try? await sut.from(bucketId)
-      .upload(
-        "sadcat.jpg",
-        fileURL: uploadFileURL("sadcat.jpg"),
-        options: FileOptions(
-          metadata: ["key": "value"]
+      try await sut.from(bucketId)
+        .upload(
+          "sadcat.jpg",
+          fileURL: uploadFileURL("sadcat.jpg"),
+          options: FileOptions(
+            metadata: ["key": "value"]
+          )
         )
-      )
-  }
+    }
+  #endif
 
   private func makeSUT() -> SupabaseStorageClient {
     SupabaseStorageClient.test(
