@@ -25,8 +25,8 @@
 //
 
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 #if canImport(MobileCoreServices)
   import MobileCoreServices
@@ -59,21 +59,22 @@ class MultipartFormData {
     }
 
     static func randomBoundary() -> String {
-      let first = UInt32.random(in: UInt32.min ... UInt32.max)
-      let second = UInt32.random(in: UInt32.min ... UInt32.max)
+      let first = UInt32.random(in: UInt32.min...UInt32.max)
+      let second = UInt32.random(in: UInt32.min...UInt32.max)
 
       return String(format: "alamofire.boundary.%08x%08x", first, second)
     }
 
     static func boundaryData(forBoundaryType boundaryType: BoundaryType, boundary: String) -> Data {
-      let boundaryText = switch boundaryType {
-      case .initial:
-        "--\(boundary)\(EncodingCharacters.crlf)"
-      case .encapsulated:
-        "\(EncodingCharacters.crlf)--\(boundary)\(EncodingCharacters.crlf)"
-      case .final:
-        "\(EncodingCharacters.crlf)--\(boundary)--\(EncodingCharacters.crlf)"
-      }
+      let boundaryText =
+        switch boundaryType {
+        case .initial:
+          "--\(boundary)\(EncodingCharacters.crlf)"
+        case .encapsulated:
+          "\(EncodingCharacters.crlf)--\(boundary)\(EncodingCharacters.crlf)"
+        case .final:
+          "\(EncodingCharacters.crlf)--\(boundary)--\(EncodingCharacters.crlf)"
+        }
 
       return Data(boundaryText.utf8)
     }
@@ -96,7 +97,7 @@ class MultipartFormData {
   // MARK: - Properties
 
   /// Default memory threshold used when encoding `MultipartFormData`, in bytes.
-  static let encodingMemoryThreshold: UInt64 = 10000000
+  static let encodingMemoryThreshold: UInt64 = 10_000_000
 
   /// The `Content-Type` header value containing the boundary used to generate the `multipart/form-data`.
   open lazy var contentType: String = "multipart/form-data; boundary=\(self.boundary)"
@@ -402,8 +403,8 @@ class MultipartFormData {
   private func encodeHeaders(for bodyPart: BodyPart) -> Data {
     let headerText =
       bodyPart.headers.map { "\($0.name): \($0.value)\(EncodingCharacters.crlf)" }
-        .joined()
-        + EncodingCharacters.crlf
+      .joined()
+      + EncodingCharacters.crlf
 
     return Data(headerText.utf8)
   }
@@ -481,7 +482,7 @@ class MultipartFormData {
 
       if bytesRead > 0 {
         if buffer.count != bytesRead {
-          buffer = Array(buffer[0 ..< bytesRead])
+          buffer = Array(buffer[0..<bytesRead])
         }
 
         try write(&buffer, to: outputStream)
@@ -492,7 +493,8 @@ class MultipartFormData {
     }
   }
 
-  private func writeFinalBoundaryData(for bodyPart: BodyPart, to outputStream: OutputStream) throws {
+  private func writeFinalBoundaryData(for bodyPart: BodyPart, to outputStream: OutputStream) throws
+  {
     if bodyPart.hasFinalBoundary {
       try write(finalBoundaryData(), to: outputStream)
     }
@@ -520,7 +522,7 @@ class MultipartFormData {
       bytesToWrite -= bytesWritten
 
       if bytesToWrite > 0 {
-        buffer = Array(buffer[bytesWritten ..< buffer.count])
+        buffer = Array(buffer[bytesWritten..<buffer.count])
       }
     }
   }
@@ -577,7 +579,7 @@ class MultipartFormData {
             kUTTagClassFilenameExtension, pathExtension as CFString, nil
           )?.takeRetainedValue(),
             let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
-            .takeRetainedValue()
+              .takeRetainedValue()
           {
             return contentType as String
           }
@@ -593,7 +595,7 @@ class MultipartFormData {
             kUTTagClassFilenameExtension, pathExtension as CFString, nil
           )?.takeRetainedValue(),
             let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
-            .takeRetainedValue()
+              .takeRetainedValue()
           {
             return contentType as String
           }
@@ -615,7 +617,7 @@ class MultipartFormData {
           kUTTagClassFilenameExtension, pathExtension as CFString, nil
         )?.takeRetainedValue(),
           let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
-          .takeRetainedValue()
+            .takeRetainedValue()
         {
           return contentType as String
         }
@@ -650,20 +652,20 @@ enum MultipartFormDataError: Error {
   var underlyingError: (any Error)? {
     switch self {
     case let .bodyPartFileNotReachableWithError(_, error),
-         let .bodyPartFileSizeQueryFailedWithError(_, error),
-         let .inputStreamReadFailed(error),
-         let .outputStreamWriteFailed(error):
+      let .bodyPartFileSizeQueryFailedWithError(_, error),
+      let .inputStreamReadFailed(error),
+      let .outputStreamWriteFailed(error):
       error
 
     case .bodyPartURLInvalid,
-         .bodyPartFilenameInvalid,
-         .bodyPartFileNotReachable,
-         .bodyPartFileIsDirectory,
-         .bodyPartFileSizeNotAvailable,
-         .bodyPartInputStreamCreationFailed,
-         .outputStreamFileAlreadyExists,
-         .outputStreamURLInvalid,
-         .outputStreamCreationFailed:
+      .bodyPartFilenameInvalid,
+      .bodyPartFileNotReachable,
+      .bodyPartFileIsDirectory,
+      .bodyPartFileSizeNotAvailable,
+      .bodyPartInputStreamCreationFailed,
+      .outputStreamFileAlreadyExists,
+      .outputStreamURLInvalid,
+      .outputStreamCreationFailed:
       nil
     }
   }
@@ -671,16 +673,16 @@ enum MultipartFormDataError: Error {
   var url: URL? {
     switch self {
     case let .bodyPartURLInvalid(url),
-         let .bodyPartFilenameInvalid(url),
-         let .bodyPartFileNotReachable(url),
-         let .bodyPartFileNotReachableWithError(url, _),
-         let .bodyPartFileIsDirectory(url),
-         let .bodyPartFileSizeNotAvailable(url),
-         let .bodyPartFileSizeQueryFailedWithError(url, _),
-         let .bodyPartInputStreamCreationFailed(url),
-         let .outputStreamFileAlreadyExists(url),
-         let .outputStreamURLInvalid(url),
-         let .outputStreamCreationFailed(url):
+      let .bodyPartFilenameInvalid(url),
+      let .bodyPartFileNotReachable(url),
+      let .bodyPartFileNotReachableWithError(url, _),
+      let .bodyPartFileIsDirectory(url),
+      let .bodyPartFileSizeNotAvailable(url),
+      let .bodyPartFileSizeQueryFailedWithError(url, _),
+      let .bodyPartInputStreamCreationFailed(url),
+      let .outputStreamFileAlreadyExists(url),
+      let .outputStreamURLInvalid(url),
+      let .outputStreamCreationFailed(url):
       url
 
     case .inputStreamReadFailed, .outputStreamWriteFailed:

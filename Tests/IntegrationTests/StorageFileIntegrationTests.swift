@@ -380,6 +380,15 @@ final class StorageFileIntegrationTests: XCTestCase {
     XCTAssertEqual(cacheControl, "public, max-age=14400")
   }
 
+  func testUploadWithFileURL() async throws {
+    try await storage.from(bucketName)
+      .upload(uploadPath, fileURL: uploadFileURL("sadcat.jpg"))
+
+    let uploadedFile = try await storage.from(bucketName).download(path: uploadPath)
+
+    XCTAssertEqual(uploadedFile, file)
+  }
+
   private func newBucket(
     prefix: String = "",
     options: BucketOptions = BucketOptions(public: true)

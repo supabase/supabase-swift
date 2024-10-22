@@ -20,6 +20,7 @@ extension SupabaseStorageClient {
         headers: [
           "Authorization": "Bearer \(apiKey)",
           "Apikey": apiKey,
+          "X-Client-Info": "storage-swift/x.y.z",
         ],
         session: session,
         logger: nil

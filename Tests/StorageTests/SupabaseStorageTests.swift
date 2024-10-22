@@ -18,6 +18,12 @@ final class SupabaseStorageTests: XCTestCase {
     upload: unimplemented("StorageHTTPSession.upload")
   )
 
+  override func invokeTest() {
+    withSnapshotTesting(record: .missing) {
+      super.invokeTest()
+    }
+  }
+
   func testGetPublicURL() throws {
     let sut = makeSUT()
 
@@ -91,11 +97,97 @@ final class SupabaseStorageTests: XCTestCase {
     }
   }
 
+  func testUploadData() async {
+    testingBoundary = "alamofire.boundary.c21f947c1c7b0c57"
+
+    sessionMock.fetch = { request in
+      assertInlineSnapshot(of: request, as: .curl) {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Apikey: test.api.key" \
+        	--header "Authorization: Bearer test.api.key" \
+        	--header "Cache-Control: max-age=14400" \
+        	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
+        	--header "X-Client-Info: storage-swift/x.y.z" \
+        	--header "x-upsert: false" \
+        	--data "--alamofire.boundary.c21f947c1c7b0c57\#r
+        Content-Disposition: form-data; name=\"cacheControl\"\#r
+        \#r
+        14400\#r
+        --alamofire.boundary.c21f947c1c7b0c57\#r
+        Content-Disposition: form-data; name=\"metadata\"\#r
+        \#r
+        {\"key\":\"value\"}\#r
+        --alamofire.boundary.c21f947c1c7b0c57\#r
+        Content-Disposition: form-data; name=\"\"; filename=\"file1.txt\"\#r
+        Content-Type: text/plain\#r
+        \#r
+        test data\#r
+        --alamofire.boundary.c21f947c1c7b0c57--\#r
+        " \
+        	"http://localhost:54321/storage/v1/object/tests/file1.txt"
+        """#
+      }
+      throw UnimplementedFailure(description: "unimplemented")
+    }
+
+    let sut = makeSUT()
+
+    _ = try? await sut.from(bucketId)
+      .upload(
+        "file1.txt",
+        data: "test data".data(using: .utf8)!,
+        options: FileOptions(
+          cacheControl: "14400",
+          metadata: ["key": "value"]
+        )
+      )
+  }
+
+  func testUploadFileURL() async {
+    testingBoundary = "alamofire.boundary.c21f947c1c7b0c57"
+
+    sessionMock.fetch = { request in
+      assertInlineSnapshot(of: request, as: .curl) {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Apikey: test.api.key" \
+        	--header "Authorization: Bearer test.api.key" \
+        	--header "Cache-Control: max-age=3600" \
+        	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
+        	--header "X-Client-Info: storage-swift/x.y.z" \
+        	--header "x-upsert: false" \
+        	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
+        """#
+      }
+      throw UnimplementedFailure(description: "unimplemented")
+    }
+
+    let sut = makeSUT()
+
+    _ = try? await sut.from(bucketId)
+      .upload(
+        "sadcat.jpg",
+        fileURL: uploadFileURL("sadcat.jpg"),
+        options: FileOptions(
+          metadata: ["key": "value"]
+        )
+      )
+  }
+
   private func makeSUT() -> SupabaseStorageClient {
     SupabaseStorageClient.test(
       supabaseURL: supabaseURL.absoluteString,
       apiKey: "test.api.key",
       session: sessionMock
     )
+  }
+
+  private func uploadFileURL(_ fileName: String) -> URL {
+    URL(fileURLWithPath: #file)
+      .deletingLastPathComponent()
+      .appendingPathComponent(fileName)
   }
 }
