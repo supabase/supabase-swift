@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.20.3](https://github.com/supabase/supabase-swift/compare/v2.20.2...v2.20.3) (2024-10-22)
+
+
+### Bug Fixes
+
+* remove kSecUseDataProtectionKeychain ([#574](https://github.com/supabase/supabase-swift/issues/574)) ([554f916](https://github.com/supabase/supabase-swift/commit/554f91689eb13c1a923a53bddb5d194e6b80328a))
+
 ## [2.20.2](https://github.com/supabase/supabase-swift/compare/v2.20.1...v2.20.2) (2024-10-17)
 
 
