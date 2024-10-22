@@ -9,6 +9,10 @@ import InlineSnapshotTesting
 import Storage
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class StorageFileIntegrationTests: XCTestCase {
   let storage = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
