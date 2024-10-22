@@ -18,12 +18,6 @@ final class SupabaseStorageTests: XCTestCase {
     upload: unimplemented("StorageHTTPSession.upload")
   )
 
-  override func invokeTest() {
-    withSnapshotTesting(record: .missing) {
-      super.invokeTest()
-    }
-  }
-
   func testGetPublicURL() throws {
     let sut = makeSUT()
 
