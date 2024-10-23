@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import HTTPTypes
+import HTTPTypesFoundation
 import Helpers
 
 #if canImport(FoundationNetworking)
@@ -15,8 +17,9 @@ import Helpers
 extension AuthClient {
   /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler = @Sendable (
-    _ request: URLRequest
-  ) async throws -> (Data, URLResponse)
+    _ request: HTTPRequest,
+    _ bodyData: Data?
+  ) async throws -> (Data, HTTPResponse)
 
   /// Configuration struct represents the client configuration.
   public struct Configuration: Sendable {
@@ -71,7 +74,13 @@ extension AuthClient {
       logger: (any SupabaseLogger)? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      fetch: @escaping FetchHandler = { request, body in
+        if let body {
+          return try await URLSession.shared.upload(for: request, from: body)
+        } else {
+          return try await URLSession.shared.data(for: request)
+        }
+      },
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
@@ -114,7 +123,13 @@ extension AuthClient {
     logger: (any SupabaseLogger)? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    fetch: @escaping FetchHandler = { request, body in
+      if let body {
+        return try await URLSession.shared.upload(for: request, from: body)
+      } else {
+        return try await URLSession.shared.data(for: request)
+      }
+    },
     autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
   ) {
     self.init(

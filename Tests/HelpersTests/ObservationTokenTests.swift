@@ -7,8 +7,9 @@
 
 import ConcurrencyExtras
 import Foundation
-@testable import Helpers
 import XCTest
+
+@testable import Helpers
 
 final class ObservationTokenTests: XCTestCase {
   func testRemove() {

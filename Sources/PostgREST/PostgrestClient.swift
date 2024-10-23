@@ -1,7 +1,8 @@
 import ConcurrencyExtras
 import Foundation
-import Helpers
 import HTTPTypes
+import HTTPTypesFoundation
+import Helpers
 
 public typealias PostgrestError = Helpers.PostgrestError
 public typealias HTTPError = Helpers.HTTPError
@@ -13,9 +14,10 @@ public typealias AnyJSON = Helpers.AnyJSON
 
 /// PostgREST client.
 public final class PostgrestClient: Sendable {
-  public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
-    Data, URLResponse
-  )
+  public typealias FetchHandler = @Sendable (
+    _ request: HTTPRequest,
+    _ bodyData: Data?
+  ) async throws -> (Data, HTTPResponse)
 
   /// The configuration struct for the PostgREST client.
   public struct Configuration: Sendable {
@@ -42,7 +44,13 @@ public final class PostgrestClient: Sendable {
       schema: String? = nil,
       headers: [String: String] = [:],
       logger: (any SupabaseLogger)? = nil,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      fetch: @escaping FetchHandler = { request, body in
+        if let body {
+          return try await URLSession.shared.upload(for: request, from: body)
+        } else {
+          return try await URLSession.shared.data(for: request)
+        }
+      },
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
     ) {
@@ -82,7 +90,13 @@ public final class PostgrestClient: Sendable {
     schema: String? = nil,
     headers: [String: String] = [:],
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    fetch: @escaping FetchHandler = { request, body in
+      if let body {
+        return try await URLSession.shared.upload(for: request, from: body)
+      } else {
+        return try await URLSession.shared.data(for: request)
+      }
+    },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
@@ -118,10 +132,11 @@ public final class PostgrestClient: Sendable {
     PostgrestQueryBuilder(
       configuration: configuration,
       request: .init(
-        url: configuration.url.appendingPathComponent(table),
         method: .get,
-        headers: HTTPFields(configuration.headers)
-      )
+        url: configuration.url.appendingPathComponent(table),
+        headerFields: HTTPFields(configuration.headers)
+      ),
+      body: nil
     )
   }
 
@@ -138,10 +153,11 @@ public final class PostgrestClient: Sendable {
     try PostgrestRpcBuilder(
       configuration: configuration,
       request: HTTPRequest(
-        url: configuration.url.appendingPathComponent("rpc/\(fn)"),
         method: .post,
-        headers: HTTPFields(configuration.headers)
-      )
+        url: configuration.url.appendingPathComponent("rpc/\(fn)"),
+        headerFields: HTTPFields(configuration.headers)
+      ),
+      body: nil
     ).rpc(params: params, count: count)
   }
 

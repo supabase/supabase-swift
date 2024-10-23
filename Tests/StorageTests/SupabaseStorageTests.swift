@@ -1,5 +1,6 @@
 import CustomDump
 import Foundation
+import HTTPTypes
 import InlineSnapshotTesting
 import XCTest
 import XCTestDynamicOverlay
@@ -15,8 +16,7 @@ final class SupabaseStorageTests: XCTestCase {
   let bucketId = "tests"
 
   var sessionMock = StorageHTTPSession(
-    fetch: unimplemented("StorageHTTPSession.fetch"),
-    upload: unimplemented("StorageHTTPSession.upload")
+    fetch: unimplemented("StorageHTTPSession.fetch")
   )
 
   func testGetPublicURL() throws {
@@ -58,24 +58,20 @@ final class SupabaseStorageTests: XCTestCase {
   }
 
   func testCreateSignedURLs() async throws {
-    sessionMock.fetch = { _ in
+    sessionMock.fetch = { _, _ in
       (
-        """
-        [
-          {
-            "signedURL": "/sign/file1.txt?token=abc.def.ghi"
-          },
-          {
-            "signedURL": "/sign/file2.txt?token=abc.def.ghi"
-          },
-        ]
-        """.data(using: .utf8)!,
-        HTTPURLResponse(
-          url: self.supabaseURL,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
+        Data(
+          """
+          [
+            {
+              "signedURL": "/sign/file1.txt?token=abc.def.ghi"
+            },
+            {
+              "signedURL": "/sign/file2.txt?token=abc.def.ghi"
+            },
+          ]
+          """.utf8),
+        HTTPResponse(status: .init(code: 200))
       )
     }
 
@@ -96,7 +92,9 @@ final class SupabaseStorageTests: XCTestCase {
     func testUploadData() async throws {
       testingBoundary = "alamofire.boundary.c21f947c1c7b0c57"
 
-      sessionMock.fetch = { request in
+      sessionMock.fetch = { request, body in
+        var request = URLRequest(httpRequest: request)!
+        request.httpBody = body
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
           curl \
@@ -126,18 +124,14 @@ final class SupabaseStorageTests: XCTestCase {
           """#
         }
         return (
-          """
-          {
-            "Id": "tests/file1.txt",
-            "Key": "tests/file1.txt"
-          }
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
+          Data(
+            """
+            {
+              "Id": "tests/file1.txt",
+              "Key": "tests/file1.txt"
+            }
+            """.utf8),
+          HTTPResponse(status: .init(code: 200))
         )
       }
 
@@ -157,7 +151,9 @@ final class SupabaseStorageTests: XCTestCase {
     func testUploadFileURL() async throws {
       testingBoundary = "alamofire.boundary.c21f947c1c7b0c57"
 
-      sessionMock.fetch = { request in
+      sessionMock.fetch = { request, body in
+        var request = URLRequest(httpRequest: request)!
+        request.httpBody = body
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
           curl \
@@ -172,18 +168,14 @@ final class SupabaseStorageTests: XCTestCase {
           """#
         }
         return (
-          """
-          {
-            "Id": "tests/file1.txt",
-            "Key": "tests/file1.txt"
-          }
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
+          Data(
+            """
+            {
+              "Id": "tests/file1.txt",
+              "Key": "tests/file1.txt"
+            }
+            """.utf8),
+          HTTPResponse(status: .init(code: 200))
         )
       }
 

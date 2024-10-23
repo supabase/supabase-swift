@@ -7,30 +7,31 @@
 
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Helpers
 import XCTestDynamicOverlay
 
 package actor HTTPClientMock: HTTPClientType {
   package struct MockNotFound: Error {}
 
-  private var mocks = [@Sendable (HTTPRequest) async throws -> HTTPResponse?]()
+  private var mocks = [@Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse)?]()
 
   /// Requests received by this client in order.
-  package var receivedRequests: [HTTPRequest] = []
+  package var receivedRequests: [(request: HTTPRequest, bodyData: Data?)] = []
 
   /// Responses returned by this client in order.
-  package var returnedResponses: [Result<HTTPResponse, any Error>] = []
+  package var returnedResponses: [Result<(Data, HTTPResponse), any Error>] = []
 
   package init() {}
 
   @discardableResult
   package func when(
-    _ request: @escaping @Sendable (HTTPRequest) -> Bool,
-    return response: @escaping @Sendable (HTTPRequest) async throws -> HTTPResponse
+    _ request: @escaping @Sendable (HTTPRequest, Data?) -> Bool,
+    return response: @escaping @Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse)
   ) -> Self {
-    mocks.append { r in
-      if request(r) {
-        return try await response(r)
+    mocks.append {
+      if request($0, $1) {
+        return try await response($0, $1)
       }
       return nil
     }
@@ -39,19 +40,22 @@ package actor HTTPClientMock: HTTPClientType {
 
   @discardableResult
   package func any(
-    _ response: @escaping @Sendable (HTTPRequest) async throws -> HTTPResponse
+    _ response: @escaping @Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse)
   ) -> Self {
-    when({ _ in true }, return: response)
+    when({ _, _ in true }, return: response)
   }
 
-  package func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-    receivedRequests.append(request)
+  package func send(
+    for request: HTTPRequest,
+    from bodyData: Data?
+  ) async throws -> (Data, HTTPResponse) {
+    receivedRequests.append((request, bodyData))
 
     for mock in mocks {
       do {
-        if let response = try await mock(request) {
-          returnedResponses.append(.success(response))
-          return response
+        if let (data, response) = try await mock(request, bodyData) {
+          returnedResponses.append(.success((data, response)))
+          return (data, response)
         }
       } catch {
         returnedResponses.append(.failure(error))

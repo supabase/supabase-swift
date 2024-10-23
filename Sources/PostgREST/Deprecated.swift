@@ -6,6 +6,9 @@
 //
 
 import Foundation
+import Helpers
+import HTTPTypes
+import HTTPTypesFoundation
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -29,7 +32,13 @@ extension PostgrestClient.Configuration {
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
-    fetch: @escaping PostgrestClient.FetchHandler = { try await URLSession.shared.data(for: $0) },
+    fetch: @escaping PostgrestClient.FetchHandler = { request, body in
+      if let body {
+        return try await URLSession.shared.upload(for: request, from: body)
+      } else {
+        return try await URLSession.shared.data(for: request)
+      }
+    },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
@@ -63,7 +72,13 @@ extension PostgrestClient {
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    fetch: @escaping FetchHandler = { request, body in
+      if let body {
+        return try await URLSession.shared.upload(for: request, from: body)
+      } else {
+        return try await URLSession.shared.data(for: request)
+      }
+    },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {

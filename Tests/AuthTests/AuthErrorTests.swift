@@ -5,8 +5,10 @@
 //  Created by Guilherme Souza on 29/08/24.
 //
 
-@testable import Auth
+import HTTPTypes
 import XCTest
+
+@testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -26,12 +28,16 @@ final class AuthErrorTests: XCTestCase {
       message: "API Error",
       errorCode: .emailConflictIdentityNotDeletable,
       underlyingData: Data(),
-      underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 400, httpVersion: nil, headerFields: nil)!
+      underlyingResponse: HTTPResponse(status: .init(code: 400))
     )
     XCTAssertEqual(api.errorCode, .emailConflictIdentityNotDeletable)
     XCTAssertEqual(api.message, "API Error")
 
-    let pkceGrantCodeExchange = AuthError.pkceGrantCodeExchange(message: "PKCE failure", error: nil, code: nil)
+    let pkceGrantCodeExchange = AuthError.pkceGrantCodeExchange(
+      message: "PKCE failure",
+      error: nil,
+      code: nil
+    )
     XCTAssertEqual(pkceGrantCodeExchange.errorCode, .unknown)
     XCTAssertEqual(pkceGrantCodeExchange.message, "PKCE failure")
 

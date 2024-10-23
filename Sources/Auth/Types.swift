@@ -193,8 +193,14 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
-    appMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .appMetadata) ?? [:]
-    userMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .userMetadata) ?? [:]
+    appMetadata = try container.decodeIfPresent(
+      [String: AnyJSON].self,
+      forKey: .appMetadata
+    ) ?? [:]
+    userMetadata = try container.decodeIfPresent(
+        [String: AnyJSON].self,
+        forKey: .userMetadata
+    ) ?? [:]
     aud = try container.decode(String.self, forKey: .aud)
     confirmationSentAt = try container.decodeIfPresent(Date.self, forKey: .confirmationSentAt)
     recoverySentAt = try container.decodeIfPresent(Date.self, forKey: .recoverySentAt)
@@ -262,8 +268,10 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
     id = try container.decode(String.self, forKey: .id)
-    identityId = try container.decodeIfPresent(UUID.self, forKey: .identityId)
-      ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    identityId = try container.decodeIfPresent(
+      UUID.self,
+      forKey: .identityId
+    ) ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
     userId = try container.decode(UUID.self, forKey: .userId)
     identityData = try container.decodeIfPresent([String: AnyJSON].self, forKey: .identityData)
     provider = try container.decode(String.self, forKey: .provider)

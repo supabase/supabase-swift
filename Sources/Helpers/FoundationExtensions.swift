@@ -32,7 +32,30 @@ extension Result {
   }
 }
 
+extension [URLQueryItem] {
+  package mutating func appendOrUpdate(_ queryItem: URLQueryItem) {
+    if let index = firstIndex(where: { $0.name == queryItem.name }) {
+      self[index] = queryItem
+    } else {
+      self.append(queryItem)
+    }
+  }
+}
+
 extension URL {
+  package var queryItems: [URLQueryItem] {
+    get {
+      return URLComponents(url: self, resolvingAgainstBaseURL: false)?.queryItems ?? []
+    }
+    set {
+      guard var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else {
+        return
+      }
+      components.queryItems = newValue
+      self = components.url ?? self
+    }
+  }
+
   package mutating func appendQueryItems(_ queryItems: [URLQueryItem]) {
     guard !queryItems.isEmpty else {
       return
@@ -79,7 +102,7 @@ extension CharacterSet {
   /// query strings to include a URL. Therefore, all "reserved" characters with the exception of "?" and "/"
   /// should be percent-escaped in the query string.
   static let sbURLQueryAllowed: CharacterSet = {
-    let generalDelimitersToEncode = ":#[]@" // does not include "?" or "/" due to RFC 3986 - Section 3.4
+    let generalDelimitersToEncode = ":#[]@"  // does not include "?" or "/" due to RFC 3986 - Section 3.4
     let subDelimitersToEncode = "!$&'()*+,;="
     let encodableDelimiters = CharacterSet(charactersIn: "\(generalDelimitersToEncode)\(subDelimitersToEncode)")
 

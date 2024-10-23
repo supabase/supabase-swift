@@ -1,10 +1,11 @@
-@testable import Auth
 import CustomDump
-@testable import Functions
 import IssueReporting
+import XCTest
+
+@testable import Auth
+@testable import Functions
 @testable import Realtime
 @testable import Supabase
-import XCTest
 
 final class AuthLocalStorageMock: AuthLocalStorage {
   func store(key _: String, value _: Data) throws {}
@@ -79,8 +80,8 @@ final class SupabaseClientTests: XCTestCase {
 
     let realtimeOptions = client.realtimeV2.options
     let expectedRealtimeHeader = client._headers.merging(with: [
-      .init("custom_realtime_header_key")!: "custom_realtime_header_value"]
-    )
+      .init("custom_realtime_header_key")!: "custom_realtime_header_value"
+    ])
     expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
 

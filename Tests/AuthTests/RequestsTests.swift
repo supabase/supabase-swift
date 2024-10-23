@@ -5,12 +5,14 @@
 //  Created by Guilherme Souza on 07/10/23.
 //
 
-@testable import Auth
+import HTTPTypes
 import Helpers
 import InlineSnapshotTesting
 import SnapshotTesting
 import TestHelpers
 import XCTest
+
+@testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -140,10 +142,10 @@ final class RequestsTests: XCTestCase {
 
   #if !os(Linux) && !os(Windows)
     func testSessionFromURL() async throws {
-      let sut = makeSUT(fetch: { request in
-        let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
+      let sut = makeSUT(fetch: { request, _ in
+        let authorizationHeader = request.headerFields[.authorization]
         XCTAssertEqual(authorizationHeader, "bearer accesstoken")
-        return (json(named: "user"), HTTPURLResponse.stub())
+        return (json(named: "user"), HTTPResponse(status: .ok))
       })
 
       let currentDate = Date()
@@ -430,7 +432,12 @@ final class RequestsTests: XCTestCase {
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
-      _ = try await sut.mfa.enroll(params: MFAEnrollParams(issuer: "supabase.com", friendlyName: "test"))
+      _ = try await sut.mfa.enroll(
+        params: MFAEnrollParams(
+          issuer: "supabase.com",
+          friendlyName: "test"
+        )
+      )
     }
   }
 
@@ -480,7 +487,13 @@ final class RequestsTests: XCTestCase {
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
-      _ = try await sut.mfa.verify(params: .init(factorId: "123", challengeId: "123", code: "123456"))
+      _ = try await sut.mfa.verify(
+        params: .init(
+          factorId: "123",
+          challengeId: "123",
+          code: "123456"
+        )
+      )
     }
   }
 
@@ -521,15 +534,22 @@ final class RequestsTests: XCTestCase {
       localStorage: InMemoryLocalStorage(),
       logger: nil,
       encoder: encoder,
-      fetch: { request in
+      fetch: { request, body in
         DispatchQueue.main.sync {
+          var request = URLRequest(httpRequest: request)!
+          request.httpBody = body
           assertSnapshot(
-            of: request, as: .curl, record: record, file: file, testName: testName, line: line
+            of: request,
+            as: .curl,
+            record: record,
+            file: file,
+            testName: testName,
+            line: line
           )
         }
 
         if let fetch {
-          return try await fetch(request)
+          return try await fetch(request, body)
         }
 
         throw UnimplementedError()

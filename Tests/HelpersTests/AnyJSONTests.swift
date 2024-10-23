@@ -7,8 +7,9 @@
 
 import CustomDump
 import Foundation
-@testable import Helpers
 import XCTest
+
+@testable import Helpers
 
 final class AnyJSONTests: XCTestCase {
   let jsonString = """

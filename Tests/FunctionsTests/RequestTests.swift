@@ -5,9 +5,14 @@
 //  Created by Guilherme Souza on 23/04/24.
 //
 
-@testable import Functions
 import SnapshotTesting
 import XCTest
+
+@testable import Functions
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 
 final class RequestTests: XCTestCase {
   let url = URL(string: "http://localhost:5432/functions/v1")!
@@ -53,9 +58,18 @@ final class RequestTests: XCTestCase {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey, "x-client-info": "functions-swift/x.y.z"]
-    ) { request in
+    ) { request, body in
       await MainActor.run {
-        assertSnapshot(of: request, as: .curl, record: record, file: file, testName: testName, line: line)
+        var request = URLRequest(httpRequest: request)!
+        request.httpBody = body
+        assertSnapshot(
+          of: request,
+          as: .curl,
+          record: record,
+          file: file,
+          testName: testName,
+          line: line
+        )
       }
       throw NSError(domain: "Error", code: 0, userInfo: nil)
     }

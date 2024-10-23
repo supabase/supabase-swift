@@ -45,6 +45,6 @@ extension PostgrestClient.Configuration {
   }()
 
   public static let defaultHeaders: [String: String] = [
-    "X-Client-Info": "postgrest-swift/\(version)",
+    "X-Client-Info": "postgrest-swift/\(version)"
   ]
 }

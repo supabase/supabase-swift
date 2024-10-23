@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import HTTPTypes
+import HTTPTypesFoundation
 import Helpers
 
 #if canImport(FoundationNetworking)
@@ -74,8 +76,13 @@ extension AuthClient.Configuration {
     localStorage: any AuthLocalStorage,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) }
-  ) {
+    fetch: @escaping AuthClient.FetchHandler = { request, body in
+      if let body {
+        return try await URLSession.shared.upload(for: request, from: body)
+      } else {
+        return try await URLSession.shared.data(for: request)
+      }
+    }  ) {
     self.init(
       url: url,
       headers: headers,
@@ -112,7 +119,13 @@ extension AuthClient {
     localStorage: any AuthLocalStorage,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping AuthClient.FetchHandler = { request, body in
+      if let body {
+        return try await URLSession.shared.upload(for: request, from: body)
+      } else {
+        return try await URLSession.shared.data(for: request)
+      }
+    }
   ) {
     self.init(
       url: url,

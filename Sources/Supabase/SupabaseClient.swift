@@ -2,12 +2,13 @@
 import ConcurrencyExtras
 import Foundation
 @_exported import Functions
+import HTTPTypes
+import HTTPTypesFoundation
 import Helpers
 import IssueReporting
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
-import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -67,7 +68,9 @@ public final class SupabaseClient: Sendable {
           configuration: StorageClientConfiguration(
             url: storageURL,
             headers: headers,
-            session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+            session: StorageHTTPSession(
+              fetch: fetchWithAuth
+            ),
             logger: options.global.logger
           )
         )
@@ -174,9 +177,13 @@ public final class SupabaseClient: Sendable {
       logger: options.global.logger,
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
-      fetch: {
+      fetch: { request, body in
         // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: $0)
+        if let body {
+          return try await options.global.session.upload(for: request, from: body)
+        } else {
+          return try await options.global.session.data(for: request)
+        }
       },
       autoRefreshToken: options.auth.autoRefreshToken
     )
@@ -338,19 +345,18 @@ public final class SupabaseClient: Sendable {
   }
 
   @Sendable
-  private func fetchWithAuth(_ request: URLRequest) async throws -> (Data, URLResponse) {
-    try await session.data(for: adapt(request: request))
+  private func fetchWithAuth(
+    for request: HTTPRequest,
+    from bodyData: Data?
+  ) async throws -> (Data, HTTPResponse) {
+    if let bodyData {
+      try await session.upload(for: adapt(request: request), from: bodyData)
+    } else {
+      try await session.data(for: adapt(request: request))
+    }
   }
 
-  @Sendable
-  private func uploadWithAuth(
-    _ request: URLRequest,
-    from data: Data
-  ) async throws -> (Data, URLResponse) {
-    try await session.upload(for: adapt(request: request), from: data)
-  }
-
-  private func adapt(request: URLRequest) async -> URLRequest {
+  private func adapt(request: HTTPRequest) async -> HTTPRequest {
     let token: String? = if let accessToken = options.auth.accessToken {
       try? await accessToken()
     } else {
@@ -359,7 +365,7 @@ public final class SupabaseClient: Sendable {
 
     var request = request
     if let token {
-      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+      request.headerFields[.authorization] = "Bearer \(token)"
     }
     return request
   }

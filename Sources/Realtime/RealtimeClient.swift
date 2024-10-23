@@ -159,7 +159,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   var sendBuffer: [(ref: String?, callback: () throws -> Void)] = []
 
   /// Ref counter for messages
-  var ref: UInt64 = .min // 0 (max: 18,446,744,073,709,551,615)
+  var ref: UInt64 = .min  // 0 (max: 18,446,744,073,709,551,615)
 
   /// Timer that triggers sending new Heartbeat messages
   var heartbeatTimer: HeartbeatTimer?
@@ -235,7 +235,16 @@ public class RealtimeClient: PhoenixTransportDelegate {
       headers["X-Client-Info"] = "realtime-swift/\(version)"
     }
     self.headers = headers
-    http = HTTPClient(fetch: { try await URLSession.shared.data(for: $0) }, interceptors: [])
+    http = HTTPClient(
+      fetch: { request, body in
+        if let body {
+          return try await URLSession.shared.upload(for: request, from: body)
+        } else {
+          return try await URLSession.shared.data(for: request)
+        }
+      },
+      interceptors: []
+    )
 
     let params = paramsClosure?()
     if let jwt = (params?["Authorization"] as? String)?.split(separator: " ").last {
