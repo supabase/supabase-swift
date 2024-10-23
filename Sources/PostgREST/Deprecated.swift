@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Helpers
 import HTTPTypes
 import HTTPTypesFoundation
 
@@ -33,9 +34,9 @@ extension PostgrestClient.Configuration {
     headers: [String: String] = [:],
     fetch: @escaping PostgrestClient.FetchHandler = { request, body in
       if let body {
-        try await URLSession.shared.upload(for: request, from: body)
+        return try await URLSession.shared.upload(for: request, from: body)
       } else {
-        try await URLSession.shared.data(for: request)
+        return try await URLSession.shared.data(for: request)
       }
     },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
@@ -73,9 +74,9 @@ extension PostgrestClient {
     headers: [String: String] = [:],
     fetch: @escaping FetchHandler = { request, body in
       if let body {
-        try await URLSession.shared.upload(for: request, from: body)
+        return try await URLSession.shared.upload(for: request, from: body)
       } else {
-        try await URLSession.shared.data(for: request)
+        return try await URLSession.shared.data(for: request)
       }
     },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,

@@ -180,9 +180,9 @@ public final class SupabaseClient: Sendable {
       fetch: { request, body in
         // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
         if let body {
-          try await options.global.session.upload(for: request, from: body)
+          return try await options.global.session.upload(for: request, from: body)
         } else {
-          try await options.global.session.data(for: request)
+          return try await options.global.session.data(for: request)
         }
       },
       autoRefreshToken: options.auth.autoRefreshToken

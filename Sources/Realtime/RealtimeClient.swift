@@ -238,9 +238,9 @@ public class RealtimeClient: PhoenixTransportDelegate {
     http = HTTPClient(
       fetch: { request, body in
         if let body {
-          try await URLSession.shared.upload(for: request, from: body)
+          return try await URLSession.shared.upload(for: request, from: body)
         } else {
-          try await URLSession.shared.data(for: request)
+          return try await URLSession.shared.data(for: request)
         }
       },
       interceptors: []

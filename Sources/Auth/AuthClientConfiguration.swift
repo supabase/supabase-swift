@@ -76,9 +76,9 @@ extension AuthClient {
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       fetch: @escaping FetchHandler = { request, body in
         if let body {
-          try await URLSession.shared.upload(for: request, from: body)
+          return try await URLSession.shared.upload(for: request, from: body)
         } else {
-          try await URLSession.shared.data(for: request)
+          return try await URLSession.shared.data(for: request)
         }
       },
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
@@ -125,9 +125,9 @@ extension AuthClient {
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     fetch: @escaping FetchHandler = { request, body in
       if let body {
-        try await URLSession.shared.upload(for: request, from: body)
+        return try await URLSession.shared.upload(for: request, from: body)
       } else {
-        try await URLSession.shared.data(for: request)
+        return try await URLSession.shared.data(for: request)
       }
     },
     autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken

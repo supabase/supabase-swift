@@ -1,5 +1,6 @@
 import Foundation
 import HTTPTypes
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -21,9 +22,9 @@ public struct StorageHTTPSession: Sendable {
     self.init(
       fetch: { request, body in
         if let body {
-          try await session.upload(for: request, from: body)
+          return try await session.upload(for: request, from: body)
         } else {
-          try await session.data(for: request)
+          return try await session.data(for: request)
         }
       }
     )

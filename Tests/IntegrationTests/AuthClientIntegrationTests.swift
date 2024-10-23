@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import CustomDump
 import HTTPTypes
+import Helpers
 import TestHelpers
 import XCTest
 
