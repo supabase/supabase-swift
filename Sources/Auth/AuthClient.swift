@@ -21,7 +21,9 @@ public final class AuthClient: Sendable {
 
   private var api: APIClient { Dependencies[clientID].api }
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  private var codeVerifierStorage: CodeVerifierStorage { Dependencies[clientID].codeVerifierStorage }
+  private var codeVerifierStorage: CodeVerifierStorage {
+    Dependencies[clientID].codeVerifierStorage
+  }
   private var date: @Sendable () -> Date { Dependencies[clientID].date }
   private var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
   private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
@@ -77,10 +79,11 @@ public final class AuthClient: Sendable {
       sessionManager: .live(clientID: clientID)
     )
 
-    observeAppLifecycleChanges()
+    Task { @MainActor in observeAppLifecycleChanges() }
   }
 
   #if canImport(ObjectiveC)
+    @MainActor
     private func observeAppLifecycleChanges() {
       #if canImport(UIKit)
         #if canImport(WatchKit)
@@ -165,14 +168,20 @@ public final class AuthClient: Sendable {
   /// Listen for auth state changes.
   ///
   /// An `.initialSession` is always emitted when this method is called.
-  public var authStateChanges: AsyncStream<(
-    event: AuthChangeEvent,
-    session: Session?
-  )> {
-    let (stream, continuation) = AsyncStream<(
-      event: AuthChangeEvent,
-      session: Session?
-    )>.makeStream()
+  public var authStateChanges:
+    AsyncStream<
+      (
+        event: AuthChangeEvent,
+        session: Session?
+      )
+    >
+  {
+    let (stream, continuation) = AsyncStream<
+      (
+        event: AuthChangeEvent,
+        session: Session?
+      )
+    >.makeStream()
 
     Task {
       let handle = await onAuthStateChange { event, session in
@@ -209,10 +218,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("signup"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (redirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           SignUpRequest(
@@ -401,10 +412,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("otp"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (redirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           OTPParams(
@@ -524,7 +537,8 @@ public final class AuthClient: Sendable {
     let codeVerifier = codeVerifierStorage.get()
 
     if codeVerifier == nil {
-      logger?.error("code verifier not found, a code verifier should exist when calling this method.")
+      logger?.error(
+        "code verifier not found, a code verifier should exist when calling this method.")
     }
 
     let session: Session = try await api.execute(
@@ -878,7 +892,9 @@ public final class AuthClient: Sendable {
           headers: [.authorization: "Bearer \(accessToken)"]
         )
       )
-    } catch let AuthError.api(_, _, _, response) where [404, 403, 401].contains(response.statusCode) {
+    } catch let AuthError.api(_, _, _, response)
+      where [404, 403, 401].contains(response.statusCode)
+    {
       // ignore 404s since user might not exist anymore
       // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.
     }
@@ -898,10 +914,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("verify"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (redirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           VerifyOTPParams.email(
@@ -991,10 +1009,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("resend"),
         method: .post,
         query: [
-          (emailRedirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (emailRedirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           ResendEmailParams(
@@ -1078,10 +1098,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("user"),
         method: .put,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (redirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(user)
       )
@@ -1213,10 +1235,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("recover"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (redirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           RecoverParams(
@@ -1300,7 +1324,7 @@ public final class AuthClient: Sendable {
     }
 
     var queryItems: [URLQueryItem] = [
-      URLQueryItem(name: "provider", value: provider.rawValue),
+      URLQueryItem(name: "provider", value: provider.rawValue)
     ]
 
     if let scopes {
