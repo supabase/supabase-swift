@@ -77,9 +77,39 @@
     ) async throws -> (Data, URLResponse) {
       let helper = URLSessionTaskCancellationHelper()
 
-      return try await withTaskCancellationHandler(operation: {
+      return try await withTaskCancellationHandler(
+        operation: {
+          try await withCheckedThrowingContinuation { continuation in
+            let task = dataTask(
+              with: request,
+              completionHandler: { data, response, error in
+                if let error {
+                  continuation.resume(throwing: error)
+                } else if let data, let response {
+                  continuation.resume(returning: (data, response))
+                } else {
+                  continuation.resume(throwing: URLSessionPolyfillError.noDataNoErrorReturned)
+                }
+              })
+
+            helper.register(task)
+
+            task.resume()
+          }
+        },
+        onCancel: {
+          helper.cancel()
+        })
+    }
+
+    public func data(
+      from url: URL,
+      delegate _: (any URLSessionTaskDelegate)? = nil
+    ) async throws -> (Data, URLResponse) {
+      let helper = URLSessionTaskCancellationHelper()
+      return try await withTaskCancellationHandler {
         try await withCheckedThrowingContinuation { continuation in
-          let task = dataTask(with: request, completionHandler: { data, response, error in
+          let task = dataTask(with: url) { data, response, error in
             if let error {
               continuation.resume(throwing: error)
             } else if let data, let response {
@@ -87,15 +117,14 @@
             } else {
               continuation.resume(throwing: URLSessionPolyfillError.noDataNoErrorReturned)
             }
-          })
+          }
 
           helper.register(task)
-
           task.resume()
         }
-      }, onCancel: {
+      } onCancel: {
         helper.cancel()
-      })
+      }
     }
 
     public func upload(
@@ -105,29 +134,31 @@
     ) async throws -> (Data, URLResponse) {
       let helper = URLSessionTaskCancellationHelper()
 
-      return try await withTaskCancellationHandler(operation: {
-        try await withCheckedThrowingContinuation { continuation in
-          let task = uploadTask(
-            with: request,
-            from: bodyData,
-            completionHandler: { data, response, error in
-              if let error {
-                continuation.resume(throwing: error)
-              } else if let data, let response {
-                continuation.resume(returning: (data, response))
-              } else {
-                continuation.resume(throwing: URLSessionPolyfillError.noDataNoErrorReturned)
+      return try await withTaskCancellationHandler(
+        operation: {
+          try await withCheckedThrowingContinuation { continuation in
+            let task = uploadTask(
+              with: request,
+              from: bodyData,
+              completionHandler: { data, response, error in
+                if let error {
+                  continuation.resume(throwing: error)
+                } else if let data, let response {
+                  continuation.resume(returning: (data, response))
+                } else {
+                  continuation.resume(throwing: URLSessionPolyfillError.noDataNoErrorReturned)
+                }
               }
-            }
-          )
+            )
 
-          helper.register(task)
+            helper.register(task)
 
-          task.resume()
-        }
-      }, onCancel: {
-        helper.cancel()
-      })
+            task.resume()
+          }
+        },
+        onCancel: {
+          helper.cancel()
+        })
     }
   }
 
