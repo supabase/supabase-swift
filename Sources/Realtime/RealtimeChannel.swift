@@ -407,12 +407,12 @@ public final class RealtimeChannel: Sendable {
         )
 
       case .presenceDiff:
-        let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]
-        let leaves = try message.payload["leaves"]?.decode(as: [String: PresenceV2].self) ?? [:]
+        let joins = try message.payload["joins"]?.decode(as: [String: Presence].self) ?? [:]
+        let leaves = try message.payload["leaves"]?.decode(as: [String: Presence].self) ?? [:]
         callbackManager.triggerPresenceDiffs(joins: joins, leaves: leaves, rawMessage: message)
 
       case .presenceState:
-        let joins = try message.payload.decode(as: [String: PresenceV2].self)
+        let joins = try message.payload.decode(as: [String: Presence].self)
         callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:], rawMessage: message)
       }
     } catch {

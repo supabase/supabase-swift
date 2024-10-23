@@ -42,8 +42,10 @@ struct MessagesView: View {
 
             Image(systemName: "circle.fill")
               .foregroundStyle(
-                userStore.presences[section.author.id] != nil ? Color.green : Color
-                  .red
+                userStore.presences[section.author.id] != nil
+                  ? Color.green
+                  : Color
+                    .red
               )
           }
         }

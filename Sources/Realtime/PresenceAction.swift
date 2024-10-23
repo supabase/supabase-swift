@@ -83,10 +83,9 @@ extension Presence: Codable {
   /// - Note: You can also receive your own presence, but without your state so be aware of
   /// exceptions.
   public func decodeState<T: Decodable>(
-    as _: T.Type = T.self,
-    decoder: JSONDecoder = AnyJSON.decoder
+    as _: T.Type = T.self
   ) throws -> T {
-    try state.decode(as: T.self, decoder: decoder)
+    try state.decode(as: T.self)
   }
 }
 
@@ -110,14 +109,13 @@ extension PresenceAction {
   /// presence.
   public func decodeJoins<T: Decodable>(
     as _: T.Type = T.self,
-    ignoreOtherTypes: Bool = true,
-    decoder: JSONDecoder = AnyJSON.decoder
+    ignoreOtherTypes: Bool = true
   ) throws -> [T] {
     if ignoreOtherTypes {
-      return joins.values.compactMap { try? $0.decodeState(as: T.self, decoder: decoder) }
+      return joins.values.compactMap { try? $0.decodeState(as: T.self) }
     }
 
-    return try joins.values.map { try $0.decodeState(as: T.self, decoder: decoder) }
+    return try joins.values.map { try $0.decodeState(as: T.self) }
   }
 
   /// Decode all ``PresenceAction/leaves`` values.
@@ -126,14 +124,13 @@ extension PresenceAction {
   /// presence.
   public func decodeLeaves<T: Decodable>(
     as _: T.Type = T.self,
-    ignoreOtherTypes: Bool = true,
-    decoder: JSONDecoder = AnyJSON.decoder
+    ignoreOtherTypes: Bool = true
   ) throws -> [T] {
     if ignoreOtherTypes {
-      return leaves.values.compactMap { try? $0.decodeState(as: T.self, decoder: decoder) }
+      return leaves.values.compactMap { try? $0.decodeState(as: T.self) }
     }
 
-    return try leaves.values.map { try $0.decodeState(as: T.self, decoder: decoder) }
+    return try leaves.values.map { try $0.decodeState(as: T.self) }
   }
 }
 

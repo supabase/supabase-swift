@@ -64,7 +64,8 @@ final class UserStore {
       return user
     }
 
-    let user: User = try await supabase
+    let user: User =
+      try await supabase
       .from("users")
       .select()
       .eq("id", value: id)
@@ -79,16 +80,14 @@ final class UserStore {
     do {
       switch action {
       case let .insert(action):
-        let user = try action.decodeRecord(decoder: decoder) as User
+        let user = try action.decodeRecord() as User
         users[user.id] = user
       case let .update(action):
-        let user = try action.decodeRecord(decoder: decoder) as User
+        let user = try action.decodeRecord() as User
         users[user.id] = user
       case let .delete(action):
         guard let id = action.oldRecord["id"]?.stringValue else { return }
         users[UUID(uuidString: id)!] = nil
-      default:
-        break
       }
     } catch {
       dump(error)

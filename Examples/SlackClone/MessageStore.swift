@@ -33,8 +33,8 @@ struct Messages {
 
   mutating func appendOrUpdate(_ message: Message) {
     if let sectionIndex = messageToSectionLookupTable[message.id],
-       let messageIndex = sections[sectionIndex].messages
-       .firstIndex(where: { $0.id == message.id })
+      let messageIndex = sections[sectionIndex].messages
+        .firstIndex(where: { $0.id == message.id })
     {
       sections[sectionIndex].messages[messageIndex] = message
     } else {
@@ -146,7 +146,7 @@ final class MessageStore {
 
   private func handleInsertedOrUpdatedMessage(_ action: HasRecord) async {
     do {
-      let decodedMessage = try action.decodeRecord(decoder: decoder) as MessagePayload
+      let decodedMessage = try action.decodeRecord() as MessagePayload
       let message = try await Message(
         id: decodedMessage.id,
         insertedAt: decodedMessage.insertedAt,
