@@ -8,7 +8,7 @@
 import Foundation
 import Helpers
 
-public struct PresenceV2: Hashable, Sendable {
+public struct Presence: Hashable, Sendable {
   /// The presence reference of the object.
   public let ref: String
 
@@ -17,7 +17,7 @@ public struct PresenceV2: Hashable, Sendable {
   public let state: JSONObject
 }
 
-extension PresenceV2: Codable {
+extension Presence: Codable {
   struct _StringCodingKey: CodingKey {
     var stringValue: String
 
@@ -42,10 +42,11 @@ extension PresenceV2: Codable {
 
     let json = try container.decode(JSONObject.self)
 
-    let codingPath = container.codingPath + [
-      _StringCodingKey("metas"),
-      _StringCodingKey(intValue: 0)!,
-    ]
+    let codingPath =
+      container.codingPath + [
+        _StringCodingKey("metas"),
+        _StringCodingKey(intValue: 0)!,
+      ]
 
     guard var meta = json["metas"]?.arrayValue?.first?.objectValue else {
       throw DecodingError.typeMismatch(
@@ -68,7 +69,7 @@ extension PresenceV2: Codable {
     }
 
     meta["phx_ref"] = nil
-    self = PresenceV2(ref: presenceRef, state: meta)
+    self = Presence(ref: presenceRef, state: meta)
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -91,15 +92,15 @@ extension PresenceV2: Codable {
 
 /// Represents a presence action.
 public protocol PresenceAction: Sendable, HasRawMessage {
-  /// Represents a map of ``PresenceV2`` objects indexed by their key.
+  /// Represents a map of ``Presence`` objects indexed by their key.
   ///
   /// Your own key can be customized when creating the channel within the presence config.
-  var joins: [String: PresenceV2] { get }
+  var joins: [String: Presence] { get }
 
-  /// Represents a map of ``PresenceV2`` objects indexed by their key.
+  /// Represents a map of ``Presence`` objects indexed by their key.
   ///
   /// Your own key can be customized when creating the channel within the presence config.
-  var leaves: [String: PresenceV2] { get }
+  var leaves: [String: Presence] { get }
 }
 
 extension PresenceAction {
@@ -137,7 +138,7 @@ extension PresenceAction {
 }
 
 struct PresenceActionImpl: PresenceAction {
-  var joins: [String: PresenceV2]
-  var leaves: [String: PresenceV2]
-  var rawMessage: RealtimeMessageV2
+  var joins: [String: Presence]
+  var leaves: [String: Presence]
+  var rawMessage: RealtimeMessage
 }

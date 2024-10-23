@@ -1,9 +1,10 @@
 import ConcurrencyExtras
 import CustomDump
 import Helpers
-@testable import Realtime
 import TestHelpers
 import XCTest
+
+@testable import Realtime
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -21,14 +22,14 @@ final class RealtimeTests: XCTestCase {
 
   var ws: MockWebSocketClient!
   var http: HTTPClientMock!
-  var sut: RealtimeClientV2!
+  var sut: RealtimeClient!
 
   override func setUp() {
     super.setUp()
 
     ws = MockWebSocketClient()
     http = HTTPClientMock()
-    sut = RealtimeClientV2(
+    sut = RealtimeClient(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
@@ -103,7 +104,7 @@ final class RealtimeTests: XCTestCase {
 
     ws.on { message in
       if message.event == "heartbeat" {
-        return RealtimeMessageV2(
+        return RealtimeMessage(
           joinRef: message.joinRef,
           ref: message.ref,
           topic: "phoenix",
@@ -135,7 +136,7 @@ final class RealtimeTests: XCTestCase {
     let joinSentMessages = ws.sentMessages.filter { $0.event == "phx_join" }
 
     let expectedMessages = try [
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: "1",
         ref: "1",
         topic: "realtime:public:messages",
@@ -147,7 +148,7 @@ final class RealtimeTests: XCTestCase {
           )
         )
       ),
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: "2",
         ref: "2",
         topic: "realtime:public:messages",
@@ -174,7 +175,7 @@ final class RealtimeTests: XCTestCase {
     ws.on { message in
       if message.event == "heartbeat" {
         expectation.fulfill()
-        return RealtimeMessageV2(
+        return RealtimeMessage(
           joinRef: message.joinRef,
           ref: message.ref,
           topic: "phoenix",
@@ -282,8 +283,8 @@ final class RealtimeTests: XCTestCase {
             "event": "test",
             "payload": ["value": 42],
             "private": false,
-          ],
-        ],
+          ]
+        ]
       ]
     )
   }
@@ -294,8 +295,8 @@ final class RealtimeTests: XCTestCase {
   }
 }
 
-extension RealtimeMessageV2 {
-  static func subscribeToMessages(ref: String?, joinRef: String?) -> RealtimeMessageV2 {
+extension RealtimeMessage {
+  static func subscribeToMessages(ref: String?, joinRef: String?) -> RealtimeMessage {
     Self(
       joinRef: joinRef,
       ref: ref,
@@ -328,10 +329,10 @@ extension RealtimeMessageV2 {
     payload: [
       "response": [
         "postgres_changes": [
-          ["id": 43783255, "event": "INSERT", "schema": "public", "table": "messages"],
-          ["id": 124973000, "event": "UPDATE", "schema": "public", "table": "messages"],
-          ["id": 85243397, "event": "DELETE", "schema": "public", "table": "messages"],
-        ],
+          ["id": 43_783_255, "event": "INSERT", "schema": "public", "table": "messages"],
+          ["id": 124_973_000, "event": "UPDATE", "schema": "public", "table": "messages"],
+          ["id": 85_243_397, "event": "DELETE", "schema": "public", "table": "messages"],
+        ]
       ],
       "status": "ok",
     ]

@@ -1,5 +1,5 @@
 //
-//  PushV2.swift
+//  Push.swift
 //
 //
 //  Created by Guilherme Souza on 02/01/24.
@@ -15,13 +15,13 @@ public enum PushStatus: String, Sendable {
   case timeout
 }
 
-actor PushV2 {
-  private weak var channel: RealtimeChannelV2?
-  let message: RealtimeMessageV2
+actor Push {
+  private weak var channel: RealtimeChannel?
+  let message: RealtimeMessage
 
   private var receivedContinuation: CheckedContinuation<PushStatus, Never>?
 
-  init(channel: RealtimeChannelV2?, message: RealtimeMessageV2) {
+  init(channel: RealtimeChannel?, message: RealtimeMessage) {
     self.channel = channel
     self.message = message
   }

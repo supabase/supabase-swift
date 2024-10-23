@@ -8,8 +8,9 @@
 import ConcurrencyExtras
 import CustomDump
 import Helpers
-@testable import Realtime
 import XCTest
+
+@testable import Realtime
 
 final class CallbackManagerTests: XCTestCase {
   func testIntegration() {
@@ -52,13 +53,15 @@ final class CallbackManagerTests: XCTestCase {
     let callbackManager = CallbackManager()
     XCTAssertNoLeak(callbackManager)
 
-    let changes = [PostgresJoinConfig(
-      event: .update,
-      schema: "public",
-      table: "users",
-      filter: nil,
-      id: 1
-    )]
+    let changes = [
+      PostgresJoinConfig(
+        event: .update,
+        schema: "public",
+        table: "users",
+        filter: nil,
+        id: 1
+      )
+    ]
 
     callbackManager.setServerChanges(changes: changes)
 
@@ -118,7 +121,8 @@ final class CallbackManagerTests: XCTestCase {
       receivedActions.withValue { $0.append(action) }
     }
 
-    let deleteSpecificUserId = callbackManager
+    let deleteSpecificUserId =
+      callbackManager
       .addPostgresCallback(filter: deleteSpecificUserFilter) { action in
         receivedActions.withValue { $0.append(action) }
       }
@@ -130,7 +134,7 @@ final class CallbackManagerTests: XCTestCase {
       commitTimestamp: currentDate,
       record: ["email": .string("new@mail.com")],
       oldRecord: ["email": .string("old@mail.com")],
-      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
+      rawMessage: RealtimeMessage(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
     callbackManager.triggerPostgresChanges(ids: [updateUsersId], data: .update(updateUserAction))
 
@@ -138,7 +142,7 @@ final class CallbackManagerTests: XCTestCase {
       columns: [],
       commitTimestamp: currentDate,
       record: ["email": .string("email@mail.com")],
-      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
+      rawMessage: RealtimeMessage(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
     callbackManager.triggerPostgresChanges(ids: [insertUsersId], data: .insert(insertUserAction))
 
@@ -149,7 +153,7 @@ final class CallbackManagerTests: XCTestCase {
       columns: [],
       commitTimestamp: currentDate,
       oldRecord: ["id": .string("1234")],
-      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
+      rawMessage: RealtimeMessage(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
     callbackManager.triggerPostgresChanges(
       ids: [deleteSpecificUserId],
@@ -174,7 +178,7 @@ final class CallbackManagerTests: XCTestCase {
     XCTAssertNoLeak(callbackManager)
 
     let event = "new_user"
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessage(
       joinRef: nil,
       ref: nil,
       topic: "realtime:users",
@@ -209,7 +213,7 @@ final class CallbackManagerTests: XCTestCase {
     callbackManager.triggerPresenceDiffs(
       joins: joins,
       leaves: leaves,
-      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
+      rawMessage: RealtimeMessage(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
 
     expectNoDifference(receivedAction.value?.joins, joins)
