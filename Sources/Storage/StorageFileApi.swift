@@ -51,13 +51,7 @@ enum FileUpload {
 }
 
 #if DEBUG
-  #if compiler(>=6)
-    // It is safe to mark it as unsafe, since this property is only used in tests for overriding the
-    // boundary value, instead of using the random one.
-    nonisolated(unsafe) var testingBoundary: String?
-  #else
-    var testingBoundary: String?
-  #endif
+  var testingBoundary: String?
 #endif
 
 /// Supabase Storage File API
