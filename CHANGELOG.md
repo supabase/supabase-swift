@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.20.4](https://github.com/supabase/supabase-swift/compare/v2.20.3...v2.20.4) (2024-10-23)
+
+
+### Bug Fixes
+
+* **storage:** cache control ([#551](https://github.com/supabase/supabase-swift/issues/551)) ([8a2b196](https://github.com/supabase/supabase-swift/commit/8a2b19690cf165c80454ff6388cb9a202b04172c))
+
 ## [2.20.3](https://github.com/supabase/supabase-swift/compare/v2.20.2...v2.20.3) (2024-10-22)
 
 
