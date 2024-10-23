@@ -40,7 +40,7 @@ struct APIClient: Sendable {
     request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
 
     if request.headerFields[.apiVersionHeaderName] == nil {
-      request.headerFields[.apiVersionHeaderName] = API_VERSIONS[._20240101]!.name.rawValue
+      request.headerFields[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
     }
 
     let (data, response) = try await http.send(for: request, from: bodyData)
@@ -70,7 +70,10 @@ struct APIClient: Sendable {
   }
 
   func handleError(data: Data, response: HTTPResponse) -> AuthError {
-    guard let error = try? configuration.decoder.decode(_RawAPIErrorResponse.self, from: data) else {
+    guard let error = try? configuration.decoder.decode(
+      _RawAPIErrorResponse.self,
+      from: data
+    ) else {
       return .api(
         message: "Unexpected error",
         errorCode: .unexpectedFailure,
@@ -81,7 +84,7 @@ struct APIClient: Sendable {
 
     let responseAPIVersion = parseResponseAPIVersion(response)
 
-    let errorCode: ErrorCode? = if let responseAPIVersion, responseAPIVersion >= API_VERSIONS[._20240101]!.timestamp, let code = error.code {
+    let errorCode: ErrorCode? = if let responseAPIVersion, responseAPIVersion >= apiVersions[._20240101]!.timestamp, let code = error.code {
       ErrorCode(code)
     } else {
       error.errorCode

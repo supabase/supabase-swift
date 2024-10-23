@@ -71,7 +71,9 @@ public struct AuthAdmin: Sendable {
     let links = httpResponse.headerFields[.link]?.components(separatedBy: ",") ?? []
     if !links.isEmpty {
       for link in links {
-        let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(while: \.isNumber)
+        let page = link.components(separatedBy: ";")[0]
+          .components(separatedBy: "=")[1]
+          .prefix(while: \.isNumber)
         let rel = link.components(separatedBy: ";")[1].components(separatedBy: "=")[1]
 
         if rel == "\"last\"", let lastPage = Int(page) {

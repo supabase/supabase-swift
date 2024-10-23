@@ -29,15 +29,19 @@ struct AuthWithEmailAndPassword: View {
     Form {
       Section {
         TextField("Email", text: $email)
-          .keyboardType(.emailAddress)
           .textContentType(.emailAddress)
           .autocorrectionDisabled()
+        #if !os(macOS)
+          .keyboardType(.emailAddress)
           .textInputAutocapitalization(.never)
+        #endif
 
         SecureField("Password", text: $password)
           .textContentType(.password)
           .autocorrectionDisabled()
+        #if !os(macOS)
           .textInputAutocapitalization(.never)
+        #endif
       }
 
       Section {

@@ -48,7 +48,9 @@ extension URL {
       return URLComponents(url: self, resolvingAgainstBaseURL: false)?.queryItems ?? []
     }
     set {
-      guard var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else { return }
+      guard var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else {
+        return
+      }
       components.queryItems = newValue
       self = components.url ?? self
     }

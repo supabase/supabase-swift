@@ -57,7 +57,7 @@ final class FunctionsClientTests: XCTestCase {
 
     let _request = await http.receivedRequests.last
     let request = try XCTUnwrap(_request)
-    
+
     XCTAssertEqual(request.request.url, url)
     XCTAssertEqual(request.request.method, .post)
     XCTAssertEqual(request.request.headerFields[.init("Apikey")!], apiKey)

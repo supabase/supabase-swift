@@ -22,7 +22,9 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
     next: @Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse)
   ) async throws -> (Data, HTTPResponse) {
     let id = UUID().uuidString
-    return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(merging: ["requestID": .string(id)]) {
+    return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(merging: [
+      "requestID": .string(id)
+    ]) {
       var request = request
       if bodyData != nil, request.headerFields[.contentType] == nil {
         request.headerFields[.contentType] = "application/json"

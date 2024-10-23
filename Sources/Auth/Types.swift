@@ -114,7 +114,7 @@ public struct Session: Codable, Hashable, Sendable {
   /// The 30 second buffer is to account for latency issues.
   public var isExpired: Bool {
     let expiresAt = Date(timeIntervalSince1970: expiresAt)
-    return expiresAt.timeIntervalSinceNow < EXPIRY_MARGIN
+    return expiresAt.timeIntervalSinceNow < defaultExpiryMargin
   }
 }
 
@@ -193,8 +193,14 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
-    appMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .appMetadata) ?? [:]
-    userMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .userMetadata) ?? [:]
+    appMetadata = try container.decodeIfPresent(
+      [String: AnyJSON].self,
+      forKey: .appMetadata
+    ) ?? [:]
+    userMetadata = try container.decodeIfPresent(
+        [String: AnyJSON].self,
+        forKey: .userMetadata
+    ) ?? [:]
     aud = try container.decode(String.self, forKey: .aud)
     confirmationSentAt = try container.decodeIfPresent(Date.self, forKey: .confirmationSentAt)
     recoverySentAt = try container.decodeIfPresent(Date.self, forKey: .recoverySentAt)
@@ -262,8 +268,10 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
     id = try container.decode(String.self, forKey: .id)
-    identityId = try container.decodeIfPresent(UUID.self, forKey: .identityId)
-      ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    identityId = try container.decodeIfPresent(
+      UUID.self,
+      forKey: .identityId
+    ) ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
     userId = try container.decode(UUID.self, forKey: .userId)
     identityData = try container.decodeIfPresent([String: AnyJSON].self, forKey: .identityData)
     provider = try container.decode(String.self, forKey: .provider)
@@ -286,6 +294,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   }
 }
 
+/// One of the providers supported by Auth.
 public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {
   case apple
   case azure
@@ -478,6 +487,7 @@ public struct UserAttributes: Codable, Hashable, Sendable {
   public var nonce: String?
 
   /// An email change token.
+  @available(*, deprecated, message: "This is an old field, stop relying on it.")
   public var emailChangeToken: String?
   /// A custom data object to store the user's metadata. This maps to the `auth.users.user_metadata`
   /// column. The `data` should be a JSON object that includes user-specific info, such as their

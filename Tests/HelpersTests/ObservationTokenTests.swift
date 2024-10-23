@@ -16,7 +16,7 @@ final class ObservationTokenTests: XCTestCase {
     let handle = ObservationToken()
 
     let onRemoveCallCount = LockIsolated(0)
-    handle._onCancel.setValue {
+    handle.onCancel = {
       onRemoveCallCount.withValue {
         $0 += 1
       }
@@ -32,7 +32,7 @@ final class ObservationTokenTests: XCTestCase {
     var handle: ObservationToken? = ObservationToken()
 
     let onRemoveCallCount = LockIsolated(0)
-    handle?._onCancel.setValue {
+    handle?.onCancel = {
       onRemoveCallCount.withValue {
         $0 += 1
       }

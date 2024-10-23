@@ -279,8 +279,8 @@ final class RealtimeTests: XCTestCase {
             "event": "test",
             "payload": ["value": 42],
             "private": false,
-          ],
-        ],
+          ]
+        ]
       ]
     )
   }
@@ -328,7 +328,7 @@ extension RealtimeMessageV2 {
           ["id": 43783255, "event": "INSERT", "schema": "public", "table": "messages"],
           ["id": 124973000, "event": "UPDATE", "schema": "public", "table": "messages"],
           ["id": 85243397, "event": "DELETE", "schema": "public", "table": "messages"],
-        ],
+        ]
       ],
       "status": "ok",
     ]

@@ -80,8 +80,8 @@ final class SupabaseClientTests: XCTestCase {
 
     let realtimeOptions = client.realtimeV2.options
     let expectedRealtimeHeader = client._headers.merging(with: [
-      .init("custom_realtime_header_key")!: "custom_realtime_header_value"]
-    )
+      .init("custom_realtime_header_key")!: "custom_realtime_header_value"
+    ])
     expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
 

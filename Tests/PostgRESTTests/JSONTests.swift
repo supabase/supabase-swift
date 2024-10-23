@@ -11,11 +11,12 @@ import XCTest
 
 final class JSONTests: XCTestCase {
   func testDecodeJSON() throws {
-    let json = """
-    {
-      "created_at": "2024-06-15T18:12:04+00:00"
-    }
-    """.data(using: .utf8)!
+    let json = Data(
+      """
+      {
+        "created_at": "2024-06-15T18:12:04+00:00"
+      }
+      """.utf8)
 
     struct Value: Decodable {
       var createdAt: Date

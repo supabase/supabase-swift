@@ -69,7 +69,12 @@ let package = Package(
       ],
       resources: [.process("Resources")]
     ),
-    .target(name: "Functions", dependencies: ["Helpers"]),
+    .target(
+      name: "Functions",
+      dependencies: [
+        "Helpers",
+      ]
+    ),
     .testTarget(
       name: "FunctionsTests",
       dependencies: [
@@ -140,6 +145,7 @@ let package = Package(
       name: "StorageTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Storage",
       ]

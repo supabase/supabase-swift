@@ -43,6 +43,12 @@ final class SessionManagerTests: XCTestCase {
     )
   }
 
+  override func invokeTest() {
+    withMainSerialExecutor {
+      super.invokeTest()
+    }
+  }
+
   func testSession_shouldFailWithSessionNotFound() async {
     do {
       _ = try await sut.session()
@@ -58,58 +64,54 @@ final class SessionManagerTests: XCTestCase {
   }
 
   func testSession_shouldReturnValidSession() async throws {
-    try await withMainSerialExecutor {
-      let session = Session.validSession
-      try Dependencies[clientID].sessionStorage.store(session)
+    let session = Session.validSession
+    Dependencies[clientID].sessionStorage.store(session)
 
-      let returnedSession = try await sut.session()
-      expectNoDifference(returnedSession, session)
-    }
+    let returnedSession = try await sut.session()
+    expectNoDifference(returnedSession, session)
   }
 
   func testSession_shouldRefreshSession_whenCurrentSessionExpired() async throws {
-    try await withMainSerialExecutor {
-      let currentSession = Session.expiredSession
-      try Dependencies[clientID].sessionStorage.store(currentSession)
+    let currentSession = Session.expiredSession
+    Dependencies[clientID].sessionStorage.store(currentSession)
 
-      let validSession = Session.validSession
+    let validSession = Session.validSession
 
-      let refreshSessionCallCount = LockIsolated(0)
+    let refreshSessionCallCount = LockIsolated(0)
 
-      let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
+    let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
-      await http.when(
-        { request, _ in request.url?.path.contains("/token") ?? false },
-        return: { _, _ in
-          refreshSessionCallCount.withValue { $0 += 1 }
-          let session = await refreshSessionStream.first(where: { _ in true })!
-          let response = Response.stub(session)
-          return (response.data, response.response)
-        }
-      )
-
-      // Fire N tasks and call sut.session()
-      let tasks = (0 ..< 10).map { _ in
-        Task { [weak self] in
-          try await self?.sut.session()
-        }
+    await http.when(
+      { request, _ in request.url?.path.contains("/token") ?? false },
+      return: { _, _ in
+        refreshSessionCallCount.withValue { $0 += 1 }
+        let session = await refreshSessionStream.first(where: { _ in true })!
+        let response = Response.stub(session)
+        return (response.data, response.response)
       }
+    )
 
-      await Task.yield()
-
-      refreshSessionContinuation.yield(validSession)
-      refreshSessionContinuation.finish()
-
-      // Await for all tasks to complete.
-      var result: [Result<Session?, Error>] = []
-      for task in tasks {
-        let value = await task.result
-        result.append(value)
+    // Fire N tasks and call sut.session()
+    let tasks = (0..<10).map { _ in
+      Task { [weak self] in
+        try await self?.sut.session()
       }
-
-      // Verify that refresher and storage was called only once.
-      XCTAssertEqual(refreshSessionCallCount.value, 1)
-      XCTAssertEqual(try result.map { try $0.get() }, (0 ..< 10).map { _ in validSession })
     }
+
+    await Task.yield()
+
+    refreshSessionContinuation.yield(validSession)
+    refreshSessionContinuation.finish()
+
+    // Await for all tasks to complete.
+    var result: [Result<Session?, Error>] = []
+    for task in tasks {
+      let value = await task.result
+      result.append(value)
+    }
+
+    // Verify that refresher and storage was called only once.
+    XCTAssertEqual(refreshSessionCallCount.value, 1)
+    XCTAssertEqual(try result.map { try $0.get() }, (0..<10).map { _ in validSession })
   }
 }
