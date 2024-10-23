@@ -21,7 +21,7 @@ jobs:
       matrix:
         command: [test, ""]
         platform: [IOS, MAC_CATALYST, MACOS, TVOS, VISIONOS, WATCHOS]
-        xcode: ["15.2"]
+        xcode: ["15.4", "16.0"]
         exclude:
           - { platform: VISIONOS }
         include:
@@ -54,7 +54,7 @@ jobs:
     name: linux
     strategy:
       matrix:
-        swift-version: ["5.9", "5.10"]
+        swift-version: ["5.10"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

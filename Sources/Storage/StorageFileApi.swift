@@ -51,7 +51,8 @@ enum FileUpload {
 }
 
 #if DEBUG
-  var testingBoundary: String?
+  import ConcurrencyExtras
+  let testingBoundary = LockIsolated<String?>(nil)
 #endif
 
 /// Supabase Storage File API
@@ -88,7 +89,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     headers[.duplex] = options.duplex
 
     #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary)
+      let formData = MultipartFormData(boundary: testingBoundary.value)
     #else
       let formData = MultipartFormData()
     #endif
