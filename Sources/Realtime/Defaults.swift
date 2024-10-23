@@ -33,19 +33,19 @@ public enum Defaults {
   public static let heartbeatLeeway: DispatchTimeInterval = .milliseconds(10)
 
   /// Default reconnect algorithm for the socket
-  public static let reconnectSteppedBackOff: (Int) -> TimeInterval = { tries in
+  public static func reconnectSteppedBackOff(tries: Int) -> TimeInterval {
     tries > 9 ? 5.0 : [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0, 2.0][tries - 1]
   }
 
   /** Default rejoin algorithm for individual channels */
-  public static let rejoinSteppedBackOff: (Int) -> TimeInterval = { tries in
+  public static func rejoinSteppedBackOff(tries: Int) -> TimeInterval {
     tries > 3 ? 10 : [1, 2, 5][tries - 1]
   }
 
   public static let vsn = "2.0.0"
 
   /// Default encode function, utilizing JSONSerialization.data
-  public static let encode: (Any) -> Data = { json in
+  public static func encode(json: Any) -> Data {
     try! JSONSerialization
       .data(
         withJSONObject: json,
@@ -54,7 +54,7 @@ public enum Defaults {
   }
 
   /// Default decode function, utilizing JSONSerialization.jsonObject
-  public static let decode: (Data) -> Any? = { data in
+  public static func decode(data: Data) -> Any? {
     guard
       let json =
       try? JSONSerialization
