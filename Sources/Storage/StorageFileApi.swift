@@ -51,13 +51,8 @@ enum FileUpload {
 }
 
 #if DEBUG
-  #if compiler(>=6)
-    // It is safe to mark it as unsafe, since this property is only used in tests for overriding the
-    // boundary value, instead of using the random one.
-    nonisolated(unsafe) var testingBoundary: String?
-  #else
-    var testingBoundary: String?
-  #endif
+  import ConcurrencyExtras
+  let testingBoundary = LockIsolated<String?>(nil)
 #endif
 
 /// Supabase Storage File API
@@ -94,7 +89,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     headers[.duplex] = options.duplex
 
     #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary)
+      let formData = MultipartFormData(boundary: testingBoundary.value)
     #else
       let formData = MultipartFormData()
     #endif

@@ -94,7 +94,7 @@ final class SupabaseStorageTests: XCTestCase {
 
   #if !os(Linux)
     func testUploadData() async throws {
-      testingBoundary = "alamofire.boundary.c21f947c1c7b0c57"
+      testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
       sessionMock.fetch = { request in
         assertInlineSnapshot(of: request, as: .curl) {
@@ -155,7 +155,7 @@ final class SupabaseStorageTests: XCTestCase {
     }
 
     func testUploadFileURL() async throws {
-      testingBoundary = "alamofire.boundary.c21f947c1c7b0c57"
+      testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
       sessionMock.fetch = { request in
         assertInlineSnapshot(of: request, as: .curl) {
