@@ -6,12 +6,13 @@
 //
 
 import InlineSnapshotTesting
-@testable import Realtime
 import XCTest
 import XCTestDynamicOverlay
 
+@testable import Realtime
+
 final class RealtimeChannelTests: XCTestCase {
-  let sut = RealtimeChannelV2(
+  let sut = RealtimeChannel(
     topic: "topic",
     config: RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(),

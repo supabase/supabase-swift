@@ -14,7 +14,7 @@ import TestHelpers
 import XCTest
 
 final class RealtimeIntegrationTests: XCTestCase {
-  let realtime = RealtimeClientV2(
+  let realtime = RealtimeClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
     options: RealtimeClientOptions(
       headers: ["apikey": DotEnv.SUPABASE_ANON_KEY]

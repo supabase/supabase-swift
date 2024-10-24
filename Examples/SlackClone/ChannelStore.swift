@@ -62,7 +62,8 @@ final class ChannelStore {
       return channel
     }
 
-    let channel: Channel = try await supabase
+    let channel: Channel =
+      try await supabase
       .from("channels")
       .select()
       .eq("id", value: id)
@@ -74,7 +75,7 @@ final class ChannelStore {
 
   private func handleInsertedChannel(_ action: InsertAction) {
     do {
-      let channel = try action.decodeRecord(decoder: decoder) as Channel
+      let channel = try action.decodeRecord() as Channel
       channels.append(channel)
     } catch {
       dump(error)

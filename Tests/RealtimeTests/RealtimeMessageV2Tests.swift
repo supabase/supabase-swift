@@ -1,25 +1,30 @@
 //
-//  RealtimeMessageV2Tests.swift
+//  RealtimeMessageTests.swift
 //
 //
 //  Created by Guilherme Souza on 26/06/24.
 //
 
-@testable import Realtime
 import XCTest
 
-final class RealtimeMessageV2Tests: XCTestCase {
+@testable import Realtime
+
+final class RealtimeMessageTests: XCTestCase {
   func testStatus() {
-    var message = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "ok"])
+    var message = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "ok"])
     XCTAssertEqual(message.status, .ok)
 
-    message = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "timeout"])
+    message = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "timeout"])
     XCTAssertEqual(message.status, .timeout)
 
-    message = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "error"])
+    message = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "error"])
     XCTAssertEqual(message.status, .error)
 
-    message = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "invalid"])
+    message = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "invalid"])
     XCTAssertNil(message.status)
   }
 
@@ -28,33 +33,52 @@ final class RealtimeMessageV2Tests: XCTestCase {
     let payloadWithStatusOK: JSONObject = ["status": "ok"]
     let payloadWithNoStatus: JSONObject = [:]
 
-    let systemEventMessage = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.system, payload: payloadWithStatusOK)
-    let postgresChangesEventMessage = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.postgresChanges, payload: payloadWithNoStatus)
-    let tokenExpiredEventMessage = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.system, payload: payloadWithTokenExpiredMessage)
+    let systemEventMessage = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.system,
+      payload: payloadWithStatusOK)
+    let postgresChangesEventMessage = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.postgresChanges,
+      payload: payloadWithNoStatus)
+    let tokenExpiredEventMessage = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.system,
+      payload: payloadWithTokenExpiredMessage)
 
     XCTAssertEqual(systemEventMessage.eventType, .system)
     XCTAssertEqual(postgresChangesEventMessage.eventType, .postgresChanges)
     XCTAssertEqual(tokenExpiredEventMessage.eventType, .tokenExpired)
 
-    let broadcastEventMessage = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.broadcast, payload: payloadWithNoStatus)
+    let broadcastEventMessage = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.broadcast,
+      payload: payloadWithNoStatus)
     XCTAssertEqual(broadcastEventMessage.eventType, .broadcast)
 
-    let closeEventMessage = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.close, payload: payloadWithNoStatus)
+    let closeEventMessage = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.close,
+      payload: payloadWithNoStatus)
     XCTAssertEqual(closeEventMessage.eventType, .close)
 
-    let errorEventMessage = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.error, payload: payloadWithNoStatus)
+    let errorEventMessage = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.error,
+      payload: payloadWithNoStatus)
     XCTAssertEqual(errorEventMessage.eventType, .error)
 
-    let presenceDiffEventMessage = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.presenceDiff, payload: payloadWithNoStatus)
+    let presenceDiffEventMessage = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.presenceDiff,
+      payload: payloadWithNoStatus)
     XCTAssertEqual(presenceDiffEventMessage.eventType, .presenceDiff)
 
-    let presenceStateEventMessage = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.presenceState, payload: payloadWithNoStatus)
+    let presenceStateEventMessage = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.presenceState,
+      payload: payloadWithNoStatus)
     XCTAssertEqual(presenceStateEventMessage.eventType, .presenceState)
 
-    let replyEventMessage = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.reply, payload: payloadWithNoStatus)
+    let replyEventMessage = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.reply,
+      payload: payloadWithNoStatus)
     XCTAssertEqual(replyEventMessage.eventType, .reply)
 
-    let unknownEventMessage = RealtimeMessageV2(joinRef: nil, ref: nil, topic: "topic", event: "unknown_event", payload: payloadWithNoStatus)
+    let unknownEventMessage = RealtimeMessage(
+      joinRef: nil, ref: nil, topic: "topic", event: "unknown_event", payload: payloadWithNoStatus)
     XCTAssertNil(unknownEventMessage.eventType)
   }
 }

@@ -1,18 +1,19 @@
 //
-//  _PushTests.swift
+//  PushTests.swift
 //
 //
 //  Created by Guilherme Souza on 03/01/24.
 //
 
 import ConcurrencyExtras
-@testable import Realtime
 import TestHelpers
 import XCTest
 
-final class _PushTests: XCTestCase {
+@testable import Realtime
+
+final class PushTests: XCTestCase {
   var ws: MockWebSocketClient!
-  var socket: RealtimeClientV2!
+  var socket: RealtimeClient!
 
   override func invokeTest() {
     withMainSerialExecutor {
@@ -24,7 +25,7 @@ final class _PushTests: XCTestCase {
     super.setUp()
 
     ws = MockWebSocketClient()
-    socket = RealtimeClientV2(
+    socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/v1/realtime")!,
       options: RealtimeClientOptions(
         headers: ["apiKey": "apikey"]
@@ -35,7 +36,7 @@ final class _PushTests: XCTestCase {
   }
 
   func testPushWithoutAck() async {
-    let channel = RealtimeChannelV2(
+    let channel = RealtimeChannel(
       topic: "realtime:users",
       config: RealtimeChannelConfig(
         broadcast: .init(acknowledgeBroadcasts: false),
@@ -45,9 +46,9 @@ final class _PushTests: XCTestCase {
       socket: Socket(client: socket),
       logger: nil
     )
-    let push = PushV2(
+    let push = Push(
       channel: channel,
-      message: RealtimeMessageV2(
+      message: RealtimeMessage(
         joinRef: nil,
         ref: "1",
         topic: "realtime:users",
@@ -61,34 +62,34 @@ final class _PushTests: XCTestCase {
   }
 
   // FIXME: Flaky test, it fails some time due the task scheduling, even tho we're using withMainSerialExecutor.
-//  func testPushWithAck() async {
-//    let channel = RealtimeChannelV2(
-//      topic: "realtime:users",
-//      config: RealtimeChannelConfig(
-//        broadcast: .init(acknowledgeBroadcasts: true),
-//        presence: .init()
-//      ),
-//      socket: socket,
-//      logger: nil
-//    )
-//    let push = PushV2(
-//      channel: channel,
-//      message: RealtimeMessageV2(
-//        joinRef: nil,
-//        ref: "1",
-//        topic: "realtime:users",
-//        event: "broadcast",
-//        payload: [:]
-//      )
-//    )
-//
-//    let task = Task {
-//      await push.send()
-//    }
-//    await Task.megaYield()
-//    await push.didReceive(status: .ok)
-//
-//    let status = await task.value
-//    XCTAssertEqual(status, .ok)
-//  }
+  //  func testPushWithAck() async {
+  //    let channel = RealtimeChannel(
+  //      topic: "realtime:users",
+  //      config: RealtimeChannelConfig(
+  //        broadcast: .init(acknowledgeBroadcasts: true),
+  //        presence: .init()
+  //      ),
+  //      socket: socket,
+  //      logger: nil
+  //    )
+  //    let push = Push(
+  //      channel: channel,
+  //      message: RealtimeMessage(
+  //        joinRef: nil,
+  //        ref: "1",
+  //        topic: "realtime:users",
+  //        event: "broadcast",
+  //        payload: [:]
+  //      )
+  //    )
+  //
+  //    let task = Task {
+  //      await push.send()
+  //    }
+  //    await Task.megaYield()
+  //    await push.didReceive(status: .ok)
+  //
+  //    let status = await task.value
+  //    XCTAssertEqual(status, .ok)
+  //  }
 }

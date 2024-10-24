@@ -19,8 +19,8 @@ extension SupabaseClient {
   }
 
   /// Realtime client for Supabase
-  @available(*, deprecated, message: "Use realtimeV2")
-  public var realtime: RealtimeClient {
-    _realtime.value
+  @available(*, deprecated, message: "Use realtime")
+  public var realtimeV2: RealtimeClient {
+    realtime
   }
 }

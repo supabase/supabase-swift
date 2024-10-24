@@ -7,7 +7,7 @@
 
 import Foundation
 
-extension RealtimeChannelV2 {
+extension RealtimeChannel {
   /// Listen for clients joining / leaving the channel using presences.
   public func presenceChange() -> AsyncStream<any PresenceAction> {
     let (stream, continuation) = AsyncStream<any PresenceAction>.makeStream()
