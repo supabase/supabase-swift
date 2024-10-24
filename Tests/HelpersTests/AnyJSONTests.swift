@@ -7,24 +7,13 @@
 
 import CustomDump
 import Foundation
-@testable import Helpers
 import XCTest
+
+@testable import Helpers
 
 final class AnyJSONTests: XCTestCase {
   let jsonString = """
-  {
-    "array" : [
-      1,
-      2,
-      3,
-      4,
-      5
-    ],
-    "bool" : true,
-    "double" : 3.14,
-    "integer" : 1,
-    "null" : null,
-    "object" : {
+    {
       "array" : [
         1,
         2,
@@ -37,13 +26,25 @@ final class AnyJSONTests: XCTestCase {
       "integer" : 1,
       "null" : null,
       "object" : {
+        "array" : [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "bool" : true,
+        "double" : 3.14,
+        "integer" : 1,
+        "null" : null,
+        "object" : {
 
+        },
+        "string" : "A string value"
       },
       "string" : "A string value"
-    },
-    "string" : "A string value"
-  }
-  """
+    }
+    """
 
   let jsonObject: AnyJSON = [
     "integer": 1,
@@ -65,20 +66,20 @@ final class AnyJSONTests: XCTestCase {
 
   func testDecode() throws {
     let data = try XCTUnwrap(jsonString.data(using: .utf8))
-    let decodedJSON = try JSONDecoder().decode(AnyJSON.self, from: data)
+    let decodedJSON = try AnyJSON.decoder.decode(AnyJSON.self, from: data)
 
     expectNoDifference(decodedJSON, jsonObject)
   }
 
-    func testEncode() throws {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-  
-      let data = try encoder.encode(jsonObject)
-      let decodedJSONString = try XCTUnwrap(String(data: data, encoding: .utf8))
-  
-      expectNoDifference(decodedJSONString, jsonString)
-    }
+  func testEncode() throws {
+    let encoder = AnyJSON.encoder
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
+    let data = try encoder.encode(jsonObject)
+    let decodedJSONString = try XCTUnwrap(String(data: data, encoding: .utf8))
+
+    expectNoDifference(decodedJSONString, jsonString)
+  }
 
   func testInitFromCodable() {
     try expectNoDifference(AnyJSON(jsonObject), jsonObject)
