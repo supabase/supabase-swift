@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.20.5](https://github.com/supabase/supabase-swift/compare/v2.20.4...v2.20.5) (2024-10-24)
+
+
+### Bug Fixes
+
+* issue with MainActor isolated property on Swift 5.9 ([#577](https://github.com/supabase/supabase-swift/issues/577)) ([7266b64](https://github.com/supabase/supabase-swift/commit/7266b64e1e0b58fc893693fa80872b6d77bf1555))
+* revert AnyJSON codable ([#580](https://github.com/supabase/supabase-swift/issues/580)) ([bfb6ed7](https://github.com/supabase/supabase-swift/commit/bfb6ed7b9b69123dc5cc16458da62ee3546eaf98))
+
 ## [2.20.4](https://github.com/supabase/supabase-swift/compare/v2.20.3...v2.20.4) (2024-10-23)
 
 
