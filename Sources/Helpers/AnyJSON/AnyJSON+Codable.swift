@@ -9,9 +9,6 @@ import Foundation
 
 extension AnyJSON {
   /// The decoder instance used for transforming AnyJSON to some Codable type.
-  @available(
-    *, deprecated, message: "decoder is deprecated, AnyJSON now uses default JSONDecoder()."
-  )
   public static let decoder: JSONDecoder = {
     let decoder = JSONDecoder()
     decoder.dataDecodingStrategy = .base64
@@ -35,9 +32,6 @@ extension AnyJSON {
   }()
 
   /// The encoder instance used for transforming AnyJSON to some Codable type.
-  @available(
-    *, deprecated, message: "encoder is deprecated, AnyJSON now uses default JSONEncoder()."
-  )
   public static let encoder: JSONEncoder = {
     let encoder = JSONEncoder()
     encoder.dataEncodingStrategy = .base64
@@ -64,38 +58,23 @@ extension AnyJSON {
     } else if let double = value as? Double {
       self = .double(double)
     } else {
-      let data = try JSONEncoder().encode(value)
-      self = try JSONDecoder().decode(AnyJSON.self, from: data)
+      let data = try AnyJSON.encoder.encode(value)
+      self = try AnyJSON.decoder.decode(AnyJSON.self, from: data)
     }
   }
 
   /// Decodes self instance as `Decodable` type.
-  public func decode<T: Decodable>(as type: T.Type = T.self) throws -> T {
-    let data = try JSONEncoder().encode(self)
-    return try JSONDecoder().decode(T.self, from: data)
-  }
-
-  @available(
-    *, deprecated, renamed: "decode(as:)", message: "Providing a custom decoder is deprecated."
-  )
   public func decode<T: Decodable>(
-    as _: T.Type = T.self,
+    as type: T.Type = T.self,
     decoder: JSONDecoder = AnyJSON.decoder
   ) throws -> T {
     let data = try AnyJSON.encoder.encode(self)
-    return try decoder.decode(T.self, from: data)
+    return try decoder.decode(type, from: data)
   }
 }
 
 extension JSONArray {
   /// Decodes self instance as array of `Decodable` type.
-  public func decode<T: Decodable>(as _: T.Type = T.self) throws -> [T] {
-    try AnyJSON.array(self).decode(as: [T].self)
-  }
-
-  @available(
-    *, deprecated, renamed: "decode(as:)", message: "Providing a custom decoder is deprecated."
-  )
   public func decode<T: Decodable>(
     as _: T.Type = T.self,
     decoder: JSONDecoder = AnyJSON.decoder
@@ -106,13 +85,6 @@ extension JSONArray {
 
 extension JSONObject {
   /// Decodes self instance as `Decodable` type.
-  public func decode<T: Decodable>(as type: T.Type = T.self) throws -> T {
-    try AnyJSON.object(self).decode(as: type)
-  }
-
-  @available(
-    *, deprecated, renamed: "decode(as:)", message: "Providing a custom decoder is deprecated."
-  )
   public func decode<T: Decodable>(
     as _: T.Type = T.self,
     decoder: JSONDecoder = AnyJSON.decoder
