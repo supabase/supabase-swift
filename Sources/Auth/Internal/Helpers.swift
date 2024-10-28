@@ -28,16 +28,16 @@ func extractParams(from url: URL) -> [String: String] {
 private func extractParams(from fragment: String) -> [URLQueryItem] {
   let components =
     fragment
-      .split(separator: "&")
-      .map { $0.split(separator: "=") }
+    .split(separator: "&")
+    .map { $0.split(separator: "=") }
 
   return
     components
-      .compactMap {
-        $0.count == 2
-          ? URLQueryItem(name: String($0[0]), value: String($0[1]))
-          : nil
-      }
+    .compactMap {
+      $0.count == 2
+        ? URLQueryItem(name: String($0[0]), value: String($0[1]))
+        : nil
+    }
 }
 
 func decode(jwt: String) throws -> [String: Any]? {
