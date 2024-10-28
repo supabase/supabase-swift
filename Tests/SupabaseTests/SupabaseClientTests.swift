@@ -1,10 +1,11 @@
-@testable import Auth
 import CustomDump
-@testable import Functions
 import IssueReporting
+import XCTest
+
+@testable import Auth
+@testable import Functions
 @testable import Realtime
 @testable import Supabase
-import XCTest
 
 final class AuthLocalStorageMock: AuthLocalStorage {
   func store(key _: String, value _: Data) throws {}
@@ -17,6 +18,9 @@ final class AuthLocalStorageMock: AuthLocalStorage {
 }
 
 final class SupabaseClientTests: XCTestCase {
+  let jwt =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+
   func testClientInitialization() async {
     final class Logger: SupabaseLogger {
       func log(message _: SupabaseLogMessage) {
@@ -31,7 +35,7 @@ final class SupabaseClientTests: XCTestCase {
 
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "ANON_KEY",
+      supabaseKey: jwt,
       options: SupabaseClientOptions(
         db: SupabaseClientOptions.DatabaseOptions(schema: customSchema),
         auth: SupabaseClientOptions.AuthOptions(
@@ -53,7 +57,7 @@ final class SupabaseClientTests: XCTestCase {
     )
 
     XCTAssertEqual(client.supabaseURL.absoluteString, "https://project-ref.supabase.co")
-    XCTAssertEqual(client.supabaseKey, "ANON_KEY")
+    XCTAssertEqual(client.supabaseKey, jwt)
     XCTAssertEqual(client.storageURL.absoluteString, "https://project-ref.supabase.co/storage/v1")
     XCTAssertEqual(client.databaseURL.absoluteString, "https://project-ref.supabase.co/rest/v1")
     XCTAssertEqual(
@@ -65,9 +69,9 @@ final class SupabaseClientTests: XCTestCase {
       client.headers,
       [
         "X-Client-Info": "supabase-swift/\(Supabase.version)",
-        "Apikey": "ANON_KEY",
+        "Apikey": jwt,
         "header_field": "header_value",
-        "Authorization": "Bearer ANON_KEY",
+        "Authorization": "Bearer \(jwt)",
       ]
     )
     expectNoDifference(client._headers.dictionary, client.headers)
@@ -79,7 +83,8 @@ final class SupabaseClientTests: XCTestCase {
 
     let realtimeOptions = client.realtimeV2.options
     let expectedRealtimeHeader = client._headers.merging(with: [
-      .init("custom_realtime_header_key")!: "custom_realtime_header_value"]
+      .init("custom_realtime_header_key")!: "custom_realtime_header_value"
+    ]
     )
     expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
@@ -97,7 +102,7 @@ final class SupabaseClientTests: XCTestCase {
     func testClientInitWithDefaultOptionsShouldBeAvailableInNonLinux() {
       _ = SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-        supabaseKey: "ANON_KEY"
+        supabaseKey: jwt
       )
     }
   #endif
@@ -107,7 +112,7 @@ final class SupabaseClientTests: XCTestCase {
 
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "ANON_KEY",
+      supabaseKey: jwt,
       options: .init(
         auth: .init(
           storage: localStorage,
@@ -123,9 +128,31 @@ final class SupabaseClientTests: XCTestCase {
 
     #if canImport(Darwin)
       // withExpectedIssue is unavailable on non-Darwin platform.
-      withExpectedIssue {
+      withExpectedIssue(
+        """
+        Supabase Client is configured with the auth.accessToken option,
+        accessing supabase.auth is not possible.
+        """
+      ) {
         _ = client.auth
       }
     #endif
   }
+
+  #if canImport(Darwin)
+    // withExpectedIssue is unavailable on non-Darwin platform.
+    func testClientInitWithNonJWTAPIKey() {
+      withExpectedIssue("Authorization header does not contain a JWT") {
+        _ = SupabaseClient(
+          supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+          supabaseKey: "invalid.token.format",
+          options: SupabaseClientOptions(
+            auth: .init(
+              storage: AuthLocalStorageMock()
+            )
+          )
+        )
+      }
+    }
+  #endif
 }
