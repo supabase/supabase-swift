@@ -21,8 +21,8 @@ let decoder: JSONDecoder = {
 }()
 
 let supabase = SupabaseClient(
-  supabaseURL: URL(string: "http://localhost:54321")!,
-  supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+  supabaseURL: URL(string: "https://rkehabxkxxpcbpzsammm.supabase.red")!,
+  supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrZWhhYnhreHhwY2JwenNhbW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjk3NTgzODgsImV4cCI6MjA0NTMzNDM4OH0.rTpPEGk9fMjHXXR49drfyF6IkrNYeL_-yGGDa1JaXTY",
   options: SupabaseClientOptions(
     db: .init(encoder: encoder, decoder: decoder),
     auth: .init(redirectToURL: URL(string: "com.supabase.slack-clone://login-callback")),

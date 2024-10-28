@@ -20,8 +20,13 @@ public final class RealtimeClientV2: Sendable {
     var accessToken: String?
     var ref = 0
     var pendingHeartbeatRef: Int?
+
+    /// Long-running task that keeps sending heartbeat messages.
     var heartbeatTask: Task<Void, Never>?
+
+    /// Long-running task for listening for incoming messages from WebSocket.
     var messageTask: Task<Void, Never>?
+
     var connectionTask: Task<Void, Never>?
     var channels: [String: RealtimeChannelV2] = [:]
     var sendBuffer: [@Sendable () async -> Void] = []
@@ -34,13 +39,14 @@ public final class RealtimeClientV2: Sendable {
   let http: any HTTPClientType
   let apikey: String?
 
+  /// All managed channels indexed by their topics.
   public var channels: [String: RealtimeChannelV2] {
     mutableState.channels
   }
 
   private let statusEventEmitter = EventEmitter<RealtimeClientStatus>(initialEvent: .disconnected)
 
-  /// AsyncStream that emits when connection status change.
+  /// Listen for connection status changes.
   ///
   /// You can also use ``onStatusChange(_:)`` for a closure based method.
   public var statusChange: AsyncStream<RealtimeClientStatus> {
@@ -198,6 +204,13 @@ public final class RealtimeClientV2: Sendable {
     await connect(reconnect: true)
   }
 
+  /// Creates a new channel and bind it to this client.
+  /// - Parameters:
+  ///   - topic: Channel's topic.
+  ///   - options: Configuration options for the channel.
+  /// - Returns: Channel instance.
+  ///
+  /// - Note: This method doesn't subscribe to the channel, call ``RealtimeChannelV2/subscribe()`` on the returned channel instance.
   public func channel(
     _ topic: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
@@ -223,6 +236,9 @@ public final class RealtimeClientV2: Sendable {
     }
   }
 
+  /// Unsubscribe and removes channel.
+  ///
+  /// If there is no channel left, client is disconnected.
   public func removeChannel(_ channel: RealtimeChannelV2) async {
     if channel.status == .subscribed {
       await channel.unsubscribe()
@@ -238,6 +254,7 @@ public final class RealtimeClientV2: Sendable {
     }
   }
 
+  /// Unsubscribes and removes all channels.
   public func removeAllChannels() async {
     await withTaskGroup(of: Void.self) { group in
       for channel in channels.values {
@@ -327,6 +344,7 @@ public final class RealtimeClientV2: Sendable {
     }
   }
 
+  /// Disconnects client.
   public func disconnect() {
     options.logger?.debug("Closing WebSocket connection")
     mutableState.withValue {
@@ -388,13 +406,14 @@ public final class RealtimeClientV2: Sendable {
         try Task.checkCancellation()
         try await self?.ws.send(message)
       } catch {
-        self?.options.logger?.error("""
-        Failed to send message:
-        \(message)
+        self?.options.logger?.error(
+          """
+          Failed to send message:
+          \(message)
 
-        Error:
-        \(error)
-        """)
+          Error:
+          \(error)
+          """)
       }
     }
 
@@ -468,5 +487,33 @@ public final class RealtimeClientV2: Sendable {
 
   var broadcastURL: URL {
     url.appendingPathComponent("api/broadcast")
+  }
+}
+
+import Network
+
+final class NetworkMonitor: @unchecked Sendable {
+  static let shared = NetworkMonitor()
+
+  private let monitor: NWPathMonitor
+  private let queue = DispatchQueue(label: "NetworkMonitor")
+
+  private(set) var isConnected: Bool = false
+
+  private init() {
+    monitor = NWPathMonitor()
+  }
+
+  func start(_ onChange: (@Sendable () -> Void)? = nil) {
+    monitor.pathUpdateHandler = { [weak self] path in
+      self?.isConnected = path.status != .unsatisfied
+      onChange?()
+    }
+
+    monitor.start(queue: queue)
+  }
+
+  func stop() {
+    monitor.cancel()
   }
 }
