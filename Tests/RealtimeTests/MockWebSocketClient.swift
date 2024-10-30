@@ -93,5 +93,6 @@ final class MockWebSocketClient: WebSocketClient {
     return stream
   }
 
-  func disconnect() {}
+  func disconnect(code: Int?, reason: String?) {
+  }
 }
