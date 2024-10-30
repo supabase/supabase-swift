@@ -8,7 +8,6 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
-import Network
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -491,31 +490,5 @@ public final class RealtimeClientV2: Sendable {
 
   var broadcastURL: URL {
     url.appendingPathComponent("api/broadcast")
-  }
-}
-
-final class NetworkMonitor: @unchecked Sendable {
-  static let shared = NetworkMonitor()
-
-  private let monitor: NWPathMonitor
-  private let queue = DispatchQueue(label: "NetworkMonitor")
-
-  private(set) var isConnected: Bool = false
-
-  private init() {
-    monitor = NWPathMonitor()
-  }
-
-  func start(_ onChange: (@Sendable () -> Void)? = nil) {
-    monitor.pathUpdateHandler = { [weak self] path in
-      self?.isConnected = path.status != .unsatisfied
-      onChange?()
-    }
-
-    monitor.start(queue: queue)
-  }
-
-  func stop() {
-    monitor.cancel()
   }
 }
