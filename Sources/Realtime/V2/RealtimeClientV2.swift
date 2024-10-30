@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import Network
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -345,7 +346,10 @@ public final class RealtimeClientV2: Sendable {
   }
 
   /// Disconnects client.
-  public func disconnect() {
+  /// - Parameters:
+  ///   - code: A numeric status code to send on disconnect.
+  ///   - reason: A custom reason for the disconnect.
+  public func disconnect(code: Int? = nil, reason: String? = nil) {
     options.logger?.debug("Closing WebSocket connection")
     mutableState.withValue {
       $0.ref = 0
@@ -353,7 +357,7 @@ public final class RealtimeClientV2: Sendable {
       $0.heartbeatTask?.cancel()
       $0.connectionTask?.cancel()
     }
-    ws.disconnect()
+    ws.disconnect(code: code, reason: reason)
     status = .disconnected
   }
 
@@ -489,8 +493,6 @@ public final class RealtimeClientV2: Sendable {
     url.appendingPathComponent("api/broadcast")
   }
 }
-
-import Network
 
 final class NetworkMonitor: @unchecked Sendable {
   static let shared = NetworkMonitor()

@@ -130,11 +130,6 @@ public final class RealtimeChannelV2: Sendable {
       await socket.connect()
     }
 
-    guard status != .subscribed else {
-      logger?.warning("Channel \(topic) is already subscribed")
-      return
-    }
-
     socket.addChannel(self)
 
     status = .subscribing
