@@ -517,7 +517,7 @@ public final class RealtimeChannelV2: Sendable {
     filter: String?,
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> RealtimeSubscription {
-    guard status == .subscribed else {
+    guard status != .subscribed else {
       reportIssue(
         "You cannot call postgresChange after joining the channel, this won't work as expected."
       )
