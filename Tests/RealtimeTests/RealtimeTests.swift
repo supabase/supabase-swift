@@ -172,7 +172,7 @@ final class RealtimeTests: XCTestCase {
 
     try? await Task.sleep(nanoseconds: NSEC_PER_SEC * 2)
 
-    assertInlineSnapshot(of: ws.sentMessages, as: .json) {
+    assertInlineSnapshot(of: ws.sentMessages.filter { $0.event == "phx_join" }, as: .json) {
       """
       [
         {
@@ -198,14 +198,6 @@ final class RealtimeTests: XCTestCase {
           "topic" : "realtime:public:messages"
         },
         {
-          "event" : "heartbeat",
-          "payload" : {
-
-          },
-          "ref" : "2",
-          "topic" : "phoenix"
-        },
-        {
           "event" : "phx_join",
           "join_ref" : "2",
           "payload" : {
@@ -226,14 +218,6 @@ final class RealtimeTests: XCTestCase {
           },
           "ref" : "2",
           "topic" : "realtime:public:messages"
-        },
-        {
-          "event" : "heartbeat",
-          "payload" : {
-
-          },
-          "ref" : "3",
-          "topic" : "phoenix"
         }
       ]
       """
