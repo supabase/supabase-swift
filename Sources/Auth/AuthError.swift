@@ -49,7 +49,7 @@ extension ErrorCode {
   public static let inviteNotFound = ErrorCode("invite_not_found")
   public static let badOAuthState = ErrorCode("bad_oauth_state")
   public static let badOAuthCallback = ErrorCode("bad_oauth_callback")
-  public static let oAuthProviderNotSupported = ErrorCode("oauth_provider_not_supported")
+  public static let oauthProviderNotSupported = ErrorCode("oauth_provider_not_supported")
   public static let unexpectedAudience = ErrorCode("unexpected_audience")
   public static let singleIdentityNotDeletable = ErrorCode("single_identity_not_deletable")
   public static let emailConflictIdentityNotDeletable = ErrorCode(
