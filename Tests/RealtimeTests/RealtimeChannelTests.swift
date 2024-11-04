@@ -6,9 +6,10 @@
 //
 
 import InlineSnapshotTesting
-@testable import Realtime
 import XCTest
 import XCTestDynamicOverlay
+
+@testable import Realtime
 
 final class RealtimeChannelTests: XCTestCase {
   let sut = RealtimeChannelV2(
@@ -48,9 +49,13 @@ final class RealtimeChannelTests: XCTestCase {
 
     sut.onPresenceChange { _ in }.store(in: &subscriptions)
 
+    sut.onSystem {
+    }
+    .store(in: &subscriptions)
+
     assertInlineSnapshot(of: sut.callbackManager.callbacks, as: .dump) {
       """
-      ▿ 7 elements
+      ▿ 8 elements
         ▿ RealtimeCallback
           ▿ postgres: PostgresCallback
             - callback: (Function)
@@ -112,6 +117,10 @@ final class RealtimeChannelTests: XCTestCase {
           ▿ presence: PresenceCallback
             - callback: (Function)
             - id: 7
+        ▿ RealtimeCallback
+          ▿ system: SystemCallback
+            - callback: (Function)
+            - id: 8
 
       """
     }

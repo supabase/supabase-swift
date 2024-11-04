@@ -154,6 +154,19 @@ final class CallbackManager: Sendable {
     }
   }
 
+  func triggerSystem(message: RealtimeMessageV2) {
+    let systemCallbacks = mutableState.callbacks.compactMap {
+      if case .system(let callback) = $0 {
+        return callback
+      }
+      return nil
+    }
+
+    for systemCallback in systemCallbacks {
+      systemCallback.callback(message)
+    }
+  }
+
   func reset() {
     mutableState.setValue(MutableState())
   }
