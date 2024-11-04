@@ -8,8 +8,9 @@
 import ConcurrencyExtras
 import CustomDump
 import Helpers
-@testable import Realtime
 import XCTest
+
+@testable import Realtime
 
 final class CallbackManagerTests: XCTestCase {
   func testIntegration() {
@@ -52,13 +53,15 @@ final class CallbackManagerTests: XCTestCase {
     let callbackManager = CallbackManager()
     XCTAssertNoLeak(callbackManager)
 
-    let changes = [PostgresJoinConfig(
-      event: .update,
-      schema: "public",
-      table: "users",
-      filter: nil,
-      id: 1
-    )]
+    let changes = [
+      PostgresJoinConfig(
+        event: .update,
+        schema: "public",
+        table: "users",
+        filter: nil,
+        id: 1
+      )
+    ]
 
     callbackManager.setServerChanges(changes: changes)
 
@@ -118,7 +121,8 @@ final class CallbackManagerTests: XCTestCase {
       receivedActions.withValue { $0.append(action) }
     }
 
-    let deleteSpecificUserId = callbackManager
+    let deleteSpecificUserId =
+      callbackManager
       .addPostgresCallback(filter: deleteSpecificUserFilter) { action in
         receivedActions.withValue { $0.append(action) }
       }
@@ -214,6 +218,22 @@ final class CallbackManagerTests: XCTestCase {
 
     expectNoDifference(receivedAction.value?.joins, joins)
     expectNoDifference(receivedAction.value?.leaves, leaves)
+  }
+
+  func testTriggerSystem() {
+    let callbackManager = CallbackManager()
+
+    let receivedMessage = LockIsolated(RealtimeMessageV2?.none)
+    callbackManager.addSystemCallback { message in
+      receivedMessage.setValue(message)
+    }
+
+    callbackManager.triggerSystem(
+      message: RealtimeMessageV2(
+        joinRef: nil, ref: nil, topic: "test", event: "system", payload: ["status": "ok"]))
+
+    XCTAssertEqual(receivedMessage.value?._eventType, .system)
+    XCTAssertEqual(receivedMessage.value?.status, .ok)
   }
 }
 

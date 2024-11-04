@@ -104,6 +104,21 @@ extension RealtimeChannelV2 {
 
     return stream
   }
+  
+  /// Listen for `system` event.
+  public func system() -> AsyncStream<RealtimeMessageV2> {
+    let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream()
+
+    let subscription = onSystem {
+      continuation.yield($0)
+    }
+
+    continuation.onTermination = { _ in
+      subscription.cancel()
+    }
+
+    return stream
+  }
 
   /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
   @available(*, deprecated, renamed: "broadcastStream(event:)")
