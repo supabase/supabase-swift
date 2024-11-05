@@ -1,10 +1,3 @@
-//
-//  CallbackManager.swift
-//
-//
-//  Created by Guilherme Souza on 24/12/23.
-//
-
 import ConcurrencyExtras
 import Foundation
 import Helpers
@@ -24,6 +17,10 @@ final class CallbackManager: Sendable {
 
   var callbacks: [RealtimeCallback] {
     mutableState.callbacks
+  }
+
+  deinit {
+    reset()
   }
 
   @discardableResult

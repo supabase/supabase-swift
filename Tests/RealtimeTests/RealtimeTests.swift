@@ -1,9 +1,11 @@
 import ConcurrencyExtras
 import CustomDump
 import Helpers
-@testable import Realtime
+import InlineSnapshotTesting
 import TestHelpers
 import XCTest
+
+@testable import Realtime
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -91,10 +93,48 @@ final class RealtimeTests: XCTestCase {
     ws.mockReceive(.messagesSubscribed)
     await channel.subscribe()
 
-    expectNoDifference(
-      ws.sentMessages,
-      [.subscribeToMessages(ref: "1", joinRef: "1")]
-    )
+    assertInlineSnapshot(of: ws.sentMessages, as: .json) {
+      """
+      [
+        {
+          "event" : "phx_join",
+          "join_ref" : "1",
+          "payload" : {
+            "access_token" : "anon.api.key",
+            "config" : {
+              "broadcast" : {
+                "ack" : false,
+                "self" : false
+              },
+              "postgres_changes" : [
+                {
+                  "event" : "INSERT",
+                  "schema" : "public",
+                  "table" : "messages"
+                },
+                {
+                  "event" : "UPDATE",
+                  "schema" : "public",
+                  "table" : "messages"
+                },
+                {
+                  "event" : "DELETE",
+                  "schema" : "public",
+                  "table" : "messages"
+                }
+              ],
+              "presence" : {
+                "key" : ""
+              },
+              "private" : false
+            }
+          },
+          "ref" : "1",
+          "topic" : "realtime:public:messages"
+        }
+      ]
+      """
+    }
   }
 
   func testSubscribeTimeout() async throws {
@@ -132,39 +172,56 @@ final class RealtimeTests: XCTestCase {
 
     try? await Task.sleep(nanoseconds: NSEC_PER_SEC * 2)
 
-    let joinSentMessages = ws.sentMessages.filter { $0.event == "phx_join" }
+    assertInlineSnapshot(of: ws.sentMessages.filter { $0.event == "phx_join" }, as: .json) {
+      """
+      [
+        {
+          "event" : "phx_join",
+          "join_ref" : "1",
+          "payload" : {
+            "access_token" : "anon.api.key",
+            "config" : {
+              "broadcast" : {
+                "ack" : false,
+                "self" : false
+              },
+              "postgres_changes" : [
 
-    let expectedMessages = try [
-      RealtimeMessageV2(
-        joinRef: "1",
-        ref: "1",
-        topic: "realtime:public:messages",
-        event: "phx_join",
-        payload: JSONObject(
-          RealtimeJoinPayload(
-            config: RealtimeJoinConfig(),
-            accessToken: apiKey
-          )
-        )
-      ),
-      RealtimeMessageV2(
-        joinRef: "2",
-        ref: "2",
-        topic: "realtime:public:messages",
-        event: "phx_join",
-        payload: JSONObject(
-          RealtimeJoinPayload(
-            config: RealtimeJoinConfig(),
-            accessToken: apiKey
-          )
-        )
-      ),
-    ]
+              ],
+              "presence" : {
+                "key" : ""
+              },
+              "private" : false
+            }
+          },
+          "ref" : "1",
+          "topic" : "realtime:public:messages"
+        },
+        {
+          "event" : "phx_join",
+          "join_ref" : "2",
+          "payload" : {
+            "access_token" : "anon.api.key",
+            "config" : {
+              "broadcast" : {
+                "ack" : false,
+                "self" : false
+              },
+              "postgres_changes" : [
 
-    expectNoDifference(
-      joinSentMessages,
-      expectedMessages
-    )
+              ],
+              "presence" : {
+                "key" : ""
+              },
+              "private" : false
+            }
+          },
+          "ref" : "2",
+          "topic" : "realtime:public:messages"
+        }
+      ]
+      """
+    }
   }
 
   func testHeartbeat() async throws {
@@ -262,30 +319,27 @@ final class RealtimeTests: XCTestCase {
     try await channel.broadcast(event: "test", message: ["value": 42])
 
     let request = await http.receivedRequests.last
-    expectNoDifference(
-      request?.headers,
-      [
-        .contentType: "application/json",
-        .apiKey: "anon.api.key",
-        .authorization: "Bearer anon.api.key",
-      ]
-    )
+    assertInlineSnapshot(of: request?.urlRequest, as: .raw(pretty: true)) {
+      """
+      POST https://localhost:54321/realtime/v1/api/broadcast
+      Authorization: Bearer anon.api.key
+      Content-Type: application/json
+      apiKey: anon.api.key
 
-    let body = try XCTUnwrap(request?.body)
-    let json = try JSONDecoder().decode(JSONObject.self, from: body)
-    expectNoDifference(
-      json,
-      [
-        "messages": [
-          [
-            "topic": "realtime:public:messages",
-            "event": "test",
-            "payload": ["value": 42],
-            "private": false,
-          ],
-        ],
-      ]
-    )
+      {
+        "messages" : [
+          {
+            "event" : "test",
+            "payload" : {
+              "value" : 42
+            },
+            "private" : false,
+            "topic" : "realtime:public:messages"
+          }
+        ]
+      }
+      """
+    }
   }
 
   private func connectSocketAndWait() async {
@@ -295,31 +349,6 @@ final class RealtimeTests: XCTestCase {
 }
 
 extension RealtimeMessageV2 {
-  static func subscribeToMessages(ref: String?, joinRef: String?) -> RealtimeMessageV2 {
-    Self(
-      joinRef: joinRef,
-      ref: ref,
-      topic: "realtime:public:messages",
-      event: "phx_join",
-      payload: [
-        "access_token": "anon.api.key",
-        "config": [
-          "broadcast": [
-            "self": false,
-            "ack": false,
-          ],
-          "postgres_changes": [
-            ["table": "messages", "event": "INSERT", "schema": "public"],
-            ["table": "messages", "schema": "public", "event": "UPDATE"],
-            ["schema": "public", "table": "messages", "event": "DELETE"],
-          ],
-          "presence": ["key": ""],
-          "private": false,
-        ],
-      ]
-    )
-  }
-
   static let messagesSubscribed = Self(
     joinRef: nil,
     ref: "2",
@@ -328,29 +357,12 @@ extension RealtimeMessageV2 {
     payload: [
       "response": [
         "postgres_changes": [
-          ["id": 43783255, "event": "INSERT", "schema": "public", "table": "messages"],
-          ["id": 124973000, "event": "UPDATE", "schema": "public", "table": "messages"],
-          ["id": 85243397, "event": "DELETE", "schema": "public", "table": "messages"],
-        ],
+          ["id": 43_783_255, "event": "INSERT", "schema": "public", "table": "messages"],
+          ["id": 124_973_000, "event": "UPDATE", "schema": "public", "table": "messages"],
+          ["id": 85_243_397, "event": "DELETE", "schema": "public", "table": "messages"],
+        ]
       ],
       "status": "ok",
     ]
   )
-
-  static let heartbeatResponse = Self(
-    joinRef: nil,
-    ref: "1",
-    topic: "phoenix",
-    event: "phx_reply",
-    payload: [
-      "response": [:],
-      "status": "ok",
-    ]
-  )
-}
-
-struct TestLogger: SupabaseLogger {
-  func log(message: SupabaseLogMessage) {
-    print(message.description)
-  }
 }

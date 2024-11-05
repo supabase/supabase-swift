@@ -1,10 +1,3 @@
-//
-//  RealtimeMessageV2.swift
-//
-//
-//  Created by Guilherme Souza on 11/01/24.
-//
-
 import Foundation
 import Helpers
 

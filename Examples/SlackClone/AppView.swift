@@ -15,13 +15,15 @@ final class AppViewModel {
   var session: Session?
   var selectedChannel: Channel?
 
-  var realtimeConnectionStatus: RealtimeClientV2.Status?
+  var realtimeConnectionStatus: RealtimeClientStatus?
 
   init() {
     Task {
       for await (event, session) in supabase.auth.authStateChanges {
         Logger.main.debug("AuthStateChange: \(event.rawValue)")
-        guard [.signedIn, .signedOut, .initialSession, .tokenRefreshed].contains(event) else { return }
+        guard [.signedIn, .signedOut, .initialSession, .tokenRefreshed].contains(event) else {
+          return
+        }
         self.session = session
 
         if session == nil {

@@ -1,14 +1,8 @@
-//
-//  RealtimeChannelV2.swift
-//
-//
-//  Created by Guilherme Souza on 26/12/23.
-//
-
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
+import IssueReporting
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -123,16 +117,12 @@ public final class RealtimeChannelV2: Sendable {
   public func subscribe() async {
     if socket.status() != .connected {
       if socket.options().connectOnSubscribe != true {
-        fatalError(
+        reportIssue(
           "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
         )
+        return
       }
       await socket.connect()
-    }
-
-    guard status != .subscribed else {
-      logger?.warning("Channel \(topic) is already subscribed")
-      return
     }
 
     socket.addChannel(self)
@@ -266,15 +256,21 @@ public final class RealtimeChannelV2: Sendable {
     }
   }
 
+  /// Tracks the given state in the channel.
+  /// - Parameter state: The state to be tracked, conforming to `Codable`.
+  /// - Throws: An error if the tracking fails.
   public func track(_ state: some Codable) async throws {
     try await track(state: JSONObject(state))
   }
 
+  /// Tracks the given state in the channel.
+  /// - Parameter state: The state to be tracked as a `JSONObject`.
   public func track(state: JSONObject) async {
-    assert(
-      status == .subscribed,
-      "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
-    )
+    if status != .subscribed {
+      reportIssue(
+        "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
+      )
+    }
 
     await push(
       ChannelEvent.presence,
@@ -286,6 +282,7 @@ public final class RealtimeChannelV2: Sendable {
     )
   }
 
+  /// Stops tracking the current state in the channel.
   public func untrack() async {
     await push(
       ChannelEvent.presence,
@@ -520,10 +517,12 @@ public final class RealtimeChannelV2: Sendable {
     filter: String?,
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> RealtimeSubscription {
-    precondition(
-      status != .subscribed,
-      "You cannot call postgresChange after joining the channel"
-    )
+    guard status != .subscribed else {
+      reportIssue(
+        "You cannot call postgresChange after joining the channel, this won't work as expected."
+      )
+      return RealtimeSubscription {}
+    }
 
     let config = PostgresJoinConfig(
       event: event,
