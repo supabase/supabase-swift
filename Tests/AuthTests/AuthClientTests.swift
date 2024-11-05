@@ -5,13 +5,14 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
-@testable import Auth
 import ConcurrencyExtras
 import CustomDump
-@testable import Helpers
 import InlineSnapshotTesting
 import TestHelpers
 import XCTest
+
+@testable import Auth
+@testable import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -126,7 +127,9 @@ final class AuthClientTests: XCTestCase {
         message: "",
         errorCode: .unknown,
         underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+        underlyingResponse: HTTPURLResponse(
+          url: URL(string: "http://localhost")!, statusCode: 404, httpVersion: nil,
+          headerFields: nil)!
       )
     }
 
@@ -157,7 +160,9 @@ final class AuthClientTests: XCTestCase {
         message: "",
         errorCode: .invalidCredentials,
         underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
+        underlyingResponse: HTTPURLResponse(
+          url: URL(string: "http://localhost")!, statusCode: 401, httpVersion: nil,
+          headerFields: nil)!
       )
     }
 
@@ -188,7 +193,9 @@ final class AuthClientTests: XCTestCase {
         message: "",
         errorCode: .invalidCredentials,
         underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(url: URL(string: "http://localhost")!, statusCode: 403, httpVersion: nil, headerFields: nil)!
+        underlyingResponse: HTTPURLResponse(
+          url: URL(string: "http://localhost")!, statusCode: 403, httpVersion: nil,
+          headerFields: nil)!
       )
     }
 
@@ -277,13 +284,17 @@ final class AuthClientTests: XCTestCase {
       response,
       OAuthResponse(
         provider: .github,
-        url: URL(string: "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt")!
+        url: URL(
+          string:
+            "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
+        )!
       )
     )
   }
 
   func testLinkIdentity() async throws {
-    let url = "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
+    let url =
+      "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
     let sut = makeSUT { _ in
       .stub(
         """
@@ -312,7 +323,8 @@ final class AuthClientTests: XCTestCase {
         fromFileName: "list-users-response",
         headers: [
           "X-Total-Count": "669",
-          "Link": "</admin/users?page=2&per_page=>; rel=\"next\", </admin/users?page=14&per_page=>; rel=\"last\"",
+          "Link":
+            "</admin/users?page=2&per_page=>; rel=\"next\", </admin/users?page=14&per_page=>; rel=\"last\"",
         ]
       )
     }
@@ -338,6 +350,31 @@ final class AuthClientTests: XCTestCase {
     XCTAssertEqual(response.total, 669)
     XCTAssertNil(response.nextPage)
     XCTAssertEqual(response.lastPage, 14)
+  }
+
+  func testSessionFromURL_withError() async throws {
+    sut = makeSUT()
+
+    Dependencies[sut.clientID].codeVerifierStorage.set("code-verifier")
+
+    let url = URL(
+      string:
+        "https://my.redirect.com?error=server_error&error_code=422&error_description=Identity+is+already+linked+to+another+user#error=server_error&error_code=422&error_description=Identity+is+already+linked+to+another+user"
+    )!
+
+    do {
+      try await sut.session(from: url)
+      XCTFail("Expect failure")
+    } catch {
+      expectNoDifference(
+        error as? AuthError,
+        AuthError.pkceGrantCodeExchange(
+          message: "Identity is already linked to another user",
+          error: "server_error",
+          code: "422"
+        )
+      )
+    }
   }
 
   private func makeSUT(

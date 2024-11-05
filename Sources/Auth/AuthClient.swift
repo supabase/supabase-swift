@@ -756,33 +756,32 @@ public final class AuthClient: Sendable {
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
   public func session(from url: URL) async throws -> Session {
-    logger?.debug("received \(url)")
+    logger?.debug("Received URL: \(url)")
 
     let params = extractParams(from: url)
 
-    if configuration.flowType == .implicit, !isImplicitGrantFlow(params: params) {
-      throw AuthError.implicitGrantRedirect(message: "Not a valid implicit grant flow url: \(url)")
-    }
-
-    if configuration.flowType == .pkce, !isPKCEFlow(params: params) {
-      throw AuthError.pkceGrantCodeExchange(message: "Not a valid PKCE flow url: \(url)")
-    }
-
-    if isPKCEFlow(params: params) {
-      guard let code = params["code"] else {
-        throw AuthError.pkceGrantCodeExchange(message: "No code detected.")
+    switch configuration.flowType {
+    case .implicit:
+      guard isImplicitGrantFlow(params: params) else {
+        throw AuthError.implicitGrantRedirect(
+          message: "Not a valid implicit grant flow URL: \(url)")
       }
+      return try await handleImplicitGrantFlow(params: params)
 
-      let session = try await exchangeCodeForSession(authCode: code)
-      return session
+    case .pkce:
+      guard isPKCEFlow(params: params) else {
+        throw AuthError.pkceGrantCodeExchange(message: "Not a valid PKCE flow URL: \(url)")
+      }
+      return try await handlePKCEFlow(params: params)
     }
+  }
 
-    if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
-      throw AuthError.pkceGrantCodeExchange(
-        message: params["error_description"] ?? "Error in URL with unspecified error_description.",
-        error: params["error"] ?? "unspecified_error",
-        code: params["error_code"] ?? "unspecified_code"
-      )
+  private func handleImplicitGrantFlow(params: [String: String]) async throws -> Session {
+    precondition(configuration.flowType == .implicit, "Method only allowed for implicit flow.")
+
+    if let errorDescription = params["error_description"] {
+      throw AuthError.implicitGrantRedirect(
+        message: errorDescription.replacingOccurrences(of: "+", with: " "))
     }
 
     guard
@@ -825,6 +824,25 @@ public final class AuthClient: Sendable {
     }
 
     return session
+  }
+
+  private func handlePKCEFlow(params: [String: String]) async throws -> Session {
+    precondition(configuration.flowType == .pkce, "Method only allowed for PKCE flow.")
+
+    if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
+      throw AuthError.pkceGrantCodeExchange(
+        message: params["error_description"]?.replacingOccurrences(of: "+", with: " ")
+          ?? "Error in URL with unspecified error_description.",
+        error: params["error"] ?? "unspecified_error",
+        code: params["error_code"] ?? "unspecified_code"
+      )
+    }
+
+    guard let code = params["code"] else {
+      throw AuthError.pkceGrantCodeExchange(message: "No code detected.")
+    }
+
+    return try await exchangeCodeForSession(authCode: code)
   }
 
   /// Sets the session data from the current session. If the current session is expired, setSession
@@ -1304,7 +1322,8 @@ public final class AuthClient: Sendable {
 
   private func isPKCEFlow(params: [String: String]) -> Bool {
     let currentCodeVerifier = codeVerifierStorage.get()
-    return params["code"] != nil && currentCodeVerifier != nil
+    return params["code"] != nil || params["error_description"] != nil || params["error"] != nil
+      || params["error_code"] != nil && currentCodeVerifier != nil
   }
 
   private func getURLForProvider(
