@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.21.0](https://github.com/supabase/supabase-swift/compare/v2.20.5...v2.21.0) (2024-11-05)
+
+
+### Features
+
+* **realtime:** add `system` event ([#589](https://github.com/supabase/supabase-swift/issues/589)) ([1176dea](https://github.com/supabase/supabase-swift/commit/1176dea4d90f353ae777a633fc079dedf98276ff))
+
+
+### Bug Fixes
+
+* **realtime:** lost `postgres_changes` on resubscribe ([#585](https://github.com/supabase/supabase-swift/issues/585)) ([fabc07d](https://github.com/supabase/supabase-swift/commit/fabc07dac833aa94e35bf932899dfb5d1a868cfb))
+
 ## [2.20.5](https://github.com/supabase/supabase-swift/compare/v2.20.4...v2.20.5) (2024-10-24)
 
 
