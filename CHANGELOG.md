@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.22.0](https://github.com/supabase/supabase-swift/compare/v2.21.0...v2.22.0) (2024-11-06)
+
+
+### Features
+
+* **auth:** add new error codes ([#586](https://github.com/supabase/supabase-swift/issues/586)) ([1721c08](https://github.com/supabase/supabase-swift/commit/1721c08c7710e0cba1390962441fe595b613072c))
+
+
+### Bug Fixes
+
+* **auth:** incorrect error when error occurs during PKCE flow ([#592](https://github.com/supabase/supabase-swift/issues/592)) ([84ce6f2](https://github.com/supabase/supabase-swift/commit/84ce6f29b2ee2192b57d8ff7c36af3378c696653))
+
 ## [2.21.0](https://github.com/supabase/supabase-swift/compare/v2.20.5...v2.21.0) (2024-11-05)
 
 
