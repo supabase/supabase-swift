@@ -37,11 +37,15 @@ extension ErrorCode {
   public static let noAuthorization = ErrorCode("no_authorization")
   public static let userNotFound = ErrorCode("user_not_found")
   public static let sessionNotFound = ErrorCode("session_not_found")
+  public static let sessionExpired = ErrorCode("session_expired")
+  public static let refreshTokenNotFound = ErrorCode("refresh_token_not_found")
+  public static let refreshTokenAlreadyUsed = ErrorCode("refresh_token_already_used")
   public static let flowStateNotFound = ErrorCode("flow_state_not_found")
   public static let flowStateExpired = ErrorCode("flow_state_expired")
   public static let signupDisabled = ErrorCode("signup_disabled")
   public static let userBanned = ErrorCode("user_banned")
-  public static let providerEmailNeedsVerification = ErrorCode("provider_email_needs_verification")
+  public static let providerEmailNeedsVerification = ErrorCode(
+    "provider_email_needs_verification")
   public static let inviteNotFound = ErrorCode("invite_not_found")
   public static let badOAuthState = ErrorCode("bad_oauth_state")
   public static let badOAuthCallback = ErrorCode("bad_oauth_callback")
@@ -96,14 +100,21 @@ extension ErrorCode {
   public static let hookTimeout = ErrorCode("hook_timeout")
   public static let hookTimeoutAfterRetry = ErrorCode("hook_timeout_after_retry")
   public static let hookPayloadOverSizeLimit = ErrorCode("hook_payload_over_size_limit")
+  public static let hookPayloadInvalidContentType = ErrorCode(
+    "hook_payload_invalid_content_type")
   public static let requestTimeout = ErrorCode("request_timeout")
   public static let mfaPhoneEnrollDisabled = ErrorCode("mfa_phone_enroll_not_enabled")
   public static let mfaPhoneVerifyDisabled = ErrorCode("mfa_phone_verify_not_enabled")
   public static let mfaTOTPEnrollDisabled = ErrorCode("mfa_totp_enroll_not_enabled")
   public static let mfaTOTPVerifyDisabled = ErrorCode("mfa_totp_verify_not_enabled")
+  public static let mfaWebAuthnEnrollDisabled = ErrorCode(
+    "mfa_webauthn_enroll_not_enabled")
+  public static let mfaWebAuthnVerifyDisabled = ErrorCode(
+    "mfa_webauthn_verify_not_enabled")
   public static let mfaVerifiedFactorExists = ErrorCode("mfa_verified_factor_exists")
-  // #nosec G101 -- Not a secret value.
+  //#nosec G101 -- Not a secret value.
   public static let invalidCredentials = ErrorCode("invalid_credentials")
+  public static let emailAddressNotAuthorized = ErrorCode("email_address_not_authorized")
 }
 
 public enum AuthError: LocalizedError, Equatable {
