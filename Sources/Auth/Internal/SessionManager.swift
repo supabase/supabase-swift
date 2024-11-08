@@ -108,6 +108,8 @@ private actor LiveSessionManager {
             // the same is true for AuthError.
             if let error = error as? URLError, error.shouldRetry {
               throw error
+            } else if let error = error as? any RetryableError, error.shouldRetry {
+              throw error
             } else {
               remove()
               throw error
