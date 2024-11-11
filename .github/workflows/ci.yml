@@ -16,12 +16,12 @@ concurrency:
 jobs:
   xcodebuild:
     name: xcodebuild
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       matrix:
         command: [test, ""]
         platform: [IOS, MAC_CATALYST, MACOS, TVOS, VISIONOS, WATCHOS]
-        xcode: ["15.4", "16"]
+        xcode: ["15.4", "16.0"]
         exclude:
           - { platform: VISIONOS }
         include:
@@ -86,7 +86,7 @@ jobs:
 
   examples:
     name: Examples
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Cache derived data
@@ -98,7 +98,7 @@ jobs:
           restore-keys: |
             deriveddata-examples-
       - name: Select Xcode 16
-        run: sudo xcode-select -s /Applications/Xcode_16.app
+        run: sudo xcode-select -s /Applications/Xcode_16.0.app
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds
