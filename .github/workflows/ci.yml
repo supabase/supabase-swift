@@ -21,24 +21,54 @@ jobs:
       matrix:
         command: [test, ""]
         platform: [IOS, MAC_CATALYST, MACOS, TVOS, VISIONOS, WATCHOS]
-        xcode: ["15.4", "16.0"]
         exclude:
           - { platform: VISIONOS }
         include:
           - { command: test, skip_release: 1 }
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode ${{ matrix.xcode }}
-        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: Cache derived data
         uses: actions/cache@v3
         with:
           path: |
             ~/.derivedData
           key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
           restore-keys: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.command }}-
+      - name: Set IgnoreFileSystemDeviceInodeChanges flag
+        run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+      - name: Update mtime for incremental builds
+        uses: chetan/git-restore-mtime-action@v2
+      - run: make dot-env
+      - name: Debug
+        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
+      - name: Release
+        if: matrix.skip_release != '1'
+        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+
+  xcodebuild-macOS-14:
+    name: xcodebuild
+    runs-on: macos-14
+    strategy:
+      matrix:
+        command: [test, ""]
+        platform: [IOS, MAC_CATALYST, MACOS, TVOS, VISIONOS, WATCHOS]
+        exclude:
+          - { platform: VISIONOS }
+        include:
+          - { command: test, skip_release: 1 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache derived data
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.derivedData
+          key: |
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
+          restore-keys: |
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.command }}-
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds
