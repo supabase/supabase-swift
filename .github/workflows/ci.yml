@@ -15,7 +15,6 @@ concurrency:
 
 jobs:
   xcodebuild:
-    name: xcodebuild
     runs-on: macos-15
     strategy:
       matrix:
@@ -48,7 +47,6 @@ jobs:
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
   xcodebuild-macOS-14:
-    name: xcodebuild
     runs-on: macos-14
     strategy:
       matrix:
