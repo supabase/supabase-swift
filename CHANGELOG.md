@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.22.1](https://github.com/supabase/supabase-swift/compare/v2.22.0...v2.22.1) (2024-11-12)
+
+
+### Bug Fixes
+
+* **auth:** `URLError` coercion for `RetryableError` causing session to be deleted ([#597](https://github.com/supabase/supabase-swift/issues/597)) ([d67b7cf](https://github.com/supabase/supabase-swift/commit/d67b7cf850d43c2a8ecf39feedfc39528f55f139))
+
 ## [2.22.0](https://github.com/supabase/supabase-swift/compare/v2.21.0...v2.22.0) (2024-11-06)
 
 
