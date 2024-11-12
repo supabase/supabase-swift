@@ -14,14 +14,15 @@ final class PostgrestTransformsTests: XCTestCase {
     configuration: PostgrestClient.Configuration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
       headers: [
-        "apikey": DotEnv.SUPABASE_ANON_KEY,
+        "apikey": DotEnv.SUPABASE_ANON_KEY
       ],
       logger: nil
     )
   )
 
   func testOrder() async throws {
-    let res = try await client.from("users")
+    let res =
+      try await client.from("users")
       .select()
       .order("username", ascending: false)
       .execute().value as AnyJSON
@@ -63,7 +64,8 @@ final class PostgrestTransformsTests: XCTestCase {
   }
 
   func testOrderOnMultipleColumns() async throws {
-    let res = try await client.from("messages")
+    let res =
+      try await client.from("messages")
       .select()
       .order("channel_id", ascending: false)
       .order("username", ascending: false)
@@ -92,7 +94,8 @@ final class PostgrestTransformsTests: XCTestCase {
   }
 
   func testLimit() async throws {
-    let res = try await client.from("users")
+    let res =
+      try await client.from("users")
       .select()
       .limit(1)
       .execute().value as AnyJSON
@@ -113,7 +116,8 @@ final class PostgrestTransformsTests: XCTestCase {
   }
 
   func testRange() async throws {
-    let res = try await client.from("users")
+    let res =
+      try await client.from("users")
       .select()
       .range(from: 1, to: 3)
       .execute().value as AnyJSON
@@ -148,7 +152,8 @@ final class PostgrestTransformsTests: XCTestCase {
   }
 
   func testSingle() async throws {
-    let res = try await client.from("users")
+    let res =
+      try await client.from("users")
       .select()
       .limit(1)
       .single()
@@ -168,7 +173,8 @@ final class PostgrestTransformsTests: XCTestCase {
   }
 
   func testSingleOnInsert() async throws {
-    let res = try await client.from("users")
+    let res =
+      try await client.from("users")
       .insert(["username": "foo"])
       .select()
       .single()
@@ -193,7 +199,8 @@ final class PostgrestTransformsTests: XCTestCase {
   }
 
   func testSelectOnInsert() async throws {
-    let res = try await client.from("users")
+    let res =
+      try await client.from("users")
       .insert(["username": "foo"])
       .select("status")
       .execute().value as AnyJSON
@@ -215,7 +222,8 @@ final class PostgrestTransformsTests: XCTestCase {
   }
 
   func testSelectOnRpc() async throws {
-    let res = try await client.rpc("get_username_and_status", params: ["name_param": "supabot"])
+    let res =
+      try await client.rpc("get_username_and_status", params: ["name_param": "supabot"])
       .select("status")
       .execute().value as AnyJSON
 
@@ -228,6 +236,29 @@ final class PostgrestTransformsTests: XCTestCase {
       ]
       """
     }
+  }
+
+  func testRpcWithArray() async throws {
+    struct Params: Encodable {
+      let arr: [Int]
+      let index: Int
+    }
+    let res =
+      try await client.rpc("get_array_element", params: Params(arr: [37, 420, 64], index: 2))
+      .execute().value as Int
+    XCTAssertEqual(res, 420)
+  }
+
+  func testRpcWithReadOnlyAccessMode() async throws {
+    struct Params: Encodable {
+      let arr: [Int]
+      let index: Int
+    }
+    let res =
+      try await client.rpc(
+        "get_array_element", params: Params(arr: [37, 420, 64], index: 2), get: true
+      ).execute().value as Int
+    XCTAssertEqual(res, 420)
   }
 
   func testCsv() async throws {
