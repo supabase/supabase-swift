@@ -1,7 +1,7 @@
 import ConcurrencyExtras
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 public typealias PostgrestError = Helpers.PostgrestError
 public typealias HTTPError = Helpers.HTTPError
@@ -129,31 +129,69 @@ public final class PostgrestClient: Sendable {
   /// - Parameters:
   ///   - fn: The function name to call.
   ///   - params: The parameters to pass to the function call.
+  ///   - head: When set to `true`, `data`, will not be returned. Useful if you only need the count.
+  ///   - get: When set to `true`, the function will be called with read-only access mode.
   ///   - count: Count algorithm to use to count rows returned by the function. Only applicable for [set-returning functions](https://www.postgresql.org/docs/current/functions-srf.html).
   public func rpc(
     _ fn: String,
     params: some Encodable & Sendable,
+    head: Bool = false,
+    get: Bool = false,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    try PostgrestRpcBuilder(
+    let method: HTTPTypes.HTTPRequest.Method
+    var url = configuration.url.appendingPathComponent("rpc/\(fn)")
+    let bodyData = try configuration.encoder.encode(params)
+    var body: Data?
+
+    if head || get {
+      method = head ? .head : .get
+
+      guard let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
+        throw PostgrestError(
+          message: "Params should be a key-value type when using `GET` or `HEAD` options.")
+      }
+
+      for (key, value) in json {
+        let formattedValue = (value as? [Any]).map(cleanFilterArray) ?? String(describing: value)
+        url.appendQueryItems([URLQueryItem(name: key, value: formattedValue)])
+      }
+
+    } else {
+      method = .post
+      body = bodyData
+    }
+
+    var request = HTTPRequest(
+      url: url,
+      method: method,
+      headers: HTTPFields(configuration.headers),
+      body: params is NoParams ? nil : body
+    )
+
+    if let count {
+      request.headers[.prefer] = "count=\(count.rawValue)"
+    }
+
+    return PostgrestFilterBuilder(
       configuration: configuration,
-      request: HTTPRequest(
-        url: configuration.url.appendingPathComponent("rpc/\(fn)"),
-        method: .post,
-        headers: HTTPFields(configuration.headers)
-      )
-    ).rpc(params: params, count: count)
+      request: request
+    )
   }
 
   /// Perform a function call.
   /// - Parameters:
   ///   - fn: The function name to call.
+  ///   - head: When set to `true`, `data`, will not be returned. Useful if you only need the count.
+  ///   - get: When set to `true`, the function will be called with read-only access mode.
   ///   - count: Count algorithm to use to count rows returned by the function. Only applicable for [set-returning functions](https://www.postgresql.org/docs/current/functions-srf.html).
   public func rpc(
     _ fn: String,
+    head: Bool = false,
+    get: Bool = false,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    try rpc(fn, params: NoParams(), count: count)
+    try rpc(fn, params: NoParams(), head: head, get: get, count: count)
   }
 
   /// Select a schema to query or perform an function (rpc) call.
@@ -165,4 +203,14 @@ public final class PostgrestClient: Sendable {
     configuration.schema = schema
     return PostgrestClient(configuration: configuration)
   }
+
+  private func cleanFilterArray(_ filter: [Any]) -> String {
+    "{\(filter.map { String(describing: $0) }.joined(separator: ","))}"
+  }
+}
+
+struct NoParams: Encodable {}
+
+extension HTTPField.Name {
+  static let prefer = Self("Prefer")!
 }

@@ -227,6 +227,19 @@ final class BuildURLRequestTests: XCTestCase {
           .select()
           .gt("created_at", value: Date(timeIntervalSince1970: 0))
       },
+      TestCase(name: "rpc call with head") { client in
+        try client.rpc("sum", head: true)
+      },
+      TestCase(name: "rpc call with get") { client in
+        try client.rpc("sum", get: true)
+      },
+      TestCase(name: "rpc call with get and params") { client in
+        try client.rpc(
+          "get_array_element",
+          params: ["array": [37, 420, 64], "index": 2] as AnyJSON,
+          get: true
+        )
+      },
     ]
 
     for testCase in testCases {
