@@ -12,6 +12,14 @@
 				<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>DOT_REVERSED_IOS_CLIENT_ID</string>
+			</array>
+		</dict>
 	</array>
 	<key>GIDClientID</key>
 	<string>YOUR_IOS_CLIENT_ID</string>
