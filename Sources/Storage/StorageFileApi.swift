@@ -124,10 +124,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
   /// Uploads a file to an existing bucket.
   /// - Parameters:
-  ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`. The
-  /// bucket must already exist before attempting to upload.
+  ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
   ///   - data: The Data to be stored in the bucket.
-  ///   - options: HTTP headers. For example `cacheControl`
+  ///   - options: The options for the uploaded file.
   @discardableResult
   public func upload(
     _ path: String,
@@ -142,46 +141,49 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     )
   }
 
-  @discardableResult
-  public func upload(
-    _ path: String,
-    fileURL: URL,
-    options: FileOptions = FileOptions()
-  ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
-      method: .post,
-      path: path,
-      file: .url(fileURL),
-      options: options
-    )
-  }
-
-  /// Replaces an existing file at the specified path with a new one.
+  /// Uploads a file to an existing bucket.
   /// - Parameters:
-  ///   - path: The relative file path. Should be of the format `folder/subfolder`. The bucket
-  /// already exist before attempting to upload.
-  ///   - data: The Data to be stored in the bucket.
-  ///   - options: HTTP headers. For example `cacheControl`
-  @discardableResult
-  public func update(
-    _ path: String,
-    data: Data,
-    options: FileOptions = FileOptions()
-  ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
-      method: .put,
-      path: path,
-      file: .data(data),
-      options: options
-    )
-  }
-
-  /// Replaces an existing file at the specified path with a new one.
-  /// - Parameters:
-  ///   - path: The relative file path. Should be of the format `folder/subfolder`. The bucket
-  /// already exist before attempting to upload.
+  ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
   ///   - fileURL: The file URL to be stored in the bucket.
-  ///   - options: HTTP headers. For example `cacheControl`
+  ///   - options: The options for the uploaded file.
+  @discardableResult
+  public func upload(
+    _ path: String,
+    fileURL: URL,
+    options: FileOptions = FileOptions()
+  ) async throws -> FileUploadResponse {
+    try await _uploadOrUpdate(
+      method: .post,
+      path: path,
+      file: .url(fileURL),
+      options: options
+    )
+  }
+
+  /// Replaces an existing file at the specified path with a new one.
+  /// - Parameters:
+  ///   - path: The relative file path. Should be of the format `folder/subfolder`. The bucket already exist before attempting to upload.
+  ///   - data: The Data to be stored in the bucket.
+  ///   - options: The options for the updated file.
+  @discardableResult
+  public func update(
+    _ path: String,
+    data: Data,
+    options: FileOptions = FileOptions()
+  ) async throws -> FileUploadResponse {
+    try await _uploadOrUpdate(
+      method: .put,
+      path: path,
+      file: .data(data),
+      options: options
+    )
+  }
+
+  /// Replaces an existing file at the specified path with a new one.
+  /// - Parameters:
+  ///   - path: The relative file path. Should be of the format `folder/subfolder`. The bucket already exist before attempting to upload.
+  ///   - fileURL: The file URL to be stored in the bucket.
+  ///   - options: The options for the updated file.
   @discardableResult
   public func update(
     _ path: String,
@@ -196,10 +198,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     )
   }
 
-  /// Moves an existing file, optionally renaming it at the same time.
+  /// Moves an existing file to a new path.
   /// - Parameters:
   ///   - source: The original file path, including the current file name. For example `folder/image.png`.
-  ///   - destination: The new file path, including the new file name. For example `folder/image-copy.png`.
+  ///   - destination: The new file path, including the new file name. For example `folder/image-new.png`.
   ///   - options: The destination options.
   public func move(
     from source: String,
@@ -222,7 +224,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     )
   }
 
-  /// Copies an existing file to a new path in the same bucket.
+  /// Copies an existing file to a new path.
   /// - Parameters:
   ///   - source: The original file path, including the current file name. For example `folder/image.png`.
   ///   - destination: The new file path, including the new file name. For example `folder/image-copy.png`.
@@ -255,13 +257,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     .Key
   }
 
-  /// Create signed url to download file without requiring permissions. This URL can be valid for a
-  /// set number of seconds.
+  /// Creates a signed URL. Use a signed URL to share a file for a fixed amount of time.
   /// - Parameters:
-  ///   - path: The file path to be downloaded, including the current file name. For example
-  /// `folder/image.png`.
-  ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL
-  /// which is valid for one minute.
+  ///   - path: The file path, including the current file name. For example `folder/image.png`.
+  ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL which is valid for one minute.
   ///   - download: Trigger a download with the specified file name.
   ///   - transform: Transform the asset before serving it to the client.
   public func createSignedURL(
@@ -291,13 +290,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     return try makeSignedURL(response.signedURL, download: download)
   }
 
-  /// Create signed url to download file without requiring permissions. This URL can be valid for a
-  /// set number of seconds.
+  /// Creates a signed URL. Use a signed URL to share a file for a fixed amount of time.
   /// - Parameters:
-  ///   - path: The file path to be downloaded, including the current file name. For example
-  /// `folder/image.png`.
-  ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL
-  /// which is valid for one minute.
+  ///   - path: The file path, including the current file name. For example `folder/image.png`.
+  ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL which is valid for one minute.
   ///   - download: Trigger a download with the default file name.
   ///   - transform: Transform the asset before serving it to the client.
   public func createSignedURL(
@@ -316,10 +312,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
   /// Creates multiple signed URLs. Use a signed URL to share a file for a fixed amount of time.
   /// - Parameters:
-  ///   - paths: The file paths to be downloaded, including the current file names. For example
-  /// `["folder/image.png", "folder2/image2.png"]`.
-  ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs
-  /// which are valid for one minute.
+  ///   - paths: The file paths to be downloaded, including the current file names. For example `["folder/image.png", "folder2/image2.png"]`.
+  ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs which are valid for one minute.
   ///   - download: Trigger a download with the specified file name.
   public func createSignedURLs(
     paths: [String],
@@ -349,10 +343,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
   /// Creates multiple signed URLs. Use a signed URL to share a file for a fixed amount of time.
   /// - Parameters:
-  ///   - paths: The file paths to be downloaded, including the current file names. For example
-  /// `["folder/image.png", "folder2/image2.png"]`.
-  ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs
-  /// which are valid for one minute.
+  ///   - paths: The file paths to be downloaded, including the current file names. For example `["folder/image.png", "folder2/image2.png"]`.
+  ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs which are valid for one minute.
   ///   - download: Trigger a download with the default file name.
   public func createSignedURLs(
     paths: [String],
@@ -389,8 +381,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
   /// Deletes files within the same bucket
   /// - Parameters:
-  ///   - paths: An array of files to be deletes, including the path and file name. For example
-  /// [`folder/image.png`].
+  ///   - paths: An array of files to be deletes, including the path and file name. For example [`folder/image.png`].
+  /// - Returns: A list of removed ``FileObject``.
   public func remove(paths: [String]) async throws -> [FileObject] {
     try await execute(
       HTTPRequest(
@@ -490,11 +482,13 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     }
   }
 
-  /// Returns a public url for an asset.
+  /// A simple convenience function to get the URL for an asset in a public bucket. If you do not want to use this function, you can construct the public URL by concatenating the bucket URL with the path to the asset. This function does not verify if the bucket is public. If a public URL is created for a bucket which is not public, you will not be able to download the asset.
   /// - Parameters:
-  ///  - path: The file path to the asset. For example `folder/image.png`.
+  ///  - path: The path and name of the file to generate the public URL for. For example `folder/image.png`.
   ///  - download: Trigger a download with the specified file name.
   ///  - options: Transform the asset before retrieving it on the client.
+  ///
+  ///  - Note: The bucket needs to be set to public, either via ``StorageBucketApi/updateBucket(_:options:)`` or by going to Storage on [supabase.com/dashboard](https://supabase.com/dashboard), clicking the overflow menu on a bucket and choosing "Make public".
   public func getPublicURL(
     path: String,
     download: String? = nil,
@@ -527,11 +521,13 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     return generatedUrl
   }
 
-  /// Returns a public url for an asset.
+  /// A simple convenience function to get the URL for an asset in a public bucket. If you do not want to use this function, you can construct the public URL by concatenating the bucket URL with the path to the asset. This function does not verify if the bucket is public. If a public URL is created for a bucket which is not public, you will not be able to download the asset.
   /// - Parameters:
-  ///  - path: The file path to the asset. For example `folder/image.png`.
+  ///  - path: The path and name of the file to generate the public URL for. For example `folder/image.png`.
   ///  - download: Trigger a download with the default file name.
   ///  - options: Transform the asset before retrieving it on the client.
+  ///
+  ///  - Note: The bucket needs to be set to public, either via ``StorageBucketApi/updateBucket(_:options:)`` or by going to Storage on [supabase.com/dashboard](https://supabase.com/dashboard), clicking the overflow menu on a bucket and choosing "Make public".
   public func getPublicURL(
     path: String,
     download: Bool,
@@ -540,14 +536,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     try getPublicURL(path: path, download: download ? "" : nil, options: options)
   }
 
-  /// Creates a signed upload URL.
-  /// - Parameter path: The file path, including the current file name. For example
-  /// `folder/image.png`.
+  /// Creates a signed upload URL. Signed upload URLs can be used to upload files to the bucket without further authentication. They are valid for 2 hours.
+  /// - Parameter path: The file path, including the current file name. For example `folder/image.png`.
   /// - Returns: A URL that can be used to upload files to the bucket without further
   /// authentication.
-  ///
-  /// - Note: Signed upload URLs can be used to upload files to the bucket without further
-  /// authentication. They are valid for 2 hours.
   public func createSignedUploadURL(
     path: String,
     options: CreateSignedUploadURLOptions? = nil
