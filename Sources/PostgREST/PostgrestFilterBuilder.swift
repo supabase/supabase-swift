@@ -1,7 +1,7 @@
 import Foundation
 import Helpers
 
-public class PostgrestFilterBuilder: PostgrestTransformBuilder {
+public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Sendable {
   public enum Operator: String, CaseIterable, Sendable {
     case eq, neq, gt, gte, lt, lte, like, ilike, `is`, `in`, cs, cd, sl, sr, nxl, nxr, adj, ov, fts,
          plfts, phfts, wfts
