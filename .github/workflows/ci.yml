@@ -47,7 +47,7 @@ jobs:
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
   xcodebuild-macOS-14:
-    runs-on: macos-14
+    runs-on: macos-13
     strategy:
       matrix:
         command: [test, ""]
