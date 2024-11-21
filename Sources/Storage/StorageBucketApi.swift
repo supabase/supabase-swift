@@ -7,7 +7,7 @@ import Helpers
 
 /// Storage Bucket API
 public class StorageBucketApi: StorageApi, @unchecked Sendable {
-  /// Retrieves the details of all Storage buckets within an existing product.
+  /// Retrieves the details of all Storage buckets within an existing project.
   public func listBuckets() async throws -> [Bucket] {
     try await execute(
       HTTPRequest(
@@ -42,6 +42,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// Creates a new Storage bucket.
   /// - Parameters:
   ///   - id: A unique identifier for the bucket you are creating.
+  ///   - options: Options for creating the bucket.
   public func createBucket(_ id: String, options: BucketOptions = .init()) async throws {
     try await execute(
       HTTPRequest(
@@ -60,9 +61,10 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
     )
   }
 
-  /// Updates a Storage bucket
+  /// Updates a Storage bucket.
   /// - Parameters:
   ///   - id: A unique identifier for the bucket you are updating.
+  ///   - options: Options for updating the bucket.
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
     try await execute(
       HTTPRequest(
