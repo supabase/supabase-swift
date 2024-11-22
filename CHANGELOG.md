@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.23.0](https://github.com/supabase/supabase-swift/compare/v2.22.1...v2.23.0) (2024-11-22)
+
+
+### Features
+
+* **postgrest:** add read-only mode for RPC ([#600](https://github.com/supabase/supabase-swift/issues/600)) ([d81fc86](https://github.com/supabase/supabase-swift/commit/d81fc865409821dc0816c930d2d537a126b4fe06))
+
 ## [2.22.1](https://github.com/supabase/supabase-swift/compare/v2.22.0...v2.22.1) (2024-11-12)
 
 
