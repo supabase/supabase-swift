@@ -31,8 +31,7 @@ extension RealtimeChannelV2 {
     filter: String? = nil
   ) -> AsyncStream<InsertAction> {
     postgresChange(event: .insert, schema: schema, table: table, filter: filter)
-      .compactMap { $0.wrappedAction as? InsertAction }
-      .eraseToStream()
+      .compactErase()
   }
 
   /// Listen for postgres changes in a channel.
@@ -43,8 +42,7 @@ extension RealtimeChannelV2 {
     filter: String? = nil
   ) -> AsyncStream<UpdateAction> {
     postgresChange(event: .update, schema: schema, table: table, filter: filter)
-      .compactMap { $0.wrappedAction as? UpdateAction }
-      .eraseToStream()
+      .compactErase()
   }
 
   /// Listen for postgres changes in a channel.
@@ -55,8 +53,7 @@ extension RealtimeChannelV2 {
     filter: String? = nil
   ) -> AsyncStream<DeleteAction> {
     postgresChange(event: .delete, schema: schema, table: table, filter: filter)
-      .compactMap { $0.wrappedAction as? DeleteAction }
-      .eraseToStream()
+      .compactErase()
   }
 
   /// Listen for postgres changes in a channel.
@@ -124,5 +121,12 @@ extension RealtimeChannelV2 {
   @available(*, deprecated, renamed: "broadcastStream(event:)")
   public func broadcast(event: String) -> AsyncStream<JSONObject> {
     broadcastStream(event: event)
+  }
+}
+
+// Helper to work around type ambiguity in macOS 13
+fileprivate extension AsyncStream<AnyAction> {
+  func compactErase<T: Sendable>() -> AsyncStream<T> {
+    AsyncStream<T>(compactMap { $0.wrappedAction as? T } as AsyncCompactMapSequence<Self, T>)
   }
 }
