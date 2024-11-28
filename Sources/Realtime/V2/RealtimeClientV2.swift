@@ -131,7 +131,10 @@ public actor RealtimeClientV2 {
   }
 
   func connect(reconnect: Bool) async {
-    if let connectionTask { await connectionTask.value; return }
+    if let connectionTask {
+      await connectionTask.value
+      return
+    }
 
     connectionTask = Task {
       guard ws == nil else {
@@ -164,23 +167,22 @@ public actor RealtimeClientV2 {
         startHeartbeating()
 
         if reconnect {
-          await rejoinChannels()
+          Task {
+            await rejoinChannels()
+          }
         }
 
         flushSendBuffer()
       } catch {
         options.logger?.verbose("error \(error.localizedDescription)")
-        disconnect()
-        await connect(reconnect: true)
+        Task {
+          disconnect()
+          await connect(reconnect: true)
+        }
       }
     }
 
     await connectionTask?.value
-  }
-
-  private func reconnect() async {
-    disconnect()
-    await connect(reconnect: true)
   }
 
   /// Creates a new channel and bind it to this client.
@@ -295,7 +297,10 @@ public actor RealtimeClientV2 {
     if pendingHeartbeatRef != nil {
       pendingHeartbeatRef = nil
       options.logger?.verbose("heartbeat timeout")
-      await reconnect()
+      Task {
+        disconnect()
+        await connect(reconnect: true)
+      }
     }
 
     let ref = makeRef()

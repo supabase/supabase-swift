@@ -120,10 +120,10 @@ public actor RealtimeChannelV2 {
       }
     } catch {
       if error is TimeoutError {
-        logger?.debug("Subscribe timed out.")
+        logger?.debug("channel timeout \(topic)")
         await subscribe()
       } else {
-        logger?.error("Subscribe failed: \(error)")
+        logger?.error("channel error \(topic) \(error.localizedDescription)")
       }
     }
   }
@@ -362,9 +362,9 @@ public actor RealtimeChannelV2 {
         callbackManager.triggerBroadcast(event: event, json: payload)
 
       case .close:
-        await socket._remove(self)
-        logger?.debug("Unsubscribed from channel \(message.topic)")
         status = .unsubscribed
+        logger?.debug("channel close \(message.topic) \(joinRef ?? "<no joinRef>")")
+        await socket._remove(self)
 
       case .error:
         logger?.debug(
