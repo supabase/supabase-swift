@@ -89,8 +89,6 @@ extension Messages {
 @MainActor
 @Observable
 final class MessageStore {
-  static let shared = MessageStore()
-
   private(set) var messages: [Channel.ID: Messages] = [:]
 
   struct Section {
@@ -98,16 +96,16 @@ final class MessageStore {
     var messages: [Message]
   }
 
-  var users: UserStore { Dependencies.shared.users }
-  var channel: ChannelStore { Dependencies.shared.channel }
+  var users: UserStore!
+  weak var channel: ChannelStore!
 
-  private init() {
+  init() {
     Task {
-      let channel = supabase.channel("public:messages")
+      let channel = await supabase.channel("public:messages")
 
-      let insertions = channel.postgresChange(InsertAction.self, table: "messages")
-      let updates = channel.postgresChange(UpdateAction.self, table: "messages")
-      let deletions = channel.postgresChange(DeleteAction.self, table: "messages")
+      let insertions = await channel.postgresChange(InsertAction.self, table: "messages")
+      let updates = await channel.postgresChange(UpdateAction.self, table: "messages")
+      let deletions = await channel.postgresChange(DeleteAction.self, table: "messages")
 
       await channel.subscribe()
 

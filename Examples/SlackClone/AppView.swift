@@ -17,7 +17,15 @@ final class AppViewModel {
 
   var realtimeConnectionStatus: RealtimeClientStatus?
 
+  let channelStore = ChannelStore()
+  let messageStore = MessageStore()
+  let userStore = UserStore()
+
   init() {
+    channelStore.messages = messageStore
+    messageStore.channel = channelStore
+    messageStore.users = userStore
+
     Task {
       for await (event, session) in supabase.auth.authStateChanges {
         Logger.main.debug("AuthStateChange: \(event.rawValue)")
@@ -27,7 +35,7 @@ final class AppViewModel {
         self.session = session
 
         if session == nil {
-          for subscription in supabase.channels {
+          for subscription in await supabase.channels {
             await subscription.unsubscribe()
           }
         }
@@ -35,7 +43,7 @@ final class AppViewModel {
     }
 
     Task {
-      for await status in supabase.realtimeV2.statusChange {
+      for await status in await supabase.realtimeV2.statusChange {
         realtimeConnectionStatus = status
       }
     }
@@ -56,6 +64,9 @@ struct AppView: View {
           MessagesView(channel: channel).id(channel.id)
         }
       }
+      .environment(model.channelStore)
+      .environment(model.messageStore)
+      .environment(model.userStore)
     } else {
       AuthView()
     }

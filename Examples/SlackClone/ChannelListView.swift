@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ChannelListView: View {
-  @Bindable var store = Dependencies.shared.channel
+  @Environment(ChannelStore.self) var store
   @Binding var channel: Channel?
 
   @State private var addChannelPresented = false
@@ -35,7 +35,6 @@ struct ChannelListView: View {
         }
       }
     }
-    .toast(state: $store.toast)
   }
 
   private var addChannelView: some View {

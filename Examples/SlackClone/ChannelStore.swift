@@ -11,21 +11,18 @@ import Supabase
 @MainActor
 @Observable
 final class ChannelStore {
-  static let shared = ChannelStore()
-
   private(set) var channels: [Channel] = []
-  var toast: ToastState?
 
-  var messages: MessageStore { Dependencies.shared.messages }
+  var messages: MessageStore!
 
-  private init() {
+  init() {
     Task {
       channels = await fetchChannels()
 
-      let channel = supabase.channel("public:channels")
+      let channel = await supabase.channel("public:channels")
 
-      let insertions = channel.postgresChange(InsertAction.self, table: "channels")
-      let deletions = channel.postgresChange(DeleteAction.self, table: "channels")
+      let insertions = await channel.postgresChange(InsertAction.self, table: "channels")
+      let deletions = await channel.postgresChange(DeleteAction.self, table: "channels")
 
       await channel.subscribe()
 
@@ -53,7 +50,6 @@ final class ChannelStore {
         .execute()
     } catch {
       dump(error)
-      toast = .init(status: .error, title: "Error", description: error.localizedDescription)
     }
   }
 
@@ -78,14 +74,13 @@ final class ChannelStore {
       channels.append(channel)
     } catch {
       dump(error)
-      toast = .init(status: .error, title: "Error", description: error.localizedDescription)
     }
   }
 
   private func handleDeletedChannel(_ action: DeleteAction) {
     guard let id = action.oldRecord["id"]?.intValue else { return }
     channels.removeAll { $0.id == id }
-    messages.removeMessages(for: id)
+    messages?.removeMessages(for: id)
   }
 
   private func fetchChannels() async -> [Channel] {
@@ -93,7 +88,6 @@ final class ChannelStore {
       return try await supabase.from("channels").select().execute().value
     } catch {
       dump(error)
-      toast = .init(status: .error, title: "Error", description: error.localizedDescription)
       return []
     }
   }

@@ -12,9 +12,6 @@ import Supabase
 class Dependencies {
   static let shared = Dependencies()
 
-  let channel = ChannelStore.shared
-  let users = UserStore.shared
-  let messages = MessageStore.shared
 }
 
 struct User: Codable, Identifiable, Hashable {

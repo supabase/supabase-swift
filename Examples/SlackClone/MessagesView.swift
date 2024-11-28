@@ -10,8 +10,8 @@ import Supabase
 import SwiftUI
 
 struct MessagesView: View {
-  let store = Dependencies.shared.messages
-  let userStore = Dependencies.shared.users
+  @Environment(MessageStore.self) var store
+  @Environment(UserStore.self) var userStore
 
   let channel: Channel
   @State private var newMessage = ""

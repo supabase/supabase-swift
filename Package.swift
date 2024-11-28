@@ -28,6 +28,8 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.2"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
+
+      .package(url: "https://github.com/grdsdev/swift-websocket", branch: "main"),
   ],
   targets: [
     .target(
@@ -122,6 +124,9 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         "Helpers",
+
+          .product(name: "WebSocket", package: "swift-websocket"),
+          .product(name: "WebSocketFoundation", package: "swift-websocket"),
       ]
     ),
     .testTarget(
