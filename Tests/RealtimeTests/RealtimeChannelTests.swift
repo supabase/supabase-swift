@@ -6,54 +6,76 @@
 //
 
 import InlineSnapshotTesting
+import TestHelpers
+import WebSocket
 import XCTest
 import XCTestDynamicOverlay
 
 @testable import Realtime
 
 final class RealtimeChannelTests: XCTestCase {
-  let sut = RealtimeChannelV2(
-    topic: "topic",
-    config: RealtimeChannelConfig(
-      broadcast: BroadcastJoinConfig(),
-      presence: PresenceJoinConfig(),
-      isPrivate: false
-    ),
-    socket: .mock,
-    logger: nil
-  )
+  var socket: RealtimeClientV2!
+  var sut: RealtimeChannelV2!
 
-  func testAttachCallbacks() {
+  var serverWs: FakeWebSocket!
+
+  override func setUp() {
+    super.setUp()
+
+    let (client, server) = FakeWebSocket.fakes()
+    self.serverWs = server
+
+    socket = RealtimeClientV2(
+      url: URL(string: "http://localhost:3000")!,
+      options: RealtimeClientOptions(),
+      wsFactory: { _, _ in client },
+      http: HTTPClientMock()
+    )
+
+    sut = RealtimeChannelV2(
+      socket,
+      topic: "topic",
+      config: RealtimeChannelConfig(
+        broadcast: BroadcastJoinConfig(),
+        presence: PresenceJoinConfig(),
+        isPrivate: false
+      ),
+      logger: nil
+    )
+  }
+
+  func testAttachCallbacks() async {
     var subscriptions = Set<RealtimeSubscription>()
 
-    sut.onPostgresChange(
+    await sut.onPostgresChange(
       AnyAction.self,
       schema: "public",
       table: "users",
       filter: "id=eq.1"
     ) { _ in }.store(in: &subscriptions)
-    sut.onPostgresChange(
+    await sut.onPostgresChange(
       InsertAction.self,
       schema: "private"
     ) { _ in }.store(in: &subscriptions)
-    sut.onPostgresChange(
+    await sut.onPostgresChange(
       UpdateAction.self,
       table: "messages"
     ) { _ in }.store(in: &subscriptions)
-    sut.onPostgresChange(
+    await sut.onPostgresChange(
       DeleteAction.self
     ) { _ in }.store(in: &subscriptions)
 
-    sut.onBroadcast(event: "test") { _ in }.store(in: &subscriptions)
-    sut.onBroadcast(event: "cursor-pos") { _ in }.store(in: &subscriptions)
+    await sut.onBroadcast(event: "test") { _ in }.store(in: &subscriptions)
+    await sut.onBroadcast(event: "cursor-pos") { _ in }.store(in: &subscriptions)
 
-    sut.onPresenceChange { _ in }.store(in: &subscriptions)
+    await sut.onPresenceChange { _ in }.store(in: &subscriptions)
 
-    sut.onSystem {
+    await sut.onSystem {
     }
     .store(in: &subscriptions)
 
-    assertInlineSnapshot(of: sut.callbackManager.callbacks, as: .dump) {
+    let callbacks = await sut.callbackManager.callbacks
+    assertInlineSnapshot(of: callbacks, as: .dump) {
       """
       ▿ 8 elements
         ▿ RealtimeCallback
@@ -124,23 +146,5 @@ final class RealtimeChannelTests: XCTestCase {
 
       """
     }
-  }
-}
-
-extension Socket {
-  static var mock: Socket {
-    Socket(
-      broadcastURL: unimplemented(),
-      status: unimplemented(),
-      options: unimplemented(),
-      accessToken: unimplemented(),
-      apiKey: unimplemented(),
-      makeRef: unimplemented(),
-      connect: unimplemented(),
-      addChannel: unimplemented(),
-      removeChannel: unimplemented(),
-      push: unimplemented(),
-      httpSend: unimplemented()
-    )
   }
 }

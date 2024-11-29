@@ -6,7 +6,7 @@ import Helpers
 #endif
 
 /// Storage Bucket API
-public class StorageBucketApi: StorageApi, @unchecked Sendable {
+public class StorageBucketApi: StorageApi {
   /// Retrieves the details of all Storage buckets within an existing project.
   public func listBuckets() async throws -> [Bucket] {
     try await execute(

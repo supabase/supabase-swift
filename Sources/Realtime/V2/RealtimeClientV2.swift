@@ -17,11 +17,12 @@ import WebSocketFoundation
 
 public typealias JSONObject = Helpers.JSONObject
 
-public typealias WebSocketFactory = (_ url: URL, _ headers: [String: String]) async throws -> (
+public typealias WebSocketFactory = @Sendable (_ url: URL, _ headers: [String: String]) async throws -> (
   any WebSocket
 )
 
-public actor RealtimeClientV2 {
+@MainActor
+public final class RealtimeClientV2 {
   var accessToken: String?
   var ref: UInt64 = 0
   var pendingHeartbeatRef: String?
@@ -74,7 +75,7 @@ public actor RealtimeClientV2 {
     statusEventEmitter.attach(listener)
   }
 
-  public init(url: URL, options: RealtimeClientOptions) {
+  public convenience init(url: URL, options: RealtimeClientOptions) {
     var interceptors: [any HTTPClientInterceptor] = []
 
     if let logger = options.logger {
@@ -219,7 +220,7 @@ public actor RealtimeClientV2 {
   ///
   /// If there is no channel left, client is disconnected.
   public func removeChannel(_ channel: RealtimeChannelV2) async {
-    if await channel.status == .subscribed {
+    if channel.status == .subscribed {
       await channel.unsubscribe()
     }
 
@@ -260,7 +261,7 @@ public actor RealtimeClientV2 {
   private func listenForMessages() {
     messageTask?.cancel()
     messageTask = Task { [weak self] in
-      guard let self, let ws = await self.ws else { return }
+      guard let self, let ws = self.ws else { return }
 
       for await event in ws.events {
         if Task.isCancelled {
@@ -275,6 +276,7 @@ public actor RealtimeClientV2 {
         case let .close(code, reason):
           options.logger?.verbose(
             "close \(code.map(String.init) ?? "no code") - \(reason)")
+          await connect(reconnect: true)
         }
       }
     }
@@ -298,7 +300,9 @@ public actor RealtimeClientV2 {
       pendingHeartbeatRef = nil
       options.logger?.verbose("heartbeat timeout")
       Task {
-        disconnect()
+        disconnect(
+          code: URLSessionWebSocketTask.CloseCode.normalClosure.rawValue,
+          reason: "heartbeat timeout")
         await connect(reconnect: true)
       }
     }
@@ -336,7 +340,7 @@ public actor RealtimeClientV2 {
     accessToken = token
 
     for channel in channels.values {
-      if await channel.status == .subscribed {
+      if channel.status == .subscribed {
         options.logger?.debug("Updating auth token for channel \(channel.topic)")
         await channel.push(
           ChannelEvent.accessToken,

@@ -6,7 +6,8 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
-public class StorageApi: @unchecked Sendable {
+@MainActor
+public class StorageApi {
   public let configuration: StorageClientConfiguration
 
   private let http: any HTTPClientType

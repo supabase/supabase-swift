@@ -1,7 +1,7 @@
 import Foundation
 import Helpers
 
-public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
+public class PostgrestTransformBuilder: PostgrestBuilder {
   /// Perform a SELECT on the query result.
   ///
   /// By default, `.insert()`, `.update()`, `.upsert()`, and `.delete()` do not return modified rows. By calling this method, modified rows are returned in `value`.
@@ -21,22 +21,20 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
       return String(char)
     }
     .joined(separator: "")
-    mutableState.withValue {
-      $0.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
+    request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
 
-      if let prefer = $0.request.headers[.prefer] {
-        var components = prefer.components(separatedBy: ",")
+    if let prefer = request.headers[.prefer] {
+      var components = prefer.components(separatedBy: ",")
 
-        if let index = components.firstIndex(where: { $0.hasPrefix("return=") }) {
-          components[index] = "return=representation"
-        } else {
-          components.append("return=representation")
-        }
-
-        $0.request.headers[.prefer] = components.joined(separator: ",")
+      if let index = components.firstIndex(where: { $0.hasPrefix("return=") }) {
+        components[index] = "return=representation"
       } else {
-        $0.request.headers[.prefer] = "return=representation"
+        components.append("return=representation")
       }
+
+      request.headers[.prefer] = components.joined(separator: ",")
+    } else {
+      request.headers[.prefer] = "return=representation"
     }
     return self
   }
@@ -57,24 +55,21 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
     nullsFirst: Bool = false,
     referencedTable: String? = nil
   ) -> PostgrestTransformBuilder {
-    mutableState.withValue {
-      let key = referencedTable.map { "\($0).order" } ?? "order"
-      let existingOrderIndex = $0.request.query.firstIndex { $0.name == key }
-      let value =
-        "\(column).\(ascending ? "asc" : "desc").\(nullsFirst ? "nullsfirst" : "nullslast")"
+    let key = referencedTable.map { "\($0).order" } ?? "order"
+    let existingOrderIndex = request.query.firstIndex { $0.name == key }
+    let value =
+      "\(column).\(ascending ? "asc" : "desc").\(nullsFirst ? "nullsfirst" : "nullslast")"
 
-      if let existingOrderIndex,
-         let currentValue = $0.request.query[existingOrderIndex].value
-      {
-        $0.request.query[existingOrderIndex] = URLQueryItem(
-          name: key,
-          value: "\(currentValue),\(value)"
-        )
-      } else {
-        $0.request.query.append(URLQueryItem(name: key, value: value))
-      }
+    if let existingOrderIndex,
+      let currentValue = request.query[existingOrderIndex].value
+    {
+      request.query[existingOrderIndex] = URLQueryItem(
+        name: key,
+        value: "\(currentValue),\(value)"
+      )
+    } else {
+      request.query.append(URLQueryItem(name: key, value: value))
     }
-
     return self
   }
 
@@ -83,13 +78,11 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   ///   - count: The maximum number of rows to return.
   ///   - referencedTable: Set this to limit rows of referenced tables instead of the parent table.
   public func limit(_ count: Int, referencedTable: String? = nil) -> PostgrestTransformBuilder {
-    mutableState.withValue {
-      let key = referencedTable.map { "\($0).limit" } ?? "limit"
-      if let index = $0.request.query.firstIndex(where: { $0.name == key }) {
-        $0.request.query[index] = URLQueryItem(name: key, value: "\(count)")
-      } else {
-        $0.request.query.append(URLQueryItem(name: key, value: "\(count)"))
-      }
+    let key = referencedTable.map { "\($0).limit" } ?? "limit"
+    if let index = request.query.firstIndex(where: { $0.name == key }) {
+      request.query[index] = URLQueryItem(name: key, value: "\(count)")
+    } else {
+      request.query.append(URLQueryItem(name: key, value: "\(count)"))
     }
     return self
   }
@@ -112,25 +105,24 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
     let keyOffset = referencedTable.map { "\($0).offset" } ?? "offset"
     let keyLimit = referencedTable.map { "\($0).limit" } ?? "limit"
 
-    mutableState.withValue {
-      if let index = $0.request.query.firstIndex(where: { $0.name == keyOffset }) {
-        $0.request.query[index] = URLQueryItem(name: keyOffset, value: "\(from)")
-      } else {
-        $0.request.query.append(URLQueryItem(name: keyOffset, value: "\(from)"))
-      }
+    if let index = request.query.firstIndex(where: { $0.name == keyOffset }) {
+      request.query[index] = URLQueryItem(name: keyOffset, value: "\(from)")
+    } else {
+      request.query.append(URLQueryItem(name: keyOffset, value: "\(from)"))
+    }
 
-      // Range is inclusive, so add 1
-      if let index = $0.request.query.firstIndex(where: { $0.name == keyLimit }) {
-        $0.request.query[index] = URLQueryItem(
-          name: keyLimit,
-          value: "\(to - from + 1)"
-        )
-      } else {
-        $0.request.query.append(URLQueryItem(
+    // Range is inclusive, so add 1
+    if let index = request.query.firstIndex(where: { $0.name == keyLimit }) {
+      request.query[index] = URLQueryItem(
+        name: keyLimit,
+        value: "\(to - from + 1)"
+      )
+    } else {
+      request.query.append(
+        URLQueryItem(
           name: keyLimit,
           value: "\(to - from + 1)"
         ))
-      }
     }
 
     return self
@@ -140,25 +132,19 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   ///
   /// Query result must be one row (e.g. using `.limit(1)`), otherwise this returns an error.
   public func single() -> PostgrestTransformBuilder {
-    mutableState.withValue {
-      $0.request.headers[.accept] = "application/vnd.pgrst.object+json"
-    }
+    request.headers[.accept] = "application/vnd.pgrst.object+json"
     return self
   }
 
   ///  Return `value` as a string in CSV format.
   public func csv() -> PostgrestTransformBuilder {
-    mutableState.withValue {
-      $0.request.headers[.accept] = "text/csv"
-    }
+    request.headers[.accept] = "text/csv"
     return self
   }
 
   /// Return `value` as an object in [GeoJSON](https://geojson.org) format.
   public func geojson() -> PostgrestTransformBuilder {
-    mutableState.withValue {
-      $0.request.headers[.accept] = "application/geo+json"
-    }
+    request.headers[.accept] = "application/geo+json"
     return self
   }
 
@@ -184,19 +170,18 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
     wal: Bool = false,
     format: String = "text"
   ) -> PostgrestTransformBuilder {
-    mutableState.withValue {
-      let options = [
-        analyze ? "analyze" : nil,
-        verbose ? "verbose" : nil,
-        settings ? "settings" : nil,
-        buffers ? "buffers" : nil,
-        wal ? "wal" : nil,
-      ]
-      .compactMap { $0 }
-      .joined(separator: "|")
-      let forMediaType = $0.request.headers[.accept] ?? "application/json"
-      $0.request.headers[.accept] = "application/vnd.pgrst.plan+\"\(format)\"; for=\(forMediaType); options=\(options);"
-    }
+    let options = [
+      analyze ? "analyze" : nil,
+      verbose ? "verbose" : nil,
+      settings ? "settings" : nil,
+      buffers ? "buffers" : nil,
+      wal ? "wal" : nil,
+    ]
+    .compactMap { $0 }
+    .joined(separator: "|")
+    let forMediaType = request.headers[.accept] ?? "application/json"
+    request.headers[.accept] =
+      "application/vnd.pgrst.plan+\"\(format)\"; for=\(forMediaType); options=\(options);"
 
     return self
   }

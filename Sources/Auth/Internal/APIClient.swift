@@ -21,7 +21,7 @@ extension HTTPClient {
   }
 }
 
-struct APIClient: Sendable {
+struct APIClient {
   let clientID: AuthClientID
 
   var configuration: AuthClient.Configuration {

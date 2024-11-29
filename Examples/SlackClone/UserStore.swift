@@ -17,15 +17,15 @@ final class UserStore {
 
   init() {
     Task {
-      let channel = await supabase.channel("public:users")
-      let changes = await channel.postgresChange(AnyAction.self, table: "users")
+      let channel = supabase.channel("public:users")
+      let changes = channel.postgresChange(AnyAction.self, table: "users")
 
-      let presences = await channel.presenceChange()
+      let presences = channel.presenceChange()
 
       await channel.subscribe()
 
       Task {
-        let statusChange = await channel.statusChange
+        let statusChange = channel.statusChange
         for await _ in statusChange.filter({ $0 == .subscribed }) {
           let userId = try await supabase.auth.session.user.id
           try await channel.track(UserPresence(userId: userId, onlineAt: Date()))

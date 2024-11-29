@@ -9,7 +9,8 @@ import HTTPTypes
 
 let version = Helpers.version
 
-/// An actor representing a client for invoking functions.
+/// A client for invoking functions.
+@MainActor
 public final class FunctionsClient: Sendable {
   /// Fetch handler used to make requests.
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (

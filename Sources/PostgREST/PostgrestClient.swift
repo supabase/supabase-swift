@@ -12,7 +12,8 @@ public typealias AnyJSON = Helpers.AnyJSON
 #endif
 
 /// PostgREST client.
-public final class PostgrestClient: Sendable {
+@MainActor
+public final class PostgrestClient {
   public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
     Data, URLResponse
   )

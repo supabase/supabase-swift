@@ -29,7 +29,7 @@ public struct StorageClientConfiguration: Sendable {
   }
 }
 
-public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
+public class SupabaseStorageClient: StorageBucketApi {
   /// Perform file operation in a bucket.
   /// - Parameter id: The bucket id to operate on.
   /// - Returns: StorageFileApi object

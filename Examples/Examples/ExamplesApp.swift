@@ -22,7 +22,7 @@ struct ExamplesApp: App {
   }
 }
 
-let supabase = SupabaseClient(
+@MainActor let supabase = SupabaseClient(
   supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
   supabaseKey: SupabaseConfig["SUPABASE_ANON_KEY"]!,
   options: .init(

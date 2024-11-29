@@ -25,7 +25,8 @@ public struct RealtimeChannelConfig: Sendable {
   public var isPrivate: Bool
 }
 
-public actor RealtimeChannelV2 {
+@MainActor
+public final class RealtimeChannelV2 {
   var clientChanges: [PostgresJoinConfig] = []
   var joinRef: String?
   var pushes: [String: PushV2] = [:]
@@ -76,7 +77,7 @@ public actor RealtimeChannelV2 {
 
   /// Subscribes to the channel
   public func subscribe() async {
-    if await socket.status != .connected {
+    if socket.status != .connected {
       if socket.options.connectOnSubscribe != true {
         reportIssue(
           "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
@@ -86,7 +87,7 @@ public actor RealtimeChannelV2 {
       await socket.connect()
     }
 
-    await socket.addChannel(self)
+    socket.addChannel(self)
 
     status = .subscribing
     logger?.debug("Subscribing to channel \(topic)")
@@ -100,10 +101,10 @@ public actor RealtimeChannelV2 {
 
     let payload = RealtimeJoinPayload(
       config: joinConfig,
-      accessToken: await socket.accessToken
+      accessToken: socket.accessToken
     )
 
-    let joinRef = await socket.makeRef()
+    let joinRef = socket.makeRef()
     self.joinRef = joinRef
 
     logger?.debug("Subscribing to channel with body: \(joinConfig)")
@@ -174,7 +175,7 @@ public actor RealtimeChannelV2 {
       if let apiKey = socket.apikey {
         headers[.apiKey] = apiKey
       }
-      if let accessToken = await socket.accessToken {
+      if let accessToken = socket.accessToken {
         headers[.authorization] = "Bearer \(accessToken)"
       }
 
@@ -364,7 +365,7 @@ public actor RealtimeChannelV2 {
       case .close:
         status = .unsubscribed
         logger?.debug("channel close \(message.topic) \(joinRef ?? "<no joinRef>")")
-        await socket._remove(self)
+        socket._remove(self)
 
       case .error:
         logger?.debug(
@@ -535,7 +536,7 @@ public actor RealtimeChannelV2 {
   func push(_ event: String, ref: String? = nil, payload: JSONObject = [:]) async -> PushStatus {
     var ref = ref
     if ref == nil {
-      ref = await socket.makeRef()
+      ref = socket.makeRef()
     }
 
     let message = RealtimeMessageV2(
@@ -556,6 +557,6 @@ public actor RealtimeChannelV2 {
 
   private func didReceiveReply(ref: String, status: String) async {
     let push = pushes.removeValue(forKey: ref)
-    await push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
+    push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
   }
 }

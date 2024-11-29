@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import Foundation
 import Helpers
 
+@MainActor
 struct AuthStateChangeEventEmitter {
   var emitter = EventEmitter<(AuthChangeEvent, Session?)?>(initialEvent: nil, emitsLastEventWhenAttaching: false)
   var logger: (any SupabaseLogger)?

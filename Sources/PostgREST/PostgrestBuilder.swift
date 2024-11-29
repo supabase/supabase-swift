@@ -8,19 +8,16 @@ import HTTPTypes
 #endif
 
 /// The builder class for creating and executing requests to a PostgREST server.
-public class PostgrestBuilder: @unchecked Sendable {
+@MainActor
+public class PostgrestBuilder {
   /// The configuration for the PostgREST client.
   let configuration: PostgrestClient.Configuration
   let http: any HTTPClientType
 
-  struct MutableState {
-    var request: Helpers.HTTPRequest
+  var request: Helpers.HTTPRequest
 
-    /// The options for fetching data from the PostgREST server.
-    var fetchOptions: FetchOptions
-  }
-
-  let mutableState: LockIsolated<MutableState>
+  /// The options for fetching data from the PostgREST server.
+  var fetchOptions: FetchOptions
 
   init(
     configuration: PostgrestClient.Configuration,
@@ -35,18 +32,14 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     http = HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
 
-    mutableState = LockIsolated(
-      MutableState(
-        request: request,
-        fetchOptions: FetchOptions()
-      )
-    )
+    self.request = request
+    self.fetchOptions = FetchOptions()
   }
 
   convenience init(_ other: PostgrestBuilder) {
     self.init(
       configuration: other.configuration,
-      request: other.mutableState.value.request
+      request: other.request
     )
   }
 
@@ -59,9 +52,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   /// Set a HTTP header for the request.
   @discardableResult
   internal func setHeader(name: HTTPField.Name, value: String) -> Self {
-    mutableState.withValue {
-      $0.request.headers[name] = value
-    }
+    request.headers[name] = value
     return self
   }
 
@@ -98,35 +89,31 @@ public class PostgrestBuilder: @unchecked Sendable {
     options: FetchOptions,
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    let request = mutableState.withValue {
-      $0.fetchOptions = options
+    fetchOptions = options
 
-      if $0.fetchOptions.head {
-        $0.request.method = .head
+    if fetchOptions.head {
+      request.method = .head
+    }
+
+    if let count = fetchOptions.count {
+      if let prefer = request.headers[.prefer] {
+        request.headers[.prefer] = "\(prefer),count=\(count.rawValue)"
+      } else {
+        request.headers[.prefer] = "count=\(count.rawValue)"
       }
+    }
 
-      if let count = $0.fetchOptions.count {
-        if let prefer = $0.request.headers[.prefer] {
-          $0.request.headers[.prefer] = "\(prefer),count=\(count.rawValue)"
-        } else {
-          $0.request.headers[.prefer] = "count=\(count.rawValue)"
-        }
+    if request.headers[.accept] == nil {
+      request.headers[.accept] = "application/json"
+    }
+    request.headers[.contentType] = "application/json"
+
+    if let schema = configuration.schema {
+      if request.method == .get || request.method == .head {
+        request.headers[.acceptProfile] = schema
+      } else {
+        request.headers[.contentProfile] = schema
       }
-
-      if $0.request.headers[.accept] == nil {
-        $0.request.headers[.accept] = "application/json"
-      }
-      $0.request.headers[.contentType] = "application/json"
-
-      if let schema = configuration.schema {
-        if $0.request.method == .get || $0.request.method == .head {
-          $0.request.headers[.acceptProfile] = schema
-        } else {
-          $0.request.headers[.contentProfile] = schema
-        }
-      }
-
-      return $0.request
     }
 
     let response = try await http.send(request)

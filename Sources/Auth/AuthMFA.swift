@@ -2,7 +2,8 @@ import Foundation
 import Helpers
 
 /// Contains the full multi-factor authentication API.
-public struct AuthMFA: Sendable {
+@MainActor
+public struct AuthMFA {
   let clientID: AuthClientID
 
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
