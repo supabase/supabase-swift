@@ -12,6 +12,7 @@ import XCTest
 
 @testable import Realtime
 
+@MainActor
 final class _PushTests: XCTestCase {
   var ws: FakeWebSocket!
   var socket: RealtimeClientV2!

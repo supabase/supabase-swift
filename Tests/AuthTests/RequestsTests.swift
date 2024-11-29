@@ -18,6 +18,7 @@ import XCTest
 
 struct UnimplementedError: Error {}
 
+@MainActor
 final class RequestsTests: XCTestCase {
   func testSignUpWithEmailAndPassword() async {
     let sut = makeSUT()

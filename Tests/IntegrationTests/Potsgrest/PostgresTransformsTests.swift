@@ -9,6 +9,7 @@ import InlineSnapshotTesting
 import PostgREST
 import XCTest
 
+@MainActor
 final class PostgrestTransformsTests: XCTestCase {
   let client = PostgrestClient(
     configuration: PostgrestClient.Configuration(

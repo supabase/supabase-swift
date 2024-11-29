@@ -9,12 +9,13 @@ import InlineSnapshotTesting
 import Storage
 import XCTest
 
+@MainActor
 final class StorageClientIntegrationTests: XCTestCase {
   let storage = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
       headers: [
-        "Authorization": "Bearer \(DotEnv.SUPABASE_SERVICE_ROLE_KEY)",
+        "Authorization": "Bearer \(DotEnv.SUPABASE_SERVICE_ROLE_KEY)"
       ],
       logger: nil
     )
@@ -36,7 +37,8 @@ final class StorageClientIntegrationTests: XCTestCase {
     buckets = try await storage.listBuckets()
     XCTAssertTrue(buckets.contains { $0.id == bucket.id })
 
-    try await storage.updateBucket(bucketName, options: BucketOptions(allowedMimeTypes: ["image/jpeg"]))
+    try await storage.updateBucket(
+      bucketName, options: BucketOptions(allowedMimeTypes: ["image/jpeg"]))
 
     bucket = try await storage.getBucket(bucketName)
     XCTAssertEqual(bucket.allowedMimeTypes, ["image/jpeg"])

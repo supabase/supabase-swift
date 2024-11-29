@@ -5,15 +5,16 @@
 //  Created by Guilherme Souza on 07/05/24.
 //
 
+import Helpers
 import InlineSnapshotTesting
 import Storage
 import XCTest
-import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
+@MainActor
 final class StorageFileIntegrationTests: XCTestCase {
   let storage = SupabaseStorageClient(
     configuration: StorageClientConfiguration(

@@ -9,6 +9,7 @@
 import SnapshotTesting
 import XCTest
 
+@MainActor
 final class RequestTests: XCTestCase {
   let url = URL(string: "http://localhost:5432/functions/v1")!
   let apiKey = "supabase.anon.key"

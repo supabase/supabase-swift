@@ -9,6 +9,7 @@
 import TestHelpers
 import XCTest
 
+@MainActor
 final class AuthClientMultipleInstancesTests: XCTestCase {
   func testMultipleAuthClientInstances() {
     let url = URL(string: "http://localhost:54321/auth")!

@@ -10,6 +10,7 @@ import XCTestDynamicOverlay
   import FoundationNetworking
 #endif
 
+@MainActor
 final class SupabaseStorageTests: XCTestCase {
   let supabaseURL = URL(string: "http://localhost:54321/storage/v1")!
   let bucketId = "tests"

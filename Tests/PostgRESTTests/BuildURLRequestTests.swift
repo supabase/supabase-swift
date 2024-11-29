@@ -15,22 +15,23 @@ struct User: Encodable {
   var username: String?
 }
 
+@MainActor
 final class BuildURLRequestTests: XCTestCase {
   let url = URL(string: "https://example.supabase.co")!
 
-  struct TestCase: Sendable {
+  struct TestCase {
     let name: String
     let record: Bool
     let file: StaticString
     let line: UInt
-    let build: @Sendable (PostgrestClient) async throws -> PostgrestBuilder
+    let build: (PostgrestClient) async throws -> PostgrestBuilder
 
     init(
       name: String,
       record: Bool = false,
       file: StaticString = #file,
       line: UInt = #line,
-      build: @escaping @Sendable (PostgrestClient) async throws -> PostgrestBuilder
+      build: @escaping (PostgrestClient) async throws -> PostgrestBuilder
     ) {
       self.name = name
       self.record = record

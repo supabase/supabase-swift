@@ -13,6 +13,7 @@ import XCTestDynamicOverlay
 
 @testable import Realtime
 
+@MainActor
 final class RealtimeChannelTests: XCTestCase {
   var socket: RealtimeClientV2!
   var sut: RealtimeChannelV2!
@@ -47,34 +48,34 @@ final class RealtimeChannelTests: XCTestCase {
   func testAttachCallbacks() async {
     var subscriptions = Set<RealtimeSubscription>()
 
-    await sut.onPostgresChange(
+    sut.onPostgresChange(
       AnyAction.self,
       schema: "public",
       table: "users",
       filter: "id=eq.1"
     ) { _ in }.store(in: &subscriptions)
-    await sut.onPostgresChange(
+    sut.onPostgresChange(
       InsertAction.self,
       schema: "private"
     ) { _ in }.store(in: &subscriptions)
-    await sut.onPostgresChange(
+    sut.onPostgresChange(
       UpdateAction.self,
       table: "messages"
     ) { _ in }.store(in: &subscriptions)
-    await sut.onPostgresChange(
+    sut.onPostgresChange(
       DeleteAction.self
     ) { _ in }.store(in: &subscriptions)
 
-    await sut.onBroadcast(event: "test") { _ in }.store(in: &subscriptions)
-    await sut.onBroadcast(event: "cursor-pos") { _ in }.store(in: &subscriptions)
+    sut.onBroadcast(event: "test") { _ in }.store(in: &subscriptions)
+    sut.onBroadcast(event: "cursor-pos") { _ in }.store(in: &subscriptions)
 
-    await sut.onPresenceChange { _ in }.store(in: &subscriptions)
+    sut.onPresenceChange { _ in }.store(in: &subscriptions)
 
-    await sut.onSystem {
+    sut.onSystem {
     }
     .store(in: &subscriptions)
 
-    let callbacks = await sut.callbackManager.callbacks
+    let callbacks = sut.callbackManager.callbacks
     assertInlineSnapshot(of: callbacks, as: .dump) {
       """
       ▿ 8 elements

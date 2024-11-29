@@ -9,12 +9,13 @@ import InlineSnapshotTesting
 import PostgREST
 import XCTest
 
+@MainActor
 final class PostgrestBasicTests: XCTestCase {
   let client = PostgrestClient(
     configuration: PostgrestClient.Configuration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
       headers: [
-        "apikey": DotEnv.SUPABASE_ANON_KEY,
+        "apikey": DotEnv.SUPABASE_ANON_KEY
       ],
       logger: nil
     )
@@ -85,7 +86,9 @@ final class PostgrestBasicTests: XCTestCase {
   }
 
   func testRPC() async throws {
-    let response = try await client.rpc("get_status", params: ["name_param": "supabot"]).execute().value as AnyJSON
+    let response =
+      try await client.rpc("get_status", params: ["name_param": "supabot"]).execute().value
+      as AnyJSON
     assertInlineSnapshot(of: response, as: .json) {
       """
       "ONLINE"
@@ -99,7 +102,8 @@ final class PostgrestBasicTests: XCTestCase {
   }
 
   func testIgnoreDuplicates_upsert() async throws {
-    let response = try await client.from("users")
+    let response =
+      try await client.from("users")
       .upsert(["username": "dragarcia"], onConflict: "username", ignoreDuplicates: true)
       .select().execute().value as AnyJSON
     assertInlineSnapshot(of: response, as: .json) {
@@ -113,7 +117,8 @@ final class PostgrestBasicTests: XCTestCase {
 
   func testBasicInsertUpdateAndDelete() async throws {
     // Basic insert
-    var response = try await client.from("messages")
+    var response =
+      try await client.from("messages")
       .insert(AnyJSON.object(["message": "foo", "username": "supabot", "channel_id": 1]))
       .select("channel_id,data,message,username")
       .execute()
@@ -131,7 +136,8 @@ final class PostgrestBasicTests: XCTestCase {
       """
     }
 
-    response = try await client.from("messages").select("channel_id,data,message,username").execute().value
+    response = try await client.from("messages").select("channel_id,data,message,username")
+      .execute().value
     assertInlineSnapshot(of: response, as: .json) {
       """
       [
@@ -159,7 +165,8 @@ final class PostgrestBasicTests: XCTestCase {
 
     // Upsert
 
-    response = try await client.from("messages")
+    response =
+      try await client.from("messages")
       .upsert(
         AnyJSON.object(
           [
@@ -186,7 +193,8 @@ final class PostgrestBasicTests: XCTestCase {
       """
     }
 
-    response = try await client.from("messages").select("channel_id,data,message,username").execute().value
+    response = try await client.from("messages").select("channel_id,data,message,username")
+      .execute().value
     assertInlineSnapshot(of: response, as: .json) {
       """
       [
@@ -249,7 +257,8 @@ final class PostgrestBasicTests: XCTestCase {
       """
     }
 
-    response = try await client.from("messages").select("channel_id,data,message,username").execute().value
+    response = try await client.from("messages").select("channel_id,data,message,username")
+      .execute().value
     assertInlineSnapshot(of: response, as: .json) {
       """
       [
@@ -331,7 +340,8 @@ final class PostgrestBasicTests: XCTestCase {
       """
     }
 
-    response = try await client.from("messages").select("channel_id,data,message,username").execute().value
+    response = try await client.from("messages").select("channel_id,data,message,username")
+      .execute().value
     assertInlineSnapshot(of: response, as: .json) {
       """
       [

@@ -16,6 +16,7 @@ final class AuthLocalStorageMock: AuthLocalStorage {
   func remove(key _: String) throws {}
 }
 
+@MainActor
 final class SupabaseClientTests: XCTestCase {
   func testClientInitialization() async {
     final class Logger: SupabaseLogger {
@@ -88,7 +89,7 @@ final class SupabaseClientTests: XCTestCase {
     XCTAssertEqual(client.auth.configuration.storageKey, "sb-project-ref-auth-token")
 
     XCTAssertNotNil(
-      client.mutableState.listenForAuthEventsTask,
+      client.listenForAuthEventsTask,
       "should listen for internal auth events"
     )
   }
@@ -117,7 +118,7 @@ final class SupabaseClientTests: XCTestCase {
     )
 
     XCTAssertNil(
-      client.mutableState.listenForAuthEventsTask,
+      client.listenForAuthEventsTask,
       "should not listen for internal auth events when using 3p authentication"
     )
 

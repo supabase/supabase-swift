@@ -101,7 +101,7 @@ public final class SupabaseClient {
     _headers.dictionary
   }
 
-  private var listenForAuthEventsTask: Task<Void, Never>?
+  var listenForAuthEventsTask: Task<Void, Never>?
   private var _storage: SupabaseStorageClient?
   private var _rest: PostgrestClient?
   private var _functions: FunctionsClient?
