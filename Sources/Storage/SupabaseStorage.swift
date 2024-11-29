@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import Helpers
 
 public typealias SupabaseLogger = Helpers.SupabaseLogger
@@ -6,7 +7,7 @@ public typealias SupabaseLogMessage = Helpers.SupabaseLogMessage
 
 public struct StorageClientConfiguration: Sendable {
   public let url: URL
-  public var headers: [String: String]
+  public var headers: HTTPFields
   public let encoder: JSONEncoder
   public let decoder: JSONDecoder
   public let session: StorageHTTPSession
@@ -14,7 +15,7 @@ public struct StorageClientConfiguration: Sendable {
 
   public init(
     url: URL,
-    headers: [String: String],
+    headers: HTTPFields,
     encoder: JSONEncoder = .defaultStorageEncoder,
     decoder: JSONDecoder = .defaultStorageDecoder,
     session: StorageHTTPSession = .init(),

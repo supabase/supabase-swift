@@ -20,9 +20,9 @@
 
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Helpers
 import Swift
-import HTTPTypes
 
 /// Container class of bindings to the channel
 struct Binding {
@@ -95,13 +95,13 @@ public struct RealtimeChannelOptions {
     [
       "config": [
         "presence": [
-          "key": presenceKey ?? "",
+          "key": presenceKey ?? ""
         ],
         "broadcast": [
           "ack": broadcastAcknowledge,
           "self": broadcastSelf,
         ],
-      ],
+      ]
     ]
   }
 }
@@ -378,7 +378,7 @@ public class RealtimeChannel {
 
     var accessTokenPayload: Payload = [:]
     var config: Payload = [
-      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? [],
+      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? []
     ]
 
     config["broadcast"] = broadcast
@@ -409,7 +409,7 @@ public class RealtimeChannel {
         let bindingsCount = clientPostgresBindings.count
         var newPostgresBindings: [Binding] = []
 
-        for i in 0 ..< bindingsCount {
+        for i in 0..<bindingsCount {
           let clientPostgresBinding = clientPostgresBindings[i]
 
           let event = clientPostgresBinding.filter["event"]
@@ -420,9 +420,9 @@ public class RealtimeChannel {
           let serverPostgresFilter = serverPostgresFilters[i]
 
           if serverPostgresFilter["event", as: String.self] == event,
-             serverPostgresFilter["schema", as: String.self] == schema,
-             serverPostgresFilter["table", as: String.self] == table,
-             serverPostgresFilter["filter", as: String.self] == filter
+            serverPostgresFilter["schema", as: String.self] == schema,
+            serverPostgresFilter["table", as: String.self] == table,
+            serverPostgresFilter["filter", as: String.self] == filter
           {
             newPostgresBindings.append(
               Binding(
@@ -731,27 +731,28 @@ public class RealtimeChannel {
 
     if !canPush, type == .broadcast {
       var headers = socket?.headers ?? [:]
-      headers["Content-Type"] = "application/json"
-      headers["apikey"] = socket?.accessToken
+      headers[.contentType] = "application/json"
+      headers[.apiKey] = socket?.accessToken
 
       let body = [
         "messages": [
           "topic": subTopic,
           "payload": payload,
           "event": event as Any,
-        ],
+        ]
       ]
 
       do {
-        let request = try HTTPRequest(
-          url: broadcastEndpointURL,
+        let request = HTTPRequest(
           method: .post,
-          headers: HTTPFields(headers.compactMapValues { $0 }),
-          body: JSONSerialization.data(withJSONObject: body)
+          url: broadcastEndpointURL,
+          headerFields: headers
         )
 
-        let response = try await socket?.http.send(request)
-        guard let response, 200 ..< 300 ~= response.statusCode else {
+        let bodyData = try JSONSerialization.data(withJSONObject: body)
+
+        let response = try await socket?.http.send(request, bodyData)
+        guard let response, 200..<300 ~= response.1.status.code else {
           return .error
         }
         return .ok
@@ -766,8 +767,8 @@ public class RealtimeChannel {
         )
 
         if let type = payload["type"] as? String, type == "broadcast",
-           let config = self.params["config"] as? [String: Any],
-           let broadcast = config["broadcast"] as? [String: Any]
+          let config = self.params["config"] as? [String: Any],
+          let broadcast = config["broadcast"] as? [String: Any]
         {
           let ack = broadcast["ack"] as? Bool
           if ack == nil || ack == false {

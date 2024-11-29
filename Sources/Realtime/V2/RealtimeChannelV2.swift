@@ -37,7 +37,10 @@ struct Socket: Sendable {
   var addChannel: @Sendable (_ channel: RealtimeChannelV2) -> Void
   var removeChannel: @Sendable (_ channel: RealtimeChannelV2) async -> Void
   var push: @Sendable (_ message: RealtimeMessageV2) async -> Void
-  var httpSend: @Sendable (_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse
+  var httpSend: @Sendable (
+    _ request: HTTPRequest,
+    _ bodyData: Data?
+  ) async throws -> (Data, HTTPResponse)
 }
 
 extension Socket {
@@ -54,7 +57,7 @@ extension Socket {
       removeChannel: { [weak client] in await client?.removeChannel($0) },
       push: { [weak client] in await client?.push($0) },
       httpSend: { [weak client] in
-        try await client?.http.send($0) ?? .init(data: Data(), response: HTTPURLResponse())
+        try await client?.http.send($0, $1) ?? (Data(), HTTPResponse(status: .ok))
       }
     )
   }
@@ -220,21 +223,21 @@ public final class RealtimeChannelV2: Sendable {
       let task = Task { [headers] in
         _ = try? await socket.httpSend(
           HTTPRequest(
-            url: socket.broadcastURL(),
             method: .post,
-            headers: headers,
-            body: JSONEncoder().encode(
-              [
-                "messages": [
-                  Message(
-                    topic: topic,
-                    event: event,
-                    payload: message,
-                    private: config.isPrivate
-                  )
-                ]
+            url: socket.broadcastURL(),
+            headerFields: headers
+          ),
+          JSONEncoder().encode(
+            [
+              "messages": [
+                Message(
+                  topic: topic,
+                  event: event,
+                  payload: message,
+                  private: config.isPrivate
+                )
               ]
-            )
+            ]
           )
         )
       }

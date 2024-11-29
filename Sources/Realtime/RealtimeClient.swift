@@ -20,6 +20,7 @@
 
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Helpers
 
 #if canImport(FoundationNetworking)
@@ -106,7 +107,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   public var timeout: TimeInterval = Defaults.timeoutInterval
 
   /// Custom headers to be added to the socket connection request
-  public var headers: [String: String] = [:]
+  public var headers: HTTPFields = [:]
 
   /// Interval between sending a heartbeat
   public var heartbeatInterval: TimeInterval = Defaults.heartbeatInterval
@@ -159,7 +160,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   var sendBuffer: [(ref: String?, callback: () throws -> Void)] = []
 
   /// Ref counter for messages
-  var ref: UInt64 = .min // 0 (max: 18,446,744,073,709,551,615)
+  var ref: UInt64 = .min  // 0 (max: 18,446,744,073,709,551,615)
 
   /// Timer that triggers sending new Heartbeat messages
   var heartbeatTimer: HeartbeatTimer?
@@ -189,7 +190,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
   public convenience init(
     _ endPoint: String,
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     params: Payload? = nil,
     vsn: String = Defaults.vsn
   ) {
@@ -205,7 +206,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
   public convenience init(
     _ endPoint: String,
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     paramsClosure: PayloadClosure?,
     vsn: String = Defaults.vsn
   ) {
@@ -220,7 +221,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
 
   public init(
     endPoint: String,
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     transport: @escaping ((URL) -> any PhoenixTransport),
     paramsClosure: PayloadClosure? = nil,
     vsn: String = Defaults.vsn
@@ -231,11 +232,20 @@ public class RealtimeClient: PhoenixTransportDelegate {
     self.vsn = vsn
 
     var headers = headers
-    if headers["X-Client-Info"] == nil {
-      headers["X-Client-Info"] = "realtime-swift/\(version)"
+    if headers[.xClientInfo] == nil {
+      headers[.xClientInfo] = "realtime-swift/\(version)"
     }
     self.headers = headers
-    http = HTTPClient(fetch: { try await URLSession.shared.data(for: $0) }, interceptors: [])
+    http = HTTPClient(
+      fetch: { request, bodyData in
+        if let bodyData {
+          try await URLSession.shared.upload(for: request, from: bodyData)
+        } else {
+          try await URLSession.shared.data(for: request)
+        }
+      },
+      interceptors: []
+    )
 
     let params = paramsClosure?()
     if let jwt = (params?["Authorization"] as? String)?.split(separator: " ").last {
@@ -334,7 +344,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     //    self.connection?.enabledSSLCipherSuites = enabledSSLCipherSuites
     //    #endif
 
-    connection?.connect(with: headers)
+    connection?.connect(with: headers.dictionary)
   }
 
   /// Disconnects the socket
@@ -940,7 +950,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     // If there is a pending heartbeat ref, then the last heartbeat was
     // never acknowledged by the server. Close the connection and attempt
     // to reconnect.
-    if let _ = pendingHeartbeatRef {
+    if pendingHeartbeatRef != nil {
       pendingHeartbeatRef = nil
       logItems(
         "transport",

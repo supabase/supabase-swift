@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import HTTPTypes
+import HTTPTypesFoundation
 
 package struct LoggerInterceptor: HTTPClientInterceptor {
   let logger: any SupabaseLogger
@@ -16,30 +18,29 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
 
   package func intercept(
     _ request: HTTPRequest,
-    next: @Sendable (HTTPRequest) async throws -> HTTPResponse
-  ) async throws -> HTTPResponse {
+    _ bodyData: Data?,
+    next: @Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse)
+  ) async throws -> (Data, HTTPResponse) {
     let id = UUID().uuidString
     return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(merging: ["requestID": .string(id)]) {
-      let urlRequest = request.urlRequest
-
       logger.verbose(
         """
-        Request: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
-        Body: \(stringfy(request.body))
+        Request: \(request.method.rawValue) \(request.url?.absoluteString.removingPercentEncoding ?? "")
+        Body: \(stringfy(bodyData))
         """
       )
 
       do {
-        let response = try await next(request)
+        let (data, response) = try await next(request, bodyData)
         logger.verbose(
           """
-          Response: Status code: \(response.statusCode) Content-Length: \(
-            response.underlyingResponse.expectedContentLength
+          Response: Status code: \(response.status.code) Content-Length: \(
+            response.headerFields[.contentLength] ?? "<none>"
           )
-          Body: \(stringfy(response.data))
+          Body: \(stringfy(data))
           """
         )
-        return response
+        return (data, response)
       } catch {
         logger.error("Response: Failure \(error)")
         throw error

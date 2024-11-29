@@ -1,6 +1,6 @@
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 /// An error type representing various errors that can occur while invoking functions.
 public enum FunctionsError: Error, LocalizedError {
@@ -45,7 +45,7 @@ public struct FunctionInvokeOptions: Sendable {
   public init(
     method: Method? = nil,
     query: [URLQueryItem] = [],
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     region: String? = nil,
     body: some Encodable
   ) {
@@ -65,7 +65,7 @@ public struct FunctionInvokeOptions: Sendable {
     }
 
     self.method = method
-    self.headers = defaultHeaders.merging(with: HTTPFields(headers))
+    self.headers = defaultHeaders.merging(with: headers)
     self.region = region
     self.query = query
   }
@@ -81,11 +81,11 @@ public struct FunctionInvokeOptions: Sendable {
   public init(
     method: Method? = nil,
     query: [URLQueryItem] = [],
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     region: String? = nil
   ) {
     self.method = method
-    self.headers = HTTPFields(headers)
+    self.headers = headers
     self.region = region
     self.query = query
     body = nil
@@ -144,7 +144,7 @@ extension FunctionInvokeOptions {
   ///   - body: The body data to be sent with the function invocation. (Default: nil)
   public init(
     method: Method? = nil,
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     region: FunctionRegion? = nil,
     body: some Encodable
   ) {
@@ -164,7 +164,7 @@ extension FunctionInvokeOptions {
   ///   - region: The Region to invoke the function in.
   public init(
     method: Method? = nil,
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     region: FunctionRegion? = nil
   ) {
     self.init(method: method, headers: headers, region: region?.rawValue)

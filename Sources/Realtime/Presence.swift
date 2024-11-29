@@ -228,7 +228,7 @@ public final class Presence {
     joinRef = nil
     caller = Caller()
 
-    guard // Do not subscribe to events if they were not provided
+    guard  // Do not subscribe to events if they were not provided
       let stateEvent = opts.events[.state],
       let diffEvent = opts.events[.diff]
     else { return }

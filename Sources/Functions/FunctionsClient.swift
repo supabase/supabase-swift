@@ -1,7 +1,8 @@
 import ConcurrencyExtras
 import Foundation
-import Helpers
 import HTTPTypes
+import HTTPTypesFoundation
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -12,9 +13,10 @@ let version = Helpers.version
 /// An actor representing a client for invoking functions.
 public final class FunctionsClient: Sendable {
   /// Fetch handler used to make requests.
-  public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
-    Data, URLResponse
-  )
+  public typealias FetchHandler = @Sendable (
+    _ request: HTTPRequest,
+    _ bodyData: Data?
+  ) async throws -> (Data, HTTPResponse)
 
   /// The base URL for the functions.
   let url: URL
@@ -45,10 +47,16 @@ public final class FunctionsClient: Sendable {
   @_disfavoredOverload
   public convenience init(
     url: URL,
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping FetchHandler = { request, bodyData in
+      if let bodyData {
+        try await URLSession.shared.upload(for: request, from: bodyData)
+      } else {
+        try await URLSession.shared.data(for: request)
+      }
+    }
   ) {
     var interceptors: [any HTTPClientInterceptor] = []
     if let logger {
@@ -62,7 +70,7 @@ public final class FunctionsClient: Sendable {
 
   init(
     url: URL,
-    headers: [String: String],
+    headers: HTTPFields,
     region: String?,
     http: any HTTPClientType
   ) {
@@ -71,7 +79,7 @@ public final class FunctionsClient: Sendable {
     self.http = http
 
     mutableState.withValue {
-      $0.headers = HTTPFields(headers)
+      $0.headers = headers
       if $0.headers[.xClientInfo] == nil {
         $0.headers[.xClientInfo] = "functions-swift/\(version)"
       }
@@ -88,10 +96,16 @@ public final class FunctionsClient: Sendable {
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
   public convenience init(
     url: URL,
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     region: FunctionRegion? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping FetchHandler = { request, bodyData in
+      if let bodyData {
+        try await URLSession.shared.upload(for: request, from: bodyData)
+      } else {
+        try await URLSession.shared.data(for: request)
+      }
+    }
   ) {
     self.init(url: url, headers: headers, region: region?.rawValue, logger: logger, fetch: fetch)
   }
@@ -120,12 +134,12 @@ public final class FunctionsClient: Sendable {
   public func invoke<Response>(
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
-    decode: (Data, HTTPURLResponse) throws -> Response
+    decode: (Data, HTTPResponse) throws -> Response
   ) async throws -> Response {
-    let response = try await rawInvoke(
+    let (data, response) = try await rawInvoke(
       functionName: functionName, invokeOptions: options
     )
-    return try decode(response.data, response.underlyingResponse)
+    return try decode(data, response)
   }
 
   /// Invokes a function and decodes the response as a specific type.
@@ -160,20 +174,20 @@ public final class FunctionsClient: Sendable {
   private func rawInvoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) async throws -> Helpers.HTTPResponse {
-    let request = buildRequest(functionName: functionName, options: invokeOptions)
-    let response = try await http.send(request)
+  ) async throws -> (Data, HTTPResponse) {
+    let (request, bodyData) = buildRequest(functionName: functionName, options: invokeOptions)
+    let (data, response) = try await http.send(request, bodyData)
 
-    guard 200 ..< 300 ~= response.statusCode else {
-      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
+    guard 200..<300 ~= response.status.code else {
+      throw FunctionsError.httpError(code: response.status.code, data: data)
     }
 
-    let isRelayError = response.headers[.xRelayError] == "true"
+    let isRelayError = response.headerFields[.xRelayError] == "true"
     if isRelayError {
       throw FunctionsError.relayError
     }
 
-    return response
+    return (data, response)
   }
 
   /// Invokes a function with streamed response.
@@ -196,7 +210,9 @@ public final class FunctionsClient: Sendable {
 
     let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
-    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
+    let (request, bodyData) = buildRequest(functionName: functionName, options: invokeOptions)
+    var urlRequest = URLRequest(httpRequest: request)!
+    urlRequest.httpBody = bodyData
 
     let task = session.dataTask(with: urlRequest)
     task.resume()
@@ -211,20 +227,23 @@ public final class FunctionsClient: Sendable {
     return stream
   }
 
-  private func buildRequest(functionName: String, options: FunctionInvokeOptions) -> Helpers.HTTPRequest {
+  private func buildRequest(
+    functionName: String,
+    options: FunctionInvokeOptions
+  ) -> (HTTPRequest, Data?) {
     var request = HTTPRequest(
-      url: url.appendingPathComponent(functionName),
       method: options.httpMethod ?? .post,
-      query: options.query,
-      headers: mutableState.headers.merging(with: options.headers),
-      body: options.body
+      url: url
+        .appendingPathComponent(functionName)
+        .appendingQueryItems(options.query),
+      headerFields: mutableState.headers.merging(with: options.headers)
     )
 
     if let region = options.region ?? region {
-      request.headers[.xRegion] = region
+      request.headerFields[.xRegion] = region
     }
 
-    return request
+    return (request, options.body)
   }
 }
 
@@ -243,13 +262,18 @@ final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
     continuation.finish(throwing: error)
   }
 
-  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+  func urlSession(
+    _: URLSession,
+    dataTask _: URLSessionDataTask,
+    didReceive response: URLResponse,
+    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+  ) {
     guard let httpResponse = response as? HTTPURLResponse else {
       continuation.finish(throwing: URLError(.badServerResponse))
       return
     }
 
-    guard 200 ..< 300 ~= httpResponse.statusCode else {
+    guard 200..<300 ~= httpResponse.statusCode else {
       let error = FunctionsError.httpError(code: httpResponse.statusCode, data: Data())
       continuation.finish(throwing: error)
       return

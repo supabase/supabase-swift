@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import HTTPTypes
 import Helpers
 
 @available(*, deprecated, renamed: "RealtimeMessage")
@@ -21,7 +22,7 @@ extension RealtimeClientV2 {
   public struct Configuration: Sendable {
     var url: URL
     var apiKey: String
-    var headers: [String: String]
+    var headers: HTTPFields
     var heartbeatInterval: TimeInterval
     var reconnectDelay: TimeInterval
     var timeoutInterval: TimeInterval
@@ -32,7 +33,7 @@ extension RealtimeClientV2 {
     public init(
       url: URL,
       apiKey: String,
-      headers: [String: String] = [:],
+      headers: HTTPFields = [:],
       heartbeatInterval: TimeInterval = 15,
       reconnectDelay: TimeInterval = 7,
       timeoutInterval: TimeInterval = 10,

@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import HTTPTypes
+import HTTPTypesFoundation
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -22,14 +24,20 @@ extension PostgrestClient.Configuration {
   ///   - decoder: The JSONDecoder to use for decoding.
   @available(
     *,
-    deprecated,
-    message: "Replace usages of this initializer with new init(url:schema:headers:logger:fetch:encoder:decoder:)"
+     deprecated,
+     message: "Replace usages of this initializer with new init(url:schema:headers:logger:fetch:encoder:decoder:)"
   )
   public init(
     url: URL,
     schema: String? = nil,
-    headers: [String: String] = [:],
-    fetch: @escaping PostgrestClient.FetchHandler = { try await URLSession.shared.data(for: $0) },
+    headers: HTTPFields = [:],
+    fetch: @escaping PostgrestClient.FetchHandler = { request, bodyData in
+      if let bodyData {
+        try await URLSession.shared.upload(for: request, from: bodyData)
+      } else {
+        try await URLSession.shared.data(for: request)
+      }
+    },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
@@ -62,8 +70,14 @@ extension PostgrestClient {
   public convenience init(
     url: URL,
     schema: String? = nil,
-    headers: [String: String] = [:],
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    headers: HTTPFields = [:],
+    fetch: @escaping FetchHandler = { request, bodyData in
+      if let bodyData {
+        try await URLSession.shared.upload(for: request, from: bodyData)
+      } else {
+        try await URLSession.shared.data(for: request)
+      }
+    },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {

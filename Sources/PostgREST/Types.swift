@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -6,22 +7,22 @@ import Foundation
 
 public struct PostgrestResponse<T: Sendable>: Sendable {
   public let data: Data
-  public let response: HTTPURLResponse
+  public let response: HTTPResponse
   public let count: Int?
   public let value: T
 
   public var status: Int {
-    response.statusCode
+    response.status.code
   }
 
   public init(
     data: Data,
-    response: HTTPURLResponse,
+    response: HTTPResponse,
     value: T
   ) {
     var count: Int?
 
-    if let contentRange = response.value(forHTTPHeaderField: "Content-Range")?.split(separator: "/")
+    if let contentRange = response.headerFields[.contentRange]?.split(separator: "/")
       .last
     {
       count = contentRange == "*" ? nil : Int(contentRange)

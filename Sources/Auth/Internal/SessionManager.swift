@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import Helpers
 
 struct SessionManager: Sendable {
@@ -79,19 +80,19 @@ private actor LiveSessionManager {
           }
 
           do {
-            let session = try await api.execute(
-              HTTPRequest(
-                url: configuration.url.appendingPathComponent("token"),
+            let (data, _) = try await api.execute(
+              for: HTTPRequest(
                 method: .post,
-                query: [
-                  URLQueryItem(name: "grant_type", value: "refresh_token")
-                ],
-                body: configuration.encoder.encode(
-                  UserCredentials(refreshToken: refreshToken)
-                )
+                url: configuration.url
+                  .appendingPathComponent("token")
+                  .appendingQueryItems([URLQueryItem(name: "grant_type", value: "refresh_token")])
+              ),
+              from: configuration.encoder.encode(
+                UserCredentials(refreshToken: refreshToken)
               )
             )
-            .decoded(as: Session.self, decoder: configuration.decoder)
+
+            let session = try configuration.decoder.decode(Session.self, from: data)
 
             update(session)
             eventEmitter.emit(.tokenRefreshed, session: session)

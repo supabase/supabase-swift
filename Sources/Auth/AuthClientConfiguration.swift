@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import HTTPTypes
+import HTTPTypesFoundation
 import Helpers
 
 #if canImport(FoundationNetworking)
@@ -15,8 +17,9 @@ import Helpers
 extension AuthClient {
   /// FetchHandler is a type alias for asynchronous network request handling.
   public typealias FetchHandler = @Sendable (
-    _ request: URLRequest
-  ) async throws -> (Data, URLResponse)
+    _ request: HTTPRequest,
+    _ bodyData: Data?
+  ) async throws -> (Data, HTTPResponse)
 
   /// Configuration struct represents the client configuration.
   public struct Configuration: Sendable {
@@ -24,7 +27,7 @@ extension AuthClient {
     public let url: URL
 
     /// Any additional headers to send to the Auth server.
-    public var headers: [String: String]
+    public var headers: HTTPFields
     public let flowType: AuthFlowType
 
     /// Default URL to be used for redirect on the flows that requires it.
@@ -63,7 +66,7 @@ extension AuthClient {
     ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
     public init(
       url: URL? = nil,
-      headers: [String: String] = [:],
+      headers: HTTPFields = [:],
       flowType: AuthFlowType = Configuration.defaultFlowType,
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
@@ -71,10 +74,16 @@ extension AuthClient {
       logger: (any SupabaseLogger)? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      fetch: @escaping FetchHandler = { request, bodyData in
+        if let bodyData {
+          try await URLSession.shared.upload(for: request, from: bodyData)
+        } else {
+          try await URLSession.shared.data(for: request)
+        }
+      },
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
     ) {
-      let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
+      let headers = headers.merging(with: Configuration.defaultHeaders)
 
       self.url = url ?? defaultAuthURL
       self.headers = headers
@@ -106,7 +115,7 @@ extension AuthClient {
   ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
   public convenience init(
     url: URL? = nil,
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
     redirectToURL: URL? = nil,
     storageKey: String? = nil,
@@ -114,7 +123,13 @@ extension AuthClient {
     logger: (any SupabaseLogger)? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    fetch: @escaping FetchHandler = { request, bodyData in
+      if let bodyData {
+        try await URLSession.shared.upload(for: request, from: bodyData)
+      } else {
+        try await URLSession.shared.data(for: request)
+      }
+    },
     autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
   ) {
     self.init(

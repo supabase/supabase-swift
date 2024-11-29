@@ -1,6 +1,6 @@
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -13,8 +13,8 @@ public class StorageApi: @unchecked Sendable {
 
   public init(configuration: StorageClientConfiguration) {
     var configuration = configuration
-    if configuration.headers["X-Client-Info"] == nil {
-      configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
+    if configuration.headers[.xClientInfo] == nil {
+      configuration.headers[.xClientInfo] = "storage-swift/\(version)"
     }
     self.configuration = configuration
 
@@ -30,35 +30,37 @@ public class StorageApi: @unchecked Sendable {
   }
 
   @discardableResult
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  func execute(
+    for request: HTTPRequest,
+    from bodyData: Data?
+  ) async throws -> (Data, HTTPResponse) {
     var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+    request.headerFields = configuration.headers.merging(with: request.headerFields)
 
-    let response = try await http.send(request)
+    let (data, response) = try await http.send(request, bodyData)
 
-    guard (200 ..< 300).contains(response.statusCode) else {
+    guard (200..<300).contains(response.status.code) else {
       if let error = try? configuration.decoder.decode(
         StorageError.self,
-        from: response.data
+        from: data
       ) {
         throw error
       }
 
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
+      throw HTTPError(data: data, response: response)
     }
 
-    return response
+    return (data, response)
   }
 }
 
-extension Helpers.HTTPRequest {
+extension HTTPRequest {
   init(
+    method: HTTPRequest.Method,
     url: URL,
-    method: HTTPTypes.HTTPRequest.Method,
-    query: [URLQueryItem],
-    formData: MultipartFormData,
     options: FileOptions,
-    headers: HTTPFields = [:]
+    headers: HTTPFields = [:],
+    formData: MultipartFormData
   ) throws {
     var headers = headers
     if headers[.contentType] == nil {
@@ -67,12 +69,11 @@ extension Helpers.HTTPRequest {
     if headers[.cacheControl] == nil {
       headers[.cacheControl] = "max-age=\(options.cacheControl)"
     }
-    try self.init(
-      url: url,
+
+    self.init(
       method: method,
-      query: query,
-      headers: headers,
-      body: formData.encode()
+      url: url,
+      headerFields: headers
     )
   }
 }

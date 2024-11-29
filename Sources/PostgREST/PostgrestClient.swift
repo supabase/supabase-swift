@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import HTTPTypesFoundation
 import Helpers
 
 public typealias PostgrestError = Helpers.PostgrestError
@@ -13,15 +14,16 @@ public typealias AnyJSON = Helpers.AnyJSON
 
 /// PostgREST client.
 public final class PostgrestClient: Sendable {
-  public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
-    Data, URLResponse
-  )
+  public typealias FetchHandler = @Sendable (
+    _ request: HTTPRequest,
+    _ bodyData: Data?
+  ) async throws -> (Data, HTTPResponse)
 
   /// The configuration struct for the PostgREST client.
   public struct Configuration: Sendable {
     public var url: URL
     public var schema: String?
-    public var headers: [String: String]
+    public var headers: HTTPFields
     public var fetch: FetchHandler
     public var encoder: JSONEncoder
     public var decoder: JSONDecoder
@@ -40,9 +42,15 @@ public final class PostgrestClient: Sendable {
     public init(
       url: URL,
       schema: String? = nil,
-      headers: [String: String] = [:],
+      headers: HTTPFields = [:],
       logger: (any SupabaseLogger)? = nil,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      fetch: @escaping FetchHandler = { request, bodyData in
+        if let bodyData {
+          return try await URLSession.shared.upload(for: request, from: bodyData)
+        } else {
+          return try await URLSession.shared.data(for: request)
+        }
+      },
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
     ) {
@@ -64,7 +72,7 @@ public final class PostgrestClient: Sendable {
   public init(configuration: Configuration) {
     _configuration = LockIsolated(configuration)
     _configuration.withValue {
-      $0.headers.merge(Configuration.defaultHeaders) { l, _ in l }
+      $0.headers.merge(with: Configuration.defaultHeaders)
     }
   }
 
@@ -80,9 +88,15 @@ public final class PostgrestClient: Sendable {
   public convenience init(
     url: URL,
     schema: String? = nil,
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    fetch: @escaping FetchHandler = { request, bodyData in
+      if let bodyData {
+        try await URLSession.shared.upload(for: request, from: bodyData)
+      } else {
+        try await URLSession.shared.data(for: request)
+      }
+    },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
@@ -105,9 +119,9 @@ public final class PostgrestClient: Sendable {
   @discardableResult
   public func setAuth(_ token: String?) -> PostgrestClient {
     if let token {
-      _configuration.withValue { $0.headers["Authorization"] = "Bearer \(token)" }
+      _configuration.withValue { $0.headers[.authorization] = "Bearer \(token)" }
     } else {
-      _ = _configuration.withValue { $0.headers.removeValue(forKey: "Authorization") }
+      _configuration.withValue { $0.headers[.authorization] = nil }
     }
     return self
   }
@@ -118,10 +132,11 @@ public final class PostgrestClient: Sendable {
     PostgrestQueryBuilder(
       configuration: configuration,
       request: .init(
-        url: configuration.url.appendingPathComponent(table),
         method: .get,
-        headers: HTTPFields(configuration.headers)
-      )
+        url: configuration.url.appendingPathComponent(table),
+        headerFields: configuration.headers
+      ),
+      bodyData: nil
     )
   }
 
@@ -163,19 +178,19 @@ public final class PostgrestClient: Sendable {
     }
 
     var request = HTTPRequest(
-      url: url,
       method: method,
-      headers: HTTPFields(configuration.headers),
-      body: params is NoParams ? nil : body
+      url: url,
+      headerFields: configuration.headers
     )
 
     if let count {
-      request.headers[.prefer] = "count=\(count.rawValue)"
+      request.headerFields[.prefer] = "count=\(count.rawValue)"
     }
 
     return PostgrestFilterBuilder(
       configuration: configuration,
-      request: request
+      request: request,
+      bodyData: params is NoParams ? nil : body
     )
   }
 

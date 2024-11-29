@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import Helpers
 
 #if canImport(FoundationNetworking)
@@ -197,13 +198,8 @@ public enum AuthError: LocalizedError, Equatable {
     return .api(
       message: message,
       errorCode: .unknown,
-      underlyingData: (try? AuthClient.Configuration.jsonEncoder.encode(error)) ?? Data(),
-      underlyingResponse: HTTPURLResponse(
-        url: defaultAuthURL,
-        statusCode: error.code ?? 500,
-        httpVersion: nil,
-        headerFields: nil
-      )!
+      data: (try? AuthClient.Configuration.jsonEncoder.encode(error)) ?? Data(),
+      response: HTTPResponse(status: .init(code: error.code ?? 500))
     )
   }
 
@@ -248,12 +244,12 @@ public enum AuthError: LocalizedError, Equatable {
   case weakPassword(message: String, reasons: [String])
 
   /// Error thrown by API when an error occurs, check `errorCode` to know more,
-  /// or use `underlyingData` or `underlyingResponse` for access to the response which originated this error.
+  /// or use `data` or `response` for access to the response which originated this error.
   case api(
     message: String,
     errorCode: ErrorCode,
-    underlyingData: Data,
-    underlyingResponse: HTTPURLResponse
+    data: Data,
+    response: HTTPResponse
   )
 
   /// Error thrown when an error happens during PKCE grant flow.
@@ -303,7 +299,7 @@ extension AuthError: RetryableError {
   package var shouldRetry: Bool {
     switch self {
     case .api(_, _, _, let response):
-      defaultRetryableHTTPStatusCodes.contains(response.statusCode)
+      defaultRetryableHTTPStatusCodes.contains(response.status.code)
     default: false
     }
   }

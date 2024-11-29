@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Helpers
 
 let version = Helpers.version
@@ -44,7 +45,7 @@ extension PostgrestClient.Configuration {
     return encoder
   }()
 
-  public static let defaultHeaders: [String: String] = [
-    "X-Client-Info": "postgrest-swift/\(version)",
+  public static let defaultHeaders: HTTPFields = [
+    .xClientInfo: "postgrest-swift/\(version)"
   ]
 }

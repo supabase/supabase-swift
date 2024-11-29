@@ -74,8 +74,8 @@ public struct RealtimeMessage {
     ref = json[1] as? String ?? ""
 
     if let topic = json[2] as? String,
-       let event = json[3] as? String,
-       let payload = json[4] as? Payload
+      let event = json[3] as? String,
+      let payload = json[4] as? Payload
     {
       self.topic = topic
       self.event = event

@@ -1,5 +1,6 @@
 import Auth
 import Foundation
+import HTTPTypes
 import Helpers
 import PostgREST
 import Realtime
@@ -89,7 +90,7 @@ public struct SupabaseClientOptions: Sendable {
 
   public struct GlobalOptions: Sendable {
     /// Optional headers for initializing the client, it will be passed down to all sub-clients.
-    public let headers: [String: String]
+    public let headers: HTTPFields
 
     /// A session to use for making requests, defaults to `URLSession.shared`.
     public let session: URLSession
@@ -98,7 +99,7 @@ public struct SupabaseClientOptions: Sendable {
     public let logger: (any SupabaseLogger)?
 
     public init(
-      headers: [String: String] = [:],
+      headers: HTTPFields = [:],
       session: URLSession = .shared,
       logger: (any SupabaseLogger)? = nil
     ) {

@@ -101,7 +101,7 @@ extension RealtimeChannelV2 {
 
     return stream
   }
-  
+
   /// Listen for `system` event.
   public func system() -> AsyncStream<RealtimeMessageV2> {
     let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream()
@@ -125,8 +125,8 @@ extension RealtimeChannelV2 {
 }
 
 // Helper to work around type ambiguity in macOS 13
-fileprivate extension AsyncStream<AnyAction> {
-  func compactErase<T: Sendable>() -> AsyncStream<T> {
+extension AsyncStream<AnyAction> {
+  fileprivate func compactErase<T: Sendable>() -> AsyncStream<T> {
     AsyncStream<T>(compactMap { $0.wrappedAction as? T } as AsyncCompactMapSequence<Self, T>)
   }
 }

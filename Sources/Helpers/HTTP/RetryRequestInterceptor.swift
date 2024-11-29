@@ -80,15 +80,20 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
   /// - Returns: The HTTP response obtained after retrying.
   package func intercept(
     _ request: HTTPRequest,
-    next: @Sendable (HTTPRequest) async throws -> HTTPResponse
-  ) async throws -> HTTPResponse {
-    try await retry(request, retryCount: 1, next: next)
+    _ bodyData: Data?,
+    next: @Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse)
+  ) async throws -> (Data, HTTPResponse) {
+    try await retry(request, bodyData, retryCount: 1, next: next)
   }
 
-  private func shouldRetry(request: HTTPRequest, result: Result<HTTPResponse, any Error>) -> Bool {
+  private func shouldRetry(
+    request: HTTPRequest,
+    bodyData: Data?,
+    result: Result<(Data, HTTPResponse), any Error>
+  ) -> Bool {
     guard retryableHTTPMethods.contains(request.method) else { return false }
 
-    if let statusCode = result.value?.statusCode, retryableHTTPStatusCodes.contains(statusCode) {
+    if let statusCode = result.value?.1.status.code, retryableHTTPStatusCodes.contains(statusCode) {
       return true
     }
 
@@ -101,19 +106,20 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
 
   private func retry(
     _ request: HTTPRequest,
+    _ bodyData: Data?,
     retryCount: Int,
-    next: @Sendable (HTTPRequest) async throws -> HTTPResponse
-  ) async throws -> HTTPResponse {
-    let result: Result<HTTPResponse, any Error>
+    next: @Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse)
+  ) async throws -> (Data, HTTPResponse) {
+    let result: Result<(Data, HTTPResponse), any Error>
 
     do {
-      let response = try await next(request)
-      result = .success(response)
+      let (data, response) = try await next(request, bodyData)
+      result = .success((data, response))
     } catch {
       result = .failure(error)
     }
 
-    if retryCount < retryLimit, shouldRetry(request: request, result: result) {
+    if retryCount < retryLimit, shouldRetry(request: request, bodyData: bodyData, result: result) {
       let retryDelay = pow(
         Double(exponentialBackoffBase),
         Double(retryCount)
@@ -123,7 +129,7 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
       try? await Task.sleep(nanoseconds: NSEC_PER_SEC * nanoseconds)
 
       if !Task.isCancelled {
-        return try await retry(request, retryCount: retryCount + 1, next: next)
+        return try await retry(request, bodyData, retryCount: retryCount + 1, next: next)
       }
     }
 

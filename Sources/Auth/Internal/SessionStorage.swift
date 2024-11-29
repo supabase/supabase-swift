@@ -122,8 +122,10 @@ extension StorageMigration {
       let key = SessionStorage.key(clientID)
 
       if let data = try? storage.retrieve(key: key),
-         let storedSession = try? AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: data)
-      {
+        let storedSession = try? AuthClient.Configuration.jsonDecoder.decode(
+          StoredSession.self,
+          from: data
+        ) {
         let session = try AuthClient.Configuration.jsonEncoder.encode(storedSession.session)
         try storage.store(key: key, value: session)
       }
