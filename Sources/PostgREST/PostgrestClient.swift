@@ -72,7 +72,7 @@ public final class PostgrestClient: Sendable {
   public init(configuration: Configuration) {
     _configuration = LockIsolated(configuration)
     _configuration.withValue {
-      $0.headers.merge(with: Configuration.defaultHeaders)
+      $0.headers.merge(Configuration.defaultHeaders) { l, _ in l }
     }
   }
 

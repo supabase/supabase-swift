@@ -21,10 +21,13 @@ public struct RealtimeClientOptions: Sendable {
   var timeoutInterval: TimeInterval
   var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
-  var fetch: (@Sendable (
-    _ request: HTTPRequest,
-    _ bodyData: Data?
-  ) async throws -> (Data, HTTPResponse))?
+  var fetch:
+    (
+      @Sendable (
+        _ request: HTTPRequest,
+        _ bodyData: Data?
+      ) async throws -> (Data, HTTPResponse)
+    )?
   package var logger: (any SupabaseLogger)?
 
   public static let defaultHeartbeatInterval: TimeInterval = 15
@@ -40,10 +43,12 @@ public struct RealtimeClientOptions: Sendable {
     timeoutInterval: TimeInterval = Self.defaultTimeoutInterval,
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
-    fetch: (@Sendable (
-      _ request: HTTPRequest,
-      _ bodyData: Data?
-    ) async throws -> (Data, HTTPResponse))? = nil,
+    fetch: (
+      @Sendable (
+        _ request: HTTPRequest,
+        _ bodyData: Data?
+      ) async throws -> (Data, HTTPResponse)
+    )? = nil,
     logger: (any SupabaseLogger)? = nil
   ) {
     self.headers = headers

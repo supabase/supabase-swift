@@ -5,8 +5,9 @@
 //  Created by Guilherme Souza on 23/12/23.
 //
 
-@testable import Auth
 import XCTest
+
+@testable import Auth
 
 final class ExtractParamsTests: XCTestCase {
   func testExtractParamsInQuery() {

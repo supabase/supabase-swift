@@ -19,6 +19,7 @@
 // THE SOFTWARE.
 
 import Foundation
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -46,7 +47,7 @@ public protocol PhoenixTransport {
    - Parameters:
    - headers: Headers to include in the URLRequests when opening the Websocket connection. Can be empty [:]
    */
-  func connect(with headers: [String: String])
+  func connect(with headers: HTTPFields)
 
   /**
    Disconnect from the server.
@@ -192,20 +193,21 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
   public var readyState: PhoenixTransportReadyState = .closed
   public var delegate: (any PhoenixTransportDelegate)? = nil
 
-  public func connect(with headers: [String: String]) {
+  public func connect(with headers: HTTPFields) {
     // Set the transport state as connecting
     readyState = .connecting
 
     // Create the session and websocket task
     session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-    var request = URLRequest(url: url)
+    let request = HTTPRequest(
+      method: .get,
+      url: url,
+      headerFields: headers
+    )
 
-    for (key, value) in headers {
-      guard let value = value as? String else { continue }
-      request.addValue(value, forHTTPHeaderField: key)
-    }
+    let urlRequest = URLRequest(httpRequest: request)!
 
-    task = session?.webSocketTask(with: request)
+    task = session?.webSocketTask(with: urlRequest)
 
     // Start the task
     task?.resume()

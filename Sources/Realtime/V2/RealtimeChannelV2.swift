@@ -37,10 +37,11 @@ struct Socket: Sendable {
   var addChannel: @Sendable (_ channel: RealtimeChannelV2) -> Void
   var removeChannel: @Sendable (_ channel: RealtimeChannelV2) async -> Void
   var push: @Sendable (_ message: RealtimeMessageV2) async -> Void
-  var httpSend: @Sendable (
-    _ request: HTTPRequest,
-    _ bodyData: Data?
-  ) async throws -> (Data, HTTPResponse)
+  var httpSend:
+    @Sendable (
+      _ request: HTTPRequest,
+      _ bodyData: Data?
+    ) async throws -> (Data, HTTPResponse)
 }
 
 extension Socket {

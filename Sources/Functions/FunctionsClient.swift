@@ -236,8 +236,12 @@ public final class FunctionsClient: Sendable {
       url: url
         .appendingPathComponent(functionName)
         .appendingQueryItems(options.query),
-      headerFields: mutableState.headers.merging(with: options.headers)
+      headerFields: mutableState.headers.merging(options.headers) { $1 }
     )
+
+    if options.body != nil && request.headerFields[.contentType] == nil {
+      request.headerFields[.contentType] = "application/json"
+    }
 
     if let region = options.region ?? region {
       request.headerFields[.xRegion] = region

@@ -8,23 +8,24 @@
 import ConcurrencyExtras
 import CustomDump
 import PostgREST
-@testable import Realtime
 import Supabase
 import TestHelpers
 import XCTest
+
+@testable import Realtime
 
 final class RealtimeIntegrationTests: XCTestCase {
   let realtime = RealtimeClientV2(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
     options: RealtimeClientOptions(
-      headers: ["apikey": DotEnv.SUPABASE_ANON_KEY]
+      headers: [.apiKey: DotEnv.SUPABASE_ANON_KEY]
     )
   )
 
   let db = PostgrestClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
     headers: [
-      "apikey": DotEnv.SUPABASE_ANON_KEY,
+      .apiKey: DotEnv.SUPABASE_ANON_KEY
     ]
   )
 
@@ -73,14 +74,14 @@ final class RealtimeIntegrationTests: XCTestCase {
         [
           "event": "test",
           "payload": [
-            "value": 1,
+            "value": 1
           ],
           "type": "broadcast",
         ],
         [
           "event": "test",
           "payload": [
-            "value": 2,
+            "value": 2
           ],
           "type": "broadcast",
         ],
@@ -151,7 +152,7 @@ final class RealtimeIntegrationTests: XCTestCase {
     expectNoDifference(
       joins,
       [
-        [], // This is the first PRESENCE_STATE event.
+        [],  // This is the first PRESENCE_STATE event.
         [UserState(email: "test@supabase.com")],
         [UserState(email: "test2@supabase.com")],
         [],
@@ -161,7 +162,7 @@ final class RealtimeIntegrationTests: XCTestCase {
     expectNoDifference(
       leaves,
       [
-        [], // This is the first PRESENCE_STATE event.
+        [],  // This is the first PRESENCE_STATE event.
         [],
         [UserState(email: "test@supabase.com")],
         [UserState(email: "test2@supabase.com")],

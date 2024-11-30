@@ -80,7 +80,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: FileOptions?
   ) async throws -> FileUploadResponse {
     let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    var headers = options.headers ?? HTTPFields()
 
     if method == .post {
       headers[.xUpsert] = "\(options.upsert)"
@@ -647,7 +647,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
     let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    var headers = options.headers ?? HTTPFields()
 
     headers[.xUpsert] = "\(options.upsert)"
     headers[.duplex] = options.duplex

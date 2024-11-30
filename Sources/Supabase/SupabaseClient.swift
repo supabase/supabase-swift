@@ -47,7 +47,7 @@ public final class SupabaseClient: Sendable {
         $0.rest = PostgrestClient(
           url: databaseURL,
           schema: options.db.schema,
-          headers: _headers,
+          headers: headers,
           logger: options.global.logger,
           fetch: { request, bodyData in
             if let bodyData {
@@ -72,7 +72,7 @@ public final class SupabaseClient: Sendable {
         $0.storage = SupabaseStorageClient(
           configuration: StorageClientConfiguration(
             url: storageURL,
-            headers: _headers,
+            headers: headers,
             session: StorageHTTPSession { request, bodyData in
               if let bodyData {
                 return try await self.uploadWithAuth(for: request, from: bodyData)
@@ -100,7 +100,7 @@ public final class SupabaseClient: Sendable {
       if $0.functions == nil {
         $0.functions = FunctionsClient(
           url: functionsURL,
-          headers: _headers,
+          headers: headers,
           region: options.functions.region,
           logger: options.global.logger,
           fetch: { request, bodyData in
@@ -117,13 +117,10 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  let _headers: HTTPFields
   /// Headers provided to the inner clients on initialization.
   ///
   /// - Note: This collection is non-mutable, if you want to provide different headers, pass it in ``SupabaseClientOptions/GlobalOptions/headers``.
-  public var headers: [String: String] {
-    _headers.dictionary
-  }
+  public let headers: HTTPFields
 
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
@@ -177,14 +174,14 @@ public final class SupabaseClient: Sendable {
       .authorization: "Bearer \(supabaseKey)",
       .apiKey: supabaseKey,
     ]
-    _headers = headers.merging(with: options.global.headers)
+    self.headers = options.global.headers.merging(headers) { $1 }
 
     // default storage key uses the supabase project ref as a namespace
     let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"
 
     _auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
-      headers: _headers,
+      headers: self.headers,
       flowType: options.auth.flowType,
       redirectToURL: options.auth.redirectToURL,
       storageKey: options.auth.storageKey ?? defaultStorageKey,
@@ -206,13 +203,13 @@ public final class SupabaseClient: Sendable {
     _realtime = UncheckedSendable(
       RealtimeClient(
         supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
-        headers: _headers,
-        params: _headers.dictionary
+        headers: headers,
+        params: headers.dictionary
       )
     )
 
     var realtimeOptions = options.realtime
-    realtimeOptions.headers.merge(with: _headers)
+    realtimeOptions.headers.merge(self.headers) { $1 }
     if realtimeOptions.logger == nil {
       realtimeOptions.logger = options.global.logger
     }

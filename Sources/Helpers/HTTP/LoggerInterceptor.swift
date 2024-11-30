@@ -31,6 +31,10 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
       )
 
       do {
+        var request = request
+        if bodyData != nil && request.headerFields[.contentType] == nil {
+          request.headerFields[.contentType] = "application/json"
+        }
         let (data, response) = try await next(request, bodyData)
         logger.verbose(
           """

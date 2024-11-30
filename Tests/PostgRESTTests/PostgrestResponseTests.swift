@@ -1,3 +1,4 @@
+import HTTPTypes
 import XCTest
 
 @testable import PostgREST
@@ -10,12 +11,10 @@ class PostgrestResponseTests: XCTestCase {
   func testInit() {
     // Prepare data and response
     let data = Data()
-    let response = HTTPURLResponse(
-      url: URL(string: "http://example.com")!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: ["Content-Range": "bytes 0-100/200"]
-    )!
+    let response = HTTPResponse(
+      status: .init(code: 200),
+      headerFields: [.contentRange: "bytes 0-100/200"]
+    )
     let value = "Test Value"
 
     // Create the PostgrestResponse instance
@@ -32,12 +31,10 @@ class PostgrestResponseTests: XCTestCase {
   func testInitWithNoCount() {
     // Prepare data and response
     let data = Data()
-    let response = HTTPURLResponse(
-      url: URL(string: "http://example.com")!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: ["Content-Range": "*"]
-    )!
+    let response = HTTPResponse(
+      status: .init(code: 200),
+      headerFields: [.contentRange: "*"]
+    )
     let value = "Test Value"
 
     // Create the PostgrestResponse instance

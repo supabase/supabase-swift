@@ -18,9 +18,9 @@ extension SupabaseStorageClient {
       configuration: StorageClientConfiguration(
         url: URL(string: supabaseURL)!,
         headers: [
-          "Authorization": "Bearer \(apiKey)",
-          "Apikey": apiKey,
-          "X-Client-Info": "storage-swift/x.y.z",
+          .authorization: "Bearer \(apiKey)",
+          .apiKey: apiKey,
+          .xClientInfo: "storage-swift/x.y.z",
         ],
         session: session,
         logger: nil

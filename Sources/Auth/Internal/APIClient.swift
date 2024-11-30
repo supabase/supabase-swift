@@ -35,12 +35,9 @@ struct APIClient: Sendable {
   func execute(
     for request: HTTPRequest,
     from bodyData: Data?
-  ) async throws -> (
-    Data,
-    HTTPResponse
-  ) {
+  ) async throws -> (Data, HTTPResponse) {
     var request = request
-    request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
+    request.headerFields = request.headerFields.merging(configuration.headers) { $1 }
 
     if request.headerFields[.apiVersionHeaderName] == nil {
       request.headerFields[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue

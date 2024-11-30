@@ -33,7 +33,12 @@ package actor HTTPClient: HTTPClientType {
     _ bodyData: Data?
   ) async throws -> (Data, HTTPResponse) {
     var next: @Sendable (HTTPRequest, Data?) async throws -> (Data, HTTPResponse) = {
-      return try await self.fetch($0, $1)
+      request, bodyData in
+      var request = request
+      if bodyData != nil && request.headerFields[.contentType] == nil {
+        request.headerFields[.contentType] = "application/json"
+      }
+      return try await self.fetch(request, bodyData)
     }
 
     for interceptor in interceptors.reversed() {

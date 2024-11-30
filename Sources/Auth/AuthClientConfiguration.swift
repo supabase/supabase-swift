@@ -83,7 +83,7 @@ extension AuthClient {
       },
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
     ) {
-      let headers = headers.merging(with: Configuration.defaultHeaders)
+      let headers = Configuration.defaultHeaders.merging(headers) { $1 }
 
       self.url = url ?? defaultAuthURL
       self.headers = headers

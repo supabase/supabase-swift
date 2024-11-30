@@ -7,10 +7,11 @@ import HTTPTypesFoundation
 #endif
 
 public struct StorageHTTPSession: Sendable {
-  public var fetch: @Sendable (
-    _ request: HTTPRequest,
-    _ bodyData: Data?
-  ) async throws -> (Data, HTTPResponse)
+  public var fetch:
+    @Sendable (
+      _ request: HTTPRequest,
+      _ bodyData: Data?
+    ) async throws -> (Data, HTTPResponse)
 
   public init(
     fetch: @escaping @Sendable (

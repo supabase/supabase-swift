@@ -14,7 +14,7 @@ final class PostgrestFilterTests: XCTestCase {
     configuration: PostgrestClient.Configuration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
       headers: [
-        "apikey": DotEnv.SUPABASE_ANON_KEY,
+        .apiKey: DotEnv.SUPABASE_ANON_KEY
       ],
       logger: nil
     )

@@ -65,7 +65,7 @@ public struct FunctionInvokeOptions: Sendable {
     }
 
     self.method = method
-    self.headers = defaultHeaders.merging(with: headers)
+    self.headers = defaultHeaders.merging(headers) { $1 }
     self.region = region
     self.query = query
   }

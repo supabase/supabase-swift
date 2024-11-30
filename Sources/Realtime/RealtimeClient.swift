@@ -344,7 +344,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     //    self.connection?.enabledSSLCipherSuites = enabledSSLCipherSuites
     //    #endif
 
-    connection?.connect(with: headers.dictionary)
+    connection?.connect(with: headers)
   }
 
   /// Disconnects the socket

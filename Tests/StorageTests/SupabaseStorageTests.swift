@@ -1,5 +1,6 @@
 import CustomDump
 import Foundation
+import HTTPTypes
 import InlineSnapshotTesting
 import XCTest
 import XCTestDynamicOverlay
@@ -15,8 +16,7 @@ final class SupabaseStorageTests: XCTestCase {
   let bucketId = "tests"
 
   var sessionMock = StorageHTTPSession(
-    fetch: unimplemented("StorageHTTPSession.fetch"),
-    upload: unimplemented("StorageHTTPSession.upload")
+    fetch: unimplemented("StorageHTTPSession.fetch")
   )
 
   func testGetPublicURL() throws {
@@ -58,24 +58,20 @@ final class SupabaseStorageTests: XCTestCase {
   }
 
   func testCreateSignedURLs() async throws {
-    sessionMock.fetch = { _ in
+    sessionMock.fetch = { _, _ in
       (
-        """
-        [
-          {
-            "signedURL": "/sign/file1.txt?token=abc.def.ghi"
-          },
-          {
-            "signedURL": "/sign/file2.txt?token=abc.def.ghi"
-          },
-        ]
-        """.data(using: .utf8)!,
-        HTTPURLResponse(
-          url: self.supabaseURL,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
+        Data(
+          """
+          [
+            {
+              "signedURL": "/sign/file1.txt?token=abc.def.ghi"
+            },
+            {
+              "signedURL": "/sign/file2.txt?token=abc.def.ghi"
+            },
+          ]
+          """.utf8),
+        HTTPResponse(status: .init(code: 200))
       )
     }
 
@@ -96,16 +92,19 @@ final class SupabaseStorageTests: XCTestCase {
     func testUploadData() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
-      sessionMock.fetch = { request in
+      sessionMock.fetch = { request, bodyData in
+        var request = URLRequest(httpRequest: request)!
+        request.httpBody = bodyData
+
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
           curl \
           	--request POST \
-          	--header "Apikey: test.api.key" \
           	--header "Authorization: Bearer test.api.key" \
           	--header "Cache-Control: max-age=14400" \
           	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
           	--header "X-Client-Info: storage-swift/x.y.z" \
+          	--header "apiKey: test.api.key" \
           	--header "x-upsert: false" \
           	--data "--alamofire.boundary.c21f947c1c7b0c57\#r
           Content-Disposition: form-data; name=\"cacheControl\"\#r
@@ -126,18 +125,16 @@ final class SupabaseStorageTests: XCTestCase {
           """#
         }
         return (
-          """
-          {
-            "Id": "tests/file1.txt",
-            "Key": "tests/file1.txt"
-          }
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
+          Data(
+            """
+            {
+              "Id": "tests/file1.txt",
+              "Key": "tests/file1.txt"
+            }
+            """.utf8),
+          HTTPResponse(
+            status: .init(code: 200)
+          )
         )
       }
 
@@ -157,33 +154,31 @@ final class SupabaseStorageTests: XCTestCase {
     func testUploadFileURL() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
-      sessionMock.fetch = { request in
+      sessionMock.fetch = { request, bodyData in
+        var request = URLRequest(httpRequest: request)!
+        request.httpBody = bodyData
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
           curl \
           	--request POST \
-          	--header "Apikey: test.api.key" \
           	--header "Authorization: Bearer test.api.key" \
           	--header "Cache-Control: max-age=3600" \
           	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
           	--header "X-Client-Info: storage-swift/x.y.z" \
+          	--header "apiKey: test.api.key" \
           	--header "x-upsert: false" \
           	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
           """#
         }
         return (
-          """
-          {
-            "Id": "tests/file1.txt",
-            "Key": "tests/file1.txt"
-          }
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
+          Data(
+            """
+            {
+              "Id": "tests/file1.txt",
+              "Key": "tests/file1.txt"
+            }
+            """.utf8),
+          HTTPResponse(status: .init(code: 200))
         )
       }
 

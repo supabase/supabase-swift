@@ -102,7 +102,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     options: FetchOptions,
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    let request = mutableState.withValue {
+    let (request, bodyData) = mutableState.withValue {
       $0.fetchOptions = options
 
       if $0.fetchOptions.head {
@@ -130,10 +130,10 @@ public class PostgrestBuilder: @unchecked Sendable {
         }
       }
 
-      return $0.request
+      return ($0.request, $0.bodyData)
     }
 
-    let (data, response) = try await http.send(request, nil)
+    let (data, response) = try await http.send(request, bodyData)
 
     guard 200..<300 ~= response.status.code else {
       if let error = try? configuration.decoder.decode(PostgrestError.self, from: data) {

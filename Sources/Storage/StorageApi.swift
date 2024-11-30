@@ -35,7 +35,7 @@ public class StorageApi: @unchecked Sendable {
     from bodyData: Data?
   ) async throws -> (Data, HTTPResponse) {
     var request = request
-    request.headerFields = configuration.headers.merging(with: request.headerFields)
+    request.headerFields = configuration.headers.merging(request.headerFields) { $1 }
 
     let (data, response) = try await http.send(request, bodyData)
 

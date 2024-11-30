@@ -9,17 +9,21 @@ extension HTTPFields {
     return .init(keyValues, uniquingKeysWith: { $1 })
   }
 
-  package mutating func merge(with other: Self) {
-    for field in other {
-      self[field.name] = field.value
-    }
+  package mutating func merge(
+    _ other: Self,
+    uniquingKeysWith combine: (String, String) throws -> String
+  ) rethrows {
+    self = try self.merging(other, uniquingKeysWith: combine)
   }
 
-  package func merging(with other: Self) -> Self {
+  package func merging(
+    _ other: Self,
+    uniquingKeysWith combine: (String, String) throws -> String
+  ) rethrows -> HTTPFields {
     var copy = self
 
     for field in other {
-      copy[field.name] = field.value
+      copy[field.name] = try combine(self[field.name] ?? "", field.value)
     }
 
     return copy

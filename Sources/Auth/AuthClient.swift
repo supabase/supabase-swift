@@ -1122,10 +1122,12 @@ public final class AuthClient: Sendable {
 
     if let jwt {
       request.headerFields[.authorization] = "Bearer \(jwt)"
+      let (data, _) = try await api.execute(for: request, from: nil)
+      return try configuration.decoder.decode(User.self, from: data)
+    } else {
+      let (data, _) = try await api.authorizedExecute(for: request, from: nil)
+      return try configuration.decoder.decode(User.self, from: data)
     }
-
-    let (data, _) = try await api.authorizedExecute(for: request, from: nil)
-    return try configuration.decoder.decode(User.self, from: data)
   }
 
   /// Updates user data, if there is a logged in user.

@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import CustomDump
+import HTTPTypes
 import InlineSnapshotTesting
 import TestHelpers
 import XCTest
@@ -80,8 +81,8 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOut() async throws {
-    sut = makeSUT { _ in
-      .stub()
+    sut = makeSUT { _, _ in
+      TestStub.stub()
     }
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -109,8 +110,8 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
-    sut = makeSUT { _ in
-      .stub()
+    sut = makeSUT { _, _ in
+      TestStub.stub()
     }
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -122,14 +123,12 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
-    sut = makeSUT { _ in
+    sut = makeSUT { _, _ in
       throw AuthError.api(
         message: "",
         errorCode: .unknown,
-        underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(
-          url: URL(string: "http://localhost")!, statusCode: 404, httpVersion: nil,
-          headerFields: nil)!
+        data: Data(),
+        response: HTTPResponse(status: .init(code: 404))
       )
     }
 
@@ -155,14 +154,12 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
-    sut = makeSUT { _ in
+    sut = makeSUT { _, _ in
       throw AuthError.api(
         message: "",
         errorCode: .invalidCredentials,
-        underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(
-          url: URL(string: "http://localhost")!, statusCode: 401, httpVersion: nil,
-          headerFields: nil)!
+        data: Data(),
+        response: HTTPResponse(status: .init(code: 401))
       )
     }
 
@@ -188,14 +185,12 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutShouldRemoveSessionIf403Returned() async throws {
-    sut = makeSUT { _ in
+    sut = makeSUT { _, _ in
       throw AuthError.api(
         message: "",
         errorCode: .invalidCredentials,
-        underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(
-          url: URL(string: "http://localhost")!, statusCode: 403, httpVersion: nil,
-          headerFields: nil)!
+        data: Data(),
+        response: HTTPResponse(status: .init(code: 403))
       )
     }
 
@@ -223,8 +218,8 @@ final class AuthClientTests: XCTestCase {
   func testSignInAnonymously() async throws {
     let session = Session(fromMockNamed: "anonymous-sign-in-response")
 
-    let sut = makeSUT { _ in
-      .stub(fromFileName: "anonymous-sign-in-response")
+    let sut = makeSUT { _, _ in
+      TestStub.stub(fromFileName: "anonymous-sign-in-response")
     }
 
     let eventsTask = Task {
@@ -243,8 +238,8 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignInWithOAuth() async throws {
-    let sut = makeSUT { _ in
-      .stub(fromFileName: "session")
+    let sut = makeSUT { _, _ in
+      TestStub.stub(fromFileName: "session")
     }
 
     let eventsTask = Task {
@@ -266,8 +261,8 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testGetLinkIdentityURL() async throws {
-    let sut = makeSUT { _ in
-      .stub(
+    let sut = makeSUT { _, _ in
+      TestStub.stub(
         """
         {
           "url" : "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
@@ -295,8 +290,8 @@ final class AuthClientTests: XCTestCase {
   func testLinkIdentity() async throws {
     let url =
       "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
-    let sut = makeSUT { _ in
-      .stub(
+    let sut = makeSUT { _, _ in
+      TestStub.stub(
         """
         {
           "url" : "\(url)"
@@ -318,12 +313,12 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testAdminListUsers() async throws {
-    let sut = makeSUT { _ in
-      .stub(
+    let sut = makeSUT { _, _ in
+      TestStub.stub(
         fromFileName: "list-users-response",
         headers: [
-          "X-Total-Count": "669",
-          "Link":
+          .xTotalCount: "669",
+          .link:
             "</admin/users?page=2&per_page=>; rel=\"next\", </admin/users?page=14&per_page=>; rel=\"last\"",
         ]
       )
@@ -336,12 +331,12 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testAdminListUsers_noNextPage() async throws {
-    let sut = makeSUT { _ in
-      .stub(
+    let sut = makeSUT { _, _ in
+      TestStub.stub(
         fromFileName: "list-users-response",
         headers: [
-          "X-Total-Count": "669",
-          "Link": "</admin/users?page=14&per_page=>; rel=\"last\"",
+          .xTotalCount: "669",
+          .link: "</admin/users?page=14&per_page=>; rel=\"last\"",
         ]
       )
     }
@@ -378,20 +373,20 @@ final class AuthClientTests: XCTestCase {
   }
 
   private func makeSUT(
-    fetch: ((URLRequest) async throws -> HTTPResponse)? = nil
+    fetch: ((HTTPRequest, Data?) async throws -> (Data, HTTPResponse))? = nil
   ) -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: clientURL,
-      headers: ["Apikey": "dummy.api.key"],
+      headers: [.apiKey: "dummy.api.key"],
       localStorage: storage,
       logger: nil,
-      fetch: { request in
+      fetch: { request, body in
         guard let fetch else {
           throw UnimplementedError()
         }
 
-        let response = try await fetch(request)
-        return (response.data, response.underlyingResponse)
+        let (data, response) = try await fetch(request, body)
+        return (data, response)
       }
     )
 
@@ -401,52 +396,47 @@ final class AuthClientTests: XCTestCase {
   }
 }
 
-extension HTTPResponse {
+struct TestStub {
   static func stub(
     _ body: String = "",
     code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: body.data(using: .utf8)!,
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
+    headers: HTTPFields = [:]
+  ) -> (Data, HTTPResponse) {
+    (
+      Data(body.utf8),
+      HTTPResponse(
+        status: .init(code: code),
         headerFields: headers
-      )!
+      )
     )
   }
 
   static func stub(
     fromFileName fileName: String,
     code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: json(named: fileName),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
+    headers: HTTPFields = [:]
+  ) -> (Data, HTTPResponse) {
+    (
+      json(named: fileName),
+      HTTPResponse(
+        status: .init(code: code),
         headerFields: headers
-      )!
+      )
     )
   }
 
   static func stub(
     _ value: some Encodable,
     code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: try! AuthClient.Configuration.jsonEncoder.encode(value),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
+    headers: HTTPFields = [:]
+  ) -> (Data, HTTPResponse) {
+    (
+      try! AuthClient.Configuration.jsonEncoder.encode(value),
+      HTTPResponse(
+        status: .init(code: code),
         headerFields: headers
-      )!
+      )
     )
+
   }
 }
