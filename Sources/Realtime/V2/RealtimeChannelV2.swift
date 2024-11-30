@@ -1,14 +1,8 @@
-//
-//  RealtimeChannelV2.swift
-//
-//
-//  Created by Guilherme Souza on 26/12/23.
-//
-
 import ConcurrencyExtras
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
+import IssueReporting
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -59,7 +53,9 @@ extension Socket {
       addChannel: { [weak client] in client?.addChannel($0) },
       removeChannel: { [weak client] in await client?.removeChannel($0) },
       push: { [weak client] in await client?.push($0) },
-      httpSend: { [weak client] in try await client?.http.send($0) ?? .init(data: Data(), response: HTTPURLResponse()) }
+      httpSend: { [weak client] in
+        try await client?.http.send($0) ?? .init(data: Data(), response: HTTPURLResponse())
+      }
     )
   }
 }
@@ -121,16 +117,12 @@ public final class RealtimeChannelV2: Sendable {
   public func subscribe() async {
     if socket.status() != .connected {
       if socket.options().connectOnSubscribe != true {
-        fatalError(
+        reportIssue(
           "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
         )
+        return
       }
       await socket.connect()
-    }
-
-    guard status != .subscribed else {
-      logger?.warning("Channel \(topic) is already subscribed")
-      return
     }
 
     socket.addChannel(self)
@@ -185,7 +177,8 @@ public final class RealtimeChannelV2: Sendable {
   @available(
     *,
     deprecated,
-    message: "manually updating auth token per channel is not recommended, please use `setAuth` in RealtimeClient instead."
+    message:
+      "manually updating auth token per channel is not recommended, please use `setAuth` in RealtimeClient instead."
   )
   public func updateAuth(jwt: String?) async {
     logger?.debug("Updating auth token for channel \(topic)")
@@ -238,8 +231,8 @@ public final class RealtimeChannelV2: Sendable {
                     event: event,
                     payload: message,
                     private: config.isPrivate
-                  ),
-                ],
+                  )
+                ]
               ]
             )
           )
@@ -263,15 +256,21 @@ public final class RealtimeChannelV2: Sendable {
     }
   }
 
+  /// Tracks the given state in the channel.
+  /// - Parameter state: The state to be tracked, conforming to `Codable`.
+  /// - Throws: An error if the tracking fails.
   public func track(_ state: some Codable) async throws {
     try await track(state: JSONObject(state))
   }
 
+  /// Tracks the given state in the channel.
+  /// - Parameter state: The state to be tracked as a `JSONObject`.
   public func track(state: JSONObject) async {
-    assert(
-      status == .subscribed,
-      "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
-    )
+    if status != .subscribed {
+      reportIssue(
+        "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
+      )
+    }
 
     await push(
       ChannelEvent.presence,
@@ -283,6 +282,7 @@ public final class RealtimeChannelV2: Sendable {
     )
   }
 
+  /// Stops tracking the current state in the channel.
   public func untrack() async {
     await push(
       ChannelEvent.presence,
@@ -295,20 +295,27 @@ public final class RealtimeChannelV2: Sendable {
 
   func onMessage(_ message: RealtimeMessageV2) async {
     do {
-      guard let eventType = message.eventType else {
+      guard let eventType = message._eventType else {
         logger?.debug("Received message without event type: \(message)")
         return
       }
 
       switch eventType {
       case .tokenExpired:
-        logger?.debug(
-          "Received token expired event. This should not happen, please report this warning."
-        )
+        // deprecated type
+        break
 
       case .system:
-        logger?.debug("Subscribed to channel \(message.topic)")
-        status = .subscribed
+        if message.status == .ok {
+          logger?.debug("Subscribed to channel \(message.topic)")
+          status = .subscribed
+        } else {
+          logger?.debug(
+            "Failed to subscribe to channel \(message.topic): \(message.payload)"
+          )
+        }
+
+        callbackManager.triggerSystem(message: message)
 
       case .reply:
         guard
@@ -510,10 +517,12 @@ public final class RealtimeChannelV2: Sendable {
     filter: String?,
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> RealtimeSubscription {
-    precondition(
-      status != .subscribed,
-      "You cannot call postgresChange after joining the channel"
-    )
+    guard status != .subscribed else {
+      reportIssue(
+        "You cannot call postgresChange after joining the channel, this won't work as expected."
+      )
+      return RealtimeSubscription {}
+    }
 
     let config = PostgresJoinConfig(
       event: event,
@@ -543,6 +552,24 @@ public final class RealtimeChannelV2: Sendable {
       logger?.debug("Removing broadcast callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
+  }
+
+  /// Listen for `system` event.
+  public func onSystem(
+    callback: @escaping @Sendable (RealtimeMessageV2) -> Void
+  ) -> RealtimeSubscription {
+    let id = callbackManager.addSystemCallback(callback: callback)
+    return RealtimeSubscription { [weak callbackManager, logger] in
+      logger?.debug("Removing system callback with id: \(id)")
+      callbackManager?.removeCallback(id: id)
+    }
+  }
+
+  /// Listen for `system` event.
+  public func onSystem(
+    callback: @escaping @Sendable () -> Void
+  ) -> RealtimeSubscription {
+    self.onSystem { _ in callback() }
   }
 
   @discardableResult

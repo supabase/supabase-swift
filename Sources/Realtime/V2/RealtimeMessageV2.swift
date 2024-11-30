@@ -1,10 +1,3 @@
-//
-//  RealtimeMessageV2.swift
-//
-//
-//  Created by Guilherme Souza on 11/01/24.
-//
-
 import Foundation
 import Helpers
 
@@ -23,15 +16,22 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
     self.payload = payload
   }
 
-  var status: PushStatus? {
+  /// Status for the received message if any.
+  public var status: PushStatus? {
     payload["status"]
       .flatMap(\.stringValue)
       .flatMap(PushStatus.init(rawValue:))
   }
 
-  public var eventType: EventType? {
+  @available(
+    *, deprecated,
+    message: "Access to event type will be removed, please inspect raw event value instead."
+  )
+  public var eventType: EventType? { _eventType }
+
+  var _eventType: EventType? {
     switch event {
-    case ChannelEvent.system where status == .ok: .system
+    case ChannelEvent.system: .system
     case ChannelEvent.postgresChanges:
       .postgresChanges
     case ChannelEvent.broadcast:
@@ -44,9 +44,6 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
       .presenceDiff
     case ChannelEvent.presenceState:
       .presenceState
-    case ChannelEvent.system
-      where payload["message"]?.stringValue?.contains("access token has expired") == true:
-      .tokenExpired
     case ChannelEvent.reply:
       .reply
     default:
@@ -62,6 +59,11 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
     case error
     case presenceDiff
     case presenceState
+    @available(
+      *, deprecated,
+      message:
+        "tokenExpired gets returned as system, check payload for verifying if is a token expiration."
+    )
     case tokenExpired
     case reply
   }

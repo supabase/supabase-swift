@@ -81,6 +81,22 @@ test-docs:
 format:
 	@swift format -i -r --ignore-unparsable-files .
 
+
+test-linux:
+	docker run \
+		--rm \
+		-v "$(PWD):$(PWD)" \
+		-w "$(PWD)" \
+		swift:5.10 \
+		bash -c 'swift test -c $(CONFIG)'
+
+build-linux:
+	docker run \
+		--rm \
+		-v "$(PWD):$(PWD)" \
+		-w "$(PWD)" \
+		swift:5.9 \
+		bash -c 'swift build -c $(CONFIG)'
 .PHONY: build-for-library-evolution format xcodebuild test-docs test-integration
 
 define udid_for

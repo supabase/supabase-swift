@@ -106,7 +106,9 @@ private actor LiveSessionManager {
             // Need to do this check here, because not all RetryableError's should be retried.
             // URLError conforms to RetryableError, but only a subset of URLError should be retried,
             // the same is true for AuthError.
-            if let error = error as? any RetryableError, error.shouldRetry {
+            if let error = error as? URLError, error.shouldRetry {
+              throw error
+            } else if let error = error as? any RetryableError, error.shouldRetry {
               throw error
             } else {
               remove()

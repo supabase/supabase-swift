@@ -1,5 +1,51 @@
 # Changelog
 
+## [2.23.0](https://github.com/supabase/supabase-swift/compare/v2.22.1...v2.23.0) (2024-11-22)
+
+
+### Features
+
+* **postgrest:** add read-only mode for RPC ([#600](https://github.com/supabase/supabase-swift/issues/600)) ([d81fc86](https://github.com/supabase/supabase-swift/commit/d81fc865409821dc0816c930d2d537a126b4fe06))
+
+## [2.22.1](https://github.com/supabase/supabase-swift/compare/v2.22.0...v2.22.1) (2024-11-12)
+
+
+### Bug Fixes
+
+* **auth:** `URLError` coercion for `RetryableError` causing session to be deleted ([#597](https://github.com/supabase/supabase-swift/issues/597)) ([d67b7cf](https://github.com/supabase/supabase-swift/commit/d67b7cf850d43c2a8ecf39feedfc39528f55f139))
+
+## [2.22.0](https://github.com/supabase/supabase-swift/compare/v2.21.0...v2.22.0) (2024-11-06)
+
+
+### Features
+
+* **auth:** add new error codes ([#586](https://github.com/supabase/supabase-swift/issues/586)) ([1721c08](https://github.com/supabase/supabase-swift/commit/1721c08c7710e0cba1390962441fe595b613072c))
+
+
+### Bug Fixes
+
+* **auth:** incorrect error when error occurs during PKCE flow ([#592](https://github.com/supabase/supabase-swift/issues/592)) ([84ce6f2](https://github.com/supabase/supabase-swift/commit/84ce6f29b2ee2192b57d8ff7c36af3378c696653))
+
+## [2.21.0](https://github.com/supabase/supabase-swift/compare/v2.20.5...v2.21.0) (2024-11-05)
+
+
+### Features
+
+* **realtime:** add `system` event ([#589](https://github.com/supabase/supabase-swift/issues/589)) ([1176dea](https://github.com/supabase/supabase-swift/commit/1176dea4d90f353ae777a633fc079dedf98276ff))
+
+
+### Bug Fixes
+
+* **realtime:** lost `postgres_changes` on resubscribe ([#585](https://github.com/supabase/supabase-swift/issues/585)) ([fabc07d](https://github.com/supabase/supabase-swift/commit/fabc07dac833aa94e35bf932899dfb5d1a868cfb))
+
+## [2.20.5](https://github.com/supabase/supabase-swift/compare/v2.20.4...v2.20.5) (2024-10-24)
+
+
+### Bug Fixes
+
+* issue with MainActor isolated property on Swift 5.9 ([#577](https://github.com/supabase/supabase-swift/issues/577)) ([7266b64](https://github.com/supabase/supabase-swift/commit/7266b64e1e0b58fc893693fa80872b6d77bf1555))
+* revert AnyJSON codable ([#580](https://github.com/supabase/supabase-swift/issues/580)) ([bfb6ed7](https://github.com/supabase/supabase-swift/commit/bfb6ed7b9b69123dc5cc16458da62ee3546eaf98))
+
 ## [2.20.4](https://github.com/supabase/supabase-swift/compare/v2.20.3...v2.20.4) (2024-10-23)
 
 

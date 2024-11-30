@@ -1,7 +1,7 @@
 import Foundation
 import Helpers
 
-public final class PostgrestQueryBuilder: PostgrestBuilder {
+public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Perform a SELECT query on the table or view.
   /// - Parameters:
   ///   - columns: The columns to retrieve, separated by commas. Columns can be renamed when returned with `customName:columnName`

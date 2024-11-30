@@ -27,25 +27,31 @@ actor PushV2 {
   }
 
   func send() async -> PushStatus {
-    await channel?.socket.push(message)
-
-    if channel?.config.broadcast.acknowledgeBroadcasts == true {
-      do {
-        return try await withTimeout(interval: channel?.socket.options().timeoutInterval ?? 10) {
-          await withCheckedContinuation {
-            self.receivedContinuation = $0
-          }
-        }
-      } catch is TimeoutError {
-        channel?.logger?.debug("Push timed out.")
-        return .timeout
-      } catch {
-        channel?.logger?.error("Error sending push: \(error)")
-        return .error
-      }
+    guard let channel = channel else {
+      return .error
     }
 
-    return .ok
+    await channel.socket.push(message)
+
+    if !channel.config.broadcast.acknowledgeBroadcasts {
+      // channel was configured with `ack = false`,
+      // don't wait for a response and return `ok`.
+      return .ok
+    }
+
+    do {
+      return try await withTimeout(interval: channel.socket.options().timeoutInterval) {
+        await withCheckedContinuation { continuation in
+          self.receivedContinuation = continuation
+        }
+      }
+    } catch is TimeoutError {
+      channel.logger?.debug("Push timed out.")
+      return .timeout
+    } catch {
+      channel.logger?.error("Error sending push: \(error.localizedDescription)")
+      return .error
+    }
   }
 
   func didReceive(status: PushStatus) {

@@ -48,8 +48,8 @@ public struct FileOptions: Sendable {
   /// The `Content-Type` header value.
   public var contentType: String?
 
-  /// When upsert is set to true, the file is overwritten if it exists. When set to false, an error
-  /// is thrown if the object already exists. Defaults to false.
+  /// When upsert is set to `true`, the file is overwritten if it exists. When set to `false`, an error
+  /// is thrown if the object already exists. Defaults to `false`.
   public var upsert: Bool
 
   /// The duplex option is a string parameter that enables or disables duplex streaming, allowing

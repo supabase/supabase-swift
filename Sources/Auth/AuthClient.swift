@@ -21,7 +21,9 @@ public final class AuthClient: Sendable {
 
   private var api: APIClient { Dependencies[clientID].api }
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  private var codeVerifierStorage: CodeVerifierStorage { Dependencies[clientID].codeVerifierStorage }
+  private var codeVerifierStorage: CodeVerifierStorage {
+    Dependencies[clientID].codeVerifierStorage
+  }
   private var date: @Sendable () -> Date { Dependencies[clientID].date }
   private var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
   private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
@@ -77,10 +79,11 @@ public final class AuthClient: Sendable {
       sessionManager: .live(clientID: clientID)
     )
 
-    observeAppLifecycleChanges()
+    Task { @MainActor in observeAppLifecycleChanges() }
   }
 
   #if canImport(ObjectiveC)
+    @MainActor
     private func observeAppLifecycleChanges() {
       #if canImport(UIKit)
         #if canImport(WatchKit)
@@ -165,14 +168,20 @@ public final class AuthClient: Sendable {
   /// Listen for auth state changes.
   ///
   /// An `.initialSession` is always emitted when this method is called.
-  public var authStateChanges: AsyncStream<(
-    event: AuthChangeEvent,
-    session: Session?
-  )> {
-    let (stream, continuation) = AsyncStream<(
-      event: AuthChangeEvent,
-      session: Session?
-    )>.makeStream()
+  public var authStateChanges:
+    AsyncStream<
+      (
+        event: AuthChangeEvent,
+        session: Session?
+      )
+    >
+  {
+    let (stream, continuation) = AsyncStream<
+      (
+        event: AuthChangeEvent,
+        session: Session?
+      )
+    >.makeStream()
 
     Task {
       let handle = await onAuthStateChange { event, session in
@@ -209,10 +218,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("signup"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (redirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           SignUpRequest(
@@ -401,10 +412,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("otp"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (redirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           OTPParams(
@@ -524,7 +537,8 @@ public final class AuthClient: Sendable {
     let codeVerifier = codeVerifierStorage.get()
 
     if codeVerifier == nil {
-      logger?.error("code verifier not found, a code verifier should exist when calling this method.")
+      logger?.error(
+        "code verifier not found, a code verifier should exist when calling this method.")
     }
 
     let session: Session = try await api.execute(
@@ -742,33 +756,32 @@ public final class AuthClient: Sendable {
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
   public func session(from url: URL) async throws -> Session {
-    logger?.debug("received \(url)")
+    logger?.debug("Received URL: \(url)")
 
     let params = extractParams(from: url)
 
-    if configuration.flowType == .implicit, !isImplicitGrantFlow(params: params) {
-      throw AuthError.implicitGrantRedirect(message: "Not a valid implicit grant flow url: \(url)")
-    }
-
-    if configuration.flowType == .pkce, !isPKCEFlow(params: params) {
-      throw AuthError.pkceGrantCodeExchange(message: "Not a valid PKCE flow url: \(url)")
-    }
-
-    if isPKCEFlow(params: params) {
-      guard let code = params["code"] else {
-        throw AuthError.pkceGrantCodeExchange(message: "No code detected.")
+    switch configuration.flowType {
+    case .implicit:
+      guard isImplicitGrantFlow(params: params) else {
+        throw AuthError.implicitGrantRedirect(
+          message: "Not a valid implicit grant flow URL: \(url)")
       }
+      return try await handleImplicitGrantFlow(params: params)
 
-      let session = try await exchangeCodeForSession(authCode: code)
-      return session
+    case .pkce:
+      guard isPKCEFlow(params: params) else {
+        throw AuthError.pkceGrantCodeExchange(message: "Not a valid PKCE flow URL: \(url)")
+      }
+      return try await handlePKCEFlow(params: params)
     }
+  }
 
-    if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
-      throw AuthError.pkceGrantCodeExchange(
-        message: params["error_description"] ?? "Error in URL with unspecified error_description.",
-        error: params["error"] ?? "unspecified_error",
-        code: params["error_code"] ?? "unspecified_code"
-      )
+  private func handleImplicitGrantFlow(params: [String: String]) async throws -> Session {
+    precondition(configuration.flowType == .implicit, "Method only allowed for implicit flow.")
+
+    if let errorDescription = params["error_description"] {
+      throw AuthError.implicitGrantRedirect(
+        message: errorDescription.replacingOccurrences(of: "+", with: " "))
     }
 
     guard
@@ -811,6 +824,25 @@ public final class AuthClient: Sendable {
     }
 
     return session
+  }
+
+  private func handlePKCEFlow(params: [String: String]) async throws -> Session {
+    precondition(configuration.flowType == .pkce, "Method only allowed for PKCE flow.")
+
+    if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
+      throw AuthError.pkceGrantCodeExchange(
+        message: params["error_description"]?.replacingOccurrences(of: "+", with: " ")
+          ?? "Error in URL with unspecified error_description.",
+        error: params["error"] ?? "unspecified_error",
+        code: params["error_code"] ?? "unspecified_code"
+      )
+    }
+
+    guard let code = params["code"] else {
+      throw AuthError.pkceGrantCodeExchange(message: "No code detected.")
+    }
+
+    return try await exchangeCodeForSession(authCode: code)
   }
 
   /// Sets the session data from the current session. If the current session is expired, setSession
@@ -878,7 +910,9 @@ public final class AuthClient: Sendable {
           headers: [.authorization: "Bearer \(accessToken)"]
         )
       )
-    } catch let AuthError.api(_, _, _, response) where [404, 403, 401].contains(response.statusCode) {
+    } catch let AuthError.api(_, _, _, response)
+      where [404, 403, 401].contains(response.statusCode)
+    {
       // ignore 404s since user might not exist anymore
       // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.
     }
@@ -898,10 +932,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("verify"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (redirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           VerifyOTPParams.email(
@@ -991,10 +1027,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("resend"),
         method: .post,
         query: [
-          (emailRedirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (emailRedirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           ResendEmailParams(
@@ -1078,10 +1116,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("user"),
         method: .put,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (redirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(user)
       )
@@ -1213,10 +1253,12 @@ public final class AuthClient: Sendable {
         url: configuration.url.appendingPathComponent("recover"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map { URLQueryItem(
-            name: "redirect_to",
-            value: $0.absoluteString
-          ) },
+          (redirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
         ].compactMap { $0 },
         body: configuration.encoder.encode(
           RecoverParams(
@@ -1280,7 +1322,8 @@ public final class AuthClient: Sendable {
 
   private func isPKCEFlow(params: [String: String]) -> Bool {
     let currentCodeVerifier = codeVerifierStorage.get()
-    return params["code"] != nil && currentCodeVerifier != nil
+    return params["code"] != nil || params["error_description"] != nil || params["error"] != nil
+      || params["error_code"] != nil && currentCodeVerifier != nil
   }
 
   private func getURLForProvider(
@@ -1300,7 +1343,7 @@ public final class AuthClient: Sendable {
     }
 
     var queryItems: [URLQueryItem] = [
-      URLQueryItem(name: "provider", value: provider.rawValue),
+      URLQueryItem(name: "provider", value: provider.rawValue)
     ]
 
     if let scopes {
