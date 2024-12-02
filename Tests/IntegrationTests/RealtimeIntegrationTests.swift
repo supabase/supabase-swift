@@ -13,6 +13,7 @@ import Supabase
 import TestHelpers
 import XCTest
 
+@MainActor
 final class RealtimeIntegrationTests: XCTestCase {
   let realtime = RealtimeClientV2(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
