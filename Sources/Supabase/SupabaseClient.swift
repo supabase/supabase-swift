@@ -161,6 +161,8 @@ public final class SupabaseClient: Sendable {
     ])
     .merging(with: HTTPFields(options.global.headers))
 
+    checkAuthorizationHeader(_headers)
+
     // default storage key uses the supabase project ref as a namespace
     let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"
 
@@ -351,14 +353,18 @@ public final class SupabaseClient: Sendable {
   }
 
   private func adapt(request: URLRequest) async -> URLRequest {
+    let defaultAccessToken = isJWT(supabaseKey) ? supabaseKey : nil
+
     let token: String? = if let accessToken = options.auth.accessToken {
       try? await accessToken()
+    } else if let accessToken = try? await auth.session.accessToken {
+      accessToken
     } else {
-      try? await auth.session.accessToken
+      defaultAccessToken
     }
 
     var request = request
-    if let token {
+    if let token, isJWT(token), request.value(forHTTPHeaderField: "Authorization") == nil {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
     return request
