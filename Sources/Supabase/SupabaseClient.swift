@@ -2,12 +2,12 @@
 import ConcurrencyExtras
 import Foundation
 @_exported import Functions
+import HTTPTypes
 import Helpers
 import IssueReporting
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
-import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -33,10 +33,11 @@ public final class SupabaseClient: Sendable {
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured by access policies.
   public var auth: AuthClient {
     if options.auth.accessToken != nil {
-      reportIssue("""
-      Supabase Client is configured with the auth.accessToken option,
-      accessing supabase.auth is not possible.
-      """)
+      reportIssue(
+        """
+        Supabase Client is configured with the auth.accessToken option,
+        accessing supabase.auth is not possible.
+        """)
     }
     return _auth
   }
@@ -79,8 +80,17 @@ public final class SupabaseClient: Sendable {
 
   let _realtime: UncheckedSendable<RealtimeClient>
 
+  @MainActor
+  private var _realtimeV2: RealtimeClientV2?
+
   /// Realtime client for Supabase
-  public let realtimeV2: RealtimeClientV2
+  @MainActor
+  public var realtimeV2: RealtimeClientV2 {
+    if _realtimeV2 == nil {
+      _realtimeV2 = _initRealtimeClient()
+    }
+    return _realtimeV2!
+  }
 
   /// Supabase Functions allows you to deploy and invoke edge functions.
   public var functions: FunctionsClient {
@@ -189,18 +199,6 @@ public final class SupabaseClient: Sendable {
       )
     )
 
-    var realtimeOptions = options.realtime
-    realtimeOptions.headers.merge(with: _headers)
-
-    if realtimeOptions.logger == nil {
-      realtimeOptions.logger = options.global.logger
-    }
-
-    realtimeV2 = RealtimeClientV2(
-      url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      options: realtimeOptions
-    )
-
     if options.auth.accessToken == nil {
       listenForAuthEvents()
     }
@@ -252,14 +250,16 @@ public final class SupabaseClient: Sendable {
   }
 
   /// Returns all Realtime channels.
+  @MainActor
   public var channels: [RealtimeChannelV2] {
-    Array(realtimeV2.subscriptions.values)
+    Array(realtimeV2.channels.values)
   }
 
   /// Creates a Realtime channel with Broadcast, Presence, and Postgres Changes.
   /// - Parameters:
   ///   - name: The name of the Realtime channel.
   ///   - options: The options to pass to the Realtime channel.
+  @MainActor
   public func channel(
     _ name: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
@@ -351,11 +351,12 @@ public final class SupabaseClient: Sendable {
   }
 
   private func adapt(request: URLRequest) async -> URLRequest {
-    let token: String? = if let accessToken = options.auth.accessToken {
-      try? await accessToken()
-    } else {
-      try? await auth.session.accessToken
-    }
+    let token: String? =
+      if let accessToken = options.auth.accessToken {
+        try? await accessToken()
+      } else {
+        try? await auth.session.accessToken
+      }
 
     var request = request
     if let token {
@@ -377,7 +378,9 @@ public final class SupabaseClient: Sendable {
 
   private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
     let accessToken: String? = mutableState.withValue {
-      if [.initialSession, .signedIn, .tokenRefreshed].contains(event), $0.changedAccessToken != session?.accessToken {
+      if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
+        $0.changedAccessToken != session?.accessToken
+      {
         $0.changedAccessToken = session?.accessToken
         return session?.accessToken ?? supabaseKey
       }
@@ -392,5 +395,27 @@ public final class SupabaseClient: Sendable {
 
     realtime.setAuth(accessToken)
     await realtimeV2.setAuth(accessToken)
+  }
+
+  @MainActor
+  private func _initRealtimeClient() -> RealtimeClientV2 {
+    var realtimeOptions = options.realtime
+    realtimeOptions.headers.merge(with: _headers)
+
+    if realtimeOptions.logger == nil {
+      realtimeOptions.logger = options.global.logger
+    }
+
+    if realtimeOptions.accessToken == nil {
+      realtimeOptions.accessToken = { [weak self] in
+        guard let self else { return "" }
+        return try await self.auth.session.accessToken
+      }
+    }
+
+    return RealtimeClientV2(
+      url: supabaseURL.appendingPathComponent("/realtime/v1"),
+      options: realtimeOptions
+    )
   }
 }
