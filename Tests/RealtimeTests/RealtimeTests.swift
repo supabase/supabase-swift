@@ -11,6 +11,7 @@ import XCTest
   import FoundationNetworking
 #endif
 
+@MainActor
 final class RealtimeTests: XCTestCase {
   let url = URL(string: "https://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
@@ -79,10 +80,10 @@ final class RealtimeTests: XCTestCase {
 
     XCTAssertEqual(socketStatuses.value, [.disconnected, .connecting, .connected])
 
-    let messageTask = sut.mutableState.messageTask
+    let messageTask = sut.messageTask
     XCTAssertNotNil(messageTask)
 
-    let heartbeatTask = sut.mutableState.heartbeatTask
+    let heartbeatTask = sut.heartbeatTask
     XCTAssertNotNil(heartbeatTask)
 
     let channelStatuses = LockIsolated([RealtimeChannelStatus]())
@@ -202,7 +203,7 @@ final class RealtimeTests: XCTestCase {
         },
         {
           "event" : "phx_join",
-          "join_ref" : "2",
+          "join_ref" : "3",
           "payload" : {
             "access_token" : "custom.access.token",
             "config" : {
@@ -219,7 +220,7 @@ final class RealtimeTests: XCTestCase {
               "private" : false
             }
           },
-          "ref" : "2",
+          "ref" : "3",
           "topic" : "realtime:public:messages"
         }
       ]
@@ -279,7 +280,7 @@ final class RealtimeTests: XCTestCase {
 
     await fulfillment(of: [sentHeartbeatExpectation], timeout: 2)
 
-    let pendingHeartbeatRef = sut.mutableState.pendingHeartbeatRef
+    let pendingHeartbeatRef = sut.pendingHeartbeatRef
     XCTAssertNotNil(pendingHeartbeatRef)
 
     // Wait until next heartbeat
@@ -304,7 +305,7 @@ final class RealtimeTests: XCTestCase {
     await http.when {
       $0.url.path.hasSuffix("broadcast")
     } return: { _ in
-      HTTPResponse(
+      await HTTPResponse(
         data: "{}".data(using: .utf8)!,
         response: HTTPURLResponse(
           url: self.sut.broadcastURL,

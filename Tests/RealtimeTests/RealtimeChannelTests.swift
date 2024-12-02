@@ -5,12 +5,15 @@
 //  Created by Guilherme Souza on 09/09/24.
 //
 
+import Helpers
 import InlineSnapshotTesting
+import TestHelpers
 import XCTest
 import XCTestDynamicOverlay
 
 @testable import Realtime
 
+@MainActor
 final class RealtimeChannelTests: XCTestCase {
   let sut = RealtimeChannelV2(
     topic: "topic",
@@ -19,7 +22,7 @@ final class RealtimeChannelTests: XCTestCase {
       presence: PresenceJoinConfig(),
       isPrivate: false
     ),
-    socket: .mock,
+    socket: .test(),
     logger: nil
   )
 
@@ -127,20 +130,17 @@ final class RealtimeChannelTests: XCTestCase {
   }
 }
 
-extension Socket {
-  static var mock: Socket {
-    Socket(
-      broadcastURL: unimplemented(),
-      status: unimplemented(),
-      options: unimplemented(),
-      accessToken: unimplemented(),
-      apiKey: unimplemented(),
-      makeRef: unimplemented(),
-      connect: unimplemented(),
-      addChannel: unimplemented(),
-      removeChannel: unimplemented(),
-      push: unimplemented(),
-      httpSend: unimplemented()
+extension RealtimeClientV2 {
+  static func test(
+    options: RealtimeClientOptions = RealtimeClientOptions(),
+    ws: any WebSocketClient = MockWebSocketClient(),
+    http: any HTTPClientType = HTTPClientMock()
+  ) -> RealtimeClientV2 {
+    RealtimeClientV2(
+      url: URL(string: "http://localhost:54321/realtime")!,
+      options: options,
+      ws: ws,
+      http: http
     )
   }
 }
