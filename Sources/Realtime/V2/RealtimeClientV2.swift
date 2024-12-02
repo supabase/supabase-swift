@@ -107,7 +107,11 @@ public final class RealtimeClientV2: Sendable {
     apikey = options.apikey
 
     mutableState.withValue {
-      $0.accessToken = options.accessToken ?? options.apikey
+      if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
+        $0.accessToken = String(accessToken)
+      } else {
+        $0.accessToken = options.apikey
+      }
     }
   }
 
