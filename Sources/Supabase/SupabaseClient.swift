@@ -407,6 +407,15 @@ public final class SupabaseClient: Sendable {
         guard let self else { return "" }
         return try await self.auth.session.accessToken
       }
+    } else {
+      reportIssue(
+        """
+        You assigned a custom `accessToken` closure to the RealtimeClientV2. This might not work as you expect
+        as SupabaseClient uses Auth for pulling an access token to send on the realtime channels.
+
+        Please make sure you know what you're doing.
+        """
+      )
     }
 
     return RealtimeClientV2(
