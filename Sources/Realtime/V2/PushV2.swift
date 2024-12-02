@@ -15,7 +15,8 @@ public enum PushStatus: String, Sendable {
   case timeout
 }
 
-actor PushV2 {
+@MainActor
+final class PushV2 {
   private weak var channel: RealtimeChannelV2?
   let message: RealtimeMessageV2
 
@@ -40,7 +41,7 @@ actor PushV2 {
     }
 
     do {
-      return try await withTimeout(interval: channel.socket.options().timeoutInterval) {
+      return try await withTimeout(interval: channel.socket.options.timeoutInterval) {
         await withCheckedContinuation { continuation in
           self.receivedContinuation = continuation
         }
