@@ -36,7 +36,10 @@ final class RealtimeTests: XCTestCase {
         headers: ["apikey": apiKey],
         heartbeatInterval: 1,
         reconnectDelay: 1,
-        timeoutInterval: 2
+        timeoutInterval: 2,
+        accessToken: {
+          "custom.access.token"
+        }
       ),
       ws: ws,
       http: http
@@ -100,7 +103,7 @@ final class RealtimeTests: XCTestCase {
           "event" : "phx_join",
           "join_ref" : "1",
           "payload" : {
-            "access_token" : "anon.api.key",
+            "access_token" : "custom.access.token",
             "config" : {
               "broadcast" : {
                 "ack" : false,
@@ -179,7 +182,7 @@ final class RealtimeTests: XCTestCase {
           "event" : "phx_join",
           "join_ref" : "1",
           "payload" : {
-            "access_token" : "anon.api.key",
+            "access_token" : "custom.access.token",
             "config" : {
               "broadcast" : {
                 "ack" : false,
@@ -201,7 +204,7 @@ final class RealtimeTests: XCTestCase {
           "event" : "phx_join",
           "join_ref" : "2",
           "payload" : {
-            "access_token" : "anon.api.key",
+            "access_token" : "custom.access.token",
             "config" : {
               "broadcast" : {
                 "ack" : false,
@@ -322,7 +325,7 @@ final class RealtimeTests: XCTestCase {
     assertInlineSnapshot(of: request?.urlRequest, as: .raw(pretty: true)) {
       """
       POST https://localhost:54321/realtime/v1/api/broadcast
-      Authorization: Bearer anon.api.key
+      Authorization: Bearer custom.access.token
       Content-Type: application/json
       apiKey: anon.api.key
 
