@@ -25,7 +25,7 @@ let package = Package(
     dependencies: [
         ...
         .package(
-            url: "https://github.com/supabase-community/supabase-swift.git",
+            url: "https://github.com/supabase/supabase-swift.git",
             from: "2.0.0"
         ),
     ],
