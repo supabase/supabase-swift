@@ -94,7 +94,7 @@ private actor LiveSessionManager {
             .decoded(as: Session.self, decoder: configuration.decoder)
 
             update(session)
-            eventEmitter.emit(.tokenRefreshed, session: session)
+            await eventEmitter.emit(.tokenRefreshed, session: session)
 
             return session
           } catch {

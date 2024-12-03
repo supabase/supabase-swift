@@ -9,7 +9,8 @@ import Foundation
 import Helpers
 import HTTPTypes
 
-public struct AuthAdmin: Sendable {
+@MainActor
+public struct AuthAdmin {
   let clientID: AuthClientID
 
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }

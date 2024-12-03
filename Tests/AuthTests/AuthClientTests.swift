@@ -18,6 +18,7 @@ import XCTest
   import FoundationNetworking
 #endif
 
+@MainActor
 final class AuthClientTests: XCTestCase {
   var sessionManager: SessionManager!
 
