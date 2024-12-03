@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import Helpers
 
 /// Contains the full multi-factor authentication API.
@@ -24,14 +25,15 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for enrolling a new MFA factor.
   /// - Returns: An authentication response after enrolling the factor.
   public func enroll(params: any MFAEnrollParamsType) async throws -> AuthMFAEnrollResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors"),
+    let (data, _) = try await api.authorizedExecute(
+      for: HTTPRequest(
         method: .post,
-        body: encoder.encode(params)
-      )
+        url: configuration.url.appendingPathComponent("factors")
+      ),
+      from: encoder.encode(params)
     )
-    .decoded(decoder: decoder)
+
+    return try decoder.decode(AuthMFAEnrollResponse.self, from: data)
   }
 
   /// Prepares a challenge used to verify that a user has access to a MFA factor.
@@ -39,14 +41,15 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for creating a challenge.
   /// - Returns: An authentication response with the challenge information.
   public func challenge(params: MFAChallengeParams) async throws -> AuthMFAChallengeResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
+    let (data, _) = try await api.authorizedExecute(
+      for: HTTPRequest(
         method: .post,
-        body: params.channel == nil ? nil : encoder.encode(["channel": params.channel])
-      )
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge")
+      ),
+      from: params.channel == nil ? nil : encoder.encode(["channel": params.channel])
     )
-    .decoded(decoder: decoder)
+
+    return try decoder.decode(AuthMFAChallengeResponse.self, from: data)
   }
 
   /// Verifies a code against a challenge. The verification code is
@@ -55,13 +58,15 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for verifying the MFA factor.
   /// - Returns: An authentication response after verifying the factor.
   public func verify(params: MFAVerifyParams) async throws -> AuthMFAVerifyResponse {
-    let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
+    let (data, _) = try await api.authorizedExecute(
+      for: HTTPRequest(
         method: .post,
-        body: encoder.encode(params)
-      )
-    ).decoded(decoder: decoder)
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify")
+      ),
+      from: encoder.encode(params)
+    )
+
+    let response: AuthMFAVerifyResponse = try decoder.decode(AuthMFAVerifyResponse.self, from: data)
 
     await sessionManager.update(response)
 
@@ -77,13 +82,15 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response after unenrolling the factor.
   @discardableResult
   public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)"),
-        method: .delete
-      )
+    let (data, _) = try await api.authorizedExecute(
+      for: HTTPRequest(
+        method: .delete,
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)")
+      ),
+      from: nil
     )
-    .decoded(decoder: decoder)
+
+    return try decoder.decode(AuthMFAUnenrollResponse.self, from: data)
   }
 
   /// Helper method which creates a challenge and immediately uses the given code to verify against
@@ -122,7 +129,9 @@ public struct AuthMFA: Sendable {
   /// Returns the Authenticator Assurance Level (AAL) for the active session.
   ///
   /// - Returns: An authentication response with the Authenticator Assurance Level.
-  public func getAuthenticatorAssuranceLevel() async throws -> AuthMFAGetAuthenticatorAssuranceLevelResponse {
+  public func getAuthenticatorAssuranceLevel() async throws
+    -> AuthMFAGetAuthenticatorAssuranceLevelResponse
+  {
     do {
       let session = try await sessionManager.session()
       let payload = try decode(jwt: session.accessToken)

@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import CustomDump
+import HTTPTypes
 import Helpers
 import InlineSnapshotTesting
 import TestHelpers
@@ -33,7 +34,7 @@ final class RealtimeTests: XCTestCase {
     sut = RealtimeClientV2(
       url: url,
       options: RealtimeClientOptions(
-        headers: ["apikey": apiKey],
+        headers: [.apiKey: apiKey],
         heartbeatInterval: 1,
         reconnectDelay: 1,
         timeoutInterval: 2
@@ -298,17 +299,12 @@ final class RealtimeTests: XCTestCase {
   }
 
   func testBroadcastWithHTTP() async throws {
-    await http.when {
-      $0.url.path.hasSuffix("broadcast")
-    } return: { _ in
-      HTTPResponse(
-        data: "{}".data(using: .utf8)!,
-        response: HTTPURLResponse(
-          url: self.sut.broadcastURL,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
+    await http.when { request, bodyData in
+      request.url!.path.hasSuffix("broadcast")
+    } return: { _, _ in
+      (
+        Data("{}".utf8),
+        HTTPResponse(status: .init(code: 200))
       )
     }
 
@@ -319,7 +315,10 @@ final class RealtimeTests: XCTestCase {
     try await channel.broadcast(event: "test", message: ["value": 42])
 
     let request = await http.receivedRequests.last
-    assertInlineSnapshot(of: request?.urlRequest, as: .raw(pretty: true)) {
+    var urlRequest = request.map { URLRequest(httpRequest: $0.0) }
+    urlRequest??.httpBody = request?.1
+
+    assertInlineSnapshot(of: urlRequest as? URLRequest, as: .raw(pretty: true)) {
       """
       POST https://localhost:54321/realtime/v1/api/broadcast
       Authorization: Bearer anon.api.key

@@ -28,8 +28,8 @@ final class FunctionInvokeOptionsTests: XCTestCase {
     let boundary = "Boundary-\(UUID().uuidString)"
     let contentType = "multipart/form-data; boundary=\(boundary)"
     let options = FunctionInvokeOptions(
-      headers: ["Content-Type": contentType],
-      body: "binary value".data(using: .utf8)!
+      headers: [.contentType: contentType],
+      body: Data("binary value".utf8)
     )
     XCTAssertEqual(options.headers[.contentType], contentType)
     XCTAssertNotNil(options.body)

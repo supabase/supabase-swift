@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import HTTPTypes
+import HTTPTypesFoundation
 import Helpers
 
 #if canImport(FoundationNetworking)
@@ -69,12 +71,18 @@ extension AuthClient.Configuration {
   )
   public init(
     url: URL,
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     flowType: AuthFlowType = Self.defaultFlowType,
     localStorage: any AuthLocalStorage,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping AuthClient.FetchHandler = { request, bodyData in
+      if let bodyData {
+        try await URLSession.shared.upload(for: request, from: bodyData)
+      } else {
+        try await URLSession.shared.data(for: request)
+      }
+    }
   ) {
     self.init(
       url: url,
@@ -107,12 +115,18 @@ extension AuthClient {
   )
   public convenience init(
     url: URL,
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     flowType: AuthFlowType = Configuration.defaultFlowType,
     localStorage: any AuthLocalStorage,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping AuthClient.FetchHandler = { data, bodyData in
+      if let bodyData {
+        try await URLSession.shared.upload(for: data, from: bodyData)
+      } else {
+        try await URLSession.shared.data(for: data)
+      }
+    }
   ) {
     self.init(
       url: url,
