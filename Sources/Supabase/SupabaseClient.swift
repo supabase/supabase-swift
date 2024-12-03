@@ -2,12 +2,12 @@
 import ConcurrencyExtras
 import Foundation
 @_exported import Functions
+import HTTPTypes
 import Helpers
 import IssueReporting
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
-import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -28,17 +28,25 @@ public final class SupabaseClient: Sendable {
   let databaseURL: URL
   let functionsURL: URL
 
-  private let _auth: AuthClient
+  @MainActor
+  private var _auth: AuthClient?
 
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured by access policies.
+  @MainActor
   public var auth: AuthClient {
     if options.auth.accessToken != nil {
-      reportIssue("""
-      Supabase Client is configured with the auth.accessToken option,
-      accessing supabase.auth is not possible.
-      """)
+      reportIssue(
+        """
+        Supabase Client is configured with the auth.accessToken option,
+        accessing supabase.auth is not possible.
+        """)
     }
-    return _auth
+
+    if _auth == nil {
+      _auth = _initAuthClient()
+    }
+
+    return _auth!
   }
 
   var rest: PostgrestClient {
@@ -160,26 +168,6 @@ public final class SupabaseClient: Sendable {
       "Apikey": supabaseKey,
     ])
     .merging(with: HTTPFields(options.global.headers))
-
-    // default storage key uses the supabase project ref as a namespace
-    let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"
-
-    _auth = AuthClient(
-      url: supabaseURL.appendingPathComponent("/auth/v1"),
-      headers: _headers.dictionary,
-      flowType: options.auth.flowType,
-      redirectToURL: options.auth.redirectToURL,
-      storageKey: options.auth.storageKey ?? defaultStorageKey,
-      localStorage: options.auth.storage,
-      logger: options.global.logger,
-      encoder: options.auth.encoder,
-      decoder: options.auth.decoder,
-      fetch: {
-        // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: $0)
-      },
-      autoRefreshToken: options.auth.autoRefreshToken
-    )
 
     _realtime = UncheckedSendable(
       RealtimeClient(
@@ -329,6 +317,7 @@ public final class SupabaseClient: Sendable {
   ///     supabase.handle(url)
   ///   }
   /// ```
+  @MainActor
   public func handle(_ url: URL) {
     auth.handle(url)
   }
@@ -351,11 +340,12 @@ public final class SupabaseClient: Sendable {
   }
 
   private func adapt(request: URLRequest) async -> URLRequest {
-    let token: String? = if let accessToken = options.auth.accessToken {
-      try? await accessToken()
-    } else {
-      try? await auth.session.accessToken
-    }
+    let token: String? =
+      if let accessToken = options.auth.accessToken {
+        try? await accessToken()
+      } else {
+        try? await auth.session.accessToken
+      }
 
     var request = request
     if let token {
@@ -366,7 +356,7 @@ public final class SupabaseClient: Sendable {
 
   private func listenForAuthEvents() {
     let task = Task {
-      for await (event, session) in auth.authStateChanges {
+      for await (event, session) in await auth.authStateChanges {
         await handleTokenChanged(event: event, session: session)
       }
     }
@@ -377,7 +367,9 @@ public final class SupabaseClient: Sendable {
 
   private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
     let accessToken: String? = mutableState.withValue {
-      if [.initialSession, .signedIn, .tokenRefreshed].contains(event), $0.changedAccessToken != session?.accessToken {
+      if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
+        $0.changedAccessToken != session?.accessToken
+      {
         $0.changedAccessToken = session?.accessToken
         return session?.accessToken ?? supabaseKey
       }
@@ -392,5 +384,28 @@ public final class SupabaseClient: Sendable {
 
     realtime.setAuth(accessToken)
     await realtimeV2.setAuth(accessToken)
+  }
+
+  @MainActor
+  private func _initAuthClient() -> AuthClient {
+    // default storage key uses the supabase project ref as a namespace
+    let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"
+
+    return AuthClient(
+      url: supabaseURL.appendingPathComponent("/auth/v1"),
+      headers: _headers.dictionary,
+      flowType: options.auth.flowType,
+      redirectToURL: options.auth.redirectToURL,
+      storageKey: options.auth.storageKey ?? defaultStorageKey,
+      localStorage: options.auth.storage,
+      logger: options.global.logger,
+      encoder: options.auth.encoder,
+      decoder: options.auth.decoder,
+      fetch: { [options] in
+        // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
+        try await options.global.session.data(for: $0)
+      },
+      autoRefreshToken: options.auth.autoRefreshToken
+    )
   }
 }

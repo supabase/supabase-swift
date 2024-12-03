@@ -2,7 +2,8 @@ import Foundation
 import Helpers
 
 /// Contains the full multi-factor authentication API.
-public struct AuthMFA: Sendable {
+@MainActor
+public struct AuthMFA {
   let clientID: AuthClientID
 
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
@@ -64,7 +65,6 @@ public struct AuthMFA: Sendable {
     ).decoded(decoder: decoder)
 
     await sessionManager.update(response)
-
     eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
 
     return response

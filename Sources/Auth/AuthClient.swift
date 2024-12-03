@@ -16,7 +16,8 @@ import Helpers
 
 typealias AuthClientID = UUID
 
-public final class AuthClient: Sendable {
+@MainActor
+public final class AuthClient {
   let clientID = AuthClientID()
 
   private var api: APIClient { Dependencies[clientID].api }
@@ -79,11 +80,10 @@ public final class AuthClient: Sendable {
       sessionManager: .live(clientID: clientID)
     )
 
-    Task { @MainActor in observeAppLifecycleChanges() }
+    observeAppLifecycleChanges()
   }
 
   #if canImport(ObjectiveC)
-    @MainActor
     private func observeAppLifecycleChanges() {
       #if canImport(UIKit)
         #if canImport(WatchKit)
@@ -149,6 +149,7 @@ public final class AuthClient: Sendable {
       // no-op
     }
   #endif
+
   /// Listen for auth state changes.
   /// - Parameter listener: Block that executes when a new event is emitted.
   /// - Returns: A handle that can be used to manually unsubscribe.
@@ -1161,7 +1162,7 @@ public final class AuthClient: Sendable {
       queryParams: queryParams
     )
 
-    await launchURL(response.url)
+    launchURL(response.url)
   }
 
   /// Links an OAuth identity to an existing user.
