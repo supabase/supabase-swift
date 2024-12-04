@@ -363,6 +363,14 @@ public final class RealtimeClientV2: Sendable {
   /// Sets the JWT access token used for channel subscription authorization and Realtime RLS.
   /// - Parameter token: A JWT string.
   public func setAuth(_ token: String?) async {
+    if let token, let payload = JWT.decodePayload(token),
+      let exp = payload["exp"] as? TimeInterval, exp < Date().timeIntervalSince1970
+    {
+      options.logger?.warning(
+        "InvalidJWTToken: Invalid value for JWT claim \"exp\" with value \(exp)")
+      return
+    }
+
     mutableState.withValue {
       $0.accessToken = token
     }

@@ -342,6 +342,27 @@ final class RealtimeTests: XCTestCase {
     }
   }
 
+  func testSetAuth() async {
+    let validToken =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
+    await sut.setAuth(validToken)
+
+    XCTAssertEqual(sut.mutableState.accessToken, validToken)
+  }
+
+  func testSetAuthWithExpiredToken() async throws {
+    let expiredToken =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOi02NDA5MjIxMTIwMH0.tnbZRC8vEyK3zaxPxfOjNgvpnuum18dxYlXeHJ4r7u8"
+    await sut.setAuth(expiredToken)
+
+    XCTAssertNotEqual(sut.mutableState.accessToken, expiredToken)
+  }
+
+  func testSetAuthWithNonJWT() async throws {
+    let token = "sb-token"
+    await sut.setAuth(token)
+  }
+
   private func connectSocketAndWait() async {
     ws.mockConnect(.connected)
     await sut.connect()
