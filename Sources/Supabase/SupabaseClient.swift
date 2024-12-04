@@ -348,18 +348,21 @@ public final class SupabaseClient: Sendable {
   }
 
   private func adapt(request: URLRequest) async -> URLRequest {
-    let token: String? =
-      if let accessToken = options.auth.accessToken {
-        try? await accessToken()
-      } else {
-        try? await auth.session.accessToken
-      }
+    let token = try? await _getAccessToken()
 
     var request = request
     if let token {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
     return request
+  }
+
+  private func _getAccessToken() async throws -> String {
+    if let accessToken = options.auth.accessToken {
+      try await accessToken()
+    } else {
+      try await auth.session.accessToken
+    }
   }
 
   private func listenForAuthEvents() {
@@ -404,8 +407,7 @@ public final class SupabaseClient: Sendable {
 
     if realtimeOptions.accessToken == nil {
       realtimeOptions.accessToken = { [weak self] in
-        guard let self else { return "" }
-        return try await self.auth.session.accessToken
+        try await self?._getAccessToken() ?? ""
       }
     } else {
       reportIssue(
