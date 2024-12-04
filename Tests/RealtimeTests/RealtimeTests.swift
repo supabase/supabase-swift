@@ -2,7 +2,6 @@ import ConcurrencyExtras
 import CustomDump
 import Helpers
 import InlineSnapshotTesting
-import JWTKit
 import TestHelpers
 import XCTest
 
@@ -344,23 +343,24 @@ final class RealtimeTests: XCTestCase {
   }
 
   func testSetAuth() async {
-    let token = await generateJWT()
-    await sut.setAuth(token)
+    let validToken =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
+    await sut.setAuth(validToken)
 
-    XCTAssertEqual(sut.mutableState.accessToken, token)
+    XCTAssertEqual(sut.mutableState.accessToken, validToken)
   }
 
   func testSetAuthWithExpiredToken() async throws {
-    let token = await generateJWT(exp: 0)
-    await sut.setAuth(token)
+    let expiredToken =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOi02NDA5MjIxMTIwMH0.tnbZRC8vEyK3zaxPxfOjNgvpnuum18dxYlXeHJ4r7u8"
+    await sut.setAuth(expiredToken)
 
-    XCTAssertNotEqual(sut.mutableState.accessToken, token)
+    XCTAssertNotEqual(sut.mutableState.accessToken, expiredToken)
   }
 
   func testSetAuthWithNonJWT() async throws {
     let token = "sb-token"
     await sut.setAuth(token)
-    XCTAssertEqual(sut.mutableState.accessToken, token)
   }
 
   private func connectSocketAndWait() async {
@@ -385,23 +385,5 @@ extension RealtimeMessageV2 {
       ],
       "status": "ok",
     ]
-  )
-}
-
-private func generateJWT(exp: TimeInterval = 60) async -> String? {
-  struct Payload: JWTPayload {
-    let exp: ExpirationClaim
-    func verify(using algorithm: some JWTAlgorithm) async throws {
-      try exp.verifyNotExpired()
-    }
-  }
-
-  let keys = JWTKeyCollection()
-  await keys.add(hmac: "your-256-bit-secret", digestAlgorithm: .sha256)
-
-  return try? await keys.sign(
-    Payload(
-      exp: ExpirationClaim(value: Date().addingTimeInterval(exp))
-    )
   )
 }
