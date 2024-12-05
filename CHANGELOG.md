@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.24.0](https://github.com/supabase/supabase-swift/compare/v2.23.0...v2.24.0) (2024-12-05)
+
+
+### Features
+
+* **realtime:** pull access token mechanism ([#615](https://github.com/supabase/supabase-swift/issues/615)) ([c88dd36](https://github.com/supabase/supabase-swift/commit/c88dd3675b8bc7da93c71847ff9ba9862323ff8d))
+
+
+### Bug Fixes
+
+* **realtime:** prevent sending expired tokens ([#618](https://github.com/supabase/supabase-swift/issues/618)) ([595277b](https://github.com/supabase/supabase-swift/commit/595277b5eb35b8b76bbb000d44fc221c4d3298f1))
+
 ## [2.23.0](https://github.com/supabase/supabase-swift/compare/v2.22.1...v2.23.0) (2024-11-22)
 
 
