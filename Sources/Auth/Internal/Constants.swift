@@ -1,5 +1,5 @@
 //
-//  Contants.swift
+//  Constants.swift
 //
 //
 //  Created by Guilherme Souza on 22/05/24.
@@ -21,7 +21,7 @@ extension HTTPField.Name {
 }
 
 let apiVersions: [APIVersion.Name: APIVersion] = [
-  ._20240101: ._20240101,
+  ._20240101: ._20240101
 ]
 
 struct APIVersion {
@@ -33,9 +33,9 @@ struct APIVersion {
   }
 
   static func date(for name: Name) -> Date {
-    let formattar = ISO8601DateFormatter()
-    formattar.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formattar.date(from: "\(name.rawValue)T00:00:00.0Z")!
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: "\(name.rawValue)T00:00:00.0Z")!
   }
 }
 
