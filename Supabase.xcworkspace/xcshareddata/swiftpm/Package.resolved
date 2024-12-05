@@ -93,7 +93,7 @@
     {
       "identity" : "swift-http-types",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-http-types",
+      "location" : "https://github.com/apple/swift-http-types.git",
       "state" : {
         "revision" : "ae67c8178eb46944fd85e4dc6dd970e1f3ed6ccd",
         "version" : "1.3.0"
@@ -124,6 +124,15 @@
       "state" : {
         "revision" : "515f79b522918f83483068d99c68daeb5116342d",
         "version" : "600.0.0-prerelease-2024-08-20"
+      }
+    },
+    {
+      "identity" : "swift-websocket",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/grdsdev/swift-websocket",
+      "state" : {
+        "branch" : "main",
+        "revision" : "1e311a62c463c05bfb7071da2b4a950320ffcd27"
       }
     },
     {
