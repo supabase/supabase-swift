@@ -29,7 +29,7 @@ struct Socket: Sendable {
   var broadcastURL: @Sendable () -> URL
   var status: @Sendable () -> RealtimeClientStatus
   var options: @Sendable () -> RealtimeClientOptions
-  var accessToken: @Sendable () -> String?
+  var accessToken: @Sendable () async -> String?
   var apiKey: @Sendable () -> String?
   var makeRef: @Sendable () -> Int
 
@@ -46,7 +46,12 @@ extension Socket {
       broadcastURL: { [weak client] in client?.broadcastURL ?? URL(string: "http://localhost")! },
       status: { [weak client] in client?.status ?? .disconnected },
       options: { [weak client] in client?.options ?? .init() },
-      accessToken: { [weak client] in client?.mutableState.accessToken },
+      accessToken: { [weak client] in
+        if let accessToken = try? await client?.options.accessToken?() {
+          return accessToken
+        }
+        return client?.mutableState.accessToken
+      },
       apiKey: { [weak client] in client?.apikey },
       makeRef: { [weak client] in client?.makeRef() ?? 0 },
       connect: { [weak client] in await client?.connect() },
@@ -139,7 +144,7 @@ public final class RealtimeChannelV2: Sendable {
 
     let payload = RealtimeJoinPayload(
       config: joinConfig,
-      accessToken: socket.accessToken()
+      accessToken: await socket.accessToken()
     )
 
     let joinRef = socket.makeRef().description
@@ -213,7 +218,7 @@ public final class RealtimeChannelV2: Sendable {
       if let apiKey = socket.apiKey() {
         headers[.apiKey] = apiKey
       }
-      if let accessToken = socket.accessToken() {
+      if let accessToken = await socket.accessToken() {
         headers[.authorization] = "Bearer \(accessToken)"
       }
 
