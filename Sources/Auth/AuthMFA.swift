@@ -134,7 +134,7 @@ public struct AuthMFA: Sendable {
   {
     do {
       let session = try await sessionManager.session()
-      let payload = try decode(jwt: session.accessToken)
+      let payload = JWT.decodePayload(session.accessToken)
 
       var currentLevel: AuthenticatorAssuranceLevels?
 

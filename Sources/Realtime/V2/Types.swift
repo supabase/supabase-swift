@@ -28,6 +28,7 @@ public struct RealtimeClientOptions: Sendable {
         _ bodyData: Data?
       ) async throws -> (Data, HTTPResponse)
     )?
+  package var accessToken: (@Sendable () async throws -> String)?
   package var logger: (any SupabaseLogger)?
 
   public static let defaultHeartbeatInterval: TimeInterval = 15
@@ -49,6 +50,7 @@ public struct RealtimeClientOptions: Sendable {
         _ bodyData: Data?
       ) async throws -> (Data, HTTPResponse)
     )? = nil,
+    accessToken: (@Sendable () async throws -> String)? = nil,
     logger: (any SupabaseLogger)? = nil
   ) {
     self.headers = headers
@@ -58,18 +60,12 @@ public struct RealtimeClientOptions: Sendable {
     self.disconnectOnSessionLoss = disconnectOnSessionLoss
     self.connectOnSubscribe = connectOnSubscribe
     self.fetch = fetch
+    self.accessToken = accessToken
     self.logger = logger
   }
 
   var apikey: String? {
     headers[.apiKey]
-  }
-
-  var accessToken: String? {
-    guard let accessToken = headers[.authorization]?.split(separator: " ").last else {
-      return nil
-    }
-    return String(accessToken)
   }
 }
 

@@ -1,5 +1,5 @@
 //
-//  Contants.swift
+//  Constants.swift
 //  Examples
 //
 //  Created by Guilherme Souza on 15/12/23.

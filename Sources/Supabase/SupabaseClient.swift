@@ -33,10 +33,11 @@ public final class SupabaseClient: Sendable {
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured by access policies.
   public var auth: AuthClient {
     if options.auth.accessToken != nil {
-      reportIssue("""
-      Supabase Client is configured with the auth.accessToken option,
-      accessing supabase.auth is not possible.
-      """)
+      reportIssue(
+        """
+        Supabase Client is configured with the auth.accessToken option,
+        accessing supabase.auth is not possible.
+        """)
     }
     return _auth
   }
@@ -92,7 +93,14 @@ public final class SupabaseClient: Sendable {
   let _realtime: UncheckedSendable<RealtimeClient>
 
   /// Realtime client for Supabase
-  public let realtimeV2: RealtimeClientV2
+  public var realtimeV2: RealtimeClientV2 {
+    mutableState.withValue {
+      if $0.realtime == nil {
+        $0.realtime = _initRealtimeClient()
+      }
+      return $0.realtime!
+    }
+  }
 
   /// Supabase Functions allows you to deploy and invoke edge functions.
   public var functions: FunctionsClient {
@@ -127,6 +135,7 @@ public final class SupabaseClient: Sendable {
     var storage: SupabaseStorageClient?
     var rest: PostgrestClient?
     var functions: FunctionsClient?
+    var realtime: RealtimeClientV2?
 
     var changedAccessToken: String?
   }
@@ -208,16 +217,6 @@ public final class SupabaseClient: Sendable {
       )
     )
 
-    var realtimeOptions = options.realtime
-    realtimeOptions.headers.merge(self.headers) { $1 }
-    if realtimeOptions.logger == nil {
-      realtimeOptions.logger = options.global.logger
-    }
-
-    realtimeV2 = RealtimeClientV2(
-      url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      options: realtimeOptions
-    )
 
     if options.auth.accessToken == nil {
       listenForAuthEvents()
@@ -369,18 +368,21 @@ public final class SupabaseClient: Sendable {
   }
 
   private func adapt(request: HTTPRequest) async -> HTTPRequest {
-    let token: String? =
-      if let accessToken = options.auth.accessToken {
-        try? await accessToken()
-      } else {
-        try? await auth.session.accessToken
-      }
+    let token = try? await _getAccessToken()
 
     var request = request
     if let token {
       request.headerFields[.authorization] = "Bearer \(token)"
     }
     return request
+  }
+
+  private func _getAccessToken() async throws -> String {
+    if let accessToken = options.auth.accessToken {
+      try await accessToken()
+    } else {
+      try await auth.session.accessToken
+    }
   }
 
   private func listenForAuthEvents() {
@@ -396,7 +398,9 @@ public final class SupabaseClient: Sendable {
 
   private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
     let accessToken: String? = mutableState.withValue {
-      if [.initialSession, .signedIn, .tokenRefreshed].contains(event), $0.changedAccessToken != session?.accessToken {
+      if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
+        $0.changedAccessToken != session?.accessToken
+      {
         $0.changedAccessToken = session?.accessToken
         return session?.accessToken ?? supabaseKey
       }
@@ -411,5 +415,34 @@ public final class SupabaseClient: Sendable {
 
     realtime.setAuth(accessToken)
     await realtimeV2.setAuth(accessToken)
+  }
+
+  private func _initRealtimeClient() -> RealtimeClientV2 {
+    var realtimeOptions = options.realtime
+    realtimeOptions.headers.merge(self.headers) { $1 }
+
+    if realtimeOptions.logger == nil {
+      realtimeOptions.logger = options.global.logger
+    }
+
+    if realtimeOptions.accessToken == nil {
+      realtimeOptions.accessToken = { [weak self] in
+        try await self?._getAccessToken() ?? ""
+      }
+    } else {
+      reportIssue(
+        """
+        You assigned a custom `accessToken` closure to the RealtimeClientV2. This might not work as you expect
+        as SupabaseClient uses Auth for pulling an access token to send on the realtime channels.
+
+        Please make sure you know what you're doing.
+        """
+      )
+    }
+
+    return RealtimeClientV2(
+      url: supabaseURL.appendingPathComponent("/realtime/v1"),
+      options: realtimeOptions
+    )
   }
 }

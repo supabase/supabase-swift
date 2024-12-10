@@ -115,7 +115,11 @@ public final class RealtimeClientV2: Sendable {
     apikey = options.apikey
 
     mutableState.withValue {
-      $0.accessToken = options.accessToken ?? options.apikey
+      if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
+        $0.accessToken = String(accessToken)
+      } else {
+        $0.accessToken = options.apikey
+      }
     }
   }
 
@@ -369,9 +373,31 @@ public final class RealtimeClientV2: Sendable {
   }
 
   /// Sets the JWT access token used for channel subscription authorization and Realtime RLS.
-  /// - Parameter token: A JWT string.
-  public func setAuth(_ token: String?) async {
-    mutableState.withValue {
+  ///
+  /// If `token` is nil it will use the ``RealtimeClientOptions/accessToken`` callback function or the token set on the client.
+  ///
+  /// On callback used, it will set the value of the token internal to the client.
+  /// - Parameter token: A JWT string to override the token set on the client.
+  public func setAuth(_ token: String? = nil) async {
+    var token = token
+
+    if token == nil {
+      token = try? await options.accessToken?()
+    }
+
+    if token == nil {
+      token = mutableState.accessToken
+    }
+
+    if let token, let payload = JWT.decodePayload(token),
+      let exp = payload["exp"] as? TimeInterval, exp < Date().timeIntervalSince1970
+    {
+      options.logger?.warning(
+        "InvalidJWTToken: Invalid value for JWT claim \"exp\" with value \(exp)")
+      return
+    }
+
+    mutableState.withValue { [token] in
       $0.accessToken = token
     }
 

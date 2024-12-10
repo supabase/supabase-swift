@@ -877,7 +877,7 @@ public final class AuthClient: Sendable {
     var hasExpired = true
     var session: Session
 
-    let jwt = try decode(jwt: accessToken)
+    let jwt = JWT.decodePayload(accessToken)
     if let exp = jwt?["exp"] as? TimeInterval {
       expiresAt = Date(timeIntervalSince1970: exp)
       hasExpired = expiresAt <= now
