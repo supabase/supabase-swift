@@ -38,7 +38,7 @@ final class IntegrationTests: XCTestCase {
   let client = PostgrestClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
     headers: [
-      "Apikey": DotEnv.SUPABASE_ANON_KEY,
+      .apiKey: DotEnv.SUPABASE_ANON_KEY
     ],
     logger: nil
   )

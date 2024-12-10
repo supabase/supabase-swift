@@ -1,10 +1,12 @@
-@testable import Auth
 import CustomDump
-@testable import Functions
+import HTTPTypes
 import IssueReporting
+import XCTest
+
+@testable import Auth
+@testable import Functions
 @testable import Realtime
 @testable import Supabase
-import XCTest
 
 final class AuthLocalStorageMock: AuthLocalStorage {
   func store(key _: String, value _: Data) throws {}
@@ -27,7 +29,7 @@ final class SupabaseClientTests: XCTestCase {
     let logger = Logger()
     let customSchema = "custom_schema"
     let localStorage = AuthLocalStorageMock()
-    let customHeaders = ["header_field": "header_value"]
+    let customHeaders: HTTPFields = [.init("header_field")!: "header_value"]
 
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -47,7 +49,7 @@ final class SupabaseClientTests: XCTestCase {
           region: .apNortheast1
         ),
         realtime: RealtimeClientOptions(
-          headers: ["custom_realtime_header_key": "custom_realtime_header_value"]
+          headers: [.init("custom_realtime_header_key")!: "custom_realtime_header_value"]
         )
       )
     )
@@ -62,15 +64,14 @@ final class SupabaseClientTests: XCTestCase {
     )
 
     XCTAssertEqual(
-      client.headers,
+	  client.headers,
       [
-        "X-Client-Info": "supabase-swift/\(Supabase.version)",
-        "Apikey": "ANON_KEY",
-        "header_field": "header_value",
-        "Authorization": "Bearer ANON_KEY",
+        .xClientInfo: "supabase-swift/\(Supabase.version)",
+        .apiKey: "ANON_KEY",
+        .init("header_field")!: "header_value",
+        .authorization: "Bearer ANON_KEY",
       ]
     )
-    expectNoDifference(client._headers.dictionary, client.headers)
 
     XCTAssertEqual(client.functions.region, "ap-northeast-1")
 
@@ -78,9 +79,10 @@ final class SupabaseClientTests: XCTestCase {
     XCTAssertEqual(realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")
 
     let realtimeOptions = client.realtimeV2.options
-    let expectedRealtimeHeader = client._headers.merging(with: [
-      .init("custom_realtime_header_key")!: "custom_realtime_header_value"]
-    )
+    let expectedRealtimeHeader = client.headers.merging([
+      .init("custom_realtime_header_key")!: "custom_realtime_header_value"
+    ]) { $1 }
+
     expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
 

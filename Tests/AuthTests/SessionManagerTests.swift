@@ -82,11 +82,13 @@ final class SessionManagerTests: XCTestCase {
     let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
     await http.when(
-      { $0.url.path.contains("/token") },
-      return: { _ in
+      { request, bodyData in
+        request.url!.path.contains("/token")
+      },
+      return: { _, _ in
         refreshSessionCallCount.withValue { $0 += 1 }
         let session = await refreshSessionStream.first(where: { _ in true })!
-        return .stub(session)
+        return TestStub.stub(session)
       }
     )
 

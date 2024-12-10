@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 public struct AuthAdmin: Sendable {
   let clientID: AuthClientID
@@ -25,12 +25,12 @@ public struct AuthAdmin: Sendable {
   /// - Warning: Never expose your `service_role` key on the client.
   public func deleteUser(id: String, shouldSoftDelete: Bool = false) async throws {
     _ = try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(id)"),
+      for: HTTPRequest(
         method: .delete,
-        body: encoder.encode(
-          DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
-        )
+        url: configuration.url.appendingPathComponent("admin/users/\(id)")
+      ),
+      from: encoder.encode(
+        DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
       )
     )
   }
@@ -46,30 +46,35 @@ public struct AuthAdmin: Sendable {
       let aud: String
     }
 
-    let httpResponse = try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users"),
+    let (data, response) = try await api.execute(
+      for: HTTPRequest(
         method: .get,
-        query: [
-          URLQueryItem(name: "page", value: params?.page?.description ?? ""),
-          URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
-        ]
-      )
+        url: configuration.url
+          .appendingPathComponent("admin/users")
+          .appendingQueryItems([
+            URLQueryItem(name: "page", value: params?.page?.description ?? ""),
+            URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
+          ])
+      ),
+      from: nil
     )
 
-    let response = try httpResponse.decoded(as: Response.self, decoder: configuration.decoder)
+    let responseData = try configuration.decoder.decode(Response.self, from: data)
 
     var pagination = ListUsersPaginatedResponse(
-      users: response.users,
-      aud: response.aud,
+      users: responseData.users,
+      aud: responseData.aud,
       lastPage: 0,
-      total: httpResponse.headers[.xTotalCount].flatMap(Int.init) ?? 0
+      total: response.headerFields[.xTotalCount].flatMap(Int.init) ?? 0
     )
 
-    let links = httpResponse.headers[.link]?.components(separatedBy: ",") ?? []
+    let links = response.headerFields[.link]?.components(separatedBy: ",") ?? []
     if !links.isEmpty {
       for link in links {
-        let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(while: \.isNumber)
+        let page = link
+          .components(separatedBy: ";")[0]
+          .components(separatedBy: "=")[1]
+          .prefix(while: \.isNumber)
         let rel = link.components(separatedBy: ";")[1].components(separatedBy: "=")[1]
 
         if rel == "\"last\"", let lastPage = Int(page) {

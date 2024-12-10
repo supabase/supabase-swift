@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import HTTPTypes
 
 extension StorageClientConfiguration {
   @available(
@@ -15,7 +16,7 @@ extension StorageClientConfiguration {
   )
   public init(
     url: URL,
-    headers: [String: String],
+    headers: HTTPFields = [:],
     encoder: JSONEncoder = .defaultStorageEncoder,
     decoder: JSONDecoder = .defaultStorageDecoder,
     session: StorageHTTPSession = .init()
