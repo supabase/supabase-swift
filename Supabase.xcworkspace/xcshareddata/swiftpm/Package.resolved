@@ -136,6 +136,15 @@
       }
     },
     {
+      "identity" : "swift-websocket",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/grdsdev/swift-websocket",
+      "state" : {
+        "branch" : "main",
+        "revision" : "47e5c2b77e2451d83d25dbc77f2b6c2254e24045"
+      }
+    },
+    {
       "identity" : "swiftui-navigation",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swiftui-navigation.git",
