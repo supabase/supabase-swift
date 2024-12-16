@@ -209,7 +209,10 @@ public final class RealtimeClientV2: Sendable {
   }
 
   private func onClose(code: Int?, reason: String?) {
-    // TODO: implement
+    options.logger?.debug(
+      "WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason ?? "<none>")")
+
+    reconnect()
   }
 
   private func reconnect() {
@@ -302,7 +305,8 @@ public final class RealtimeClientV2: Sendable {
 
           switch event {
           case .binary:
-            fatalError("Unsupported binary event")
+            self.options.logger?.error("Unsupported binary event received.")
+            break
           case .text(let text):
             let data = Data(text.utf8)
             let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
