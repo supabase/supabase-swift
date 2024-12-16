@@ -29,7 +29,7 @@ final class _PushTests: XCTestCase {
       options: RealtimeClientOptions(
         headers: ["apiKey": "apikey"]
       ),
-      ws: ws,
+      wsTransport: { self.ws },
       http: HTTPClientMock()
     )
   }
