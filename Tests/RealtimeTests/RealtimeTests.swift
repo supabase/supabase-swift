@@ -41,7 +41,7 @@ final class RealtimeTests: XCTestCase {
           "custom.access.token"
         }
       ),
-      ws: ws,
+      wsTransport: { self.ws },
       http: http
     )
   }
