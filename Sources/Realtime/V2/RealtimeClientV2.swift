@@ -159,10 +159,10 @@ public final class RealtimeClientV2: Sendable {
             await onConnected(reconnect: reconnect)
 
           case .disconnected:
-            await onDisconnected()
+            onDisconnected()
 
           case let .error(error):
-            await onError(error)
+            onError(error)
           }
         }
       }
@@ -187,25 +187,27 @@ public final class RealtimeClientV2: Sendable {
     await flushSendBuffer()
   }
 
-  private func onDisconnected() async {
+  private func onDisconnected() {
     options.logger?
       .debug(
         "WebSocket disconnected. Trying again in \(options.reconnectDelay)"
       )
-    await reconnect()
+    reconnect()
   }
 
-  private func onError(_ error: (any Error)?) async {
+  private func onError(_ error: (any Error)?) {
     options.logger?
       .debug(
         "WebSocket error \(error?.localizedDescription ?? "<none>"). Trying again in \(options.reconnectDelay)"
       )
-    await reconnect()
+    reconnect()
   }
 
-  private func reconnect() async {
-    disconnect()
-    await connect(reconnect: true)
+  private func reconnect() {
+    Task {
+      disconnect()
+      await connect(reconnect: true)
+    }
   }
 
   /// Creates a new channel and bind it to this client.
@@ -297,7 +299,7 @@ public final class RealtimeClientV2: Sendable {
         options.logger?.debug(
           "Error while listening for messages. Trying again in \(options.reconnectDelay) \(error)"
         )
-        await reconnect()
+        reconnect()
       }
     }
     mutableState.withValue {
@@ -344,7 +346,7 @@ public final class RealtimeClientV2: Sendable {
       )
     } else {
       options.logger?.debug("Heartbeat timeout")
-      await reconnect()
+      reconnect()
     }
   }
 
