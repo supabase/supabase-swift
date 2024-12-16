@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.24.1](https://github.com/supabase/supabase-swift/compare/v2.24.0...v2.24.1) (2024-12-16)
+
+
+### Bug Fixes
+
+* **auth:** add missing channel param to signUp method ([#625](https://github.com/supabase/supabase-swift/issues/625)) ([3a36ab7](https://github.com/supabase/supabase-swift/commit/3a36ab74c4fbd9224c03dabd88046bba49b0de9c))
+
 ## [2.24.0](https://github.com/supabase/supabase-swift/compare/v2.23.0...v2.24.0) (2024-12-05)
 
 
