@@ -24,7 +24,7 @@ package actor HTTPClient: HTTPClientType {
     interceptors: [any HTTPClientInterceptor]
   ) {
     self.fetch = fetch
-    self.interceptors = interceptors
+    self.interceptors = [UserAgentClientHintsInterceptor()] + interceptors
   }
 
   package func send(_ request: HTTPRequest) async throws -> HTTPResponse {
