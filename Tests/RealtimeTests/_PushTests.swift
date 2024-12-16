@@ -12,7 +12,7 @@ import XCTest
 @testable import Realtime
 
 final class _PushTests: XCTestCase {
-  var ws: MockWebSocketClient!
+  var ws: FakeWebSocket!
   var socket: RealtimeClientV2!
 
   override func invokeTest() {
@@ -24,13 +24,14 @@ final class _PushTests: XCTestCase {
   override func setUp() {
     super.setUp()
 
-    ws = MockWebSocketClient()
+    let (client, server) = FakeWebSocket.fakes()
+    ws = server
     socket = RealtimeClientV2(
       url: URL(string: "https://localhost:54321/v1/realtime")!,
       options: RealtimeClientOptions(
         headers: ["apiKey": "apikey"]
       ),
-      wsTransport: { self.ws },
+      wsTransport: { client },
       http: HTTPClientMock()
     )
   }
@@ -67,9 +68,10 @@ final class _PushTests: XCTestCase {
   //      topic: "realtime:users",
   //      config: RealtimeChannelConfig(
   //        broadcast: .init(acknowledgeBroadcasts: true),
-  //        presence: .init()
+  //        presence: .init(),
+  //        isPrivate: false
   //      ),
-  //      socket: socket,
+  //      socket: Socket(client: socket),
   //      logger: nil
   //    )
   //    let push = PushV2(
@@ -86,7 +88,7 @@ final class _PushTests: XCTestCase {
   //    let task = Task {
   //      await push.send()
   //    }
-  //    await Task.megaYield()
+  //    await Task.yield()
   //    await push.didReceive(status: .ok)
   //
   //    let status = await task.value

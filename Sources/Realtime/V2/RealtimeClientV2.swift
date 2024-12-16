@@ -16,7 +16,7 @@ import Helpers
 public typealias JSONObject = Helpers.JSONObject
 
 /// Factory function for returning a new WebSocket connection.
-typealias WebSocketTransport = @Sendable () -> any WebSocketClient
+typealias WebSocketTransport = @Sendable () async throws -> any WebSocket
 
 public final class RealtimeClientV2: Sendable {
   struct MutableState {
@@ -34,7 +34,7 @@ public final class RealtimeClientV2: Sendable {
     var channels: [String: RealtimeChannelV2] = [:]
     var sendBuffer: [@Sendable () async -> Void] = []
 
-    var conn: (any WebSocketClient)?
+    var conn: (any WebSocket)?
   }
 
   let url: URL
@@ -44,7 +44,7 @@ public final class RealtimeClientV2: Sendable {
   let http: any HTTPClientType
   let apikey: String?
 
-  var conn: (any WebSocketClient)? {
+  var conn: (any WebSocket)? {
     mutableState.conn
   }
 
@@ -90,12 +90,14 @@ public final class RealtimeClientV2: Sendable {
       url: url,
       options: options,
       wsTransport: {
-        WebSocket(
-          realtimeURL: Self.realtimeWebSocketURL(
+        let configuration = URLSessionConfiguration.default
+        configuration.httpAdditionalHeaders = options.headers.dictionary
+        return try await URLSessionWebSocket.connect(
+          to: Self.realtimeWebSocketURL(
             baseURL: Self.realtimeBaseURL(url: url),
             apikey: options.apikey
           ),
-          options: options
+          configuration: configuration
         )
       },
       http: HTTPClient(
@@ -160,24 +162,13 @@ public final class RealtimeClientV2: Sendable {
 
         status = .connecting
 
-        let conn = wsTransport()
-        mutableState.withValue { $0.conn = conn }
+        do {
+          let conn = try await wsTransport()
+          mutableState.withValue { $0.conn = conn }
 
-        for await connectionStatus in conn.connect() {
-          if Task.isCancelled {
-            break
-          }
-
-          switch connectionStatus {
-          case .connected:
-            await onConnected(reconnect: reconnect)
-
-          case .disconnected:
-            onDisconnected()
-
-          case let .error(error):
-            onError(error)
-          }
+          await onConnected(reconnect: reconnect)
+        } catch {
+          onError(error)
         }
       }
 
@@ -215,6 +206,10 @@ public final class RealtimeClientV2: Sendable {
         "WebSocket error \(error?.localizedDescription ?? "<none>"). Trying again in \(options.reconnectDelay)"
       )
     reconnect()
+  }
+
+  private func onClose(code: Int?, reason: String?) {
+    // TODO: implement
   }
 
   private func reconnect() {
@@ -302,18 +297,23 @@ public final class RealtimeClientV2: Sendable {
       guard let self, let conn = self.conn else { return }
 
       do {
-        for try await message in conn.receive() {
-          if Task.isCancelled {
-            return
-          }
+        for await event in conn.events {
+          if Task.isCancelled { return }
 
-          await onMessage(message)
+          switch event {
+          case .binary:
+            fatalError("Unsupported binary event")
+          case .text(let text):
+            let data = Data(text.utf8)
+            let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
+            await onMessage(message)
+
+          case let .close(code, reason):
+            onClose(code: code, reason: reason)
+          }
         }
       } catch {
-        options.logger?.debug(
-          "Error while listening for messages. Trying again in \(options.reconnectDelay) \(error)"
-        )
-        reconnect()
+        onError(error)
       }
     }
     mutableState.withValue {
@@ -371,7 +371,7 @@ public final class RealtimeClientV2: Sendable {
   public func disconnect(code: Int? = nil, reason: String? = nil) {
     options.logger?.debug("Closing WebSocket connection")
 
-    conn?.disconnect(code: code, reason: reason)
+    conn?.close(code: code, reason: reason)
 
     mutableState.withValue {
       $0.ref = 0
@@ -453,7 +453,8 @@ public final class RealtimeClientV2: Sendable {
       do {
         // Check cancellation before sending, because this push may have been cancelled before a connection was established.
         try Task.checkCancellation()
-        try await self?.conn?.send(message)
+        let data = try JSONEncoder().encode(message)
+        self?.conn?.send(String(decoding: data, as: UTF8.self))
       } catch {
         self?.options.logger?.error(
           """
