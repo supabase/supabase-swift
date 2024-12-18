@@ -246,12 +246,14 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - phone: User's phone number with international prefix.
   ///   - password: Password for the user.
+  ///   - channel: Messaging channel to use (e.g. whatsapp or sms).
   ///   - data: Custom data object to store additional user metadata.
   ///   - captchaToken: Optional captcha token for securing this endpoint.
   @discardableResult
   public func signUp(
     phone: String,
     password: String,
+    channel: MessagingChannel = .sms,
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
@@ -264,6 +266,7 @@ public final class AuthClient: Sendable {
         SignUpRequest(
           password: password,
           phone: phone,
+          channel: channel,
           data: data,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
