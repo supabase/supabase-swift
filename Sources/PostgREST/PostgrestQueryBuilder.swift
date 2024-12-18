@@ -27,10 +27,14 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       }
       .joined(separator: "")
 
-      $0.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
+      var urlComponents = URLComponents(url: $0.request.url!, resolvingAgainstBaseURL: true)!
+      var queryItems = urlComponents.queryItems ?? []
+      queryItems.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
+      urlComponents.queryItems = queryItems
+      $0.request.url = urlComponents.url!
 
       if let count {
-        $0.request.headers[.prefer] = "count=\(count.rawValue)"
+        $0.request.headerFields[.prefer] = "count=\(count.rawValue)"
       }
       if head {
         $0.request.method = .head
@@ -58,25 +62,28 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       if let returning {
         prefersHeaders.append("return=\(returning.rawValue)")
       }
-      $0.request.body = try configuration.encoder.encode(values)
+      $0.bodyData = try configuration.encoder.encode(values)
       if let count {
         prefersHeaders.append("count=\(count.rawValue)")
       }
-      if let prefer = $0.request.headers[.prefer] {
+      if let prefer = $0.request.headerFields[.prefer] {
         prefersHeaders.insert(prefer, at: 0)
       }
       if !prefersHeaders.isEmpty {
-        $0.request.headers[.prefer] = prefersHeaders.joined(separator: ",")
+        $0.request.headerFields[.prefer] = prefersHeaders.joined(separator: ",")
       }
-      if let body = $0.request.body,
-         let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
+      if let body = $0.bodyData,
+        let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
       {
         let allKeys = jsonObject.flatMap(\.keys)
         let uniqueKeys = Set(allKeys).sorted()
-        $0.request.query.appendOrUpdate(URLQueryItem(
-          name: "columns",
-          value: uniqueKeys.joined(separator: ",")
-        ))
+        var urlComponents = URLComponents(url: $0.request.url!, resolvingAgainstBaseURL: true)!
+        var queryItems = urlComponents.queryItems ?? []
+        queryItems.appendOrUpdate(
+          URLQueryItem(name: "columns", value: uniqueKeys.joined(separator: ","))
+        )
+        urlComponents.queryItems = queryItems
+        $0.request.url = urlComponents.url!
       }
     }
 
@@ -108,28 +115,36 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
         "return=\(returning.rawValue)",
       ]
       if let onConflict {
-        $0.request.query.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
+        var urlComponents = URLComponents(url: $0.request.url!, resolvingAgainstBaseURL: true)!
+        var queryItems = urlComponents.queryItems ?? []
+        queryItems.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
+        urlComponents.queryItems = queryItems
+        $0.request.url = urlComponents.url!
       }
-      $0.request.body = try configuration.encoder.encode(values)
+      $0.bodyData = try configuration.encoder.encode(values)
       if let count {
         prefersHeaders.append("count=\(count.rawValue)")
       }
-      if let prefer = $0.request.headers[.prefer] {
+      if let prefer = $0.request.headerFields[.prefer] {
         prefersHeaders.insert(prefer, at: 0)
       }
       if !prefersHeaders.isEmpty {
-        $0.request.headers[.prefer] = prefersHeaders.joined(separator: ",")
+        $0.request.headerFields[.prefer] = prefersHeaders.joined(separator: ",")
       }
 
-      if let body = $0.request.body,
-         let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
+      if let body = $0.bodyData,
+        let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
       {
         let allKeys = jsonObject.flatMap(\.keys)
         let uniqueKeys = Set(allKeys).sorted()
-        $0.request.query.appendOrUpdate(URLQueryItem(
-          name: "columns",
-          value: uniqueKeys.joined(separator: ",")
-        ))
+
+        var urlComponents = URLComponents(url: $0.request.url!, resolvingAgainstBaseURL: true)!
+        var queryItems = urlComponents.queryItems ?? []
+        queryItems.appendOrUpdate(
+          URLQueryItem(name: "columns", value: uniqueKeys.joined(separator: ","))
+        )
+        urlComponents.queryItems = queryItems
+        $0.request.url = urlComponents.url!
       }
     }
     return PostgrestFilterBuilder(self)
@@ -150,15 +165,15 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     try mutableState.withValue {
       $0.request.method = .patch
       var preferHeaders = ["return=\(returning.rawValue)"]
-      $0.request.body = try configuration.encoder.encode(values)
+      $0.bodyData = try configuration.encoder.encode(values)
       if let count {
         preferHeaders.append("count=\(count.rawValue)")
       }
-      if let prefer = $0.request.headers[.prefer] {
+      if let prefer = $0.request.headerFields[.prefer] {
         preferHeaders.insert(prefer, at: 0)
       }
       if !preferHeaders.isEmpty {
-        $0.request.headers[.prefer] = preferHeaders.joined(separator: ",")
+        $0.request.headerFields[.prefer] = preferHeaders.joined(separator: ",")
       }
     }
     return PostgrestFilterBuilder(self)
@@ -180,11 +195,11 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       if let count {
         preferHeaders.append("count=\(count.rawValue)")
       }
-      if let prefer = $0.request.headers[.prefer] {
+      if let prefer = $0.request.headerFields[.prefer] {
         preferHeaders.insert(prefer, at: 0)
       }
       if !preferHeaders.isEmpty {
-        $0.request.headers[.prefer] = preferHeaders.joined(separator: ",")
+        $0.request.headerFields[.prefer] = preferHeaders.joined(separator: ",")
       }
     }
     return PostgrestFilterBuilder(self)

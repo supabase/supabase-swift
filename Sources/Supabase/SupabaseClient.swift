@@ -50,7 +50,13 @@ public final class SupabaseClient: Sendable {
           schema: options.db.schema,
           headers: headers,
           logger: options.global.logger,
-          fetch: fetchWithAuth,
+          fetch: { request, bodyData in
+            if let bodyData {
+              return try await self.uploadWithAuth(for: request, from: bodyData)
+            } else {
+              return try await self.fetchWithAuth(for: request)
+            }
+          },
           encoder: options.db.encoder,
           decoder: options.db.decoder
         )
@@ -68,7 +74,13 @@ public final class SupabaseClient: Sendable {
           configuration: StorageClientConfiguration(
             url: storageURL,
             headers: headers,
-            session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+            session: StorageHTTPSession { request, bodyData in
+              if let bodyData {
+                return try await self.uploadWithAuth(for: request, from: bodyData)
+              } else {
+                return try await self.fetchWithAuth(for: request)
+              }
+            },
             logger: options.global.logger
           )
         )
@@ -99,7 +111,13 @@ public final class SupabaseClient: Sendable {
           headers: headers,
           region: options.functions.region,
           logger: options.global.logger,
-          fetch: fetchWithAuth
+          fetch: { request, bodyData in
+            if let bodyData {
+              return try await self.uploadWithAuth(for: request, from: bodyData)
+            } else {
+              return try await self.fetchWithAuth(for: request)
+            }
+          }
         )
       }
 
@@ -107,13 +125,10 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  let _headers: HTTPFields
   /// Headers provided to the inner clients on initialization.
   ///
   /// - Note: This collection is non-mutable, if you want to provide different headers, pass it in ``SupabaseClientOptions/GlobalOptions/headers``.
-  public var headers: [String: String] {
-    _headers.dictionary
-  }
+  public let headers: HTTPFields
 
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
@@ -163,19 +178,19 @@ public final class SupabaseClient: Sendable {
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
-    _headers = HTTPFields([
-      "X-Client-Info": "supabase-swift/\(version)",
-      "Authorization": "Bearer \(supabaseKey)",
-      "Apikey": supabaseKey,
-    ])
-    .merging(with: HTTPFields(options.global.headers))
+    let headers: HTTPFields = [
+      .xClientInfo: "supabase-swift/\(version)",
+      .authorization: "Bearer \(supabaseKey)",
+      .apiKey: supabaseKey,
+    ]
+    self.headers = options.global.headers.merging(headers) { $1 }
 
     // default storage key uses the supabase project ref as a namespace
     let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"
 
     _auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
-      headers: _headers.dictionary,
+      headers: self.headers,
       flowType: options.auth.flowType,
       redirectToURL: options.auth.redirectToURL,
       storageKey: options.auth.storageKey ?? defaultStorageKey,
@@ -183,9 +198,13 @@ public final class SupabaseClient: Sendable {
       logger: options.global.logger,
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
-      fetch: {
+      fetch: { request, bodyData in
         // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: $0)
+        if let bodyData {
+          try await options.global.session.upload(for: request, from: bodyData)
+        } else {
+          try await options.global.session.data(for: request)
+        }
       },
       autoRefreshToken: options.auth.autoRefreshToken
     )
@@ -193,10 +212,11 @@ public final class SupabaseClient: Sendable {
     _realtime = UncheckedSendable(
       RealtimeClient(
         supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
-        headers: _headers.dictionary,
-        params: _headers.dictionary
+        headers: headers,
+        params: headers.dictionary
       )
     )
+
 
     if options.auth.accessToken == nil {
       listenForAuthEvents()
@@ -335,24 +355,24 @@ public final class SupabaseClient: Sendable {
   }
 
   @Sendable
-  private func fetchWithAuth(_ request: URLRequest) async throws -> (Data, URLResponse) {
-    try await session.data(for: adapt(request: request))
+  private func fetchWithAuth(for request: HTTPRequest) async throws -> (Data, HTTPResponse) {
+    return try await session.data(for: adapt(request: request))
   }
 
   @Sendable
   private func uploadWithAuth(
-    _ request: URLRequest,
+    for request: HTTPRequest,
     from data: Data
-  ) async throws -> (Data, URLResponse) {
+  ) async throws -> (Data, HTTPResponse) {
     try await session.upload(for: adapt(request: request), from: data)
   }
 
-  private func adapt(request: URLRequest) async -> URLRequest {
+  private func adapt(request: HTTPRequest) async -> HTTPRequest {
     let token = try? await _getAccessToken()
 
     var request = request
     if let token {
-      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+      request.headerFields[.authorization] = "Bearer \(token)"
     }
     return request
   }
@@ -399,7 +419,7 @@ public final class SupabaseClient: Sendable {
 
   private func _initRealtimeClient() -> RealtimeClientV2 {
     var realtimeOptions = options.realtime
-    realtimeOptions.headers.merge(with: _headers)
+    realtimeOptions.headers.merge(self.headers) { $1 }
 
     if realtimeOptions.logger == nil {
       realtimeOptions.logger = options.global.logger

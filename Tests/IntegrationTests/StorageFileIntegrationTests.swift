@@ -5,10 +5,11 @@
 //  Created by Guilherme Souza on 07/05/24.
 //
 
+import HTTPTypes
+import Helpers
 import InlineSnapshotTesting
 import Storage
 import XCTest
-import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -19,7 +20,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
       headers: [
-        "Authorization": "Bearer \(DotEnv.SUPABASE_SERVICE_ROLE_KEY)"
+        .authorization: "Bearer \(DotEnv.SUPABASE_SERVICE_ROLE_KEY)"
       ],
       logger: nil
     )
@@ -378,9 +379,13 @@ final class StorageFileIntegrationTests: XCTestCase {
 
     let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath)
 
-    let (_, response) = try await URLSession.shared.data(from: publicURL)
-    let httpResponse = try XCTUnwrap(response as? HTTPURLResponse)
-    let cacheControl = try XCTUnwrap(httpResponse.value(forHTTPHeaderField: "cache-control"))
+    let request = HTTPRequest(
+      method: .get,
+      url: publicURL
+    )
+
+    let (_, response) = try await URLSession.shared.data(for: request)
+    let cacheControl = try XCTUnwrap(response.headerFields[.cacheControl])
 
     XCTAssertEqual(cacheControl, "public, max-age=14400")
   }

@@ -15,13 +15,13 @@ extension FixedWidthInteger {
 extension Array where Element: FixedWidthInteger {
   static func random(count: Int) -> [Element] {
     var array: [Element] = .init(repeating: 0, count: count)
-    (0 ..< count).forEach { array[$0] = Element.random() }
+    (0..<count).forEach { array[$0] = Element.random() }
     return array
   }
 
   static func random(count: Int, using generator: inout some RandomNumberGenerator) -> [Element] {
     var array: [Element] = .init(repeating: 0, count: count)
-    (0 ..< count).forEach { array[$0] = Element.random(using: &generator) }
+    (0..<count).forEach { array[$0] = Element.random(using: &generator) }
     return array
   }
 }
