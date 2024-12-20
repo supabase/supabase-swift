@@ -170,6 +170,8 @@ public final class SupabaseClient: Sendable {
     ])
     .merging(with: HTTPFields(options.global.headers))
 
+    checkAuthorizationHeader(_headers)
+
     // default storage key uses the supabase project ref as a namespace
     let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"
 
@@ -351,7 +353,7 @@ public final class SupabaseClient: Sendable {
     let token = try? await _getAccessToken()
 
     var request = request
-    if let token {
+    if let token, isJWT(token), request.value(forHTTPHeaderField: "Authorization") == nil {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
     return request
