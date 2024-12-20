@@ -3,13 +3,14 @@ import Foundation
 
 @testable import Realtime
 
-public final class FakeWebSocket: WebSocket {
+final class FakeWebSocket: WebSocket {
   struct MutableState {
     var isClosed: Bool = false
     weak var other: FakeWebSocket?
     var onEvent: (@Sendable (WebSocketEvent) -> Void)?
 
     var sentEvents: [WebSocketEvent] = []
+    var receivedEvents: [WebSocketEvent] = []
     var closeCode: Int?
     var closeReason: String?
   }
@@ -20,23 +21,25 @@ public final class FakeWebSocket: WebSocket {
     self.`protocol` = `protocol`
   }
 
-  public var sentEvents: [WebSocketEvent] {
+  /// Events send by this connection.
+  var sentEvents: [WebSocketEvent] {
     mutableState.value.sentEvents
   }
 
-  public var receivedEvents: [WebSocketEvent] {
-    mutableState.value.other?.sentEvents ?? []
+  /// Events received by this connection.
+  var receivedEvents: [WebSocketEvent] {
+    mutableState.value.receivedEvents
   }
 
-  public var closeCode: Int? {
+  var closeCode: Int? {
     mutableState.value.closeCode
   }
 
-  public var closeReason: String? {
+  var closeReason: String? {
     mutableState.value.closeReason
   }
 
-  public func close(code: Int?, reason: String?) {
+  func close(code: Int?, reason: String?) {
     mutableState.withValue { s in
       if s.isClosed { return }
 
@@ -49,7 +52,7 @@ public final class FakeWebSocket: WebSocket {
     }
   }
 
-  public func send(_ text: String) {
+  func send(_ text: String) {
     mutableState.withValue {
       guard !$0.isClosed else { return }
 
@@ -61,7 +64,7 @@ public final class FakeWebSocket: WebSocket {
     }
   }
 
-  public func send(_ binary: Data) {
+  func send(_ binary: Data) {
     mutableState.withValue {
       guard !$0.isClosed else { return }
 
@@ -73,19 +76,20 @@ public final class FakeWebSocket: WebSocket {
     }
   }
 
-  public var onEvent: (@Sendable (WebSocketEvent) -> Void)? {
+  var onEvent: (@Sendable (WebSocketEvent) -> Void)? {
     get { mutableState.value.onEvent }
     set { mutableState.withValue { $0.onEvent = newValue } }
   }
 
-  public let `protocol`: String
+  let `protocol`: String
 
-  public var isClosed: Bool {
+  var isClosed: Bool {
     mutableState.value.isClosed
   }
 
   func _trigger(_ event: WebSocketEvent) {
     mutableState.withValue {
+      $0.receivedEvents.append(event)
       $0.onEvent?(event)
 
       if case .close(let code, let reason) = event {
@@ -103,7 +107,7 @@ public final class FakeWebSocket: WebSocket {
   /// received by the other.
   ///
   /// This can be useful in constructing tests.
-  public static func fakes(`protocol`: String = "") -> (FakeWebSocket, FakeWebSocket) {
+  static func fakes(`protocol`: String = "") -> (FakeWebSocket, FakeWebSocket) {
     let (peer1, peer2) = (FakeWebSocket(protocol: `protocol`), FakeWebSocket(protocol: `protocol`))
 
     peer1.mutableState.withValue { $0.other = peer2 }
