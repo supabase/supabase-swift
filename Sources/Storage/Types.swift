@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import Helpers
 
 public struct SearchOptions: Encodable, Sendable {
@@ -63,7 +64,7 @@ public struct FileOptions: Sendable {
   public var metadata: [String: AnyJSON]?
 
   /// Optionally add extra headers.
-  public var headers: [String: String]?
+  public var headers: HTTPFields?
 
   public init(
     cacheControl: String = "3600",
@@ -71,7 +72,7 @@ public struct FileOptions: Sendable {
     upsert: Bool = false,
     duplex: String? = nil,
     metadata: [String: AnyJSON]? = nil,
-    headers: [String: String]? = nil
+    headers: HTTPFields? = nil
   ) {
     self.cacheControl = cacheControl
     self.contentType = contentType

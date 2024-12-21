@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 07/10/23.
 //
 
+import HTTPTypes
 import Helpers
 import InlineSnapshotTesting
 import SnapshotTesting
@@ -141,10 +142,10 @@ final class RequestsTests: XCTestCase {
 
   #if !os(Linux) && !os(Windows)
     func testSessionFromURL() async throws {
-      let sut = makeSUT(fetch: { request in
-        let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
+      let sut = makeSUT(fetch: { request, bodyData in
+        let authorizationHeader = request.headerFields[.authorization]
         XCTAssertEqual(authorizationHeader, "bearer accesstoken")
-        return (json(named: "user"), HTTPURLResponse.stub())
+        return (json(named: "user"), HTTPResponse(status: .ok))
       })
 
       let currentDate = Date()
@@ -432,7 +433,11 @@ final class RequestsTests: XCTestCase {
 
     await assert {
       _ = try await sut.mfa.enroll(
-        params: MFAEnrollParams(issuer: "supabase.com", friendlyName: "test"))
+        params: MFAEnrollParams(
+          issuer: "supabase.com",
+          friendlyName: "test"
+        )
+      )
     }
   }
 
@@ -483,7 +488,12 @@ final class RequestsTests: XCTestCase {
 
     await assert {
       _ = try await sut.mfa.verify(
-        params: .init(factorId: "123", challengeId: "123", code: "123456"))
+        params: .init(
+          factorId: "123",
+          challengeId: "123",
+          code: "123456"
+        )
+      )
     }
   }
 
@@ -519,20 +529,22 @@ final class RequestsTests: XCTestCase {
 
     let configuration = AuthClient.Configuration(
       url: clientURL,
-      headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
+      headers: [.apiKey: "dummy.api.key", .xClientInfo: "gotrue-swift/x.y.z"],
       flowType: flowType,
       localStorage: InMemoryLocalStorage(),
       logger: nil,
       encoder: encoder,
-      fetch: { request in
+      fetch: { request, bodyData in
         DispatchQueue.main.sync {
+          var request = URLRequest(httpRequest: request)!
+          request.httpBody = bodyData
           assertSnapshot(
             of: request, as: .curl, record: record, file: file, testName: testName, line: line
           )
         }
 
         if let fetch {
-          return try await fetch(request)
+          return try await fetch(request, bodyData)
         }
 
         throw UnimplementedError()
@@ -540,16 +552,5 @@ final class RequestsTests: XCTestCase {
     )
 
     return AuthClient(configuration: configuration)
-  }
-}
-
-extension HTTPURLResponse {
-  fileprivate static func stub(code: Int = 200) -> HTTPURLResponse {
-    HTTPURLResponse(
-      url: clientURL,
-      statusCode: code,
-      httpVersion: nil,
-      headerFields: nil
-    )!
   }
 }

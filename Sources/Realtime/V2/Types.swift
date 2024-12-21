@@ -21,7 +21,13 @@ public struct RealtimeClientOptions: Sendable {
   var timeoutInterval: TimeInterval
   var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
-  var fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))?
+  var fetch:
+    (
+      @Sendable (
+        _ request: HTTPRequest,
+        _ bodyData: Data?
+      ) async throws -> (Data, HTTPResponse)
+    )?
   package var accessToken: (@Sendable () async throws -> String)?
   package var logger: (any SupabaseLogger)?
 
@@ -32,17 +38,22 @@ public struct RealtimeClientOptions: Sendable {
   public static let defaultConnectOnSubscribe: Bool = true
 
   public init(
-    headers: [String: String] = [:],
+    headers: HTTPFields = [:],
     heartbeatInterval: TimeInterval = Self.defaultHeartbeatInterval,
     reconnectDelay: TimeInterval = Self.defaultReconnectDelay,
     timeoutInterval: TimeInterval = Self.defaultTimeoutInterval,
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
-    fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
+    fetch: (
+      @Sendable (
+        _ request: HTTPRequest,
+        _ bodyData: Data?
+      ) async throws -> (Data, HTTPResponse)
+    )? = nil,
     accessToken: (@Sendable () async throws -> String)? = nil,
     logger: (any SupabaseLogger)? = nil
   ) {
-    self.headers = HTTPFields(headers)
+    self.headers = headers
     self.heartbeatInterval = heartbeatInterval
     self.reconnectDelay = reconnectDelay
     self.timeoutInterval = timeoutInterval
@@ -79,8 +90,4 @@ public enum RealtimeClientStatus: Sendable, CustomStringConvertible {
     case .connected: "Connected"
     }
   }
-}
-
-extension HTTPField.Name {
-  static let apiKey = Self("apiKey")!
 }

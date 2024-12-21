@@ -5,11 +5,12 @@
 //  Created by Guilherme Souza on 27/03/24.
 //
 
-@testable import Auth
 import ConcurrencyExtras
 import CustomDump
 import TestHelpers
 import XCTest
+
+@testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -24,8 +25,8 @@ final class AuthClientIntegrationTests: XCTestCase {
       configuration: AuthClient.Configuration(
         url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
         headers: [
-          "apikey": key,
-          "Authorization": "Bearer \(key)",
+          .apiKey: key,
+          .authorization: "Bearer \(key)",
         ],
         localStorage: InMemoryLocalStorage(),
         logger: nil
