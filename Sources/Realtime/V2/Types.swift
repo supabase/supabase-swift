@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -22,6 +22,7 @@ public struct RealtimeClientOptions: Sendable {
   var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
   var fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))?
+  package var accessToken: (@Sendable () async throws -> String)?
   package var logger: (any SupabaseLogger)?
 
   public static let defaultHeartbeatInterval: TimeInterval = 15
@@ -38,6 +39,7 @@ public struct RealtimeClientOptions: Sendable {
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
+    accessToken: (@Sendable () async throws -> String)? = nil,
     logger: (any SupabaseLogger)? = nil
   ) {
     self.headers = HTTPFields(headers)
@@ -47,18 +49,12 @@ public struct RealtimeClientOptions: Sendable {
     self.disconnectOnSessionLoss = disconnectOnSessionLoss
     self.connectOnSubscribe = connectOnSubscribe
     self.fetch = fetch
+    self.accessToken = accessToken
     self.logger = logger
   }
 
   var apikey: String? {
     headers[.apiKey]
-  }
-
-  var accessToken: String? {
-    guard let accessToken = headers[.authorization]?.split(separator: " ").last else {
-      return nil
-    }
-    return String(accessToken)
   }
 }
 

@@ -125,7 +125,7 @@ public struct AuthMFA: Sendable {
   public func getAuthenticatorAssuranceLevel() async throws -> AuthMFAGetAuthenticatorAssuranceLevelResponse {
     do {
       let session = try await sessionManager.session()
-      let payload = try decode(jwt: session.accessToken)
+      let payload = JWT.decodePayload(session.accessToken)
 
       var currentLevel: AuthenticatorAssuranceLevels?
 

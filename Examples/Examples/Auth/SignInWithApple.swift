@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 16/12/23.
 //
 
+import Auth
 import AuthenticationServices
 import SwiftUI
 
@@ -14,7 +15,7 @@ struct SignInWithApple: View {
   var body: some View {
     VStack {
       SignInWithAppleButton { request in
-        request.requestedScopes = [.email]
+        request.requestedScopes = [.email, .fullName]
       } onCompletion: { result in
         switch result {
         case let .failure(error):
@@ -29,16 +30,23 @@ struct SignInWithApple: View {
             return
           }
 
-          guard let identityToken = credential.identityToken.flatMap({ String(
-            data: $0,
-            encoding: .utf8
-          ) }) else {
+          guard
+            let identityToken = credential.identityToken.flatMap({
+              String(
+                data: $0,
+                encoding: .utf8
+              )
+            })
+          else {
             debug("Invalid identity token")
             return
           }
 
           Task {
-            await signInWithApple(using: identityToken)
+            await signInWithApple(
+              using: identityToken,
+              fullName: credential.fullName?.formatted()
+            )
           }
         }
       }
@@ -55,13 +63,21 @@ struct SignInWithApple: View {
     }
   }
 
-  private func signInWithApple(using idToken: String) async {
+  private func signInWithApple(using idToken: String, fullName: String?) async {
     actionState = .inFlight
     let result = await Result {
-      _ = try await supabase.auth.signInWithIdToken(credentials: .init(
-        provider: .apple,
-        idToken: idToken
-      ))
+      _ = try await supabase.auth.signInWithIdToken(
+        credentials: .init(
+          provider: .apple,
+          idToken: idToken
+        ))
+
+      // fullName is provided only in the first time (account creation),
+      // so checking if it is non-nil to not erase data on login.
+      if let fullName {
+        _ = try? await supabase.auth.update(
+          user: UserAttributes(data: ["full_name": .string(fullName)]))
+      }
     }
     actionState = .result(result)
   }

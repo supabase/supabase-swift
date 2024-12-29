@@ -46,6 +46,7 @@ struct SignUpRequest: Codable, Hashable, Sendable {
   var email: String?
   var password: String?
   var phone: String?
+  var channel: MessagingChannel?
   var data: [String: AnyJSON]?
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?

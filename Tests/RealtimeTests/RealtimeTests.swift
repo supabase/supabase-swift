@@ -36,7 +36,10 @@ final class RealtimeTests: XCTestCase {
         headers: ["apikey": apiKey],
         heartbeatInterval: 1,
         reconnectDelay: 1,
-        timeoutInterval: 2
+        timeoutInterval: 2,
+        accessToken: {
+          "custom.access.token"
+        }
       ),
       ws: ws,
       http: http
@@ -100,7 +103,7 @@ final class RealtimeTests: XCTestCase {
           "event" : "phx_join",
           "join_ref" : "1",
           "payload" : {
-            "access_token" : "anon.api.key",
+            "access_token" : "custom.access.token",
             "config" : {
               "broadcast" : {
                 "ack" : false,
@@ -179,7 +182,7 @@ final class RealtimeTests: XCTestCase {
           "event" : "phx_join",
           "join_ref" : "1",
           "payload" : {
-            "access_token" : "anon.api.key",
+            "access_token" : "custom.access.token",
             "config" : {
               "broadcast" : {
                 "ack" : false,
@@ -201,7 +204,7 @@ final class RealtimeTests: XCTestCase {
           "event" : "phx_join",
           "join_ref" : "2",
           "payload" : {
-            "access_token" : "anon.api.key",
+            "access_token" : "custom.access.token",
             "config" : {
               "broadcast" : {
                 "ack" : false,
@@ -322,7 +325,7 @@ final class RealtimeTests: XCTestCase {
     assertInlineSnapshot(of: request?.urlRequest, as: .raw(pretty: true)) {
       """
       POST https://localhost:54321/realtime/v1/api/broadcast
-      Authorization: Bearer anon.api.key
+      Authorization: Bearer custom.access.token
       Content-Type: application/json
       apiKey: anon.api.key
 
@@ -340,6 +343,27 @@ final class RealtimeTests: XCTestCase {
       }
       """
     }
+  }
+
+  func testSetAuth() async {
+    let validToken =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
+    await sut.setAuth(validToken)
+
+    XCTAssertEqual(sut.mutableState.accessToken, validToken)
+  }
+
+  func testSetAuthWithExpiredToken() async throws {
+    let expiredToken =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOi02NDA5MjIxMTIwMH0.tnbZRC8vEyK3zaxPxfOjNgvpnuum18dxYlXeHJ4r7u8"
+    await sut.setAuth(expiredToken)
+
+    XCTAssertNotEqual(sut.mutableState.accessToken, expiredToken)
+  }
+
+  func testSetAuthWithNonJWT() async throws {
+    let token = "sb-token"
+    await sut.setAuth(token)
   }
 
   private func connectSocketAndWait() async {

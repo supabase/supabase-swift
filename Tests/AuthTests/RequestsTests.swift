@@ -5,12 +5,13 @@
 //  Created by Guilherme Souza on 07/10/23.
 //
 
-@testable import Auth
 import Helpers
 import InlineSnapshotTesting
 import SnapshotTesting
 import TestHelpers
 import XCTest
+
+@testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -126,7 +127,7 @@ final class RequestsTests: XCTestCase {
       url,
       URL(
         string:
-        "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read,write&redirect_to=https://dummy-url.com/redirect&extra_key=extra_value"
+          "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read,write&redirect_to=https://dummy-url.com/redirect&extra_key=extra_value"
       )!
     )
   }
@@ -152,7 +153,7 @@ final class RequestsTests: XCTestCase {
 
       let url = URL(
         string:
-        "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
+          "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
       )!
 
       let session = try await sut.session(from: url)
@@ -173,7 +174,7 @@ final class RequestsTests: XCTestCase {
 
     let url = URL(
       string:
-      "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
+        "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
     )!
 
     do {
@@ -430,7 +431,8 @@ final class RequestsTests: XCTestCase {
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
-      _ = try await sut.mfa.enroll(params: MFAEnrollParams(issuer: "supabase.com", friendlyName: "test"))
+      _ = try await sut.mfa.enroll(
+        params: MFAEnrollParams(issuer: "supabase.com", friendlyName: "test"))
     }
   }
 
@@ -480,7 +482,8 @@ final class RequestsTests: XCTestCase {
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     await assert {
-      _ = try await sut.mfa.verify(params: .init(factorId: "123", challengeId: "123", code: "123456"))
+      _ = try await sut.mfa.verify(
+        params: .init(factorId: "123", challengeId: "123", code: "123456"))
     }
   }
 
