@@ -183,6 +183,17 @@ struct PanelView: View {
           Text("-")
         }
       }
+
+      TableColumn("Metadata") { item in
+        Text(
+          {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let data = try! encoder.encode(item.metadata ?? [:])
+            return String(decoding: data, as: UTF8.self)
+          }()
+        )
+      }
     }
     .contextMenu(
       forSelectionType: FileObject.ID.self,

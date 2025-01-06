@@ -133,7 +133,7 @@ public struct DestinationOptions: Sendable {
 }
 
 public struct FileObject: Identifiable, Hashable, Codable, Sendable {
-  public var name: String
+  public var name: String?
   public var bucketId: String?
   public var owner: String?
   public var id: UUID?
@@ -141,18 +141,16 @@ public struct FileObject: Identifiable, Hashable, Codable, Sendable {
   public var createdAt: Date?
   public var lastAccessedAt: Date?
   public var metadata: [String: AnyJSON]?
-  public var buckets: Bucket?
 
   public init(
-    name: String,
+    name: String? = nil,
     bucketId: String? = nil,
     owner: String? = nil,
-    id: UUID? = nil,
+    id: UUID?,
     updatedAt: Date? = nil,
     createdAt: Date? = nil,
     lastAccessedAt: Date? = nil,
-    metadata: [String: AnyJSON]? = nil,
-    buckets: Bucket? = nil
+    metadata: [String: AnyJSON]? = nil
   ) {
     self.name = name
     self.bucketId = bucketId
@@ -162,7 +160,6 @@ public struct FileObject: Identifiable, Hashable, Codable, Sendable {
     self.createdAt = createdAt
     self.lastAccessedAt = lastAccessedAt
     self.metadata = metadata
-    self.buckets = buckets
   }
 
   enum CodingKeys: String, CodingKey {
@@ -174,7 +171,6 @@ public struct FileObject: Identifiable, Hashable, Codable, Sendable {
     case createdAt = "created_at"
     case lastAccessedAt = "last_accessed_at"
     case metadata
-    case buckets
   }
 }
 
@@ -213,20 +209,20 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
 public struct Bucket: Identifiable, Hashable, Codable, Sendable {
   public var id: String
   public var name: String
-  public var owner: String
-  public var isPublic: Bool
-  public var createdAt: Date
-  public var updatedAt: Date
+  public var owner: String?
+  public var isPublic: Bool?
+  public var createdAt: Date?
+  public var updatedAt: Date?
   public var allowedMimeTypes: [String]?
   public var fileSizeLimit: Int64?
 
   public init(
     id: String,
     name: String,
-    owner: String,
-    isPublic: Bool,
-    createdAt: Date,
-    updatedAt: Date,
+    owner: String? = nil,
+    isPublic: Bool? = nil,
+    createdAt: Date? = nil,
+    updatedAt: Date? = nil,
     allowedMimeTypes: [String]? = nil,
     fileSizeLimit: Int64? = nil
   ) {
