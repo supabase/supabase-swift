@@ -26,20 +26,14 @@ final class RealtimeIntegrationTests: XCTestCase {
 
   static let reconnectDelay: TimeInterval = 1
 
-  let realtime = RealtimeClientV2(
-    url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
-    options: RealtimeClientOptions(
-      headers: ["apikey": DotEnv.SUPABASE_ANON_KEY],
-      reconnectDelay: reconnectDelay,
-      logger: TestLogger()
+  let client = SupabaseClient(
+    supabaseURL: URL(string: DotEnv.SUPABASE_URL)!,
+    supabaseKey: DotEnv.SUPABASE_ANON_KEY,
+    options: SupabaseClientOptions(
+      realtime: RealtimeClientOptions(
+        reconnectDelay: reconnectDelay
+      )
     )
-  )
-
-  let db = PostgrestClient(
-    url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
-    headers: [
-      "apikey": DotEnv.SUPABASE_ANON_KEY
-    ]
   )
 
   override func invokeTest() {
@@ -49,20 +43,20 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testDisconnectByUser_shouldNotReconnect() async {
-    await realtime.connect()
-    XCTAssertEqual(realtime.status, .connected)
+    await client.realtimeV2.connect()
+    XCTAssertEqual(client.realtimeV2.status, .connected)
 
-    realtime.disconnect()
+    client.realtimeV2.disconnect()
 
     /// Wait for the reconnection delay
     try? await Task.sleep(
       nanoseconds: NSEC_PER_SEC * UInt64(Self.reconnectDelay) + 1)
 
-    XCTAssertEqual(realtime.status, .disconnected)
+    XCTAssertEqual(client.realtimeV2.status, .disconnected)
   }
 
   func testBroadcast() async throws {
-    let channel = realtime.channel("integration") {
+    let channel = client.realtimeV2.channel("integration") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
@@ -119,7 +113,7 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testBroadcastWithUnsubscribedChannel() async throws {
-    let channel = realtime.channel("integration") {
+    let channel = client.realtimeV2.channel("integration") {
       $0.broadcast.acknowledgeBroadcasts = true
     }
 
@@ -133,7 +127,7 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testPresence() async throws {
-    let channel = realtime.channel("integration") {
+    let channel = client.realtimeV2.channel("integration") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
@@ -184,7 +178,7 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testPostgresChanges() async throws {
-    let channel = realtime.channel("db-changes")
+    let channel = client.realtimeV2.channel("db-changes")
 
     let receivedInsertActions = Task {
       await channel.postgresChange(InsertAction.self, schema: "public").prefix(1).collect()
@@ -214,12 +208,12 @@ final class RealtimeIntegrationTests: XCTestCase {
     _ = await channel.system().first(where: { _ in true })
 
     let key = try await
-      (db.from("key_value_storage")
+      (client.from("key_value_storage")
       .insert(["key": AnyJSON.string(UUID().uuidString), "value": "value1"]).select().single()
       .execute().value as Entry).key
-    try await db.from("key_value_storage").update(["value": "value2"]).eq("key", value: key)
+    try await client.from("key_value_storage").update(["value": "value2"]).eq("key", value: key)
       .execute()
-    try await db.from("key_value_storage").delete().eq("key", value: key).execute()
+    try await client.from("key_value_storage").delete().eq("key", value: key).execute()
 
     let insertedEntries = try await receivedInsertActions.value.map {
       try $0.decodeRecord(
