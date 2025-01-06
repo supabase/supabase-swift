@@ -22,7 +22,7 @@ public final class RealtimeClientV2: Sendable {
   struct MutableState {
     var accessToken: String?
     var ref = 0
-    var pendingHeartbeatRef: Int?
+    var pendingHeartbeatRef: String?
 
     /// Long-running task that keeps sending heartbeat messages.
     var heartbeatTask: Task<Void, Never>?
@@ -31,7 +31,7 @@ public final class RealtimeClientV2: Sendable {
     var messageTask: Task<Void, Never>?
 
     var connectionTask: Task<Void, Never>?
-    var channels: [String: RealtimeChannelV2] = [:]
+    var channels: [RealtimeChannelV2] = []
     var sendBuffer: [@Sendable () -> Void] = []
 
     var conn: (any WebSocket)?
@@ -50,7 +50,10 @@ public final class RealtimeClientV2: Sendable {
 
   /// All managed channels indexed by their topics.
   public var channels: [String: RealtimeChannelV2] {
-    mutableState.channels
+    mutableState.channels.reduce(
+      into: [:],
+      { $0[$1.topic] = $1 }
+    )
   }
 
   private let statusEventEmitter = EventEmitter<RealtimeClientStatus>(initialEvent: .disconnected)
@@ -132,7 +135,7 @@ public final class RealtimeClientV2: Sendable {
     mutableState.withValue {
       $0.heartbeatTask?.cancel()
       $0.messageTask?.cancel()
-      $0.channels = [:]
+      $0.channels = []
     }
   }
 
@@ -239,17 +242,28 @@ public final class RealtimeClientV2: Sendable {
     )
     options(&config)
 
-    return RealtimeChannelV2(
+    let channel = RealtimeChannelV2(
       topic: "realtime:\(topic)",
       config: config,
       socket: Socket(client: self),
       logger: self.options.logger
     )
+
+    mutableState.withValue {
+      $0.channels.append(channel)
+    }
+
+    return channel
   }
 
+  @available(
+    *, deprecated,
+    message:
+      "Client handles channels automatically, this method will be removed on the next major release."
+  )
   public func addChannel(_ channel: RealtimeChannelV2) {
     mutableState.withValue {
-      $0.channels[channel.topic] = channel
+      $0.channels.append(channel)
     }
   }
 
@@ -261,13 +275,17 @@ public final class RealtimeClientV2: Sendable {
       await channel.unsubscribe()
     }
 
-    mutableState.withValue {
-      $0.channels[channel.topic] = nil
-    }
-
     if channels.isEmpty {
       options.logger?.debug("No more subscribed channel in socket")
       disconnect()
+    }
+  }
+
+  func _remove(_ channel: RealtimeChannelV2) {
+    mutableState.withValue {
+      $0.channels.removeAll {
+        $0.joinRef == channel.joinRef
+      }
     }
   }
 
@@ -335,8 +353,8 @@ public final class RealtimeClientV2: Sendable {
     }
   }
 
-  private func sendHeartbeat(){
-    let pendingHeartbeatRef: Int? = mutableState.withValue {
+  private func sendHeartbeat() {
+    let pendingHeartbeatRef: String? = mutableState.withValue {
       if $0.pendingHeartbeatRef != nil {
         $0.pendingHeartbeatRef = nil
         return nil
@@ -351,7 +369,7 @@ public final class RealtimeClientV2: Sendable {
       push(
         RealtimeMessageV2(
           joinRef: nil,
-          ref: pendingHeartbeatRef.description,
+          ref: pendingHeartbeatRef,
           topic: "phoenix",
           event: "heartbeat",
           payload: [:]
@@ -424,23 +442,20 @@ public final class RealtimeClientV2: Sendable {
   }
 
   private func onMessage(_ message: RealtimeMessageV2) async {
-    let channel = mutableState.withValue {
-      let channel = $0.channels[message.topic]
-
-      if let ref = message.ref, Int(ref) == $0.pendingHeartbeatRef {
+    let channels = mutableState.withValue {
+      if let ref = message.ref, ref == $0.pendingHeartbeatRef {
         $0.pendingHeartbeatRef = nil
         options.logger?.debug("heartbeat received")
       } else {
         options.logger?
-          .debug("Received event \(message.event) for channel \(channel?.topic ?? "null")")
+          .debug("Received event \(message.event) for channel \(message.topic)")
       }
-      return channel
+
+      return $0.channels.filter { $0.topic == message.topic }
     }
 
-    if let channel {
+    for channel in channels {
       await channel.onMessage(message)
-    } else {
-      options.logger?.warning("No channel subscribed to \(message.topic). Ignoring message.")
     }
   }
 
@@ -482,10 +497,10 @@ public final class RealtimeClientV2: Sendable {
     }
   }
 
-  func makeRef() -> Int {
+  func makeRef() -> String {
     mutableState.withValue {
       $0.ref += 1
-      return $0.ref
+      return $0.ref.description
     }
   }
 

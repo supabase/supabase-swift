@@ -31,11 +31,10 @@ struct Socket: Sendable {
   var options: @Sendable () -> RealtimeClientOptions
   var accessToken: @Sendable () async -> String?
   var apiKey: @Sendable () -> String?
-  var makeRef: @Sendable () -> Int
+  var makeRef: @Sendable () -> String
 
   var connect: @Sendable () async -> Void
-  var addChannel: @Sendable (_ channel: RealtimeChannelV2) -> Void
-  var removeChannel: @Sendable (_ channel: RealtimeChannelV2) async -> Void
+  var removeChannel: @Sendable (_ channel: RealtimeChannelV2) -> Void
   var push: @Sendable (_ message: RealtimeMessageV2) -> Void
   var httpSend: @Sendable (_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse
 }
@@ -53,10 +52,9 @@ extension Socket {
         return client?.mutableState.accessToken
       },
       apiKey: { [weak client] in client?.apikey },
-      makeRef: { [weak client] in client?.makeRef() ?? 0 },
+      makeRef: { [weak client] in client?.makeRef() ?? "" },
       connect: { [weak client] in await client?.connect() },
-      addChannel: { [weak client] in client?.addChannel($0) },
-      removeChannel: { [weak client] in await client?.removeChannel($0) },
+      removeChannel: { [weak client] in client?._remove($0) },
       push: { [weak client] in client?.push($0) },
       httpSend: { [weak client] in
         try await client?.http.send($0) ?? .init(data: Data(), response: HTTPURLResponse())
@@ -78,6 +76,7 @@ public final class RealtimeChannelV2: Sendable {
   let config: RealtimeChannelConfig
   let logger: (any SupabaseLogger)?
   let socket: Socket
+  var joinRef: String? { mutableState.joinRef }
 
   let callbackManager = CallbackManager()
   private let statusEventEmitter = EventEmitter<RealtimeChannelStatus>(initialEvent: .unsubscribed)
@@ -130,8 +129,6 @@ public final class RealtimeChannelV2: Sendable {
       await socket.connect()
     }
 
-    socket.addChannel(self)
-
     status = .subscribing
     logger?.debug("Subscribing to channel \(topic)")
 
@@ -147,7 +144,7 @@ public final class RealtimeChannelV2: Sendable {
       accessToken: await socket.accessToken()
     )
 
-    let joinRef = socket.makeRef().description
+    let joinRef = socket.makeRef()
     mutableState.withValue { $0.joinRef = joinRef }
 
     logger?.debug("Subscribing to channel with body: \(joinConfig)")
@@ -406,7 +403,7 @@ public final class RealtimeChannelV2: Sendable {
         callbackManager.triggerBroadcast(event: event, json: payload)
 
       case .close:
-        await socket.removeChannel(self)
+        socket.removeChannel(self)
         logger?.debug("Unsubscribed from channel \(message.topic)")
         status = .unsubscribed
 
@@ -582,7 +579,7 @@ public final class RealtimeChannelV2: Sendable {
     let push = mutableState.withValue {
       let message = RealtimeMessageV2(
         joinRef: $0.joinRef,
-        ref: ref ?? socket.makeRef().description,
+        ref: ref ?? socket.makeRef(),
         topic: self.topic,
         event: event,
         payload: payload

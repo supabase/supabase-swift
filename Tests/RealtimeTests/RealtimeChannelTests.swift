@@ -137,7 +137,6 @@ extension Socket {
       apiKey: unimplemented(),
       makeRef: unimplemented(),
       connect: unimplemented(),
-      addChannel: unimplemented(),
       removeChannel: unimplemented(),
       push: unimplemented(),
       httpSend: unimplemented()
