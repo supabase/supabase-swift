@@ -44,7 +44,7 @@ final class _PushTests: XCTestCase {
         presence: .init(),
         isPrivate: false
       ),
-      socket: Socket(client: socket),
+      socket: socket,
       logger: nil
     )
     let push = PushV2(

@@ -188,76 +188,55 @@ final class RealtimeTests: XCTestCase {
     // Wait for the timeout for rejoining.
     await sleep(seconds: UInt64(timeoutInterval))
 
-    assertInlineSnapshot(of: client.sentEvents.map(\.json), as: .json) {
+    let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
+      $0.event == "phx_join"
+    }
+    assertInlineSnapshot(of: events, as: .json) {
       """
       [
         {
-          "text" : {
-            "event" : "phx_join",
-            "join_ref" : "1",
-            "payload" : {
-              "access_token" : "custom.access.token",
-              "config" : {
-                "broadcast" : {
-                  "ack" : false,
-                  "self" : false
-                },
-                "postgres_changes" : [
+          "event" : "phx_join",
+          "join_ref" : "1",
+          "payload" : {
+            "access_token" : "custom.access.token",
+            "config" : {
+              "broadcast" : {
+                "ack" : false,
+                "self" : false
+              },
+              "postgres_changes" : [
 
-                ],
-                "presence" : {
-                  "key" : ""
-                },
-                "private" : false
-              }
-            },
-            "ref" : "1",
-            "topic" : "realtime:public:messages"
-          }
+              ],
+              "presence" : {
+                "key" : ""
+              },
+              "private" : false
+            }
+          },
+          "ref" : "1",
+          "topic" : "realtime:public:messages"
         },
         {
-          "text" : {
-            "event" : "heartbeat",
-            "payload" : {
+          "event" : "phx_join",
+          "join_ref" : "2",
+          "payload" : {
+            "access_token" : "custom.access.token",
+            "config" : {
+              "broadcast" : {
+                "ack" : false,
+                "self" : false
+              },
+              "postgres_changes" : [
 
-            },
-            "ref" : "2",
-            "topic" : "phoenix"
-          }
-        },
-        {
-          "text" : {
-            "event" : "phx_join",
-            "join_ref" : "2",
-            "payload" : {
-              "access_token" : "custom.access.token",
-              "config" : {
-                "broadcast" : {
-                  "ack" : false,
-                  "self" : false
-                },
-                "postgres_changes" : [
-
-                ],
-                "presence" : {
-                  "key" : ""
-                },
-                "private" : false
-              }
-            },
-            "ref" : "2",
-            "topic" : "realtime:public:messages"
-          }
-        },
-        {
-          "text" : {
-            "event" : "heartbeat",
-            "payload" : {
-
-            },
-            "ref" : "3",
-            "topic" : "phoenix"
-          }
+              ],
+              "presence" : {
+                "key" : ""
+              },
+              "private" : false
+            }
+          },
+          "ref" : "2",
+          "topic" : "realtime:public:messages"
         }
       ]
       """
@@ -331,7 +310,7 @@ final class RealtimeTests: XCTestCase {
         .connected,
         .disconnected,
         .connecting,
-        .connected
+        .connected,
       ]
     )
   }

@@ -40,7 +40,7 @@ actor PushV2 {
     }
 
     do {
-      return try await withTimeout(interval: channel.socket.options().timeoutInterval) {
+      return try await withTimeout(interval: channel.socket.options.timeoutInterval) {
         await withCheckedContinuation { continuation in
           self.receivedContinuation = continuation
         }

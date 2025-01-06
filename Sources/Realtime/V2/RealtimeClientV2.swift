@@ -245,7 +245,7 @@ public final class RealtimeClientV2: Sendable {
     let channel = RealtimeChannelV2(
       topic: "realtime:\(topic)",
       config: config,
-      socket: Socket(client: self),
+      socket: self,
       logger: self.options.logger
     )
 
@@ -298,6 +298,13 @@ public final class RealtimeClientV2: Sendable {
 
       await group.waitForAll()
     }
+  }
+
+  func _getAccessToken() async -> String? {
+    if let accessToken = try? await options.accessToken?() {
+      return accessToken
+    }
+    return mutableState.accessToken
   }
 
   private func rejoinChannels() {
