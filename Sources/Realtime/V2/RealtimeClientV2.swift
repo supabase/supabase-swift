@@ -32,7 +32,7 @@ public final class RealtimeClientV2: Sendable {
 
     var connectionTask: Task<Void, Never>?
     var channels: [String: RealtimeChannelV2] = [:]
-    var sendBuffer: [@Sendable () async -> Void] = []
+    var sendBuffer: [@Sendable () -> Void] = []
 
     var conn: (any WebSocket)?
   }
@@ -165,8 +165,7 @@ public final class RealtimeClientV2: Sendable {
         do {
           let conn = try await wsTransport()
           mutableState.withValue { $0.conn = conn }
-
-          await onConnected(reconnect: reconnect)
+          onConnected(reconnect: reconnect)
         } catch {
           onError(error)
         }
@@ -180,16 +179,16 @@ public final class RealtimeClientV2: Sendable {
     _ = await statusChange.first { @Sendable in $0 == .connected }
   }
 
-  private func onConnected(reconnect: Bool) async {
+  private func onConnected(reconnect: Bool) {
     status = .connected
     options.logger?.debug("Connected to realtime WebSocket")
     listenForMessages()
     startHeartbeating()
     if reconnect {
-      await rejoinChannels()
+      rejoinChannels()
     }
 
-    await flushSendBuffer()
+    flushSendBuffer()
   }
 
   private func onDisconnected() {
@@ -283,15 +282,11 @@ public final class RealtimeClientV2: Sendable {
     }
   }
 
-  private func rejoinChannels() async {
-    await withTaskGroup(of: Void.self) { group in
+  private func rejoinChannels() {
+    Task {
       for channel in channels.values {
-        group.addTask {
-          await channel.subscribe()
-        }
+        await channel.subscribe()
       }
-
-      await group.waitForAll()
     }
   }
 
@@ -332,7 +327,7 @@ public final class RealtimeClientV2: Sendable {
         if Task.isCancelled {
           break
         }
-        await self?.sendHeartbeat()
+        self?.sendHeartbeat()
       }
     }
     mutableState.withValue {
@@ -340,7 +335,7 @@ public final class RealtimeClientV2: Sendable {
     }
   }
 
-  private func sendHeartbeat() async {
+  private func sendHeartbeat(){
     let pendingHeartbeatRef: Int? = mutableState.withValue {
       if $0.pendingHeartbeatRef != nil {
         $0.pendingHeartbeatRef = nil
@@ -353,7 +348,7 @@ public final class RealtimeClientV2: Sendable {
     }
 
     if let pendingHeartbeatRef {
-      await push(
+      push(
         RealtimeMessageV2(
           joinRef: nil,
           ref: pendingHeartbeatRef.description,
@@ -452,7 +447,7 @@ public final class RealtimeClientV2: Sendable {
   /// Push out a message if the socket is connected.
   ///
   /// If the socket is not connected, the message gets enqueued within a local buffer, and sent out when a connection is next established.
-  public func push(_ message: RealtimeMessageV2) async {
+  public func push(_ message: RealtimeMessageV2) {
     let callback = { @Sendable [weak self] in
       do {
         // Check cancellation before sending, because this push may have been cancelled before a connection was established.
@@ -472,7 +467,7 @@ public final class RealtimeClientV2: Sendable {
     }
 
     if status == .connected {
-      await callback()
+      callback()
     } else {
       mutableState.withValue {
         $0.sendBuffer.append(callback)
@@ -480,15 +475,10 @@ public final class RealtimeClientV2: Sendable {
     }
   }
 
-  private func flushSendBuffer() async {
-    let sendBuffer = mutableState.withValue {
-      let copy = $0.sendBuffer
+  private func flushSendBuffer() {
+    mutableState.withValue {
+      $0.sendBuffer.forEach { $0() }
       $0.sendBuffer = []
-      return copy
-    }
-
-    for send in sendBuffer {
-      await send()
     }
   }
 

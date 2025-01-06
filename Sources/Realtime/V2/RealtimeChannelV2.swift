@@ -36,7 +36,7 @@ struct Socket: Sendable {
   var connect: @Sendable () async -> Void
   var addChannel: @Sendable (_ channel: RealtimeChannelV2) -> Void
   var removeChannel: @Sendable (_ channel: RealtimeChannelV2) async -> Void
-  var push: @Sendable (_ message: RealtimeMessageV2) async -> Void
+  var push: @Sendable (_ message: RealtimeMessageV2) -> Void
   var httpSend: @Sendable (_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse
 }
 
@@ -57,7 +57,7 @@ extension Socket {
       connect: { [weak client] in await client?.connect() },
       addChannel: { [weak client] in client?.addChannel($0) },
       removeChannel: { [weak client] in await client?.removeChannel($0) },
-      push: { [weak client] in await client?.push($0) },
+      push: { [weak client] in client?.push($0) },
       httpSend: { [weak client] in
         try await client?.http.send($0) ?? .init(data: Data(), response: HTTPURLResponse())
       }

@@ -31,7 +31,7 @@ actor PushV2 {
       return .error
     }
 
-    await channel.socket.push(message)
+    channel.socket.push(message)
 
     if !channel.config.broadcast.acknowledgeBroadcasts {
       // channel was configured with `ack = false`,
