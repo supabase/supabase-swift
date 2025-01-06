@@ -8,6 +8,9 @@
 import ConcurrencyExtras
 import Foundation
 
+/// A token for cancelling observations.
+///
+/// When this token gets deallocated it cancels the observation it was associated with. Store this token in another object to keep the observation alive.
 public final class ObservationToken: @unchecked Sendable, Hashable {
   private let _isCancelled = LockIsolated(false)
   package var onCancel: @Sendable () -> Void
@@ -44,9 +47,7 @@ public final class ObservationToken: @unchecked Sendable, Hashable {
   public func hash(into hasher: inout Hasher) {
     hasher.combine(ObjectIdentifier(self))
   }
-}
 
-extension ObservationToken {
   public func store(in collection: inout some RangeReplaceableCollection<ObservationToken>) {
     collection.append(self)
   }
@@ -59,9 +60,15 @@ extension ObservationToken {
 package final class EventEmitter<Event: Sendable>: Sendable {
   public typealias Listener = @Sendable (Event) -> Void
 
-  private let listeners = LockIsolated<[(key: ObjectIdentifier, listener: Listener)]>([])
-  private let _lastEvent: LockIsolated<Event>
-  package var lastEvent: Event { _lastEvent.value }
+  struct MutableState {
+    var listeners: [(key: ObjectIdentifier, listener: Listener)] = []
+    var lastEvent: Event
+  }
+
+  let mutableState: LockIsolated<MutableState>
+
+  /// The last event emitted by this Emiter, or the initial event.
+  package var lastEvent: Event { mutableState.lastEvent }
 
   let emitsLastEventWhenAttaching: Bool
 
@@ -69,10 +76,13 @@ package final class EventEmitter<Event: Sendable>: Sendable {
     initialEvent event: Event,
     emitsLastEventWhenAttaching: Bool = true
   ) {
-    _lastEvent = LockIsolated(event)
+    mutableState = LockIsolated(MutableState(lastEvent: event))
     self.emitsLastEventWhenAttaching = emitsLastEventWhenAttaching
   }
 
+  /// Attaches a new listener for observing event emissions.
+  ///
+  /// If emitter initialized with `emitsLastEventWhenAttaching = true`, listener gets called right away with last event.
   package func attach(_ listener: @escaping Listener) -> ObservationToken {
     defer {
       if emitsLastEventWhenAttaching {
@@ -84,21 +94,24 @@ package final class EventEmitter<Event: Sendable>: Sendable {
     let key = ObjectIdentifier(token)
 
     token.onCancel = { [weak self] in
-      self?.listeners.withValue {
-        $0.removeAll { $0.key == key }
+      self?.mutableState.withValue {
+        $0.listeners.removeAll { $0.key == key }
       }
     }
 
-    listeners.withValue {
-      $0.append((key, listener))
+    mutableState.withValue {
+      $0.listeners.append((key, listener))
     }
 
     return token
   }
 
+  /// Trigger a new event on all attached listeners, or a specific listener owned by the `token` provided.
   package func emit(_ event: Event, to token: ObservationToken? = nil) {
-    _lastEvent.setValue(event)
-    let listeners = listeners.value
+    let listeners = mutableState.withValue {
+      $0.lastEvent = event
+      return $0.listeners
+    }
 
     if let token {
       listeners.first { $0.key == ObjectIdentifier(token) }?.listener(event)
@@ -109,6 +122,7 @@ package final class EventEmitter<Event: Sendable>: Sendable {
     }
   }
 
+  /// Returns a new ``AsyncStream`` for observing events emitted by this emitter.
   package func stream() -> AsyncStream<Event> {
     AsyncStream { continuation in
       let token = attach { status in
