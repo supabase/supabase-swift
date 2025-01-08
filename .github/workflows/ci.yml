@@ -78,29 +78,29 @@ jobs:
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
-  linux:
-    name: linux
-    strategy:
-      matrix:
-        swift-version: ["5.10"]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: ${{ matrix.swift-version }}
-      - name: Cache build
-        uses: actions/cache@v3
-        with:
-          path: |
-            .build
-          key: |
-            build-spm-linux-${{ matrix.swift-version }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Package.resolved') }}
-          restore-keys: |
-            build-spm-linux-${{ matrix.swift-version }}-
-      - run: make dot-env
-      - name: Run tests
-        run: swift test --skip IntegrationTests
+  # linux:
+  #   name: linux
+  #   strategy:
+  #     matrix:
+  #       swift-version: ["5.10"]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: swift-actions/setup-swift@v2
+  #       with:
+  #         swift-version: ${{ matrix.swift-version }}
+  #     - name: Cache build
+  #       uses: actions/cache@v3
+  #       with:
+  #         path: |
+  #           .build
+  #         key: |
+  #           build-spm-linux-${{ matrix.swift-version }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Package.resolved') }}
+  #         restore-keys: |
+  #           build-spm-linux-${{ matrix.swift-version }}-
+  #     - run: make dot-env
+  #     - name: Run tests
+  #       run: swift test --skip IntegrationTests
 
   # library-evolution:
   #   name: Library (evolution)

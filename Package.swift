@@ -92,10 +92,7 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Helpers",
-        "Auth",
-        "PostgREST",
-        "Realtime",
-        "Storage",
+        "Supabase",
         "TestHelpers",
       ],
       resources: [.process("Fixtures")]
