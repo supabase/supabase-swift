@@ -1,3 +1,4 @@
+import Clocks
 import ConcurrencyExtras
 import CustomDump
 import Helpers
@@ -11,6 +12,7 @@ import XCTest
   import FoundationNetworking
 #endif
 
+@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class RealtimeTests: XCTestCase {
   let url = URL(string: "https://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
@@ -25,23 +27,24 @@ final class RealtimeTests: XCTestCase {
   var client: FakeWebSocket!
   var http: HTTPClientMock!
   var sut: RealtimeClientV2!
+  var testClock: TestClock<Duration>!
 
-  let heartbeatInterval: TimeInterval = 1
-  let reconnectDelay: TimeInterval = 1
-  let timeoutInterval: TimeInterval = 2
+  let heartbeatInterval: TimeInterval = RealtimeClientOptions.defaultHeartbeatInterval
+  let reconnectDelay: TimeInterval = RealtimeClientOptions.defaultReconnectDelay
+  let timeoutInterval: TimeInterval = RealtimeClientOptions.defaultTimeoutInterval
 
   override func setUp() {
     super.setUp()
 
     (client, server) = FakeWebSocket.fakes()
     http = HTTPClientMock()
+    testClock = TestClock()
+    _clock = testClock
+
     sut = RealtimeClientV2(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
-        heartbeatInterval: heartbeatInterval,
-        reconnectDelay: reconnectDelay,
-        timeoutInterval: timeoutInterval,
         accessToken: {
           "custom.access.token"
         }
@@ -183,10 +186,14 @@ final class RealtimeTests: XCTestCase {
     }
 
     await sut.connect()
-    await channel.subscribe()
+    await testClock.advance(by: .seconds(heartbeatInterval))
+
+    Task {
+      await channel.subscribe()
+    }
 
     // Wait for the timeout for rejoining.
-    await sleep(seconds: UInt64(timeoutInterval))
+    await testClock.advance(by: .seconds(timeoutInterval))
 
     let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
       $0.event == "phx_join"
@@ -269,6 +276,8 @@ final class RealtimeTests: XCTestCase {
 
     await sut.connect()
 
+    await testClock.advance(by: .seconds(heartbeatInterval * 2))
+
     await fulfillment(of: [expectation], timeout: 3)
   }
 
@@ -290,17 +299,18 @@ final class RealtimeTests: XCTestCase {
     defer { subscription.cancel() }
 
     await sut.connect()
+    await testClock.advance(by: .seconds(heartbeatInterval))
 
-    await fulfillment(of: [sentHeartbeatExpectation], timeout: 2)
+    await fulfillment(of: [sentHeartbeatExpectation], timeout: 0)
 
     let pendingHeartbeatRef = sut.mutableState.pendingHeartbeatRef
     XCTAssertNotNil(pendingHeartbeatRef)
 
     // Wait until next heartbeat
-    await sleep(seconds: 2)
+    await testClock.advance(by: .seconds(heartbeatInterval))
 
     // Wait for reconnect delay
-    await sleep(seconds: 1)
+    await testClock.advance(by: .seconds(reconnectDelay))
 
     XCTAssertEqual(
       statuses.value,
@@ -430,8 +440,4 @@ extension WebSocketEvent {
     guard case .text(let text) = self else { return nil }
     return try? JSONDecoder().decode(RealtimeMessageV2.self, from: Data(text.utf8))
   }
-}
-
-func sleep(seconds: UInt64) async {
-  try? await Task.sleep(nanoseconds: NSEC_PER_SEC * seconds)
 }

@@ -151,7 +151,7 @@ public final class RealtimeClientV2: Sendable {
     if status == .disconnected {
       let connectionTask = Task {
         if reconnect {
-          try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(options.reconnectDelay))
+          try? await _clock.sleep(for: options.reconnectDelay)
 
           if Task.isCancelled {
             options.logger?.debug("Reconnect cancelled, returning")
@@ -349,7 +349,7 @@ public final class RealtimeClientV2: Sendable {
   private func startHeartbeating() {
     let heartbeatTask = Task { [weak self, options] in
       while !Task.isCancelled {
-        try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(options.heartbeatInterval))
+        try? await _clock.sleep(for: options.heartbeatInterval)
         if Task.isCancelled {
           break
         }
