@@ -41,15 +41,15 @@ public final class RealtimeChannelV2: Sendable {
   var joinRef: String? { mutableState.joinRef }
 
   let callbackManager = CallbackManager()
-  private let statusEventEmitter = EventEmitter<RealtimeChannelStatus>(initialEvent: .unsubscribed)
+  private let statusSubject = AsyncValueSubject<RealtimeChannelStatus>(.unsubscribed)
 
   public private(set) var status: RealtimeChannelStatus {
-    get { statusEventEmitter.lastEvent }
-    set { statusEventEmitter.emit(newValue) }
+    get { statusSubject.value }
+    set { statusSubject.yield(newValue) }
   }
 
   public var statusChange: AsyncStream<RealtimeChannelStatus> {
-    statusEventEmitter.stream()
+    statusSubject.values
   }
 
   /// Listen for connection status changes.
@@ -59,8 +59,9 @@ public final class RealtimeChannelV2: Sendable {
   /// - Note: Use ``statusChange`` if you prefer to use Async/Await.
   public func onStatusChange(
     _ listener: @escaping @Sendable (RealtimeChannelStatus) -> Void
-  ) -> ObservationToken {
-    statusEventEmitter.attach(listener)
+  ) -> RealtimeSubscription {
+    let task = statusSubject.onChange { listener($0) }
+    return RealtimeSubscription { task.cancel() }
   }
 
   init(
