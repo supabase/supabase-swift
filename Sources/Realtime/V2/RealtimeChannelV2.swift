@@ -25,50 +25,6 @@ public struct RealtimeChannelConfig: Sendable {
   public var isPrivate: Bool
 }
 
-struct Socket: Sendable {
-  var broadcastURL: @Sendable () -> URL
-  var status: @Sendable () -> RealtimeClientStatus
-  var options: @Sendable () -> RealtimeClientOptions
-  var accessToken: @Sendable () async -> String?
-  var apiKey: @Sendable () -> String?
-  var makeRef: @Sendable () -> Int
-
-  var connect: @Sendable () async -> Void
-  var addChannel: @Sendable (_ channel: RealtimeChannelV2) -> Void
-  var removeChannel: @Sendable (_ channel: RealtimeChannelV2) async -> Void
-  var push: @Sendable (_ message: RealtimeMessageV2) async -> Void
-  var httpSend:
-    @Sendable (
-      _ request: HTTPRequest,
-      _ bodyData: Data?
-    ) async throws -> (Data, HTTPResponse)
-}
-
-extension Socket {
-  init(client: RealtimeClientV2) {
-    self.init(
-      broadcastURL: { [weak client] in client?.broadcastURL ?? URL(string: "http://localhost")! },
-      status: { [weak client] in client?.status ?? .disconnected },
-      options: { [weak client] in client?.options ?? .init() },
-      accessToken: { [weak client] in
-        if let accessToken = try? await client?.options.accessToken?() {
-          return accessToken
-        }
-        return client?.mutableState.accessToken
-      },
-      apiKey: { [weak client] in client?.apikey },
-      makeRef: { [weak client] in client?.makeRef() ?? 0 },
-      connect: { [weak client] in await client?.connect() },
-      addChannel: { [weak client] in client?.addChannel($0) },
-      removeChannel: { [weak client] in await client?.removeChannel($0) },
-      push: { [weak client] in await client?.push($0) },
-      httpSend: { [weak client] in
-        try await client?.http.send($0, $1) ?? (Data(), HTTPResponse(status: .ok))
-      }
-    )
-  }
-}
-
 public final class RealtimeChannelV2: Sendable {
   struct MutableState {
     var clientChanges: [PostgresJoinConfig] = []
@@ -81,18 +37,19 @@ public final class RealtimeChannelV2: Sendable {
   let topic: String
   let config: RealtimeChannelConfig
   let logger: (any SupabaseLogger)?
-  let socket: Socket
+  let socket: RealtimeClientV2
+  var joinRef: String? { mutableState.joinRef }
 
   let callbackManager = CallbackManager()
-  private let statusEventEmitter = EventEmitter<RealtimeChannelStatus>(initialEvent: .unsubscribed)
+  private let statusSubject = AsyncValueSubject<RealtimeChannelStatus>(.unsubscribed)
 
   public private(set) var status: RealtimeChannelStatus {
-    get { statusEventEmitter.lastEvent }
-    set { statusEventEmitter.emit(newValue) }
+    get { statusSubject.value }
+    set { statusSubject.yield(newValue) }
   }
 
   public var statusChange: AsyncStream<RealtimeChannelStatus> {
-    statusEventEmitter.stream()
+    statusSubject.values
   }
 
   /// Listen for connection status changes.
@@ -102,14 +59,15 @@ public final class RealtimeChannelV2: Sendable {
   /// - Note: Use ``statusChange`` if you prefer to use Async/Await.
   public func onStatusChange(
     _ listener: @escaping @Sendable (RealtimeChannelStatus) -> Void
-  ) -> ObservationToken {
-    statusEventEmitter.attach(listener)
+  ) -> RealtimeSubscription {
+    let task = statusSubject.onChange { listener($0) }
+    return RealtimeSubscription { task.cancel() }
   }
 
   init(
     topic: String,
     config: RealtimeChannelConfig,
-    socket: Socket,
+    socket: RealtimeClientV2,
     logger: (any SupabaseLogger)?
   ) {
     self.topic = topic
@@ -124,8 +82,8 @@ public final class RealtimeChannelV2: Sendable {
 
   /// Subscribes to the channel
   public func subscribe() async {
-    if socket.status() != .connected {
-      if socket.options().connectOnSubscribe != true {
+    if socket.status != .connected {
+      if socket.options.connectOnSubscribe != true {
         reportIssue(
           "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
         )
@@ -133,8 +91,6 @@ public final class RealtimeChannelV2: Sendable {
       }
       await socket.connect()
     }
-
-    socket.addChannel(self)
 
     status = .subscribing
     logger?.debug("Subscribing to channel \(topic)")
@@ -148,10 +104,10 @@ public final class RealtimeChannelV2: Sendable {
 
     let payload = RealtimeJoinPayload(
       config: joinConfig,
-      accessToken: await socket.accessToken()
+      accessToken: await socket._getAccessToken()
     )
 
-    let joinRef = socket.makeRef().description
+    let joinRef = socket.makeRef()
     mutableState.withValue { $0.joinRef = joinRef }
 
     logger?.debug("Subscribing to channel with body: \(joinConfig)")
@@ -163,7 +119,7 @@ public final class RealtimeChannelV2: Sendable {
     )
 
     do {
-      try await withTimeout(interval: socket.options().timeoutInterval) { [self] in
+      try await withTimeout(interval: socket.options.timeoutInterval) { [self] in
         _ = await statusChange.first { @Sendable in $0 == .subscribed }
       }
     } catch {
@@ -219,18 +175,18 @@ public final class RealtimeChannelV2: Sendable {
       }
 
       var headers: HTTPFields = [.contentType: "application/json"]
-      if let apiKey = socket.apiKey() {
+      if let apiKey = socket.options.apikey {
         headers[.apiKey] = apiKey
       }
-      if let accessToken = await socket.accessToken() {
+      if let accessToken = await socket._getAccessToken() {
         headers[.authorization] = "Bearer \(accessToken)"
       }
 
       let task = Task { [headers] in
-        _ = try? await socket.httpSend(
+        _ = try? await socket.http.send(
           HTTPRequest(
             method: .post,
-            url: socket.broadcastURL(),
+            url: socket.broadcastURL,
             headerFields: headers
           ),
           JSONEncoder().encode(
@@ -249,7 +205,7 @@ public final class RealtimeChannelV2: Sendable {
       }
 
       if config.broadcast.acknowledgeBroadcasts {
-        try? await withTimeout(interval: socket.options().timeoutInterval) {
+        try? await withTimeout(interval: socket.options.timeoutInterval) {
           await task.value
         }
       }
@@ -410,7 +366,7 @@ public final class RealtimeChannelV2: Sendable {
         callbackManager.triggerBroadcast(event: event, json: payload)
 
       case .close:
-        await socket.removeChannel(self)
+        socket._remove(self)
         logger?.debug("Unsubscribed from channel \(message.topic)")
         status = .unsubscribed
 
@@ -586,7 +542,7 @@ public final class RealtimeChannelV2: Sendable {
     let push = mutableState.withValue {
       let message = RealtimeMessageV2(
         joinRef: $0.joinRef,
-        ref: ref ?? socket.makeRef().description,
+        ref: ref ?? socket.makeRef(),
         topic: self.topic,
         event: event,
         payload: payload

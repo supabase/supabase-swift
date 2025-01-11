@@ -1,7 +1,9 @@
+import Clocks
 import ConcurrencyExtras
 import CustomDump
-import HTTPTypes
 import Helpers
+import HTTPTypes
+import HTTPTypesFoundation
 import InlineSnapshotTesting
 import TestHelpers
 import XCTest
@@ -12,6 +14,7 @@ import XCTest
   import FoundationNetworking
 #endif
 
+@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class RealtimeTests: XCTestCase {
   let url = URL(string: "https://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
@@ -22,27 +25,33 @@ final class RealtimeTests: XCTestCase {
     }
   }
 
-  var ws: MockWebSocketClient!
+  var server: FakeWebSocket!
+  var client: FakeWebSocket!
   var http: HTTPClientMock!
   var sut: RealtimeClientV2!
+  var testClock: TestClock<Duration>!
+
+  let heartbeatInterval: TimeInterval = RealtimeClientOptions.defaultHeartbeatInterval
+  let reconnectDelay: TimeInterval = RealtimeClientOptions.defaultReconnectDelay
+  let timeoutInterval: TimeInterval = RealtimeClientOptions.defaultTimeoutInterval
 
   override func setUp() {
     super.setUp()
 
-    ws = MockWebSocketClient()
+    (client, server) = FakeWebSocket.fakes()
     http = HTTPClientMock()
+    testClock = TestClock()
+    _clock = testClock
+
     sut = RealtimeClientV2(
       url: url,
       options: RealtimeClientOptions(
         headers: [.apiKey: apiKey],
-        heartbeatInterval: 1,
-        reconnectDelay: 1,
-        timeoutInterval: 2,
         accessToken: {
           "custom.access.token"
         }
       ),
-      ws: ws,
+      wsTransport: { self.client },
       http: http
     )
   }
@@ -76,7 +85,7 @@ final class RealtimeTests: XCTestCase {
     }
     .store(in: &subscriptions)
 
-    await connectSocketAndWait()
+    await sut.connect()
 
     XCTAssertEqual(socketStatuses.value, [.disconnected, .connecting, .connected])
 
@@ -94,47 +103,57 @@ final class RealtimeTests: XCTestCase {
     }
     .store(in: &subscriptions)
 
-    ws.mockReceive(.messagesSubscribed)
-    await channel.subscribe()
+    let subscribeTask = Task {
+      await channel.subscribe()
+    }
+    await Task.yield()
+    server.send(.messagesSubscribed)
 
-    assertInlineSnapshot(of: ws.sentMessages, as: .json) {
+    // Wait until it subscribes to assert WS events
+    await subscribeTask.value
+
+    XCTAssertEqual(channelStatuses.value, [.unsubscribed, .subscribing, .subscribed])
+
+    assertInlineSnapshot(of: client.sentEvents.map(\.json), as: .json) {
       """
       [
         {
-          "event" : "phx_join",
-          "join_ref" : "1",
-          "payload" : {
-            "access_token" : "custom.access.token",
-            "config" : {
-              "broadcast" : {
-                "ack" : false,
-                "self" : false
-              },
-              "postgres_changes" : [
-                {
-                  "event" : "INSERT",
-                  "schema" : "public",
-                  "table" : "messages"
+          "text" : {
+            "event" : "phx_join",
+            "join_ref" : "1",
+            "payload" : {
+              "access_token" : "custom.access.token",
+              "config" : {
+                "broadcast" : {
+                  "ack" : false,
+                  "self" : false
                 },
-                {
-                  "event" : "UPDATE",
-                  "schema" : "public",
-                  "table" : "messages"
+                "postgres_changes" : [
+                  {
+                    "event" : "INSERT",
+                    "schema" : "public",
+                    "table" : "messages"
+                  },
+                  {
+                    "event" : "UPDATE",
+                    "schema" : "public",
+                    "table" : "messages"
+                  },
+                  {
+                    "event" : "DELETE",
+                    "schema" : "public",
+                    "table" : "messages"
+                  }
+                ],
+                "presence" : {
+                  "key" : ""
                 },
-                {
-                  "event" : "DELETE",
-                  "schema" : "public",
-                  "table" : "messages"
-                }
-              ],
-              "presence" : {
-                "key" : ""
-              },
-              "private" : false
-            }
-          },
-          "ref" : "1",
-          "topic" : "realtime:public:messages"
+                "private" : false
+              }
+            },
+            "ref" : "1",
+            "topic" : "realtime:public:messages"
+          }
         }
       ]
       """
@@ -145,38 +164,43 @@ final class RealtimeTests: XCTestCase {
     let channel = sut.channel("public:messages")
     let joinEventCount = LockIsolated(0)
 
-    ws.on { message in
-      if message.event == "heartbeat" {
-        return RealtimeMessageV2(
-          joinRef: message.joinRef,
-          ref: message.ref,
-          topic: "phoenix",
-          event: "phx_reply",
-          payload: [
-            "response": [:],
-            "status": "ok",
-          ]
-        )
-      }
+    server.onEvent = { @Sendable [server] event in
+      guard let msg = event.realtimeMessage else { return }
 
-      if message.event == "phx_join" {
+      if msg.event == "heartbeat" {
+        server?.send(
+          RealtimeMessageV2(
+            joinRef: msg.joinRef,
+            ref: msg.ref,
+            topic: "phoenix",
+            event: "phx_reply",
+            payload: ["response": [:]]
+          )
+        )
+      } else if msg.event == "phx_join" {
         joinEventCount.withValue { $0 += 1 }
 
         // Skip first join.
         if joinEventCount.value == 2 {
-          return .messagesSubscribed
+          server?.send(.messagesSubscribed)
         }
       }
-
-      return nil
     }
 
-    await connectSocketAndWait()
-    await channel.subscribe()
+    await sut.connect()
+    await testClock.advance(by: .seconds(heartbeatInterval))
 
-    try? await Task.sleep(nanoseconds: NSEC_PER_SEC * 2)
+    Task {
+      await channel.subscribe()
+    }
 
-    assertInlineSnapshot(of: ws.sentMessages.filter { $0.event == "phx_join" }, as: .json) {
+    // Wait for the timeout for rejoining.
+    await testClock.advance(by: .seconds(timeoutInterval))
+
+    let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
+      $0.event == "phx_join"
+    }
+    assertInlineSnapshot(of: events, as: .json) {
       """
       [
         {
@@ -232,25 +256,29 @@ final class RealtimeTests: XCTestCase {
     let expectation = expectation(description: "heartbeat")
     expectation.expectedFulfillmentCount = 2
 
-    ws.on { message in
-      if message.event == "heartbeat" {
+    server.onEvent = { @Sendable [server] event in
+      guard let msg = event.realtimeMessage else { return }
+
+      if msg.event == "heartbeat" {
         expectation.fulfill()
-        return RealtimeMessageV2(
-          joinRef: message.joinRef,
-          ref: message.ref,
-          topic: "phoenix",
-          event: "phx_reply",
-          payload: [
-            "response": [:],
-            "status": "ok",
-          ]
+        server?.send(
+          RealtimeMessageV2(
+            joinRef: msg.joinRef,
+            ref: msg.ref,
+            topic: "phoenix",
+            event: "phx_reply",
+            payload: [
+              "response": [:],
+              "status": "ok",
+            ]
+          )
         )
       }
-
-      return nil
     }
 
-    await connectSocketAndWait()
+    await sut.connect()
+
+    await testClock.advance(by: .seconds(heartbeatInterval * 2))
 
     await fulfillment(of: [expectation], timeout: 3)
   }
@@ -258,36 +286,33 @@ final class RealtimeTests: XCTestCase {
   func testHeartbeat_whenNoResponse_shouldReconnect() async throws {
     let sentHeartbeatExpectation = expectation(description: "sentHeartbeat")
 
-    ws.on {
-      if $0.event == "heartbeat" {
+    server.onEvent = { @Sendable in
+      if $0.realtimeMessage?.event == "heartbeat" {
         sentHeartbeatExpectation.fulfill()
       }
-
-      return nil
     }
 
     let statuses = LockIsolated<[RealtimeClientStatus]>([])
-
-    Task {
-      for await status in sut.statusChange {
-        statuses.withValue {
-          $0.append(status)
-        }
+    let subscription = sut.onStatusChange { status in
+      statuses.withValue {
+        $0.append(status)
       }
     }
-    await Task.yield()
-    await connectSocketAndWait()
+    defer { subscription.cancel() }
 
-    await fulfillment(of: [sentHeartbeatExpectation], timeout: 2)
+    await sut.connect()
+    await testClock.advance(by: .seconds(heartbeatInterval))
+
+    await fulfillment(of: [sentHeartbeatExpectation], timeout: 0)
 
     let pendingHeartbeatRef = sut.mutableState.pendingHeartbeatRef
     XCTAssertNotNil(pendingHeartbeatRef)
 
     // Wait until next heartbeat
-    try await Task.sleep(nanoseconds: NSEC_PER_SEC * 2)
+    await testClock.advance(by: .seconds(heartbeatInterval))
 
     // Wait for reconnect delay
-    try await Task.sleep(nanoseconds: NSEC_PER_SEC * 1)
+    await testClock.advance(by: .seconds(reconnectDelay))
 
     XCTAssertEqual(
       statuses.value,
@@ -297,15 +322,16 @@ final class RealtimeTests: XCTestCase {
         .connected,
         .disconnected,
         .connecting,
+        .connected,
       ]
     )
   }
 
   func testBroadcastWithHTTP() async throws {
-    await http.when { request, bodyData in
+    await http.when { request, body in
       request.url!.path.hasSuffix("broadcast")
     } return: { _, _ in
-      (
+      return (
         Data("{}".utf8),
         HTTPResponse(status: .init(code: 200))
       )
@@ -317,11 +343,9 @@ final class RealtimeTests: XCTestCase {
 
     try await channel.broadcast(event: "test", message: ["value": 42])
 
-    let request = await http.receivedRequests.last
-    var urlRequest = request.map { URLRequest(httpRequest: $0.0) }
-    urlRequest??.httpBody = request?.1
-
-    assertInlineSnapshot(of: urlRequest as? URLRequest, as: .raw(pretty: true)) {
+    let request = await http.receivedRequests.last?.0
+    let urlReqest = request.map { URLRequest(httpRequest: $0)! }
+    assertInlineSnapshot(of: urlReqest, as: .raw(pretty: true)) {
       """
       POST https://localhost:54321/realtime/v1/api/broadcast
       Authorization: Bearer custom.access.token
@@ -364,11 +388,6 @@ final class RealtimeTests: XCTestCase {
     let token = "sb-token"
     await sut.setAuth(token)
   }
-
-  private func connectSocketAndWait() async {
-    ws.mockConnect(.connected)
-    await sut.connect()
-  }
 }
 
 extension RealtimeMessageV2 {
@@ -388,4 +407,35 @@ extension RealtimeMessageV2 {
       "status": "ok",
     ]
   )
+}
+
+extension FakeWebSocket {
+  func send(_ message: RealtimeMessageV2) {
+    try! self.send(String(decoding: JSONEncoder().encode(message), as: UTF8.self))
+  }
+}
+
+extension WebSocketEvent {
+  var json: Any {
+    switch self {
+    case .binary(let data):
+      let json = try? JSONSerialization.jsonObject(with: data)
+      return ["binary": json]
+    case .text(let text):
+      let json = try? JSONSerialization.jsonObject(with: Data(text.utf8))
+      return ["text": json]
+    case .close(let code, let reason):
+      return [
+        "close": [
+          "code": code as Any,
+          "reason": reason,
+        ]
+      ]
+    }
+  }
+
+  var realtimeMessage: RealtimeMessageV2? {
+    guard case .text(let text) = self else { return nil }
+    return try? JSONDecoder().decode(RealtimeMessageV2.self, from: Data(text.utf8))
+  }
 }

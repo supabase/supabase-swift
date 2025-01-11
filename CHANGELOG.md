@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.24.2](https://github.com/supabase/supabase-swift/compare/v2.24.1...v2.24.2) (2025-01-08)
+
+
+### Bug Fixes
+
+* **realtime:** auto reconnect after calling disconnect, and several refactors ([#627](https://github.com/supabase/supabase-swift/issues/627)) ([1887f4f](https://github.com/supabase/supabase-swift/commit/1887f4f376e172bb7fbcec84506fea6c4797fde7))
+
 ## [2.24.1](https://github.com/supabase/supabase-swift/compare/v2.24.0...v2.24.1) (2024-12-16)
 
 

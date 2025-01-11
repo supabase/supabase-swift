@@ -19,7 +19,10 @@ final class RealtimeChannelTests: XCTestCase {
       presence: PresenceJoinConfig(),
       isPrivate: false
     ),
-    socket: .mock,
+    socket: RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions()
+    ),
     logger: nil
   )
 
@@ -124,23 +127,5 @@ final class RealtimeChannelTests: XCTestCase {
 
       """
     }
-  }
-}
-
-extension Socket {
-  static var mock: Socket {
-    Socket(
-      broadcastURL: unimplemented(),
-      status: unimplemented(),
-      options: unimplemented(),
-      accessToken: unimplemented(),
-      apiKey: unimplemented(),
-      makeRef: unimplemented(),
-      connect: unimplemented(),
-      addChannel: unimplemented(),
-      removeChannel: unimplemented(),
-      push: unimplemented(),
-      httpSend: unimplemented()
-    )
   }
 }

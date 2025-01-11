@@ -5,8 +5,11 @@
 //  Created by Guilherme Souza on 27/03/24.
 //
 
+import Clocks
 import ConcurrencyExtras
 import CustomDump
+import Helpers
+import InlineSnapshotTesting
 import PostgREST
 import Supabase
 import TestHelpers
@@ -14,20 +17,27 @@ import XCTest
 
 @testable import Realtime
 
+struct TestLogger: SupabaseLogger {
+  func log(message: SupabaseLogMessage) {
+    print(message.description)
+  }
+}
+
+@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class RealtimeIntegrationTests: XCTestCase {
-  let realtime = RealtimeClientV2(
-    url: URL(string: "\(DotEnv.SUPABASE_URL)/realtime/v1")!,
-    options: RealtimeClientOptions(
-      headers: [.apiKey: DotEnv.SUPABASE_ANON_KEY]
-    )
+
+  let testClock = TestClock<Duration>()
+
+  let client = SupabaseClient(
+    supabaseURL: URL(string: DotEnv.SUPABASE_URL)!,
+    supabaseKey: DotEnv.SUPABASE_ANON_KEY
   )
 
-  let db = PostgrestClient(
-    url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
-    headers: [
-      .apiKey: DotEnv.SUPABASE_ANON_KEY
-    ]
-  )
+  override func setUp() {
+    super.setUp()
+
+    _clock = testClock
+  }
 
   override func invokeTest() {
     withMainSerialExecutor {
@@ -35,23 +45,25 @@ final class RealtimeIntegrationTests: XCTestCase {
     }
   }
 
-  func testBroadcast() async throws {
-    let expectation = expectation(description: "receivedBroadcastMessages")
-    expectation.expectedFulfillmentCount = 3
+  func testDisconnectByUser_shouldNotReconnect() async {
+    await client.realtimeV2.connect()
+    XCTAssertEqual(client.realtimeV2.status, .connected)
 
-    let channel = realtime.channel("integration") {
+    client.realtimeV2.disconnect()
+
+    /// Wait for the reconnection delay
+    await testClock.advance(by: .seconds(RealtimeClientOptions.defaultReconnectDelay))
+
+    XCTAssertEqual(client.realtimeV2.status, .disconnected)
+  }
+
+  func testBroadcast() async throws {
+    let channel = client.realtimeV2.channel("integration") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
-    let receivedMessages = LockIsolated<[JSONObject]>([])
-
-    Task {
-      for await message in channel.broadcastStream(event: "test") {
-        receivedMessages.withValue {
-          $0.append(message)
-        }
-        expectation.fulfill()
-      }
+    let receivedMessagesTask = Task {
+      await channel.broadcastStream(event: "test").prefix(3).collect()
     }
 
     await Task.yield()
@@ -66,41 +78,44 @@ final class RealtimeIntegrationTests: XCTestCase {
     try await channel.broadcast(event: "test", message: Message(value: 2))
     try await channel.broadcast(event: "test", message: ["value": 3, "another_value": 42])
 
-    await fulfillment(of: [expectation], timeout: 0.5)
+    let receivedMessages = try await withTimeout(interval: 5) {
+      await receivedMessagesTask.value
+    }
 
-    expectNoDifference(
-      receivedMessages.value,
+    assertInlineSnapshot(of: receivedMessages, as: .json) {
+      """
       [
-        [
-          "event": "test",
-          "payload": [
-            "value": 1
-          ],
-          "type": "broadcast",
-        ],
-        [
-          "event": "test",
-          "payload": [
-            "value": 2
-          ],
-          "type": "broadcast",
-        ],
-        [
-          "event": "test",
-          "payload": [
-            "value": 3,
-            "another_value": 42,
-          ],
-          "type": "broadcast",
-        ],
+        {
+          "event" : "test",
+          "payload" : {
+            "value" : 1
+          },
+          "type" : "broadcast"
+        },
+        {
+          "event" : "test",
+          "payload" : {
+            "value" : 2
+          },
+          "type" : "broadcast"
+        },
+        {
+          "event" : "test",
+          "payload" : {
+            "another_value" : 42,
+            "value" : 3
+          },
+          "type" : "broadcast"
+        }
       ]
-    )
+      """
+    }
 
     await channel.unsubscribe()
   }
 
   func testBroadcastWithUnsubscribedChannel() async throws {
-    let channel = realtime.channel("integration") {
+    let channel = client.realtimeV2.channel("integration") {
       $0.broadcast.acknowledgeBroadcasts = true
     }
 
@@ -114,22 +129,12 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testPresence() async throws {
-    let channel = realtime.channel("integration") {
+    let channel = client.realtimeV2.channel("integration") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
-    let expectation = expectation(description: "presenceChange")
-    expectation.expectedFulfillmentCount = 4
-
-    let receivedPresenceChanges = LockIsolated<[any PresenceAction]>([])
-
-    Task {
-      for await presence in channel.presenceChange() {
-        receivedPresenceChanges.withValue {
-          $0.append(presence)
-        }
-        expectation.fulfill()
-      }
+    let receivedPresenceChangesTask = Task {
+      await channel.presenceChange().prefix(4).collect()
     }
 
     await Task.yield()
@@ -145,10 +150,12 @@ final class RealtimeIntegrationTests: XCTestCase {
 
     await channel.untrack()
 
-    await fulfillment(of: [expectation], timeout: 0.5)
+    let receivedPresenceChanges = try await withTimeout(interval: 5) {
+      await receivedPresenceChangesTask.value
+    }
 
-    let joins = try receivedPresenceChanges.value.map { try $0.decodeJoins(as: UserState.self) }
-    let leaves = try receivedPresenceChanges.value.map { try $0.decodeLeaves(as: UserState.self) }
+    let joins = try receivedPresenceChanges.map { try $0.decodeJoins(as: UserState.self) }
+    let leaves = try receivedPresenceChanges.map { try $0.decodeLeaves(as: UserState.self) }
     expectNoDifference(
       joins,
       [
@@ -172,86 +179,87 @@ final class RealtimeIntegrationTests: XCTestCase {
     await channel.unsubscribe()
   }
 
-  // FIXME: Test getting stuck
-//  func testPostgresChanges() async throws {
-//    let channel = realtime.channel("db-changes")
-//
-//    let receivedInsertActions = Task {
-//      await channel.postgresChange(InsertAction.self, schema: "public").prefix(1).collect()
-//    }
-//
-//    let receivedUpdateActions = Task {
-//      await channel.postgresChange(UpdateAction.self, schema: "public").prefix(1).collect()
-//    }
-//
-//    let receivedDeleteActions = Task {
-//      await channel.postgresChange(DeleteAction.self, schema: "public").prefix(1).collect()
-//    }
-//
-//    let receivedAnyActionsTask = Task {
-//      await channel.postgresChange(AnyAction.self, schema: "public").prefix(3).collect()
-//    }
-//
-//    await Task.yield()
-//    await channel.subscribe()
-//
-//    struct Entry: Codable, Equatable {
-//      let key: String
-//      let value: AnyJSON
-//    }
-//
-//    let key = try await (
-//      db.from("key_value_storage")
-//        .insert(["key": AnyJSON.string(UUID().uuidString), "value": "value1"]).select().single()
-//        .execute().value as Entry
-//    ).key
-//    try await db.from("key_value_storage").update(["value": "value2"]).eq("key", value: key)
-//      .execute()
-//    try await db.from("key_value_storage").delete().eq("key", value: key).execute()
-//
-//    let insertedEntries = try await receivedInsertActions.value.map {
-//      try $0.decodeRecord(
-//        as: Entry.self,
-//        decoder: JSONDecoder()
-//      )
-//    }
-//    let updatedEntries = try await receivedUpdateActions.value.map {
-//      try $0.decodeRecord(
-//        as: Entry.self,
-//        decoder: JSONDecoder()
-//      )
-//    }
-//    let deletedEntryIds = await receivedDeleteActions.value.compactMap {
-//      $0.oldRecord["key"]?.stringValue
-//    }
-//
-//    expectNoDifference(insertedEntries, [Entry(key: key, value: "value1")])
-//    expectNoDifference(updatedEntries, [Entry(key: key, value: "value2")])
-//    expectNoDifference(deletedEntryIds, [key])
-//
-//    let receivedAnyActions = await receivedAnyActionsTask.value
-//    XCTAssertEqual(receivedAnyActions.count, 3)
-//
-//    if case let .insert(action) = receivedAnyActions[0] {
-//      let record = try action.decodeRecord(as: Entry.self, decoder: JSONDecoder())
-//      expectNoDifference(record, Entry(key: key, value: "value1"))
-//    } else {
-//      XCTFail("Expected a `AnyAction.insert` on `receivedAnyActions[0]`")
-//    }
-//
-//    if case let .update(action) = receivedAnyActions[1] {
-//      let record = try action.decodeRecord(as: Entry.self, decoder: JSONDecoder())
-//      expectNoDifference(record, Entry(key: key, value: "value2"))
-//    } else {
-//      XCTFail("Expected a `AnyAction.update` on `receivedAnyActions[1]`")
-//    }
-//
-//    if case let .delete(action) = receivedAnyActions[2] {
-//      expectNoDifference(key, action.oldRecord["key"]?.stringValue)
-//    } else {
-//      XCTFail("Expected a `AnyAction.delete` on `receivedAnyActions[2]`")
-//    }
-//
-//    await channel.unsubscribe()
-//  }
+  func testPostgresChanges() async throws {
+    let channel = client.realtimeV2.channel("db-changes")
+
+    let receivedInsertActions = Task {
+      await channel.postgresChange(InsertAction.self, schema: "public").prefix(1).collect()
+    }
+
+    let receivedUpdateActions = Task {
+      await channel.postgresChange(UpdateAction.self, schema: "public").prefix(1).collect()
+    }
+
+    let receivedDeleteActions = Task {
+      await channel.postgresChange(DeleteAction.self, schema: "public").prefix(1).collect()
+    }
+
+    let receivedAnyActionsTask = Task {
+      await channel.postgresChange(AnyAction.self, schema: "public").prefix(3).collect()
+    }
+
+    await Task.yield()
+    await channel.subscribe()
+
+    struct Entry: Codable, Equatable {
+      let key: String
+      let value: AnyJSON
+    }
+
+    // Wait until a system event for makind sure DB change listeners are set before making DB changes.
+    _ = await channel.system().first(where: { _ in true })
+
+    let key = try await
+      (client.from("key_value_storage")
+      .insert(["key": AnyJSON.string(UUID().uuidString), "value": "value1"]).select().single()
+      .execute().value as Entry).key
+    try await client.from("key_value_storage").update(["value": "value2"]).eq("key", value: key)
+      .execute()
+    try await client.from("key_value_storage").delete().eq("key", value: key).execute()
+
+    let insertedEntries = try await receivedInsertActions.value.map {
+      try $0.decodeRecord(
+        as: Entry.self,
+        decoder: JSONDecoder()
+      )
+    }
+    let updatedEntries = try await receivedUpdateActions.value.map {
+      try $0.decodeRecord(
+        as: Entry.self,
+        decoder: JSONDecoder()
+      )
+    }
+    let deletedEntryIds = await receivedDeleteActions.value.compactMap {
+      $0.oldRecord["key"]?.stringValue
+    }
+
+    expectNoDifference(insertedEntries, [Entry(key: key, value: "value1")])
+    expectNoDifference(updatedEntries, [Entry(key: key, value: "value2")])
+    expectNoDifference(deletedEntryIds, [key])
+
+    let receivedAnyActions = await receivedAnyActionsTask.value
+    XCTAssertEqual(receivedAnyActions.count, 3)
+
+    if case let .insert(action) = receivedAnyActions[0] {
+      let record = try action.decodeRecord(as: Entry.self, decoder: JSONDecoder())
+      expectNoDifference(record, Entry(key: key, value: "value1"))
+    } else {
+      XCTFail("Expected a `AnyAction.insert` on `receivedAnyActions[0]`")
+    }
+
+    if case let .update(action) = receivedAnyActions[1] {
+      let record = try action.decodeRecord(as: Entry.self, decoder: JSONDecoder())
+      expectNoDifference(record, Entry(key: key, value: "value2"))
+    } else {
+      XCTFail("Expected a `AnyAction.update` on `receivedAnyActions[1]`")
+    }
+
+    if case let .delete(action) = receivedAnyActions[2] {
+      expectNoDifference(key, action.oldRecord["key"]?.stringValue)
+    } else {
+      XCTFail("Expected a `AnyAction.delete` on `receivedAnyActions[2]`")
+    }
+
+    await channel.unsubscribe()
+  }
 }

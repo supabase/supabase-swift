@@ -28,6 +28,7 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.2"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
+    .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
   ],
   targets: [
     .target(
@@ -36,6 +37,7 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
+        .product(name: "Clocks", package: "swift-clocks"),
       ]
     ),
     .testTarget(
@@ -93,10 +95,7 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Helpers",
-        "Auth",
-        "PostgREST",
-        "Realtime",
-        "Storage",
+        "Supabase",
         "TestHelpers",
       ],
       resources: [.process("Fixtures")]
