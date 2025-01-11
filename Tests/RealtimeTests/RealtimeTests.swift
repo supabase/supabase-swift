@@ -343,8 +343,9 @@ final class RealtimeTests: XCTestCase {
 
     try await channel.broadcast(event: "test", message: ["value": 42])
 
-    let request = await http.receivedRequests.last?.0
-    let urlReqest = request.map { URLRequest(httpRequest: $0)! }
+    let request = await http.receivedRequests.last
+    var urlReqest = request.map { URLRequest(httpRequest: $0.0)! }!
+    urlReqest.httpBody = request?.1
     assertInlineSnapshot(of: urlReqest, as: .raw(pretty: true)) {
       """
       POST https://localhost:54321/realtime/v1/api/broadcast
