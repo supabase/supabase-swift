@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 27/03/24.
 //
 
+import Clocks
 import ConcurrencyExtras
 import CustomDump
 import Helpers
@@ -22,19 +23,21 @@ struct TestLogger: SupabaseLogger {
   }
 }
 
+@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class RealtimeIntegrationTests: XCTestCase {
 
-  static let reconnectDelay: TimeInterval = 1
+  let testClock = TestClock<Duration>()
 
   let client = SupabaseClient(
     supabaseURL: URL(string: DotEnv.SUPABASE_URL)!,
-    supabaseKey: DotEnv.SUPABASE_ANON_KEY,
-    options: SupabaseClientOptions(
-      realtime: RealtimeClientOptions(
-        reconnectDelay: reconnectDelay
-      )
-    )
+    supabaseKey: DotEnv.SUPABASE_ANON_KEY
   )
+
+  override func setUp() {
+    super.setUp()
+
+    _clock = testClock
+  }
 
   override func invokeTest() {
     withMainSerialExecutor {
@@ -49,8 +52,7 @@ final class RealtimeIntegrationTests: XCTestCase {
     client.realtimeV2.disconnect()
 
     /// Wait for the reconnection delay
-    try? await Task.sleep(
-      nanoseconds: NSEC_PER_SEC * UInt64(Self.reconnectDelay) + 1)
+    await testClock.advance(by: .seconds(RealtimeClientOptions.defaultReconnectDelay))
 
     XCTAssertEqual(client.realtimeV2.status, .disconnected)
   }

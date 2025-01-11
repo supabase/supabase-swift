@@ -6,11 +6,13 @@
 //
 
 import ConcurrencyExtras
+import Helpers
 import TestHelpers
 import XCTest
 
 @testable import Realtime
 
+@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class _PushTests: XCTestCase {
   var ws: FakeWebSocket!
   var socket: RealtimeClientV2!
@@ -26,6 +28,7 @@ final class _PushTests: XCTestCase {
 
     let (client, server) = FakeWebSocket.fakes()
     ws = server
+
     socket = RealtimeClientV2(
       url: URL(string: "https://localhost:54321/v1/realtime")!,
       options: RealtimeClientOptions(

@@ -56,19 +56,19 @@ public final class RealtimeClientV2: Sendable {
     )
   }
 
-  private let statusEventEmitter = EventEmitter<RealtimeClientStatus>(initialEvent: .disconnected)
+  private let statusSubject = AsyncValueSubject<RealtimeClientStatus>(.disconnected)
 
   /// Listen for connection status changes.
   ///
   /// You can also use ``onStatusChange(_:)`` for a closure based method.
   public var statusChange: AsyncStream<RealtimeClientStatus> {
-    statusEventEmitter.stream()
+    statusSubject.values
   }
 
   /// The current connection status.
   public private(set) var status: RealtimeClientStatus {
-    get { statusEventEmitter.lastEvent }
-    set { statusEventEmitter.emit(newValue) }
+    get { statusSubject.value }
+    set { statusSubject.yield(newValue) }
   }
 
   /// Listen for connection status changes.
@@ -79,7 +79,8 @@ public final class RealtimeClientV2: Sendable {
   public func onStatusChange(
     _ listener: @escaping @Sendable (RealtimeClientStatus) -> Void
   ) -> RealtimeSubscription {
-    statusEventEmitter.attach(listener)
+    let task = statusSubject.onChange { listener($0) }
+    return RealtimeSubscription { task.cancel() }
   }
 
   public convenience init(url: URL, options: RealtimeClientOptions) {
@@ -150,7 +151,7 @@ public final class RealtimeClientV2: Sendable {
     if status == .disconnected {
       let connectionTask = Task {
         if reconnect {
-          try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(options.reconnectDelay))
+          try? await _clock.sleep(for: options.reconnectDelay)
 
           if Task.isCancelled {
             options.logger?.debug("Reconnect cancelled, returning")
@@ -348,7 +349,7 @@ public final class RealtimeClientV2: Sendable {
   private func startHeartbeating() {
     let heartbeatTask = Task { [weak self, options] in
       while !Task.isCancelled {
-        try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(options.heartbeatInterval))
+        try? await _clock.sleep(for: options.heartbeatInterval)
         if Task.isCancelled {
           break
         }
