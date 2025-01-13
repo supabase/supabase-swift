@@ -31,7 +31,7 @@ actor PushV2 {
       return .error
     }
 
-    await channel.socket.push(message)
+    channel.socket.push(message)
 
     if !channel.config.broadcast.acknowledgeBroadcasts {
       // channel was configured with `ack = false`,
@@ -40,7 +40,7 @@ actor PushV2 {
     }
 
     do {
-      return try await withTimeout(interval: channel.socket.options().timeoutInterval) {
+      return try await withTimeout(interval: channel.socket.options.timeoutInterval) {
         await withCheckedContinuation { continuation in
           self.receivedContinuation = continuation
         }
