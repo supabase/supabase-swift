@@ -34,8 +34,8 @@ final class URLSessionWebSocket: WebSocket {
     }
 
     // It is safe to use `nonisolated(unsafe)` because all completion handlers runs on the same queue.
-    nonisolated(unsafe) var continuation: CheckedContinuation<URLSessionWebSocket, any Error>!
-    nonisolated(unsafe) var webSocket: URLSessionWebSocket?
+    nonisolated var continuation: CheckedContinuation<URLSessionWebSocket, any Error>!
+    nonisolated var webSocket: URLSessionWebSocket?
 
     let session = URLSession.sessionWithConfiguration(
       configuration ?? .default,
