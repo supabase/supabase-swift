@@ -33,45 +33,59 @@ final class URLSessionWebSocket: WebSocket {
       preconditionFailure("only ws: and wss: schemes are supported")
     }
 
-    // It is safe to use `nonisolated(unsafe)` because all completion handlers runs on the same queue.
-    nonisolated(unsafe) var continuation: CheckedContinuation<URLSessionWebSocket, any Error>!
-    nonisolated(unsafe) var webSocket: URLSessionWebSocket?
+    struct MutableState {
+      var continuation: CheckedContinuation<URLSessionWebSocket, any Error>!
+      var webSocket: URLSessionWebSocket?
+    }
+
+    let mutableState = LockIsolated(MutableState())
 
     let session = URLSession.sessionWithConfiguration(
       configuration ?? .default,
       onComplete: { session, task, error in
-        if let webSocket {
-          // There are three possibilities here:
-          // 1. the peer sent a close Frame, `onWebSocketTaskClosed` was already
-          //    called and `_connectionClosed` is a no-op.
-          // 2. we sent a close Frame (through `close()`) and `_connectionClosed`
-          //    is a no-op.
-          // 3. an error occurred (e.g. network failure) and `_connectionClosed`
-          //    will signal that and close `event`.
-          webSocket._connectionClosed(
-            code: 1006, reason: Data("abnormal close".utf8))
-        } else if let error {
-          continuation.resume(
-            throwing: WebSocketError.connection(
-              message: "connection ended unexpectedly", error: error))
-        } else {
-          // `onWebSocketTaskOpened` should have been called and resumed continuation.
-          // So either there was an error creating the connection or a logic error.
-          assertionFailure("expected an error or `onWebSocketTaskOpened` to have been called first")
+        mutableState.withValue {
+          if let webSocket = $0.webSocket {
+            // There are three possibilities here:
+            // 1. the peer sent a close Frame, `onWebSocketTaskClosed` was already
+            //    called and `_connectionClosed` is a no-op.
+            // 2. we sent a close Frame (through `close()`) and `_connectionClosed`
+            //    is a no-op.
+            // 3. an error occurred (e.g. network failure) and `_connectionClosed`
+            //    will signal that and close `event`.
+            webSocket._connectionClosed(
+              code: 1006, reason: Data("abnormal close".utf8))
+          } else if let error {
+            $0.continuation.resume(
+              throwing: WebSocketError.connection(
+                message: "connection ended unexpectedly", error: error))
+          } else {
+            // `onWebSocketTaskOpened` should have been called and resumed continuation.
+            // So either there was an error creating the connection or a logic error.
+            assertionFailure(
+              "expected an error or `onWebSocketTaskOpened` to have been called first")
+          }
         }
       },
       onWebSocketTaskOpened: { session, task, `protocol` in
-        webSocket = URLSessionWebSocket(_task: task, _protocol: `protocol` ?? "")
-        continuation.resume(returning: webSocket!)
+        mutableState.withValue {
+          $0.webSocket = URLSessionWebSocket(_task: task, _protocol: `protocol` ?? "")
+          $0.continuation.resume(returning: $0.webSocket!)
+        }
       },
       onWebSocketTaskClosed: { session, task, code, reason in
-        assert(webSocket != nil, "connection should exist by this time")
-        webSocket!._connectionClosed(code: code, reason: reason)
+        mutableState.withValue {
+          assert($0.webSocket != nil, "connection should exist by this time")
+          $0.webSocket!._connectionClosed(code: code, reason: reason)
+        }
       }
     )
 
     session.webSocketTask(with: url, protocols: protocols ?? []).resume()
-    return try await withCheckedThrowingContinuation { continuation = $0 }
+    return try await withCheckedThrowingContinuation { continuation in
+      mutableState.withValue {
+        $0.continuation = continuation
+      }
+    }
   }
 
   let _task: URLSessionWebSocketTask
