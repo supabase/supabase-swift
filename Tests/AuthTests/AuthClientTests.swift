@@ -7,12 +7,12 @@
 
 import ConcurrencyExtras
 import CustomDump
+import Helpers
 import InlineSnapshotTesting
 import TestHelpers
 import XCTest
 
 @testable import Auth
-@testable import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

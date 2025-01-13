@@ -7,7 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
-@testable import Helpers
+import Helpers
 import XCTest
 
 final class ObservationTokenTests: XCTestCase {
