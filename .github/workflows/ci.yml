@@ -22,6 +22,8 @@ jobs:
         command: [test, ""]
         platform: [IOS, MACOS]
         xcode: ["16.0"]
+        include:
+          - {command: test, skip_release: 1}
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode ${{ matrix.xcode }}
@@ -44,6 +46,9 @@ jobs:
       - run: make dot-env
       - name: Debug
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
+      - name: Release
+        if: matrix.skip_release != '1'
+        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
   xcodebuild:
     name: xcodebuild (15)
@@ -62,6 +67,7 @@ jobs:
           - {xcode: 15.2, platform: WATCHOS}
         include:
           - {xcode: 15.2, skip_release: 1}
+          - {command: test, skip_release: 1}
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode ${{ matrix.xcode }}
