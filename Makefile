@@ -98,14 +98,6 @@ build-linux:
 		swift:5.9 \
 		bash -c 'swift build -c $(CONFIG)'
 
-build-for-library-evolution:
-	swift build \
-		-q \
-		-c release \
-		--target Supabase \
-		-Xswiftc -emit-module-interface \
-		-Xswiftc -enable-library-evolution
-
 .PHONY: build-for-library-evolution format xcodebuild test-docs test-integration
 
 define udid_for
