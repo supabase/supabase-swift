@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "Supabase"
-               BuildableName = "Supabase"
-               BlueprintName = "Supabase"
+               BlueprintIdentifier = "PostgREST"
+               BuildableName = "PostgREST"
+               BlueprintName = "PostgREST"
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
@@ -27,18 +27,8 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
-      <TestPlans>
-         <TestPlanReference
-            reference = "container:TestPlans/Supabase.xctestplan"
-            default = "YES">
-         </TestPlanReference>
-         <TestPlanReference
-            reference = "container:TestPlans/Integration.xctestplan">
-         </TestPlanReference>
-         <TestPlanReference
-            reference = "container:TestPlans/AllTests.xctestplan">
-         </TestPlanReference>
-      </TestPlans>
+      <Testables>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -60,9 +50,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "Supabase"
-            BuildableName = "Supabase"
-            BlueprintName = "Supabase"
+            BlueprintIdentifier = "PostgREST"
+            BuildableName = "PostgREST"
+            BlueprintName = "PostgREST"
             ReferencedContainer = "container:">
          </BuildableReference>
       </MacroExpansion>

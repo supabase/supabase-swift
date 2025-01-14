@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "Functions"
-               BuildableName = "Functions"
-               BlueprintName = "Functions"
+               BlueprintIdentifier = "Storage"
+               BuildableName = "Storage"
+               BlueprintName = "Storage"
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
@@ -27,12 +27,8 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
-      <TestPlans>
-         <TestPlanReference
-            reference = "container:TestPlans/Functions.xctestplan"
-            default = "YES">
-         </TestPlanReference>
-      </TestPlans>
+      <Testables>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -54,9 +50,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "Functions"
-            BuildableName = "Functions"
-            BlueprintName = "Functions"
+            BlueprintIdentifier = "Storage"
+            BuildableName = "Storage"
+            BlueprintName = "Storage"
             ReferencedContainer = "container:">
          </BuildableReference>
       </MacroExpansion>
