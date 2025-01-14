@@ -57,7 +57,7 @@ public struct AuthAdmin: Sendable {
       )
     )
 
-    let response = try httpResponse.decoded(as: Response.self, decoder: configuration.decoder)
+    let response = try await httpResponse.decoded(as: Response.self, decoder: configuration.decoder)
 
     var pagination = ListUsersPaginatedResponse(
       users: response.users,

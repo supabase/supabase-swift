@@ -439,7 +439,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         query: queryItems
       )
     )
-    .data
+    .data()
   }
 
   /// Retrieves the details of an existing file.

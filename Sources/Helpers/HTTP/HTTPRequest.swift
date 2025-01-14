@@ -9,7 +9,7 @@ import Foundation
 import HTTPTypes
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+import FoundationNetworking
 #endif
 
 package struct HTTPRequest: Sendable {
@@ -17,14 +17,14 @@ package struct HTTPRequest: Sendable {
   package var method: HTTPTypes.HTTPRequest.Method
   package var query: [URLQueryItem]
   package var headers: HTTPFields
-  package var body: Data?
+  package var body: Body?
 
   package init(
     url: URL,
     method: HTTPTypes.HTTPRequest.Method,
     query: [URLQueryItem] = [],
     headers: HTTPFields = [:],
-    body: Data? = nil
+    body: Body? = nil
   ) {
     self.url = url
     self.method = method
@@ -33,28 +33,43 @@ package struct HTTPRequest: Sendable {
     self.body = body
   }
 
-  package init?(
-    urlString: String,
+  package init(
+    url: URL,
     method: HTTPTypes.HTTPRequest.Method,
     query: [URLQueryItem] = [],
     headers: HTTPFields = [:],
     body: Data?
   ) {
+    self.url = url
+    self.method = method
+    self.query = query
+
+    self.body = body.map(Body.data)
+
+    var headers = headers
+
+    if body != nil, headers[.contentType] == nil {
+      headers[.contentType] = "application/json"
+    }
+
+    self.headers = headers
+  }
+
+  package init?(
+    urlString: String,
+    method: HTTPTypes.HTTPRequest.Method,
+    query: [URLQueryItem] = [],
+    headers: HTTPFields = [:],
+    body: Body?
+  ) {
     guard let url = URL(string: urlString) else { return nil }
     self.init(url: url, method: method, query: query, headers: headers, body: body)
   }
 
-  package var urlRequest: URLRequest {
-    var urlRequest = URLRequest(url: query.isEmpty ? url : url.appendingQueryItems(query))
-    urlRequest.httpMethod = method.rawValue
-    urlRequest.allHTTPHeaderFields = .init(headers.map { ($0.name.rawName, $0.value) }) { $1 }
-    urlRequest.httpBody = body
-
-    if urlRequest.httpBody != nil, urlRequest.value(forHTTPHeaderField: "Content-Type") == nil {
-      urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    }
-
-    return urlRequest
+  package enum Body: Sendable {
+    case url(URL)
+    case data(Data)
+    case json(any Encodable & Sendable, encoder: JSONEncoder = JSONEncoder())
   }
 }
 

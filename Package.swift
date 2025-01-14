@@ -86,6 +86,7 @@ let package = Package(
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Functions",
         "TestHelpers",
+        "Helpers",
       ],
       exclude: ["__Snapshots__"]
     ),
@@ -167,6 +168,7 @@ let package = Package(
       name: "SupabaseTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
+        "Helpers",
         "Supabase",
       ]
     ),

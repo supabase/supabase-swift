@@ -105,7 +105,7 @@ public final class RealtimeClientV2: Sendable {
         )
       },
       http: HTTPClient(
-        fetch: options.fetch ?? { try await URLSession.shared.data(for: $0) },
+        configuration: .init(),
         interceptors: interceptors
       )
     )

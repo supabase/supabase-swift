@@ -1,7 +1,7 @@
 import ConcurrencyExtras
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -55,7 +55,10 @@ public final class FunctionsClient: Sendable {
       interceptors.append(LoggerInterceptor(logger: logger))
     }
 
-    let http = HTTPClient(fetch: fetch, interceptors: interceptors)
+    let http = HTTPClient(
+      configuration: .init(),
+      interceptors: interceptors
+    )
 
     self.init(url: url, headers: headers, region: region, http: http)
   }
@@ -125,7 +128,7 @@ public final class FunctionsClient: Sendable {
     let response = try await rawInvoke(
       functionName: functionName, invokeOptions: options
     )
-    return try decode(response.data, response.underlyingResponse)
+    return try decode(await response.data(), response.underlyingResponse)
   }
 
   /// Invokes a function and decodes the response as a specific type.
@@ -164,8 +167,8 @@ public final class FunctionsClient: Sendable {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
     let response = try await http.send(request)
 
-    guard 200 ..< 300 ~= response.statusCode else {
-      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
+    guard 200..<300 ~= response.statusCode else {
+      throw FunctionsError.httpError(code: response.statusCode, data: await response.data())
     }
 
     let isRelayError = response.headers[.xRelayError] == "true"
@@ -190,34 +193,19 @@ public final class FunctionsClient: Sendable {
   public func _invokeWithStreamedResponse(
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()
-  ) -> AsyncThrowingStream<Data, any Error> {
-    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-    let delegate = StreamResponseDelegate(continuation: continuation)
-
-    let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
-
-    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
-
-    let task = session.dataTask(with: urlRequest)
-    task.resume()
-
-    continuation.onTermination = { _ in
-      task.cancel()
-
-      // Hold a strong reference to delegate until continuation terminates.
-      _ = delegate
-    }
-
-    return stream
+  ) async throws -> some AsyncSequence {
+    try await http.send(buildRequest(functionName: functionName, options: invokeOptions)).body
   }
 
-  private func buildRequest(functionName: String, options: FunctionInvokeOptions) -> Helpers.HTTPRequest {
+  private func buildRequest(functionName: String, options: FunctionInvokeOptions)
+    -> Helpers.HTTPRequest
+  {
     var request = HTTPRequest(
       url: url.appendingPathComponent(functionName),
       method: options.httpMethod ?? .post,
       query: options.query,
       headers: mutableState.headers.merging(with: options.headers),
-      body: options.body
+      body: options.body.map(HTTPRequest.Body.data)
     )
 
     if let region = options.region ?? region {
@@ -243,13 +231,16 @@ final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
     continuation.finish(throwing: error)
   }
 
-  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+  func urlSession(
+    _: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse,
+    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+  ) {
     guard let httpResponse = response as? HTTPURLResponse else {
       continuation.finish(throwing: URLError(.badServerResponse))
       return
     }
 
-    guard 200 ..< 300 ~= httpResponse.statusCode else {
+    guard 200..<300 ~= httpResponse.statusCode else {
       let error = FunctionsError.httpError(code: httpResponse.statusCode, data: Data())
       continuation.finish(throwing: error)
       return

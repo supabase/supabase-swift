@@ -18,33 +18,38 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
     _ request: HTTPRequest,
     next: @Sendable (HTTPRequest) async throws -> HTTPResponse
   ) async throws -> HTTPResponse {
-    let id = UUID().uuidString
-    return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(merging: ["requestID": .string(id)]) {
-      let urlRequest = request.urlRequest
+//    let id = UUID().uuidString
+//    return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(merging: [
+//      "requestID": .string(id)
+//    ]) {
+//      let urlRequest = request.urlRequest
+//
+//      logger.verbose(
+//        """
+//        Request: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
+//        Body: \(stringfy(request.body))
+//        """
+//      )
+//
+//      do {
+//        let response = try await next(request)
+//        let data = await response.data()
+//        logger.verbose(
+//          """
+//          Response: Status code: \(response.statusCode) Content-Length: \(
+//            response.underlyingResponse.expectedContentLength
+//          )
+//          Body: \(stringfy(data))
+//          """
+//        )
+//        return response
+//      } catch {
+//        logger.error("Response: Failure \(error)")
+//        throw error
+//      }
+//    }
 
-      logger.verbose(
-        """
-        Request: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
-        Body: \(stringfy(request.body))
-        """
-      )
-
-      do {
-        let response = try await next(request)
-        logger.verbose(
-          """
-          Response: Status code: \(response.statusCode) Content-Length: \(
-            response.underlyingResponse.expectedContentLength
-          )
-          Body: \(stringfy(response.data))
-          """
-        )
-        return response
-      } catch {
-        logger.error("Response: Failure \(error)")
-        throw error
-      }
-    }
+    try await next(request)
   }
 }
 

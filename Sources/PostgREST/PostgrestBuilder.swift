@@ -1,7 +1,7 @@
 import ConcurrencyExtras
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -33,7 +33,7 @@ public class PostgrestBuilder: @unchecked Sendable {
       interceptors.append(LoggerInterceptor(logger: logger))
     }
 
-    http = HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
+    http = HTTPClient(configuration: .init(), interceptors: interceptors)
 
     mutableState = LockIsolated(
       MutableState(
@@ -131,16 +131,19 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     let response = try await http.send(request)
 
-    guard 200 ..< 300 ~= response.statusCode else {
-      if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
+    guard 200..<300 ~= response.statusCode else {
+      if let error = try? await response.decoded(
+        as: PostgrestError.self, decoder: configuration.decoder)
+      {
         throw error
       }
 
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
+      throw HTTPError(data: await response.data(), response: response.underlyingResponse)
     }
 
-    let value = try decode(response.data)
-    return PostgrestResponse(data: response.data, response: response.underlyingResponse, value: value)
+    let value = try await decode(response.data())
+    return PostgrestResponse(
+      data: await response.data(), response: response.underlyingResponse, value: value)
   }
 }
 

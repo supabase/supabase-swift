@@ -391,7 +391,7 @@ final class AuthClientTests: XCTestCase {
         }
 
         let response = try await fetch(request)
-        return (response.data, response.underlyingResponse)
+        return (await response.data(), response.underlyingResponse)
       }
     )
 
@@ -408,7 +408,7 @@ extension HTTPResponse {
     headers: [String: String]? = nil
   ) -> HTTPResponse {
     HTTPResponse(
-      data: body.data(using: .utf8)!,
+      body: .string(body),
       response: HTTPURLResponse(
         url: clientURL,
         statusCode: code,
@@ -424,7 +424,7 @@ extension HTTPResponse {
     headers: [String: String]? = nil
   ) -> HTTPResponse {
     HTTPResponse(
-      data: json(named: fileName),
+      body: .data(json(named: fileName)),
       response: HTTPURLResponse(
         url: clientURL,
         statusCode: code,
@@ -440,7 +440,7 @@ extension HTTPResponse {
     headers: [String: String]? = nil
   ) -> HTTPResponse {
     HTTPResponse(
-      data: try! AuthClient.Configuration.jsonEncoder.encode(value),
+      body: .data(try! AuthClient.Configuration.jsonEncoder.encode(value)),
       response: HTTPURLResponse(
         url: clientURL,
         statusCode: code,
