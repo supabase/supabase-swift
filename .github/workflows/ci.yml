@@ -21,7 +21,7 @@ jobs:
       matrix:
         command: [test, ""]
         platform: [IOS, MAC_CATALYST, MACOS, TVOS, VISIONOS, WATCHOS]
-        xcode: ["16.0"]
+        xcode: ["16.2"]
         include:
           - {command: test, skip_release: 1}
     steps:
