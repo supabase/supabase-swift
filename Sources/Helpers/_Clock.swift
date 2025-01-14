@@ -6,6 +6,7 @@
 //
 
 import Clocks
+import ConcurrencyExtras
 import Foundation
 
 package protocol _Clock: Sendable {
@@ -41,12 +42,19 @@ let _resolveClock: @Sendable () -> any _Clock = {
   }
 }
 
-// For overriding clock on tests, we use a mutable _clock in DEBUG builds.
-// nonisolated(unsafe) is safe to use if making sure we assign _clock once in test set up.
-//
-// _clock is read-only in RELEASE builds.
+private let __clock = LockIsolated(_resolveClock())
+
 #if DEBUG
-  nonisolated(unsafe) package var _clock = _resolveClock()
+  package var _clock: any _Clock {
+    get {
+      __clock.value
+    }
+    set {
+      __clock.setValue(newValue)
+    }
+  }
 #else
-  package let _clock = _resolveClock()
+  package var _clock: any _Clock {
+    __clock.value
+  }
 #endif

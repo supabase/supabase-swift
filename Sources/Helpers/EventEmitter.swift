@@ -70,7 +70,7 @@ package final class EventEmitter<Event: Sendable>: Sendable {
   /// The last event emitted by this Emiter, or the initial event.
   package var lastEvent: Event { mutableState.lastEvent }
 
-  let emitsLastEventWhenAttaching: Bool
+  package let emitsLastEventWhenAttaching: Bool
 
   package init(
     initialEvent event: Event,

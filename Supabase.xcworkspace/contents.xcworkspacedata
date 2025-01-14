@@ -7,32 +7,4 @@
    <FileRef
       location = "container:Examples/Examples.xcodeproj">
    </FileRef>
-   <Group
-      location = "group:TestPlans"
-      name = "TestPlans">
-      <FileRef
-         location = "group:Auth.xctestplan">
-      </FileRef>
-      <FileRef
-         location = "group:Realtime.xctestplan">
-      </FileRef>
-      <FileRef
-         location = "group:Functions.xctestplan">
-      </FileRef>
-      <FileRef
-         location = "group:Integration.xctestplan">
-      </FileRef>
-      <FileRef
-         location = "group:AllTests.xctestplan">
-      </FileRef>
-      <FileRef
-         location = "group:Supabase.xctestplan">
-      </FileRef>
-      <FileRef
-         location = "group:PostgREST.xctestplan">
-      </FileRef>
-      <FileRef
-         location = "group:Storage.xctestplan">
-      </FileRef>
-   </Group>
 </Workspace>

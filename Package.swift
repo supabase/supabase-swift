@@ -19,11 +19,13 @@ let package = Package(
     .library(name: "PostgREST", targets: ["PostgREST"]),
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
-    .library(name: "Supabase", targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]),
+    .library(
+      name: "Supabase",
+      targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]),
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
-    .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "4.0.0"),
+    .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0"..<"4.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.2"),
@@ -66,14 +68,14 @@ let package = Package(
         "TestHelpers",
       ],
       exclude: [
-        "__Snapshots__",
+        "__Snapshots__"
       ],
       resources: [.process("Resources")]
     ),
     .target(
       name: "Functions",
       dependencies: [
-        "Helpers",
+        "Helpers"
       ]
     ),
     .testTarget(
@@ -137,7 +139,7 @@ let package = Package(
     .target(
       name: "Storage",
       dependencies: [
-        "Helpers",
+        "Helpers"
       ]
     ),
     .testTarget(

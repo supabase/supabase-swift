@@ -97,6 +97,7 @@ build-linux:
 		-w "$(PWD)" \
 		swift:5.9 \
 		bash -c 'swift build -c $(CONFIG)'
+
 .PHONY: build-for-library-evolution format xcodebuild test-docs test-integration
 
 define udid_for
