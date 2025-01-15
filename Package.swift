@@ -1,4 +1,4 @@
-// swift-tools-version:5.9
+// swift-tools-version:5.10
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import Foundation
@@ -7,11 +7,11 @@ import PackageDescription
 let package = Package(
   name: "Supabase",
   platforms: [
-    .iOS(.v13),
-    .macCatalyst(.v13),
-    .macOS(.v10_15),
-    .watchOS(.v6),
-    .tvOS(.v13),
+    .iOS(.v14),
+    .macCatalyst(.v14),
+    .macOS(.v11),
+    .watchOS(.v7),
+    .tvOS(.v14),
   ],
   products: [
     .library(name: "Auth", targets: ["Auth"]),
