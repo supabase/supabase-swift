@@ -46,19 +46,19 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testDisconnectByUser_shouldNotReconnect() async {
-    await client.realtimeV2.connect()
-    XCTAssertEqual(client.realtimeV2.status, .connected)
+    await client.realtime.connect()
+    XCTAssertEqual(client.realtime.status, .connected)
 
-    client.realtimeV2.disconnect()
+    client.realtime.disconnect()
 
     /// Wait for the reconnection delay
     await testClock.advance(by: .seconds(RealtimeClientOptions.defaultReconnectDelay))
 
-    XCTAssertEqual(client.realtimeV2.status, .disconnected)
+    XCTAssertEqual(client.realtime.status, .disconnected)
   }
 
   func testBroadcast() async throws {
-    let channel = client.realtimeV2.channel("integration") {
+    let channel = client.realtime.channel("integration") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
@@ -115,7 +115,7 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testBroadcastWithUnsubscribedChannel() async throws {
-    let channel = client.realtimeV2.channel("integration") {
+    let channel = client.realtime.channel("integration") {
       $0.broadcast.acknowledgeBroadcasts = true
     }
 
@@ -129,7 +129,7 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testPresence() async throws {
-    let channel = client.realtimeV2.channel("integration") {
+    let channel = client.realtime.channel("integration") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
@@ -180,7 +180,7 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   func testPostgresChanges() async throws {
-    let channel = client.realtimeV2.channel("db-changes")
+    let channel = client.realtime.channel("db-changes")
 
     let receivedInsertActions = Task {
       await channel.postgresChange(InsertAction.self, schema: "public").prefix(1).collect()

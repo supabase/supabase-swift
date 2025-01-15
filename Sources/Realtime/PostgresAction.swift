@@ -26,7 +26,7 @@ public protocol HasOldRecord {
 }
 
 public protocol HasRawMessage {
-  var rawMessage: RealtimeMessageV2 { get }
+  var rawMessage: RealtimeMessage { get }
 }
 
 public struct InsertAction: PostgresAction, HasRecord, HasRawMessage {
@@ -35,7 +35,7 @@ public struct InsertAction: PostgresAction, HasRecord, HasRawMessage {
   public let columns: [Column]
   public let commitTimestamp: Date
   public let record: [String: AnyJSON]
-  public let rawMessage: RealtimeMessageV2
+  public let rawMessage: RealtimeMessage
 }
 
 public struct UpdateAction: PostgresAction, HasRecord, HasOldRecord, HasRawMessage {
@@ -44,7 +44,7 @@ public struct UpdateAction: PostgresAction, HasRecord, HasOldRecord, HasRawMessa
   public let columns: [Column]
   public let commitTimestamp: Date
   public let record, oldRecord: [String: AnyJSON]
-  public let rawMessage: RealtimeMessageV2
+  public let rawMessage: RealtimeMessage
 }
 
 public struct DeleteAction: PostgresAction, HasOldRecord, HasRawMessage {
@@ -53,7 +53,7 @@ public struct DeleteAction: PostgresAction, HasOldRecord, HasRawMessage {
   public let columns: [Column]
   public let commitTimestamp: Date
   public let oldRecord: [String: AnyJSON]
-  public let rawMessage: RealtimeMessageV2
+  public let rawMessage: RealtimeMessage
 }
 
 public enum AnyAction: PostgresAction, HasRawMessage {
@@ -71,7 +71,7 @@ public enum AnyAction: PostgresAction, HasRawMessage {
     }
   }
 
-  public var rawMessage: RealtimeMessageV2 {
+  public var rawMessage: RealtimeMessage {
     wrappedAction.rawMessage
   }
 }

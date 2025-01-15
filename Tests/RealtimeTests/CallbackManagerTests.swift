@@ -134,7 +134,7 @@ final class CallbackManagerTests: XCTestCase {
       commitTimestamp: currentDate,
       record: ["email": .string("new@mail.com")],
       oldRecord: ["email": .string("old@mail.com")],
-      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
+      rawMessage: RealtimeMessage(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
     callbackManager.triggerPostgresChanges(ids: [updateUsersId], data: .update(updateUserAction))
 
@@ -142,7 +142,7 @@ final class CallbackManagerTests: XCTestCase {
       columns: [],
       commitTimestamp: currentDate,
       record: ["email": .string("email@mail.com")],
-      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
+      rawMessage: RealtimeMessage(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
     callbackManager.triggerPostgresChanges(ids: [insertUsersId], data: .insert(insertUserAction))
 
@@ -153,7 +153,7 @@ final class CallbackManagerTests: XCTestCase {
       columns: [],
       commitTimestamp: currentDate,
       oldRecord: ["id": .string("1234")],
-      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
+      rawMessage: RealtimeMessage(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
     callbackManager.triggerPostgresChanges(
       ids: [deleteSpecificUserId],
@@ -178,7 +178,7 @@ final class CallbackManagerTests: XCTestCase {
     XCTAssertNoLeak(callbackManager)
 
     let event = "new_user"
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessage(
       joinRef: nil,
       ref: nil,
       topic: "realtime:users",
@@ -213,7 +213,7 @@ final class CallbackManagerTests: XCTestCase {
     callbackManager.triggerPresenceDiffs(
       joins: joins,
       leaves: leaves,
-      rawMessage: RealtimeMessageV2(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
+      rawMessage: RealtimeMessage(joinRef: nil, ref: nil, topic: "", event: "", payload: [:])
     )
 
     expectNoDifference(receivedAction.value?.joins, joins)
@@ -223,13 +223,13 @@ final class CallbackManagerTests: XCTestCase {
   func testTriggerSystem() {
     let callbackManager = CallbackManager()
 
-    let receivedMessage = LockIsolated(RealtimeMessageV2?.none)
+    let receivedMessage = LockIsolated(RealtimeMessage?.none)
     callbackManager.addSystemCallback { message in
       receivedMessage.setValue(message)
     }
 
     callbackManager.triggerSystem(
-      message: RealtimeMessageV2(
+      message: RealtimeMessage(
         joinRef: nil, ref: nil, topic: "test", event: "system", payload: ["status": "ok"]))
 
     XCTAssertEqual(receivedMessage.value?._eventType, .system)

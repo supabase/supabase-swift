@@ -7,7 +7,7 @@
 
 import Foundation
 
-extension RealtimeChannelV2 {
+extension RealtimeChannel {
   /// Listen for clients joining / leaving the channel using presences.
   public func presenceChange() -> AsyncStream<any PresenceAction> {
     let (stream, continuation) = AsyncStream<any PresenceAction>.makeStream()
@@ -103,8 +103,8 @@ extension RealtimeChannelV2 {
   }
   
   /// Listen for `system` event.
-  public func system() -> AsyncStream<RealtimeMessageV2> {
-    let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream()
+  public func system() -> AsyncStream<RealtimeMessage> {
+    let (stream, continuation) = AsyncStream<RealtimeMessage>.makeStream()
 
     let subscription = onSystem {
       continuation.yield($0)
@@ -115,12 +115,6 @@ extension RealtimeChannelV2 {
     }
 
     return stream
-  }
-
-  /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
-  @available(*, deprecated, renamed: "broadcastStream(event:)")
-  public func broadcast(event: String) -> AsyncStream<JSONObject> {
-    broadcastStream(event: event)
   }
 }
 

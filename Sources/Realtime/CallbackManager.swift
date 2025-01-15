@@ -73,7 +73,7 @@ final class CallbackManager: Sendable {
   }
 
   @discardableResult
-  func addSystemCallback(callback: @escaping @Sendable (RealtimeMessageV2) -> Void) -> Int {
+  func addSystemCallback(callback: @escaping @Sendable (RealtimeMessage) -> Void) -> Int {
     mutableState.withValue {
       $0.id += 1
       $0.callbacks.append(.system(SystemCallback(id: $0.id, callback: callback)))
@@ -132,7 +132,7 @@ final class CallbackManager: Sendable {
   func triggerPresenceDiffs(
     joins: [String: PresenceV2],
     leaves: [String: PresenceV2],
-    rawMessage: RealtimeMessageV2
+    rawMessage: RealtimeMessage
   ) {
     let presenceCallbacks = mutableState.callbacks.compactMap {
       if case let .presence(callback) = $0 {
@@ -151,7 +151,7 @@ final class CallbackManager: Sendable {
     }
   }
 
-  func triggerSystem(message: RealtimeMessageV2) {
+  func triggerSystem(message: RealtimeMessage) {
     let systemCallbacks = mutableState.callbacks.compactMap {
       if case .system(let callback) = $0 {
         return callback
@@ -188,7 +188,7 @@ struct PresenceCallback {
 
 struct SystemCallback {
   var id: Int
-  var callback: @Sendable (RealtimeMessageV2) -> Void
+  var callback: @Sendable (RealtimeMessage) -> Void
 }
 
 enum RealtimeCallback {

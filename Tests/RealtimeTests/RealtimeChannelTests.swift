@@ -12,14 +12,14 @@ import XCTestDynamicOverlay
 @testable import Realtime
 
 final class RealtimeChannelTests: XCTestCase {
-  let sut = RealtimeChannelV2(
+  let sut = RealtimeChannel(
     topic: "topic",
     config: RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(),
       presence: PresenceJoinConfig(),
       isPrivate: false
     ),
-    socket: RealtimeClientV2(
+    socket: RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions()
     ),
