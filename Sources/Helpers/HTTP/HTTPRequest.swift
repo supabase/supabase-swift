@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 23/04/24.
 //
 
+import Alamofire
 import Foundation
 import HTTPTypes
 
@@ -55,6 +56,12 @@ package struct HTTPRequest: Sendable {
     }
 
     return urlRequest
+  }
+}
+
+extension HTTPRequest: URLRequestConvertible {
+  package func asURLRequest() throws -> URLRequest {
+    urlRequest
   }
 }
 

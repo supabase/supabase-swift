@@ -24,6 +24,7 @@ let package = Package(
       targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]),
   ],
   dependencies: [
+    .package(url: "https://github.com/Alamofire/Alamofire", from: "5.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
     .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0"..<"4.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
@@ -36,6 +37,7 @@ let package = Package(
     .target(
       name: "Helpers",
       dependencies: [
+        "Alamofire",
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Clocks", package: "swift-clocks"),
@@ -75,6 +77,7 @@ let package = Package(
     .target(
       name: "Functions",
       dependencies: [
+        "Alamofire",
         "Helpers"
       ]
     ),
