@@ -395,7 +395,6 @@ public final class SupabaseClient: Sendable {
       return nil
     }
 
-    functions.setAuth(token: accessToken)
     realtime.setAuth(accessToken)
     await realtimeV2.setAuth(accessToken)
   }
