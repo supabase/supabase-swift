@@ -99,7 +99,8 @@ public final class SupabaseClient: Sendable {
           headers: headers,
           region: options.functions.region,
           logger: options.global.logger,
-          fetch: fetchWithAuth
+          fetch: fetchWithAuth,
+          _requestAdapter: adapt
         )
       }
 
@@ -347,6 +348,7 @@ public final class SupabaseClient: Sendable {
     try await session.upload(for: adapt(request: request), from: data)
   }
 
+  @Sendable
   private func adapt(request: URLRequest) async -> URLRequest {
     let token = try? await _getAccessToken()
 
