@@ -23,7 +23,7 @@ jobs:
         platform: [IOS, MACOS]
         xcode: ["16.2"]
         include:
-          - {command: test, skip_release: 1}
+          - { command: test, skip_release: 1 }
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode ${{ matrix.xcode }}
@@ -59,13 +59,13 @@ jobs:
         platform: [IOS, MAC_CATALYST, MACOS, TVOS, VISIONOS, WATCHOS]
         xcode: [15.2, 15.4]
         exclude:
-          - {xcode: 15.2, command: test}
-          - {xcode: 15.2, platform: MAC_CATALYST}
-          - {xcode: 15.2, platform: TVOS}
-          - {xcode: 15.2, platform: VISIONOS}
-          - {xcode: 15.2, platform: WATCHOS}
+          - { xcode: 15.2, command: test }
+          - { xcode: 15.2, platform: MAC_CATALYST }
+          - { xcode: 15.2, platform: TVOS }
+          - { xcode: 15.2, platform: VISIONOS }
+          - { xcode: 15.2, platform: WATCHOS }
         include:
-          - {command: test, skip_release: 1}
+          - { command: test, skip_release: 1 }
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode ${{ matrix.xcode }}
@@ -98,6 +98,25 @@ jobs:
       - name: Release
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+
+  coverage:
+    runs-on: macos-15
+    name: coverage report
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install coveralls-lcov
+        run: sudo gem install coveralls-lcov
+      - name: Test with code coverage
+        run: |
+          swift test --enable-code-coverage --skip IntegrationTests
+          xcrun llvm-cov export \
+            -format=lcov \
+            -ignore-filename-regex="Tests" \
+            -instr-profile .build/debug/codecov/default.profdata \
+            .build/debug/SupabasePackageTests.xctest/Contents/MacOS/SupabasePackageTests \
+            > coverage.info
+      - name: Upload to coveralls
+        run: coveralls-lcov --repo-token ${{ secrets.COVERALLS_TOKEN }} coverage.info
 
   # linux:
   #   name: linux
