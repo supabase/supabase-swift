@@ -64,7 +64,7 @@ public struct SupabaseClientOptions: Sendable {
     /// Note that this function may be called concurrently and many times. Use memoization and locking techniques if this is not supported by the client libraries.
     /// When set, the `auth` namespace of the Supabase client cannot be used.
     /// Create another client if you wish to use Supabase Auth and third-party authentications concurrently in the same application.
-    public let accessToken: (@Sendable () async throws -> String)?
+    public let accessToken: (@Sendable () async throws -> String?)?
 
     public init(
       storage: any AuthLocalStorage,
@@ -74,7 +74,7 @@ public struct SupabaseClientOptions: Sendable {
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
-      accessToken: (@Sendable () async throws -> String)? = nil
+      accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.storage = storage
       self.redirectToURL = redirectToURL
@@ -163,7 +163,7 @@ extension SupabaseClientOptions.AuthOptions {
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
-      accessToken: (@Sendable () async throws -> String)? = nil
+      accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.init(
         storage: AuthClient.Configuration.defaultLocalStorage,

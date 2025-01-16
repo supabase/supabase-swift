@@ -357,7 +357,7 @@ public final class SupabaseClient: Sendable {
     return request
   }
 
-  private func _getAccessToken() async throws -> String {
+  private func _getAccessToken() async throws -> String? {
     if let accessToken = options.auth.accessToken {
       try await accessToken()
     } else {
@@ -407,7 +407,7 @@ public final class SupabaseClient: Sendable {
 
     if realtimeOptions.accessToken == nil {
       realtimeOptions.accessToken = { [weak self] in
-        try await self?._getAccessToken() ?? ""
+        try await self?._getAccessToken()
       }
     } else {
       reportIssue(
