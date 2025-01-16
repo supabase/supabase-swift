@@ -108,6 +108,7 @@ jobs:
         run: sudo gem install coveralls-lcov
       - name: Test with code coverage
         run: |
+          make dot-env
           swift test --enable-code-coverage --skip IntegrationTests
           xcrun llvm-cov export \
             -format=lcov \
