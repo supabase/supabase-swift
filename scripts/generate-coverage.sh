@@ -2,7 +2,7 @@
 
 # Define variables
 SCHEME="Supabase"               # Replace with your Xcode scheme name
-OUTPUT_FILE="coverage.info"     # Output coverage file name
+OUTPUT_FILE="lcov.info"     # Output coverage file name
 TEMP_COVERAGE_DIR="temp_coverage" # Temporary directory for intermediate coverage files
 
 # Step 2: Find the profdata file
@@ -55,6 +55,7 @@ done
 # Step 5: Merge coverage data into a single file
 echo "Merging coverage data..."
 rm -f "$OUTPUT_FILE" # Ensure the output file doesn't already exist
+
 for INFO_FILE in "$TEMP_COVERAGE_DIR"/*.info; do
   if [ -f "$INFO_FILE" ]; then
     lcov --add-tracefile "$INFO_FILE" --output-file "$OUTPUT_FILE"

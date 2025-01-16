@@ -58,6 +58,10 @@ jobs:
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
       - uses: coverallsapp/github-action@v2.3.4
         if: steps.coverage.outcome == 'success'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: lcov.info
+
 
   xcodebuild:
     name: xcodebuild (15)
