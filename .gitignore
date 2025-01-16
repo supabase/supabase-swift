@@ -100,3 +100,5 @@ iOSInjectionProject/
 .env
 Secrets.swift
 DotEnv.swift
+lcov.info
+temp_coverage

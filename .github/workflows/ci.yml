@@ -23,7 +23,7 @@ jobs:
         platform: [IOS, MACOS]
         xcode: ["16.2"]
         include:
-          - {command: test, skip_release: 1}
+          - { command: test, skip_release: 1 }
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode ${{ matrix.xcode }}
@@ -49,6 +49,19 @@ jobs:
       - name: Release
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+      - name: Instal lcov
+        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        run: brew install lcov
+      - name: Export code coverage
+        id: coverage
+        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
+      - uses: coverallsapp/github-action@v2.3.4
+        if: steps.coverage.outcome == 'success'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: lcov.info
+
 
   xcodebuild:
     name: xcodebuild (15)
@@ -59,13 +72,13 @@ jobs:
         platform: [IOS, MAC_CATALYST, MACOS, TVOS, VISIONOS, WATCHOS]
         xcode: [15.2, 15.4]
         exclude:
-          - {xcode: 15.2, command: test}
-          - {xcode: 15.2, platform: MAC_CATALYST}
-          - {xcode: 15.2, platform: TVOS}
-          - {xcode: 15.2, platform: VISIONOS}
-          - {xcode: 15.2, platform: WATCHOS}
+          - { xcode: 15.2, command: test }
+          - { xcode: 15.2, platform: MAC_CATALYST }
+          - { xcode: 15.2, platform: TVOS }
+          - { xcode: 15.2, platform: VISIONOS }
+          - { xcode: 15.2, platform: WATCHOS }
         include:
-          - {command: test, skip_release: 1}
+          - { command: test, skip_release: 1 }
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode ${{ matrix.xcode }}

@@ -1,6 +1,7 @@
 CONFIG = Debug
 
 DERIVED_DATA_PATH = ~/.derivedData/$(CONFIG)
+TEMP_COVERAGE_DIR := temp_coverage
 
 PLATFORM_IOS = iOS Simulator,id=$(call udid_for,iOS,iPhone \d\+ Pro [^M])
 PLATFORM_MACOS = macOS
@@ -25,7 +26,7 @@ XCODEBUILD_FLAGS = \
 	-destination $(DESTINATION) \
 	-scheme "$(SCHEME)" \
 	-skipMacroValidation \
-	-workspace $(WORKSPACE)
+	-workspace $(WORKSPACE) \
 
 XCODEBUILD_COMMAND = xcodebuild $(XCODEBUILD_ARGUMENT) $(XCODEBUILD_FLAGS)
 
@@ -99,6 +100,10 @@ build-linux:
 		bash -c 'swift build -c $(CONFIG)'
 
 .PHONY: build-for-library-evolution format xcodebuild test-docs test-integration
+
+.PHONY: coverage
+coverage:
+	@DERIVED_DATA_PATH=$(DERIVED_DATA_PATH) ./scripts/generate-coverage.sh
 
 define udid_for
 $(shell xcrun simctl list devices available '$(1)' | grep '$(2)' | sort -r | head -1 | awk -F '[()]' '{ print $$(NF-3) }')
