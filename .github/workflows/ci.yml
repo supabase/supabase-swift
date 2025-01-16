@@ -49,6 +49,12 @@ jobs:
       - name: Release
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+      - name: Export code coverage
+        id: coverage
+        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
+      - uses: coverallsapp/github-action@v2.3.4
+        if: steps.coverage.outcome == 'success'
 
   xcodebuild:
     name: xcodebuild (15)
@@ -98,26 +104,6 @@ jobs:
       - name: Release
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
-
-  coverage:
-    runs-on: macos-15
-    name: coverage report
-    steps:
-      - uses: actions/checkout@v4
-      - name: Test with code coverage
-        run: |
-          make dot-env
-          swift test --enable-code-coverage --skip IntegrationTests
-          xcrun llvm-profdata merge \
-            -sparse .build/debug/codecov/*.profraw \
-            -o .build/debug/codecov/default.profdata
-          xcrun llvm-cov export \
-            -format=lcov \
-            -ignore-filename-regex="Tests|.build" \
-            -instr-profile .build/debug/codecov/default.profdata \
-            .build/debug/SupabasePackageTests.xctest/Contents/MacOS/SupabasePackageTests \
-            > coverage.info
-      - uses: coverallsapp/github-action@v2.3.4
 
   # linux:
   #   name: linux
