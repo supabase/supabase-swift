@@ -104,20 +104,20 @@ jobs:
     name: coverage report
     steps:
       - uses: actions/checkout@v4
-      - name: Install coveralls-lcov
-        run: sudo gem install coveralls-lcov
       - name: Test with code coverage
         run: |
           make dot-env
           swift test --enable-code-coverage --skip IntegrationTests
+          xcrun llvm-profdata merge \
+            -sparse .build/debug/codecov/*.profraw \
+            -o .build/debug/codecov/default.profdata
           xcrun llvm-cov export \
             -format=lcov \
-            -ignore-filename-regex="Tests" \
+            -ignore-filename-regex="Tests|.build" \
             -instr-profile .build/debug/codecov/default.profdata \
             .build/debug/SupabasePackageTests.xctest/Contents/MacOS/SupabasePackageTests \
             > coverage.info
-      - name: Upload to coveralls
-        run: coveralls-lcov --repo-token ${{ secrets.COVERALLS_TOKEN }} coverage.info
+      - uses: coverallsapp/github-action@v2.3.4
 
   # linux:
   #   name: linux
