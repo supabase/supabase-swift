@@ -49,6 +49,9 @@ jobs:
       - name: Release
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+      - name: Instal lcov
+        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        run: brew install lcov
       - name: Export code coverage
         id: coverage
         if: matrix.command == 'test' && matrix.platform == 'IOS'
