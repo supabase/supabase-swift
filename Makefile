@@ -2,7 +2,6 @@ CONFIG = Debug
 
 DERIVED_DATA_PATH = ~/.derivedData/$(CONFIG)
 TEMP_COVERAGE_DIR := temp_coverage
-OUTPUT_FILE := coverage.info
 
 PLATFORM_IOS = iOS Simulator,id=$(call udid_for,iOS,iPhone \d\+ Pro [^M])
 PLATFORM_MACOS = macOS
