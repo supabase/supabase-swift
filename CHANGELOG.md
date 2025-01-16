@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.24.4](https://github.com/supabase/supabase-swift/compare/v2.24.3...v2.24.4) (2025-01-16)
+
+
+### Bug Fixes
+
+* Make the return value of accessToken nullable ([#641](https://github.com/supabase/supabase-swift/issues/641)) ([af9b774](https://github.com/supabase/supabase-swift/commit/af9b77453892da562c444e94ff7538051a2dd0a4))
+
 ## [2.24.3](https://github.com/supabase/supabase-swift/compare/v2.24.2...v2.24.3) (2025-01-14)
 
 
