@@ -38,23 +38,8 @@ endif
 
 TEST_RUNNER_CI = $(CI)
 
-export SECRETS
-define SECRETS
-enum DotEnv {
-  static let SUPABASE_URL = "$(SUPABASE_URL)"
-  static let SUPABASE_ANON_KEY = "$(SUPABASE_ANON_KEY)"
-  static let SUPABASE_SERVICE_ROLE_KEY = "$(SUPABASE_SERVICE_ROLE_KEY)"
-}
-endef
-
 xcodebuild:
 	$(XCODEBUILD)
-
-load-env:
-	@. ./scripts/load_env.sh
-
-dot-env:
-	@echo "$$SECRETS" > Tests/IntegrationTests/DotEnv.swift
 
 test-integration:
 	cd Tests/IntegrationTests && supabase start && supabase db reset
