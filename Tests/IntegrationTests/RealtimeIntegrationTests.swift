@@ -29,7 +29,7 @@ final class RealtimeIntegrationTests: XCTestCase {
   let testClock = TestClock<Duration>()
 
   let client = SupabaseClient(
-    supabaseURL: URL(string: DotEnv.SUPABASE_URL) ?? URL(string: "http://localhost:54321")!,
+    supabaseURL: URL(string: DotEnv.SUPABASE_URL)!,
     supabaseKey: DotEnv.SUPABASE_ANON_KEY
   )
 

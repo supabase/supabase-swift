@@ -56,8 +56,10 @@ load-env:
 dot-env:
 	@echo "$$SECRETS" > Tests/IntegrationTests/DotEnv.swift
 
-test-integration: dot-env
-	$(MAKE) TEST_PLAN=Integration xcodebuild
+test-integration:
+	cd Tests/IntegrationTests && supabase start && supabase db reset
+	swift test --filter IntegrationTests
+	cd Tests/IntegrationTests && supabase stop
 
 build-for-library-evolution:
 	swift build \
