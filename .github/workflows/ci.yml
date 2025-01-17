@@ -111,16 +111,21 @@ jobs:
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
-  integration-tests:
+  linux:
     runs-on: ubuntu-latest
-    name: Integration Tests
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
+      - uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
       - run: supabase start
         working-directory: ./Tests/IntegrationTests
       - name: Run tests
-        run: swift test --filter IntegrationTests
+        run: swift test
         env:
           SUPABASE_URL: http://localhost:54321
           SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
@@ -129,30 +134,6 @@ jobs:
         if: always()
         run: supabase stop
         working-directory: ./Tests/IntegrationTests
-
-  # linux:
-  #   name: linux
-  #   strategy:
-  #     matrix:
-  #       swift-version: ["5.10"]
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: swift-actions/setup-swift@v2
-  #       with:
-  #         swift-version: ${{ matrix.swift-version }}
-  #     - name: Cache build
-  #       uses: actions/cache@v3
-  #       with:
-  #         path: |
-  #           .build
-  #         key: |
-  #           build-spm-linux-${{ matrix.swift-version }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Package.resolved') }}
-  #         restore-keys: |
-  #           build-spm-linux-${{ matrix.swift-version }}-
-  #     - run: make dot-env
-  #     - name: Run tests
-  #       run: swift test --skip IntegrationTests
 
   # library-evolution:
   #   name: Library (evolution)
