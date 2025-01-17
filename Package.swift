@@ -99,7 +99,10 @@ let package = Package(
         "Supabase",
         "TestHelpers",
       ],
-      resources: [.process("Fixtures")]
+      resources: [
+        .process("Fixtures"),
+        .process("supabase"),
+      ]
     ),
     .target(
       name: "PostgREST",
@@ -149,6 +152,9 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Storage",
+      ],
+      resources: [
+        .copy("sadcat.jpg")
       ]
     ),
     .target(

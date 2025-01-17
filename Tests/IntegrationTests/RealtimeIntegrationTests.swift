@@ -30,7 +30,12 @@ final class RealtimeIntegrationTests: XCTestCase {
 
   let client = SupabaseClient(
     supabaseURL: URL(string: DotEnv.SUPABASE_URL)!,
-    supabaseKey: DotEnv.SUPABASE_ANON_KEY
+    supabaseKey: DotEnv.SUPABASE_ANON_KEY,
+    options: SupabaseClientOptions(
+      auth: SupabaseClientOptions.AuthOptions(
+        storage: InMemoryLocalStorage()
+      )
+    )
   )
 
   override func setUp() {
