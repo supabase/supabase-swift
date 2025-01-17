@@ -58,7 +58,10 @@ rm -f "$OUTPUT_FILE" # Ensure the output file doesn't already exist
 
 for INFO_FILE in "$TEMP_COVERAGE_DIR"/*.info; do
   if [ -f "$INFO_FILE" ]; then
-    lcov --add-tracefile "$INFO_FILE" --output-file "$OUTPUT_FILE"
+    lcov \
+      --ignore-errors inconsistent \
+      --add-tracefile "$INFO_FILE" \
+      --output-file "$OUTPUT_FILE"
     if [ $? -ne 0 ]; then
       echo "Failed to merge $INFO_FILE into $OUTPUT_FILE. Exiting."
       exit 1
