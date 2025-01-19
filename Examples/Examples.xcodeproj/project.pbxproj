@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		792404BA2C3454A9002959B3 /* SupaDriveApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 792404B92C3454A9002959B3 /* SupaDriveApp.swift */; };
+		792404BE2C3454AA002959B3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 792404BD2C3454AA002959B3 /* Assets.xcassets */; };
+		792404C22C3454AA002959B3 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 792404C12C3454AA002959B3 /* Preview Assets.xcassets */; };
+		792404E32C3473EC002959B3 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 792404E22C3473EC002959B3 /* Supabase */; };
+		792404E52C347466002959B3 /* AppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 792404E42C347463002959B3 /* AppView.swift */; };
+		792404E72C348620002959B3 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 792404E62C34861E002959B3 /* AuthView.swift */; };
 		7928145D2CAB2CE2000B4ADB /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7928145C2CAB2CDE000B4ADB /* ResetPasswordView.swift */; };
 		793895CA2954ABFF0044F2B8 /* ExamplesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895C92954ABFF0044F2B8 /* ExamplesApp.swift */; };
 		793895CC2954ABFF0044F2B8 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793895CB2954ABFF0044F2B8 /* RootView.swift */; };
@@ -28,8 +34,10 @@
 		7956406A2955AFBD0088A06F /* ErrorText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795640692955AFBD0088A06F /* ErrorText.swift */; };
 		7956406D2955B3500088A06F /* SwiftUINavigation in Frameworks */ = {isa = PBXBuildFile; productRef = 7956406C2955B3500088A06F /* SwiftUINavigation */; };
 		795640702955B5190088A06F /* IdentifiedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 7956406F2955B5190088A06F /* IdentifiedCollections */; };
+		79615DF92C3DA92C005AE6E0 /* CustomDump in Frameworks */ = {isa = PBXBuildFile; productRef = 79615DF82C3DA92C005AE6E0 /* CustomDump */; };
 		796298992AEBBA77000AA957 /* MFAFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796298982AEBBA77000AA957 /* MFAFlow.swift */; };
 		7962989D2AEBC6F9000AA957 /* SVGView in Frameworks */ = {isa = PBXBuildFile; productRef = 7962989C2AEBC6F9000AA957 /* SVGView */; };
+		796B32BE2C4559E900DDD7B4 /* IdentifiedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 796B32BD2C4559E900DDD7B4 /* IdentifiedCollections */; };
 		79719ECE2ADF26C400737804 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79719ECD2ADF26C400737804 /* Supabase */; };
 		797D664A2B46A1D8007592ED /* Dependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797D66492B46A1D8007592ED /* Dependencies.swift */; };
 		797EFB662BABD82A00098D6B /* BucketList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797EFB652BABD82A00098D6B /* BucketList.swift */; };
@@ -79,6 +87,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		792404B72C3454A9002959B3 /* SupaDrive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SupaDrive.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		792404B92C3454A9002959B3 /* SupaDriveApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupaDriveApp.swift; sourceTree = "<group>"; };
+		792404BD2C3454AA002959B3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		792404BF2C3454AA002959B3 /* SupaDrive.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SupaDrive.entitlements; sourceTree = "<group>"; };
+		792404C12C3454AA002959B3 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		792404E42C347463002959B3 /* AppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppView.swift; sourceTree = "<group>"; };
+		792404E62C34861E002959B3 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		7928145C2CAB2CDE000B4ADB /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
 		793895C62954ABFF0044F2B8 /* Examples.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Examples.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		793895C92954ABFF0044F2B8 /* ExamplesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExamplesApp.swift; sourceTree = "<group>"; };
@@ -151,6 +166,16 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		792404B42C3454A9002959B3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				796B32BE2C4559E900DDD7B4 /* IdentifiedCollections in Frameworks */,
+				792404E32C3473EC002959B3 /* Supabase in Frameworks */,
+				79615DF92C3DA92C005AE6E0 /* CustomDump in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		793895C32954ABFF0044F2B8 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -184,12 +209,34 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		792404B82C3454A9002959B3 /* SupaDrive */ = {
+			isa = PBXGroup;
+			children = (
+				792404E62C34861E002959B3 /* AuthView.swift */,
+				792404E42C347463002959B3 /* AppView.swift */,
+				792404B92C3454A9002959B3 /* SupaDriveApp.swift */,
+				792404BD2C3454AA002959B3 /* Assets.xcassets */,
+				792404BF2C3454AA002959B3 /* SupaDrive.entitlements */,
+				792404C02C3454AA002959B3 /* Preview Content */,
+			);
+			path = SupaDrive;
+			sourceTree = "<group>";
+		};
+		792404C02C3454AA002959B3 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				792404C12C3454AA002959B3 /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
 		793895BD2954ABFF0044F2B8 = {
 			isa = PBXGroup;
 			children = (
 				793895C82954ABFF0044F2B8 /* Examples */,
 				79FEFFAD2B07873600D36347 /* UserManagement */,
 				79D884C82B3C18830009EA4A /* SlackClone */,
+				792404B82C3454A9002959B3 /* SupaDrive */,
 				793895C72954ABFF0044F2B8 /* Products */,
 				7956405A2954AC3E0088A06F /* Frameworks */,
 			);
@@ -201,6 +248,7 @@
 				793895C62954ABFF0044F2B8 /* Examples.app */,
 				79FEFFAC2B07873600D36347 /* UserManagement.app */,
 				79D884C72B3C18830009EA4A /* SlackClone.app */,
+				792404B72C3454A9002959B3 /* SupaDrive.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -350,6 +398,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		792404B62C3454A9002959B3 /* SupaDrive */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 792404DF2C3454AA002959B3 /* Build configuration list for PBXNativeTarget "SupaDrive" */;
+			buildPhases = (
+				792404B32C3454A9002959B3 /* Sources */,
+				792404B42C3454A9002959B3 /* Frameworks */,
+				792404B52C3454A9002959B3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SupaDrive;
+			packageProductDependencies = (
+				792404E22C3473EC002959B3 /* Supabase */,
+				79615DF82C3DA92C005AE6E0 /* CustomDump */,
+				796B32BD2C4559E900DDD7B4 /* IdentifiedCollections */,
+			);
+			productName = SupaDrive;
+			productReference = 792404B72C3454A9002959B3 /* SupaDrive.app */;
+			productType = "com.apple.product-type.application";
+		};
 		793895C52954ABFF0044F2B8 /* Examples */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 793895D52954AC000044F2B8 /* Build configuration list for PBXNativeTarget "Examples" */;
@@ -423,9 +493,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1510;
+				LastSwiftUpdateCheck = 1600;
 				LastUpgradeCheck = 1510;
 				TargetAttributes = {
+					792404B62C3454A9002959B3 = {
+						CreatedOnToolsVersion = 16.0;
+					};
 					793895C52954ABFF0044F2B8 = {
 						CreatedOnToolsVersion = 14.1;
 					};
@@ -451,6 +524,7 @@
 				7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */,
 				7962989B2AEBC6F9000AA957 /* XCRemoteSwiftPackageReference "SVGView" */,
 				79E2B5562B97890F0042CD21 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				79615DF72C3DA92C005AE6E0 /* XCRemoteSwiftPackageReference "swift-custom-dump" */,
 			);
 			productRefGroup = 793895C72954ABFF0044F2B8 /* Products */;
 			projectDirPath = "";
@@ -459,11 +533,21 @@
 				793895C52954ABFF0044F2B8 /* Examples */,
 				79FEFFAB2B07873600D36347 /* UserManagement */,
 				79D884C62B3C18830009EA4A /* SlackClone */,
+				792404B62C3454A9002959B3 /* SupaDrive */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		792404B52C3454A9002959B3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				792404C22C3454AA002959B3 /* Preview Assets.xcassets in Resources */,
+				792404BE2C3454AA002959B3 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		793895C42954ABFF0044F2B8 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -495,6 +579,16 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		792404B32C3454A9002959B3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				792404BA2C3454A9002959B3 /* SupaDriveApp.swift in Sources */,
+				792404E52C347466002959B3 /* AppView.swift in Sources */,
+				792404E72C348620002959B3 /* AuthView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		793895C22954ABFF0044F2B8 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -572,6 +666,87 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		792404D92C3454AA002959B3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = SupaDrive/SupaDrive.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"SupaDrive/Preview Content\"";
+				DEVELOPMENT_TEAM = ELTTE7K8TT;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.SupaDrive;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 2.0;
+			};
+			name = Debug;
+		};
+		792404DA2C3454AA002959B3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = SupaDrive/SupaDrive.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"SupaDrive/Preview Content\"";
+				DEVELOPMENT_TEAM = ELTTE7K8TT;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.SupaDrive;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 2.0;
+			};
+			name = Release;
+		};
 		793895D32954AC000044F2B8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -928,6 +1103,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		792404DF2C3454AA002959B3 /* Build configuration list for PBXNativeTarget "SupaDrive" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				792404D92C3454AA002959B3 /* Debug */,
+				792404DA2C3454AA002959B3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		793895C12954ABFF0044F2B8 /* Build configuration list for PBXProject "Examples" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -983,6 +1167,14 @@
 				minimumVersion = 1.0.0;
 			};
 		};
+		79615DF72C3DA92C005AE6E0 /* XCRemoteSwiftPackageReference "swift-custom-dump" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-custom-dump";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.0;
+			};
+		};
 		7962989B2AEBC6F9000AA957 /* XCRemoteSwiftPackageReference "SVGView" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/exyte/SVGView";
@@ -1002,6 +1194,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		792404E22C3473EC002959B3 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Supabase;
+		};
 		7956406C2955B3500088A06F /* SwiftUINavigation */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7956406B2955B3500088A06F /* XCRemoteSwiftPackageReference "swiftui-navigation" */;
@@ -1012,10 +1208,20 @@
 			package = 7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */;
 			productName = IdentifiedCollections;
 		};
+		79615DF82C3DA92C005AE6E0 /* CustomDump */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 79615DF72C3DA92C005AE6E0 /* XCRemoteSwiftPackageReference "swift-custom-dump" */;
+			productName = CustomDump;
+		};
 		7962989C2AEBC6F9000AA957 /* SVGView */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7962989B2AEBC6F9000AA957 /* XCRemoteSwiftPackageReference "SVGView" */;
 			productName = SVGView;
+		};
+		796B32BD2C4559E900DDD7B4 /* IdentifiedCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */;
+			productName = IdentifiedCollections;
 		};
 		79719ECD2ADF26C400737804 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
