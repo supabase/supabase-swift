@@ -38,7 +38,7 @@ final class StorageFileAPITests: XCTestCase {
     storage = SupabaseStorageClient(
       configuration: StorageClientConfiguration(
         url: url,
-        headers: [:],
+        headers: ["X-Client-Info": "storage-swift/0.0.0"],
         session: mockSession,
         logger: nil
       )
@@ -76,7 +76,7 @@ final class StorageFileAPITests: XCTestCase {
         curl \
         	--request POST \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/2.24.4" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
         	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
         	"http://localhost:54321/storage/v1/object/list/bucket"
         """#
@@ -107,7 +107,7 @@ final class StorageFileAPITests: XCTestCase {
         curl \
         	--request POST \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/2.24.4" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
         	--data "{\"bucketId\":\"bucket\",\"destinationBucket\":null,\"destinationKey\":\"new\/path.txt\",\"sourceKey\":\"old\/path.txt\"}" \
         	"http://localhost:54321/storage/v1/object/move"
         """#
@@ -141,7 +141,7 @@ final class StorageFileAPITests: XCTestCase {
         curl \
         	--request POST \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/2.24.4" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
         	--data "{\"bucketId\":\"bucket\",\"destinationBucket\":null,\"destinationKey\":\"dest\/file.txt\",\"sourceKey\":\"source\/file.txt\"}" \
         	"http://localhost:54321/storage/v1/object/copy"
         """#
@@ -176,7 +176,7 @@ final class StorageFileAPITests: XCTestCase {
         curl \
         	--request POST \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/2.24.4" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
         	--data "{\"expiresIn\":3600}" \
         	"http://localhost:54321/storage/v1/object/sign/bucket/file.txt"
         """#
@@ -215,7 +215,7 @@ final class StorageFileAPITests: XCTestCase {
         curl \
         	--request POST \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/2.24.4" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
         	--data "{\"expiresIn\":3600,\"paths\":[\"file.txt\",\"file2.txt\"]}" \
         	"http://localhost:54321/storage/v1/object/sign/bucket"
         """#

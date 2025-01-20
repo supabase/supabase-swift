@@ -37,7 +37,7 @@ final class StorageBucketAPITests: XCTestCase {
     storage = SupabaseStorageClient(
       configuration: StorageClientConfiguration(
         url: URL(string: "http://example.com")!,
-        headers: [:],
+        headers: ["X-Client-Info": "storage-swift/0.0.0"],
         session: mockSession,
         logger: nil
       )
@@ -72,7 +72,7 @@ final class StorageBucketAPITests: XCTestCase {
       assertInlineSnapshot(of: $0, as: .curl) {
         #"""
         curl \
-        	--header "X-Client-Info: storage-swift/2.24.4" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
         	"http://example.com/bucket/bucket123"
         """#
       }
@@ -111,7 +111,7 @@ final class StorageBucketAPITests: XCTestCase {
       assertInlineSnapshot(of: $0, as: .curl) {
         #"""
         curl \
-        	--header "X-Client-Info: storage-swift/2.24.4" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
         	"http://example.com/bucket"
         """#
       }
@@ -152,7 +152,7 @@ final class StorageBucketAPITests: XCTestCase {
         curl \
         	--request POST \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/2.24.4" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
         	--data "{\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":true}" \
         	"http://example.com/bucket"
         """#
@@ -196,7 +196,7 @@ final class StorageBucketAPITests: XCTestCase {
         curl \
         	--request PUT \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/2.24.4" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
         	--data "{\"id\":\"bucket123\",\"name\":\"bucket123\",\"public\":true}" \
         	"http://example.com/bucket/bucket123"
         """#
@@ -228,7 +228,7 @@ final class StorageBucketAPITests: XCTestCase {
         #"""
         curl \
         	--request DELETE \
-        	--header "X-Client-Info: storage-swift/2.24.4" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
         	"http://example.com/bucket/bucket123"
         """#
       }
@@ -255,7 +255,7 @@ final class StorageBucketAPITests: XCTestCase {
         #"""
         curl \
         	--request POST \
-        	--header "X-Client-Info: storage-swift/2.24.4" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
         	"http://example.com/bucket/bucket123/empty"
         """#
       }
