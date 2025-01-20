@@ -1,7 +1,7 @@
 import ConcurrencyExtras
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -164,7 +164,7 @@ public final class FunctionsClient: Sendable {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
     let response = try await http.send(request)
 
-    guard 200 ..< 300 ~= response.statusCode else {
+    guard 200..<300 ~= response.statusCode else {
       throw FunctionsError.httpError(code: response.statusCode, data: response.data)
     }
 
@@ -211,10 +211,12 @@ public final class FunctionsClient: Sendable {
     return stream
   }
 
-  private func buildRequest(functionName: String, options: FunctionInvokeOptions) -> Helpers.HTTPRequest {
+  private func buildRequest(functionName: String, options: FunctionInvokeOptions)
+    -> Helpers.HTTPRequest
+  {
     var request = HTTPRequest(
       url: url.appendingPathComponent(functionName),
-      method: options.httpMethod ?? .post,
+      method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
       query: options.query,
       headers: mutableState.headers.merging(with: options.headers),
       body: options.body
@@ -230,12 +232,14 @@ public final class FunctionsClient: Sendable {
 
 final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
   let continuation: AsyncThrowingStream<Data, any Error>.Continuation
+  let lastReceivedData = LockIsolated<Data?>(nil)
 
   init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
     self.continuation = continuation
   }
 
   func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
+    lastReceivedData.setValue(data)
     continuation.yield(data)
   }
 
@@ -243,14 +247,24 @@ final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
     continuation.finish(throwing: error)
   }
 
-  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+  func urlSession(
+    _: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse,
+    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+  ) {
+    defer {
+      completionHandler(.allow)
+    }
+
     guard let httpResponse = response as? HTTPURLResponse else {
       continuation.finish(throwing: URLError(.badServerResponse))
       return
     }
 
-    guard 200 ..< 300 ~= httpResponse.statusCode else {
-      let error = FunctionsError.httpError(code: httpResponse.statusCode, data: Data())
+    guard 200..<300 ~= httpResponse.statusCode else {
+      let error = FunctionsError.httpError(
+        code: httpResponse.statusCode,
+        data: lastReceivedData.value ?? Data()
+      )
       continuation.finish(throwing: error)
       return
     }
@@ -259,6 +273,5 @@ final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
     if isRelayError {
       continuation.finish(throwing: FunctionsError.relayError)
     }
-    completionHandler(.allow)
   }
 }

@@ -16,8 +16,7 @@ final class FunctionsIntegrationTests: XCTestCase {
   )
 
   func testInvokeWithStreamedResponse() async throws {
-    let response = sut.functions
-      ._invokeWithStreamedResponse("stream")
+    let response = sut.functions._invokeWithStreamedResponse("stream")
 
     var chunks = [Data]()
     for try await chunk in response.prefix(3) {

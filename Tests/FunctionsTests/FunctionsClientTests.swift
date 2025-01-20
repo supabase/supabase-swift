@@ -1,9 +1,10 @@
 import ConcurrencyExtras
-@testable import Functions
-import Helpers
 import HTTPTypes
+import Helpers
 import TestHelpers
 import XCTest
+
+@testable import Functions
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -56,7 +57,35 @@ final class FunctionsClientTests: XCTestCase {
     XCTAssertEqual(request?.method, .post)
     XCTAssertEqual(request?.headers[.init("Apikey")!], apiKey)
     XCTAssertEqual(request?.headers[.init("X-Custom-Key")!], "value")
-    XCTAssertEqual(request?.headers[.init("X-Client-Info")!], "functions-swift/\(Functions.version)")
+    XCTAssertEqual(
+      request?.headers[.init("X-Client-Info")!], "functions-swift/\(Functions.version)")
+  }
+
+  func testInvokeReturningDecodable() async throws {
+    let http = await HTTPClientMock().any { _ in
+      try .stub(
+        body: [
+          "message": "Hello, world!",
+          "status": "ok"
+        ]
+      )
+    }
+
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["Apikey": apiKey],
+      region: nil,
+      http: http
+    )
+
+    struct Payload: Decodable {
+      var message: String
+      var status: String
+    }
+
+    let response = try await sut.invoke("hello") as Payload
+    XCTAssertEqual(response.message, "Hello, world!")
+    XCTAssertEqual(response.status, "ok")
   }
 
   func testInvokeWithCustomMethod() async throws {
@@ -208,6 +237,9 @@ final class FunctionsClientTests: XCTestCase {
   func test_setAuth() {
     sut.setAuth(token: "access.token")
     XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
+
+    sut.setAuth(token: nil)
+    XCTAssertNil(sut.headers[.authorization])
   }
 }
 

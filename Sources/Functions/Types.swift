@@ -99,7 +99,7 @@ public struct FunctionInvokeOptions: Sendable {
     case delete = "DELETE"
   }
 
-  var httpMethod: HTTPTypes.HTTPRequest.Method? {
+  static func httpMethod(_ method: Method?) -> HTTPTypes.HTTPRequest.Method? {
     switch method {
     case .get:
       .get
