@@ -27,7 +27,7 @@ import Helpers
           kUTTagClassFilenameExtension, pathExtension as CFString, nil
         )?.takeRetainedValue(),
           let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
-          .takeRetainedValue()
+            .takeRetainedValue()
         {
           return contentType as String
         }
@@ -43,7 +43,7 @@ import Helpers
           kUTTagClassFilenameExtension, pathExtension as CFString, nil
         )?.takeRetainedValue(),
           let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
-          .takeRetainedValue()
+            .takeRetainedValue()
         {
           return contentType as String
         }
@@ -62,7 +62,7 @@ import Helpers
         kUTTagClassFilenameExtension, pathExtension as CFString, nil
       )?.takeRetainedValue(),
         let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
-        .takeRetainedValue()
+          .takeRetainedValue()
       {
         return contentType as String
       }

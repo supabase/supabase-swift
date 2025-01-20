@@ -11,7 +11,8 @@ extension StorageClientConfiguration {
   @available(
     *,
     deprecated,
-    message: "Replace usages of this initializer with new init(url:headers:encoder:decoder:session:logger)"
+    message:
+      "Replace usages of this initializer with new init(url:headers:encoder:decoder:session:logger)"
   )
   public init(
     url: URL,
@@ -101,7 +102,8 @@ extension StorageFileApi {
 @available(
   *,
   deprecated,
-  message: "File was deprecated and it isn't used in the package anymore, if you're using it on your application, consider replacing it as it will be removed on the next major release."
+  message:
+    "File was deprecated and it isn't used in the package anymore, if you're using it on your application, consider replacing it as it will be removed on the next major release."
 )
 public struct File: Hashable, Equatable {
   public var name: String
@@ -121,7 +123,8 @@ public struct File: Hashable, Equatable {
   *,
   deprecated,
   renamed: "MultipartFormData",
-  message: "FormData was deprecated in favor of MultipartFormData, and it isn't used in the package anymore, if you're using it on your application, consider replacing it as it will be removed on the next major release."
+  message:
+    "FormData was deprecated in favor of MultipartFormData, and it isn't used in the package anymore, if you're using it on your application, consider replacing it as it will be removed on the next major release."
 )
 public class FormData {
   var files: [File] = []
