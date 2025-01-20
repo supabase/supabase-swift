@@ -1,3 +1,4 @@
+import Helpers
 import InlineSnapshotTesting
 import XCTest
 
@@ -25,6 +26,8 @@ final class StorageFileAPITests: XCTestCase {
         return response
       },
       upload: { [weak self] request, data in
+        self?.snapshot?(request)
+
         guard let response = self?.mockResponses.removeFirst() else {
           throw StorageError(message: "No mock response available")
         }
@@ -232,5 +235,50 @@ final class StorageFileAPITests: XCTestCase {
       urls[0].absoluteString, "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
     XCTAssertEqual(
       urls[1].absoluteString, "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi")
+  }
+
+  func testNonSuccessStatusCode() async throws {
+    mockResponses = [
+      (
+        """
+        {"message":"Error"}
+        """.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: url,
+          statusCode: 412,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    ]
+
+    do {
+      try await storage.from("bucket")
+        .move(from: "source", to: "destination")
+    } catch let error as StorageError {
+      XCTAssertEqual(error.message, "Error")
+    }
+  }
+
+  func testNonSuccessStatusCodeWithNonJSONResponse() async throws {
+    mockResponses = [
+      (
+        "error".data(using: .utf8)!,
+        HTTPURLResponse(
+          url: url,
+          statusCode: 412,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    ]
+
+    do {
+      try await storage.from("bucket")
+        .move(from: "source", to: "destination")
+    } catch let error as HTTPError {
+      XCTAssertEqual(error.data, Data("error".utf8))
+      XCTAssertEqual(error.response.statusCode, 412)
+    }
   }
 }

@@ -23,6 +23,8 @@ final class StorageBucketAPITests: XCTestCase {
         return response
       },
       upload: { [weak self] request, data in
+        self?.snapshot?(request)
+
         guard let response = self?.mockResponses.removeFirst() else {
           throw StorageError(message: "No mock response available")
         }
