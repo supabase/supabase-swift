@@ -68,20 +68,15 @@ extension Optional: URLQueryRepresentable where Wrapped: URLQueryRepresentable {
 extension JSONObject: URLQueryRepresentable {
   public var queryValue: String {
     let value = mapValues(\.value)
-    return JSONSerialization.stringfy(value)
+    return JSONSerialization.stringfy(value)!
   }
 }
 
 extension JSONSerialization {
-  static func stringfy(_ object: Any) -> String {
-    guard
-      let data = try? data(
-        withJSONObject: object, options: [.withoutEscapingSlashes, .sortedKeys]
-      ),
-      let string = String(data: data, encoding: .utf8)
-    else {
-      return "{}"
-    }
-    return string
+  static func stringfy(_ object: Any) -> String? {
+    let data = try? data(
+      withJSONObject: object, options: [.withoutEscapingSlashes, .sortedKeys]
+    )
+    return data.flatMap { String(data: $0, encoding: .utf8) }
   }
 }

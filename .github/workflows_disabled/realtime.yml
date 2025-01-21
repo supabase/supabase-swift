@@ -49,6 +49,5 @@ jobs:
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: ${{ matrix.swift-version }}
-      - run: make dot-env
       - name: Run tests
         run: swift test --filter RealtimeTests.

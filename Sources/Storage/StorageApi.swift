@@ -1,6 +1,6 @@
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -36,7 +36,7 @@ public class StorageApi: @unchecked Sendable {
 
     let response = try await http.send(request)
 
-    guard (200 ..< 300).contains(response.statusCode) else {
+    guard (200..<300).contains(response.statusCode) else {
       if let error = try? configuration.decoder.decode(
         StorageError.self,
         from: response.data

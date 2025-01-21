@@ -43,7 +43,7 @@ for TEST_BUNDLE in $TEST_BUNDLES; do
   xcrun llvm-cov export \
     -format=lcov \
     -instr-profile "$PROFDATA_FILE" \
-    -ignore-filename-regex "Tests/|.build|DerivedData|.derivedData" \
+    -ignore-filename-regex "Tests/|.build|DerivedData|.derivedData|Deprecated/|Deprecated.swift" \
     "$BINARY_PATH" > "$TEMP_COVERAGE_DIR/$BINARY_NAME.info"
 
   if [ $? -ne 0 ]; then
@@ -58,7 +58,10 @@ rm -f "$OUTPUT_FILE" # Ensure the output file doesn't already exist
 
 for INFO_FILE in "$TEMP_COVERAGE_DIR"/*.info; do
   if [ -f "$INFO_FILE" ]; then
-    lcov --add-tracefile "$INFO_FILE" --output-file "$OUTPUT_FILE"
+    lcov \
+      --ignore-errors inconsistent \
+      --add-tracefile "$INFO_FILE" \
+      --output-file "$OUTPUT_FILE"
     if [ $? -ne 0 ]; then
       echo "Failed to merge $INFO_FILE into $OUTPUT_FILE. Exiting."
       exit 1

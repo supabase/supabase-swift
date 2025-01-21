@@ -1,6 +1,6 @@
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 /// An error type representing various errors that can occur while invoking functions.
 public enum FunctionsError: Error, LocalizedError {
@@ -99,7 +99,7 @@ public struct FunctionInvokeOptions: Sendable {
     case delete = "DELETE"
   }
 
-  var httpMethod: HTTPTypes.HTTPRequest.Method? {
+  static func httpMethod(_ method: Method?) -> HTTPTypes.HTTPRequest.Method? {
     switch method {
     case .get:
       .get

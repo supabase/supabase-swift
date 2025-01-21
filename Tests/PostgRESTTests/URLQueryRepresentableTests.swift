@@ -23,4 +23,20 @@ final class URLQueryRepresentableTests: XCTestCase {
     XCTAssertEqual(AnyJSON.bool(true).queryValue, "true")
     XCTAssertEqual(AnyJSON.null.queryValue, "NULL")
   }
+
+  func testOptional() {
+    XCTAssertEqual(Optional.some([1, 2]).queryValue, "{1,2}")
+    XCTAssertEqual(Optional<[Int]>.none.queryValue, "NULL")
+  }
+
+  func testUUID() {
+    XCTAssertEqual(UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!.queryValue, "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")
+  }
+
+  func testDate() {
+    XCTAssertEqual(
+      Date(timeIntervalSince1970: 1737465985).queryValue,
+      "2025-01-21T13:26:25.000Z"
+    )
+  }
 }

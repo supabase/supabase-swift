@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 07/05/24.
 //
 
+import Helpers
 import InlineSnapshotTesting
 import Storage
 import XCTest
-import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -382,7 +382,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     let httpResponse = try XCTUnwrap(response as? HTTPURLResponse)
     let cacheControl = try XCTUnwrap(httpResponse.value(forHTTPHeaderField: "cache-control"))
 
-    XCTAssertEqual(cacheControl, "public, max-age=14400")
+    XCTAssertEqual(cacheControl, "max-age=14400")
   }
 
   func testUploadWithFileURL() async throws {

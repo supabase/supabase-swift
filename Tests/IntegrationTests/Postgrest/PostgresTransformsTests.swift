@@ -46,6 +46,20 @@ final class PostgrestTransformsTests: XCTestCase {
         },
         {
           "age_range" : "[20,30)",
+          "catchphrase" : "'json' 'test'",
+          "data" : {
+            "foo" : {
+              "bar" : {
+                "nested" : "value"
+              },
+              "baz" : "string value"
+            }
+          },
+          "status" : "ONLINE",
+          "username" : "jsonuser"
+        },
+        {
+          "age_range" : "[20,30)",
           "catchphrase" : "'fat' 'rat'",
           "data" : null,
           "status" : "ONLINE",
@@ -74,6 +88,13 @@ final class PostgrestTransformsTests: XCTestCase {
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
+        {
+          "channel_id" : 3,
+          "data" : null,
+          "id" : 4,
+          "message" : "Some message on channel wihtout details",
+          "username" : "supabot"
+        },
         {
           "channel_id" : 2,
           "data" : null,
@@ -265,7 +286,7 @@ final class PostgrestTransformsTests: XCTestCase {
     let res = try await client.from("users").select().csv().execute().string()
     assertInlineSnapshot(of: res, as: .json) {
       #"""
-      "username,data,age_range,status,catchphrase\nsupabot,,\"[1,2)\",ONLINE,\"'cat' 'fat'\"\nkiwicopple,,\"[25,35)\",OFFLINE,\"'bat' 'cat'\"\nawailas,,\"[25,35)\",ONLINE,\"'bat' 'rat'\"\ndragarcia,,\"[20,30)\",ONLINE,\"'fat' 'rat'\""
+      "username,data,age_range,status,catchphrase\nsupabot,,\"[1,2)\",ONLINE,\"'cat' 'fat'\"\nkiwicopple,,\"[25,35)\",OFFLINE,\"'bat' 'cat'\"\nawailas,,\"[25,35)\",ONLINE,\"'bat' 'rat'\"\ndragarcia,,\"[20,30)\",ONLINE,\"'fat' 'rat'\"\njsonuser,\"{\"\"foo\"\": {\"\"bar\"\": {\"\"nested\"\": \"\"value\"\"}, \"\"baz\"\": \"\"string value\"\"}}\",\"[20,30)\",ONLINE,\"'json' 'test'\""
       """#
     }
   }

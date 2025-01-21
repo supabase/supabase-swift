@@ -1,3 +1,4 @@
+import HTTPTypes
 import XCTest
 
 @testable import Functions
@@ -33,5 +34,19 @@ final class FunctionInvokeOptionsTests: XCTestCase {
     )
     XCTAssertEqual(options.headers[.contentType], contentType)
     XCTAssertNotNil(options.body)
+  }
+
+  func testMethod() {
+    let testCases: [FunctionInvokeOptions.Method: HTTPTypes.HTTPRequest.Method] = [
+      .get: .get,
+      .post: .post,
+      .put: .put,
+      .patch: .patch,
+      .delete: .delete,
+    ]
+
+    for (method, expected) in testCases {
+      XCTAssertEqual(FunctionInvokeOptions.httpMethod(method), expected)
+    }
   }
 }
