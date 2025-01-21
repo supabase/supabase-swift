@@ -43,7 +43,7 @@ for TEST_BUNDLE in $TEST_BUNDLES; do
   xcrun llvm-cov export \
     -format=lcov \
     -instr-profile "$PROFDATA_FILE" \
-    -ignore-filename-regex "Tests/|.build|DerivedData|.derivedData" \
+    -ignore-filename-regex "Tests/|.build|DerivedData|.derivedData|Deprecated/" \
     "$BINARY_PATH" > "$TEMP_COVERAGE_DIR/$BINARY_NAME.info"
 
   if [ $? -ne 0 ]; then
