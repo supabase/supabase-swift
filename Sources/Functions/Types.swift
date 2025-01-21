@@ -1,6 +1,6 @@
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 /// An error type representing various errors that can occur while invoking functions.
 public enum FunctionsError: Error, LocalizedError {

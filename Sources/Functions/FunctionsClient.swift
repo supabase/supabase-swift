@@ -29,6 +29,7 @@ public final class FunctionsClient: Sendable {
 
   private let http: any HTTPClientType
   private let mutableState = LockIsolated(MutableState())
+  private let sessionConfiguration: URLSessionConfiguration
 
   var headers: HTTPFields {
     mutableState.headers
@@ -42,13 +43,15 @@ public final class FunctionsClient: Sendable {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
+  ///   - sessionConfiguration: The `URLSessionConfiguration` used for making requests.
   @_disfavoredOverload
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    sessionConfiguration: URLSessionConfiguration = .default
   ) {
     var interceptors: [any HTTPClientInterceptor] = []
     if let logger {
@@ -57,18 +60,26 @@ public final class FunctionsClient: Sendable {
 
     let http = HTTPClient(fetch: fetch, interceptors: interceptors)
 
-    self.init(url: url, headers: headers, region: region, http: http)
+    self.init(
+      url: url,
+      headers: headers,
+      region: region,
+      http: http,
+      sessionConfiguration: sessionConfiguration
+    )
   }
 
   init(
     url: URL,
     headers: [String: String],
     region: String?,
-    http: any HTTPClientType
+    http: any HTTPClientType,
+    sessionConfiguration: URLSessionConfiguration = .default
   ) {
     self.url = url
     self.region = region
     self.http = http
+    self.sessionConfiguration = sessionConfiguration
 
     mutableState.withValue {
       $0.headers = HTTPFields(headers)
@@ -194,7 +205,8 @@ public final class FunctionsClient: Sendable {
     let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
     let delegate = StreamResponseDelegate(continuation: continuation)
 
-    let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+    let session = URLSession(
+      configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
 
     let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
 

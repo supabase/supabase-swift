@@ -1,7 +1,0 @@
-curl \
-	--request POST \
-	--header "Content-Type: application/json" \
-	--header "apikey: supabase.anon.key" \
-	--header "x-client-info: functions-swift/x.y.z" \
-	--data "{\"name\":\"Supabase\"}" \
-	"http://localhost:5432/functions/v1/hello-world"
