@@ -1,5 +1,0 @@
-curl \
-	--header "Accept: application/json" \
-	--header "Content-Type: application/json" \
-	--header "X-Client-Info: postgrest-swift/x.y.z" \
-	"https://example.supabase.co/todos?column=eq.Some%20value&column=neq.Some%20value&column=gt.Some%20value&column=gte.Some%20value&column=lt.Some%20value&column=lte.Some%20value&column=like.Some%20value&column=ilike.Some%20value&column=is.Some%20value&column=in.Some%20value&column=cs.Some%20value&column=cd.Some%20value&column=sl.Some%20value&column=sr.Some%20value&column=nxl.Some%20value&column=nxr.Some%20value&column=adj.Some%20value&column=ov.Some%20value&column=fts.Some%20value&column=plfts.Some%20value&column=phfts.Some%20value&column=wfts.Some%20value&select=*"

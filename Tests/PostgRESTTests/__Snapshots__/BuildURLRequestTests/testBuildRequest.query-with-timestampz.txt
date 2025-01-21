@@ -1,5 +1,0 @@
-curl \
-	--header "Accept: application/json" \
-	--header "Content-Type: application/json" \
-	--header "X-Client-Info: postgrest-swift/x.y.z" \
-	"https://example.supabase.co/tasks?order=received_at.asc.nullslast&received_at=gt.2023-03-23T15:50:30.511743+00:00&select=*"
