@@ -43,4 +43,13 @@ class PostgrestQueryTests: XCTestCase {
     let id: Int
     let username: String
   }
+
+  struct Country: Decodable {
+    let name: String
+    let cities: [City]
+
+    struct City: Decodable {
+      let name: String
+    }
+  }
 }

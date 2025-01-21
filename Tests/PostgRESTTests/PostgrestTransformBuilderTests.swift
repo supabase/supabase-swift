@@ -320,13 +320,4 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
     XCTAssertTrue(explain.contains("Aggregate"))
   }
-
-  struct Country: Decodable {
-    let name: String
-    let cities: [City]
-
-    struct City: Decodable {
-      let name: String
-    }
-  }
 }
