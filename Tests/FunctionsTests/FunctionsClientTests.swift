@@ -71,6 +71,7 @@ final class FunctionsClientTests: XCTestCase {
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "X-Custom-Key: value" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"name\":\"Supabase\"}" \
       	"http://localhost:5432/functions/v1/hello_world"
       """#
     }
@@ -397,38 +398,5 @@ final class FunctionsClientTests: XCTestCase {
       }
     } catch FunctionsError.relayError {
     }
-  }
-}
-
-extension Mock {
-  func snapshotRequest(
-    message: @autoclosure () -> String = "",
-    record isRecording: Bool? = nil,
-    timeout: TimeInterval = 5,
-    syntaxDescriptor: InlineSnapshotSyntaxDescriptor = InlineSnapshotSyntaxDescriptor(),
-    matches expected: (() -> String)? = nil,
-    fileID: StaticString = #fileID,
-    file filePath: StaticString = #filePath,
-    function: StaticString = #function,
-    line: UInt = #line,
-    column: UInt = #column
-  ) -> Self {
-    var copy = self
-    copy.onRequestHandler = OnRequestHandler {
-      assertInlineSnapshot(
-        of: $0,
-        as: .curl,
-        record: isRecording,
-        timeout: timeout,
-        syntaxDescriptor: syntaxDescriptor,
-        matches: expected,
-        fileID: fileID,
-        file: filePath,
-        function: function,
-        line: line,
-        column: column
-      )
-    }
-    return copy
   }
 }
