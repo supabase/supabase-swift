@@ -14,6 +14,7 @@ struct Dependencies: Sendable {
   var date: @Sendable () -> Date = { Date() }
 
   var urlOpener: URLOpener = .live
+  var pkce: PKCE = .live
 
   var encoder: JSONEncoder { configuration.encoder }
   var decoder: JSONDecoder { configuration.decoder }

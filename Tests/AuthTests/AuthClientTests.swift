@@ -9,6 +9,7 @@ import ConcurrencyExtras
 import CustomDump
 import Helpers
 import InlineSnapshotTesting
+import Mocker
 import TestHelpers
 import XCTest
 
@@ -80,9 +81,28 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOut() async throws {
-    sut = makeSUT { _ in
-      .stub()
+    Mock(
+      url: clientURL.appendingPathComponent("logout"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .post: Data()
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/logout?scope=global"
+      """#
     }
+    .register()
+
+    sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
@@ -109,9 +129,29 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
-    sut = makeSUT { _ in
-      .stub()
+    Mock(
+      url: clientURL.appendingPathComponent("logout").appendingQueryItems([
+        URLQueryItem(name: "scope", value: "others")
+      ]),
+      statusCode: 200,
+      data: [
+        .post: Data()
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/logout?scope=others"
+      """#
     }
+    .register()
+
+    sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
@@ -122,16 +162,29 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
-    sut = makeSUT { _ in
-      throw AuthError.api(
-        message: "",
-        errorCode: .unknown,
-        underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(
-          url: URL(string: "http://localhost")!, statusCode: 404, httpVersion: nil,
-          headerFields: nil)!
-      )
+    Mock(
+      url: clientURL.appendingPathComponent("logout").appendingQueryItems([
+        URLQueryItem(name: "scope", value: "global")
+      ]),
+      statusCode: 404,
+      data: [
+        .post: Data()
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/logout?scope=global"
+      """#
     }
+    .register()
+
+    sut = makeSUT()
 
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
@@ -155,16 +208,29 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
-    sut = makeSUT { _ in
-      throw AuthError.api(
-        message: "",
-        errorCode: .invalidCredentials,
-        underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(
-          url: URL(string: "http://localhost")!, statusCode: 401, httpVersion: nil,
-          headerFields: nil)!
-      )
+    Mock(
+      url: clientURL.appendingPathComponent("logout").appendingQueryItems([
+        URLQueryItem(name: "scope", value: "global")
+      ]),
+      statusCode: 401,
+      data: [
+        .post: Data()
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/logout?scope=global"
+      """#
     }
+    .register()
+
+    sut = makeSUT()
 
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
@@ -188,16 +254,29 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOutShouldRemoveSessionIf403Returned() async throws {
-    sut = makeSUT { _ in
-      throw AuthError.api(
-        message: "",
-        errorCode: .invalidCredentials,
-        underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(
-          url: URL(string: "http://localhost")!, statusCode: 403, httpVersion: nil,
-          headerFields: nil)!
-      )
+    Mock(
+      url: clientURL.appendingPathComponent("logout").appendingQueryItems([
+        URLQueryItem(name: "scope", value: "global")
+      ]),
+      statusCode: 403,
+      data: [
+        .post: Data()
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/logout?scope=global"
+      """#
     }
+    .register()
+
+    sut = makeSUT()
 
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
@@ -223,9 +302,29 @@ final class AuthClientTests: XCTestCase {
   func testSignInAnonymously() async throws {
     let session = Session(fromMockNamed: "anonymous-sign-in-response")
 
-    let sut = makeSUT { _ in
-      .stub(fromFileName: "anonymous-sign-in-response")
+    Mock(
+      url: clientURL.appendingPathComponent("signup"),
+      statusCode: 200,
+      data: [
+        .post: MockData.anonymousSignInResponse
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 2" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{}" \
+      	"http://localhost:54321/auth/v1/signup"
+      """#
     }
+    .register()
+
+    let sut = makeSUT()
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -243,8 +342,34 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignInWithOAuth() async throws {
-    let sut = makeSUT { _ in
-      .stub(fromFileName: "session")
+    Mock(
+      url: clientURL.appendingPathComponent("token").appendingQueryItems([
+        URLQueryItem(name: "grant_type", value: "pkce")
+      ]),
+      statusCode: 200,
+      data: [
+        .post: MockData.session
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 126" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"auth_code\":\"12345\",\"code_verifier\":\"nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA\"}" \
+      	"http://localhost:54321/auth/v1/token?grant_type=pkce"
+      """#
+    }
+    .register()
+
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].pkce.generateCodeVerifier = {
+      "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
     }
 
     let eventsTask = Task {
@@ -266,16 +391,38 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testGetLinkIdentityURL() async throws {
-    let sut = makeSUT { _ in
-      .stub(
-        """
-        {
-          "url" : "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
-        }
-        """
-      )
-    }
+    let url =
+      "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
+    let sut = makeSUT()
 
+    Mock(
+      url: clientURL.appendingPathComponent("user/identities/authorize"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          {
+            "url": "\(url)"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/user/identities/authorize?code_challenge=fmVr5yVJ7LpFn9nLSHQNA_84o5r8lFy4bsH_UF_PArk&code_challenge_method=s256&provider=github&skip_http_redirect=true"
+      """#
+    }
+    .register()
+
+    Dependencies[sut.clientID].pkce.generateCodeChallenge = { _ in
+      "fmVr5yVJ7LpFn9nLSHQNA_84o5r8lFy4bsH_UF_PArk"
+    }
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let response = try await sut.getLinkIdentityURL(provider: .github)
@@ -285,8 +432,7 @@ final class AuthClientTests: XCTestCase {
       OAuthResponse(
         provider: .github,
         url: URL(
-          string:
-            "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
+          string: url
         )!
       )
     )
@@ -295,16 +441,37 @@ final class AuthClientTests: XCTestCase {
   func testLinkIdentity() async throws {
     let url =
       "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
-    let sut = makeSUT { _ in
-      .stub(
-        """
-        {
-          "url" : "\(url)"
-        }
-        """
-      )
-    }
 
+    Mock(
+      url: clientURL.appendingPathComponent("user/identities/authorize"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          {
+            "url": "\(url)"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/user/identities/authorize?code_challenge=C8LR1RB8uGzS9GltM-Wif1p-AdVE-_fT5z0r6LV3Fps&code_challenge_method=s256&provider=github&skip_http_redirect=true"
+      """#
+    }
+    .register()
+
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].pkce.generateCodeChallenge = { _ in
+      "C8LR1RB8uGzS9GltM-Wif1p-AdVE-_fT5z0r6LV3Fps"
+    }
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let receivedURL = LockIsolated<URL?>(nil)
@@ -318,16 +485,31 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testAdminListUsers() async throws {
-    let sut = makeSUT { _ in
-      .stub(
-        fromFileName: "list-users-response",
-        headers: [
-          "X-Total-Count": "669",
-          "Link":
-            "</admin/users?page=2&per_page=>; rel=\"next\", </admin/users?page=14&per_page=>; rel=\"last\"",
-        ]
-      )
+    Mock(
+      url: clientURL.appendingPathComponent("admin/users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: MockData.listUsersResponse
+      ],
+      additionalHeaders: [
+        "X-Total-Count": "669",
+        "Link":
+          "</admin/users?page=2&per_page=>; rel=\"next\", </admin/users?page=14&per_page=>; rel=\"last\"",
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/admin/users?page=&per_page="
+      """#
     }
+    .register()
+
+    let sut = makeSUT()
 
     let response = try await sut.admin.listUsers()
     XCTAssertEqual(response.total, 669)
@@ -336,15 +518,30 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testAdminListUsers_noNextPage() async throws {
-    let sut = makeSUT { _ in
-      .stub(
-        fromFileName: "list-users-response",
-        headers: [
-          "X-Total-Count": "669",
-          "Link": "</admin/users?page=14&per_page=>; rel=\"last\"",
-        ]
-      )
+    Mock(
+      url: clientURL.appendingPathComponent("admin/users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: MockData.listUsersResponse
+      ],
+      additionalHeaders: [
+        "X-Total-Count": "669",
+        "Link": "</admin/users?page=14&per_page=>; rel=\"last\"",
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/admin/users?page=&per_page="
+      """#
     }
+    .register()
+
+    let sut = makeSUT()
 
     let response = try await sut.admin.listUsers()
     XCTAssertEqual(response.total, 669)
@@ -377,21 +574,25 @@ final class AuthClientTests: XCTestCase {
     }
   }
 
-  private func makeSUT(
-    fetch: ((URLRequest) async throws -> HTTPResponse)? = nil
-  ) -> AuthClient {
+  private func makeSUT() -> AuthClient {
+    let sessionConfiguration = URLSessionConfiguration.default
+    sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
+    let session = URLSession(configuration: sessionConfiguration)
+
+    let encoder = AuthClient.Configuration.jsonEncoder
+    encoder.outputFormatting = [.sortedKeys]
+
     let configuration = AuthClient.Configuration(
       url: clientURL,
-      headers: ["Apikey": "dummy.api.key"],
+      headers: [
+        "apikey":
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+      ],
       localStorage: storage,
       logger: nil,
+      encoder: encoder,
       fetch: { request in
-        guard let fetch else {
-          throw UnimplementedError()
-        }
-
-        let response = try await fetch(request)
-        return (response.data, response.underlyingResponse)
+        try await session.data(for: request)
       }
     )
 
@@ -449,4 +650,16 @@ extension HTTPResponse {
       )!
     )
   }
+}
+
+enum MockData {
+  static let listUsersResponse = try! Data(
+    contentsOf: Bundle.module.url(forResource: "list-users-response", withExtension: "json")!)
+
+  static let session = try! Data(
+    contentsOf: Bundle.module.url(forResource: "session", withExtension: "json")!)
+
+  static let anonymousSignInResponse = try! Data(
+    contentsOf: Bundle.module.url(forResource: "anonymous-sign-in-response", withExtension: "json")!
+  )
 }
