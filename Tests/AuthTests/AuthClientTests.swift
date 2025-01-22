@@ -41,6 +41,8 @@ final class AuthClientTests: XCTestCase {
   override func tearDown() {
     super.tearDown()
 
+    Mocker.removeAll()
+
     let completion = { [weak sut] in
       XCTAssertNil(sut, "sut should not leak")
     }
