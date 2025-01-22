@@ -54,6 +54,7 @@ public struct AuthMFA: Sendable {
   ///
   /// - Parameter params: The parameters for verifying the MFA factor.
   /// - Returns: An authentication response after verifying the factor.
+  @discardableResult
   public func verify(params: MFAVerifyParams) async throws -> AuthMFAVerifyResponse {
     let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
       HTTPRequest(
