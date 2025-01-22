@@ -76,4 +76,96 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
       .rpc("hello_world", get: true)
       .execute()
   }
+
+  func testRpcWithGetMethodAndNonJSONObjectShouldThrowError() async throws {
+    do {
+      try await sut
+        .rpc("hello", params: [1, 2, 3], get: true)
+        .execute()
+    } catch let error as PostgrestError {
+      XCTAssertEqual(
+        error.message, "Params should be a key-value type when using `GET` or `HEAD` options.")
+    }
+  }
+
+  func testRpcWithHeadMethodAndNonJSONObjectShouldThrowError() async throws {
+    do {
+      try await sut
+        .rpc("hello", params: [1, 2, 3], head: true)
+        .execute()
+    } catch let error as PostgrestError {
+      XCTAssertEqual(
+        error.message, "Params should be a key-value type when using `GET` or `HEAD` options.")
+    }
+  }
+
+  func testRpcWithGetMethodAndJSOBOjectShouldCleanArray() async throws {
+    Mock(
+      url: url.appendingPathComponent("rpc/sum"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          {
+            "sum": 6
+          }
+          """.utf8
+        )
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/rpc/sum?key=value&numbers=%7B1,2,3%7D"
+      """#
+    }
+    .register()
+
+    struct Response: Decodable {
+      let sum: Int
+    }
+
+    let response =
+      try await sut
+      .rpc(
+        "sum",
+        params: [
+          "numbers": [1, 2, 3],
+          "key": "value"
+        ] as JSONObject,
+        get: true
+      )
+      .execute()
+      .value as Response
+
+    XCTAssertEqual(response.sum, 6)
+  }
+
+  func testRpcWithCount() async throws {
+    Mock(
+      url: url.appendingPathComponent("rpc/hello"),
+      statusCode: 200,
+      data: [.post: Data()]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: count=estimated" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/rpc/hello"
+      """#
+    }
+    .register()
+
+    try await sut.rpc("hello", count: .estimated).execute()
+  }
 }

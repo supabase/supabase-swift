@@ -90,8 +90,7 @@ let package = Package(
         "Mocker",
         "Functions",
         "TestHelpers",
-      ],
-      exclude: ["__Snapshots__"]
+      ]
     ),
     .testTarget(
       name: "IntegrationTests",
@@ -124,8 +123,7 @@ let package = Package(
         "Helpers",
         "PostgREST",
         "TestHelpers",
-      ],
-      exclude: ["__Snapshots__"]
+      ]
     ),
     .target(
       name: "Realtime",

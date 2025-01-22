@@ -102,6 +102,35 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
     XCTAssertEqual(countries[0].cities[0].name, "New York City")
   }
 
+  func testMultipleOrder() async throws {
+    Mock(
+      url: url.appendingPathComponent("cities"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/cities?order=num_of_habitants.asc.nullslast,name.desc.nullsfirst&select=name,num_of_habitants"
+      """#
+    }
+    .register()
+
+    try await sut
+      .from("cities")
+      .select("name,num_of_habitants")
+      .order("num_of_habitants")
+      .order("name", ascending: false, nullsFirst: true)
+      .execute()
+  }
+
   func testLimit() async throws {
     Mock(
       url: url.appendingPathComponent("countries"),
@@ -204,6 +233,41 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
     XCTAssertEqual(countries[0].name, "United States")
   }
 
+  func testRangeWithReferencedTable() async throws {
+    Mock(
+      url: url.appendingPathComponent("countries"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/countries?cities.limit=2&cities.offset=0&select=name,cities(name)"
+      """#
+    }
+    .register()
+
+    try await sut
+      .from("countries")
+      .select(
+        """
+        name,
+        cities (
+          name
+        )
+        """
+      )
+      .range(from: 0, to: 1, referencedTable: "cities")
+      .execute()
+  }
+
   func testSingle() async throws {
     Mock(
       url: url.appendingPathComponent("countries"),
@@ -263,19 +327,49 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
     }
     .register()
 
-    let csv = try await sut
+    let csv =
+      try await sut
       .from("countries")
       .select()
       .csv()
       .execute()
       .string()
 
-    let ids = csv?
+    let ids =
+      csv?
       .split(separator: "\n")
       .dropFirst()
       .map { $0.split(separator: ",").first! } ?? []
 
     XCTAssertEqual(ids, ["1", "2", "3"])
+  }
+
+  func testGeoJSON() async throws {
+    Mock(
+      url: url.appendingPathComponent("countries"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/geo+json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/countries?select=area"
+      """#
+    }
+    .register()
+
+    try await sut
+      .from("countries")
+      .select("area")
+      .geojson()
+      .execute()
   }
 
   func testExplain() async throws {
@@ -311,7 +405,8 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
     }
     .register()
 
-    let explain = try await sut
+    let explain =
+      try await sut
       .from("countries")
       .select()
       .explain(analyze: true, verbose: true)
