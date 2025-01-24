@@ -43,15 +43,31 @@ public final class FunctionsClient: Sendable {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  ///   - sessionConfiguration: The `URLSessionConfiguration` used for making requests.
   @_disfavoredOverload
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
+    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+  ) {
+    self.init(
+      url: url,
+      headers: headers,
+      region: region,
+      logger: logger,
+      fetch: fetch,
+      sessionConfiguration: .default
+    )
+  }
+
+  convenience init(
+    url: URL,
+    headers: [String: String] = [:],
+    region: String? = nil,
+    logger: (any SupabaseLogger)? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    sessionConfiguration: URLSessionConfiguration = .default
+    sessionConfiguration: URLSessionConfiguration
   ) {
     var interceptors: [any HTTPClientInterceptor] = []
     if let logger {
