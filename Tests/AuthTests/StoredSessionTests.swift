@@ -1,8 +1,9 @@
-@testable import Auth
 import ConcurrencyExtras
 import SnapshotTesting
 import TestHelpers
 import XCTest
+
+@testable import Auth
 
 final class StoredSessionTests: XCTestCase {
   let clientID = AuthClientID()
@@ -37,11 +38,11 @@ final class StoredSessionTests: XCTestCase {
         appMetadata: [
           "provider": "email",
           "providers": [
-            "email",
+            "email"
           ],
         ],
         userMetadata: [
-          "referrer_id": nil,
+          "referrer_id": nil
         ],
         aud: "authenticated",
         confirmationSentAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
@@ -65,13 +66,13 @@ final class StoredSessionTests: XCTestCase {
             identityId: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
             userId: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
             identityData: [
-              "sub": "859f402d-b3de-4105-a1b9-932836d9193b",
+              "sub": "859f402d-b3de-4105-a1b9-932836d9193b"
             ],
             provider: "email",
             createdAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
             lastSignInAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
             updatedAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!
-          ),
+          )
         ],
         factors: nil
       )

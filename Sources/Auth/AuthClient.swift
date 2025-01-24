@@ -29,6 +29,7 @@ public final class AuthClient: Sendable {
   private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
   private var logger: (any SupabaseLogger)? { Dependencies[clientID].configuration.logger }
   private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
+  private var pkce: PKCE { Dependencies[clientID].pkce }
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -1310,10 +1311,10 @@ public final class AuthClient: Sendable {
       return (nil, nil)
     }
 
-    let codeVerifier = PKCE.generateCodeVerifier()
+    let codeVerifier = pkce.generateCodeVerifier()
     codeVerifierStorage.set(codeVerifier)
 
-    let codeChallenge = PKCE.generateCodeChallenge(from: codeVerifier)
+    let codeChallenge = pkce.generateCodeChallenge(codeVerifier)
     let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
 
     return (codeChallenge, codeChallengeMethod)

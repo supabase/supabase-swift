@@ -5,8 +5,9 @@
 //  Created by Guilherme Souza on 23/12/23.
 //
 
-@testable import Auth
 import XCTest
+
+@testable import Auth
 
 final class ExtractParamsTests: XCTestCase {
   func testExtractParamsInQuery() {
@@ -25,7 +26,8 @@ final class ExtractParamsTests: XCTestCase {
 
   func testExtractParamsInBothFragmentAndQuery() {
     let code = UUID().uuidString
-    let url = URL(string: "io.supabase.flutterquickstart://login-callback/?code=\(code)#message=abc")!
+    let url = URL(
+      string: "io.supabase.flutterquickstart://login-callback/?code=\(code)#message=abc")!
     let params = extractParams(from: url)
     XCTAssertEqual(params, ["code": code, "message": "abc"])
   }
