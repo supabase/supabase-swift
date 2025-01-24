@@ -66,6 +66,7 @@ jobs:
           - { xcode: 15.2, platform: TVOS }
           - { xcode: 15.2, platform: VISIONOS }
           - { xcode: 15.2, platform: WATCHOS }
+          - { command: test, platform: WATCHOS }
         include:
           - { command: test, skip_release: 1 }
     steps:
