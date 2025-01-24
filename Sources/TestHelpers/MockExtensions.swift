@@ -26,7 +26,7 @@ extension Mock {
     copy.onRequestHandler = OnRequestHandler {
       assertInlineSnapshot(
         of: $0,
-        as: .curl,
+        as: ._curl,
         record: isRecording,
         timeout: timeout,
         syntaxDescriptor: syntaxDescriptor,

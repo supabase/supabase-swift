@@ -30,7 +30,7 @@
     //   --data 'pricing[billing]=monthly&pricing[lane]=individual' \
     //   "https://www.pointfree.co/subscribe"
     // ```
-    package static let curl = SimplySnapshotting.lines.pullback { (request: URLRequest) in
+    package static let _curl = SimplySnapshotting.lines.pullback { (request: URLRequest) in
 
       var components = ["curl"]
 
