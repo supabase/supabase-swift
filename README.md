@@ -33,7 +33,9 @@ let package = Package(
     targets: [
         .target(
             name: "YourTargetName",
-            dependencies: ["Supabase"] // Add as a dependency
+            dependencies: [
+                .product(name: "Supabase", package: "supabase-swift") // Add as a dependency
+            ]
         )
     ]
 )
