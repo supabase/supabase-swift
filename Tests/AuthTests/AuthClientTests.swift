@@ -343,6 +343,9 @@ final class AuthClientTests: XCTestCase {
 
     XCTAssertEqual(events, [.initialSession, .signedIn])
     XCTAssertEqual(sessions, [nil, session])
+
+    XCTAssertEqual(sut.currentSession, session)
+    XCTAssertEqual(sut.currentUser, session.user)
   }
 
   func testSignInWithOAuth() async throws {
@@ -882,6 +885,138 @@ final class AuthClientTests: XCTestCase {
       XCTAssertEqual(session, expectedSession)
     }
   #endif
+
+  func testSessionWithURL_implicitFlow() async throws {
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      statusCode: 200,
+      data: [
+        .get: MockData.user
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Authorization: bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/user"
+      """#
+    }
+    .register()
+
+    let sut = makeSUT(flowType: .implicit)
+
+    let url = URL(
+      string:
+        "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
+    )!
+    try await sut.session(from: url)
+  }
+
+  func testSessionWithURL_implicitFlow_invalidURL() async throws {
+    let sut = makeSUT(flowType: .implicit)
+
+    let url = URL(
+      string:
+        "https://dummy-url.com/callback#invalid_key=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
+    )!
+
+    do {
+      try await sut.session(from: url)
+    } catch let AuthError.implicitGrantRedirect(message) {
+      XCTAssertEqual(message, "Not a valid implicit grant flow URL: \(url)")
+    }
+  }
+
+  func testSessionWithURL_implicitFlow_error() async throws {
+    let sut = makeSUT(flowType: .implicit)
+
+    let url = URL(
+      string:
+        "https://dummy-url.com/callback#error_description=Invalid+code&error=invalid_grant"
+    )!
+
+    do {
+      try await sut.session(from: url)
+    } catch let AuthError.implicitGrantRedirect(message) {
+      XCTAssertEqual(message, "Invalid code")
+    }
+  }
+
+  func testSessionWithURL_implicitFlow_recoveryType() async throws {
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      statusCode: 200,
+      data: [
+        .get: MockData.user
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Authorization: bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/user"
+      """#
+    }
+    .register()
+
+    let sut = makeSUT(flowType: .implicit)
+
+    let url = URL(
+      string:
+        "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer&type=recovery"
+    )!
+
+    let eventsTask = Task {
+      await sut.authStateChanges.prefix(3).collect().map(\.event)
+    }
+
+    await Task.yield()
+
+    try await sut.session(from: url)
+
+    let events = await eventsTask.value
+    XCTAssertEqual(events, [.initialSession, .signedIn, .passwordRecovery])
+  }
+
+  func testSessionWithURL_pkceFlow_error() async throws {
+    let sut = makeSUT()
+
+    let url = URL(
+      string:
+        "https://dummy-url.com/callback#error_description=Invalid+code&error=invalid_grant&error_code=500"
+    )!
+
+    do {
+      try await sut.session(from: url)
+    } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
+      XCTAssertEqual(message, "Invalid code")
+      XCTAssertEqual(error, "invalid_grant")
+      XCTAssertEqual(code, "500")
+    }
+  }
+
+  func testSessionWithURL_pkceFlow_error_noErrorDescription() async throws {
+    let sut = makeSUT()
+
+    let url = URL(
+      string:
+        "https://dummy-url.com/callback#error=invalid_grant&error_code=500"
+    )!
+
+    do {
+      try await sut.session(from: url)
+    } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
+      XCTAssertEqual(message, "Error in URL with unspecified error_description.")
+      XCTAssertEqual(error, "invalid_grant")
+      XCTAssertEqual(code, "500")
+    }
+  }
 
   func testSessionFromURLWithMissingComponent() async {
     let sut = makeSUT()
