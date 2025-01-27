@@ -527,7 +527,7 @@ final class RequestsTests: XCTestCase {
       fetch: { request in
         DispatchQueue.main.sync {
           assertSnapshot(
-            of: request, as: .curl, record: record, file: file, testName: testName, line: line
+            of: request, as: ._curl, record: record, file: file, testName: testName, line: line
           )
         }
 
