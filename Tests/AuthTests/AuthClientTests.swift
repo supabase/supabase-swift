@@ -1783,6 +1783,161 @@ final class AuthClientTests: XCTestCase {
     XCTAssertEqual(factorId, "123")
   }
 
+  func testMFAChallengeAndVerify() async throws {
+    let factorId = "123"
+    let code = "456"
+
+    Mock(
+      url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "id": "12345",
+            "type": "totp",
+            "expires_at": 12345678
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/factors/123/challenge"
+      """#
+    }
+    .register()
+
+    Mock(
+      url: clientURL.appendingPathComponent("factors/\(factorId)/verify"),
+      statusCode: 200,
+      data: [
+        .post: MockData.session
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "Content-Length: 55" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"challenge_id\":\"12345\",\"code\":\"456\",\"factor_id\":\"123\"}" \
+      	"http://localhost:54321/auth/v1/factors/123/verify"
+      """#
+    }
+    .register()
+
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    try await sut.mfa.challengeAndVerify(
+      params: MFAChallengeAndVerifyParams(
+        factorId: factorId,
+        code: code
+      )
+    )
+  }
+
+  func testMFAListFactors() async throws {
+    let sut = makeSUT()
+
+    var session = Session.validSession
+    session.user.factors = [
+      Factor(
+        id: "1",
+        friendlyName: nil,
+        factorType: "totp",
+        status: .verified,
+        createdAt: Date(),
+        updatedAt: Date()
+      ),
+      Factor(
+        id: "2",
+        friendlyName: nil,
+        factorType: "totp",
+        status: .unverified,
+        createdAt: Date(),
+        updatedAt: Date()
+      ),
+      Factor(
+        id: "3",
+        friendlyName: nil,
+        factorType: "phone",
+        status: .verified,
+        createdAt: Date(),
+        updatedAt: Date()
+      ),
+      Factor(
+        id: "4",
+        friendlyName: nil,
+        factorType: "phone",
+        status: .unverified,
+        createdAt: Date(),
+        updatedAt: Date()
+      ),
+    ]
+
+    Dependencies[sut.clientID].sessionStorage.store(session)
+
+    let factors = try await sut.mfa.listFactors()
+    XCTAssertEqual(factors.totp.map(\.id), ["1"])
+    XCTAssertEqual(factors.phone.map(\.id), ["3"])
+  }
+
+  func testGetAuthenticatorAssuranceLevel_whenAALAndVerifiedFactor_shouldReturnAAL2() async throws {
+    var session = Session.validSession
+
+    // access token with aal token
+    session.accessToken =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJ0b3RwIiwidGltZXN0YW1wIjoxNTE2MjM5MDIyfSx7Im1ldGhvZCI6InBob25lIiwidGltZXN0YW1wIjoxNTE2MjM5MDIyfV19.OQy2SmA1hcw9V5wrY-bvORjbFh5tWznLIfcMCqPu_6M"
+
+    session.user.factors = [
+      Factor(
+        id: "1",
+        friendlyName: nil,
+        factorType: "totp",
+        status: .verified,
+        createdAt: Date(),
+        updatedAt: Date()
+      )
+    ]
+
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(session)
+
+    let aal = try await sut.mfa.getAuthenticatorAssuranceLevel()
+
+    XCTAssertEqual(
+      aal,
+      AuthMFAGetAuthenticatorAssuranceLevelResponse(
+        currentLevel: "aal1",
+        nextLevel: "aal2",
+        currentAuthenticationMethods: [
+          AMREntry(
+            method: "totp",
+            timestamp: 1_516_239_022
+          ),
+          AMREntry(
+            method: "phone",
+            timestamp: 1_516_239_022
+          ),
+        ]
+      )
+    )
+  }
+
   private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
