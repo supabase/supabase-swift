@@ -106,11 +106,7 @@ public class PostgrestBuilder: @unchecked Sendable {
       }
 
       if let count = $0.fetchOptions.count {
-        if let prefer = $0.request.headers[.prefer] {
-          $0.request.headers[.prefer] = "\(prefer),count=\(count.rawValue)"
-        } else {
-          $0.request.headers[.prefer] = "count=\(count.rawValue)"
-        }
+        $0.request.headers.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
       }
 
       if $0.request.headers[.accept] == nil {

@@ -23,20 +23,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
     .joined(separator: "")
     mutableState.withValue {
       $0.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
-
-      if let prefer = $0.request.headers[.prefer] {
-        var components = prefer.components(separatedBy: ",")
-
-        if let index = components.firstIndex(where: { $0.hasPrefix("return=") }) {
-          components[index] = "return=representation"
-        } else {
-          components.append("return=representation")
-        }
-
-        $0.request.headers[.prefer] = components.joined(separator: ",")
-      } else {
-        $0.request.headers[.prefer] = "return=representation"
-      }
+      $0.request.headers.appendOrUpdate(.prefer, value: "return=representation")
     }
     return self
   }
@@ -64,7 +51,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
         "\(column).\(ascending ? "asc" : "desc").\(nullsFirst ? "nullsfirst" : "nullslast")"
 
       if let existingOrderIndex,
-         let currentValue = $0.request.query[existingOrderIndex].value
+        let currentValue = $0.request.query[existingOrderIndex].value
       {
         $0.request.query[existingOrderIndex] = URLQueryItem(
           name: key,
@@ -85,11 +72,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   public func limit(_ count: Int, referencedTable: String? = nil) -> PostgrestTransformBuilder {
     mutableState.withValue {
       let key = referencedTable.map { "\($0).limit" } ?? "limit"
-      if let index = $0.request.query.firstIndex(where: { $0.name == key }) {
-        $0.request.query[index] = URLQueryItem(name: key, value: "\(count)")
-      } else {
-        $0.request.query.append(URLQueryItem(name: key, value: "\(count)"))
-      }
+      $0.request.query.appendOrUpdate(URLQueryItem(name: key, value: "\(count)"))
     }
     return self
   }
@@ -113,24 +96,10 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
     let keyLimit = referencedTable.map { "\($0).limit" } ?? "limit"
 
     mutableState.withValue {
-      if let index = $0.request.query.firstIndex(where: { $0.name == keyOffset }) {
-        $0.request.query[index] = URLQueryItem(name: keyOffset, value: "\(from)")
-      } else {
-        $0.request.query.append(URLQueryItem(name: keyOffset, value: "\(from)"))
-      }
+      $0.request.query.appendOrUpdate(URLQueryItem(name: keyOffset, value: "\(from)"))
 
       // Range is inclusive, so add 1
-      if let index = $0.request.query.firstIndex(where: { $0.name == keyLimit }) {
-        $0.request.query[index] = URLQueryItem(
-          name: keyLimit,
-          value: "\(to - from + 1)"
-        )
-      } else {
-        $0.request.query.append(URLQueryItem(
-          name: keyLimit,
-          value: "\(to - from + 1)"
-        ))
-      }
+      $0.request.query.appendOrUpdate(URLQueryItem(name: keyLimit, value: "\(to - from + 1)"))
     }
 
     return self
@@ -195,7 +164,8 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
       .compactMap { $0 }
       .joined(separator: "|")
       let forMediaType = $0.request.headers[.accept] ?? "application/json"
-      $0.request.headers[.accept] = "application/vnd.pgrst.plan+\"\(format)\"; for=\(forMediaType); options=\(options);"
+      $0.request.headers[.accept] =
+        "application/vnd.pgrst.plan+\"\(format)\"; for=\(forMediaType); options=\(options);"
     }
 
     return self
