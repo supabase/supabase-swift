@@ -608,4 +608,107 @@ final class StorageFileAPITests: XCTestCase {
 
     XCTAssertEqual(data, imageData)
   }
+
+  func testInfo() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/info/bucket/file.txt"),
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          {
+            "name": "file.txt",
+            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+            "version": "2"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/object/info/bucket/file.txt"
+      """#
+    }
+    .register()
+
+    let info = try await storage.from("bucket").info(path: "file.txt")
+
+    XCTAssertEqual(info.name, "file.txt")
+  }
+
+  func testExists() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/file.txt"),
+      statusCode: 200,
+      data: [
+        .head: Data()
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--head \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
+      """#
+    }
+    .register()
+
+    let exists = try await storage.from("bucket").exists(path: "file.txt")
+
+    XCTAssertTrue(exists)
+  }
+
+  func testExists_400_error() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/file.txt"),
+      statusCode: 400,
+      data: [
+        .head: Data()
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--head \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
+      """#
+    }
+    .register()
+
+    let exists = try await storage.from("bucket").exists(path: "file.txt")
+
+    XCTAssertFalse(exists)
+  }
+
+  func testExists_404_error() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/file.txt"),
+      statusCode: 404,
+      data: [
+        .head: Data()
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--head \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
+      """#
+    }
+    .register()
+
+    let exists = try await storage.from("bucket").exists(path: "file.txt")
+
+    XCTAssertFalse(exists)
+  }
 }
