@@ -9,34 +9,19 @@ import ConcurrencyExtras
 import Foundation
 
 extension JSONEncoder {
+  @available(*, deprecated, message: "Access to storage encoder is going to be removed.")
   public static let defaultStorageEncoder: JSONEncoder = {
     let encoder = JSONEncoder()
     encoder.keyEncodingStrategy = .convertToSnakeCase
     return encoder
   }()
+
+  static let unconfiguredEncoder: JSONEncoder = .init()
 }
 
 extension JSONDecoder {
-  public static let defaultStorageDecoder: JSONDecoder = {
-    let decoder = JSONDecoder()
-    let formatter = LockIsolated(ISO8601DateFormatter())
-    formatter.withValue {
-      $0.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    }
-
-    decoder.dateDecodingStrategy = .custom { decoder in
-      let container = try decoder.singleValueContainer()
-      let string = try container.decode(String.self)
-
-      if let date = formatter.withValue({ $0.date(from: string) }) {
-        return date
-      }
-
-      throw DecodingError.dataCorruptedError(
-        in: container, debugDescription: "Invalid date format: \(string)"
-      )
-    }
-
-    return decoder
-  }()
+  @available(*, deprecated, message: "Access to storage decoder is going to be removed.")
+  public static var defaultStorageDecoder: JSONDecoder {
+    .default
+  }
 }
