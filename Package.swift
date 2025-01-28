@@ -156,10 +156,13 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        "Mocker",
+        "TestHelpers",
         "Storage",
       ],
       resources: [
-        .copy("sadcat.jpg")
+        .copy("sadcat.jpg"),
+        .process("Fixtures"),
       ]
     ),
     .target(

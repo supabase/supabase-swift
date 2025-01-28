@@ -1,36 +1,21 @@
 import InlineSnapshotTesting
+import Mocker
+import TestHelpers
 import XCTest
 
 @testable import Storage
 
 final class StorageBucketAPITests: XCTestCase {
+  let url = URL(string: "http://localhost:54321/storage/v1")!
   var storage: SupabaseStorageClient!
-  var mockResponses: [(Data, URLResponse)]!
-
-  var snapshot: ((URLRequest) -> Void)?
 
   override func setUp() {
     super.setUp()
-    mockResponses = []
 
-    let mockSession = StorageHTTPSession(
-      fetch: { [weak self] request in
-        self?.snapshot?(request)
+    let configuration = URLSessionConfiguration.default
+    configuration.protocolClasses = [MockingURLProtocol.self]
 
-        guard let response = self?.mockResponses.removeFirst() else {
-          throw StorageError(message: "No mock response available")
-        }
-        return response
-      },
-      upload: { [weak self] request, data in
-        self?.snapshot?(request)
-
-        guard let response = self?.mockResponses.removeFirst() else {
-          throw StorageError(message: "No mock response available")
-        }
-        return response
-      }
-    )
+    let session = URLSession(configuration: configuration)
 
     JSONEncoder.defaultStorageEncoder.outputFormatting = [
       .sortedKeys
@@ -38,47 +23,54 @@ final class StorageBucketAPITests: XCTestCase {
 
     storage = SupabaseStorageClient(
       configuration: StorageClientConfiguration(
-        url: URL(string: "http://example.com")!,
-        headers: ["X-Client-Info": "storage-swift/0.0.0"],
-        session: mockSession,
+        url: url,
+        headers: [
+          "apikey":
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+        ],
+        session: StorageHTTPSession(
+          fetch: { try await session.data(for: $0) },
+          upload: { try await session.upload(for: $0, from: $1) }
+        ),
         logger: nil
       )
     )
   }
 
+  override func tearDown() {
+    super.tearDown()
+
+    Mocker.removeAll()
+  }
+
   func testGetBucket() async throws {
-    let jsonResponse = """
-      {
-          "id": "bucket123",
-          "name": "test-bucket",
-          "owner": "owner123",
-          "public": false,
-          "created_at": "2024-01-01T00:00:00.000Z",
-          "updated_at": "2024-01-01T00:00:00.000Z"
-      }
-      """.data(using: .utf8)!
-
-    mockResponses = [
-      (
-        jsonResponse,
-        HTTPURLResponse(
-          url: URL(string: "http://example.com")!,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
-    ]
-
-    snapshot = {
-      assertInlineSnapshot(of: $0, as: .curl) {
-        #"""
-        curl \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	"http://example.com/bucket/bucket123"
-        """#
-      }
+    Mock(
+      url: url.appendingPathComponent("bucket/bucket123"),
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          {
+              "id": "bucket123",
+              "name": "test-bucket",
+              "owner": "owner123",
+              "public": false,
+              "created_at": "2024-01-01T00:00:00.000Z",
+              "updated_at": "2024-01-01T00:00:00.000Z"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/bucket/bucket123"
+      """#
     }
+    .register()
 
     let bucket = try await storage.getBucket("bucket123")
     XCTAssertEqual(bucket.id, "bucket123")
@@ -86,38 +78,35 @@ final class StorageBucketAPITests: XCTestCase {
   }
 
   func testListBuckets() async throws {
-    let jsonResponse = """
-      [{
-          "id": "bucket123",
-          "name": "test-bucket",
-          "owner": "owner123",
-          "public": false,
-          "created_at": "2024-01-01T00:00:00.000Z",
-          "updated_at": "2024-01-01T00:00:00.000Z"
-      }]
-      """.data(using: .utf8)!
-
-    mockResponses = [
-      (
-        jsonResponse,
-        HTTPURLResponse(
-          url: URL(string: "http://example.com")!,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
-    ]
-
-    snapshot = {
-      assertInlineSnapshot(of: $0, as: .curl) {
-        #"""
-        curl \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	"http://example.com/bucket"
-        """#
-      }
+    Mock(
+      url: url.appendingPathComponent("bucket"),
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          [
+            {
+              "id": "bucket123",
+              "name": "test-bucket",
+              "owner": "owner123",
+              "public": false,
+              "created_at": "2024-01-01T00:00:00.000Z",
+              "updated_at": "2024-01-01T00:00:00.000Z"
+            }
+          ]
+          """.utf8
+        )
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/bucket"
+      """#
     }
+    .register()
 
     let buckets = try await storage.listBuckets()
     XCTAssertEqual(buckets.count, 1)
@@ -125,41 +114,36 @@ final class StorageBucketAPITests: XCTestCase {
   }
 
   func testCreateBucket() async throws {
-    let jsonResponse = """
-      {
-          "id": "newbucket",
-          "name": "new-bucket",
-          "owner": "owner123",
-          "public": true,
-          "created_at": "2024-01-01T00:00:00.000Z",
-          "updated_at": "2024-01-01T00:00:00.000Z"
-      }
-      """.data(using: .utf8)!
-
-    mockResponses = [
-      (
-        jsonResponse,
-        HTTPURLResponse(
-          url: URL(string: "http://example.com")!,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
-    ]
-
-    snapshot = {
-      assertInlineSnapshot(of: $0, as: .curl) {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--data "{\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":true}" \
-        	"http://example.com/bucket"
-        """#
-      }
+    Mock(
+      url: url.appendingPathComponent("bucket"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "id": "newbucket",
+            "name": "new-bucket",
+            "owner": "owner123",
+            "public": true,
+            "created_at": "2024-01-01T00:00:00.000Z",
+            "updated_at": "2024-01-01T00:00:00.000Z"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 51" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":true}" \
+      	"http://localhost:54321/storage/v1/bucket"
+      """#
     }
+    .register()
 
     let options = BucketOptions(public: true)
     try await storage.createBucket(
@@ -169,41 +153,36 @@ final class StorageBucketAPITests: XCTestCase {
   }
 
   func testUpdateBucket() async throws {
-    let jsonResponse = """
-      {
-          "id": "bucket123",
-          "name": "updated-bucket",
-          "owner": "owner123",
-          "public": true,
-          "created_at": "2024-01-01T00:00:00.000Z",
-          "updated_at": "2024-01-01T00:00:00.000Z"
-      }
-      """.data(using: .utf8)!
-
-    mockResponses = [
-      (
-        jsonResponse,
-        HTTPURLResponse(
-          url: URL(string: "http://example.com")!,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
-    ]
-
-    snapshot = {
-      assertInlineSnapshot(of: $0, as: .curl) {
-        #"""
-        curl \
-        	--request PUT \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--data "{\"id\":\"bucket123\",\"name\":\"bucket123\",\"public\":true}" \
-        	"http://example.com/bucket/bucket123"
-        """#
-      }
+    Mock(
+      url: url.appendingPathComponent("bucket/bucket123"),
+      statusCode: 200,
+      data: [
+        .put: Data(
+          """
+          {
+            "id": "bucket123",
+            "name": "updated-bucket",
+            "owner": "owner123",
+            "public": true,
+            "created_at": "2024-01-01T00:00:00.000Z",
+            "updated_at": "2024-01-01T00:00:00.000Z"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request PUT \
+      	--header "Content-Length: 51" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"id\":\"bucket123\",\"name\":\"bucket123\",\"public\":true}" \
+      	"http://localhost:54321/storage/v1/bucket/bucket123"
+      """#
     }
+    .register()
 
     let options = BucketOptions(public: true)
     try await storage.updateBucket(
@@ -213,55 +192,45 @@ final class StorageBucketAPITests: XCTestCase {
   }
 
   func testDeleteBucket() async throws {
-    mockResponses = [
-      (
-        Data(),
-        HTTPURLResponse(
-          url: URL(string: "http://example.com")!,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
-    ]
-
-    snapshot = {
-      assertInlineSnapshot(of: $0, as: .curl) {
-        #"""
-        curl \
-        	--request DELETE \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	"http://example.com/bucket/bucket123"
-        """#
-      }
+    Mock(
+      url: url.appendingPathComponent("bucket/bucket123"),
+      statusCode: 200,
+      data: [
+        .delete: Data()
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request DELETE \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/bucket/bucket123"
+      """#
     }
+    .register()
 
     try await storage.deleteBucket("bucket123")
   }
 
   func testEmptyBucket() async throws {
-    mockResponses = [
-      (
-        Data(),
-        HTTPURLResponse(
-          url: URL(string: "http://example.com")!,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
-    ]
-
-    snapshot = {
-      assertInlineSnapshot(of: $0, as: .curl) {
-        #"""
-        curl \
-        	--request POST \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	"http://example.com/bucket/bucket123/empty"
-        """#
-      }
+    Mock(
+      url: url.appendingPathComponent("bucket/bucket123/empty"),
+      statusCode: 200,
+      data: [
+        .post: Data()
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/bucket/bucket123/empty"
+      """#
     }
+    .register()
 
     try await storage.emptyBucket("bucket123")
   }

@@ -383,6 +383,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - paths: An array of files to be deletes, including the path and file name. For example [`folder/image.png`].
   /// - Returns: A list of removed ``FileObject``.
+  @discardableResult
   public func remove(paths: [String]) async throws -> [FileObject] {
     try await execute(
       HTTPRequest(
