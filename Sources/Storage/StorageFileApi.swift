@@ -640,7 +640,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     headers[.xUpsert] = "\(options.upsert)"
     headers[.duplex] = options.duplex
 
-    let formData = MultipartFormData()
+    #if DEBUG
+      let formData = MultipartFormData(boundary: testingBoundary.value)
+    #else
+      let formData = MultipartFormData()
+    #endif
     file.encode(to: formData, withPath: path, options: options)
 
     struct UploadResponse: Decodable {
