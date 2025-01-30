@@ -70,7 +70,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   }
 
   private struct SignedURLResponse: Decodable {
-    let signedURL: URL
+    let signedURL: String
   }
 
   private func _uploadOrUpdate(
@@ -274,7 +274,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let transform: TransformOptions?
     }
 
-    let encoder = JSONEncoder()
+    let encoder = JSONEncoder.unconfiguredEncoder
 
     let response = try await execute(
       HTTPRequest(
@@ -325,7 +325,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let paths: [String]
     }
 
-    let encoder = JSONEncoder()
+    let encoder = JSONEncoder.unconfiguredEncoder
 
     let response = try await execute(
       HTTPRequest(
@@ -354,25 +354,25 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     try await createSignedURLs(paths: paths, expiresIn: expiresIn, download: download ? "" : nil)
   }
 
-  private func makeSignedURL(_ signedURL: URL, download: String?) throws -> URL {
-    guard
-      let signedURLComponents = URLComponents(
-        url: signedURL,
-        resolvingAgainstBaseURL: false
-      ),
-      var baseURLComponents = URLComponents(url: configuration.url, resolvingAgainstBaseURL: false)
+  private func makeSignedURL(_ signedURL: String, download: String?) throws -> URL {
+    guard let signedURLComponents = URLComponents(string: signedURL),
+      var baseComponents = URLComponents(
+        url: configuration.url, resolvingAgainstBaseURL: false)
     else {
       throw URLError(.badURL)
     }
 
-    baseURLComponents.path += signedURLComponents.path
-    baseURLComponents.queryItems = signedURLComponents.queryItems ?? []
+    baseComponents.path +=
+      signedURLComponents.path.hasPrefix("/")
+      ? signedURLComponents.path : "/\(signedURLComponents.path)"
+    baseComponents.queryItems = signedURLComponents.queryItems
 
     if let download {
-      baseURLComponents.queryItems!.append(URLQueryItem(name: "download", value: download))
+      baseComponents.queryItems = baseComponents.queryItems ?? []
+      baseComponents.queryItems!.append(URLQueryItem(name: "download", value: download))
     }
 
-    guard let signedURL = baseURLComponents.url else {
+    guard let signedURL = baseComponents.url else {
       throw URLError(.badURL)
     }
 
@@ -383,6 +383,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - paths: An array of files to be deletes, including the path and file name. For example [`folder/image.png`].
   /// - Returns: A list of removed ``FileObject``.
+  @discardableResult
   public func remove(paths: [String]) async throws -> [FileObject] {
     try await execute(
       HTTPRequest(
@@ -402,7 +403,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     path: String? = nil,
     options: SearchOptions? = nil
   ) async throws -> [FileObject] {
-    let encoder = JSONEncoder()
+    let encoder = JSONEncoder.unconfiguredEncoder
 
     var options = options ?? defaultSearchOptions
     options.prefix = path ?? ""
@@ -545,7 +546,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: CreateSignedUploadURLOptions? = nil
   ) async throws -> SignedUploadURL {
     struct Response: Decodable {
-      let url: URL
+      let url: String
     }
 
     var headers = HTTPFields()
@@ -639,7 +640,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     headers[.xUpsert] = "\(options.upsert)"
     headers[.duplex] = options.duplex
 
-    let formData = MultipartFormData()
+    #if DEBUG
+      let formData = MultipartFormData(boundary: testingBoundary.value)
+    #else
+      let formData = MultipartFormData()
+    #endif
     file.encode(to: formData, withPath: path, options: options)
 
     struct UploadResponse: Decodable {

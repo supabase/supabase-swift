@@ -5,7 +5,7 @@ public struct StorageError: Error, Decodable, Sendable {
   public var message: String
   public var error: String?
 
-  public init(statusCode: String?, message: String, error: String?) {
+  public init(statusCode: String? = nil, message: String, error: String? = nil) {
     self.statusCode = statusCode
     self.message = message
     self.error = error
