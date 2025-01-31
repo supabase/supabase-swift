@@ -4,7 +4,7 @@ import Helpers
 public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Sendable {
   public enum Operator: String, CaseIterable, Sendable {
     case eq, neq, gt, gte, lt, lte, like, ilike, `is`, `in`, cs, cd, sl, sr, nxl, nxr, adj, ov, fts,
-         plfts, phfts, wfts
+      plfts, phfts, wfts
   }
 
   // MARK: - Filters
@@ -17,10 +17,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     let queryValue = value.queryValue
 
     mutableState.withValue {
-      $0.request.query.append(URLQueryItem(
-        name: column,
-        value: "not.\(op.rawValue).\(queryValue)"
-      ))
+      $0.request.query.append(
+        URLQueryItem(
+          name: column,
+          value: "not.\(op.rawValue).\(queryValue)"
+        ))
     }
 
     return self
@@ -152,14 +153,6 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     return self
   }
 
-  @available(*, deprecated, renamed: "like(_:pattern:)")
-  public func like(
-    _ column: String,
-    value: any URLQueryRepresentable
-  ) -> PostgrestFilterBuilder {
-    like(column, pattern: value)
-  }
-
   /// Match only rows where `column` matches all of `patterns` case-sensitively.
   /// - Parameters:
   ///   - column: The column to filter on
@@ -204,14 +197,6 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
       $0.request.query.append(URLQueryItem(name: column, value: "ilike.\(queryValue)"))
     }
     return self
-  }
-
-  @available(*, deprecated, renamed: "ilike(_:pattern:)")
-  public func ilike(
-    _ column: String,
-    value: any URLQueryRepresentable
-  ) -> PostgrestFilterBuilder {
-    ilike(column, pattern: value)
   }
 
   /// Match only rows where `column` matches all of `patterns` case-insensitively.
@@ -282,14 +267,6 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
       )
     }
     return self
-  }
-
-  @available(*, deprecated, renamed: "in(_:values:)")
-  public func `in`(
-    _ column: String,
-    value: [any URLQueryRepresentable]
-  ) -> PostgrestFilterBuilder {
-    `in`(column, values: value)
   }
 
   /// Match only rows where `column` contains every element appearing in `value`.
@@ -472,33 +449,6 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     textSearch(column, query: query, config: config, type: nil)
   }
 
-  @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .plain type.")
-  public func plfts(
-    _ column: String,
-    query: any URLQueryRepresentable,
-    config: String? = nil
-  ) -> PostgrestFilterBuilder {
-    textSearch(column, query: query, config: config, type: .plain)
-  }
-
-  @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .phrase type.")
-  public func phfts(
-    _ column: String,
-    query: any URLQueryRepresentable,
-    config: String? = nil
-  ) -> PostgrestFilterBuilder {
-    textSearch(column, query: query, config: config, type: .phrase)
-  }
-
-  @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .websearch type.")
-  public func wfts(
-    _ column: String,
-    query: any URLQueryRepresentable,
-    config: String? = nil
-  ) -> PostgrestFilterBuilder {
-    textSearch(column, query: query, config: config, type: .websearch)
-  }
-
   /// Match only rows which satisfy the filter. This is an escape hatch - you should use the specific filter methods wherever possible.
   ///
   /// Unlike most filters, `opearator` and `value` are used as-is and need to follow [PostgREST syntax](https://postgrest.org/en/stable/api.html#operators). You also need to make sure they are properly sanitized.
@@ -513,10 +463,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     value: String
   ) -> PostgrestFilterBuilder {
     mutableState.withValue {
-      $0.request.query.append(URLQueryItem(
-        name: column,
-        value: "\(`operator`).\(value)"
-      ))
+      $0.request.query.append(
+        URLQueryItem(
+          name: column,
+          value: "\(`operator`).\(value)"
+        ))
     }
     return self
   }
@@ -530,10 +481,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     let query = query.mapValues(\.queryValue)
     mutableState.withValue { mutableState in
       for (key, value) in query {
-        mutableState.request.query.append(URLQueryItem(
-          name: key,
-          value: "eq.\(value.queryValue)"
-        ))
+        mutableState.request.query.append(
+          URLQueryItem(
+            name: key,
+            value: "eq.\(value.queryValue)"
+          ))
       }
     }
     return self

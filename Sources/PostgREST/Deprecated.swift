@@ -23,7 +23,8 @@ extension PostgrestClient.Configuration {
   @available(
     *,
     deprecated,
-    message: "Replace usages of this initializer with new init(url:schema:headers:logger:fetch:encoder:decoder:)"
+    message:
+      "Replace usages of this initializer with new init(url:schema:headers:logger:fetch:encoder:decoder:)"
   )
   public init(
     url: URL,
@@ -57,7 +58,8 @@ extension PostgrestClient {
   @available(
     *,
     deprecated,
-    message: "Replace usages of this initializer with new init(url:schema:headers:logger:fetch:encoder:decoder:)"
+    message:
+      "Replace usages of this initializer with new init(url:schema:headers:logger:fetch:encoder:decoder:)"
   )
   public convenience init(
     url: URL,
@@ -76,5 +78,59 @@ extension PostgrestClient {
       encoder: encoder,
       decoder: decoder
     )
+  }
+}
+
+extension PostgrestFilterBuilder {
+
+  @available(*, deprecated, renamed: "like(_:pattern:)")
+  public func like(
+    _ column: String,
+    value: any URLQueryRepresentable
+  ) -> PostgrestFilterBuilder {
+    like(column, pattern: value)
+  }
+
+  @available(*, deprecated, renamed: "in(_:values:)")
+  public func `in`(
+    _ column: String,
+    value: [any URLQueryRepresentable]
+  ) -> PostgrestFilterBuilder {
+    `in`(column, values: value)
+  }
+
+  @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .plain type.")
+  public func plfts(
+    _ column: String,
+    query: any URLQueryRepresentable,
+    config: String? = nil
+  ) -> PostgrestFilterBuilder {
+    textSearch(column, query: query, config: config, type: .plain)
+  }
+
+  @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .phrase type.")
+  public func phfts(
+    _ column: String,
+    query: any URLQueryRepresentable,
+    config: String? = nil
+  ) -> PostgrestFilterBuilder {
+    textSearch(column, query: query, config: config, type: .phrase)
+  }
+
+  @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .websearch type.")
+  public func wfts(
+    _ column: String,
+    query: any URLQueryRepresentable,
+    config: String? = nil
+  ) -> PostgrestFilterBuilder {
+    textSearch(column, query: query, config: config, type: .websearch)
+  }
+
+  @available(*, deprecated, renamed: "ilike(_:pattern:)")
+  public func ilike(
+    _ column: String,
+    value: any URLQueryRepresentable
+  ) -> PostgrestFilterBuilder {
+    ilike(column, pattern: value)
   }
 }
