@@ -31,7 +31,7 @@ public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
   public let function: String
   public let line: UInt
   public let timestamp: TimeInterval
-  public let additionalContext: JSONObject
+  public var additionalContext: JSONObject
 
   @usableFromInline
   init(
@@ -55,7 +55,8 @@ public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
   }
 
   public var description: String {
-    let date = ISO8601DateFormatter.iso8601.value.string(from: Date(timeIntervalSince1970: timestamp))
+    let date = ISO8601DateFormatter.iso8601.value.string(
+      from: Date(timeIntervalSince1970: timestamp))
     let file = fileID.split(separator: ".", maxSplits: 1).first.map(String.init) ?? fileID
     var description = "\(date) [\(level)] [\(system)] [\(file).\(function):\(line)] \(message)"
     if !additionalContext.isEmpty {
