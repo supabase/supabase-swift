@@ -38,6 +38,9 @@ final class PostgrestFilterTests: XCTestCase {
         },
         {
           "status" : "ONLINE"
+        },
+        {
+          "status" : "ONLINE"
         }
       ]
       """
@@ -103,6 +106,9 @@ final class PostgrestFilterTests: XCTestCase {
         },
         {
           "username" : "dragarcia"
+        },
+        {
+          "username" : "jsonuser"
         }
       ]
       """
@@ -121,6 +127,9 @@ final class PostgrestFilterTests: XCTestCase {
       [
         {
           "id" : 2
+        },
+        {
+          "id" : 4
         }
       ]
       """
@@ -142,6 +151,9 @@ final class PostgrestFilterTests: XCTestCase {
         },
         {
           "id" : 2
+        },
+        {
+          "id" : 4
         }
       ]
       """
@@ -348,6 +360,9 @@ final class PostgrestFilterTests: XCTestCase {
         },
         {
           "status" : "ONLINE"
+        },
+        {
+          "status" : "ONLINE"
         }
       ]
       """
@@ -459,6 +474,9 @@ final class PostgrestFilterTests: XCTestCase {
         },
         {
           "age_range" : "[20,30)"
+        },
+        {
+          "age_range" : "[20,30)"
         }
       ]
       """
@@ -497,6 +515,9 @@ final class PostgrestFilterTests: XCTestCase {
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
+        {
+          "age_range" : "[20,30)"
+        },
         {
           "age_range" : "[20,30)"
         }

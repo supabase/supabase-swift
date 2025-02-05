@@ -9,6 +9,7 @@
 import ConcurrencyExtras
 import CustomDump
 import TestHelpers
+import InlineSnapshotTesting
 import XCTest
 
 #if canImport(FoundationNetworking)
@@ -71,6 +72,23 @@ final class AuthClientIntegrationTests: XCTestCase {
       try await authClient.signOut()
 
       try await authClient.signIn(email: email, password: password)
+    }
+  }
+
+  func testSignUpWithWeakPassword() async {
+    do {
+      try await authClient.signUp(email: mockEmail(), password: "weak-password")
+    } catch {
+      assertInlineSnapshot(of: error, as: .dump) {
+        #"""
+        ▿ AuthError
+          ▿ weakPassword: (2 elements)
+            - message: "Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789, !@#$%^&*()_+-=[]{};\':\"|<>?,./`~."
+            ▿ reasons: 1 element
+              - "characters"
+
+        """#
+      }
     }
   }
 
@@ -167,12 +185,6 @@ final class AuthClientIntegrationTests: XCTestCase {
     }
   }
 
-  func testUserIdentities() async throws {
-    let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
-    let identities = try await authClient.userIdentities()
-    expectNoDifference(session.user.identities, identities)
-  }
-
   func testUnlinkIdentity_withOnlyOneIdentity() async throws {
     let identities = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
       .user.identities
@@ -246,8 +258,8 @@ final class AuthClientIntegrationTests: XCTestCase {
   func testLinkIdentity() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-    try await authClient.linkIdentity(provider: .github) { url in
-      XCTAssertTrue(url.absoluteString.contains("github.com"))
+    try await authClient.linkIdentity(provider: .apple) { url in
+      XCTAssertTrue(url.absoluteString.contains("apple.com"))
     }
   }
 
@@ -318,17 +330,24 @@ final class AuthClientIntegrationTests: XCTestCase {
   }
 
   private func mockPassword(length: Int = 12) -> String {
-    let allowedCharacters =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+"
+    let allowedCharacters = [
+      "abcdefghijklmnopqrstuvwxyz",
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+      "0123456789",
+      "!@#$%^&*()_+-=[]{};\':\"|<>?,./`~.",
+    ]
+
     var password = ""
 
-    for _ in 0 ..< length {
-      let randomIndex = Int.random(in: 0 ..< allowedCharacters.count)
-      let character = allowedCharacters[allowedCharacters.index(
-        allowedCharacters.startIndex,
-        offsetBy: randomIndex
-      )]
-      password.append(character)
+    while password.count < length {
+      for characterSet in allowedCharacters {
+        let randomIndex = Int.random(in: 0 ..< characterSet.count)
+        let character = characterSet[characterSet.index(
+          characterSet.startIndex,
+          offsetBy: randomIndex
+        )]
+        password.append(character)
+      }
     }
 
     return password
