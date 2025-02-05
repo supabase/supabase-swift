@@ -105,7 +105,7 @@ jobs:
     name: integration tests (linux)
     strategy:
       matrix:
-        swift-version: ["5.10"]
+        swift-version: ["6"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
