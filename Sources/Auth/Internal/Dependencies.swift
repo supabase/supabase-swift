@@ -15,10 +15,10 @@ struct Dependencies: Sendable {
 
   var urlOpener: URLOpener = .live
   var pkce: PKCE = .live
+  var logger: (any SupabaseLogger)?
 
   var encoder: JSONEncoder { configuration.encoder }
   var decoder: JSONDecoder { configuration.decoder }
-  var logger: (any SupabaseLogger)? { configuration.logger }
 }
 
 extension Dependencies {

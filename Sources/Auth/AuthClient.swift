@@ -14,10 +14,22 @@ import Helpers
   import WatchKit
 #endif
 
-typealias AuthClientID = UUID
+typealias AuthClientID = Int
+
+struct AuthClientLoggerDecorator: SupabaseLogger {
+  let clientID: AuthClientID
+  let decoratee: any SupabaseLogger
+
+  func log(message: SupabaseLogMessage) {
+    var message = message
+    message.additionalContext["client_id"] = .integer(clientID)
+    decoratee.log(message: message)
+  }
+}
 
 public final class AuthClient: Sendable {
-  let clientID = AuthClientID()
+  static let globalClientID = LockIsolated(0)
+  let clientID: AuthClientID
 
   private var api: APIClient { Dependencies[clientID].api }
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
@@ -71,13 +83,21 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
+    clientID = AuthClient.globalClientID.withValue {
+      $0 += 1
+      return $0
+    }
+
     Dependencies[clientID] = Dependencies(
       configuration: configuration,
       http: HTTPClient(configuration: configuration),
       api: APIClient(clientID: clientID),
       codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID)
+      sessionManager: .live(clientID: clientID),
+      logger: configuration.logger.map {
+        AuthClientLoggerDecorator(clientID: clientID, decoratee: $0)
+      }
     )
 
     Task { @MainActor in observeAppLifecycleChanges() }
