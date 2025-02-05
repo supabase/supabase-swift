@@ -12,7 +12,7 @@ import InlineSnapshotTesting
 extension Mock {
   package func snapshotRequest(
     message: @autoclosure () -> String = "",
-    record isRecording: Bool? = nil,
+    record: SnapshotTestingConfiguration.Record? = nil,
     timeout: TimeInterval = 5,
     syntaxDescriptor: InlineSnapshotSyntaxDescriptor = InlineSnapshotSyntaxDescriptor(),
     matches expected: (() -> String)? = nil,
@@ -27,7 +27,7 @@ extension Mock {
       assertInlineSnapshot(
         of: $0,
         as: ._curl,
-        record: isRecording,
+        record: record,
         timeout: timeout,
         syntaxDescriptor: syntaxDescriptor,
         matches: expected,

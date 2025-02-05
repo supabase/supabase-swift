@@ -11,6 +11,10 @@ import PostgREST
 import TestHelpers
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 class PostgrestQueryTests: XCTestCase {
   let url = URL(string: "http://localhost:54321/rest/v1")!
 
