@@ -52,6 +52,20 @@ final class PostgrestBasicTests: XCTestCase {
           "data" : null,
           "status" : "ONLINE",
           "username" : "dragarcia"
+        },
+        {
+          "age_range" : "[20,30)",
+          "catchphrase" : "'json' 'test'",
+          "data" : {
+            "foo" : {
+              "bar" : {
+                "nested" : "value"
+              },
+              "baz" : "string value"
+            }
+          },
+          "status" : "ONLINE",
+          "username" : "jsonuser"
         }
       ]
       """
@@ -78,6 +92,10 @@ final class PostgrestBasicTests: XCTestCase {
         {
           "non_updatable_column" : 1,
           "username" : "dragarcia"
+        },
+        {
+          "non_updatable_column" : 1,
+          "username" : "jsonuser"
         }
       ]
       """
@@ -148,6 +166,12 @@ final class PostgrestBasicTests: XCTestCase {
           "username" : "supabot"
         },
         {
+          "channel_id" : 3,
+          "data" : null,
+          "message" : "Some message on channel wihtout details",
+          "username" : "supabot"
+        },
+        {
           "channel_id" : 1,
           "data" : null,
           "message" : "foo",
@@ -200,6 +224,12 @@ final class PostgrestBasicTests: XCTestCase {
           "channel_id" : 2,
           "data" : null,
           "message" : "Perfection is attained, not when there is nothing more to add, but when there is nothing left to take away.",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 3,
+          "data" : null,
+          "message" : "Some message on channel wihtout details",
           "username" : "supabot"
         },
         {
@@ -263,6 +293,12 @@ final class PostgrestBasicTests: XCTestCase {
           "channel_id" : 2,
           "data" : null,
           "message" : "Perfection is attained, not when there is nothing more to add, but when there is nothing left to take away.",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 3,
+          "data" : null,
+          "message" : "Some message on channel wihtout details",
           "username" : "supabot"
         },
         {
@@ -348,6 +384,12 @@ final class PostgrestBasicTests: XCTestCase {
           "username" : "supabot"
         },
         {
+          "channel_id" : 3,
+          "data" : null,
+          "message" : "Some message on channel wihtout details",
+          "username" : "supabot"
+        },
+        {
           "channel_id" : 2,
           "data" : null,
           "message" : "foo",
@@ -429,6 +471,13 @@ final class PostgrestBasicTests: XCTestCase {
           "data" : null,
           "id" : 2,
           "message" : "Perfection is attained, not when there is nothing more to add, but when there is nothing left to take away.",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 3,
+          "data" : null,
+          "id" : 4,
+          "message" : "Some message on channel wihtout details",
           "username" : "supabot"
         }
       ]

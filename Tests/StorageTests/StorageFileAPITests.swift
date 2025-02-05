@@ -6,6 +6,10 @@ import XCTest
 
 @testable import Storage
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class StorageFileAPITests: XCTestCase {
   let url = URL(string: "http://localhost:54321/storage/v1")!
   var storage: SupabaseStorageClient!

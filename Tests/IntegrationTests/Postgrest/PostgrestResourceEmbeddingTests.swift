@@ -41,7 +41,19 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
               "id" : 2,
               "message" : "Perfection is attained, not when there is nothing more to add, but when there is nothing left to take away.",
               "username" : "supabot"
+            },
+            {
+              "channel_id" : 3,
+              "data" : null,
+              "id" : 4,
+              "message" : "Some message on channel wihtout details",
+              "username" : "supabot"
             }
+          ]
+        },
+        {
+          "messages" : [
+
           ]
         },
         {
@@ -82,6 +94,11 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
               "message" : "Hello World 👋",
               "username" : "supabot"
             }
+          ]
+        },
+        {
+          "messages" : [
+
           ]
         },
         {
@@ -145,6 +162,11 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
           "messages" : [
 
           ]
+        },
+        {
+          "messages" : [
+
+          ]
         }
       ]
       """
@@ -192,6 +214,11 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
           "messages" : [
 
           ]
+        },
+        {
+          "messages" : [
+
+          ]
         }
       ]
       """
@@ -210,6 +237,13 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
         {
           "messages" : [
             {
+              "channel_id" : 3,
+              "data" : null,
+              "id" : 4,
+              "message" : "Some message on channel wihtout details",
+              "username" : "supabot"
+            },
+            {
               "channel_id" : 2,
               "data" : null,
               "id" : 2,
@@ -223,6 +257,11 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
               "message" : "Hello World 👋",
               "username" : "supabot"
             }
+          ]
+        },
+        {
+          "messages" : [
+
           ]
         },
         {
@@ -258,6 +297,13 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
         {
           "messages" : [
             {
+              "channel_id" : 3,
+              "data" : null,
+              "id" : 4,
+              "message" : "Some message on channel wihtout details",
+              "username" : "supabot"
+            },
+            {
               "channel_id" : 2,
               "data" : null,
               "id" : 2,
@@ -271,6 +317,11 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
               "message" : "Hello World 👋",
               "username" : "supabot"
             }
+          ]
+        },
+        {
+          "messages" : [
+
           ]
         },
         {
@@ -327,6 +378,11 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
           "messages" : [
 
           ]
+        },
+        {
+          "messages" : [
+
+          ]
         }
       ]
       """
@@ -351,6 +407,11 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
               "message" : "Perfection is attained, not when there is nothing more to add, but when there is nothing left to take away.",
               "username" : "supabot"
             }
+          ]
+        },
+        {
+          "messages" : [
+
           ]
         },
         {

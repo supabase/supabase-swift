@@ -30,7 +30,10 @@ final class RealtimeIntegrationTests: XCTestCase {
 
   let client = SupabaseClient(
     supabaseURL: URL(string: DotEnv.SUPABASE_URL) ?? URL(string: "http://localhost:54321")!,
-    supabaseKey: DotEnv.SUPABASE_ANON_KEY
+    supabaseKey: DotEnv.SUPABASE_ANON_KEY,
+    options: SupabaseClientOptions(
+      auth: SupabaseClientOptions.AuthOptions(storage: InMemoryLocalStorage())
+    )
   )
 
   override func setUp() {
@@ -210,12 +213,12 @@ final class RealtimeIntegrationTests: XCTestCase {
     _ = await channel.system().first(where: { _ in true })
 
     let key = try await
-      (client.from("key_value_storage")
+      (client.from("key_value")
       .insert(["key": AnyJSON.string(UUID().uuidString), "value": "value1"]).select().single()
       .execute().value as Entry).key
-    try await client.from("key_value_storage").update(["value": "value2"]).eq("key", value: key)
+    try await client.from("key_value").update(["value": "value2"]).eq("key", value: key)
       .execute()
-    try await client.from("key_value_storage").delete().eq("key", value: key).execute()
+    try await client.from("key_value").delete().eq("key", value: key).execute()
 
     let insertedEntries = try await receivedInsertActions.value.map {
       try $0.decodeRecord(
