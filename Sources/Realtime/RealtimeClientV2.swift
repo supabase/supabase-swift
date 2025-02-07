@@ -422,14 +422,14 @@ public final class RealtimeClientV2: Sendable {
   /// On callback used, it will set the value of the token internal to the client.
   /// - Parameter token: A JWT string to override the token set on the client.
   public func setAuth(_ token: String? = nil) async {
-    var token = token
+    var tokenToSend = token
 
-    if token == nil {
-      token = try? await options.accessToken?()
+    if tokenToSend == nil {
+      tokenToSend = try? await options.accessToken?()
     }
 
-    if token == nil {
-      token = mutableState.accessToken
+    guard tokenToSend != mutableState.accessToken else {
+      return
     }
 
     mutableState.withValue { [token] in
