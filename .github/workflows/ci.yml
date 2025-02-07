@@ -173,7 +173,7 @@ jobs:
 
       - name: Check Colima Logs
         if: always()
-        run: cat /Users/runner/.colima/_lima/colima/ha.stderr.log || true        
+        run: cat /Users/runner/.lima/default/ha.stderr.log || true        
 
       - name: Verify Docker Installation
         run: |
