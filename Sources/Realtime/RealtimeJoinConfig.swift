@@ -10,10 +10,12 @@ import Foundation
 struct RealtimeJoinPayload: Codable {
   var config: RealtimeJoinConfig
   var accessToken: String?
+  var version: String?
 
   enum CodingKeys: String, CodingKey {
     case config
     case accessToken = "access_token"
+    case version
   }
 }
 
