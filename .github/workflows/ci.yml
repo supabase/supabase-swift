@@ -171,6 +171,10 @@ jobs:
           docker context create lima --docker "host=unix://${HOME}/.lima/docker/sock"
           docker context use lima
 
+      - name: Check Colima Logs
+        if: always()
+        run: cat /Users/runner/.colima/_lima/colima/ha.stderr.log || true        
+
       - name: Verify Docker Installation
         run: |
           docker version
