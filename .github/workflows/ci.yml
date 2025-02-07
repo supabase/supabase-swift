@@ -163,14 +163,13 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Install Docker
+      - name: Install Docker + Lima
         run: |
-          brew install docker docker-compose
-
-      - name: Start Docker Daemon
-        run: |
-          brew install colima
-          colima start
+          brew install docker lima
+          limactl start --tty=false
+          limactl shell default -- sudo systemctl enable --now docker
+          docker context create lima --docker "host=unix://${HOME}/.lima/docker/sock"
+          docker context use lima
 
       - name: Verify Docker Installation
         run: |
