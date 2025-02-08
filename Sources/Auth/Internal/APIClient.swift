@@ -22,14 +22,14 @@ extension HTTPClient {
 }
 
 struct APIClient: Sendable {
-  let clientID: AuthClientID
+  unowned var client: AuthClient
 
   var configuration: AuthClient.Configuration {
-    Dependencies[clientID].configuration
+    client.configuration
   }
 
   var http: any HTTPClientType {
-    Dependencies[clientID].http
+    client.http
   }
 
   func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
@@ -50,15 +50,9 @@ struct APIClient: Sendable {
   }
 
   @discardableResult
-  func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
-    var sessionManager: SessionManager {
-      Dependencies[clientID].sessionManager
-    }
-
-    let session = try await sessionManager.session()
-
+  func authorizedExecute(_ request: Helpers.HTTPRequest, jwt: String) async throws -> Helpers.HTTPResponse {
     var request = request
-    request.headers[.authorization] = "Bearer \(session.accessToken)"
+    request.headers[.authorization] = "Bearer \(jwt)"
 
     return try await execute(request)
   }

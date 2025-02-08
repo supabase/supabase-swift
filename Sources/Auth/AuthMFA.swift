@@ -3,14 +3,18 @@ import Helpers
 
 /// Contains the full multi-factor authentication API.
 public struct AuthMFA: Sendable {
-  let clientID: AuthClientID
+  let client: AuthClient
 
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].encoder }
-  var decoder: JSONDecoder { Dependencies[clientID].decoder }
-  var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
-  var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
+  var eventEmitter: AuthStateChangeEventEmitter { client.eventEmitter }
+  var sessionManager: SessionManager { client.sessionManager }
+  var configuration: AuthClient.Configuration { client.configuration }
+  var encoder: JSONEncoder { configuration.encoder }
+  var decoder: JSONDecoder { configuration.decoder }
+  var api: APIClient { client.api }
+
+  init(client: AuthClient) {
+    self.client = client
+  }
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
   /// creates a new `unverified` factor.
@@ -29,7 +33,8 @@ public struct AuthMFA: Sendable {
         url: configuration.url.appendingPathComponent("factors"),
         method: .post,
         body: encoder.encode(params)
-      )
+      ),
+      jwt: client.session.accessToken
     )
     .decoded(decoder: decoder)
   }
@@ -44,7 +49,8 @@ public struct AuthMFA: Sendable {
         url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
         method: .post,
         body: params.channel == nil ? nil : encoder.encode(["channel": params.channel])
-      )
+      ),
+      jwt: client.session.accessToken
     )
     .decoded(decoder: decoder)
   }
@@ -61,7 +67,8 @@ public struct AuthMFA: Sendable {
         url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
         method: .post,
         body: encoder.encode(params)
-      )
+      ),
+      jwt: client.session.accessToken
     ).decoded(decoder: decoder)
 
     await sessionManager.update(response)
@@ -82,7 +89,8 @@ public struct AuthMFA: Sendable {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("factors/\(params.factorId)"),
         method: .delete
-      )
+      ),
+      jwt: client.session.accessToken
     )
     .decoded(decoder: decoder)
   }

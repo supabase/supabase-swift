@@ -6,24 +6,16 @@ import XCTest
 @testable import Auth
 
 final class StoredSessionTests: XCTestCase {
-  let clientID = AuthClientID()
-
   func testStoredSession() throws {
-    Dependencies[clientID] = Dependencies(
+    let sut = SessionStorage.live(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost")!,
         storageKey: "supabase.auth.token",
         localStorage: try! DiskTestStorage(),
         logger: nil
       ),
-      http: HTTPClientMock(),
-      api: .init(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID)
+      logger: nil
     )
-
-    let sut = Dependencies[clientID].sessionStorage
 
     XCTAssertNotNil(sut.get())
 

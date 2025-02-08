@@ -59,7 +59,7 @@ final class AuthClientTests: XCTestCase {
   func testOnAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    sut.sessionStorage.store(session)
 
     let events = LockIsolated([AuthChangeEvent]())
 
@@ -77,7 +77,7 @@ final class AuthClientTests: XCTestCase {
   func testAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    sut.sessionStorage.store(session)
 
     let stateChange = await sut.authStateChanges.first { _ in true }
     expectNoDifference(stateChange?.event, .initialSession)
@@ -108,7 +108,7 @@ final class AuthClientTests: XCTestCase {
 
     sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -157,11 +157,11 @@ final class AuthClientTests: XCTestCase {
 
     sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     try await sut.signOut(scope: .others)
 
-    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
+    let sessionRemoved = sut.sessionStorage.get() == nil
     XCTAssertFalse(sessionRemoved)
   }
 
@@ -191,7 +191,7 @@ final class AuthClientTests: XCTestCase {
     sut = makeSUT()
 
     let validSession = Session.validSession
-    Dependencies[sut.clientID].sessionStorage.store(validSession)
+    sut.sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -207,7 +207,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [.validSession, nil])
 
-    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
+    let sessionRemoved = sut.sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -237,7 +237,7 @@ final class AuthClientTests: XCTestCase {
     sut = makeSUT()
 
     let validSession = Session.validSession
-    Dependencies[sut.clientID].sessionStorage.store(validSession)
+    sut.sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -253,7 +253,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
+    let sessionRemoved = sut.sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -283,7 +283,7 @@ final class AuthClientTests: XCTestCase {
     sut = makeSUT()
 
     let validSession = Session.validSession
-    Dependencies[sut.clientID].sessionStorage.store(validSession)
+    sut.sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -299,7 +299,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
+    let sessionRemoved = sut.sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
   }
 
@@ -423,7 +423,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     let response = try await sut.getLinkIdentityURL(provider: .github)
 
@@ -469,10 +469,10 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     let receivedURL = LockIsolated<URL?>(nil)
-    Dependencies[sut.clientID].urlOpener.open = { url in
+    sut.urlOpener.open = { url in
       receivedURL.setValue(url)
     }
 
@@ -549,7 +549,7 @@ final class AuthClientTests: XCTestCase {
   func testSessionFromURL_withError() async throws {
     sut = makeSUT()
 
-    Dependencies[sut.clientID].codeVerifierStorage.set("code-verifier")
+    sut.codeVerifierStorage.set("code-verifier")
 
     let url = URL(
       string:
@@ -866,7 +866,7 @@ final class AuthClientTests: XCTestCase {
 
       let currentDate = Date()
 
-      Dependencies[sut.clientID].date = { currentDate }
+      sut.date = { currentDate }
 
       let url = URL(
         string:
@@ -1061,7 +1061,7 @@ final class AuthClientTests: XCTestCase {
     .register()
 
     let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
@@ -1218,7 +1218,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     try await sut.update(
       user: UserAttributes(
@@ -1374,7 +1374,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     try await sut.reauthenticate()
   }
@@ -1401,7 +1401,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     try await sut.unlinkIdentity(
       UserIdentity(
@@ -1515,7 +1515,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.enroll(
       params: MFAEnrollParams(
@@ -1560,7 +1560,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.enroll(
       params: .totp(
@@ -1605,7 +1605,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.enroll(
       params: .phone(
@@ -1650,7 +1650,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.challenge(params: .init(factorId: factorId))
 
@@ -1699,7 +1699,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.challenge(
       params: .init(
@@ -1744,7 +1744,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     try await sut.mfa.verify(
       params: .init(
@@ -1776,7 +1776,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     let factorId = try await sut.mfa.unenroll(params: .init(factorId: "123")).factorId
 
@@ -1839,7 +1839,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.sessionStorage.store(.validSession)
 
     try await sut.mfa.challengeAndVerify(
       params: MFAChallengeAndVerifyParams(
@@ -1888,7 +1888,7 @@ final class AuthClientTests: XCTestCase {
       ),
     ]
 
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    sut.sessionStorage.store(session)
 
     let factors = try await sut.mfa.listFactors()
     XCTAssertEqual(factors.totp.map(\.id), ["1"])
@@ -1915,7 +1915,7 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    sut.sessionStorage.store(session)
 
     let aal = try await sut.mfa.getAuthenticatorAssuranceLevel()
 
@@ -1963,11 +1963,11 @@ final class AuthClientTests: XCTestCase {
 
     let sut = AuthClient(configuration: configuration)
 
-    Dependencies[sut.clientID].pkce.generateCodeVerifier = {
+    sut.pkce.generateCodeVerifier = {
       "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
     }
 
-    Dependencies[sut.clientID].pkce.generateCodeChallenge = { _ in
+    sut.pkce.generateCodeChallenge = { _ in
       "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
     }
 

@@ -10,11 +10,15 @@ import Helpers
 import HTTPTypes
 
 public struct AuthAdmin: Sendable {
-  let clientID: AuthClientID
+  var clientID: AuthClientID {
+    client.clientID
+  }
 
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].encoder }
+  let client: AuthClient
+
+  var configuration: AuthClient.Configuration { client.configuration }
+  var api: APIClient { client.api }
+  var encoder: JSONEncoder { configuration.encoder }
 
   /// Delete a user. Requires `service_role` key.
   /// - Parameter id: The id of the user you want to delete.

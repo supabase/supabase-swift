@@ -27,21 +27,75 @@ struct AuthClientLoggerDecorator: SupabaseLogger {
   }
 }
 
+@propertyWrapper
+struct Dependency<T: Sendable>: Sendable {
+  init(wrappedValue value: T) {
+    self.wrappedValue = value
+  }
+
+  #if DEBUG
+    var wrappedValue: T
+  #else
+    let wrappedValue: T
+  #endif
+}
+
 public final class AuthClient: Sendable {
   static let globalClientID = LockIsolated(0)
   let clientID: AuthClientID
 
-  private var api: APIClient { Dependencies[clientID].api }
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  private var codeVerifierStorage: CodeVerifierStorage {
-    Dependencies[clientID].codeVerifierStorage
+  struct MutableState {
+    var sessionManager: SessionManager?
+    var api: APIClient?
+    var codeVerifierStorage: CodeVerifierStorage?
+    var sessionStorage: SessionStorage?
   }
-  private var date: @Sendable () -> Date { Dependencies[clientID].date }
-  private var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
-  private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
-  private var logger: (any SupabaseLogger)? { Dependencies[clientID].configuration.logger }
-  private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
-  private var pkce: PKCE { Dependencies[clientID].pkce }
+
+  let mutableState = LockIsolated(MutableState())
+  let configuration: AuthClient.Configuration
+  let http: any HTTPClientType
+
+  var codeVerifierStorage: CodeVerifierStorage {
+    mutableState.withValue { [configuration] in
+      if $0.codeVerifierStorage == nil {
+        $0.codeVerifierStorage = .live(configuration: configuration)
+      }
+      return $0.codeVerifierStorage!
+    }
+  }
+
+  var sessionStorage: SessionStorage {
+    mutableState.withValue { [configuration, logger] in
+      if $0.sessionStorage == nil {
+        $0.sessionStorage = .live(configuration: configuration, logger: logger)
+      }
+      return $0.sessionStorage!
+    }
+  }
+
+  var sessionManager: SessionManager {
+    mutableState.withValue {
+      if $0.sessionManager == nil {
+        $0.sessionManager = .live(client: self)
+      }
+      return $0.sessionManager!
+    }
+  }
+
+  var api: APIClient {
+    mutableState.withValue {
+      if $0.api == nil {
+        $0.api = APIClient(client: self)
+      }
+      return $0.api!
+    }
+  }
+
+  @Dependency var pkce: PKCE = .live
+  @Dependency var urlOpener: URLOpener = .live
+  @Dependency var eventEmitter = AuthStateChangeEventEmitter()
+  @Dependency var logger: (any SupabaseLogger)?
+  @Dependency var date: @Sendable () -> Date = { Date() }
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -68,14 +122,14 @@ public final class AuthClient: Sendable {
 
   /// Namespace for accessing multi-factor authentication API.
   public var mfa: AuthMFA {
-    AuthMFA(clientID: clientID)
+    AuthMFA(client: self)
   }
 
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `service_role` key, be careful to never expose `service_role`
   /// key in the client.
   public var admin: AuthAdmin {
-    AuthAdmin(clientID: clientID)
+    AuthAdmin(client: self)
   }
 
   /// Initializes a AuthClient with a specific configuration.
@@ -88,17 +142,11 @@ public final class AuthClient: Sendable {
       return $0
     }
 
-    Dependencies[clientID] = Dependencies(
-      configuration: configuration,
-      http: HTTPClient(configuration: configuration),
-      api: APIClient(clientID: clientID),
-      codeVerifierStorage: .live(clientID: clientID),
-      sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID),
-      logger: configuration.logger.map {
-        AuthClientLoggerDecorator(clientID: clientID, decoratee: $0)
-      }
-    )
+    self.configuration = configuration
+    self.http = HTTPClient(configuration: configuration)
+    self.logger = configuration.logger.map {
+      AuthClientLoggerDecorator(clientID: clientID, decoratee: $0)
+    }
 
     Task { @MainActor in observeAppLifecycleChanges() }
   }
@@ -1103,7 +1151,8 @@ public final class AuthClient: Sendable {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("reauthenticate"),
         method: .get
-      )
+      ),
+      jwt: session.accessToken
     )
   }
 
@@ -1120,7 +1169,10 @@ public final class AuthClient: Sendable {
       return try await api.execute(request).decoded(decoder: configuration.decoder)
     }
 
-    return try await api.authorizedExecute(request).decoded(decoder: configuration.decoder)
+    return try await api.authorizedExecute(
+      request,
+      jwt: session.accessToken
+    ).decoded(decoder: configuration.decoder)
   }
 
   /// Updates user data, if there is a logged in user.
@@ -1148,7 +1200,8 @@ public final class AuthClient: Sendable {
           }
         ].compactMap { $0 },
         body: configuration.encoder.encode(user)
-      )
+      ),
+      jwt: session.accessToken
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
     await sessionManager.update(session)
@@ -1210,7 +1263,7 @@ public final class AuthClient: Sendable {
       scopes: scopes,
       redirectTo: redirectTo,
       queryParams: queryParams,
-      launchURL: { Dependencies[clientID].urlOpener.open($0) }
+      launchURL: { urlOpener.open($0) }
     )
   }
 
@@ -1246,7 +1299,8 @@ public final class AuthClient: Sendable {
       HTTPRequest(
         url: url,
         method: .get
-      )
+      ),
+      jwt: session.accessToken
     )
     .decoded(as: Response.self, decoder: configuration.decoder)
 
@@ -1260,7 +1314,8 @@ public final class AuthClient: Sendable {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("user/identities/\(identity.identityId)"),
         method: .delete
-      )
+      ),
+      jwt: session.accessToken
     )
   }
 

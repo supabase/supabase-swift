@@ -12,8 +12,8 @@ struct SessionManager: Sendable {
 }
 
 extension SessionManager {
-  static func live(clientID: AuthClientID) -> Self {
-    let instance = LiveSessionManager(clientID: clientID)
+  static func live(client: AuthClient) -> Self {
+    let instance = LiveSessionManager(client: client)
     return Self(
       session: { try await instance.session() },
       refreshSession: { try await instance.refreshSession($0) },
@@ -26,19 +26,20 @@ extension SessionManager {
 }
 
 private actor LiveSessionManager {
-  private var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
-  private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
-  private var logger: (any SupabaseLogger)? { Dependencies[clientID].logger }
-  private var api: APIClient { Dependencies[clientID].api }
+
+  unowned var client: AuthClient
+
+  private var configuration: AuthClient.Configuration { client.configuration }
+  private var sessionStorage: SessionStorage { client.sessionStorage }
+  private var eventEmitter: AuthStateChangeEventEmitter { client.eventEmitter }
+  private var logger: (any SupabaseLogger)? { client.logger }
+  private var api: APIClient { client.api }
 
   private var inFlightRefreshTask: Task<Session, any Error>?
   private var startAutoRefreshTokenTask: Task<Void, Never>?
 
-  let clientID: AuthClientID
-
-  init(clientID: AuthClientID) {
-    self.clientID = clientID
+  init(client: AuthClient) {
+    self.client = client
   }
 
   func session() async throws -> Session {

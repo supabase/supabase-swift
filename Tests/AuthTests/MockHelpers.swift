@@ -15,20 +15,18 @@ extension Decodable {
   }
 }
 
-extension Dependencies {
-  static var mock = Dependencies(
-    configuration: AuthClient.Configuration(
-      url: URL(string: "https://project-id.supabase.com")!,
-      localStorage: InMemoryLocalStorage(),
-      logger: nil
-    ),
-    http: HTTPClientMock(),
-    api: APIClient(clientID: AuthClientID()),
-    codeVerifierStorage: CodeVerifierStorage.mock,
-    sessionStorage: SessionStorage.live(clientID: AuthClientID()),
-    sessionManager: SessionManager.live(clientID: AuthClientID())
-  )
-}
+//extension Dependencies {
+//  static var mock = Dependencies(
+//    configuration: AuthClient.Configuration(
+//      url: URL(string: "https://project-id.supabase.com")!,
+//      localStorage: InMemoryLocalStorage(),
+//      logger: nil
+//    ),
+//    http: HTTPClientMock(),
+//    codeVerifierStorage: CodeVerifierStorage.mock,
+//    sessionStorage: SessionStorage.live(clientID: AuthClientID())
+//  )
+//}
 
 extension CodeVerifierStorage {
   static var mock: CodeVerifierStorage {
