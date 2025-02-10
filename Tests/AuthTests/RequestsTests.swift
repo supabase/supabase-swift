@@ -149,7 +149,7 @@ final class RequestsTests: XCTestCase {
 
       let currentDate = Date()
 
-      sut.date = { currentDate }
+      Current.date = { currentDate }
 
       let url = URL(
         string:

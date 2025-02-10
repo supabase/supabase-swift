@@ -10,10 +10,6 @@ import HTTPTypes
 import Helpers
 
 public struct AuthAdmin: Sendable {
-  var clientID: AuthClientID {
-    client.clientID
-  }
-
   let client: AuthClient
 
   var configuration: AuthClient.Configuration { client.configuration }

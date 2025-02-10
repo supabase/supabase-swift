@@ -14,36 +14,7 @@ import Helpers
   import WatchKit
 #endif
 
-typealias AuthClientID = Int
-
-struct AuthClientLoggerDecorator: SupabaseLogger {
-  let clientID: AuthClientID
-  let decoratee: any SupabaseLogger
-
-  func log(message: SupabaseLogMessage) {
-    var message = message
-    message.additionalContext["client_id"] = .integer(clientID)
-    decoratee.log(message: message)
-  }
-}
-
-@propertyWrapper
-struct Dependency<T: Sendable>: Sendable {
-  init(wrappedValue value: T) {
-    self.wrappedValue = value
-  }
-
-  #if DEBUG
-    var wrappedValue: T
-  #else
-    let wrappedValue: T
-  #endif
-}
-
 public final class AuthClient: Sendable {
-  static let globalClientID = LockIsolated(0)
-  let clientID: AuthClientID
-
   struct MutableState {
     var sessionManager: SessionManager?
   }
@@ -61,19 +32,16 @@ public final class AuthClient: Sendable {
     }
   }
 
-  @Dependency var pkce: PKCE = .live
-  @Dependency var urlOpener: URLOpener = .live
-  @Dependency var eventEmitter = AuthStateChangeEventEmitter()
-  @Dependency var logger: (any SupabaseLogger)?
-  @Dependency var date: @Sendable () -> Date = { Date() }
+  let eventEmitter = AuthStateChangeEventEmitter()
 
+  var logger: (any SupabaseLogger)? { configuration.logger }
   var localStorage: any AuthLocalStorage {
     configuration.localStorage
   }
 
   /// The current session, if any exists in storage.
   ///
-  /// - Note: The session returned by this property may be expired. Use ``session`` for a session that is 
+  /// - Note: The session returned by this property may be expired. Use ``session`` for a session that is
   /// guaranteed to be valid.
   public var currentSession: Session? {
     getStoredSession()
@@ -123,16 +91,8 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    clientID = AuthClient.globalClientID.withValue {
-      $0 += 1
-      return $0
-    }
-
     self.configuration = configuration
     self.http = HTTPClient(configuration: configuration)
-    self.logger = configuration.logger.map {
-      AuthClientLoggerDecorator(clientID: clientID, decoratee: $0)
-    }
 
     migrateLocalStorage()
 
@@ -919,7 +879,7 @@ public final class AuthClient: Sendable {
       accessToken: accessToken,
       tokenType: tokenType,
       expiresIn: expiresIn,
-      expiresAt: expiresAt ?? date().addingTimeInterval(expiresIn).timeIntervalSince1970,
+      expiresAt: expiresAt ?? Current.date().addingTimeInterval(expiresIn).timeIntervalSince1970,
       refreshToken: refreshToken,
       user: user
     )
@@ -964,7 +924,7 @@ public final class AuthClient: Sendable {
   /// - Returns: A new valid session.
   @discardableResult
   public func setSession(accessToken: String, refreshToken: String) async throws -> Session {
-    let now = date()
+    let now = Current.date()
     var expiresAt = now
     var hasExpired = true
     var session: Session
@@ -1327,7 +1287,7 @@ public final class AuthClient: Sendable {
       scopes: scopes,
       redirectTo: redirectTo,
       queryParams: queryParams,
-      launchURL: { urlOpener.open($0) }
+      launchURL: { Current.urlOpener.open($0) }
     )
   }
 
@@ -1450,10 +1410,10 @@ public final class AuthClient: Sendable {
       return (nil, nil)
     }
 
-    let codeVerifier = pkce.generateCodeVerifier()
+    let codeVerifier = Current.pkce.generateCodeVerifier()
     storeCodeVerifier(codeVerifier)
 
-    let codeChallenge = pkce.generateCodeChallenge(codeVerifier)
+    let codeChallenge = Current.pkce.generateCodeChallenge(codeVerifier)
     let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
 
     return (codeChallenge, codeChallengeMethod)

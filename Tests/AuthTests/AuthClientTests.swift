@@ -472,7 +472,7 @@ final class AuthClientTests: XCTestCase {
     sut.storeSession(.validSession)
 
     let receivedURL = LockIsolated<URL?>(nil)
-    sut.urlOpener.open = { url in
+    Current.urlOpener.open = { url in
       receivedURL.setValue(url)
     }
 
@@ -866,7 +866,7 @@ final class AuthClientTests: XCTestCase {
 
       let currentDate = Date()
 
-      sut.date = { currentDate }
+      Current.date = { currentDate }
 
       let url = URL(
         string:
@@ -1963,11 +1963,11 @@ final class AuthClientTests: XCTestCase {
 
     let sut = AuthClient(configuration: configuration)
 
-    sut.pkce.generateCodeVerifier = {
+    Current.pkce.generateCodeVerifier = {
       "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
     }
 
-    sut.pkce.generateCodeChallenge = { _ in
+    Current.pkce.generateCodeChallenge = { _ in
       "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
     }
 

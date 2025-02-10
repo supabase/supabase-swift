@@ -58,7 +58,7 @@
 //
 //  func testSession_shouldReturnValidSession() async throws {
 //    let session = Session.validSession
-//    client.sessionStorage.store(session)
+//    client.storeSession(session)
 //
 //    let returnedSession = try await sut.session()
 //    expectNoDifference(returnedSession, session)
@@ -66,7 +66,7 @@
 //
 //  func testSession_shouldRefreshSession_whenCurrentSessionExpired() async throws {
 //    let currentSession = Session.expiredSession
-//    client.sessionStorage.store(currentSession)
+//    client.storeSession(currentSession)
 //
 //    let validSession = Session.validSession
 //
