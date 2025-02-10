@@ -117,13 +117,18 @@ public final class RealtimeClientV2: Sendable {
     wsTransport: @escaping WebSocketTransport,
     http: any HTTPClientType
   ) {
+    var options = options
+    if options.headers[.xClientInfo] == nil {
+      options.headers[.xClientInfo] = "realtime-swift/\(version)"
+    }
+
     self.url = url
     self.options = options
     self.wsTransport = wsTransport
     self.http = http
     apikey = options.apikey
 
-    mutableState.withValue {
+    mutableState.withValue { [options] in
       if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
         $0.accessToken = String(accessToken)
       } else {
@@ -353,7 +358,7 @@ public final class RealtimeClientV2: Sendable {
         if Task.isCancelled {
           break
         }
-        self?.sendHeartbeat()
+        await self?.sendHeartbeat()
       }
     }
     mutableState.withValue {
@@ -361,7 +366,7 @@ public final class RealtimeClientV2: Sendable {
     }
   }
 
-  private func sendHeartbeat() {
+  private func sendHeartbeat() async {
     let pendingHeartbeatRef: String? = mutableState.withValue {
       if $0.pendingHeartbeatRef != nil {
         $0.pendingHeartbeatRef = nil
@@ -383,6 +388,7 @@ public final class RealtimeClientV2: Sendable {
           payload: [:]
         )
       )
+      await setAuth()
     } else {
       options.logger?.debug("Heartbeat timeout")
       reconnect()
@@ -416,21 +422,13 @@ public final class RealtimeClientV2: Sendable {
   /// On callback used, it will set the value of the token internal to the client.
   /// - Parameter token: A JWT string to override the token set on the client.
   public func setAuth(_ token: String? = nil) async {
-    var token = token
+    var tokenToSend = token
 
-    if token == nil {
-      token = try? await options.accessToken?()
+    if tokenToSend == nil {
+      tokenToSend = try? await options.accessToken?()
     }
 
-    if token == nil {
-      token = mutableState.accessToken
-    }
-
-    if let token, let payload = JWT.decodePayload(token),
-      let exp = payload["exp"] as? TimeInterval, exp < Date().timeIntervalSince1970
-    {
-      options.logger?.warning(
-        "InvalidJWTToken: Invalid value for JWT claim \"exp\" with value \(exp)")
+    guard tokenToSend != mutableState.accessToken else {
       return
     }
 

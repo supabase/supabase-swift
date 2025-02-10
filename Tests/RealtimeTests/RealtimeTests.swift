@@ -113,7 +113,7 @@ final class RealtimeTests: XCTestCase {
     XCTAssertEqual(channelStatuses.value, [.unsubscribed, .subscribing, .subscribed])
 
     assertInlineSnapshot(of: client.sentEvents.map(\.json), as: .json) {
-      """
+      #"""
       [
         {
           "text" : {
@@ -147,14 +147,15 @@ final class RealtimeTests: XCTestCase {
                   "key" : ""
                 },
                 "private" : false
-              }
+              },
+              "version" : "realtime-swift\/0.0.0"
             },
             "ref" : "1",
             "topic" : "realtime:public:messages"
           }
         }
       ]
-      """
+      """#
     }
   }
 
@@ -199,7 +200,7 @@ final class RealtimeTests: XCTestCase {
       $0.event == "phx_join"
     }
     assertInlineSnapshot(of: events, as: .json) {
-      """
+      #"""
       [
         {
           "event" : "phx_join",
@@ -218,7 +219,8 @@ final class RealtimeTests: XCTestCase {
                 "key" : ""
               },
               "private" : false
-            }
+            },
+            "version" : "realtime-swift\/0.0.0"
           },
           "ref" : "1",
           "topic" : "realtime:public:messages"
@@ -240,13 +242,14 @@ final class RealtimeTests: XCTestCase {
                 "key" : ""
               },
               "private" : false
-            }
+            },
+            "version" : "realtime-swift\/0.0.0"
           },
           "ref" : "2",
           "topic" : "realtime:public:messages"
         }
       ]
-      """
+      """#
     }
   }
 
@@ -376,14 +379,6 @@ final class RealtimeTests: XCTestCase {
     await sut.setAuth(validToken)
 
     XCTAssertEqual(sut.mutableState.accessToken, validToken)
-  }
-
-  func testSetAuthWithExpiredToken() async throws {
-    let expiredToken =
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOi02NDA5MjIxMTIwMH0.tnbZRC8vEyK3zaxPxfOjNgvpnuum18dxYlXeHJ4r7u8"
-    await sut.setAuth(expiredToken)
-
-    XCTAssertNotEqual(sut.mutableState.accessToken, expiredToken)
   }
 
   func testSetAuthWithNonJWT() async throws {

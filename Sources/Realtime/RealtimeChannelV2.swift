@@ -104,7 +104,8 @@ public final class RealtimeChannelV2: Sendable {
 
     let payload = RealtimeJoinPayload(
       config: joinConfig,
-      accessToken: await socket._getAccessToken()
+      accessToken: await socket._getAccessToken(),
+      version: socket.options.headers[.xClientInfo]
     )
 
     let joinRef = socket.makeRef()
