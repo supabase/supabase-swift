@@ -10,7 +10,6 @@ public struct AuthMFA: Sendable {
   var configuration: AuthClient.Configuration { client.configuration }
   var encoder: JSONEncoder { configuration.encoder }
   var decoder: JSONDecoder { configuration.decoder }
-  var api: APIClient { client.api }
 
   init(client: AuthClient) {
     self.client = client
@@ -28,7 +27,7 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for enrolling a new MFA factor.
   /// - Returns: An authentication response after enrolling the factor.
   public func enroll(params: any MFAEnrollParamsType) async throws -> AuthMFAEnrollResponse {
-    try await api.authorizedExecute(
+    try await client.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("factors"),
         method: .post,
@@ -44,7 +43,7 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for creating a challenge.
   /// - Returns: An authentication response with the challenge information.
   public func challenge(params: MFAChallengeParams) async throws -> AuthMFAChallengeResponse {
-    try await api.authorizedExecute(
+    try await client.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
         method: .post,
@@ -62,7 +61,7 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response after verifying the factor.
   @discardableResult
   public func verify(params: MFAVerifyParams) async throws -> AuthMFAVerifyResponse {
-    let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
+    let response: AuthMFAVerifyResponse = try await client.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
         method: .post,
@@ -85,7 +84,7 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response after unenrolling the factor.
   @discardableResult
   public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
-    try await api.authorizedExecute(
+    try await client.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("factors/\(params.factorId)"),
         method: .delete
@@ -131,7 +130,9 @@ public struct AuthMFA: Sendable {
   /// Returns the Authenticator Assurance Level (AAL) for the active session.
   ///
   /// - Returns: An authentication response with the Authenticator Assurance Level.
-  public func getAuthenticatorAssuranceLevel() async throws -> AuthMFAGetAuthenticatorAssuranceLevelResponse {
+  public func getAuthenticatorAssuranceLevel() async throws
+    -> AuthMFAGetAuthenticatorAssuranceLevelResponse
+  {
     do {
       let session = try await sessionManager.session()
       let payload = JWT.decodePayload(session.accessToken)

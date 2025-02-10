@@ -33,7 +33,6 @@ private actor LiveSessionManager {
   private var sessionStorage: SessionStorage { client.sessionStorage }
   private var eventEmitter: AuthStateChangeEventEmitter { client.eventEmitter }
   private var logger: (any SupabaseLogger)? { client.logger }
-  private var api: APIClient { client.api }
 
   private var inFlightRefreshTask: Task<Session, any Error>?
   private var startAutoRefreshTokenTask: Task<Void, Never>?
@@ -80,7 +79,7 @@ private actor LiveSessionManager {
           }
 
           do {
-            let session = try await api.execute(
+            let session = try await client.execute(
               HTTPRequest(
                 url: configuration.url.appendingPathComponent("token"),
                 method: .post,

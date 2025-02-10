@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 public struct AuthAdmin: Sendable {
   var clientID: AuthClientID {
@@ -17,7 +17,6 @@ public struct AuthAdmin: Sendable {
   let client: AuthClient
 
   var configuration: AuthClient.Configuration { client.configuration }
-  var api: APIClient { client.api }
   var encoder: JSONEncoder { configuration.encoder }
 
   /// Delete a user. Requires `service_role` key.
@@ -28,7 +27,7 @@ public struct AuthAdmin: Sendable {
   ///
   /// - Warning: Never expose your `service_role` key on the client.
   public func deleteUser(id: String, shouldSoftDelete: Bool = false) async throws {
-    _ = try await api.execute(
+    _ = try await client.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/users/\(id)"),
         method: .delete,
@@ -50,7 +49,7 @@ public struct AuthAdmin: Sendable {
       let aud: String
     }
 
-    let httpResponse = try await api.execute(
+    let httpResponse = try await client.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/users"),
         method: .get,
@@ -73,7 +72,8 @@ public struct AuthAdmin: Sendable {
     let links = httpResponse.headers[.link]?.components(separatedBy: ",") ?? []
     if !links.isEmpty {
       for link in links {
-        let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(while: \.isNumber)
+        let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
+          while: \.isNumber)
         let rel = link.components(separatedBy: ";")[1].components(separatedBy: "=")[1]
 
         if rel == "\"last\"", let lastPage = Int(page) {

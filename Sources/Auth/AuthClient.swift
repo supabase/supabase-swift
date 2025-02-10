@@ -46,7 +46,6 @@ public final class AuthClient: Sendable {
 
   struct MutableState {
     var sessionManager: SessionManager?
-    var api: APIClient?
     var codeVerifierStorage: CodeVerifierStorage?
     var sessionStorage: SessionStorage?
   }
@@ -82,15 +81,6 @@ public final class AuthClient: Sendable {
     }
   }
 
-  var api: APIClient {
-    mutableState.withValue {
-      if $0.api == nil {
-        $0.api = APIClient(client: self)
-      }
-      return $0.api!
-    }
-  }
-
   @Dependency var pkce: PKCE = .live
   @Dependency var urlOpener: URLOpener = .live
   @Dependency var eventEmitter = AuthStateChangeEventEmitter()
@@ -120,7 +110,7 @@ public final class AuthClient: Sendable {
     currentSession?.user
   }
 
-  /// Namespace for accessing multi-factor authentication API.
+  /// Namespace for accessing multi-factor authentication
   public var mfa: AuthMFA {
     AuthMFA(client: self)
   }
@@ -341,7 +331,7 @@ public final class AuthClient: Sendable {
   }
 
   private func _signUp(request: HTTPRequest) async throws -> AuthResponse {
-    let response = try await api.execute(request).decoded(
+    let response = try await execute(request).decoded(
       as: AuthResponse.self,
       decoder: configuration.decoder
     )
@@ -448,7 +438,7 @@ public final class AuthClient: Sendable {
   }
 
   private func _signIn(request: HTTPRequest) async throws -> Session {
-    let session = try await api.execute(request).decoded(
+    let session = try await execute(request).decoded(
       as: Session.self,
       decoder: configuration.decoder
     )
@@ -479,7 +469,7 @@ public final class AuthClient: Sendable {
   ) async throws {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    _ = try await api.execute(
+    _ = try await execute(
       .init(
         url: configuration.url.appendingPathComponent("otp"),
         method: .post,
@@ -522,7 +512,7 @@ public final class AuthClient: Sendable {
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
   ) async throws {
-    _ = try await api.execute(
+    _ = try await execute(
       .init(
         url: configuration.url.appendingPathComponent("otp"),
         method: .post,
@@ -552,7 +542,7 @@ public final class AuthClient: Sendable {
   ) async throws -> SSOResponse {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    return try await api.execute(
+    return try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("sso"),
         method: .post,
@@ -585,7 +575,7 @@ public final class AuthClient: Sendable {
   ) async throws -> SSOResponse {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    return try await api.execute(
+    return try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("sso"),
         method: .post,
@@ -613,7 +603,7 @@ public final class AuthClient: Sendable {
         "code verifier not found, a code verifier should exist when calling this method.")
     }
 
-    let session: Session = try await api.execute(
+    let session: Session = try await execute(
       .init(
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
@@ -869,7 +859,7 @@ public final class AuthClient: Sendable {
     let providerToken = params["provider_token"]
     let providerRefreshToken = params["provider_refresh_token"]
 
-    let user = try await api.execute(
+    let user = try await execute(
       .init(
         url: configuration.url.appendingPathComponent("user"),
         method: .get,
@@ -974,7 +964,7 @@ public final class AuthClient: Sendable {
     }
 
     do {
-      _ = try await api.execute(
+      _ = try await execute(
         .init(
           url: configuration.url.appendingPathComponent("logout"),
           method: .post,
@@ -1071,7 +1061,7 @@ public final class AuthClient: Sendable {
   }
 
   private func _verifyOTP(request: HTTPRequest) async throws -> AuthResponse {
-    let response = try await api.execute(request).decoded(
+    let response = try await execute(request).decoded(
       as: AuthResponse.self,
       decoder: configuration.decoder
     )
@@ -1094,7 +1084,7 @@ public final class AuthClient: Sendable {
     emailRedirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    _ = try await api.execute(
+    _ = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("resend"),
         method: .post,
@@ -1129,7 +1119,7 @@ public final class AuthClient: Sendable {
     type: ResendMobileType,
     captchaToken: String? = nil
   ) async throws -> ResendMobileResponse {
-    try await api.execute(
+    try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("resend"),
         method: .post,
@@ -1147,7 +1137,7 @@ public final class AuthClient: Sendable {
 
   /// Sends a re-authentication OTP to the user's email or phone number.
   public func reauthenticate() async throws {
-    try await api.authorizedExecute(
+    try await authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("reauthenticate"),
         method: .get
@@ -1166,10 +1156,10 @@ public final class AuthClient: Sendable {
 
     if let jwt {
       request.headers[.authorization] = "Bearer \(jwt)"
-      return try await api.execute(request).decoded(decoder: configuration.decoder)
+      return try await execute(request).decoded(decoder: configuration.decoder)
     }
 
-    return try await api.authorizedExecute(
+    return try await authorizedExecute(
       request,
       jwt: session.accessToken
     ).decoded(decoder: configuration.decoder)
@@ -1187,7 +1177,7 @@ public final class AuthClient: Sendable {
     }
 
     var session = try await sessionManager.session()
-    let updatedUser = try await api.authorizedExecute(
+    let updatedUser = try await authorizedExecute(
       .init(
         url: configuration.url.appendingPathComponent("user"),
         method: .put,
@@ -1295,7 +1285,7 @@ public final class AuthClient: Sendable {
       let url: URL
     }
 
-    let response = try await api.authorizedExecute(
+    let response = try await authorizedExecute(
       HTTPRequest(
         url: url,
         method: .get
@@ -1310,7 +1300,7 @@ public final class AuthClient: Sendable {
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
   /// with that identity once it's unlinked.
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
-    try await api.authorizedExecute(
+    try await authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("user/identities/\(identity.identityId)"),
         method: .delete
@@ -1327,7 +1317,7 @@ public final class AuthClient: Sendable {
   ) async throws {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    _ = try await api.execute(
+    _ = try await execute(
       .init(
         url: configuration.url.appendingPathComponent("recover"),
         method: .post,
