@@ -46,31 +46,11 @@ public final class AuthClient: Sendable {
 
   struct MutableState {
     var sessionManager: SessionManager?
-    var codeVerifierStorage: CodeVerifierStorage?
-    var sessionStorage: SessionStorage?
   }
 
   let mutableState = LockIsolated(MutableState())
   let configuration: AuthClient.Configuration
   let http: any HTTPClientType
-
-  var codeVerifierStorage: CodeVerifierStorage {
-    mutableState.withValue { [configuration] in
-      if $0.codeVerifierStorage == nil {
-        $0.codeVerifierStorage = .live(configuration: configuration)
-      }
-      return $0.codeVerifierStorage!
-    }
-  }
-
-  var sessionStorage: SessionStorage {
-    mutableState.withValue { [configuration, logger] in
-      if $0.sessionStorage == nil {
-        $0.sessionStorage = .live(configuration: configuration, logger: logger)
-      }
-      return $0.sessionStorage!
-    }
-  }
 
   var sessionManager: SessionManager {
     mutableState.withValue {
@@ -87,20 +67,36 @@ public final class AuthClient: Sendable {
   @Dependency var logger: (any SupabaseLogger)?
   @Dependency var date: @Sendable () -> Date = { Date() }
 
+  var localStorage: any AuthLocalStorage {
+    configuration.localStorage
+  }
+
+  /// The current session, if any exists in storage.
+  ///
+  /// - Note: The session returned by this property may be expired. Use ``session`` for a session that is 
+  /// guaranteed to be valid.
+  public var currentSession: Session? {
+    getStoredSession()
+  }
+
   /// Returns the session, refreshing it if necessary.
   ///
-  /// If no session can be found, a ``AuthError/sessionNotFound`` error is thrown.
+  /// - Returns: A valid session object.
+  /// - Throws: ``AuthError/sessionNotFound`` if no session exists.
+  ///
+  /// Example:
+  /// ```swift
+  /// do {
+  ///   let session = try await authClient.session
+  ///   // Use valid session
+  /// } catch AuthError.sessionMissing {
+  ///   // Handle no session case
+  /// }
+  /// ```
   public var session: Session {
     get async throws {
       try await sessionManager.session()
     }
-  }
-
-  /// Returns the current session, if any.
-  ///
-  /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
-  public var currentSession: Session? {
-    sessionStorage.get()
   }
 
   /// Returns the current user, if any.
@@ -137,6 +133,8 @@ public final class AuthClient: Sendable {
     self.logger = configuration.logger.map {
       AuthClientLoggerDecorator(clientID: clientID, decoratee: $0)
     }
+
+    migrateLocalStorage()
 
     Task { @MainActor in observeAppLifecycleChanges() }
   }
@@ -208,13 +206,32 @@ public final class AuthClient: Sendable {
       // no-op
     }
   #endif
-  /// Listen for auth state changes.
-  /// - Parameter listener: Block that executes when a new event is emitted.
-  /// - Returns: A handle that can be used to manually unsubscribe.
+
+  /// Listens for authentication state changes.
   ///
-  /// - Note: This method blocks execution until the ``AuthChangeEvent/initialSession`` event is
-  /// emitted. Although this operation is usually fast, in case of the current stored session being
-  /// invalid, a call to the endpoint is necessary for refreshing the session.
+  /// - Parameter listener: Closure called when auth state changes
+  /// - Returns: A registration token that can be used to stop listening
+  ///
+  /// The listener is called with these events:
+  /// - `.initialSession`: When first checking the session
+  /// - `.signedIn`: When user signs in
+  /// - `.signedOut`: When user signs out
+  /// - `.userUpdated`: When user profile is updated
+  /// - `.tokenRefreshed`: When session token is refreshed
+  ///
+  /// Example:
+  /// ```swift
+  /// let token = await authClient.onAuthStateChange { event, session in
+  ///   switch event {
+  ///   case .signedIn:
+  ///     print("User signed in!")
+  ///   case .signedOut:
+  ///     print("User signed out!")
+  ///   default:
+  ///     break
+  ///   }
+  /// }
+  /// ```
   @discardableResult
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
@@ -255,13 +272,25 @@ public final class AuthClient: Sendable {
     return stream
   }
 
-  /// Creates a new user.
+  /// Creates a new user with email and password.
+  ///
   /// - Parameters:
-  ///   - email: User's email address.
-  ///   - password: Password for the user.
-  ///   - data: Custom data object to store additional user metadata.
-  ///   - redirectTo: The redirect URL embedded in the email link, defaults to ``Configuration/redirectToURL`` if not provided.
-  ///   - captchaToken: Optional captcha token for securing this endpoint.
+  ///   - email: User's email address
+  ///   - password: User's password
+  ///   - data: Optional metadata to store with the user profile
+  ///   - redirectTo: Optional URL to redirect to after email confirmation
+  ///   - captchaToken: Optional captcha token for additional security
+  /// - Returns: An ``AuthResponse`` containing the created user and session if auto-confirm is enabled
+  /// - Throws: ``AuthError`` if signup fails
+  ///
+  /// Example:
+  /// ```swift
+  /// let response = try await authClient.signUp(
+  ///   email: "user@example.com",
+  ///   password: "securepass123",
+  ///   data: ["name": "John Doe"]
+  /// )
+  /// ```
   @discardableResult
   public func signUp(
     email: String,
@@ -344,11 +373,22 @@ public final class AuthClient: Sendable {
     return response
   }
 
-  /// Log in an existing user with an email and password.
+  /// Signs in an existing user with email and password.
+  ///
   /// - Parameters:
-  ///   - email: User's email address.
-  ///   - password: User's password.
-  ///   - captchaToken: Optional captcha token for securing this endpoint.
+  ///   - email: User's email address
+  ///   - password: User's password
+  ///   - captchaToken: Optional captcha token for additional security
+  /// - Returns: A valid ``Session`` for the authenticated user
+  /// - Throws: ``AuthError`` if authentication fails
+  ///
+  /// Example:
+  /// ```swift
+  /// let session = try await authClient.signIn(
+  ///   email: "user@example.com",
+  ///   password: "securepass123"
+  /// )
+  /// ```
   @discardableResult
   public func signIn(
     email: String,
@@ -412,12 +452,18 @@ public final class AuthClient: Sendable {
     )
   }
 
-  /// Creates a new anonymous user.
+  /// Creates an anonymous session.
+  ///
   /// - Parameters:
-  ///   - data: A custom data object to store the user's metadata. This maps to the
-  /// `auth.users.raw_user_meta_data` column. The `data` should be a JSON object that includes
-  /// user-specific info, such as their first and last name.
-  ///   - captchaToken: Verification token received when the user completes the captcha.
+  ///   - data: Optional metadata to store with the anonymous user
+  ///   - captchaToken: Optional captcha token for additional security
+  /// - Returns: A new session for the anonymous user
+  /// - Throws: ``AuthError`` if creation fails
+  ///
+  /// Example:
+  /// ```swift
+  /// let session = try await authClient.signInAnonymously()
+  /// ```
   @discardableResult
   public func signInAnonymously(
     data: [String: AnyJSON]? = nil,
@@ -596,7 +642,7 @@ public final class AuthClient: Sendable {
 
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
   public func exchangeCodeForSession(authCode: String) async throws -> Session {
-    let codeVerifier = codeVerifierStorage.get()
+    let codeVerifier = getStoredCodeVerifier()
 
     if codeVerifier == nil {
       logger?.error(
@@ -618,7 +664,7 @@ public final class AuthClient: Sendable {
     )
     .decoded(decoder: configuration.decoder)
 
-    codeVerifierStorage.set(nil)
+    storeCodeVerifier(nil)
 
     await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
@@ -948,10 +994,22 @@ public final class AuthClient: Sendable {
     return session
   }
 
-  /// Signs out the current user, if there is a logged in user.
+  /// Signs out the current user.
   ///
-  /// If using ``SignOutScope/others`` scope, no ``AuthChangeEvent/signedOut`` event is fired.
-  /// - Parameter scope: Specifies which sessions should be logged out.
+  /// - Parameter scope: Determines which sessions to invalidate:
+  ///   - `.global`: Signs out from all devices (default)
+  ///   - `.local`: Signs out only from current device
+  ///   - `.others`: Signs out from all other devices
+  /// - Throws: ``AuthError`` if sign out fails
+  ///
+  /// Example:
+  /// ```swift
+  /// // Sign out everywhere
+  /// try await authClient.signOut()
+  ///
+  /// // Sign out only other sessions
+  /// try await authClient.signOut(scope: .others)
+  /// ```
   public func signOut(scope: SignOutScope = .global) async throws {
     guard let accessToken = currentSession?.accessToken else {
       configuration.logger?.warning("signOut called without a session")
@@ -1165,9 +1223,25 @@ public final class AuthClient: Sendable {
     ).decoded(decoder: configuration.decoder)
   }
 
-  /// Updates user data, if there is a logged in user.
+  /// Updates the current user's profile.
+  ///
+  /// - Parameters:
+  ///   - user: The user attributes to update
+  ///   - redirectTo: Optional URL to redirect to after email confirmation if email is changed
+  /// - Returns: The updated user profile
+  /// - Throws: ``AuthError`` if update fails or no session exists
+  ///
+  /// Example:
+  /// ```swift
+  /// let updatedUser = try await authClient.update(
+  ///   user: .init(data: ["name": "New Name"])
+  /// )
+  /// ```
   @discardableResult
-  public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
+  public func update(
+    user: UserAttributes,
+    redirectTo: URL? = nil
+  ) async throws -> User {
     var user = user
 
     if user.email != nil {
@@ -1377,7 +1451,7 @@ public final class AuthClient: Sendable {
     }
 
     let codeVerifier = pkce.generateCodeVerifier()
-    codeVerifierStorage.set(codeVerifier)
+    storeCodeVerifier(codeVerifier)
 
     let codeChallenge = pkce.generateCodeChallenge(codeVerifier)
     let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
@@ -1390,7 +1464,7 @@ public final class AuthClient: Sendable {
   }
 
   private func isPKCEFlow(params: [String: String]) -> Bool {
-    let currentCodeVerifier = codeVerifierStorage.get()
+    let currentCodeVerifier = getStoredCodeVerifier()
     return params["code"] != nil || params["error_description"] != nil || params["error"] != nil
       || params["error_code"] != nil && currentCodeVerifier != nil
   }

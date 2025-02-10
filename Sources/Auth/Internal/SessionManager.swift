@@ -30,7 +30,6 @@ private actor LiveSessionManager {
   unowned var client: AuthClient
 
   private var configuration: AuthClient.Configuration { client.configuration }
-  private var sessionStorage: SessionStorage { client.sessionStorage }
   private var eventEmitter: AuthStateChangeEventEmitter { client.eventEmitter }
   private var logger: (any SupabaseLogger)? { client.logger }
 
@@ -43,7 +42,7 @@ private actor LiveSessionManager {
 
   func session() async throws -> Session {
     try await trace(using: logger) {
-      guard let currentSession = sessionStorage.get() else {
+      guard let currentSession = client.getStoredSession() else {
         logger?.debug("session missing")
         throw AuthError.sessionMissing
       }
@@ -123,11 +122,11 @@ private actor LiveSessionManager {
   }
 
   func update(_ session: Session) {
-    sessionStorage.store(session)
+    client.storeSession(session)
   }
 
   func remove() {
-    sessionStorage.delete()
+    client.deleteSession()
   }
 
   func startAutoRefreshToken() {
@@ -152,7 +151,7 @@ private actor LiveSessionManager {
     await trace(using: logger) {
       let now = Date().timeIntervalSince1970
 
-      guard let session = sessionStorage.get() else {
+      guard let session = client.getStoredSession() else {
         return
       }
 

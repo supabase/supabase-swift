@@ -7,17 +7,11 @@ import XCTest
 
 final class StoredSessionTests: XCTestCase {
   func testStoredSession() throws {
-    let sut = SessionStorage.live(
-      configuration: AuthClient.Configuration(
-        url: URL(string: "http://localhost")!,
-        storageKey: "supabase.auth.token",
-        localStorage: try! DiskTestStorage(),
-        logger: nil
-      ),
-      logger: nil
+    let client = AuthClient(
+      localStorage: try! DiskTestStorage()
     )
 
-    XCTAssertNotNil(sut.get())
+    XCTAssertNotNil(client.getStoredSession())
 
     let session = Session(
       accessToken: "accesstoken",
@@ -70,8 +64,8 @@ final class StoredSessionTests: XCTestCase {
       )
     )
 
-    sut.store(session)
-    XCTAssertNotNil(sut.get())
+    client.storeSession(session)
+    XCTAssertNotNil(client.getStoredSession())
   }
 
   private final class DiskTestStorage: AuthLocalStorage {
