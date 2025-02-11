@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.24.5](https://github.com/supabase/supabase-swift/compare/v2.24.4...v2.24.5) (2025-02-10)
+
+
+### Bug Fixes
+
+* **realtime:** remove jwt check ([#658](https://github.com/supabase/supabase-swift/issues/658)) ([4c95559](https://github.com/supabase/supabase-swift/commit/4c955592c58c7d0aafbd0c32ae8a85e213303caa))
+
 ## [2.24.4](https://github.com/supabase/supabase-swift/compare/v2.24.3...v2.24.4) (2025-01-16)
 
 
