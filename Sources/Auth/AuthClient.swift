@@ -14,6 +14,10 @@ import Helpers
   import WatchKit
 #endif
 
+#if canImport(ObjectiveC) && canImport(Combine)
+  import Combine
+#endif
+
 typealias AuthClientID = Int
 
 struct AuthClientLoggerDecorator: SupabaseLogger {
@@ -27,21 +31,28 @@ struct AuthClientLoggerDecorator: SupabaseLogger {
   }
 }
 
-public final class AuthClient: Sendable {
-  static let globalClientID = LockIsolated(0)
-  let clientID: AuthClientID
+public actor AuthClient {
+  static var globalClientID = 0
+  nonisolated let clientID: AuthClientID
 
-  private var api: APIClient { Dependencies[clientID].api }
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  private var codeVerifierStorage: CodeVerifierStorage {
+  nonisolated private var api: APIClient { Dependencies[clientID].api }
+
+  nonisolated var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
+
+  nonisolated private var codeVerifierStorage: CodeVerifierStorage {
     Dependencies[clientID].codeVerifierStorage
   }
-  private var date: @Sendable () -> Date { Dependencies[clientID].date }
-  private var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
-  private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
-  private var logger: (any SupabaseLogger)? { Dependencies[clientID].configuration.logger }
-  private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
-  private var pkce: PKCE { Dependencies[clientID].pkce }
+
+  nonisolated private var date: @Sendable () -> Date { Dependencies[clientID].date }
+  nonisolated private var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
+  nonisolated private var eventEmitter: AuthStateChangeEventEmitter {
+    Dependencies[clientID].eventEmitter
+  }
+  nonisolated private var logger: (any SupabaseLogger)? {
+    Dependencies[clientID].configuration.logger
+  }
+  nonisolated private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
+  nonisolated private var pkce: PKCE { Dependencies[clientID].pkce }
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -55,26 +66,26 @@ public final class AuthClient: Sendable {
   /// Returns the current session, if any.
   ///
   /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
-  public var currentSession: Session? {
+  nonisolated public var currentSession: Session? {
     sessionStorage.get()
   }
 
   /// Returns the current user, if any.
   ///
   /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
-  public var currentUser: User? {
+  nonisolated public var currentUser: User? {
     currentSession?.user
   }
 
   /// Namespace for accessing multi-factor authentication API.
-  public var mfa: AuthMFA {
+  nonisolated public var mfa: AuthMFA {
     AuthMFA(clientID: clientID)
   }
 
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `service_role` key, be careful to never expose `service_role`
   /// key in the client.
-  public var admin: AuthAdmin {
+  nonisolated public var admin: AuthAdmin {
     AuthAdmin(clientID: clientID)
   }
 
@@ -83,10 +94,8 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    clientID = AuthClient.globalClientID.withValue {
-      $0 += 1
-      return $0
-    }
+    AuthClient.globalClientID += 1
+    clientID = AuthClient.globalClientID
 
     Dependencies[clientID] = Dependencies(
       configuration: configuration,
@@ -103,63 +112,69 @@ public final class AuthClient: Sendable {
     Task { @MainActor in observeAppLifecycleChanges() }
   }
 
-  #if canImport(ObjectiveC)
+  #if canImport(ObjectiveC) && canImport(Combine)
     @MainActor
     private func observeAppLifecycleChanges() {
+      var didBecomeActiveNotification: NSNotification.Name?
+      var willResignActiveNotification: NSNotification.Name?
+
       #if canImport(UIKit)
         #if canImport(WatchKit)
           if #available(watchOS 7.0, *) {
-            NotificationCenter.default.addObserver(
-              self,
-              selector: #selector(handleDidBecomeActive),
-              name: WKExtension.applicationDidBecomeActiveNotification,
-              object: nil
-            )
-            NotificationCenter.default.addObserver(
-              self,
-              selector: #selector(handleWillResignActive),
-              name: WKExtension.applicationWillResignActiveNotification,
-              object: nil
-            )
+            didBecomeActiveNotification = WKExtension.applicationDidBecomeActiveNotification
+            willResignActiveNotification = WKExtension.applicationWillResignActiveNotification
           }
         #else
-          NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleDidBecomeActive),
-            name: UIApplication.didBecomeActiveNotification,
-            object: nil
-          )
-          NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleWillResignActive),
-            name: UIApplication.willResignActiveNotification,
-            object: nil
-          )
+          didBecomeActiveNotification = UIApplication.didBecomeActiveNotification
+          willResignActiveNotification = UIApplication.willResignActiveNotification
         #endif
       #elseif canImport(AppKit)
-        NotificationCenter.default.addObserver(
-          self,
-          selector: #selector(handleDidBecomeActive),
-          name: NSApplication.didBecomeActiveNotification,
-          object: nil
-        )
-        NotificationCenter.default.addObserver(
-          self,
-          selector: #selector(handleWillResignActive),
-          name: NSApplication.willResignActiveNotification,
-          object: nil
-        )
+        didBecomeActiveNotification = NSApplication.didBecomeActiveNotification
+        willResignActiveNotification = NSApplication.willResignActiveNotification
       #endif
+
+      if let didBecomeActiveNotification, let willResignActiveNotification {
+        var cancellables = Set<AnyCancellable>()
+
+        NotificationCenter.default
+          .publisher(for: UIApplication.didBecomeActiveNotification)
+          .sink(
+            receiveCompletion: { _ in
+              // hold ref to cancellable until it completes
+              _ = cancellables
+            },
+            receiveValue: { [weak self] _ in
+              Task {
+                await self?.handleDidBecomeActive()
+              }
+            }
+          )
+          .store(in: &cancellables)
+
+        NotificationCenter.default
+          .publisher(for: UIApplication.willResignActiveNotification)
+          .sink(
+            receiveCompletion: { _ in
+              // hold ref to cancellable until it completes
+              _ = cancellables
+            },
+            receiveValue: { [weak self] _ in
+              Task {
+                await self?.handleWillResignActive()
+              }
+            }
+          )
+          .store(in: &cancellables)
+      }
+
     }
 
-    @objc
     private func handleDidBecomeActive() {
       if configuration.autoRefreshToken {
         startAutoRefresh()
       }
     }
 
-    @objc
     private func handleWillResignActive() {
       if configuration.autoRefreshToken {
         stopAutoRefresh()
@@ -170,6 +185,7 @@ public final class AuthClient: Sendable {
       // no-op
     }
   #endif
+
   /// Listen for auth state changes.
   /// - Parameter listener: Block that executes when a new event is emitted.
   /// - Returns: A handle that can be used to manually unsubscribe.
@@ -189,7 +205,7 @@ public final class AuthClient: Sendable {
   /// Listen for auth state changes.
   ///
   /// An `.initialSession` is always emitted when this method is called.
-  public var authStateChanges:
+  nonisolated public var authStateChanges:
     AsyncStream<
       (
         event: AuthChangeEvent,
@@ -597,7 +613,7 @@ public final class AuthClient: Sendable {
   /// If that isn't the case, you should consider using
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)``.
-  public func getOAuthSignInURL(
+  nonisolated public func getOAuthSignInURL(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
@@ -672,7 +688,7 @@ public final class AuthClient: Sendable {
         scopes: scopes,
         queryParams: queryParams
       ) { @MainActor url in
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { [configuration] continuation in
           guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
             preconditionFailure(
               "Please, provide a valid redirect URL, either thorugh `redirectTo` param, or globally thorugh `AuthClient.Configuration.redirectToURL`."
@@ -767,12 +783,12 @@ public final class AuthClient: Sendable {
   ///     supabase.auth.handle(url)
   ///   }
   /// ```
-  public func handle(_ url: URL) {
+  nonisolated public func handle(_ url: URL) {
     Task {
       do {
         try await session(from: url)
       } catch {
-        logger?.error("Failure loading session from url '\(url)' error: \(error)")
+        await logger?.error("Failure loading session from url '\(url)' error: \(error)")
       }
     }
   }
@@ -1326,7 +1342,9 @@ public final class AuthClient: Sendable {
     eventEmitter.emit(.initialSession, session: session, token: token)
   }
 
-  private func prepareForPKCE() -> (codeChallenge: String?, codeChallengeMethod: String?) {
+  nonisolated private func prepareForPKCE() -> (
+    codeChallenge: String?, codeChallengeMethod: String?
+  ) {
     guard configuration.flowType == .pkce else {
       return (nil, nil)
     }
@@ -1350,7 +1368,7 @@ public final class AuthClient: Sendable {
       || params["error_code"] != nil && currentCodeVerifier != nil
   }
 
-  private func getURLForProvider(
+  nonisolated private func getURLForProvider(
     url: URL,
     provider: Provider,
     scopes: String? = nil,
