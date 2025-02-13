@@ -137,7 +137,7 @@ public actor AuthClient {
         var cancellables = Set<AnyCancellable>()
 
         NotificationCenter.default
-          .publisher(for: UIApplication.didBecomeActiveNotification)
+          .publisher(for: didBecomeActiveNotification)
           .sink(
             receiveCompletion: { _ in
               // hold ref to cancellable until it completes
@@ -152,7 +152,7 @@ public actor AuthClient {
           .store(in: &cancellables)
 
         NotificationCenter.default
-          .publisher(for: UIApplication.willResignActiveNotification)
+          .publisher(for: willResignActiveNotification)
           .sink(
             receiveCompletion: { _ in
               // hold ref to cancellable until it completes
