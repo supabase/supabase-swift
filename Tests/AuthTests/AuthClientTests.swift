@@ -20,8 +20,6 @@ import XCTest
 #endif
 
 final class AuthClientTests: XCTestCase {
-  var sessionManager: SessionManager!
-
   var storage: InMemoryLocalStorage!
 
   var http: HTTPClientMock!
@@ -52,7 +50,6 @@ final class AuthClientTests: XCTestCase {
     defer { completion() }
 
     sut = nil
-    sessionManager = nil
     storage = nil
   }
 

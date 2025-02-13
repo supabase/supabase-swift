@@ -16,21 +16,13 @@ import Helpers
 
 public final class AuthClient: Sendable {
   struct MutableState {
-    var sessionManager: SessionManager?
+    var inFlightRefreshTask: Task<Session, any Error>?
+    var autoRefreshTokenTask: Task<Void, Never>?
   }
 
   let mutableState = LockIsolated(MutableState())
   let configuration: AuthClient.Configuration
   let http: any HTTPClientType
-
-  var sessionManager: SessionManager {
-    mutableState.withValue {
-      if $0.sessionManager == nil {
-        $0.sessionManager = .live(client: self)
-      }
-      return $0.sessionManager!
-    }
-  }
 
   let eventEmitter = AuthStateChangeEventEmitter()
 
@@ -63,7 +55,7 @@ public final class AuthClient: Sendable {
   /// ```
   public var session: Session {
     get async throws {
-      try await sessionManager.session()
+      try await _session()
     }
   }
 
@@ -326,7 +318,7 @@ public final class AuthClient: Sendable {
     )
 
     if let session = response.session {
-      await sessionManager.update(session)
+      storeSession(session)
       eventEmitter.emit(.signedIn, session: session)
     }
 
@@ -449,7 +441,7 @@ public final class AuthClient: Sendable {
       decoder: configuration.decoder
     )
 
-    await sessionManager.update(session)
+    storeSession(session)
     eventEmitter.emit(.signedIn, session: session)
 
     return session
@@ -626,7 +618,7 @@ public final class AuthClient: Sendable {
 
     storeCodeVerifier(nil)
 
-    await sessionManager.update(session)
+    storeSession(session)
     eventEmitter.emit(.signedIn, session: session)
 
     return session
@@ -884,7 +876,7 @@ public final class AuthClient: Sendable {
       user: user
     )
 
-    await sessionManager.update(session)
+    storeSession(session)
     eventEmitter.emit(.signedIn, session: session)
 
     if let type = params["type"], type == "recovery" {
@@ -949,7 +941,7 @@ public final class AuthClient: Sendable {
       )
     }
 
-    await sessionManager.update(session)
+    storeSession(session)
     eventEmitter.emit(.signedIn, session: session)
     return session
   }
@@ -977,7 +969,7 @@ public final class AuthClient: Sendable {
     }
 
     if scope != .others {
-      await sessionManager.remove()
+      deleteSession()
       eventEmitter.emit(.signedOut, session: nil)
     }
 
@@ -1085,7 +1077,7 @@ public final class AuthClient: Sendable {
     )
 
     if let session = response.session {
-      await sessionManager.update(session)
+      storeSession(session)
       eventEmitter.emit(.signedIn, session: session)
     }
 
@@ -1210,7 +1202,7 @@ public final class AuthClient: Sendable {
       user.codeChallengeMethod = codeChallengeMethod
     }
 
-    var session = try await sessionManager.session()
+    var session = try await _session()
     let updatedUser = try await authorizedExecute(
       .init(
         url: configuration.url.appendingPathComponent("user"),
@@ -1228,7 +1220,7 @@ public final class AuthClient: Sendable {
       jwt: session.accessToken
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
-    await sessionManager.update(session)
+    storeSession(session)
     eventEmitter.emit(.userUpdated, session: session)
     return updatedUser
   }
@@ -1385,19 +1377,19 @@ public final class AuthClient: Sendable {
       throw AuthError.sessionMissing
     }
 
-    return try await sessionManager.refreshSession(refreshToken)
+    return try await _refreshSession(refreshToken)
   }
 
   /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
   ///
   /// If you set ``Configuration/autoRefreshToken`` you don't need to call this function, it will be called for you.
   public func startAutoRefresh() {
-    Task { await sessionManager.startAutoRefresh() }
+    _startAutoRefreshToken()
   }
 
   /// Stops an active auto refresh process running in the background (if any).
   public func stopAutoRefresh() {
-    Task { await sessionManager.stopAutoRefresh() }
+    _stopAutoRefreshToken()
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {

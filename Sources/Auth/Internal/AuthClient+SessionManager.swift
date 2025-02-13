@@ -1,48 +1,11 @@
 import Foundation
 import Helpers
 
-struct SessionManager: Sendable {
-  var session: @Sendable () async throws -> Session
-  var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
-  var update: @Sendable (_ session: Session) async -> Void
-  var remove: @Sendable () async -> Void
+extension AuthClient {
 
-  var startAutoRefresh: @Sendable () async -> Void
-  var stopAutoRefresh: @Sendable () async -> Void
-}
-
-extension SessionManager {
-  static func live(client: AuthClient) -> Self {
-    let instance = LiveSessionManager(client: client)
-    return Self(
-      session: { try await instance.session() },
-      refreshSession: { try await instance.refreshSession($0) },
-      update: { await instance.update($0) },
-      remove: { await instance.remove() },
-      startAutoRefresh: { await instance.startAutoRefreshToken() },
-      stopAutoRefresh: { await instance.stopAutoRefreshToken() }
-    )
-  }
-}
-
-private actor LiveSessionManager {
-
-  unowned var client: AuthClient
-
-  private var configuration: AuthClient.Configuration { client.configuration }
-  private var eventEmitter: AuthStateChangeEventEmitter { client.eventEmitter }
-  private var logger: (any SupabaseLogger)? { client.logger }
-
-  private var inFlightRefreshTask: Task<Session, any Error>?
-  private var startAutoRefreshTokenTask: Task<Void, Never>?
-
-  init(client: AuthClient) {
-    self.client = client
-  }
-
-  func session() async throws -> Session {
+  func _session() async throws -> Session {
     try await trace(using: logger) {
-      guard let currentSession = client.getStoredSession() else {
+      guard let currentSession = getStoredSession() else {
         logger?.debug("session missing")
         throw AuthError.sessionMissing
       }
@@ -52,11 +15,11 @@ private actor LiveSessionManager {
       }
 
       logger?.debug("session expired")
-      return try await refreshSession(currentSession.refreshToken)
+      return try await _refreshSession(currentSession.refreshToken)
     }
   }
 
-  func refreshSession(_ refreshToken: String) async throws -> Session {
+  func _refreshSession(_ refreshToken: String) async throws -> Session {
     try await SupabaseLoggerTaskLocal.$additionalContext.withValue(
       merging: [
         "refresh_id": .string(UUID().uuidString),
@@ -64,21 +27,23 @@ private actor LiveSessionManager {
       ]
     ) {
       try await trace(using: logger) {
-        if let inFlightRefreshTask {
+        if let inFlightRefreshTask = mutableState.inFlightRefreshTask {
           logger?.debug("Refresh already in flight")
           return try await inFlightRefreshTask.value
         }
 
-        inFlightRefreshTask = Task {
+        let inFlightRefreshTask = Task {
           logger?.debug("Refresh task started")
 
           defer {
-            inFlightRefreshTask = nil
+            mutableState.withValue {
+              $0.inFlightRefreshTask = nil
+            }
             logger?.debug("Refresh task ended")
           }
 
           do {
-            let session = try await client.execute(
+            let session = try await execute(
               HTTPRequest(
                 url: configuration.url.appendingPathComponent("token"),
                 method: .post,
@@ -92,7 +57,7 @@ private actor LiveSessionManager {
             )
             .decoded(as: Session.self, decoder: configuration.decoder)
 
-            update(session)
+            storeSession(session)
             eventEmitter.emit(.tokenRefreshed, session: session)
 
             return session
@@ -110,48 +75,57 @@ private actor LiveSessionManager {
             } else if let error = error as? any RetryableError, error.shouldRetry {
               throw error
             } else {
-              remove()
+              deleteSession()
               throw error
             }
           }
         }
 
-        return try await inFlightRefreshTask!.value
+        mutableState.withValue {
+          $0.inFlightRefreshTask = inFlightRefreshTask
+        }
+
+        return try await inFlightRefreshTask.value
       }
     }
   }
 
-  func update(_ session: Session) {
-    client.storeSession(session)
-  }
+  //  func update(_ session: Session) {
+  //    client.storeSession(session)
+  //  }
 
-  func remove() {
-    client.deleteSession()
-  }
+  //  func remove() {
+  //    client.deleteSession()
+  //  }
 
-  func startAutoRefreshToken() {
+  func _startAutoRefreshToken() {
     logger?.debug("start auto refresh token")
 
-    startAutoRefreshTokenTask?.cancel()
-    startAutoRefreshTokenTask = Task {
-      while !Task.isCancelled {
-        await autoRefreshTokenTick()
-        try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(autoRefreshTickDuration))
+    mutableState.withValue {
+      $0.autoRefreshTokenTask?.cancel()
+      $0.autoRefreshTokenTask = Task {
+        while !Task.isCancelled {
+          await autoRefreshTokenTick()
+          try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(autoRefreshTickDuration))
+        }
       }
     }
   }
 
-  func stopAutoRefreshToken() {
+  func _stopAutoRefreshToken() {
     logger?.debug("stop auto refresh token")
-    startAutoRefreshTokenTask?.cancel()
-    startAutoRefreshTokenTask = nil
+
+    mutableState.withValue {
+      $0.autoRefreshTokenTask?.cancel()
+      $0.autoRefreshTokenTask = nil
+    }
   }
 
   private func autoRefreshTokenTick() async {
     await trace(using: logger) {
       let now = Date().timeIntervalSince1970
 
-      guard let session = client.getStoredSession() else {
+      guard let session = getStoredSession() else {
         return
       }
 
@@ -161,7 +135,7 @@ private actor LiveSessionManager {
       )
 
       if expiresInTicks <= autoRefreshTickThreshold {
-        _ = try? await refreshSession(session.refreshToken)
+        _ = try? await _refreshSession(session.refreshToken)
       }
     }
   }

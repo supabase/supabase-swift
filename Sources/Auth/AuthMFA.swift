@@ -6,7 +6,6 @@ public struct AuthMFA: Sendable {
   let client: AuthClient
 
   var eventEmitter: AuthStateChangeEventEmitter { client.eventEmitter }
-  var sessionManager: SessionManager { client.sessionManager }
   var configuration: AuthClient.Configuration { client.configuration }
   var encoder: JSONEncoder { configuration.encoder }
   var decoder: JSONDecoder { configuration.decoder }
@@ -70,7 +69,7 @@ public struct AuthMFA: Sendable {
       jwt: client.session.accessToken
     ).decoded(decoder: decoder)
 
-    await sessionManager.update(response)
+    client.storeSession(response)
 
     eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
 
@@ -116,7 +115,7 @@ public struct AuthMFA: Sendable {
   ///
   /// - Returns: An authentication response with the list of MFA factors.
   public func listFactors() async throws -> AuthMFAListFactorsResponse {
-    let user = try await sessionManager.session().user
+    let user = try await client.session.user
     let factors = user.factors ?? []
     let totp = factors.filter {
       $0.factorType == "totp" && $0.status == .verified
@@ -134,7 +133,7 @@ public struct AuthMFA: Sendable {
     -> AuthMFAGetAuthenticatorAssuranceLevelResponse
   {
     do {
-      let session = try await sessionManager.session()
+      let session = try await client.session
       let payload = JWT.decodePayload(session.accessToken)
 
       var currentLevel: AuthenticatorAssuranceLevels?
