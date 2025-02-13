@@ -788,7 +788,7 @@ public actor AuthClient {
       do {
         try await session(from: url)
       } catch {
-        await logger?.error("Failure loading session from url '\(url)' error: \(error)")
+        logger?.error("Failure loading session from url '\(url)' error: \(error)")
       }
     }
   }
