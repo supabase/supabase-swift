@@ -105,7 +105,7 @@ extension AuthClient {
     deprecated,
     message: "Replace usages of this initializer with new init(url:headers:flowType:localStorage:logger:encoder:decoder:fetch)"
   )
-  public convenience init(
+  public init(
     url: URL,
     headers: [String: String] = [:],
     flowType: AuthFlowType = Configuration.defaultFlowType,
