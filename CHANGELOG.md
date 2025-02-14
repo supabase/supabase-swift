@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.24.6](https://github.com/supabase/supabase-swift/compare/v2.24.5...v2.24.6) (2025-02-14)
+
+
+### Bug Fixes
+
+* **auth:** make AuthClient an Actor ([#664](https://github.com/supabase/supabase-swift/issues/664)) ([bdf1961](https://github.com/supabase/supabase-swift/commit/bdf19614b35b76281f2a50e785b6d21fa9578e40))
+
 ## [2.24.5](https://github.com/supabase/supabase-swift/compare/v2.24.4...v2.24.5) (2025-02-10)
 
 
