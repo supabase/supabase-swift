@@ -16,7 +16,8 @@ import Helpers
 public typealias JSONObject = Helpers.JSONObject
 
 /// Factory function for returning a new WebSocket connection.
-typealias WebSocketTransport = @Sendable () async throws -> any WebSocket
+typealias WebSocketTransport = @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
+  any WebSocket
 
 public final class RealtimeClientV2: Sendable {
   struct MutableState {
@@ -93,15 +94,11 @@ public final class RealtimeClientV2: Sendable {
     self.init(
       url: url,
       options: options,
-      wsTransport: {
+      wsTransport: { url, headers in
         let configuration = URLSessionConfiguration.default
-        configuration.httpAdditionalHeaders = options.headers.dictionary
+        configuration.httpAdditionalHeaders = headers
         return try await URLSessionWebSocket.connect(
-          to: Self.realtimeWebSocketURL(
-            baseURL: Self.realtimeBaseURL(url: url),
-            apikey: options.apikey,
-            logLevel: options.logLevel
-          ),
+          to: url,
           configuration: configuration
         )
       },
@@ -173,7 +170,14 @@ public final class RealtimeClientV2: Sendable {
         status = .connecting
 
         do {
-          let conn = try await wsTransport()
+          let conn = try await wsTransport(
+            Self.realtimeWebSocketURL(
+              baseURL: Self.realtimeBaseURL(url: url),
+              apikey: options.apikey,
+              logLevel: options.logLevel
+            ),
+            options.headers.dictionary
+          )
           mutableState.withValue { $0.conn = conn }
           onConnected(reconnect: reconnect)
         } catch {
