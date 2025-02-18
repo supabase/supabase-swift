@@ -14,7 +14,7 @@ import XCTest
 
 @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class RealtimeTests: XCTestCase {
-  let url = URL(string: "https://localhost:54321/realtime/v1")!
+  let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
 
   override func invokeTest() {
@@ -49,7 +49,7 @@ final class RealtimeTests: XCTestCase {
           "custom.access.token"
         }
       ),
-      wsTransport: { self.client },
+      wsTransport: { _, _ in self.client },
       http: http
     )
   }
@@ -58,6 +58,30 @@ final class RealtimeTests: XCTestCase {
     sut.disconnect()
 
     super.tearDown()
+  }
+
+  func test_transport() async {
+    let client = RealtimeClientV2(
+      url: url,
+      options: RealtimeClientOptions(
+        headers: ["apikey": apiKey],
+        logLevel: .warn,
+        accessToken: {
+          "custom.access.token"
+        }
+      ),
+      wsTransport: { url, headers in
+        assertInlineSnapshot(of: url, as: .description) {
+          """
+          ws://localhost:54321/realtime/v1/websocket?apikey=anon.api.key&vsn=1.0.0&log_level=warn
+          """
+        }
+        return FakeWebSocket.fakes().0
+      },
+      http: http
+    )
+
+    await client.connect()
   }
 
   func testBehavior() async throws {
@@ -352,7 +376,7 @@ final class RealtimeTests: XCTestCase {
     let request = await http.receivedRequests.last
     assertInlineSnapshot(of: request?.urlRequest, as: .raw(pretty: true)) {
       """
-      POST https://localhost:54321/realtime/v1/api/broadcast
+      POST http://localhost:54321/realtime/v1/api/broadcast
       Authorization: Bearer custom.access.token
       Content-Type: application/json
       apiKey: anon.api.key

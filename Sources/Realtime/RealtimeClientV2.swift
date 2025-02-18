@@ -16,7 +16,8 @@ import Helpers
 public typealias JSONObject = Helpers.JSONObject
 
 /// Factory function for returning a new WebSocket connection.
-typealias WebSocketTransport = @Sendable () async throws -> any WebSocket
+typealias WebSocketTransport = @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
+  any WebSocket
 
 public final class RealtimeClientV2: Sendable {
   struct MutableState {
@@ -93,14 +94,11 @@ public final class RealtimeClientV2: Sendable {
     self.init(
       url: url,
       options: options,
-      wsTransport: {
+      wsTransport: { url, headers in
         let configuration = URLSessionConfiguration.default
-        configuration.httpAdditionalHeaders = options.headers.dictionary
+        configuration.httpAdditionalHeaders = headers
         return try await URLSessionWebSocket.connect(
-          to: Self.realtimeWebSocketURL(
-            baseURL: Self.realtimeBaseURL(url: url),
-            apikey: options.apikey
-          ),
+          to: url,
           configuration: configuration
         )
       },
@@ -172,7 +170,14 @@ public final class RealtimeClientV2: Sendable {
         status = .connecting
 
         do {
-          let conn = try await wsTransport()
+          let conn = try await wsTransport(
+            Self.realtimeWebSocketURL(
+              baseURL: Self.realtimeBaseURL(url: url),
+              apikey: options.apikey,
+              logLevel: options.logLevel
+            ),
+            options.headers.dictionary
+          )
           mutableState.withValue { $0.conn = conn }
           onConnected(reconnect: reconnect)
         } catch {
@@ -528,7 +533,7 @@ public final class RealtimeClientV2: Sendable {
     return url
   }
 
-  static func realtimeWebSocketURL(baseURL: URL, apikey: String?) -> URL {
+  static func realtimeWebSocketURL(baseURL: URL, apikey: String?, logLevel: LogLevel?) -> URL {
     guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
     else {
       return baseURL
@@ -539,6 +544,10 @@ public final class RealtimeClientV2: Sendable {
       components.queryItems!.append(URLQueryItem(name: "apikey", value: apikey))
     }
     components.queryItems!.append(URLQueryItem(name: "vsn", value: "1.0.0"))
+
+    if let logLevel {
+      components.queryItems!.append(URLQueryItem(name: "log_level", value: logLevel.rawValue))
+    }
 
     components.path.append("/websocket")
     components.path = components.path.replacingOccurrences(of: "//", with: "/")
