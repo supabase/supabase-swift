@@ -25,7 +25,7 @@ public struct RealtimeClientOptions: Sendable {
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: (any SupabaseLogger)?
 
-  public static let defaultHeartbeatInterval: TimeInterval = 15
+  public static let defaultHeartbeatInterval: TimeInterval = 25
   public static let defaultReconnectDelay: TimeInterval = 7
   public static let defaultTimeoutInterval: TimeInterval = 10
   public static let defaultDisconnectOnSessionLoss = true
