@@ -99,7 +99,8 @@ public final class RealtimeClientV2: Sendable {
         return try await URLSessionWebSocket.connect(
           to: Self.realtimeWebSocketURL(
             baseURL: Self.realtimeBaseURL(url: url),
-            apikey: options.apikey
+            apikey: options.apikey,
+            logLevel: options.logLevel
           ),
           configuration: configuration
         )
@@ -528,7 +529,7 @@ public final class RealtimeClientV2: Sendable {
     return url
   }
 
-  static func realtimeWebSocketURL(baseURL: URL, apikey: String?) -> URL {
+  static func realtimeWebSocketURL(baseURL: URL, apikey: String?, logLevel: LogLevel?) -> URL {
     guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
     else {
       return baseURL
@@ -539,6 +540,10 @@ public final class RealtimeClientV2: Sendable {
       components.queryItems!.append(URLQueryItem(name: "apikey", value: apikey))
     }
     components.queryItems!.append(URLQueryItem(name: "vsn", value: "1.0.0"))
+
+    if let logLevel {
+      components.queryItems!.append(URLQueryItem(name: "log_level", value: logLevel.rawValue))
+    }
 
     components.path.append("/websocket")
     components.path = components.path.replacingOccurrences(of: "//", with: "/")
