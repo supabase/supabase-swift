@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.24.7](https://github.com/supabase/supabase-swift/compare/v2.24.6...v2.24.7) (2025-02-18)
+
+
+### Bug Fixes
+
+* **realtime:** Set default heartbeat interval to 25s ([#667](https://github.com/supabase/supabase-swift/issues/667)) ([14c590d](https://github.com/supabase/supabase-swift/commit/14c590d08898e5a3c1c131ad704966d73df7e538))
+
 ## [2.24.6](https://github.com/supabase/supabase-swift/compare/v2.24.5...v2.24.6) (2025-02-14)
 
 
