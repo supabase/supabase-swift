@@ -1,3 +1,11 @@
+//
+//  RealtimeFilter.swift
+//  Supabase
+//
+//  Created by Lucas Abijmil on 19/02/2025.
+//
+
+/// A filter that can be used in Realtime.
 public enum RealtimeFilter {
   case eq(_ column: String, value: any RealtimeFilterValue)
   case neq(_ column: String, value: any RealtimeFilterValue)
