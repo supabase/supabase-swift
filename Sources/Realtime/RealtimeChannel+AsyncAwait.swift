@@ -15,24 +15,24 @@ public enum RealtimeChannelV2Filter {
   case gte(column: String, value: any URLQueryRepresentable)
   case lt(column: String, value: any URLQueryRepresentable)
   case lte(column: String, value: any URLQueryRepresentable)
-  case `in`(column: String, value: [any URLQueryRepresentable])
+  case `in`(column: String, values: [any URLQueryRepresentable])
 
   var value: String {
     switch self {
-    case .eq(let column, let value):
+    case let .eq(column, value):
       return "\(column)=eq.\(value.queryValue)"
-    case .neq(let column, let value):
+    case let .neq(column, value):
       return "\(column)=neq.\(value.queryValue)"
-    case .gt(let column, let value):
+    case let .gt(column, value):
       return "\(column)=gt.\(value.queryValue)"
-    case .gte(let column, let value):
+    case let .gte(column, value):
       return "\(column)=gte.\(value.queryValue)"
-    case .lt(let column, let value):
+    case let .lt(column, value):
       return "\(column)=lt.\(value.queryValue)"
-    case .lte(let column, let value):
+    case let .lte(column, value):
       return "\(column)=lte.\(value.queryValue)"
-    case .in(let column, let value):
-      return "\(column)=in.(\(value.map(\.queryValue).joined(separator: ",")))"
+    case let .in(column, values):
+      return "\(column)=in.(\(values.map(\.queryValue).joined(separator: ",")))"
     }
   }
 }
