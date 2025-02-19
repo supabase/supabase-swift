@@ -1,13 +1,6 @@
 import Foundation
 import Helpers
 
-@available(
-  *,
-  deprecated,
-  renamed: "PostgrestFilterValue"
-)
-public typealias URLQueryRepresentable = PostgrestFilterValue
-
 /// A value that can be used to filter Postgrest queries.
 public protocol PostgrestFilterValue {
   var rawValue: String { get }

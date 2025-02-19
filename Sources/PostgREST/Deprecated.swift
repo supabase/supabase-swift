@@ -134,3 +134,10 @@ extension PostgrestFilterBuilder {
     ilike(column, pattern: value)
   }
 }
+
+@available(
+  *,
+  deprecated,
+  renamed: "PostgrestFilterValue"
+)
+public typealias URLQueryRepresentable = PostgrestFilterValue
