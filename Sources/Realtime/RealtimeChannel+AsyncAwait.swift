@@ -6,33 +6,71 @@
 //
 
 import Foundation
-import PostgREST
 
-public enum RealtimeChannelV2Filter {
-  case eq(column: String, value: any URLQueryRepresentable)
-  case neq(column: String, value: any URLQueryRepresentable)
-  case gt(column: String, value: any URLQueryRepresentable)
-  case gte(column: String, value: any URLQueryRepresentable)
-  case lt(column: String, value: any URLQueryRepresentable)
-  case lte(column: String, value: any URLQueryRepresentable)
-  case `in`(column: String, values: [any URLQueryRepresentable])
+/// A value that can be used to filter Realtime changes in a channel.
+public protocol RealtimeFilterValue {
+  var rawValue: String { get }
+}
+
+extension String: RealtimeFilterValue {
+  public var rawValue: String { self }
+}
+
+extension Int: RealtimeFilterValue {
+  public var rawValue: String { "\(self)" }
+}
+
+extension Double: RealtimeFilterValue {
+  public var rawValue: String { "\(self)" }
+}
+
+extension Bool: RealtimeFilterValue {
+  public var rawValue: String { "\(self)" }
+}
+
+extension UUID: RealtimeFilterValue {
+  public var rawValue: String { uuidString }
+}
+
+extension Date: RealtimeFilterValue {
+  public var rawValue: String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.string(from: self)
+  }
+}
+
+extension Array: RealtimeFilterValue where Element: RealtimeFilterValue {
+  public var rawValue: String {
+    map(\.rawValue).joined(separator: ",")
+  }
+}
+
+public enum RealtimeFilter {
+  case eq(_ column: String, value: any RealtimeFilterValue)
+  case neq(_ column: String, value: any RealtimeFilterValue)
+  case gt(_ column: String, value: any RealtimeFilterValue)
+  case gte(_ column: String, value: any RealtimeFilterValue)
+  case lt(_ column: String, value: any RealtimeFilterValue)
+  case lte(_ column: String, value: any RealtimeFilterValue)
+  case `in`(_ column: String, values: [any RealtimeFilterValue])
 
   var value: String {
     switch self {
     case let .eq(column, value):
-      return "\(column)=eq.\(value.queryValue)"
+      return "\(column)=eq.\(value.rawValue)"
     case let .neq(column, value):
-      return "\(column)=neq.\(value.queryValue)"
+      return "\(column)=neq.\(value.rawValue)"
     case let .gt(column, value):
-      return "\(column)=gt.\(value.queryValue)"
+      return "\(column)=gt.\(value.rawValue)"
     case let .gte(column, value):
-      return "\(column)=gte.\(value.queryValue)"
+      return "\(column)=gte.\(value.rawValue)"
     case let .lt(column, value):
-      return "\(column)=lt.\(value.queryValue)"
+      return "\(column)=lt.\(value.rawValue)"
     case let .lte(column, value):
-      return "\(column)=lte.\(value.queryValue)"
+      return "\(column)=lte.\(value.rawValue)"
     case let .in(column, values):
-      return "\(column)=in.(\(values.map(\.queryValue).joined(separator: ",")))"
+      return "\(column)=in.(\(values.map(\.rawValue)))"
     }
   }
 }
@@ -58,7 +96,7 @@ extension RealtimeChannelV2 {
     _: InsertAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimeChannelV2Filter? = nil
+    filter: RealtimeFilter? = nil
   ) -> AsyncStream<InsertAction> {
     postgresChange(event: .insert, schema: schema, table: table, filter: filter?.value)
       .compactErase()
@@ -70,6 +108,7 @@ extension RealtimeChannelV2 {
      deprecated,
      message: "Use the new filter syntax instead."
   )
+  @_disfavoredOverload
   public func postgresChange(
     _: InsertAction.Type,
     schema: String = "public",
@@ -85,7 +124,7 @@ extension RealtimeChannelV2 {
     _: UpdateAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimeChannelV2Filter? = nil
+    filter: RealtimeFilter? = nil
   ) -> AsyncStream<UpdateAction> {
     postgresChange(event: .update, schema: schema, table: table, filter: filter?.value)
       .compactErase()
@@ -97,6 +136,7 @@ extension RealtimeChannelV2 {
      deprecated,
      message: "Use the new filter syntax instead."
   )
+  @_disfavoredOverload
   public func postgresChange(
     _: UpdateAction.Type,
     schema: String = "public",
@@ -112,7 +152,7 @@ extension RealtimeChannelV2 {
     _: DeleteAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimeChannelV2Filter? = nil
+    filter: RealtimeFilter? = nil
   ) -> AsyncStream<DeleteAction> {
     postgresChange(event: .delete, schema: schema, table: table, filter: filter?.value)
       .compactErase()
@@ -124,6 +164,7 @@ extension RealtimeChannelV2 {
      deprecated,
      message: "Use the new filter syntax instead."
   )
+  @_disfavoredOverload
   public func postgresChange(
     _: DeleteAction.Type,
     schema: String = "public",
@@ -139,7 +180,7 @@ extension RealtimeChannelV2 {
     _: AnyAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimeChannelV2Filter? = nil
+    filter: RealtimeFilter? = nil
   ) -> AsyncStream<AnyAction> {
     postgresChange(event: .all, schema: schema, table: table, filter: filter?.value)
   }
@@ -150,6 +191,7 @@ extension RealtimeChannelV2 {
      deprecated,
      message: "Use the new filter syntax instead."
   )
+  @_disfavoredOverload
   public func postgresChange(
     _: AnyAction.Type,
     schema: String = "public",
