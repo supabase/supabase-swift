@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.25.0](https://github.com/supabase/supabase-swift/compare/v2.24.7...v2.25.0) (2025-02-20)
+
+
+### Features
+
+* **realtime:** add predefined filters instead of regular `String` ([#669](https://github.com/supabase/supabase-swift/issues/669)) ([3dc9b82](https://github.com/supabase/supabase-swift/commit/3dc9b82e90a5158664d163caeb397e220f58d8dd))
+
 ## [2.24.7](https://github.com/supabase/supabase-swift/compare/v2.24.6...v2.24.7) (2025-02-18)
 
 
