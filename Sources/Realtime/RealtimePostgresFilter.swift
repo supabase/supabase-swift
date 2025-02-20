@@ -30,7 +30,7 @@ public enum RealtimePostgresFilter {
     case let .lte(column, value):
       return "\(column)=lte.\(value.rawValue)"
     case let .in(column, values):
-      return "\(column)=in.(\(values.map(\.rawValue)))"
+      return "\(column)=in.(\(values.map(\.rawValue).joined(separator: ",")))"
     }
   }
 }

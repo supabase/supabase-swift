@@ -28,7 +28,7 @@ extension RealtimeChannelV2 {
     _: InsertAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimeFilter? = nil
+    filter: RealtimePostgresFilter? = nil
   ) -> AsyncStream<InsertAction> {
     postgresChange(event: .insert, schema: schema, table: table, filter: filter?.value)
       .compactErase()
@@ -56,7 +56,7 @@ extension RealtimeChannelV2 {
     _: UpdateAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimeFilter? = nil
+    filter: RealtimePostgresFilter? = nil
   ) -> AsyncStream<UpdateAction> {
     postgresChange(event: .update, schema: schema, table: table, filter: filter?.value)
       .compactErase()
@@ -84,7 +84,7 @@ extension RealtimeChannelV2 {
     _: DeleteAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimeFilter? = nil
+    filter: RealtimePostgresFilter? = nil
   ) -> AsyncStream<DeleteAction> {
     postgresChange(event: .delete, schema: schema, table: table, filter: filter?.value)
       .compactErase()
@@ -112,7 +112,7 @@ extension RealtimeChannelV2 {
     _: AnyAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimeFilter? = nil
+    filter: RealtimePostgresFilter? = nil
   ) -> AsyncStream<AnyAction> {
     postgresChange(event: .all, schema: schema, table: table, filter: filter?.value)
   }
