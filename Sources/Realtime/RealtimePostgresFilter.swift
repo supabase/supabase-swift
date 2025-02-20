@@ -1,19 +1,19 @@
 //
-//  RealtimeFilter.swift
+//  RealtimePostgresFilter.swift
 //  Supabase
 //
 //  Created by Lucas Abijmil on 19/02/2025.
 //
 
 /// A filter that can be used in Realtime.
-public enum RealtimeFilter {
-  case eq(_ column: String, value: any RealtimeFilterValue)
-  case neq(_ column: String, value: any RealtimeFilterValue)
-  case gt(_ column: String, value: any RealtimeFilterValue)
-  case gte(_ column: String, value: any RealtimeFilterValue)
-  case lt(_ column: String, value: any RealtimeFilterValue)
-  case lte(_ column: String, value: any RealtimeFilterValue)
-  case `in`(_ column: String, values: [any RealtimeFilterValue])
+public enum RealtimePostgresFilter {
+  case eq(_ column: String, value: any RealtimePostgresFilterValue)
+  case neq(_ column: String, value: any RealtimePostgresFilterValue)
+  case gt(_ column: String, value: any RealtimePostgresFilterValue)
+  case gte(_ column: String, value: any RealtimePostgresFilterValue)
+  case lt(_ column: String, value: any RealtimePostgresFilterValue)
+  case lte(_ column: String, value: any RealtimePostgresFilterValue)
+  case `in`(_ column: String, values: [any RealtimePostgresFilterValue])
 
   var value: String {
     switch self {
