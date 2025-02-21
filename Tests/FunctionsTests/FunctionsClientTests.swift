@@ -12,7 +12,6 @@ import XCTest
   import FoundationNetworking
 #endif
 
-#if !os(Windows) && !os(Linux) && !os(Android) // no URLSessionConfiguration.protocolClasses
 final class FunctionsClientTests: XCTestCase {
   let url = URL(string: "http://localhost:5432/functions/v1")!
   let apiKey =
@@ -401,4 +400,3 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 }
-#endif

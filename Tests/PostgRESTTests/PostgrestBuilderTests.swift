@@ -11,7 +11,6 @@ import XCTest
 
 @testable import PostgREST
 
-#if !os(Windows) && !os(Linux) && !os(Android) // no URLSessionConfiguration.protocolClasses
 final class PostgrestBuilderTests: PostgrestQueryTests {
   func testCustomHeaderOnAPerCallBasis() throws {
     let url = URL(string: "http://localhost:54321/rest/v1")!
@@ -226,4 +225,3 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     XCTAssertEqual(query.mutableState.request.headers[.init("key")!], "value")
   }
 }
-#endif

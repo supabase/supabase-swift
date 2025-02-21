@@ -19,7 +19,6 @@ import XCTest
   import FoundationNetworking
 #endif
 
-#if !os(Windows) && !os(Linux) && !os(Android) // no URLSessionConfiguration.protocolClasses
 final class AuthClientTests: XCTestCase {
   var sessionManager: SessionManager!
 
@@ -28,11 +27,13 @@ final class AuthClientTests: XCTestCase {
   var http: HTTPClientMock!
   var sut: AuthClient!
 
+  #if !os(Windows) && !os(Linux) && !os(Android)
   override func invokeTest() {
     withMainSerialExecutor {
       super.invokeTest()
     }
   }
+  #endif
 
   override func setUp() {
     super.setUp()
@@ -2040,4 +2041,3 @@ enum MockData {
     contentsOf: Bundle.module.url(forResource: "anonymous-sign-in-response", withExtension: "json")!
   )
 }
-#endif

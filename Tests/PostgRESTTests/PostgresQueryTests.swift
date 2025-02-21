@@ -11,7 +11,10 @@ import PostgREST
 import TestHelpers
 import XCTest
 
-#if !os(Windows) && !os(Linux) && !os(Android) // no URLSessionConfiguration.protocolClasses
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 class PostgrestQueryTests: XCTestCase {
   let url = URL(string: "http://localhost:54321/rest/v1")!
 
@@ -54,4 +57,3 @@ class PostgrestQueryTests: XCTestCase {
     }
   }
 }
-#endif

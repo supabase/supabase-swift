@@ -11,7 +11,6 @@ import Mocker
 import PostgREST
 import XCTest
 
-#if !os(Windows) && !os(Linux) && !os(Android) // no URLSessionConfiguration.protocolClasses
 final class PostgrestRpcBuilderTests: PostgrestQueryTests {
   func testRpc() async throws {
     Mock(
@@ -170,4 +169,3 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
     try await sut.rpc("hello", count: .estimated).execute()
   }
 }
-#endif

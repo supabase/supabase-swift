@@ -4,12 +4,22 @@ import Mocker
 import TestHelpers
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 @testable import Storage
 
-#if !os(Windows) && !os(Linux) && !os(Android) // no URLSessionConfiguration.protocolClasses
 final class StorageFileAPITests: XCTestCase {
   let url = URL(string: "http://localhost:54321/storage/v1")!
   var storage: SupabaseStorageClient!
+
+  override func setUpWithError() throws {
+    #if os(Android) || os(Linux)
+    throw XCTSkip("no support for URLSessionConfiguration.protocolClasses")
+    #endif
+    try super.setUpWithError()
+  }
 
   override func setUp() {
     super.setUp()
@@ -892,4 +902,3 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
 }
-#endif
