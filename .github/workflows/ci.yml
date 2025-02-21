@@ -107,7 +107,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: "Remove IntegrationTests"
-        run: rm -r Tests/IntegrationTests
+        run: rm -r Tests/IntegrationTests/*
       - name: "Test Swift Package on Android"
         uses: skiptools/swift-android-action@v2
         with:
