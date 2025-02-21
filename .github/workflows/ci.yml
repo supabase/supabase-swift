@@ -108,13 +108,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: "Remove IntegrationTests"
         run: rm -r Tests/IntegrationTests/*
+      - name: "Test Swift Package on Linux"
+        run: swift test
       - name: "Test Swift Package on Android"
         uses: skiptools/swift-android-action@v2
         with:
           # need to copy over the Tests folder because it contains __Snapshots__
           copy-files: Tests
-      - name: "Test Swift Package on Linux"
-        run: swift test
 
   # linux:
   #   name: linux
