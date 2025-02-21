@@ -9,6 +9,7 @@ import Mocker
 import PostgREST
 import XCTest
 
+#if !os(Android) // no URLSessionConfiguration.protocolClasses
 final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testSelect() async throws {
@@ -416,3 +417,4 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
     XCTAssertTrue(explain.contains("Aggregate"))
   }
 }
+#endif

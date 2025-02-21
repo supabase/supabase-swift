@@ -262,7 +262,7 @@ extension URLResponse {
   // We provide a function that can give us the right value on an platform.
   // See https://github.com/apple/swift-corelibs-foundation/pull/4778
   fileprivate static func empty() -> URLResponse {
-    #if os(Windows) || os(Linux)
+    #if os(Windows) || os(Linux) || os(Android)
       URLResponse(
         url: .init(string: "https://supabase.com")!,
         mimeType: nil,

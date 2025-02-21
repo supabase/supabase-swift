@@ -131,7 +131,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// must be set before calling `socket.connect()` in order to be applied
   public var disableSSLCertValidation: Bool = false
 
-  #if os(Linux) || os(Windows)
+  #if os(Linux) || os(Windows) || os(Android)
   #else
     /// Configure custom SSL validation logic, eg. SSL pinning. This
     /// must be set before calling `socket.connect()` in order to apply.

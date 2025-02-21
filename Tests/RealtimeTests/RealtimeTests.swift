@@ -17,11 +17,13 @@ final class RealtimeTests: XCTestCase {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
 
+  #if !os(Windows) && !os(Android)
   override func invokeTest() {
     withMainSerialExecutor {
       super.invokeTest()
     }
   }
+  #endif
 
   var server: FakeWebSocket!
   var client: FakeWebSocket!

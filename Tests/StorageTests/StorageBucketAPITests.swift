@@ -5,6 +5,7 @@ import XCTest
 
 @testable import Storage
 
+#if !os(Android) // no URLSessionConfiguration.protocolClasses
 final class StorageBucketAPITests: XCTestCase {
   let url = URL(string: "http://localhost:54321/storage/v1")!
   var storage: SupabaseStorageClient!
@@ -235,3 +236,4 @@ final class StorageBucketAPITests: XCTestCase {
     try await storage.emptyBucket("bucket123")
   }
 }
+#endif

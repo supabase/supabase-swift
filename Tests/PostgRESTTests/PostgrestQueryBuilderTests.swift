@@ -11,6 +11,7 @@ import PostgREST
 import TestHelpers
 import XCTest
 
+#if !os(Android) // no URLSessionConfiguration.protocolClasses
 final class PostgrestQueryBuilderTests: PostgrestQueryTests {
   override func setUp() {
     super.setUp()
@@ -361,3 +362,4 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
       .execute()
   }
 }
+#endif

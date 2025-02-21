@@ -139,7 +139,7 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  #if !os(Linux) && !os(Windows)
+  #if !os(Linux) && !os(Windows) && !os(Android)
     func testSessionFromURL() async throws {
       let sut = makeSUT(fetch: { request in
         let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]

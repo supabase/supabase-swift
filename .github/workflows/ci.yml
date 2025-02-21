@@ -101,6 +101,14 @@ jobs:
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
+  android:
+    name: android
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Test Swift Package on Android"
+        uses: skiptools/swift-android-action@v2
+
   # linux:
   #   name: linux
   #   strategy:

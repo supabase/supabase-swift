@@ -10,6 +10,7 @@ import Mocker
 import PostgREST
 import XCTest
 
+#if !os(Android) // no URLSessionConfiguration.protocolClasses
 final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   override func setUp() {
@@ -670,3 +671,4 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
       .execute()
   }
 }
+#endif

@@ -1,4 +1,4 @@
-#if !os(Windows) && !os(Linux)
+#if !os(Windows) && !os(Linux) && !os(Android)
   import Foundation
   import Security
 

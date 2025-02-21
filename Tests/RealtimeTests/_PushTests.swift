@@ -17,11 +17,13 @@ final class _PushTests: XCTestCase {
   var ws: FakeWebSocket!
   var socket: RealtimeClientV2!
 
+  #if !os(Windows) && !os(Android)
   override func invokeTest() {
     withMainSerialExecutor {
       super.invokeTest()
     }
   }
+  #endif
 
   override func setUp() {
     super.setUp()
