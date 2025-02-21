@@ -716,7 +716,7 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertFalse(exists)
   }
 
-  XXXfunc testCreateSignedUploadURL() async throws {
+  func XXXtestCreateSignedUploadURL() async throws {
     Mock(
       url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
       statusCode: 200,
