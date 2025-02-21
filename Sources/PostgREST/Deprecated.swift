@@ -86,7 +86,7 @@ extension PostgrestFilterBuilder {
   @available(*, deprecated, renamed: "like(_:pattern:)")
   public func like(
     _ column: String,
-    value: any URLQueryRepresentable
+    value: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
     like(column, pattern: value)
   }
@@ -94,7 +94,7 @@ extension PostgrestFilterBuilder {
   @available(*, deprecated, renamed: "in(_:values:)")
   public func `in`(
     _ column: String,
-    value: [any URLQueryRepresentable]
+    value: [any PostgrestFilterValue]
   ) -> PostgrestFilterBuilder {
     `in`(column, values: value)
   }
@@ -102,7 +102,7 @@ extension PostgrestFilterBuilder {
   @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .plain type.")
   public func plfts(
     _ column: String,
-    query: any URLQueryRepresentable,
+    query: any PostgrestFilterValue,
     config: String? = nil
   ) -> PostgrestFilterBuilder {
     textSearch(column, query: query, config: config, type: .plain)
@@ -111,7 +111,7 @@ extension PostgrestFilterBuilder {
   @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .phrase type.")
   public func phfts(
     _ column: String,
-    query: any URLQueryRepresentable,
+    query: any PostgrestFilterValue,
     config: String? = nil
   ) -> PostgrestFilterBuilder {
     textSearch(column, query: query, config: config, type: .phrase)
@@ -120,7 +120,7 @@ extension PostgrestFilterBuilder {
   @available(*, deprecated, message: "Use textSearch(_:query:config:type) with .websearch type.")
   public func wfts(
     _ column: String,
-    query: any URLQueryRepresentable,
+    query: any PostgrestFilterValue,
     config: String? = nil
   ) -> PostgrestFilterBuilder {
     textSearch(column, query: query, config: config, type: .websearch)
@@ -129,8 +129,15 @@ extension PostgrestFilterBuilder {
   @available(*, deprecated, renamed: "ilike(_:pattern:)")
   public func ilike(
     _ column: String,
-    value: any URLQueryRepresentable
+    value: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
     ilike(column, pattern: value)
   }
 }
+
+@available(
+  *,
+  deprecated,
+  renamed: "PostgrestFilterValue"
+)
+public typealias URLQueryRepresentable = PostgrestFilterValue

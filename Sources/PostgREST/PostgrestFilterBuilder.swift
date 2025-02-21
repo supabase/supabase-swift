@@ -12,9 +12,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   public func not(
     _ column: String,
     operator op: Operator,
-    value: any URLQueryRepresentable
+    value: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = value.queryValue
+    let queryValue = value.rawValue
 
     mutableState.withValue {
       $0.request.query.append(
@@ -28,11 +28,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   }
 
   public func or(
-    _ filters: any URLQueryRepresentable,
+    _ filters: any PostgrestFilterValue,
     referencedTable: String? = nil
   ) -> PostgrestFilterBuilder {
     let key = referencedTable.map { "\($0).or" } ?? "or"
-    let queryValue = filters.queryValue
+    let queryValue = filters.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: key, value: "(\(queryValue))"))
     }
@@ -48,9 +48,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - value: The value to filter with
   public func eq(
     _ column: String,
-    value: any URLQueryRepresentable
+    value: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = value.queryValue
+    let queryValue = value.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "eq.\(queryValue)"))
     }
@@ -64,9 +64,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - value: The value to filter with
   public func neq(
     _ column: String,
-    value: any URLQueryRepresentable
+    value: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = value.queryValue
+    let queryValue = value.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "neq.\(queryValue)"))
     }
@@ -80,9 +80,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - value: The value to filter with
   public func gt(
     _ column: String,
-    value: any URLQueryRepresentable
+    value: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = value.queryValue
+    let queryValue = value.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "gt.\(queryValue)"))
     }
@@ -96,9 +96,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - value: The value to filter with
   public func gte(
     _ column: String,
-    value: any URLQueryRepresentable
+    value: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = value.queryValue
+    let queryValue = value.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "gte.\(queryValue)"))
     }
@@ -112,9 +112,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - value: The value to filter with
   public func lt(
     _ column: String,
-    value: any URLQueryRepresentable
+    value: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = value.queryValue
+    let queryValue = value.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "lt.\(queryValue)"))
     }
@@ -128,9 +128,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - value: The value to filter with
   public func lte(
     _ column: String,
-    value: any URLQueryRepresentable
+    value: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = value.queryValue
+    let queryValue = value.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "lte.\(queryValue)"))
     }
@@ -144,9 +144,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - pattern: The pattern to match with
   public func like(
     _ column: String,
-    pattern: any URLQueryRepresentable
+    pattern: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = pattern.queryValue
+    let queryValue = pattern.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "like.\(queryValue)"))
     }
@@ -159,9 +159,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - patterns: The patterns to match with
   public func likeAllOf(
     _ column: String,
-    patterns: [some URLQueryRepresentable]
+    patterns: [some PostgrestFilterValue]
   ) -> PostgrestFilterBuilder {
-    let queryValue = patterns.queryValue
+    let queryValue = patterns.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "like(all).\(queryValue)"))
     }
@@ -174,9 +174,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - patterns: The patterns to match with
   public func likeAnyOf(
     _ column: String,
-    patterns: [some URLQueryRepresentable]
+    patterns: [some PostgrestFilterValue]
   ) -> PostgrestFilterBuilder {
-    let queryValue = patterns.queryValue
+    let queryValue = patterns.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "like(any).\(queryValue)"))
     }
@@ -190,9 +190,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - pattern: The pattern to match with
   public func ilike(
     _ column: String,
-    pattern: any URLQueryRepresentable
+    pattern: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = pattern.queryValue
+    let queryValue = pattern.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "ilike.\(queryValue)"))
     }
@@ -205,9 +205,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - patterns: The patterns to match with
   public func iLikeAllOf(
     _ column: String,
-    patterns: [some URLQueryRepresentable]
+    patterns: [some PostgrestFilterValue]
   ) -> PostgrestFilterBuilder {
-    let queryValue = patterns.queryValue
+    let queryValue = patterns.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "ilike(all).\(queryValue)"))
     }
@@ -220,9 +220,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - patterns: The patterns to match with
   public func iLikeAnyOf(
     _ column: String,
-    patterns: [some URLQueryRepresentable]
+    patterns: [some PostgrestFilterValue]
   ) -> PostgrestFilterBuilder {
-    let queryValue = patterns.queryValue
+    let queryValue = patterns.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "ilike(any).\(queryValue)"))
     }
@@ -241,7 +241,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     _ column: String,
     value: Bool?
   ) -> PostgrestFilterBuilder {
-    let queryValue = value.queryValue
+    let queryValue = value.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "is.\(queryValue)"))
     }
@@ -255,9 +255,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - value: The values array to filter with
   public func `in`(
     _ column: String,
-    values: [any URLQueryRepresentable]
+    values: [any PostgrestFilterValue]
   ) -> PostgrestFilterBuilder {
-    let queryValues = values.map(\.queryValue)
+    let queryValues = values.map(\.rawValue)
     mutableState.withValue {
       $0.request.query.append(
         URLQueryItem(
@@ -278,9 +278,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - value: The jsonb, array, or range value to filter with
   public func contains(
     _ column: String,
-    value: any URLQueryRepresentable
+    value: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = value.queryValue
+    let queryValue = value.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "cs.\(queryValue)"))
     }
@@ -296,9 +296,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - value: The jsonb, array, or range value to filter with
   public func containedBy(
     _ column: String,
-    value: some URLQueryRepresentable
+    value: some PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = value.queryValue
+    let queryValue = value.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "cd.\(queryValue)"))
     }
@@ -314,9 +314,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - range: The range to filter with
   public func rangeLt(
     _ column: String,
-    range: any URLQueryRepresentable
+    range: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = range.queryValue
+    let queryValue = range.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "sl.\(queryValue)"))
     }
@@ -332,9 +332,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - range: The range to filter with
   public func rangeGt(
     _ column: String,
-    range: any URLQueryRepresentable
+    range: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = range.queryValue
+    let queryValue = range.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "sr.\(queryValue)"))
     }
@@ -350,9 +350,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - range: The range to filter with
   public func rangeGte(
     _ column: String,
-    range: any URLQueryRepresentable
+    range: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = range.queryValue
+    let queryValue = range.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "nxl.\(queryValue)"))
     }
@@ -368,9 +368,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - range: The range to filter with
   public func rangeLte(
     _ column: String,
-    range: any URLQueryRepresentable
+    range: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = range.queryValue
+    let queryValue = range.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "nxr.\(queryValue)"))
     }
@@ -386,9 +386,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - range: The range to filter with
   public func rangeAdjacent(
     _ column: String,
-    range: any URLQueryRepresentable
+    range: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = range.queryValue
+    let queryValue = range.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "adj.\(queryValue)"))
     }
@@ -404,9 +404,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - value: The array or range value to filter with
   public func overlaps(
     _ column: String,
-    value: any URLQueryRepresentable
+    value: any PostgrestFilterValue
   ) -> PostgrestFilterBuilder {
-    let queryValue = value.queryValue
+    let queryValue = value.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "ov.\(queryValue)"))
     }
@@ -424,11 +424,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - type: Change how the `query` text is interpreted
   public func textSearch(
     _ column: String,
-    query: any URLQueryRepresentable,
+    query: any PostgrestFilterValue,
     config: String? = nil,
     type: TextSearchType? = nil
   ) -> PostgrestFilterBuilder {
-    let queryValue = query.queryValue
+    let queryValue = query.rawValue
     let configPart = config.map { "(\($0))" }
 
     mutableState.withValue {
@@ -443,7 +443,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
 
   public func fts(
     _ column: String,
-    query: any URLQueryRepresentable,
+    query: any PostgrestFilterValue,
     config: String? = nil
   ) -> PostgrestFilterBuilder {
     textSearch(column, query: query, config: config, type: nil)
@@ -476,15 +476,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///
   /// - Parameter query: The object to filter with, with column names as keys mapped to their filter values
   public func match(
-    _ query: [String: any URLQueryRepresentable]
+    _ query: [String: any PostgrestFilterValue]
   ) -> PostgrestFilterBuilder {
-    let query = query.mapValues(\.queryValue)
+    let query = query.mapValues(\.rawValue)
     mutableState.withValue { mutableState in
       for (key, value) in query {
         mutableState.request.query.append(
           URLQueryItem(
             name: key,
-            value: "eq.\(value.queryValue)"
+            value: "eq.\(value.rawValue)"
           ))
       }
     }
