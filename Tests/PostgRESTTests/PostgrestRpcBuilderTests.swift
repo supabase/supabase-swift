@@ -11,7 +11,7 @@ import Mocker
 import PostgREST
 import XCTest
 
-#if !os(Android) // no URLSessionConfiguration.protocolClasses
+#if !os(Windows) && !os(Linux) && !os(Android) // no URLSessionConfiguration.protocolClasses
 final class PostgrestRpcBuilderTests: PostgrestQueryTests {
   func testRpc() async throws {
     Mock(

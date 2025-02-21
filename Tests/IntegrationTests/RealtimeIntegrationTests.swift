@@ -23,7 +23,7 @@ struct TestLogger: SupabaseLogger {
   }
 }
 
-#if !os(Android) // no URLSessionConfiguration.protocolClasses
+#if !os(Windows) && !os(Linux) && !os(Android) // no URLSessionConfiguration.protocolClasses
 @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class RealtimeIntegrationTests: XCTestCase {
 
@@ -40,13 +40,11 @@ final class RealtimeIntegrationTests: XCTestCase {
     _clock = testClock
   }
 
-  #if !os(Windows) && !os(Android)
   override func invokeTest() {
     withMainSerialExecutor {
       super.invokeTest()
     }
   }
-  #endif
 
   func testDisconnectByUser_shouldNotReconnect() async {
     await client.realtimeV2.connect()

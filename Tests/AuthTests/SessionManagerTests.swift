@@ -15,7 +15,7 @@ import XCTestDynamicOverlay
 
 @testable import Auth
 
-#if !os(Android) // no URLSessionConfiguration.protocolClasses
+#if !os(Windows) && !os(Linux) && !os(Android) // no URLSessionConfiguration.protocolClasses
 final class SessionManagerTests: XCTestCase {
   var http: HTTPClientMock!
 
@@ -44,13 +44,11 @@ final class SessionManagerTests: XCTestCase {
     )
   }
 
-  #if !os(Windows) && !os(Android)
   override func invokeTest() {
     withMainSerialExecutor {
       super.invokeTest()
     }
   }
-  #endif
 
   func testSession_shouldFailWithSessionNotFound() async {
     do {

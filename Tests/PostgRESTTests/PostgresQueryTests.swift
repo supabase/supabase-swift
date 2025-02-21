@@ -11,7 +11,7 @@ import PostgREST
 import TestHelpers
 import XCTest
 
-#if !os(Android) // no URLSessionConfiguration.protocolClasses
+#if !os(Windows) && !os(Linux) && !os(Android) // no URLSessionConfiguration.protocolClasses
 class PostgrestQueryTests: XCTestCase {
   let url = URL(string: "http://localhost:54321/rest/v1")!
 

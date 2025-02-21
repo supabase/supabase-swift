@@ -11,7 +11,7 @@ import XCTest
 
 @testable import PostgREST
 
-#if !os(Android) // no URLSessionConfiguration.protocolClasses
+#if !os(Windows) && !os(Linux) && !os(Android) // no URLSessionConfiguration.protocolClasses
 final class PostgrestBuilderTests: PostgrestQueryTests {
   func testCustomHeaderOnAPerCallBasis() throws {
     let url = URL(string: "http://localhost:54321/rest/v1")!
