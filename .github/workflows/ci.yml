@@ -109,7 +109,8 @@ jobs:
       - name: "Test Swift Package on Android"
         uses: skiptools/swift-android-action@v2
         with:
-          copy-files: Tests/*/__Snapshots__
+          # need to copy over the Tests folder because it contains __Snapshots__
+          copy-files: Tests
       - name: "Test Swift Package on Linux"
         run: swift test
 
