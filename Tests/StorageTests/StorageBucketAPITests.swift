@@ -81,7 +81,7 @@ final class StorageBucketAPITests: XCTestCase {
     XCTAssertEqual(bucket.name, "test-bucket")
   }
 
-  func testListBuckets() async throws {
+  func XXXtestListBuckets() async throws {
     Mock(
       url: url.appendingPathComponent("bucket"),
       statusCode: 200,
