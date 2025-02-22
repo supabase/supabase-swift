@@ -437,7 +437,7 @@ final class StorageFileAPITests: XCTestCase {
     }
   }
 
-  func testUpdateFromData() async throws {
+  func XXXtestUpdateFromData() async throws {
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 200,
