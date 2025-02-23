@@ -221,7 +221,7 @@ final class StorageFileAPITests: XCTestCase {
       "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
   }
 
-  func XXXtestCreateSignedURLs() async throws {
+  func testCreateSignedURLs() async throws {
     Mock(
       url: url.appendingPathComponent("object/sign/bucket"),
       statusCode: 200,
@@ -437,7 +437,7 @@ final class StorageFileAPITests: XCTestCase {
     }
   }
 
-  func XXXtestUpdateFromData() async throws {
+  func testUpdateFromData() async throws {
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 200,
@@ -692,7 +692,7 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertFalse(exists)
   }
 
-  func XXXtestExists_404_error() async throws {
+  func testExists_404_error() async throws {
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 404,
@@ -716,7 +716,7 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertFalse(exists)
   }
 
-  func XXXtestCreateSignedUploadURL() async throws {
+  func testCreateSignedUploadURL() async throws {
     Mock(
       url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
       statusCode: 200,
