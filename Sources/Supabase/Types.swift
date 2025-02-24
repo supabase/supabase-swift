@@ -138,7 +138,7 @@ public struct SupabaseClientOptions: Sendable {
 }
 
 extension SupabaseClientOptions {
-  #if !os(Linux)
+  #if !os(Linux) && !os(Android)
     public init(
       db: DatabaseOptions = .init(),
       global: GlobalOptions = .init(),
@@ -155,7 +155,7 @@ extension SupabaseClientOptions {
 }
 
 extension SupabaseClientOptions.AuthOptions {
-  #if !os(Linux)
+  #if !os(Linux) && !os(Android)
     public init(
       redirectToURL: URL? = nil,
       storageKey: String? = nil,

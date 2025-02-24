@@ -7,7 +7,7 @@ public protocol AuthLocalStorage: Sendable {
 }
 
 extension AuthClient.Configuration {
-  #if !os(Linux) && !os(Windows)
+  #if !os(Linux) && !os(Windows) && !os(Android)
     public static let defaultLocalStorage: any AuthLocalStorage = KeychainLocalStorage()
   #elseif os(Windows)
     public static let defaultLocalStorage: any AuthLocalStorage = WinCredLocalStorage()

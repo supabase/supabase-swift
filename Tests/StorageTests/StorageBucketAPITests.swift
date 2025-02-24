@@ -3,6 +3,10 @@ import Mocker
 import TestHelpers
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 @testable import Storage
 
 final class StorageBucketAPITests: XCTestCase {

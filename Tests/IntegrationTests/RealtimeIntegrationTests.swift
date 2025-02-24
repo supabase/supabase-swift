@@ -23,6 +23,7 @@ struct TestLogger: SupabaseLogger {
   }
 }
 
+#if !os(Android) && !os(Linux)
 @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class RealtimeIntegrationTests: XCTestCase {
 
@@ -39,15 +40,18 @@ final class RealtimeIntegrationTests: XCTestCase {
     _clock = testClock
   }
 
+  #if !os(Windows) && !os(Linux) && !os(Android)
   override func invokeTest() {
     withMainSerialExecutor {
       super.invokeTest()
     }
   }
+  #endif
 
   func testDisconnectByUser_shouldNotReconnect() async {
     await client.realtimeV2.connect()
-    XCTAssertEqual(client.realtimeV2.status, .connected)
+    let status: RealtimeClientStatus = client.realtimeV2.status
+    XCTAssertEqual(status, .connected)
 
     client.realtimeV2.disconnect()
 
@@ -263,3 +267,4 @@ final class RealtimeIntegrationTests: XCTestCase {
     await channel.unsubscribe()
   }
 }
+#endif

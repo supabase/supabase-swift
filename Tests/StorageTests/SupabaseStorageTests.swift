@@ -92,7 +92,7 @@ final class SupabaseStorageTests: XCTestCase {
     }
   }
 
-  #if !os(Linux)
+  #if !os(Linux) && !os(Android)
     func testUploadData() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 

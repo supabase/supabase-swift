@@ -1,4 +1,4 @@
-#if !os(Windows) && !os(Linux)
+#if !os(Windows) && !os(Linux) && !os(Android)
   import Foundation
 
   /// ``AuthLocalStorage`` implementation using Keychain. This is the default local storage used by the library.

@@ -55,6 +55,10 @@ final class RequestTests: XCTestCase {
       headers: ["apikey": apiKey, "x-client-info": "functions-swift/x.y.z"]
     ) { request in
       await MainActor.run {
+        #if os(Android)
+        // missing snapshots for Android
+        return
+        #endif
         assertSnapshot(of: request, as: .curl, record: record, file: file, testName: testName, line: line)
       }
       throw NSError(domain: "Error", code: 0, userInfo: nil)

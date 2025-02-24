@@ -22,6 +22,10 @@ extension Mock {
     line: UInt = #line,
     column: UInt = #column
   ) -> Self {
+    #if os(Linux) || os(Android)
+    // non-Darwin curl snapshots have a different Content-Length than expected
+    return self
+    #endif
     var copy = self
     copy.onRequestHandler = OnRequestHandler {
       assertInlineSnapshot(

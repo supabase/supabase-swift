@@ -43,11 +43,13 @@ final class SessionManagerTests: XCTestCase {
     )
   }
 
+  #if !os(Windows) && !os(Linux) && !os(Android)
   override func invokeTest() {
     withMainSerialExecutor {
       super.invokeTest()
     }
   }
+  #endif
 
   func testSession_shouldFailWithSessionNotFound() async {
     do {

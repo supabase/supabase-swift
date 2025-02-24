@@ -9,6 +9,10 @@ final class StoredSessionTests: XCTestCase {
   let clientID = AuthClientID()
 
   func testStoredSession() throws {
+    #if os(Android)
+    throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
+    #endif
+
     Dependencies[clientID] = Dependencies(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost")!,

@@ -109,7 +109,7 @@ public actor AuthClient {
       }
     )
 
-    Task { @MainActor in observeAppLifecycleChanges() }
+    Task { @MainActor in await observeAppLifecycleChanges() }
   }
 
   #if canImport(ObjectiveC) && canImport(Combine)

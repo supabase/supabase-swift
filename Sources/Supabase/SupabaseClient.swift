@@ -131,7 +131,7 @@ public final class SupabaseClient: Sendable {
     options.global.session
   }
 
-  #if !os(Linux)
+  #if !os(Linux) && !os(Android)
     /// Create a new client.
     /// - Parameters:
     ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in your project dashboard.

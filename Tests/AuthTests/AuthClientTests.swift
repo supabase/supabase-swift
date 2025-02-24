@@ -27,11 +27,13 @@ final class AuthClientTests: XCTestCase {
   var http: HTTPClientMock!
   var sut: AuthClient!
 
+  #if !os(Windows) && !os(Linux) && !os(Android)
   override func invokeTest() {
     withMainSerialExecutor {
       super.invokeTest()
     }
   }
+  #endif
 
   override func setUp() {
     super.setUp()
@@ -842,7 +844,7 @@ final class AuthClientTests: XCTestCase {
     try await sut.refreshSession(refreshToken: "refresh-token")
   }
 
-  #if !os(Linux) && !os(Windows)
+  #if !os(Linux) && !os(Windows) && !os(Android)
     func testSessionFromURL() async throws {
       Mock(
         url: clientURL.appendingPathComponent("user"),

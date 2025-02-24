@@ -93,7 +93,7 @@ final class SupabaseClientTests: XCTestCase {
     )
   }
 
-  #if !os(Linux)
+  #if !os(Linux) && !os(Android)
     func testClientInitWithDefaultOptionsShouldBeAvailableInNonLinux() {
       _ = SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
