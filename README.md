@@ -92,7 +92,7 @@ When a platform version is no longer supported, Supabase will drop it in a **min
 For macOS, the named yearly releases are treated as major versions for this policy, regardless of their version numbers.
 
 > [!IMPORTANT]
-> Linux and Windows works but aren't supported, and may stop working on future versions of the library.
+> Android, Linux and Windows works but aren't supported, and may stop working on future versions of the library.
 
 ## Contributing
 
