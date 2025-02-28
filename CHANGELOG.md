@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.26.0](https://github.com/supabase/supabase-swift/compare/v2.25.0...v2.26.0) (2025-02-25)
+
+
+### Features
+
+* add Android support ([#673](https://github.com/supabase/supabase-swift/issues/673)) ([6ec2cdd](https://github.com/supabase/supabase-swift/commit/6ec2cdd994f80cc754f310b4aaf307671454f992))
+
 ## [2.25.0](https://github.com/supabase/supabase-swift/compare/v2.24.7...v2.25.0) (2025-02-20)
 
 
