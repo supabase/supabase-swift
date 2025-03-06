@@ -5,6 +5,8 @@ import IssueReporting
 @testable import Realtime
 @testable import Supabase
 import XCTest
+import InlineSnapshotTesting
+import SnapshotTestingCustomDump
 
 final class AuthLocalStorageMock: AuthLocalStorage {
   func store(key _: String, value _: Data) throws {}
@@ -61,16 +63,18 @@ final class SupabaseClientTests: XCTestCase {
       "https://project-ref.supabase.co/functions/v1"
     )
 
-    XCTAssertEqual(
-      client.headers,
+    assertInlineSnapshot(of: client.headers, as: .customDump) {
+      """
       [
-        "X-Client-Info": "supabase-swift/\(Supabase.version)",
         "Apikey": "ANON_KEY",
-        "header_field": "header_value",
         "Authorization": "Bearer ANON_KEY",
+        "X-Client-Info": "supabase-swift/0.0.0",
+        "X-Supabase-Client-Platform": "macOS",
+        "X-Supabase-Client-Platform-Version": "0.0.0",
+        "header_field": "header_value"
       ]
-    )
-    expectNoDifference(client._headers.dictionary, client.headers)
+      """
+    }
 
     XCTAssertEqual(client.functions.region, "ap-northeast-1")
 

@@ -17,8 +17,6 @@ public typealias SupabaseLogger = Helpers.SupabaseLogger
 public typealias SupabaseLogLevel = Helpers.SupabaseLogLevel
 public typealias SupabaseLogMessage = Helpers.SupabaseLogMessage
 
-let version = Helpers.version
-
 /// Supabase Client.
 public final class SupabaseClient: Sendable {
   let options: SupabaseClientOptions
@@ -163,12 +161,16 @@ public final class SupabaseClient: Sendable {
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
-    _headers = HTTPFields([
-      "X-Client-Info": "supabase-swift/\(version)",
-      "Authorization": "Bearer \(supabaseKey)",
-      "Apikey": supabaseKey,
-    ])
-    .merging(with: HTTPFields(options.global.headers))
+    _headers = HTTPFields(defaultHeaders)
+      .merging(
+        with: HTTPFields(
+          [
+            "Authorization": "Bearer \(supabaseKey)",
+            "Apikey": supabaseKey,
+          ]
+        )
+      )
+      .merging(with: HTTPFields(options.global.headers))
 
     // default storage key uses the supabase project ref as a namespace
     let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"
