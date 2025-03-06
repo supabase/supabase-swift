@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.26.0](https://github.com/supabase/supabase-swift/compare/v2.25.0...v2.26.0) (2025-03-06)
+
+
+### Features
+
+* add Android support ([#673](https://github.com/supabase/supabase-swift/issues/673)) ([6ec2cdd](https://github.com/supabase/supabase-swift/commit/6ec2cdd994f80cc754f310b4aaf307671454f992))
+
+
+### Bug Fixes
+
+* **auth:** add missing `@MainActor` ([#684](https://github.com/supabase/supabase-swift/issues/684)) ([16ffdd4](https://github.com/supabase/supabase-swift/commit/16ffdd4a2f996626be8cb595ab6f31d94e8eeb4b))
+
 ## [2.25.0](https://github.com/supabase/supabase-swift/compare/v2.24.7...v2.25.0) (2025-02-20)
 
 
