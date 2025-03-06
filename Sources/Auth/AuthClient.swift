@@ -181,6 +181,7 @@ public actor AuthClient {
       }
     }
   #else
+    @MainActor
     private func observeAppLifecycleChanges() {
       // no-op
     }
