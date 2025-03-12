@@ -12,12 +12,21 @@ private let _version = "2.27.0"  // {x-release-please-version}
 private let _platform: String? = {
   #if os(macOS)
     return "macOS"
+  #elseif os(visionOS)
+    return "visionOS"
   #elseif os(iOS)
-    return "iOS"
-  #elseif os(tvOS)
-    return "tvOS"
+    #if targetEnvironment(macCatalyst)
+      return "macCatalyst"
+    #else
+      if #available(iOS 14.0, *), ProcessInfo.processInfo.isiOSAppOnMac {
+        return "iOSAppOnMac"
+      }
+      return "iOS"
+    #endif
   #elseif os(watchOS)
     return "watchOS"
+  #elseif os(tvOS)
+    return "tvOS"
   #elseif os(Android)
     return "Android"
   #elseif os(Linux)
@@ -31,7 +40,10 @@ private let _platform: String? = {
 
 private let _platformVersion: String? = {
   #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || os(Windows)
-    ProcessInfo.processInfo.operatingSystemVersionString
+    let majorVersion = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+    let minorVersion = ProcessInfo.processInfo.operatingSystemVersion.minorVersion
+    let patchVersion = ProcessInfo.processInfo.operatingSystemVersion.patchVersion
+    return "\(majorVersion).\(minorVersion).\(patchVersion)"
   #elseif os(Linux) || os(Android)
     if let version = try? String(contentsOfFile: "/proc/version") {
       version.trimmingCharacters(in: .whitespacesAndNewlines)
