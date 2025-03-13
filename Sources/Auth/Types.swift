@@ -195,7 +195,8 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
     appMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .appMetadata) ?? [:]
-    userMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .userMetadata) ?? [:]
+    userMetadata =
+      try container.decodeIfPresent([String: AnyJSON].self, forKey: .userMetadata) ?? [:]
     aud = try container.decode(String.self, forKey: .aud)
     confirmationSentAt = try container.decodeIfPresent(Date.self, forKey: .confirmationSentAt)
     recoverySentAt = try container.decodeIfPresent(Date.self, forKey: .recoverySentAt)
@@ -263,7 +264,8 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
     id = try container.decode(String.self, forKey: .id)
-    identityId = try container.decodeIfPresent(UUID.self, forKey: .identityId)
+    identityId =
+      try container.decodeIfPresent(UUID.self, forKey: .identityId)
       ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
     userId = try container.decode(UUID.self, forKey: .userId)
     identityData = try container.decodeIfPresent([String: AnyJSON].self, forKey: .identityData)
@@ -507,6 +509,73 @@ public struct UserAttributes: Codable, Hashable, Sendable {
   }
 }
 
+public struct AdminUserAttributes: Encodable, Hashable, Sendable {
+
+  /// A custom data object to store the user's application specific metadata. This maps to the `auth.users.app_metadata` column.
+  public var appMetadata: [String: AnyJSON]?
+
+  /// Determines how long a user is banned for.
+  public var banDuration: String?
+
+  /// The user's email.
+  public var email: String?
+
+  /// Confirms the user's email address if set to true.
+  public var emailConfirm: Bool?
+
+  /// The `id` for the user.
+  public var id: String?
+
+  /// The nonce sent for reauthentication if the user's password is to be updated.
+  public var nonce: String?
+
+  /// The user's password.
+  public var password: String?
+
+  /// The `password_hash` for the user's password.
+  public var passwordHash: String?
+
+  /// The user's phone.
+  public var phone: String?
+
+  /// Confirms the user's phone number if set to true.
+  public var phoneConfirm: Bool?
+
+  /// The role claim set in the user's access token JWT.
+  public var role: String?
+
+  /// A custom data object to store the user's metadata. This maps to the `auth.users.raw_user_meta_data` column.
+  public var userMetadata: [String: AnyJSON]?
+
+  public init(
+    appMetadata: [String: AnyJSON]? = nil,
+    banDuration: String? = nil,
+    email: String? = nil,
+    emailConfirm: Bool? = nil,
+    id: String? = nil,
+    nonce: String? = nil,
+    password: String? = nil,
+    passwordHash: String? = nil,
+    phone: String? = nil,
+    phoneConfirm: Bool? = nil,
+    role: String? = nil,
+    userMetadata: [String: AnyJSON]? = nil
+  ) {
+    self.appMetadata = appMetadata
+    self.banDuration = banDuration
+    self.email = email
+    self.emailConfirm = emailConfirm
+    self.id = id
+    self.nonce = nonce
+    self.password = password
+    self.passwordHash = passwordHash
+    self.phone = phone
+    self.phoneConfirm = phoneConfirm
+    self.role = role
+    self.userMetadata = userMetadata
+  }
+}
+
 struct RecoverParams: Codable, Hashable, Sendable {
   var email: String
   var gotrueMetaSecurity: AuthMetaSecurity?
@@ -719,8 +788,8 @@ public struct AMREntry: Decodable, Hashable, Sendable {
 extension AMREntry {
   init?(value: Any) {
     guard let dict = value as? [String: Any],
-          let method = dict["method"] as? Method,
-          let timestamp = dict["timestamp"] as? TimeInterval
+      let method = dict["method"] as? Method,
+      let timestamp = dict["timestamp"] as? TimeInterval
     else {
       return nil
     }
@@ -838,4 +907,66 @@ public struct ListUsersPaginatedResponse: Hashable, Sendable {
   public var nextPage: Int?
   public var lastPage: Int
   public var total: Int
+}
+
+public struct GenerateLinkParams {
+  var type: String
+  var email: String
+  var password: String?
+  var newEmail: String?
+  var data: [String: AnyJSON]?
+  var redirectTo: URL?
+
+  public static func signUp(
+    email: String,
+    password: String,
+    data: [String: AnyJSON]? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      type: "signup",
+      email: email,
+      password: password,
+      data: data,
+      redirectTo: redirectTo
+    )
+  }
+
+  public static func invite(
+    email: String,
+    data: [String: AnyJSON]?,
+    redirectTo: URL?
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      type: "invite",
+      email: email,
+      data: data,
+      redirectTo: redirectTo
+    )
+  }
+
+  public static func magicLink(
+    email: String,
+    data: [String: AnyJSON]?,
+    redirectTo: URL?
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      type: "magiclink",
+      email: email,
+      data: data,
+      redirectTo: redirectTo
+    )
+  }
+
+  public static func recovery(
+    email: String,
+    redirectTo: URL?
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      type: "recovery",
+      email: email,
+      redirectTo: redirectTo
+    )
+  }
+
 }
