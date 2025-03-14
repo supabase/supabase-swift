@@ -43,16 +43,16 @@ Observe postgres changes using the new `postgresChanges(_:schema:table:filter)` 
 ```swift
 let channel = await supabase.realtimeV2.channel("public:messages")
 
-for await insertion in channel.postgresChanges(InsertAction.self, table: "messages") {
+for await insertion in channel.postgresChange(InsertAction.self, table: "messages") {
     let insertedMessage = try insertion.decodeRecord(as: Message.self)
 }
 
-for await update in channel.postgresChanges(UpdateAction.self, table: "messages") {
+for await update in channel.postgresChange(UpdateAction.self, table: "messages") {
     let updateMessage = try update.decodeRecord(as: Message.self)
     let oldMessage = try update.decodeOldRecord(as: Message.self)
 }
 
-for await deletion in channel.postgresChanges(DeleteAction.self, table: "messages") {
+for await deletion in channel.postgresChange(DeleteAction.self, table: "messages") {
     struct Payload: Decodable {
         let id: UUID
     }
@@ -65,7 +65,7 @@ for await deletion in channel.postgresChanges(DeleteAction.self, table: "message
 If you wish to listen for all changes, use:
 
 ```swift
-for change in channel.postgresChanges(AnyAction.self, table: "messages") {
+for change in channel.postgresChange(AnyAction.self, table: "messages") {
     // change: enum with insert, update, and delete cases.
 }
 ```
@@ -128,10 +128,10 @@ try await channel.broadcast(event: "PING", message: PingEventMessage(timestamp: 
 
 ### Listening for Broadcast messages
 
-Use `broadcast()` method for observing broadcast events.
+Use `broadcastStream()` method for observing broadcast events.
 
 ```swift
-for await event in channel.broadcast(event: "PING") {
+for await event in channel.broadcastStream(event: "PING") {
     let message = try event.decode(as: PingEventMessage.self)
 }
 ```
