@@ -11,7 +11,7 @@ Supabase client for Swift. Mirrors the design of [supabase-js](https://github.co
 
 ### Requirements
 - iOS 13.0+ / macOS 10.15+ / tvOS 13+ / watchOS 6+ / visionOS 1+
-- Xcode 15.x
+- Xcode 15+
 - Swift 5.9+
 
 > [!IMPORTANT]
