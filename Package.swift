@@ -181,6 +181,7 @@ let package = Package(
       name: "SupabaseTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         "Supabase",
       ]
     ),
