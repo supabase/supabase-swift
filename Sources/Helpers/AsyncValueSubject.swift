@@ -20,9 +20,10 @@ package final class AsyncValueSubject<Value: Sendable>: Sendable {
     var value: Value
     var continuations: [UInt: AsyncStream<Value>.Continuation] = [:]
     var count: UInt = 0
+    var finished = false
   }
 
-  let bufferingPolicy: BufferingPolicy
+  let bufferingPolicy: UncheckedSendable<BufferingPolicy>
   let mutableState: LockIsolated<MutableState>
 
   /// Creates a new AsyncValueSubject with an initial value.
@@ -31,7 +32,7 @@ package final class AsyncValueSubject<Value: Sendable>: Sendable {
   ///   - bufferingPolicy: Determines how values are buffered in the AsyncStream (defaults to .unbounded)
   package init(_ initialValue: Value, bufferingPolicy: BufferingPolicy = .unbounded) {
     self.mutableState = LockIsolated(MutableState(value: initialValue))
-    self.bufferingPolicy = bufferingPolicy
+    self.bufferingPolicy = UncheckedSendable(bufferingPolicy)
   }
 
   deinit {
@@ -43,12 +44,17 @@ package final class AsyncValueSubject<Value: Sendable>: Sendable {
     mutableState.value
   }
 
-  /// Sends a new value to the subject and notifies all observers.
-  /// - Parameter value: The new value to send
+  /// Resume the task awaiting the next iteration point by having it return normally from its suspension point with a given element.
+  /// - Parameter value: The value to yield from the continuation.
+  ///
+  /// If nothing is awaiting the next value, this method attempts to buffer the result’s element.
+  ///
+  /// This can be called more than once and returns to the caller immediately without blocking for any awaiting consumption from the iteration.
   package func yield(_ value: Value) {
     mutableState.withValue {
-      $0.value = value
+      guard !$0.finished else { return }
 
+      $0.value = value
       for (_, continuation) in $0.continuations {
         continuation.yield(value)
       }
@@ -62,14 +68,20 @@ package final class AsyncValueSubject<Value: Sendable>: Sendable {
   /// finish, the stream enters a terminal state and doesn't produce any
   /// additional elements.
   package func finish() {
-    for (_, continuation) in mutableState.continuations {
-      continuation.finish()
+    mutableState.withValue {
+      guard $0.finished == false else { return }
+
+      $0.finished = true
+
+      for (_, continuation) in $0.continuations {
+        continuation.finish()
+      }
     }
   }
 
   /// An AsyncStream that emits the current value and all subsequent updates.
   package var values: AsyncStream<Value> {
-    AsyncStream(bufferingPolicy: bufferingPolicy) { continuation in
+    AsyncStream(bufferingPolicy: bufferingPolicy.value) { continuation in
       insert(continuation)
     }
   }
