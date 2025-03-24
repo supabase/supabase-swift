@@ -35,7 +35,10 @@ final class AsyncValueSubjectTests: XCTestCase {
 
     let task = Task {
       for await value in subject.values {
-        let values = values.withValue { $0.append(value); return $0 }
+        let values = values.withValue {
+          $0.append(value)
+          return $0
+        }
         if values.count == 4 {
           break
         }
@@ -78,11 +81,11 @@ final class AsyncValueSubjectTests: XCTestCase {
 
   func testFinish() async {
     let subject = AsyncValueSubject<Int>(0)
-    var values: [Int] = []
+    let values = LockIsolated<[Int]>([])
 
     let task = Task {
       for await value in subject.values {
-        values.append(value)
+        values.withValue { $0.append(value) }
       }
     }
 
@@ -94,7 +97,7 @@ final class AsyncValueSubjectTests: XCTestCase {
 
     await task.value
 
-    XCTAssertEqual(values, [0, 1])
+    XCTAssertEqual(values.value, [0, 1])
     XCTAssertEqual(subject.value, 1)
   }
 }
