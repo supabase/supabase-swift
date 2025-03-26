@@ -1,10 +1,13 @@
-@testable import Auth
 import CustomDump
-@testable import Functions
+import InlineSnapshotTesting
 import IssueReporting
+import SnapshotTestingCustomDump
+import XCTest
+
+@testable import Auth
+@testable import Functions
 @testable import Realtime
 @testable import Supabase
-import XCTest
 
 final class AuthLocalStorageMock: AuthLocalStorage {
   func store(key _: String, value _: Data) throws {}
@@ -61,16 +64,22 @@ final class SupabaseClientTests: XCTestCase {
       "https://project-ref.supabase.co/functions/v1"
     )
 
-    XCTAssertEqual(
-      client.headers,
+    assertInlineSnapshot(of: client.headers, as: .customDump) {
+      """
       [
-        "X-Client-Info": "supabase-swift/\(Supabase.version)",
         "Apikey": "ANON_KEY",
-        "header_field": "header_value",
         "Authorization": "Bearer ANON_KEY",
+        "X-Client-Info": "supabase-swift/0.0.0",
+        "X-Supabase-Client-Platform": "macOS",
+        "X-Supabase-Client-Platform-Version": "0.0.0",
+        "header_field": "header_value"
       ]
-    )
-    expectNoDifference(client._headers.dictionary, client.headers)
+      """
+    }
+    expectNoDifference(client.headers, client.auth.configuration.headers)
+    expectNoDifference(client.headers, client.functions.headers.dictionary)
+    expectNoDifference(client.headers, client.storage.configuration.headers)
+    expectNoDifference(client.headers, client.rest.configuration.headers)
 
     XCTAssertEqual(client.functions.region, "ap-northeast-1")
 
@@ -79,7 +88,8 @@ final class SupabaseClientTests: XCTestCase {
 
     let realtimeOptions = client.realtimeV2.options
     let expectedRealtimeHeader = client._headers.merging(with: [
-      .init("custom_realtime_header_key")!: "custom_realtime_header_value"]
+      .init("custom_realtime_header_key")!: "custom_realtime_header_value"
+    ]
     )
     expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
