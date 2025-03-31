@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.26.1](https://github.com/supabase/supabase-swift/compare/v2.26.0...v2.26.1) (2025-03-31)
+
+
+### Bug Fixes
+
+* avoid sharing schemes with library users ([#696](https://github.com/supabase/supabase-swift/issues/696)) ([3caa69f](https://github.com/supabase/supabase-swift/commit/3caa69fa8fb71eb8c4d89dac8ba498a9782b26fc))
+
 ## [2.26.0](https://github.com/supabase/supabase-swift/compare/v2.25.0...v2.26.0) (2025-03-06)
 
 
