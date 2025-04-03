@@ -12,12 +12,6 @@ import XCTest
 
 final class AsyncValueSubjectTests: XCTestCase {
 
-  override func invokeTest() {
-    withMainSerialExecutor {
-      super.invokeTest()
-    }
-  }
-
   func testInitialValue() async {
     let subject = AsyncValueSubject<Int>(42)
     XCTAssertEqual(subject.value, 42)
@@ -45,7 +39,7 @@ final class AsyncValueSubjectTests: XCTestCase {
       }
     }
 
-    await Task.yield()
+    await Task.megaYield()
 
     subject.yield(1)
     subject.yield(2)
@@ -67,7 +61,7 @@ final class AsyncValueSubjectTests: XCTestCase {
       }
     }
 
-    await Task.yield()
+    await Task.megaYield()
 
     subject.yield(1)
     subject.yield(2)
@@ -89,7 +83,7 @@ final class AsyncValueSubjectTests: XCTestCase {
       }
     }
 
-    await Task.yield()
+    await Task.megaYield()
 
     subject.yield(1)
     subject.finish()
