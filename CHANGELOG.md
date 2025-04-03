@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.26.2](https://github.com/supabase/supabase-swift/compare/v2.26.1...v2.26.2) (2025-04-03)
+
+
+### Bug Fixes
+
+* update outdated error doc ([#699](https://github.com/supabase/supabase-swift/issues/699)) ([b9dc3a3](https://github.com/supabase/supabase-swift/commit/b9dc3a3005968e3bd1b8348005f1f178d44dff1c))
+
 ## [2.26.1](https://github.com/supabase/supabase-swift/compare/v2.26.0...v2.26.1) (2025-03-31)
 
 
