@@ -2,11 +2,15 @@
 name: 'PR Title is Conventional'
 
 on:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - edited
       - synchronize
+
+permissions:
+  pull-requests: write
+  contents: read
 
 jobs:
   main:
