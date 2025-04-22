@@ -87,13 +87,13 @@ public enum RealtimeClientStatus: Sendable, CustomStringConvertible {
 }
 
 public enum HeartbeatStatus: Sendable {
-  /// Hearbeat was sent.
+  /// Heartbeat was sent.
   case sent
-  /// Hearbeat was received.
+  /// Heartbeat was received.
   case ok
   /// Server responded with an error.
   case error
-  /// Hearbeat wasn't received in time.
+  /// Heartbeat wasn't received in time.
   case timeout
   /// Socket is disconnected.
   case disconnected
