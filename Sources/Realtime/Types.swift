@@ -86,6 +86,19 @@ public enum RealtimeClientStatus: Sendable, CustomStringConvertible {
   }
 }
 
+public enum HeartbeatStatus: Sendable {
+  /// Hearbeat was sent.
+  case sent
+  /// Hearbeat was received.
+  case ok
+  /// Server responded with an error.
+  case error
+  /// Hearbeat wasn't received in time.
+  case timeout
+  /// Socket is disconnected.
+  case disconnected
+}
+
 extension HTTPField.Name {
   static let apiKey = Self("apiKey")!
 }
