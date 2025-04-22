@@ -70,7 +70,7 @@ public final class RealtimeClientV2: Sendable {
     set { statusSubject.yield(newValue) }
   }
 
-  /// Listen for heartbeat checks.
+  /// Listen for heartbeat status.
   ///
   /// You can also use ``onHeartbeat(_:)`` for a closure based method.
   public var heartbeat: AsyncStream<HeartbeatStatus> {
@@ -90,7 +90,7 @@ public final class RealtimeClientV2: Sendable {
   }
 
   /// Listen for heatbeat checks.
-  /// - Parameter listener: Closure that will be called when a heartbeat is received.
+  /// - Parameter listener: Closure that will be called when heartbeat status changes.
   /// - Returns: An observation handle that can be used to stop listening.
   ///
   /// - Nite: Use ``heartbeat`` if you prefer to use Async/Await.
