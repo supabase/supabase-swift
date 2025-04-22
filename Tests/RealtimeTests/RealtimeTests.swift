@@ -18,11 +18,11 @@ final class RealtimeTests: XCTestCase {
   let apiKey = "anon.api.key"
 
   #if !os(Windows) && !os(Linux) && !os(Android)
-  override func invokeTest() {
-    withMainSerialExecutor {
-      super.invokeTest()
+    override func invokeTest() {
+      withMainSerialExecutor {
+        super.invokeTest()
+      }
     }
-  }
   #endif
 
   var server: FakeWebSocket!
@@ -303,11 +303,21 @@ final class RealtimeTests: XCTestCase {
       }
     }
 
+    let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
+    let subscription = sut.onHeartbeat { status in
+      heartbeatStatuses.withValue {
+        $0.append(status)
+      }
+    }
+    defer { subscription.cancel() }
+
     await sut.connect()
 
     await testClock.advance(by: .seconds(heartbeatInterval * 2))
 
     await fulfillment(of: [expectation], timeout: 3)
+
+    expectNoDifference(heartbeatStatuses.value, [.sent, .ok, .sent, .ok])
   }
 
   func testHeartbeat_whenNoResponse_shouldReconnect() async throws {
@@ -352,6 +362,34 @@ final class RealtimeTests: XCTestCase {
         .connected,
       ]
     )
+  }
+
+  func testHeartbeat_timeout() async throws {
+    let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
+    let s1 = sut.onHeartbeat { status in
+      heartbeatStatuses.withValue {
+        $0.append(status)
+      }
+    }
+    defer { s1.cancel() }
+
+    // Don't respond to any heartbeats
+    server.onEvent = { _ in }
+
+    await sut.connect()
+    await testClock.advance(by: .seconds(heartbeatInterval))
+
+    // First heartbeat sent
+    XCTAssertEqual(heartbeatStatuses.value, [.sent])
+
+    // Wait for timeout
+    await testClock.advance(by: .seconds(timeoutInterval))
+
+    // Wait for next heartbeat.
+    await testClock.advance(by: .seconds(heartbeatInterval))
+
+    // Should have timeout status
+    XCTAssertEqual(heartbeatStatuses.value, [.sent, .timeout])
   }
 
   func testBroadcastWithHTTP() async throws {
