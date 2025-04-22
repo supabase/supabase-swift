@@ -74,7 +74,7 @@ public final class RealtimeClientV2: Sendable {
   ///
   /// You can also use ``onHeartbeat(_:)`` for a closure based method.
   public var heartbeat: AsyncStream<HeartbeatStatus> {
-    heartbeatSubject.values.compactMap { $0 }.eraseToStream()
+    heartbeatSubject.values.compactMap { value -> HeartbeatStatus? in value }.eraseToStream()
   }
 
   /// Listen for connection status changes.
