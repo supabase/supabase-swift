@@ -21,7 +21,7 @@ extension JSONEncoder {
 
 extension JSONDecoder {
   @available(*, deprecated, message: "Access to storage decoder is going to be removed.")
-  public static var defaultStorageDecoder: JSONDecoder {
-    .default
-  }
+  public static let defaultStorageDecoder: JSONDecoder = {
+    JSONDecoder.supabase()
+  }()
 }

@@ -10,37 +10,12 @@ import Foundation
 extension AnyJSON {
   /// The decoder instance used for transforming AnyJSON to some Codable type.
   public static let decoder: JSONDecoder = {
-    let decoder = JSONDecoder()
-    decoder.dataDecodingStrategy = .base64
-    decoder.dateDecodingStrategy = .custom { decoder in
-      let container = try decoder.singleValueContainer()
-      let dateString = try container.decode(String.self)
-
-      let date =
-        ISO8601DateFormatter.iso8601WithFractionalSeconds.value.date(from: dateString)
-        ?? ISO8601DateFormatter.iso8601.value.date(from: dateString)
-
-      guard let decodedDate = date else {
-        throw DecodingError.dataCorruptedError(
-          in: container, debugDescription: "Invalid date format: \(dateString)"
-        )
-      }
-
-      return decodedDate
-    }
-    return decoder
+    JSONDecoder.supabase()
   }()
 
   /// The encoder instance used for transforming AnyJSON to some Codable type.
   public static let encoder: JSONEncoder = {
-    let encoder = JSONEncoder()
-    encoder.dataEncodingStrategy = .base64
-    encoder.dateEncodingStrategy = .custom { date, encoder in
-      let string = ISO8601DateFormatter.iso8601WithFractionalSeconds.value.string(from: date)
-      var container = encoder.singleValueContainer()
-      try container.encode(string)
-    }
-    return encoder
+    JSONEncoder.supabase()
   }()
 }
 

@@ -9,22 +9,15 @@ import ConcurrencyExtras
 import Foundation
 
 extension JSONDecoder {
-  private static let supportedDateFormatters: [UncheckedSendable<ISO8601DateFormatter>] = [
-    ISO8601DateFormatter.iso8601WithFractionalSeconds,
-    ISO8601DateFormatter.iso8601,
-  ]
-
   /// Default `JSONDecoder` for decoding types from Supabase.
-  package static let `default`: JSONDecoder = {
+  package static func supabase() -> JSONDecoder {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .custom { decoder in
       let container = try decoder.singleValueContainer()
       let string = try container.decode(String.self)
 
-      for formatter in supportedDateFormatters {
-        if let date = formatter.value.date(from: string) {
-          return date
-        }
+      if let date = string.date {
+        return date
       }
 
       throw DecodingError.dataCorruptedError(
@@ -32,5 +25,17 @@ extension JSONDecoder {
       )
     }
     return decoder
-  }()
+  }
+}
+extension JSONEncoder {
+  /// Default `JSONEncoder` for encoding types to Supabase.
+  package static func supabase() -> JSONEncoder {
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .custom { date, encoder in
+      var container = encoder.singleValueContainer()
+      let string = date.iso8601String
+      try container.encode(string)
+    }
+    return encoder
+  }
 }
