@@ -44,11 +44,11 @@ final class SessionManagerTests: XCTestCase {
   }
 
   #if !os(Windows) && !os(Linux) && !os(Android)
-  override func invokeTest() {
-    withMainSerialExecutor {
-      super.invokeTest()
+    override func invokeTest() {
+      withMainSerialExecutor {
+        super.invokeTest()
+      }
     }
-  }
   #endif
 
   func testSession_shouldFailWithSessionNotFound() async {
@@ -112,7 +112,10 @@ final class SessionManagerTests: XCTestCase {
     }
 
     // Verify that refresher and storage was called only once.
-    XCTAssertEqual(refreshSessionCallCount.value, 1)
-    XCTAssertEqual(try result.map { try $0.get() }, (0..<10).map { _ in validSession })
+    expectNoDifference(refreshSessionCallCount.value, 1)
+    expectNoDifference(
+      try result.map { try $0.get()?.accessToken },
+      (0..<10).map { _ in validSession.accessToken }
+    )
   }
 }

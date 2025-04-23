@@ -34,6 +34,7 @@ extension SessionStorage {
     let migrations: [StorageMigration] = [
       .sessionNewKey(clientID: clientID),
       .storeSessionDirectly(clientID: clientID),
+      .useDefaultEncoder(clientID: clientID),
     ]
 
     var key: String {
@@ -46,14 +47,16 @@ extension SessionStorage {
           do {
             try migration.run()
           } catch {
-            logger?.error("Storage migration failed: \(error.localizedDescription)")
+            logger?.error(
+              "Storage migration '\(migration.name)' failed: \(error.localizedDescription)"
+            )
           }
         }
 
         do {
           let storedData = try storage.retrieve(key: key)
           return try storedData.flatMap {
-            try AuthClient.Configuration.jsonDecoder.decode(Session.self, from: $0)
+            try JSONDecoder().decode(Session.self, from: $0)
           }
         } catch {
           logger?.error("Failed to retrieve session: \(error.localizedDescription)")
@@ -64,7 +67,7 @@ extension SessionStorage {
         do {
           try storage.store(
             key: key,
-            value: AuthClient.Configuration.jsonEncoder.encode(session)
+            value: JSONEncoder().encode(session)
           )
         } catch {
           logger?.error("Failed to store session: \(error.localizedDescription)")
@@ -82,6 +85,7 @@ extension SessionStorage {
 }
 
 struct StorageMigration {
+  var name: String
   var run: @Sendable () throws -> Void
 }
 
@@ -89,7 +93,7 @@ extension StorageMigration {
   /// Migrate stored session from `supabase.session` key to the custom provided storage key
   /// or the default `supabase.auth.token` key.
   static func sessionNewKey(clientID: AuthClientID) -> StorageMigration {
-    StorageMigration {
+    StorageMigration(name: "sessionNewKey") {
       let storage = Dependencies[clientID].configuration.localStorage
       let newKey = SessionStorage.key(clientID)
 
@@ -117,15 +121,37 @@ extension StorageMigration {
       var expirationDate: Date
     }
 
-    return StorageMigration {
+    return StorageMigration(name: "storeSessionDirectly") {
       let storage = Dependencies[clientID].configuration.localStorage
       let key = SessionStorage.key(clientID)
 
       if let data = try? storage.retrieve(key: key),
-         let storedSession = try? AuthClient.Configuration.jsonDecoder.decode(StoredSession.self, from: data)
+        let storedSession = try? AuthClient.Configuration.jsonDecoder.decode(
+          StoredSession.self,
+          from: data
+        )
       {
         let session = try AuthClient.Configuration.jsonEncoder.encode(storedSession.session)
         try storage.store(key: key, value: session)
+      }
+    }
+  }
+
+  static func useDefaultEncoder(clientID: AuthClientID) -> StorageMigration {
+    StorageMigration(name: "useDefaultEncoder") {
+      let storage = Dependencies[clientID].configuration.localStorage
+      let key = SessionStorage.key(clientID)
+
+      let storedData = try? storage.retrieve(key: key)
+      let sessionUsingOldDecoder = storedData.flatMap {
+        try? AuthClient.Configuration.jsonDecoder.decode(Session.self, from: $0)
+      }
+
+      if let sessionUsingOldDecoder {
+        try storage.store(
+          key: key,
+          value: JSONEncoder().encode(sessionUsingOldDecoder)
+        )
       }
     }
   }
