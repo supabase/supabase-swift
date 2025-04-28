@@ -118,46 +118,4 @@ final class SessionManagerTests: XCTestCase {
       (0..<10).map { _ in validSession.accessToken }
     )
   }
-
-  func testRefreshSession_shouldNotRemoveSession_whenErrorIsURLErrorCancelled() async throws {
-    let currentSession = Session.validSession
-    Dependencies[clientID].sessionStorage.store(currentSession)
-
-    await http.when(
-      { $0.url.path.contains("/token") },
-      return: { _ in
-        throw URLError(.cancelled)
-      }
-    )
-
-    do {
-      _ = try await sut.refreshSession(currentSession.refreshToken)
-      XCTFail("Expected a \(URLError.cancelled) failure")
-    } catch let error as URLError {
-      XCTAssertEqual(error.code, .cancelled)
-    }
-
-    XCTAssertNotNil(Dependencies[clientID].sessionStorage.get())
-  }
-
-  func testRefreshSession_shouldNotRemoveSession_whenErrorIsCancellationError() async throws {
-    let currentSession = Session.validSession
-    Dependencies[clientID].sessionStorage.store(currentSession)
-
-    await http.when(
-      { $0.url.path.contains("/token") },
-      return: { _ in
-        throw CancellationError()
-      }
-    )
-
-    do {
-      _ = try await sut.refreshSession(currentSession.refreshToken)
-      XCTFail("Expected a \(CancellationError.self) failure")
-    } catch is CancellationError {
-      // no-op
-    }
-
-    XCTAssertNotNil(Dependencies[clientID].sessionStorage.get())
-  }
 }

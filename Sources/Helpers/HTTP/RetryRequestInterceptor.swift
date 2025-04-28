@@ -30,6 +30,22 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
     .delete, .get, .head, .options, .put, .trace,
   ]
 
+  /// The default set of retryable URL error codes.
+  package static let defaultRetryableURLErrorCodes: Set<URLError.Code> = [
+    .backgroundSessionInUseByAnotherProcess, .backgroundSessionWasDisconnected,
+    .badServerResponse, .callIsActive, .cannotConnectToHost, .cannotFindHost,
+    .cannotLoadFromNetwork, .dataNotAllowed, .dnsLookupFailed,
+    .downloadDecodingFailedMidStream, .downloadDecodingFailedToComplete,
+    .internationalRoamingOff, .networkConnectionLost, .notConnectedToInternet,
+    .secureConnectionFailed, .serverCertificateHasBadDate,
+    .serverCertificateNotYetValid, .timedOut,
+  ]
+
+  /// The default set of retryable HTTP status codes.
+  package static let defaultRetryableHTTPStatusCodes: Set<Int> = [
+    408, 500, 502, 503, 504,
+  ]
+
   /// The maximum number of retries.
   package let retryLimit: Int
   /// The base value for exponential backoff.
@@ -56,12 +72,14 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
     retryLimit: Int = RetryRequestInterceptor.defaultRetryLimit,
     exponentialBackoffBase: UInt = RetryRequestInterceptor.defaultExponentialBackoffBase,
     exponentialBackoffScale: Double = RetryRequestInterceptor.defaultExponentialBackoffScale,
-    retryableHTTPMethods: Set<HTTPTypes.HTTPRequest.Method> = RetryRequestInterceptor.defaultRetryableHTTPMethods,
-    retryableHTTPStatusCodes: Set<Int> = defaultRetryableHTTPStatusCodes,
-    retryableErrorCodes: Set<URLError.Code> = defaultRetryableURLErrorCodes
+    retryableHTTPMethods: Set<HTTPTypes.HTTPRequest.Method> = RetryRequestInterceptor
+      .defaultRetryableHTTPMethods,
+    retryableHTTPStatusCodes: Set<Int> = RetryRequestInterceptor.defaultRetryableHTTPStatusCodes,
+    retryableErrorCodes: Set<URLError.Code> = RetryRequestInterceptor.defaultRetryableURLErrorCodes
   ) {
     precondition(
-      exponentialBackoffBase >= 2, "The `exponentialBackoffBase` must be a minimum of 2."
+      exponentialBackoffBase >= 2,
+      "The `exponentialBackoffBase` must be a minimum of 2."
     )
 
     self.retryLimit = retryLimit
@@ -114,10 +132,11 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
     }
 
     if retryCount < retryLimit, shouldRetry(request: request, result: result) {
-      let retryDelay = pow(
-        Double(exponentialBackoffBase),
-        Double(retryCount)
-      ) * exponentialBackoffScale
+      let retryDelay =
+        pow(
+          Double(exponentialBackoffBase),
+          Double(retryCount)
+        ) * exponentialBackoffScale
 
       let nanoseconds = UInt64(retryDelay)
       try? await Task.sleep(nanoseconds: NSEC_PER_SEC * nanoseconds)
