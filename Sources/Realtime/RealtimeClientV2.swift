@@ -96,7 +96,7 @@ public final class RealtimeClientV2: Sendable {
   /// - Parameter listener: Closure that will be called when heartbeat status changes.
   /// - Returns: An observation handle that can be used to stop listening.
   ///
-  /// - Nite: Use ``heartbeat`` if you prefer to use Async/Await.
+  /// - Note: Use ``heartbeat`` if you prefer to use Async/Await.
   public func onHeartbeat(
     _ listener: @escaping @Sendable (HeartbeatStatus) -> Void
   ) -> RealtimeSubscription {
