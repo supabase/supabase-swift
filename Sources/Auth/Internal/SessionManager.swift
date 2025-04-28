@@ -100,6 +100,14 @@ private actor LiveSessionManager {
           } catch {
             logger?.debug("Refresh token failed with error: \(error)")
 
+            if let error = error as? URLError, error.code == .cancelled {
+              throw error
+            }
+
+            if error is CancellationError {
+              throw error
+            }
+
             // DO NOT remove session in case it is an error that should be retried.
             // i.e. server instability, connection issues, ...
             //
@@ -111,6 +119,7 @@ private actor LiveSessionManager {
             } else if let error = error as? any RetryableError, error.shouldRetry {
               throw error
             } else {
+              logger?.debug("No retryable error, removing session")
               remove()
               throw error
             }
