@@ -28,11 +28,11 @@ final class AuthClientTests: XCTestCase {
   var sut: AuthClient!
 
   #if !os(Windows) && !os(Linux) && !os(Android)
-  override func invokeTest() {
-    withMainSerialExecutor {
-      super.invokeTest()
+    override func invokeTest() {
+      withMainSerialExecutor {
+        super.invokeTest()
+      }
     }
-  }
   #endif
 
   override func setUp() {
@@ -71,7 +71,7 @@ final class AuthClientTests: XCTestCase {
       }
     }
 
-    XCTAssertEqual(events.value, [.initialSession])
+    expectNoDifference(events.value, [.initialSession])
 
     handle.remove()
   }
@@ -131,7 +131,7 @@ final class AuthClientTests: XCTestCase {
     }
 
     let events = await eventsTask.value.map(\.event)
-    XCTAssertEqual(events, [.initialSession, .signedOut])
+    expectNoDifference(events, [.initialSession, .signedOut])
   }
 
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
@@ -343,11 +343,11 @@ final class AuthClientTests: XCTestCase {
     let events = await eventsTask.value.map(\.event)
     let sessions = await eventsTask.value.map(\.session)
 
-    XCTAssertEqual(events, [.initialSession, .signedIn])
-    XCTAssertEqual(sessions, [nil, session])
+    expectNoDifference(events, [.initialSession, .signedIn])
+    expectNoDifference(sessions, [nil, session])
 
-    XCTAssertEqual(sut.currentSession, session)
-    XCTAssertEqual(sut.currentUser, session.user)
+    expectNoDifference(sut.currentSession, session)
+    expectNoDifference(sut.currentUser, session.user)
   }
 
   func testSignInWithOAuth() async throws {
@@ -392,7 +392,7 @@ final class AuthClientTests: XCTestCase {
 
     let events = await eventsTask.value.map(\.event)
 
-    XCTAssertEqual(events, [.initialSession, .signedIn])
+    expectNoDifference(events, [.initialSession, .signedIn])
   }
 
   func testGetLinkIdentityURL() async throws {
@@ -480,7 +480,7 @@ final class AuthClientTests: XCTestCase {
 
     try await sut.linkIdentity(provider: .github)
 
-    XCTAssertEqual(receivedURL.value?.absoluteString, url)
+    expectNoDifference(receivedURL.value?.absoluteString, url)
   }
 
   func testAdminListUsers() async throws {
@@ -511,9 +511,9 @@ final class AuthClientTests: XCTestCase {
     let sut = makeSUT()
 
     let response = try await sut.admin.listUsers()
-    XCTAssertEqual(response.total, 669)
-    XCTAssertEqual(response.nextPage, 2)
-    XCTAssertEqual(response.lastPage, 14)
+    expectNoDifference(response.total, 669)
+    expectNoDifference(response.nextPage, 2)
+    expectNoDifference(response.lastPage, 14)
   }
 
   func testAdminListUsers_noNextPage() async throws {
@@ -543,9 +543,9 @@ final class AuthClientTests: XCTestCase {
     let sut = makeSUT()
 
     let response = try await sut.admin.listUsers()
-    XCTAssertEqual(response.total, 669)
+    expectNoDifference(response.total, 669)
     XCTAssertNil(response.nextPage)
-    XCTAssertEqual(response.lastPage, 14)
+    expectNoDifference(response.lastPage, 14)
   }
 
   func testSessionFromURL_withError() async throws {
@@ -809,7 +809,7 @@ final class AuthClientTests: XCTestCase {
       redirectTo: URL(string: "https://dummy-url.com/redirect")!,
       queryParams: [("extra_key", "extra_value")]
     )
-    XCTAssertEqual(
+    expectNoDifference(
       url,
       URL(
         string:
@@ -884,7 +884,7 @@ final class AuthClientTests: XCTestCase {
         refreshToken: "refreshtoken",
         user: User(fromMockNamed: "user")
       )
-      XCTAssertEqual(session, expectedSession)
+      expectNoDifference(session, expectedSession)
     }
   #endif
 
@@ -928,7 +928,7 @@ final class AuthClientTests: XCTestCase {
     do {
       try await sut.session(from: url)
     } catch let AuthError.implicitGrantRedirect(message) {
-      XCTAssertEqual(message, "Not a valid implicit grant flow URL: \(url)")
+      expectNoDifference(message, "Not a valid implicit grant flow URL: \(url)")
     }
   }
 
@@ -943,7 +943,7 @@ final class AuthClientTests: XCTestCase {
     do {
       try await sut.session(from: url)
     } catch let AuthError.implicitGrantRedirect(message) {
-      XCTAssertEqual(message, "Invalid code")
+      expectNoDifference(message, "Invalid code")
     }
   }
 
@@ -983,7 +983,7 @@ final class AuthClientTests: XCTestCase {
     try await sut.session(from: url)
 
     let events = await eventsTask.value
-    XCTAssertEqual(events, [.initialSession, .signedIn, .passwordRecovery])
+    expectNoDifference(events, [.initialSession, .signedIn, .passwordRecovery])
   }
 
   func testSessionWithURL_pkceFlow_error() async throws {
@@ -997,9 +997,9 @@ final class AuthClientTests: XCTestCase {
     do {
       try await sut.session(from: url)
     } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
-      XCTAssertEqual(message, "Invalid code")
-      XCTAssertEqual(error, "invalid_grant")
-      XCTAssertEqual(code, "500")
+      expectNoDifference(message, "Invalid code")
+      expectNoDifference(error, "invalid_grant")
+      expectNoDifference(code, "500")
     }
   }
 
@@ -1014,9 +1014,9 @@ final class AuthClientTests: XCTestCase {
     do {
       try await sut.session(from: url)
     } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
-      XCTAssertEqual(message, "Error in URL with unspecified error_description.")
-      XCTAssertEqual(error, "invalid_grant")
-      XCTAssertEqual(code, "500")
+      expectNoDifference(message, "Error in URL with unspecified error_description.")
+      expectNoDifference(error, "invalid_grant")
+      expectNoDifference(code, "500")
     }
   }
 
@@ -1326,7 +1326,7 @@ final class AuthClientTests: XCTestCase {
       captchaToken: "captcha-token"
     )
 
-    XCTAssertEqual(response.messageId, "12345")
+    expectNoDifference(response.messageId, "12345")
   }
 
   func testDeleteUser() async throws {
@@ -1449,7 +1449,7 @@ final class AuthClientTests: XCTestCase {
       captchaToken: "captcha-token"
     )
 
-    XCTAssertEqual(response.url, URL(string: "https://supabase.com")!)
+    expectNoDifference(response.url, URL(string: "https://supabase.com")!)
   }
 
   func testSignInWithSSOUsingProviderId() async throws {
@@ -1482,7 +1482,7 @@ final class AuthClientTests: XCTestCase {
       captchaToken: "captcha-token"
     )
 
-    XCTAssertEqual(response.url, URL(string: "https://supabase.com")!)
+    expectNoDifference(response.url, URL(string: "https://supabase.com")!)
   }
 
   func testMFAEnrollLegacy() async throws {
@@ -1526,8 +1526,8 @@ final class AuthClientTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(response.id, "12345")
-    XCTAssertEqual(response.type, "totp")
+    expectNoDifference(response.id, "12345")
+    expectNoDifference(response.type, "totp")
   }
 
   func testMFAEnrollTotp() async throws {
@@ -1571,8 +1571,8 @@ final class AuthClientTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(response.id, "12345")
-    XCTAssertEqual(response.type, "totp")
+    expectNoDifference(response.id, "12345")
+    expectNoDifference(response.type, "totp")
   }
 
   func testMFAEnrollPhone() async throws {
@@ -1616,8 +1616,8 @@ final class AuthClientTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(response.id, "12345")
-    XCTAssertEqual(response.type, "phone")
+    expectNoDifference(response.id, "12345")
+    expectNoDifference(response.type, "phone")
   }
 
   func testMFAChallenge() async throws {
@@ -1656,7 +1656,7 @@ final class AuthClientTests: XCTestCase {
 
     let response = try await sut.mfa.challenge(params: .init(factorId: factorId))
 
-    XCTAssertEqual(
+    expectNoDifference(
       response,
       AuthMFAChallengeResponse(
         id: "12345",
@@ -1710,7 +1710,7 @@ final class AuthClientTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(
+    expectNoDifference(
       response,
       AuthMFAChallengeResponse(
         id: "12345",
@@ -1782,7 +1782,7 @@ final class AuthClientTests: XCTestCase {
 
     let factorId = try await sut.mfa.unenroll(params: .init(factorId: "123")).factorId
 
-    XCTAssertEqual(factorId, "123")
+    expectNoDifference(factorId, "123")
   }
 
   func testMFAChallengeAndVerify() async throws {
@@ -1893,8 +1893,8 @@ final class AuthClientTests: XCTestCase {
     Dependencies[sut.clientID].sessionStorage.store(session)
 
     let factors = try await sut.mfa.listFactors()
-    XCTAssertEqual(factors.totp.map(\.id), ["1"])
-    XCTAssertEqual(factors.phone.map(\.id), ["3"])
+    expectNoDifference(factors.totp.map(\.id), ["1"])
+    expectNoDifference(factors.phone.map(\.id), ["3"])
   }
 
   func testGetAuthenticatorAssuranceLevel_whenAALAndVerifiedFactor_shouldReturnAAL2() async throws {
@@ -1921,7 +1921,7 @@ final class AuthClientTests: XCTestCase {
 
     let aal = try await sut.mfa.getAuthenticatorAssuranceLevel()
 
-    XCTAssertEqual(
+    expectNoDifference(
       aal,
       AuthMFAGetAuthenticatorAssuranceLevelResponse(
         currentLevel: "aal1",

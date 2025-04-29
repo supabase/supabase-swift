@@ -1,41 +1,41 @@
 {
   "supabase.auth.token" : {
-    "access_token" : "accesstoken",
-    "expires_at" : 1711977907,
-    "expires_in" : 120,
-    "refresh_token" : "refreshtoken",
-    "token_type" : "bearer",
+    "accessToken" : "accesstoken",
+    "expiresAt" : 1711977907,
+    "expiresIn" : 120,
+    "refreshToken" : "refreshtoken",
+    "tokenType" : "bearer",
     "user" : {
-      "app_metadata" : {
+      "appMetadata" : {
         "provider" : "email",
         "providers" : [
           "email"
         ]
       },
       "aud" : "authenticated",
-      "confirmation_sent_at" : "2022-04-09T11:57:01.000Z",
-      "created_at" : "2022-04-09T11:57:01.000Z",
+      "confirmationSentAt" : 671198221,
+      "createdAt" : 671198221,
       "email" : "johndoe@supabsae.com",
       "id" : "859F402D-B3DE-4105-A1B9-932836D9193B",
       "identities" : [
         {
-          "created_at" : "2022-04-09T11:57:01.000Z",
+          "createdAt" : 671198221,
           "id" : "859f402d-b3de-4105-a1b9-932836d9193b",
-          "identity_data" : {
+          "identityData" : {
             "sub" : "859f402d-b3de-4105-a1b9-932836d9193b"
           },
-          "identity_id" : "859F402D-B3DE-4105-A1B9-932836D9193B",
-          "last_sign_in_at" : "2022-04-09T11:57:01.000Z",
+          "identityId" : "859F402D-B3DE-4105-A1B9-932836D9193B",
+          "lastSignInAt" : 671198221,
           "provider" : "email",
-          "updated_at" : "2022-04-09T11:57:01.000Z",
-          "user_id" : "859F402D-B3DE-4105-A1B9-932836D9193B"
+          "updatedAt" : 671198221,
+          "userId" : "859F402D-B3DE-4105-A1B9-932836D9193B"
         }
       ],
-      "is_anonymous" : false,
+      "isAnonymous" : false,
       "phone" : "",
       "role" : "authenticated",
-      "updated_at" : "2022-04-09T11:57:01.000Z",
-      "user_metadata" : {
+      "updatedAt" : 671198221,
+      "userMetadata" : {
         "referrer_id" : null
       }
     }
