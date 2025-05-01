@@ -32,13 +32,15 @@ public final class RealtimeChannelV2: Sendable {
     var pushes: [String: PushV2] = [:]
   }
 
-  private let mutableState = LockIsolated(MutableState())
+  @MainActor
+  private var mutableState = MutableState()
 
   let topic: String
   let config: RealtimeChannelConfig
   let logger: (any SupabaseLogger)?
   let socket: RealtimeClientV2
-  var joinRef: String? { mutableState.joinRef }
+
+  @MainActor var joinRef: String? { mutableState.joinRef }
 
   let callbackManager = CallbackManager()
   private let statusSubject = AsyncValueSubject<RealtimeChannelStatus>(.unsubscribed)
@@ -81,6 +83,7 @@ public final class RealtimeChannelV2: Sendable {
   }
 
   /// Subscribes to the channel
+  @MainActor
   public func subscribe() async {
     if socket.status != .connected {
       if socket.options.connectOnSubscribe != true {
@@ -109,7 +112,7 @@ public final class RealtimeChannelV2: Sendable {
     )
 
     let joinRef = socket.makeRef()
-    mutableState.withValue { $0.joinRef = joinRef }
+    mutableState.joinRef = joinRef
 
     logger?.debug("Subscribing to channel with body: \(joinConfig)")
 
@@ -497,8 +500,8 @@ public final class RealtimeChannelV2: Sendable {
       filter: filter
     )
 
-    mutableState.withValue {
-      $0.clientChanges.append(config)
+    Task { @MainActor in
+      mutableState.clientChanges.append(config)
     }
 
     let id = callbackManager.addPostgresCallback(filter: config, callback: callback)
@@ -538,32 +541,28 @@ public final class RealtimeChannelV2: Sendable {
     self.onSystem { _ in callback() }
   }
 
+  @MainActor
   @discardableResult
   func push(_ event: String, ref: String? = nil, payload: JSONObject = [:]) async -> PushStatus {
-    let push = mutableState.withValue {
-      let message = RealtimeMessageV2(
-        joinRef: $0.joinRef,
-        ref: ref ?? socket.makeRef(),
-        topic: self.topic,
-        event: event,
-        payload: payload
-      )
+    let message = RealtimeMessageV2(
+      joinRef: joinRef,
+      ref: ref ?? socket.makeRef(),
+      topic: self.topic,
+      event: event,
+      payload: payload
+    )
 
-      let push = PushV2(channel: self, message: message)
-      if let ref = message.ref {
-        $0.pushes[ref] = push
-      }
-
-      return push
+    let push = PushV2(channel: self, message: message)
+    if let ref = message.ref {
+      mutableState.pushes[ref] = push
     }
 
     return await push.send()
   }
 
-  private func didReceiveReply(ref: String, status: String) async {
-    let push = mutableState.withValue {
-      $0.pushes.removeValue(forKey: ref)
-    }
-    await push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
+  @MainActor
+  private func didReceiveReply(ref: String, status: String) {
+    let push = mutableState.pushes.removeValue(forKey: ref)
+    push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
   }
 }
