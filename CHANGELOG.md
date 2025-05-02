@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.27.0](https://github.com/supabase/supabase-swift/compare/v2.26.1...v2.27.0) (2025-05-02)
+
+
+### Features
+
+* **realtime:** add heartbeat callback ([#709](https://github.com/supabase/supabase-swift/issues/709)) ([5f3d75c](https://github.com/supabase/supabase-swift/commit/5f3d75ce163df4a882975425c2c603198e2a7272))
+
+
+### Bug Fixes
+
+* **auth:** do not remove session in case of network failure ([#712](https://github.com/supabase/supabase-swift/issues/712)) ([f001b60](https://github.com/supabase/supabase-swift/commit/f001b602ddf7022e8e556ca9f8285f6cf9b3b2be))
+* decoder and encoder default instances ([#711](https://github.com/supabase/supabase-swift/issues/711)) ([0104331](https://github.com/supabase/supabase-swift/commit/01043316f94c6c4a55f73442c7155389e2b15ef6))
+* update outdated error doc ([#699](https://github.com/supabase/supabase-swift/issues/699)) ([b9dc3a3](https://github.com/supabase/supabase-swift/commit/b9dc3a3005968e3bd1b8348005f1f178d44dff1c))
+
 ## [2.26.1](https://github.com/supabase/supabase-swift/compare/v2.26.0...v2.26.1) (2025-03-31)
 
 
