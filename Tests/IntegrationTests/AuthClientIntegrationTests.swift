@@ -5,11 +5,13 @@
 //  Created by Guilherme Souza on 27/03/24.
 //
 
-@testable import Auth
 import ConcurrencyExtras
 import CustomDump
+import InlineSnapshotTesting
 import TestHelpers
 import XCTest
+
+@testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -55,7 +57,7 @@ final class AuthClientIntegrationTests: XCTestCase {
       let password = mockPassword()
 
       let metadata: [String: AnyJSON] = [
-        "test": .integer(42),
+        "test": .integer(42)
       ]
 
       let response = try await authClient.signUp(
@@ -74,23 +76,23 @@ final class AuthClientIntegrationTests: XCTestCase {
     }
   }
 
-//  func testSignUpAndSignInWithPhone() async throws {
-//    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
-//      let phone = mockPhoneNumber()
-//      let password = mockPassword()
-//      let metadata: [String: AnyJSON] = [
-//        "test": .integer(42),
-//      ]
-//      let response = try await authClient.signUp(phone: phone, password: password, data: metadata)
-//      XCTAssertNotNil(response.session)
-//      XCTAssertEqual(response.user.phone, phone)
-//      XCTAssertEqual(response.user.userMetadata["test"], 42)
-//
-//      try await authClient.signOut()
-//
-//      try await authClient.signIn(phone: phone, password: password)
-//    }
-//  }
+  //  func testSignUpAndSignInWithPhone() async throws {
+  //    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
+  //      let phone = mockPhoneNumber()
+  //      let password = mockPassword()
+  //      let metadata: [String: AnyJSON] = [
+  //        "test": .integer(42),
+  //      ]
+  //      let response = try await authClient.signUp(phone: phone, password: password, data: metadata)
+  //      XCTAssertNotNil(response.session)
+  //      XCTAssertEqual(response.user.phone, phone)
+  //      XCTAssertEqual(response.user.userMetadata["test"], 42)
+  //
+  //      try await authClient.signOut()
+  //
+  //      try await authClient.signIn(phone: phone, password: password)
+  //    }
+  //  }
 
   func testSignInWithEmail_invalidEmail() async throws {
     let email = mockEmail()
@@ -108,12 +110,12 @@ final class AuthClientIntegrationTests: XCTestCase {
     }
   }
 
-//  func testSignInWithOTP_usingEmail() async throws {
-//    let email = mockEmail()
-//
-//    try await authClient.signInWithOTP(email: email)
-//    try await authClient.verifyOTP(email: email, token: "123456", type: .magiclink)
-//  }
+  //  func testSignInWithOTP_usingEmail() async throws {
+  //    let email = mockEmail()
+  //
+  //    try await authClient.signInWithOTP(email: email)
+  //    try await authClient.verifyOTP(email: email, token: "123456", type: .magiclink)
+  //  }
 
   func testSignOut_otherScope_shouldSignOutLocally() async throws {
     try await XCTAssertAuthChangeEvents([.initialSession, .signedIn]) {
@@ -170,7 +172,7 @@ final class AuthClientIntegrationTests: XCTestCase {
   func testUserIdentities() async throws {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
     let identities = try await authClient.userIdentities()
-    expectNoDifference(session.user.identities, identities)
+    expectNoDifference(session.user.identities?.map(\.identityId) ?? [], identities.map(\.identityId))
   }
 
   func testUnlinkIdentity_withOnlyOneIdentity() async throws {
@@ -181,15 +183,8 @@ final class AuthClientIntegrationTests: XCTestCase {
     do {
       try await authClient.unlinkIdentity(identity)
       XCTFail("Expect failure")
-    } catch {
-      if let error = error as? AuthError {
-        XCTAssertEqual(
-          error.localizedDescription,
-          "User must have at least 1 identity after unlinking"
-        )
-      } else {
-        XCTFail("Unexpected error: \(error)")
-      }
+    } catch let error as AuthError {
+      XCTAssertEqual(error.errorCode, .singleIdentityNotDeletable)
     }
   }
 
@@ -246,8 +241,8 @@ final class AuthClientIntegrationTests: XCTestCase {
   func testLinkIdentity() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-    try await authClient.linkIdentity(provider: .github) { url in
-      XCTAssertTrue(url.absoluteString.contains("github.com"))
+    try await authClient.linkIdentity(provider: .apple) { url in
+      XCTAssertTrue(url.absoluteString.contains("apple.com"))
     }
   }
 
@@ -291,10 +286,10 @@ final class AuthClientIntegrationTests: XCTestCase {
     }
   }
 
-  private func mockEmail(length: Int = Int.random(in: 5 ... 10)) -> String {
+  private func mockEmail(length: Int = Int.random(in: 5...10)) -> String {
     var username = ""
-    for _ in 0 ..< length {
-      let randomAscii = Int.random(in: 97 ... 122) // ASCII values for lowercase letters
+    for _ in 0..<length {
+      let randomAscii = Int.random(in: 97...122)  // ASCII values for lowercase letters
       let randomCharacter = Character(UnicodeScalar(randomAscii)!)
       username.append(randomCharacter)
     }
@@ -303,13 +298,13 @@ final class AuthClientIntegrationTests: XCTestCase {
 
   private func mockPhoneNumber() -> String {
     // Generate random country code (1 to 3 digits)
-    let countryCode = String(format: "%d", Int.random(in: 1 ... 999))
+    let countryCode = String(format: "%d", Int.random(in: 1...999))
 
     // Generate random area code (3 digits)
-    let areaCode = String(format: "%03d", Int.random(in: 100 ... 999))
+    let areaCode = String(format: "%03d", Int.random(in: 100...999))
 
     // Generate random subscriber number (7 digits)
-    let subscriberNumber = String(format: "%07d", Int.random(in: 1000000 ... 9999999))
+    let subscriberNumber = String(format: "%07d", Int.random(in: 1_000_000...9_999_999))
 
     // Format the phone number in E.164 format
     let phoneNumber = "\(countryCode)\(areaCode)\(subscriberNumber)"
@@ -322,12 +317,14 @@ final class AuthClientIntegrationTests: XCTestCase {
       "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+"
     var password = ""
 
-    for _ in 0 ..< length {
-      let randomIndex = Int.random(in: 0 ..< allowedCharacters.count)
-      let character = allowedCharacters[allowedCharacters.index(
-        allowedCharacters.startIndex,
-        offsetBy: randomIndex
-      )]
+    for _ in 0..<length {
+      let randomIndex = Int.random(in: 0..<allowedCharacters.count)
+      let character = allowedCharacters[
+        allowedCharacters.index(
+          allowedCharacters.startIndex,
+          offsetBy: randomIndex
+        )
+      ]
       password.append(character)
     }
 

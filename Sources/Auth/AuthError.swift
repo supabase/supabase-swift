@@ -298,13 +298,3 @@ public enum AuthError: LocalizedError, Equatable {
     return lhs == rhs
   }
 }
-
-extension AuthError: RetryableError {
-  package var shouldRetry: Bool {
-    switch self {
-    case .api(_, _, _, let response):
-      defaultRetryableHTTPStatusCodes.contains(response.statusCode)
-    default: false
-    }
-  }
-}

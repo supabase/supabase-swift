@@ -78,43 +78,24 @@ private actor LiveSessionManager {
             logger?.debug("Refresh task ended")
           }
 
-          do {
-            let session = try await api.execute(
-              HTTPRequest(
-                url: configuration.url.appendingPathComponent("token"),
-                method: .post,
-                query: [
-                  URLQueryItem(name: "grant_type", value: "refresh_token")
-                ],
-                body: configuration.encoder.encode(
-                  UserCredentials(refreshToken: refreshToken)
-                )
+          let session = try await api.execute(
+            HTTPRequest(
+              url: configuration.url.appendingPathComponent("token"),
+              method: .post,
+              query: [
+                URLQueryItem(name: "grant_type", value: "refresh_token")
+              ],
+              body: configuration.encoder.encode(
+                UserCredentials(refreshToken: refreshToken)
               )
             )
-            .decoded(as: Session.self, decoder: configuration.decoder)
+          )
+          .decoded(as: Session.self, decoder: configuration.decoder)
 
-            update(session)
-            eventEmitter.emit(.tokenRefreshed, session: session)
+          update(session)
+          eventEmitter.emit(.tokenRefreshed, session: session)
 
-            return session
-          } catch {
-            logger?.debug("Refresh token failed with error: \(error)")
-
-            // DO NOT remove session in case it is an error that should be retried.
-            // i.e. server instability, connection issues, ...
-            //
-            // Need to do this check here, because not all RetryableError's should be retried.
-            // URLError conforms to RetryableError, but only a subset of URLError should be retried,
-            // the same is true for AuthError.
-            if let error = error as? URLError, error.shouldRetry {
-              throw error
-            } else if let error = error as? any RetryableError, error.shouldRetry {
-              throw error
-            } else {
-              remove()
-              throw error
-            }
-          }
+          return session
         }
 
         return try await inFlightRefreshTask!.value
