@@ -46,9 +46,9 @@ private let _platformVersion: String? = {
     return "\(majorVersion).\(minorVersion).\(patchVersion)"
   #elseif os(Linux) || os(Android)
     if let version = try? String(contentsOfFile: "/proc/version") {
-      version.trimmingCharacters(in: .whitespacesAndNewlines)
+      return version.trimmingCharacters(in: .whitespacesAndNewlines)
     } else {
-      nil
+      return nil
     }
   #else
     nil
