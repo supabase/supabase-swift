@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.0](https://github.com/supabase/supabase-swift/compare/v2.27.0...v2.28.0) (2025-05-03)
+
+
+### Features
+
+* add standard client headers ([#685](https://github.com/supabase/supabase-swift/issues/685)) ([ad031c7](https://github.com/supabase/supabase-swift/commit/ad031c7e14c4881b76ac1e24ef2738c8c1cf621e))
+
 ## [2.27.0](https://github.com/supabase/supabase-swift/compare/v2.26.1...v2.27.0) (2025-05-02)
 
 
