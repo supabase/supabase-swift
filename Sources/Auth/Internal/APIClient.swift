@@ -1,6 +1,6 @@
 import Foundation
-import Helpers
 import HTTPTypes
+import Helpers
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
@@ -12,7 +12,7 @@ extension HTTPClient {
     interceptors.append(
       RetryRequestInterceptor(
         retryableHTTPMethods: RetryRequestInterceptor.defaultRetryableHTTPMethods.union(
-          [.post] // Add POST method so refresh token are also retried.
+          [.post]  // Add POST method so refresh token are also retried.
         )
       )
     )
@@ -42,7 +42,7 @@ struct APIClient: Sendable {
 
     let response = try await http.send(request)
 
-    guard 200 ..< 300 ~= response.statusCode else {
+    guard 200..<300 ~= response.statusCode else {
       throw handleError(response: response)
     }
 
@@ -64,10 +64,12 @@ struct APIClient: Sendable {
   }
 
   func handleError(response: Helpers.HTTPResponse) -> AuthError {
-    guard let error = try? response.decoded(
-      as: _RawAPIErrorResponse.self,
-      decoder: configuration.decoder
-    ) else {
+    guard
+      let error = try? response.decoded(
+        as: _RawAPIErrorResponse.self,
+        decoder: configuration.decoder
+      )
+    else {
       return .api(
         message: "Unexpected error",
         errorCode: .unexpectedFailure,
@@ -78,11 +80,14 @@ struct APIClient: Sendable {
 
     let responseAPIVersion = parseResponseAPIVersion(response)
 
-    let errorCode: ErrorCode? = if let responseAPIVersion, responseAPIVersion >= apiVersions[._20240101]!.timestamp, let code = error.code {
-      ErrorCode(code)
-    } else {
-      error.errorCode
-    }
+    let errorCode: ErrorCode? =
+      if let responseAPIVersion, responseAPIVersion >= apiVersions[._20240101]!.timestamp,
+        let code = error.code
+      {
+        ErrorCode(code)
+      } else {
+        error.errorCode
+      }
 
     if errorCode == nil, let weakPassword = error.weakPassword {
       return .weakPassword(

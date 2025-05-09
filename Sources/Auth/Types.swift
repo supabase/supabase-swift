@@ -143,6 +143,31 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public var isAnonymous: Bool
   public var factors: [Factor]?
 
+  enum CodingKeys: String, CodingKey {
+    case id
+    case appMetadata = "app_metadata"
+    case userMetadata = "user_metadata"
+    case aud
+    case confirmationSentAt = "confirmation_sent_at"
+    case recoverySentAt = "recovery_sent_at"
+    case emailChangeSentAt = "email_change_sent_at"
+    case newEmail = "new_email"
+    case invitedAt = "invited_at"
+    case actionLink = "action_link"
+    case email
+    case phone
+    case createdAt = "created_at"
+    case confirmedAt = "confirmed_at"
+    case emailConfirmedAt = "email_confirmed_at"
+    case phoneConfirmedAt = "phone_confirmed_at"
+    case lastSignInAt = "last_sign_in_at"
+    case role
+    case updatedAt = "updated_at"
+    case identities
+    case isAnonymous = "is_anonymous"
+    case factors
+  }
+
   public init(
     id: UUID,
     appMetadata: [String: AnyJSON],
@@ -229,6 +254,17 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   public var lastSignInAt: Date?
   public var updatedAt: Date?
 
+  enum CodingKeys: String, CodingKey {
+    case id
+    case identityId = "identity_id"
+    case userId = "user_id"
+    case identityData = "identity_data"
+    case provider
+    case createdAt = "created_at"
+    case lastSignInAt = "last_sign_in_at"
+    case updatedAt = "updated_at"
+  }
+
   public init(
     id: String,
     identityId: UUID,
@@ -247,17 +283,6 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     self.createdAt = createdAt
     self.lastSignInAt = lastSignInAt
     self.updatedAt = updatedAt
-  }
-
-  private enum CodingKeys: CodingKey {
-    case id
-    case identityId
-    case userId
-    case identityData
-    case provider
-    case createdAt
-    case lastSignInAt
-    case updatedAt
   }
 
   public init(from decoder: any Decoder) throws {
@@ -909,14 +934,18 @@ public struct ListUsersPaginatedResponse: Hashable, Sendable {
   public var total: Int
 }
 
-public struct GenerateLinkParams {
-  var type: String
-  var email: String
-  var password: String?
-  var newEmail: String?
-  var data: [String: AnyJSON]?
+public struct GenerateLinkParams: Sendable {
+  struct Body: Encodable {
+    var type: GenerateLinkType
+    var email: String
+    var password: String?
+    var newEmail: String?
+    var data: [String: AnyJSON]?
+  }
+  var body: Body
   var redirectTo: URL?
 
+  /// Generates a signup link.
   public static func signUp(
     email: String,
     password: String,
@@ -924,49 +953,107 @@ public struct GenerateLinkParams {
     redirectTo: URL? = nil
   ) -> GenerateLinkParams {
     GenerateLinkParams(
-      type: "signup",
-      email: email,
-      password: password,
-      data: data,
+      body: .init(
+        type: .signup,
+        email: email,
+        password: password,
+        data: data
+      ),
       redirectTo: redirectTo
     )
   }
 
+  /// Generates an invite link.
   public static func invite(
     email: String,
-    data: [String: AnyJSON]?,
-    redirectTo: URL?
+    data: [String: AnyJSON]? = nil,
+    redirectTo: URL? = nil
   ) -> GenerateLinkParams {
     GenerateLinkParams(
-      type: "invite",
-      email: email,
-      data: data,
+      body: .init(
+        type: .invite,
+        email: email,
+        data: data
+      ),
       redirectTo: redirectTo
     )
   }
 
+  /// Generates a magic link.
   public static func magicLink(
     email: String,
-    data: [String: AnyJSON]?,
-    redirectTo: URL?
+    data: [String: AnyJSON]? = nil,
+    redirectTo: URL? = nil
   ) -> GenerateLinkParams {
     GenerateLinkParams(
-      type: "magiclink",
-      email: email,
-      data: data,
+      body: .init(
+        type: .magiclink,
+        email: email,
+        data: data
+      ),
       redirectTo: redirectTo
     )
   }
 
+  /// Generates a recovery link.
   public static func recovery(
     email: String,
-    redirectTo: URL?
+    redirectTo: URL? = nil
   ) -> GenerateLinkParams {
     GenerateLinkParams(
-      type: "recovery",
-      email: email,
+      body: .init(
+        type: .recovery,
+        email: email
+      ),
       redirectTo: redirectTo
     )
   }
 
+}
+
+/// The response from the `generateLink` function.
+public struct GenerateLinkResponse: Hashable, Sendable {
+  /// The properties related to the email link generated.
+  public let properties: GenerateLinkProperties
+  /// The user that the email link is associated to.
+  public let user: User
+}
+
+/// The properties related to the email link generated.
+public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
+  /// The email link to send to the users.
+  /// The action link follows the following format: auth/v1/verify?type={verification_type}&token={hashed_token}&redirect_to={redirect_to}
+  public let actionLink: URL
+  /// The raw ramil OTP.
+  /// You should send this in the email if you want your users to verify using an OTP instead of the action link.
+  public let emailOTP: String
+  /// The hashed token appended to the action link.
+  public let hashedToken: String
+  /// The URL appended to the action link.
+  public let redirectTo: URL
+  /// The verification type that the emaillink is associated to.
+  public let verificationType: GenerateLinkType
+
+  enum CodingKeys: String, CodingKey {
+    case actionLink = "action_link"
+    case emailOTP = "email_otp"
+    case hashedToken = "hashed_token"
+    case redirectTo = "redirect_to"
+    case verificationType = "verification_type"
+  }
+}
+
+public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable {
+  public let rawValue: String
+
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  public static let signup = GenerateLinkType(rawValue: "signup")
+  public static let invite = GenerateLinkType(rawValue: "invite")
+  public static let magiclink = GenerateLinkType(rawValue: "magiclink")
+  public static let recovery = GenerateLinkType(rawValue: "recovery")
+  public static let emailChangeCurrent = GenerateLinkType(rawValue: "email_change_current")
+  public static let emailChangeNew = GenerateLinkType(rawValue: "email_change_new")
 }
