@@ -1940,6 +1940,167 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  func testgetUserById() async throws {
+    let id = "859f402d-b3de-4105-a1b9-932836d9193b"
+    let sut = makeSUT()
+
+    Mock(
+      url: clientURL.appendingPathComponent("admin/users/\(id)"),
+      statusCode: 200,
+      data: [.get: MockData.user]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/admin/users/859f402d-b3de-4105-a1b9-932836d9193b"
+      """#
+    }
+    .register()
+
+    let user = try await sut.admin.getUserById(id)
+
+    expectNoDifference(user.id, UUID(uuidString: id))
+  }
+
+  func testUpdateUserById() async throws {
+    let id = "859f402d-b3de-4105-a1b9-932836d9193b"
+    let sut = makeSUT()
+
+    Mock(
+      url: clientURL.appendingPathComponent("admin/users/\(id)"),
+      statusCode: 200,
+      data: [.put: MockData.user]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request PUT \
+      	--header "Content-Length: 63" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"phone\":\"1234567890\",\"user_metadata\":{\"full_name\":\"John Doe\"}}" \
+      	"http://localhost:54321/auth/v1/admin/users/859f402d-b3de-4105-a1b9-932836d9193b"
+      """#
+    }
+    .register()
+
+    let attributes = AdminUserAttributes(
+      phone: "1234567890",
+      userMetadata: [
+        "full_name": "John Doe"
+      ]
+    )
+
+    let user = try await sut.admin.updateUserById(id, attributes: attributes)
+
+    expectNoDifference(user.id, UUID(uuidString: id))
+  }
+
+  func testCreateUser() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: clientURL.appendingPathComponent("admin/users"),
+      statusCode: 200,
+      data: [.post: MockData.user]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 98" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"email\":\"test@example.com\",\"password\":\"password\",\"password_hash\":\"password\",\"phone\":\"1234567890\"}" \
+      	"http://localhost:54321/auth/v1/admin/users"
+      """#
+    }
+    .register()
+
+    let attributes = AdminUserAttributes(
+      email: "test@example.com",
+      password: "password",
+      passwordHash: "password",
+      phone: "1234567890"
+    )
+
+    _ = try await sut.admin.createUser(attributes: attributes)
+  }
+
+  func testGenerateLink_signUp() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: clientURL.appendingPathComponent("admin/generate_link"),
+      statusCode: 200,
+      data: [
+        .post: try! AuthClient.Configuration.jsonEncoder.encode([
+          "properties": [
+            "action_link":
+              "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com",
+            "email_otp": "123456",
+            "hashed_token": "hashed_token",
+            "redirect_to": "https://example.com",
+            "verification_type": "signup",
+          ],
+          "user": AnyJSON(User(fromMockNamed: "user")),
+        ])
+      ]
+    )
+    .register()
+
+    let link = try await sut.admin.generateLink(
+      params: .signUp(
+        email: "test@example.com",
+        password: "password",
+        data: ["full_name": "John Doe"]
+      )
+    )
+
+    expectNoDifference(
+      link.properties.actionLink.absoluteString,
+      "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com"
+    )
+  }
+
+  func testInviteUserByEmail() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: clientURL.appendingPathComponent("admin/invite"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: MockData.user]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 60" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"data\":{\"full_name\":\"John Doe\"},\"email\":\"test@example.com\"}" \
+      	"http://localhost:54321/auth/v1/admin/invite?redirect_to=https://example.com"
+      """#
+    }
+    .register()
+
+    _ = try await sut.admin.inviteUserByEmail(
+      "test@example.com",
+      data: ["full_name": "John Doe"],
+      redirectTo: URL(string: "https://example.com")
+    )
+  }
+
   private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
