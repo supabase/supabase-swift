@@ -172,7 +172,8 @@ final class AuthClientIntegrationTests: XCTestCase {
   func testUserIdentities() async throws {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
     let identities = try await authClient.userIdentities()
-    expectNoDifference(session.user.identities?.map(\.identityId) ?? [], identities.map(\.identityId))
+    expectNoDifference(
+      session.user.identities?.map(\.identityId) ?? [], identities.map(\.identityId))
   }
 
   func testUnlinkIdentity_withOnlyOneIdentity() async throws {
@@ -271,6 +272,54 @@ final class AuthClientIntegrationTests: XCTestCase {
       }
       XCTAssertNil(authClient.currentSession)
     }
+  }
+
+  func testGenerateLink_signUp() async throws {
+    let client = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    let password = mockPassword()
+
+    let link = try await client.admin.generateLink(
+      params: .signUp(
+        email: email,
+        password: password,
+        data: ["full_name": "John Doe"]
+      )
+    )
+
+    expectNoDifference(link.properties.actionLink.path, "/auth/v1/verify")
+    expectNoDifference(link.properties.verificationType, .signup)
+    expectNoDifference(link.user.email, email)
+  }
+
+  func testGenerateLink_magicLink() async throws {
+    let client = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+
+    let link = try await client.admin.generateLink(params: .magicLink(email: email))
+
+    expectNoDifference(link.properties.verificationType, .magiclink)
+  }
+
+  // func testGenerateLink_recovery() async throws {
+  //   let client = Self.makeClient(serviceRole: true)
+  //   let email = mockEmail()
+  //   let password = mockPassword()
+
+  //   _ = try await client.signUp(email: email, password: password)
+
+  //   let link = try await client.admin.generateLink(params: .recovery(email: email))
+
+  //   expectNoDifference(link.properties.verificationType, .recovery)
+  // }
+
+  func testGenerateLink_invite() async throws {
+    let client = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+
+    let link = try await client.admin.generateLink(params: .invite(email: email))
+
+    expectNoDifference(link.properties.verificationType, .invite)
   }
 
   @discardableResult
