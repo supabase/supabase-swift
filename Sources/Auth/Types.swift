@@ -143,31 +143,6 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public var isAnonymous: Bool
   public var factors: [Factor]?
 
-  enum CodingKeys: String, CodingKey {
-    case id
-    case appMetadata = "app_metadata"
-    case userMetadata = "user_metadata"
-    case aud
-    case confirmationSentAt = "confirmation_sent_at"
-    case recoverySentAt = "recovery_sent_at"
-    case emailChangeSentAt = "email_change_sent_at"
-    case newEmail = "new_email"
-    case invitedAt = "invited_at"
-    case actionLink = "action_link"
-    case email
-    case phone
-    case createdAt = "created_at"
-    case confirmedAt = "confirmed_at"
-    case emailConfirmedAt = "email_confirmed_at"
-    case phoneConfirmedAt = "phone_confirmed_at"
-    case lastSignInAt = "last_sign_in_at"
-    case role
-    case updatedAt = "updated_at"
-    case identities
-    case isAnonymous = "is_anonymous"
-    case factors
-  }
-
   public init(
     id: UUID,
     appMetadata: [String: AnyJSON],
@@ -253,17 +228,6 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   public var createdAt: Date?
   public var lastSignInAt: Date?
   public var updatedAt: Date?
-
-  enum CodingKeys: String, CodingKey {
-    case id
-    case identityId = "identity_id"
-    case userId = "user_id"
-    case identityData = "identity_data"
-    case provider
-    case createdAt = "created_at"
-    case lastSignInAt = "last_sign_in_at"
-    case updatedAt = "updated_at"
-  }
 
   public init(
     id: String,
@@ -1033,14 +997,6 @@ public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
   public let redirectTo: URL
   /// The verification type that the emaillink is associated to.
   public let verificationType: GenerateLinkType
-
-  enum CodingKeys: String, CodingKey {
-    case actionLink = "action_link"
-    case emailOTP = "email_otp"
-    case hashedToken = "hashed_token"
-    case redirectTo = "redirect_to"
-    case verificationType = "verification_type"
-  }
 }
 
 public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable {

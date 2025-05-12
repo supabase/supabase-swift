@@ -1941,7 +1941,7 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testgetUserById() async throws {
-    let id = "859f402d-b3de-4105-a1b9-932836d9193b"
+    let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
     let sut = makeSUT()
 
     Mock(
@@ -1962,11 +1962,11 @@ final class AuthClientTests: XCTestCase {
 
     let user = try await sut.admin.getUserById(id)
 
-    expectNoDifference(user.id, UUID(uuidString: id))
+    expectNoDifference(user.id, id)
   }
 
   func testUpdateUserById() async throws {
-    let id = "859f402d-b3de-4105-a1b9-932836d9193b"
+    let id = UUID(uuidString:"859f402d-b3de-4105-a1b9-932836d9193b")!
     let sut = makeSUT()
 
     Mock(
@@ -1998,7 +1998,7 @@ final class AuthClientTests: XCTestCase {
 
     let user = try await sut.admin.updateUserById(id, attributes: attributes)
 
-    expectNoDifference(user.id, UUID(uuidString: id))
+    expectNoDifference(user.id, id)
   }
 
   func testCreateUser() async throws {
