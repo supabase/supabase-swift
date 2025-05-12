@@ -138,7 +138,6 @@ extension AuthAdmin {
   @available(
     *,
     deprecated,
-    renamed: "deleteUser(id:shouldSoftDelete:)",
     message: "Use deleteUser with UUID instead of string."
   )
   public func deleteUser(id: String, shouldSoftDelete: Bool = false) async throws {
