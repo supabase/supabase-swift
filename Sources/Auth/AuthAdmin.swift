@@ -19,7 +19,7 @@ public struct AuthAdmin: Sendable {
   /// Get user by id.
   /// - Parameter uid: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
-  public func getUserById(_ uid: String) async throws -> User {
+  public func getUserById(_ uid: UUID) async throws -> User {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
@@ -33,7 +33,7 @@ public struct AuthAdmin: Sendable {
   ///   - uid: The user id you want to update.
   ///   - attributes: The data you want to update.
   @discardableResult
-  public func updateUserById(_ uid: String, attributes: AdminUserAttributes) async throws -> User {
+  public func updateUserById(_ uid: UUID, attributes: AdminUserAttributes) async throws -> User {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
@@ -106,7 +106,7 @@ public struct AuthAdmin: Sendable {
   /// from the auth schema.
   ///
   /// - Warning: Never expose your `service_role` key on the client.
-  public func deleteUser(id: String, shouldSoftDelete: Bool = false) async throws {
+  public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws {
     _ = try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/users/\(id)"),
