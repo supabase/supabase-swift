@@ -32,7 +32,8 @@ extension JSONEncoder {
     *,
     deprecated,
     renamed: "AuthClient.Configuration.jsonEncoder",
-    message: "Access to the default JSONEncoder instance moved to AuthClient.Configuration.jsonEncoder"
+    message:
+      "Access to the default JSONEncoder instance moved to AuthClient.Configuration.jsonEncoder"
   )
   public static var goTrue: JSONEncoder {
     AuthClient.Configuration.jsonEncoder
@@ -44,7 +45,8 @@ extension JSONDecoder {
     *,
     deprecated,
     renamed: "AuthClient.Configuration.jsonDecoder",
-    message: "Access to the default JSONDecoder instance moved to AuthClient.Configuration.jsonDecoder"
+    message:
+      "Access to the default JSONDecoder instance moved to AuthClient.Configuration.jsonDecoder"
   )
   public static var goTrue: JSONDecoder {
     AuthClient.Configuration.jsonDecoder
@@ -65,7 +67,8 @@ extension AuthClient.Configuration {
   @available(
     *,
     deprecated,
-    message: "Replace usages of this initializer with new init(url:headers:flowType:localStorage:logger:encoder:decoder:fetch)"
+    message:
+      "Replace usages of this initializer with new init(url:headers:flowType:localStorage:logger:encoder:decoder:fetch)"
   )
   public init(
     url: URL,
@@ -103,7 +106,8 @@ extension AuthClient {
   @available(
     *,
     deprecated,
-    message: "Replace usages of this initializer with new init(url:headers:flowType:localStorage:logger:encoder:decoder:fetch)"
+    message:
+      "Replace usages of this initializer with new init(url:headers:flowType:localStorage:logger:encoder:decoder:fetch)"
   )
   public init(
     url: URL,
@@ -129,3 +133,19 @@ extension AuthClient {
 
 @available(*, deprecated, message: "Use MFATotpEnrollParams or MFAPhoneEnrollParams instead.")
 public typealias MFAEnrollParams = MFATotpEnrollParams
+
+extension AuthAdmin {
+  @available(
+    *,
+    deprecated,
+    renamed: "deleteUser(id:shouldSoftDelete:)",
+    message: "Use deleteUser with UUID instead of string."
+  )
+  public func deleteUser(id: String, shouldSoftDelete: Bool = false) async throws {
+    guard let id = UUID(uuidString: id) else {
+      fatalError("id should be a valid UUID")
+    }
+
+    try await self.deleteUser(id: id, shouldSoftDelete: shouldSoftDelete)
+  }
+}

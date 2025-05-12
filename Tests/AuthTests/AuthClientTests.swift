@@ -1330,7 +1330,7 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testDeleteUser() async throws {
-    let id = "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
+    let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
 
     Mock(
       url: clientURL.appendingPathComponent("admin/users/\(id)"),
