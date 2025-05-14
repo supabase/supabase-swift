@@ -179,3 +179,11 @@ jobs:
         run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="SlackClone" XCODEBUILD_ARGUMENT=build xcodebuild
       - name: UserManagement
         run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="UserManagement" XCODEBUILD_ARGUMENT=build xcodebuild
+
+  docs:
+    name: Test docs
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test docs
+        run: make test-docs
