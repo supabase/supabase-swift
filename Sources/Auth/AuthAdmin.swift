@@ -173,7 +173,7 @@ public struct AuthAdmin: Sendable {
   /// - Throws: An error if the link generation fails.
   /// - Returns: The generated link.
   public func generateLink(params: GenerateLinkParams) async throws -> GenerateLinkResponse {
-    let response = try await api.execute(
+    try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/generate_link").appendingQueryItems(
           [
@@ -188,12 +188,7 @@ public struct AuthAdmin: Sendable {
         method: .post,
         body: encoder.encode(params.body)
       )
-    ).decoded(as: AnyJSON.self, decoder: configuration.decoder)
-
-    let properties = try response.decode(as: GenerateLinkProperties.self)
-    let user = try response.decode(as: User.self)
-
-    return GenerateLinkResponse(properties: properties, user: user)
+    ).decoded(decoder: configuration.decoder)
   }
 }
 

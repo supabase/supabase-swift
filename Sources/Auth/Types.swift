@@ -249,6 +249,17 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     self.updatedAt = updatedAt
   }
 
+  enum CodingKeys: CodingKey {
+    case id
+    case identityId
+    case userId
+    case identityData
+    case provider
+    case createdAt
+    case lastSignInAt
+    case updatedAt
+  }
+
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -975,12 +986,19 @@ public struct GenerateLinkParams: Sendable {
 
 }
 
-/// The response from the `generateLink` function.
-public struct GenerateLinkResponse: Hashable, Sendable {
+/// The response from the ``AuthAdmin/generateLink(params:)`` function.
+public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
   /// The properties related to the email link generated.
   public let properties: GenerateLinkProperties
   /// The user that the email link is associated to.
   public let user: User
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+
+    self.user = try container.decode(User.self)
+    self.properties = try container.decode(GenerateLinkProperties.self)
+  }
 }
 
 /// The properties related to the email link generated.
