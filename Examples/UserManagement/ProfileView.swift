@@ -185,7 +185,7 @@ struct ProfileView: View {
       do {
         let currentUserId = try await supabase.auth.session.user.id
         try await supabase.auth.admin.deleteUser(
-          id: currentUserId.uuidString,
+          id: currentUserId,
           shouldSoftDelete: true
         )
       } catch {
