@@ -30,7 +30,7 @@ final class AuthClientIntegrationTests: XCTestCase {
           "Authorization": "Bearer \(key)",
         ],
         localStorage: InMemoryLocalStorage(),
-        logger: nil
+        logger: TestLogger()
       )
     )
   }
@@ -173,7 +173,9 @@ final class AuthClientIntegrationTests: XCTestCase {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
     let identities = try await authClient.userIdentities()
     expectNoDifference(
-      session.user.identities?.map(\.identityId) ?? [], identities.map(\.identityId))
+      session.user.identities?.map(\.identityId) ?? [],
+      identities.map(\.identityId)
+    )
   }
 
   func testUnlinkIdentity_withOnlyOneIdentity() async throws {
@@ -295,7 +297,14 @@ final class AuthClientIntegrationTests: XCTestCase {
   func testGenerateLink_magicLink() async throws {
     let client = Self.makeClient(serviceRole: true)
     let email = mockEmail()
+    let password = mockPassword()
 
+    // first create a user
+    try await client.admin.createUser(
+      attributes: AdminUserAttributes(email: email, password: password)
+    )
+
+    // generate a magic link for the created user
     let link = try await client.admin.generateLink(params: .magicLink(email: email))
 
     expectNoDifference(link.properties.verificationType, .magiclink)

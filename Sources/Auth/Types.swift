@@ -994,10 +994,8 @@ public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
   public let user: User
 
   public init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-
-    self.user = try container.decode(User.self)
-    self.properties = try container.decode(GenerateLinkProperties.self)
+    self.properties = try GenerateLinkProperties(from: decoder)
+    self.user = try User(from: decoder)
   }
 }
 

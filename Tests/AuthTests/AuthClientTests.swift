@@ -2080,7 +2080,7 @@ final class AuthClientTests: XCTestCase {
 
     expectNoDifference(
       link.properties.actionLink.absoluteString,
-      "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com"
+      "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
     )
   }
 
