@@ -909,123 +909,123 @@ public struct ListUsersPaginatedResponse: Hashable, Sendable {
   public var total: Int
 }
 
-public struct GenerateLinkParams: Sendable {
-  struct Body: Encodable {
-    var type: GenerateLinkType
-    var email: String
-    var password: String?
-    var newEmail: String?
-    var data: [String: AnyJSON]?
-  }
-  var body: Body
-  var redirectTo: URL?
-
-  /// Generates a signup link.
-  public static func signUp(
-    email: String,
-    password: String,
-    data: [String: AnyJSON]? = nil,
-    redirectTo: URL? = nil
-  ) -> GenerateLinkParams {
-    GenerateLinkParams(
-      body: .init(
-        type: .signup,
-        email: email,
-        password: password,
-        data: data
-      ),
-      redirectTo: redirectTo
-    )
-  }
-
-  /// Generates an invite link.
-  public static func invite(
-    email: String,
-    data: [String: AnyJSON]? = nil,
-    redirectTo: URL? = nil
-  ) -> GenerateLinkParams {
-    GenerateLinkParams(
-      body: .init(
-        type: .invite,
-        email: email,
-        data: data
-      ),
-      redirectTo: redirectTo
-    )
-  }
-
-  /// Generates a magic link.
-  public static func magicLink(
-    email: String,
-    data: [String: AnyJSON]? = nil,
-    redirectTo: URL? = nil
-  ) -> GenerateLinkParams {
-    GenerateLinkParams(
-      body: .init(
-        type: .magiclink,
-        email: email,
-        data: data
-      ),
-      redirectTo: redirectTo
-    )
-  }
-
-  /// Generates a recovery link.
-  public static func recovery(
-    email: String,
-    redirectTo: URL? = nil
-  ) -> GenerateLinkParams {
-    GenerateLinkParams(
-      body: .init(
-        type: .recovery,
-        email: email
-      ),
-      redirectTo: redirectTo
-    )
-  }
-
-}
-
-/// The response from the ``AuthAdmin/generateLink(params:)`` function.
-public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
-  /// The properties related to the email link generated.
-  public let properties: GenerateLinkProperties
-  /// The user that the email link is associated to.
-  public let user: User
-
-  public init(from decoder: any Decoder) throws {
-    self.properties = try GenerateLinkProperties(from: decoder)
-    self.user = try User(from: decoder)
-  }
-}
-
-/// The properties related to the email link generated.
-public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
-  /// The email link to send to the users.
-  /// The action link follows the following format: auth/v1/verify?type={verification_type}&token={hashed_token}&redirect_to={redirect_to}
-  public let actionLink: URL
-  /// The raw ramil OTP.
-  /// You should send this in the email if you want your users to verify using an OTP instead of the action link.
-  public let emailOTP: String
-  /// The hashed token appended to the action link.
-  public let hashedToken: String
-  /// The URL appended to the action link.
-  public let redirectTo: URL
-  /// The verification type that the emaillink is associated to.
-  public let verificationType: GenerateLinkType
-}
-
-public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable {
-  public let rawValue: String
-
-  public init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-
-  public static let signup = GenerateLinkType(rawValue: "signup")
-  public static let invite = GenerateLinkType(rawValue: "invite")
-  public static let magiclink = GenerateLinkType(rawValue: "magiclink")
-  public static let recovery = GenerateLinkType(rawValue: "recovery")
-  public static let emailChangeCurrent = GenerateLinkType(rawValue: "email_change_current")
-  public static let emailChangeNew = GenerateLinkType(rawValue: "email_change_new")
-}
+//public struct GenerateLinkParams: Sendable {
+//  struct Body: Encodable {
+//    var type: GenerateLinkType
+//    var email: String
+//    var password: String?
+//    var newEmail: String?
+//    var data: [String: AnyJSON]?
+//  }
+//  var body: Body
+//  var redirectTo: URL?
+//
+//  /// Generates a signup link.
+//  public static func signUp(
+//    email: String,
+//    password: String,
+//    data: [String: AnyJSON]? = nil,
+//    redirectTo: URL? = nil
+//  ) -> GenerateLinkParams {
+//    GenerateLinkParams(
+//      body: .init(
+//        type: .signup,
+//        email: email,
+//        password: password,
+//        data: data
+//      ),
+//      redirectTo: redirectTo
+//    )
+//  }
+//
+//  /// Generates an invite link.
+//  public static func invite(
+//    email: String,
+//    data: [String: AnyJSON]? = nil,
+//    redirectTo: URL? = nil
+//  ) -> GenerateLinkParams {
+//    GenerateLinkParams(
+//      body: .init(
+//        type: .invite,
+//        email: email,
+//        data: data
+//      ),
+//      redirectTo: redirectTo
+//    )
+//  }
+//
+//  /// Generates a magic link.
+//  public static func magicLink(
+//    email: String,
+//    data: [String: AnyJSON]? = nil,
+//    redirectTo: URL? = nil
+//  ) -> GenerateLinkParams {
+//    GenerateLinkParams(
+//      body: .init(
+//        type: .magiclink,
+//        email: email,
+//        data: data
+//      ),
+//      redirectTo: redirectTo
+//    )
+//  }
+//
+//  /// Generates a recovery link.
+//  public static func recovery(
+//    email: String,
+//    redirectTo: URL? = nil
+//  ) -> GenerateLinkParams {
+//    GenerateLinkParams(
+//      body: .init(
+//        type: .recovery,
+//        email: email
+//      ),
+//      redirectTo: redirectTo
+//    )
+//  }
+//
+//}
+//
+///// The response from the ``AuthAdmin/generateLink(params:)`` function.
+//public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
+//  /// The properties related to the email link generated.
+//  public let properties: GenerateLinkProperties
+//  /// The user that the email link is associated to.
+//  public let user: User
+//
+//  public init(from decoder: any Decoder) throws {
+//    self.properties = try GenerateLinkProperties(from: decoder)
+//    self.user = try User(from: decoder)
+//  }
+//}
+//
+///// The properties related to the email link generated.
+//public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
+//  /// The email link to send to the users.
+//  /// The action link follows the following format: auth/v1/verify?type={verification_type}&token={hashed_token}&redirect_to={redirect_to}
+//  public let actionLink: URL
+//  /// The raw ramil OTP.
+//  /// You should send this in the email if you want your users to verify using an OTP instead of the action link.
+//  public let emailOTP: String
+//  /// The hashed token appended to the action link.
+//  public let hashedToken: String
+//  /// The URL appended to the action link.
+//  public let redirectTo: URL
+//  /// The verification type that the emaillink is associated to.
+//  public let verificationType: GenerateLinkType
+//}
+//
+//public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable {
+//  public let rawValue: String
+//
+//  public init(rawValue: String) {
+//    self.rawValue = rawValue
+//  }
+//
+//  public static let signup = GenerateLinkType(rawValue: "signup")
+//  public static let invite = GenerateLinkType(rawValue: "invite")
+//  public static let magiclink = GenerateLinkType(rawValue: "magiclink")
+//  public static let recovery = GenerateLinkType(rawValue: "recovery")
+//  public static let emailChangeCurrent = GenerateLinkType(rawValue: "email_change_current")
+//  public static let emailChangeNew = GenerateLinkType(rawValue: "email_change_new")
+//}

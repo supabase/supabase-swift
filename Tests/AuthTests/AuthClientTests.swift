@@ -2043,46 +2043,46 @@ final class AuthClientTests: XCTestCase {
     _ = try await sut.admin.createUser(attributes: attributes)
   }
 
-  func testGenerateLink_signUp() async throws {
-    let sut = makeSUT()
-
-    let user = User(fromMockNamed: "user")
-    let encoder = JSONEncoder.supabase()
-    encoder.keyEncodingStrategy = .convertToSnakeCase
-
-    let userData = try encoder.encode(user)
-    var json = try JSONSerialization.jsonObject(with: userData, options: []) as! [String: Any]
-
-    json["action_link"] = "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com"
-    json["email_otp"] = "123456"
-    json["hashed_token"] = "hashed_token"
-    json["redirect_to"] = "https://example.com"
-    json["verification_type"] = "signup"
-
-    let responseData = try JSONSerialization.data(withJSONObject: json)
-
-    Mock(
-      url: clientURL.appendingPathComponent("admin/generate_link"),
-      statusCode: 200,
-      data: [
-        .post: responseData
-      ]
-    )
-    .register()
-
-    let link = try await sut.admin.generateLink(
-      params: .signUp(
-        email: "test@example.com",
-        password: "password",
-        data: ["full_name": "John Doe"]
-      )
-    )
-
-    expectNoDifference(
-      link.properties.actionLink.absoluteString,
-      "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-    )
-  }
+//  func testGenerateLink_signUp() async throws {
+//    let sut = makeSUT()
+//
+//    let user = User(fromMockNamed: "user")
+//    let encoder = JSONEncoder.supabase()
+//    encoder.keyEncodingStrategy = .convertToSnakeCase
+//
+//    let userData = try encoder.encode(user)
+//    var json = try JSONSerialization.jsonObject(with: userData, options: []) as! [String: Any]
+//
+//    json["action_link"] = "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com"
+//    json["email_otp"] = "123456"
+//    json["hashed_token"] = "hashed_token"
+//    json["redirect_to"] = "https://example.com"
+//    json["verification_type"] = "signup"
+//
+//    let responseData = try JSONSerialization.data(withJSONObject: json)
+//
+//    Mock(
+//      url: clientURL.appendingPathComponent("admin/generate_link"),
+//      statusCode: 200,
+//      data: [
+//        .post: responseData
+//      ]
+//    )
+//    .register()
+//
+//    let link = try await sut.admin.generateLink(
+//      params: .signUp(
+//        email: "test@example.com",
+//        password: "password",
+//        data: ["full_name": "John Doe"]
+//      )
+//    )
+//
+//    expectNoDifference(
+//      link.properties.actionLink.absoluteString,
+//      "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+//    )
+//  }
 
   func testInviteUserByEmail() async throws {
     let sut = makeSUT()

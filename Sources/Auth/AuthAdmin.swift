@@ -153,7 +153,8 @@ public struct AuthAdmin: Sendable {
     if !links.isEmpty {
       for link in links {
         let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
-          while: \.isNumber)
+          while: \.isNumber
+        )
         let rel = link.components(separatedBy: ";")[1].components(separatedBy: "=")[1]
 
         if rel == "\"last\"", let lastPage = Int(page) {
@@ -166,6 +167,10 @@ public struct AuthAdmin: Sendable {
 
     return pagination
   }
+
+  /*
+   Generate link is commented out temporarily due issues with they Auth's decoding is configured.
+   Will revisit it later.
 
   /// Generates email links and OTPs to be sent via a custom email provider.
   ///
@@ -190,6 +195,7 @@ public struct AuthAdmin: Sendable {
       )
     ).decoded(decoder: configuration.decoder)
   }
+   */
 }
 
 extension HTTPField.Name {
