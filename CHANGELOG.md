@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.29.0](https://github.com/supabase/supabase-swift/compare/v2.28.0...v2.29.0) (2025-05-20)
+
+
+### Features
+
+* **auth:** add missing auth admin methods ([#715](https://github.com/supabase/supabase-swift/issues/715)) ([04661f8](https://github.com/supabase/supabase-swift/commit/04661f86773161ec9a64feb0bcbd29b964646cfd))
+
 ## [2.28.0](https://github.com/supabase/supabase-swift/compare/v2.27.0...v2.28.0) (2025-05-03)
 
 
