@@ -9,14 +9,10 @@ import Foundation
 
 extension AnyJSON {
   /// The decoder instance used for transforming AnyJSON to some Codable type.
-  public static let decoder: JSONDecoder = {
-    JSONDecoder.supabase()
-  }()
+  public static let decoder: JSONDecoder = JSONDecoder.supabase()
 
   /// The encoder instance used for transforming AnyJSON to some Codable type.
-  public static let encoder: JSONEncoder = {
-    JSONEncoder.supabase()
-  }()
+  public static let encoder: JSONEncoder = JSONEncoder.supabase()
 }
 
 extension AnyJSON {

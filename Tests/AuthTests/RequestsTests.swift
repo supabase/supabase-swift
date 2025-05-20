@@ -338,7 +338,7 @@ final class RequestsTests: XCTestCase {
   func testDeleteUser() async {
     let sut = makeSUT()
 
-    let id = "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
+    let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     await assert {
       try await sut.admin.deleteUser(id: id)
     }
