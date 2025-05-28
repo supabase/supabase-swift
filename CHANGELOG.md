@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.29.1](https://github.com/supabase/supabase-swift/compare/v2.29.0...v2.29.1) (2025-05-28)
+
+
+### Bug Fixes
+
+* **realtime:** make Push associated to MainActor ([#721](https://github.com/supabase/supabase-swift/issues/721)) ([7d6870f](https://github.com/supabase/supabase-swift/commit/7d6870ffa980ad3728c272acc03fc3e3c0251fe4))
+
 ## [2.29.0](https://github.com/supabase/supabase-swift/compare/v2.28.0...v2.29.0) (2025-05-20)
 
 
