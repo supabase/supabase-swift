@@ -95,9 +95,10 @@ extension RealtimeChannelV2 {
   @_disfavoredOverload
   @available(*, deprecated, message: "Use `broadcastStream(event:)` with `BroadcastEvent` instead.")
   public func broadcastStream(event: String) -> AsyncStream<JSONObject> {
-    self.broadcastStream(event: event).map { (payload: BroadcastEvent) in
+    let stream = self.broadcastStream(event: event).map { (payload: BroadcastEvent) in
       try! JSONObject(payload)
     }
-    .eraseToStream()
+
+    return AsyncStream(stream)
   }
 }

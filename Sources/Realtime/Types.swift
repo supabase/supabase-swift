@@ -112,7 +112,7 @@ public enum LogLevel: String, Sendable {
 ///
 /// If broadcast event was triggered using [`realtime.broadcast_changes`](https://supabase.com/docs/guides/realtime/subscribing-to-database-changes#using-broadcast),
 /// use ``BroadcastEvent/broadcastChange(of:)`` to decode the payload into a specific type.
-public struct BroadcastEvent: Codable, Sendable {
+public struct BroadcastEvent: Codable, Hashable, Sendable {
   /// The type of the event, e.g. `broadcast`.
   public let type: String
   /// The event that triggered the broadcast.
