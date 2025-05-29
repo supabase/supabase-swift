@@ -178,24 +178,20 @@ final class CallbackManagerTests: XCTestCase {
     XCTAssertNoLeak(callbackManager)
 
     let event = "new_user"
-    let message = RealtimeMessageV2(
-      joinRef: nil,
-      ref: nil,
-      topic: "realtime:users",
+    let message = BroadcastEvent(
+      type: "broadcast",
       event: event,
       payload: ["email": "mail@example.com"]
     )
 
-    let jsonObject = try JSONObject(message)
-
-    let receivedMessage = LockIsolated<JSONObject?>(nil)
+    let receivedMessage = LockIsolated<BroadcastEvent?>(nil)
     callbackManager.addBroadcastCallback(event: event) {
       receivedMessage.setValue($0)
     }
 
-    callbackManager.triggerBroadcast(event: event, json: jsonObject)
+    callbackManager.triggerBroadcast(event: event, json: message)
 
-    XCTAssertEqual(receivedMessage.value, jsonObject)
+    XCTAssertEqual(receivedMessage.value, message)
   }
 
   func testTriggerPresenceDiffs() {
