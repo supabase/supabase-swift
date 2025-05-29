@@ -3,6 +3,27 @@ import Foundation
 public typealias JSONObject = [String: AnyJSON]
 public typealias JSONArray = [AnyJSON]
 
+/// A type for decoding arbitraty JSON keys.
+package struct AnyCodingKey: CodingKey {
+  package var stringValue: String
+  package var intValue: Int?
+
+  package init(stringValue: String) {
+    self.stringValue = stringValue
+    self.intValue = nil
+  }
+
+  package init(intValue: Int) {
+    self.stringValue = "\(intValue)"
+    self.intValue = intValue
+  }
+}
+extension AnyCodingKey: ExpressibleByStringLiteral {
+  package init(stringLiteral value: String) {
+    self.init(stringValue: value)
+  }
+}
+
 /// An enumeration that represents JSON-compatible values of various types.
 public enum AnyJSON: Sendable, Codable, Hashable {
   /// Represents a `null` JSON value.

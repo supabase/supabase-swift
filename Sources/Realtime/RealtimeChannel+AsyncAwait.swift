@@ -155,8 +155,8 @@ extension RealtimeChannelV2 {
   }
 
   /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
-  public func broadcastStream(event: String) -> AsyncStream<JSONObject> {
-    let (stream, continuation) = AsyncStream<JSONObject>.makeStream()
+  public func broadcastStream(event: String) -> AsyncStream<BroadcastEvent> {
+    let (stream, continuation) = AsyncStream<BroadcastEvent>.makeStream()
 
     let subscription = onBroadcast(event: event) {
       continuation.yield($0)

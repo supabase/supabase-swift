@@ -79,3 +79,25 @@ extension RealtimeChannelV2 {
   @available(*, deprecated, renamed: "RealtimeChannelStatus")
   public typealias Status = RealtimeChannelStatus
 }
+
+extension RealtimeChannelV2 {
+  @_disfavoredOverload
+  @available(*, deprecated, message: "Use `onBroadcast(event:callback:)` with `BroadcastEvent` instead.")
+  public func onBroadcast(
+    event: String,
+    callback: @escaping @Sendable (JSONObject) -> Void
+  ) -> RealtimeSubscription {
+    self.onBroadcast(event: event) { (payload: BroadcastEvent) in
+      callback(try! JSONObject(payload))
+    }
+  }
+
+  @_disfavoredOverload
+  @available(*, deprecated, message: "Use `broadcastStream(event:)` with `BroadcastEvent` instead.")
+  public func broadcastStream(event: String) -> AsyncStream<JSONObject> {
+    self.broadcastStream(event: event).map { (payload: BroadcastEvent) in
+      try! JSONObject(payload)
+    }
+    .eraseToStream()
+  }
+}

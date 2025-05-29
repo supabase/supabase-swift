@@ -5,7 +5,9 @@
 //  Created by Guilherme Souza on 18/01/24.
 //
 
+import AsyncAlgorithms
 import Foundation
+import OSLog
 import Supabase
 
 @MainActor
@@ -22,22 +24,21 @@ final class ChannelStore {
     Task {
       channels = await fetchChannels()
 
-      let channel = supabase.channel("public:channels")
+      await supabase.realtimeV2.setAuth()
 
-      let insertions = channel.postgresChange(InsertAction.self, table: "channels")
-      let deletions = channel.postgresChange(DeleteAction.self, table: "channels")
-
-      await channel.subscribe()
-
-      Task {
-        for await insertion in insertions {
-          handleInsertedChannel(insertion)
-        }
+      let realtimeChannel = supabase.channel("channel:*") {
+        $0.isPrivate = true
       }
 
+      let insertions = realtimeChannel.broadcastStream(event: "INSERT")
+      let updates = realtimeChannel.broadcastStream(event: "UPDATE")
+      let deletions = realtimeChannel.broadcastStream(event: "DELETE")
+
+      await realtimeChannel.subscribe()
+
       Task {
-        for await delete in deletions {
-          handleDeletedChannel(delete)
+        for await event in merge(insertions, updates, deletions) {
+          handleBroadcastEvent(event)
         }
       }
     }
@@ -52,7 +53,7 @@ final class ChannelStore {
         .insert(channel)
         .execute()
     } catch {
-      dump(error)
+      Logger.main.error("Failed to add channel: \(error.localizedDescription)")
       toast = .init(status: .error, title: "Error", description: error.localizedDescription)
     }
   }
@@ -62,7 +63,8 @@ final class ChannelStore {
       return channel
     }
 
-    let channel: Channel = try await supabase
+    let channel: Channel =
+      try await supabase
       .from("channels")
       .select()
       .eq("id", value: id)
@@ -72,27 +74,40 @@ final class ChannelStore {
     return channel
   }
 
-  private func handleInsertedChannel(_ action: InsertAction) {
+  private func handleBroadcastEvent(_ event: BroadcastEvent) {
     do {
-      let channel = try action.decodeRecord(decoder: decoder) as Channel
-      channels.append(channel)
+      let change = try event.broadcastChange()
+      switch change.operation {
+      case .insert(let channel):
+        channels.append(try channel.decode(decoder: decoder))
+
+      case .update(let new, _):
+        let channel = try new.decode(decoder: decoder) as Channel
+        if let index = channels.firstIndex(where: { $0.id == channel.id }) {
+          channels[index] = channel
+        } else {
+          Logger.main.warning("Channel with ID \(channel.id) not found for update")
+        }
+
+      case .delete(let old):
+        guard let id = old["id"]?.intValue else {
+          Logger.main.error("Missing channel ID in delete operation")
+          return
+        }
+        channels.removeAll { $0.id == id }
+        messages.removeMessages(for: id)
+      }
     } catch {
-      dump(error)
+      Logger.main.error("Failed to handle broadcast event: \(error.localizedDescription)")
       toast = .init(status: .error, title: "Error", description: error.localizedDescription)
     }
-  }
-
-  private func handleDeletedChannel(_ action: DeleteAction) {
-    guard let id = action.oldRecord["id"]?.intValue else { return }
-    channels.removeAll { $0.id == id }
-    messages.removeMessages(for: id)
   }
 
   private func fetchChannels() async -> [Channel] {
     do {
       return try await supabase.from("channels").select().execute().value
     } catch {
-      dump(error)
+      Logger.main.error("Failed to fetch channels: \(error.localizedDescription)")
       toast = .init(status: .error, title: "Error", description: error.localizedDescription)
       return []
     }

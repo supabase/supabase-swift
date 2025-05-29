@@ -107,3 +107,108 @@ extension HTTPField.Name {
 public enum LogLevel: String, Sendable {
   case info, warn, error
 }
+
+/// A broadcast event from the server.
+///
+/// If broadcast event was triggered using [`realtime.broadcast_changes`](https://supabase.com/docs/guides/realtime/subscribing-to-database-changes#using-broadcast),
+/// use ``BroadcastEvent/broadcastChange(of:)`` to decode the payload into a specific type.
+public struct BroadcastEvent: Codable, Sendable {
+  /// The type of the event, e.g. `broadcast`.
+  public let type: String
+  /// The event that triggered the broadcast.
+  public let event: String
+  /// The payload of the event.
+  public let payload: JSONObject
+
+  /// Decodes the payload into a specific type.
+  ///
+  /// If broadcast event was triggered using [`realtime.broadcast_changes`](https://supabase.com/docs/guides/realtime/subscribing-to-database-changes#using-broadcast),
+  /// use this method to decode the payload into a specific type.
+  public func broadcastChange() throws -> BroadcastChange {
+    try payload.decode()
+  }
+}
+
+/// A broadcast change event from the server.
+public struct BroadcastChange: Codable, Sendable {
+  /// The schema of the table that was changed.
+  public var schema: String
+  /// The table that was changed.
+  public var table: String
+  /// The operation that was performed on the table.
+  public var operation: Operation
+
+  /// The operation that was performed on the table.
+  public enum Operation: Codable, Sendable {
+    /// A new record was inserted.
+    case insert(new: JSONObject)
+    /// A record was updated.
+    case update(new: JSONObject, old: JSONObject)
+    /// A record was deleted.
+    case delete(old: JSONObject)
+  }
+}
+
+extension BroadcastChange {
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: AnyCodingKey.self)
+
+    self.schema = try container.decode(String.self, forKey: "schema")
+    self.table = try container.decode(String.self, forKey: "table")
+    self.operation = try BroadcastChange.Operation(from: decoder)
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: AnyCodingKey.self)
+
+    try container.encode(schema, forKey: "schema")
+    try container.encode(table, forKey: "table")
+    try operation.encode(to: encoder)
+  }
+}
+
+extension BroadcastChange.Operation {
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: AnyCodingKey.self)
+
+    let operation = try container.decode(String.self, forKey: "operation")
+    switch operation {
+    case "INSERT":
+      let new = try container.decode(JSONObject.self, forKey: "record")
+      self = .insert(new: new)
+    case "UPDATE":
+      let new = try container.decode(JSONObject.self, forKey: "record")
+      let old = try container.decode(JSONObject.self, forKey: "old_record")
+      self = .update(new: new, old: old)
+    case "DELETE":
+      let old = try container.decode(JSONObject.self, forKey: "old_record")
+      self = .delete(old: old)
+    default:
+      throw DecodingError.dataCorruptedError(
+        forKey: "operation",
+        in: container,
+        debugDescription: "Unknown operation type: \(operation)"
+      )
+    }
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: AnyCodingKey.self)
+
+    switch self {
+    case .insert(let new):
+      try container.encode("INSERT", forKey: "operation")
+      try container.encode(new, forKey: "record")
+      try container.encodeNil(forKey: "old_record")
+    case .update(let new, let old):
+      try container.encode("UPDATE", forKey: "operation")
+      try container.encode(new, forKey: "record")
+      try container.encode(old, forKey: "old_record")
+    case .delete(let old):
+      try container.encode("DELETE", forKey: "operation")
+      try container.encode(old, forKey: "old_record")
+      try container.encodeNil(forKey: "record")
+    }
+
+  }
+}

@@ -361,13 +361,8 @@ public final class RealtimeChannelV2: Sendable {
         callbackManager.triggerPostgresChanges(ids: ids, data: action)
 
       case .broadcast:
-        let payload = message.payload
-
-        guard let event = payload["event"]?.stringValue else {
-          throw RealtimeError("Expected 'event' key in 'payload' for broadcast event.")
-        }
-
-        callbackManager.triggerBroadcast(event: event, json: payload)
+        let payload = try message.payload.decode(as: BroadcastEvent.self)
+        callbackManager.triggerBroadcast(event: payload.event, json: payload)
 
       case .close:
         socket._remove(self)
@@ -514,7 +509,7 @@ public final class RealtimeChannelV2: Sendable {
   /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
   public func onBroadcast(
     event: String,
-    callback: @escaping @Sendable (JSONObject) -> Void
+    callback: @escaping @Sendable (BroadcastEvent) -> Void
   ) -> RealtimeSubscription {
     let id = callbackManager.addBroadcastCallback(event: event, callback: callback)
     return RealtimeSubscription { [weak callbackManager, logger] in
