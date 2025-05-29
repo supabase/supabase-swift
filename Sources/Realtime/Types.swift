@@ -129,7 +129,9 @@ public struct BroadcastEvent: Codable, Hashable, Sendable {
   }
 }
 
-/// A broadcast change event from the server.
+/// A postgres change event sent through broadcast.
+///
+/// More info in [Subscribing to Database Changes](https://supabase.com/docs/guides/realtime/subscribing-to-database-changes)
 public struct BroadcastChange: Codable, Sendable {
   /// The schema of the table that was changed.
   public var schema: String
