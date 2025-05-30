@@ -1,5 +1,4 @@
 import Foundation
-import Helpers
 
 /// Extracts parameters encoded in the URL both in the query and fragment.
 func extractParams(from url: URL) -> [String: String] {

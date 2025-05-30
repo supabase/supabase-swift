@@ -1,7 +1,6 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
-import Helpers
 
 public typealias PostgrestError = Helpers.PostgrestError
 public typealias HTTPError = Helpers.HTTPError

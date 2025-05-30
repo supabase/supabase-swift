@@ -19,7 +19,6 @@
 // THE SOFTWARE.
 
 import Foundation
-import Helpers
 
 /// Data that is received from the Server.
 public struct RealtimeMessage {

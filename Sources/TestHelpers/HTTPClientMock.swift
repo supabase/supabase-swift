@@ -7,7 +7,6 @@
 
 import ConcurrencyExtras
 import Foundation
-import Helpers
 import XCTestDynamicOverlay
 
 package actor HTTPClientMock: HTTPClientType {

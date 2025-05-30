@@ -1,5 +1,4 @@
 import Foundation
-import Helpers
 
 public struct RealtimeMessageV2: Hashable, Codable, Sendable {
   public let joinRef: String?

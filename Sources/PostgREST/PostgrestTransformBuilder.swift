@@ -1,5 +1,4 @@
 import Foundation
-import Helpers
 
 public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Perform a SELECT on the query result.

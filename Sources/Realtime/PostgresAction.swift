@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Helpers
 
 public struct Column: Equatable, Codable, Sendable {
   public let name: String

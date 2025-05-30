@@ -6,9 +6,8 @@
 //
 
 import ConcurrencyExtras
-import XCTest
-
 import Helpers
+import XCTest
 
 final class EventEmitterTests: XCTestCase {
 

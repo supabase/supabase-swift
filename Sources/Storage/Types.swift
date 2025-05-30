@@ -1,5 +1,4 @@
 import Foundation
-import Helpers
 
 public struct SearchOptions: Encodable, Sendable {
   var prefix: String
