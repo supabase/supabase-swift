@@ -12,8 +12,6 @@ import Foundation
   import FoundationNetworking
 #endif
 
-public typealias JSONObject = Helpers.JSONObject
-
 /// Factory function for returning a new WebSocket connection.
 typealias WebSocketTransport = @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
   any WebSocket

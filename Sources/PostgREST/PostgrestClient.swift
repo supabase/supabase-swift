@@ -2,10 +2,6 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 
-public typealias PostgrestError = Helpers.PostgrestError
-public typealias HTTPError = Helpers.HTTPError
-public typealias AnyJSON = Helpers.AnyJSON
-
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
