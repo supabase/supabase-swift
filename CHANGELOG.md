@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.29.2](https://github.com/supabase/supabase-swift/compare/v2.29.1...v2.29.2) (2025-05-31)
+
+
+### Bug Fixes
+
+* re-export Helpers module ([#724](https://github.com/supabase/supabase-swift/issues/724)) ([fd97d99](https://github.com/supabase/supabase-swift/commit/fd97d99d780c6b6e5bff58663e8b13979853d593))
+
 ## [2.29.1](https://github.com/supabase/supabase-swift/compare/v2.29.0...v2.29.1) (2025-05-28)
 
 
