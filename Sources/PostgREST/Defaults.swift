@@ -7,7 +7,6 @@
 
 import ConcurrencyExtras
 import Foundation
-import Helpers
 
 let version = Helpers.version
 

@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Helpers
 
 @available(*, deprecated, renamed: "RealtimeMessage")
 public typealias Message = RealtimeMessage

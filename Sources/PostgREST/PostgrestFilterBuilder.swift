@@ -1,5 +1,4 @@
 import Foundation
-import Helpers
 
 public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Sendable {
   public enum Operator: String, CaseIterable, Sendable {

@@ -1,5 +1,4 @@
 import XCTest
-
 import Helpers
 
 final class JWTTests: XCTestCase {

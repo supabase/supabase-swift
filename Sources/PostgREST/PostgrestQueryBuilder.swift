@@ -1,5 +1,4 @@
 import Foundation
-import Helpers
 
 public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Perform a SELECT query on the table or view.

@@ -1,5 +1,4 @@
 import Foundation
-import Helpers
 
 struct SessionManager: Sendable {
   var session: @Sendable () async throws -> Session

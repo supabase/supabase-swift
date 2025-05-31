@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Helpers
 
 public struct PresenceV2: Hashable, Sendable {
   /// The presence reference of the object.

@@ -1,5 +1,4 @@
 import Foundation
-import Helpers
 
 /// A value that can be used to filter Postgrest queries.
 public protocol PostgrestFilterValue {

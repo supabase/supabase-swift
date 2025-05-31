@@ -1,21 +1,11 @@
-@_exported import Auth
 import ConcurrencyExtras
 import Foundation
-@_exported import Functions
 import HTTPTypes
-import Helpers
 import IssueReporting
-@_exported import PostgREST
-@_exported import Realtime
-@_exported import Storage
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
-
-public typealias SupabaseLogger = Helpers.SupabaseLogger
-public typealias SupabaseLogLevel = Helpers.SupabaseLogLevel
-public typealias SupabaseLogMessage = Helpers.SupabaseLogMessage
 
 /// Supabase Client.
 public final class SupabaseClient: Sendable {
@@ -35,7 +25,8 @@ public final class SupabaseClient: Sendable {
         """
         Supabase Client is configured with the auth.accessToken option,
         accessing supabase.auth is not possible.
-        """)
+        """
+      )
     }
     return _auth
   }

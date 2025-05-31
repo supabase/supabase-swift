@@ -1,7 +1,6 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
-import Helpers
 import IssueReporting
 
 #if canImport(FoundationNetworking)
