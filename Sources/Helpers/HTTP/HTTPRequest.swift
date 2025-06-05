@@ -18,19 +18,22 @@ package struct HTTPRequest: Sendable {
   package var query: [URLQueryItem]
   package var headers: HTTPFields
   package var body: Data?
+  package var timeoutInterval: TimeInterval
 
   package init(
     url: URL,
     method: HTTPTypes.HTTPRequest.Method,
     query: [URLQueryItem] = [],
     headers: HTTPFields = [:],
-    body: Data? = nil
+    body: Data? = nil,
+    timeoutInterval: TimeInterval = 60
   ) {
     self.url = url
     self.method = method
     self.query = query
     self.headers = headers
     self.body = body
+    self.timeoutInterval = timeoutInterval
   }
 
   package init?(
@@ -38,18 +41,19 @@ package struct HTTPRequest: Sendable {
     method: HTTPTypes.HTTPRequest.Method,
     query: [URLQueryItem] = [],
     headers: HTTPFields = [:],
-    body: Data?
+    body: Data? = nil,
+    timeoutInterval: TimeInterval = 60
   ) {
     guard let url = URL(string: urlString) else { return nil }
-    self.init(url: url, method: method, query: query, headers: headers, body: body)
+    self.init(url: url, method: method, query: query, headers: headers, body: body, timeoutInterval: timeoutInterval)
   }
 
   package var urlRequest: URLRequest {
-    var urlRequest = URLRequest(url: query.isEmpty ? url : url.appendingQueryItems(query))
+    var urlRequest = URLRequest(url: query.isEmpty ? url : url.appendingQueryItems(query), timeoutInterval: timeoutInterval)
     urlRequest.httpMethod = method.rawValue
     urlRequest.allHTTPHeaderFields = .init(headers.map { ($0.name.rawName, $0.value) }) { $1 }
     urlRequest.httpBody = body
-
+    
     if urlRequest.httpBody != nil, urlRequest.value(forHTTPHeaderField: "Content-Type") == nil {
       urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
     }
