@@ -3,10 +3,10 @@ import OSLog
 import Supabase
 import SwiftUI
 
-let logger = Logger(subsystem: "com.supabase.examples", category: "SignInWithFacebook")
-
 struct SignInWithFacebook: View {
   @State private var actionState = ActionState<Void, Error>.idle
+
+  static let logger = Logger(subsystem: "com.supabase.examples", category: "SignInWithFacebook")
 
   let loginManager = LoginManager()
 
@@ -24,16 +24,16 @@ struct SignInWithFacebook: View {
           switch result {
           case .failed(let error):
             actionState = .result(.failure(error))
-            logger.error("Facebook login failed: \(error.localizedDescription)")
+            Self.logger.error("Facebook login failed: \(error.localizedDescription)")
           case .cancelled:
             actionState = .idle
-            logger.info("Facebook login cancelled")
+            Self.logger.info("Facebook login cancelled")
           case .success(_, _, let token):
-            logger.info("Facebook login succeeded.")
+            Self.logger.info("Facebook login succeeded.")
 
             guard let idToken = token?.tokenString else {
               actionState = .idle
-              logger.error("Facebook login token is nil")
+              Self.logger.error("Facebook login token is nil")
               return
             }
 
@@ -46,10 +46,10 @@ struct SignInWithFacebook: View {
                   )
                 )
                 actionState = .result(.success(()))
-                logger.info("Successfully signed in with Facebook")
+                Self.logger.info("Successfully signed in with Facebook")
               } catch {
                 actionState = .result(.failure(error))
-                logger.error("Failed to sign in with Facebook: \(error.localizedDescription)")
+                Self.logger.error("Failed to sign in with Facebook: \(error.localizedDescription)")
 
               }
             }
