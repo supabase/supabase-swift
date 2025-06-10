@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.29.3](https://github.com/supabase/supabase-swift/compare/v2.29.2...v2.29.3) (2025-06-10)
+
+
+### Bug Fixes
+
+* **auth:** allow to pass a Keychain storage without a service defined ([#730](https://github.com/supabase/supabase-swift/issues/730)) ([6b1d60f](https://github.com/supabase/supabase-swift/commit/6b1d60f4d3900cdbf96fd6d1be9a00711790c2ca))
+* **functions:** set request timeout to 150 seconds when invoking functions ([#728](https://github.com/supabase/supabase-swift/issues/728)) ([3d2930d](https://github.com/supabase/supabase-swift/commit/3d2930d90bf5005ecf479a27a9dd7930a819e06c))
+
 ## [2.29.2](https://github.com/supabase/supabase-swift/compare/v2.29.1...v2.29.2) (2025-05-31)
 
 
