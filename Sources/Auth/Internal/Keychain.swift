@@ -3,11 +3,11 @@
   import Security
 
   struct Keychain {
-    let service: String
+    let service: String?
     let accessGroup: String?
 
     init(
-      service: String,
+      service: String?,
       accessGroup: String? = nil
     ) {
       self.service = service
@@ -55,8 +55,10 @@
     private func baseQuery(withKey key: String? = nil, data: Data? = nil) -> [String: Any] {
       var query: [String: Any] = [:]
       query[kSecClass as String] = kSecClassGenericPassword
-      query[kSecAttrService as String] = service
 
+      if let service {
+        query[kSecAttrService as String] = service
+      }
       if let key {
         query[kSecAttrAccount as String] = key
       }

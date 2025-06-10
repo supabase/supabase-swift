@@ -5,7 +5,7 @@
   public struct KeychainLocalStorage: AuthLocalStorage {
     private let keychain: Keychain
 
-    public init(service: String = "supabase.gotrue.swift", accessGroup: String? = nil) {
+    public init(service: String? = "supabase.gotrue.swift", accessGroup: String? = nil) {
       keychain = Keychain(service: service, accessGroup: accessGroup)
     }
 
