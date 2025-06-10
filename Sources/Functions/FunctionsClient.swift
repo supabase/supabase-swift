@@ -15,6 +15,11 @@ public final class FunctionsClient: Sendable {
     Data, URLResponse
   )
 
+  /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
+  ///
+  /// See more: https://supabase.com/docs/guides/functions/limits
+  public static let requestIdleTimeout: TimeInterval = 150
+
   /// The base URL for the functions.
   let url: URL
 
@@ -246,7 +251,8 @@ public final class FunctionsClient: Sendable {
       method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
       query: options.query,
       headers: mutableState.headers.merging(with: options.headers),
-      body: options.body
+      body: options.body,
+      timeoutInterval: FunctionsClient.requestIdleTimeout
     )
 
     if let region = options.region ?? region {
