@@ -204,4 +204,12 @@ enum RealtimeCallback {
     case let .system(callback): callback.id
     }
   }
+
+  var isPresence: Bool {
+    if case .presence = self {
+      return true
+    } else {
+      return false
+    }
+  }
 }
