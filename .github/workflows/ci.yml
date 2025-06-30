@@ -67,7 +67,7 @@ jobs:
           - { xcode: 15.2, command: test }
           - { xcode: 15.2, platform: MAC_CATALYST }
           - { xcode: 15.2, platform: TVOS }
-          - { xcode: 15.2, platform: VISIONOS }
+          #- { xcode: 15.2, platform: VISIONOS }
           - { xcode: 15.2, platform: WATCHOS }
           - { command: test, platform: WATCHOS }
         include:

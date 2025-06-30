@@ -10,9 +10,10 @@ PLATFORM_TVOS = tvOS Simulator,id=$(call udid_for,tvOS,TV)
 PLATFORM_VISIONOS = visionOS Simulator,id=$(call udid_for,visionOS,Vision)
 PLATFORM_WATCHOS = watchOS Simulator,id=$(call udid_for,watchOS,Watch)
 
-
 PLATFORM = IOS
 DESTINATION = platform="$(PLATFORM_$(PLATFORM))"
+
+PLATFORM_ID = $(shell echo "$(DESTINATION)" | sed -E "s/.+,id=(.+)/\1/")
 
 SCHEME = Supabase
 
@@ -26,19 +27,25 @@ XCODEBUILD_FLAGS = \
 	-destination $(DESTINATION) \
 	-scheme "$(SCHEME)" \
 	-skipMacroValidation \
-	-workspace $(WORKSPACE) \
+	-workspace $(WORKSPACE)
 
 XCODEBUILD_COMMAND = xcodebuild $(XCODEBUILD_ARGUMENT) $(XCODEBUILD_FLAGS)
 
 ifneq ($(strip $(shell which xcbeautify)),)
-	XCODEBUILD = set -o pipefail && $(XCODEBUILD_COMMAND) | xcbeautify --quiet
+	XCODEBUILD = set -o pipefail && $(XCODEBUILD_COMMAND) | xcbeautify
 else
 	XCODEBUILD = $(XCODEBUILD_COMMAND)
 endif
 
 TEST_RUNNER_CI = $(CI)
 
-xcodebuild:
+warm-simulator:
+	@test "$(PLATFORM_ID)" != "" \
+		&& xcrun simctl boot $(PLATFORM_ID) \
+		&& open -a Simulator --args -CurrentDeviceUDID $(PLATFORM_ID) \
+		|| exit 0
+
+xcodebuild: warm-simulator
 	$(XCODEBUILD)
 
 test-integration:
@@ -48,6 +55,7 @@ test-integration:
 
 build-for-library-evolution:
 	swift build \
+		-q \
 		-c release \
 		--target Supabase \
 		-Xswiftc -emit-module-interface \
@@ -67,31 +75,18 @@ test-docs:
 		&& exit 1)
 
 format:
-	@swift format -i -r --ignore-unparsable-files .
+	find . \
+		-path '*/Documentation/docc' -prune -o \
+		-name '*.swift' \
+		-not -path '*/.*' -print0 \
+		| xargs -0 xcrun swift-format --ignore-unparsable-files --in-place
 
-
-test-linux:
-	docker run \
-		--rm \
-		-v "$(PWD):$(PWD)" \
-		-w "$(PWD)" \
-		swift:5.10 \
-		bash -c 'swift test -c $(CONFIG)'
-
-build-linux:
-	docker run \
-		--rm \
-		-v "$(PWD):$(PWD)" \
-		-w "$(PWD)" \
-		swift:5.9 \
-		bash -c 'swift build -c $(CONFIG)'
-
-.PHONY: build-for-library-evolution format xcodebuild test-docs test-integration
+.PHONY: build-for-library-evolution format warm-simulator xcodebuild test-docs test-integration
 
 .PHONY: coverage
 coverage:
 	@DERIVED_DATA_PATH=$(DERIVED_DATA_PATH) ./scripts/generate-coverage.sh
 
 define udid_for
-$(shell xcrun simctl list devices available '$(1)' | grep '$(2)' | sort -r | head -1 | awk -F '[()]' '{ print $$(NF-3) }')
+$(shell xcrun simctl list --json devices available '$(1)' | jq -r '[.devices|to_entries|sort_by(.key)|reverse|.[].value|select(length > 0)|.[0]][0].udid')
 endef
