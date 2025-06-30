@@ -104,16 +104,24 @@ jobs:
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
-  linux_android:
-    name: Linux and Android
-    runs-on: ubuntu-24.04
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: "Remove IntegrationTests"
         run: rm -r Tests/IntegrationTests/*
-      - name: "Build Swift Package on Linux"
+      - name: "Build Swift Package"
         run: swift build
-      - name: "Test Swift Package on Android"
+      
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Remove IntegrationTests"
+        run: rm -r Tests/IntegrationTests/*
+      - name: "Test Swift Package"
         uses: skiptools/swift-android-action@v2
         with:
           # need to copy over the Tests folder because it contains __Snapshots__
@@ -121,38 +129,15 @@ jobs:
           # tests are not yet passing on Android
           run-tests: false
 
-  # linux:
-  #   name: linux
-  #   strategy:
-  #     matrix:
-  #       swift-version: ["5.10"]
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: swift-actions/setup-swift@v2
-  #       with:
-  #         swift-version: ${{ matrix.swift-version }}
-  #     - name: Cache build
-  #       uses: actions/cache@v3
-  #       with:
-  #         path: |
-  #           .build
-  #         key: |
-  #           build-spm-linux-${{ matrix.swift-version }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Package.resolved') }}
-  #         restore-keys: |
-  #           build-spm-linux-${{ matrix.swift-version }}-
-  #     - name: Run tests
-  #       run: swift test --skip IntegrationTests
-
-  # library-evolution:
-  #   name: Library (evolution)
-  #   runs-on: macos-14
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Select Xcode 15.4
-  #       run: sudo xcode-select -s /Applications/Xcode_15.4.app
-  #     - name: Build for library evolution
-  #       run: make build-for-library-evolution
+  library-evolution:
+    name: Library (evolution)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 15.4
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+      - name: Build for library evolution
+        run: make build-for-library-evolution
 
   examples:
     name: Examples
