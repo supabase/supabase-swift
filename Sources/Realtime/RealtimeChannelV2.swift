@@ -401,7 +401,18 @@ public final class RealtimeChannelV2: Sendable {
   public func onPresenceChange(
     _ callback: @escaping @Sendable (any PresenceAction) -> Void
   ) -> RealtimeSubscription {
+    if status == .subscribed {
+      logger?.debug(
+        "Resubscribe to \(self.topic) due to change in presence callback on joined channel."
+      )
+      Task {
+        await unsubscribe()
+        await subscribe()
+      }
+    }
+
     let id = callbackManager.addPresenceCallback(callback: callback)
+
     return RealtimeSubscription { [weak callbackManager, logger] in
       logger?.debug("Removing presence callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
