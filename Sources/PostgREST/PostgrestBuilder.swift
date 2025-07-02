@@ -80,7 +80,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   ///   - options: Options for querying Supabase.
   /// - Returns: A `PostgrestResponse<T>` instance representing the response.
   @discardableResult
-  public func execute<T: Decodable>(
+  public func execute<T: Decodable & Sendable>(
     options: FetchOptions = FetchOptions()
   ) async throws -> PostgrestResponse<T> {
     try await execute(options: options) { [configuration] data in
@@ -93,7 +93,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     }
   }
 
-  private func execute<T>(
+  private func execute<T: Sendable>(
     options: FetchOptions,
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
@@ -126,7 +126,7 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     let response = try await http.send(request)
 
-    guard 200 ..< 300 ~= response.statusCode else {
+    guard 200..<300 ~= response.statusCode else {
       if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
         throw error
       }
@@ -135,7 +135,11 @@ public class PostgrestBuilder: @unchecked Sendable {
     }
 
     let value = try decode(response.data)
-    return PostgrestResponse(data: response.data, response: response.underlyingResponse, value: value)
+    return PostgrestResponse(
+      data: response.data,
+      response: response.underlyingResponse,
+      value: value
+    )
   }
 }
 
