@@ -169,6 +169,7 @@ final class RealtimeTests: XCTestCase {
                   }
                 ],
                 "presence" : {
+                  "enabled" : false,
                   "key" : ""
                 },
                 "private" : false
@@ -241,6 +242,7 @@ final class RealtimeTests: XCTestCase {
 
               ],
               "presence" : {
+                "enabled" : false,
                 "key" : ""
               },
               "private" : false
@@ -264,6 +266,7 @@ final class RealtimeTests: XCTestCase {
 
               ],
               "presence" : {
+                "enabled" : false,
                 "key" : ""
               },
               "private" : false

@@ -35,7 +35,9 @@ public final class RealtimeChannelV2: Sendable {
   private var mutableState = MutableState()
 
   let topic: String
-  let config: RealtimeChannelConfig
+
+  @MainActor var config: RealtimeChannelConfig
+
   let logger: (any SupabaseLogger)?
   let socket: RealtimeClientV2
 
@@ -96,6 +98,8 @@ public final class RealtimeChannelV2: Sendable {
 
     status = .subscribing
     logger?.debug("Subscribing to channel \(topic)")
+
+    config.presence.enabled = callbackManager.callbacks.contains(where: { $0.isPresence })
 
     let joinConfig = RealtimeJoinConfig(
       broadcast: config.broadcast,
@@ -168,6 +172,7 @@ public final class RealtimeChannelV2: Sendable {
   /// - Parameters:
   ///   - event: Broadcast message event.
   ///   - message: Message payload.
+  @MainActor
   public func broadcast(event: String, message: JSONObject) async {
     if status != .subscribed {
       struct Message: Encodable {
@@ -374,7 +379,7 @@ public final class RealtimeChannelV2: Sendable {
         status = .unsubscribed
 
       case .error:
-        logger?.debug(
+        logger?.error(
           "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
         )
 
@@ -396,7 +401,18 @@ public final class RealtimeChannelV2: Sendable {
   public func onPresenceChange(
     _ callback: @escaping @Sendable (any PresenceAction) -> Void
   ) -> RealtimeSubscription {
+    if status == .subscribed {
+      logger?.debug(
+        "Resubscribe to \(self.topic) due to change in presence callback on joined channel."
+      )
+      Task {
+        await unsubscribe()
+        await subscribe()
+      }
+    }
+
     let id = callbackManager.addPresenceCallback(callback: callback)
+
     return RealtimeSubscription { [weak callbackManager, logger] in
       logger?.debug("Removing presence callback with id: \(id)")
       callbackManager?.removeCallback(id: id)

@@ -6,6 +6,7 @@
 //
 
 import InlineSnapshotTesting
+import TestHelpers
 import XCTest
 import XCTestDynamicOverlay
 
@@ -127,5 +128,68 @@ final class RealtimeChannelTests: XCTestCase {
 
       """
     }
+  }
+
+  @MainActor
+  func testPresenceEnabledDuringSubscribe() async {
+    // Create fake WebSocket for testing
+    let (client, server) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClientMock()
+    )
+
+    // Create a channel without presence callback initially
+    let channel = socket.channel("test-topic")
+
+    // Initially presence should be disabled
+    XCTAssertFalse(channel.config.presence.enabled)
+
+    // Connect the socket
+    await socket.connect()
+
+    // Add a presence callback before subscribing
+    let presenceSubscription = channel.onPresenceChange { _ in }
+
+    // Verify that presence callback exists
+    XCTAssertTrue(channel.callbackManager.callbacks.contains(where: { $0.isPresence }))
+
+    // Start subscription process
+    Task {
+      await channel.subscribe()
+    }
+
+    // Wait for the join message to be sent
+    await Task.megaYield()
+
+    // Check the sent events to verify presence enabled is set correctly
+    let joinEvents = server.receivedEvents.compactMap { $0.realtimeMessage }.filter {
+      $0.event == "phx_join"
+    }
+
+    // Should have at least one join event
+    XCTAssertGreaterThan(joinEvents.count, 0)
+
+    // Check that the presence enabled flag is set to true in the join payload
+    if let joinEvent = joinEvents.first,
+      let config = joinEvent.payload["config"]?.objectValue,
+      let presence = config["presence"]?.objectValue,
+      let enabled = presence["enabled"]?.boolValue
+    {
+      XCTAssertTrue(enabled, "Presence should be enabled when presence callback exists")
+    } else {
+      XCTFail("Could not find presence enabled flag in join payload")
+    }
+
+    // Clean up
+    presenceSubscription.cancel()
+    await channel.unsubscribe()
+    socket.disconnect()
   }
 }

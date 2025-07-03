@@ -50,6 +50,7 @@ public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
 public struct PresenceJoinConfig: Codable, Hashable, Sendable {
   /// Track presence payload across clients.
   public var key: String = ""
+  var enabled: Bool = false
 }
 
 public enum PostgresChangeEvent: String, Codable, Sendable {

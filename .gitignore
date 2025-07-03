@@ -101,3 +101,5 @@ iOSInjectionProject/
 Secrets.swift
 lcov.info
 temp_coverage
+
+.cursor
