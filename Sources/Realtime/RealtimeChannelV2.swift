@@ -101,18 +101,16 @@ public final class RealtimeChannelV2: Sendable {
         }
         logger?.debug("Successfully subscribed to channel '\(topic)'")
         return
-      } catch {
-        if error is TimeoutError {
+      } catch is TimeoutError {
           logger?.debug("Subscribe timed out for channel '\(topic)' (attempt \(attempts)/\(maxRetryAttempt))")
           if attempts < maxRetryAttempt {
             logger?.debug("Retrying subscription to channel '\(topic)'...")
           } else {
             logger?.error("Failed to subscribe to channel '\(topic)' after \(maxRetryAttempt) attempts due to timeout")
           }
-        } else {
-          logger?.error("Subscribe failed for channel '\(topic)' (attempt \(attempts)/\(maxRetryAttempt)): \(error)")
-          break
-        }
+      } catch {
+        logger?.error("Subscribe failed for channel '\(topic)' (attempt \(attempts)/\(maxRetryAttempt)): \(error)")
+        break
       }
     }
     
