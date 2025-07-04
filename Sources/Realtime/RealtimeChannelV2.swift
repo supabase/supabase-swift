@@ -572,11 +572,9 @@ public final class RealtimeChannelV2: Sendable {
   @MainActor
   @discardableResult
   func push(_ event: String, ref: String? = nil, payload: JSONObject = [:]) async -> PushStatus {
-    let messageRef = ref ?? socket.makeRef()
-    
     let message = RealtimeMessageV2(
       joinRef: joinRef,
-      ref: messageRef,
+      ref: ref ?? socket.makeRef(),
       topic: self.topic,
       event: event,
       payload: payload
@@ -587,8 +585,7 @@ public final class RealtimeChannelV2: Sendable {
       mutableState.pushes[ref] = push
     }
 
-    let status = await push.send()
-    return status
+    return await push.send()
   }
 
   @MainActor
