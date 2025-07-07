@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   xcodebuild-latest:
-    name: xcodebuild (16)
+    name: xcodebuild (16.3)
     runs-on: macos-15
     strategy:
       matrix:
@@ -42,7 +42,7 @@ jobs:
       - name: Release
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
-      - name: Instal lcov
+      - name: Install lcov
         if: matrix.command == 'test' && matrix.platform == 'IOS'
         run: brew install lcov
       - name: Export code coverage
@@ -55,34 +55,20 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           file: lcov.info
 
-  xcodebuild:
-    name: xcodebuild (15)
+  xcodebuild-legacy:
+    name: xcodebuild (15.4)
     runs-on: macos-14
     strategy:
       matrix:
         command: [test, ""]
-        platform: [IOS, MAC_CATALYST, MACOS, TVOS, VISIONOS, WATCHOS]
-        xcode: [15.2, 15.4]
-        exclude:
-          - { xcode: 15.2, command: test }
-          - { xcode: 15.2, platform: MAC_CATALYST }
-          - { xcode: 15.2, platform: TVOS }
-          #- { xcode: 15.2, platform: VISIONOS }
-          - { xcode: 15.2, platform: WATCHOS }
-          - { command: test, platform: WATCHOS }
+        platform: [IOS, MACOS, MAC_CATALYST]
+        xcode: ["15.4"]
         include:
           - { command: test, skip_release: 1 }
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-      - name: Install visionOS runtime
-        if: matrix.platform == 'visionOS'
-        run: |
-          sudo xcodebuild -runFirstLaunch
-          sudo xcrun simctl list
-          sudo xcodebuild -downloadPlatform visionOS
-          sudo xcodebuild -runFirstLaunch
       - name: List available devices
         run: xcrun simctl list devices available
       - name: Cache derived data
