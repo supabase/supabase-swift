@@ -98,28 +98,63 @@ public final class RealtimeChannelV2: Sendable {
         logger?.debug(
           "Attempting to subscribe to channel '\(topic)' (attempt \(attempts)/\(maxRetryAttempt))"
         )
+
         try await withTimeout(interval: socket.options.timeoutInterval) { [self] in
           await _subscribe()
         }
+
         logger?.debug("Successfully subscribed to channel '\(topic)'")
         return
+
       } catch is TimeoutError {
         logger?.debug(
           "Subscribe timed out for channel '\(topic)' (attempt \(attempts)/\(maxRetryAttempt))"
         )
+
         if attempts < maxRetryAttempt {
-          logger?.debug("Retrying subscription to channel '\(topic)'...")
+          // Add exponential backoff with jitter
+          let delay = calculateRetryDelay(for: attempts)
+          logger?.debug(
+            "Retrying subscription to channel '\(topic)' in \(String(format: "%.2f", delay)) seconds..."
+          )
+
+          do {
+            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+          } catch {
+            // If sleep is cancelled, break out of retry loop
+            logger?.debug("Subscription retry cancelled for channel '\(topic)'")
+            break
+          }
         } else {
           logger?.error(
             "Failed to subscribe to channel '\(topic)' after \(maxRetryAttempt) attempts due to timeout"
           )
         }
+
       } catch {
-        preconditionFailure("The only error possibly thrown is TimeoutError.")
+        preconditionFailure(
+          "The only possible error here is TimeoutError, this should never happen.")
       }
     }
 
     logger?.error("Subscription to channel '\(topic)' failed after \(attempts) attempts")
+    status = .unsubscribed
+  }
+
+  /// Calculates retry delay with exponential backoff and jitter
+  private func calculateRetryDelay(for attempt: Int) -> TimeInterval {
+    let baseDelay: TimeInterval = 1.0
+    let maxDelay: TimeInterval = 30.0
+    let backoffMultiplier: Double = 2.0
+
+    let exponentialDelay = baseDelay * pow(backoffMultiplier, Double(attempt - 1))
+    let cappedDelay = min(exponentialDelay, maxDelay)
+
+    // Add jitter (±25% random variation) to prevent thundering herd
+    let jitterRange = cappedDelay * 0.25
+    let jitter = Double.random(in: -jitterRange...jitterRange)
+
+    return max(0.1, cappedDelay + jitter)
   }
 
   /// Subscribes to the channel
