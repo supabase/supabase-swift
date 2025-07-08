@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.30.0](https://github.com/supabase/supabase-swift/compare/v2.29.3...v2.30.0) (2025-07-03)
+
+
+### Features
+
+* **realtime:** add presence-enabled flag to join push ([#736](https://github.com/supabase/supabase-swift/issues/736)) ([7de5b8b](https://github.com/supabase/supabase-swift/commit/7de5b8b0b88a070046112026a3add7aa08b5fa3a))
+
 ## [2.29.3](https://github.com/supabase/supabase-swift/compare/v2.29.2...v2.29.3) (2025-06-10)
 
 
