@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.30.1](https://github.com/supabase/supabase-swift/compare/v2.30.0...v2.30.1) (2025-07-10)
+
+
+### Bug Fixes
+
+* drop Swift 5.9 ([#745](https://github.com/supabase/supabase-swift/issues/745)) ([8054bbe](https://github.com/supabase/supabase-swift/commit/8054bbe0ffa48834d20ec26d5205f6913cdde968))
+
 ## [2.30.0](https://github.com/supabase/supabase-swift/compare/v2.29.3...v2.30.0) (2025-07-03)
 
 
