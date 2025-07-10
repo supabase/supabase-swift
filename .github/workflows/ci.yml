@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   xcodebuild-latest:
-    name: xcodebuild (16)
+    name: xcodebuild (16.3)
     runs-on: macos-15
     strategy:
       matrix:
@@ -42,7 +42,7 @@ jobs:
       - name: Release
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
-      - name: Instal lcov
+      - name: Install lcov
         if: matrix.command == 'test' && matrix.platform == 'IOS'
         run: brew install lcov
       - name: Export code coverage
@@ -55,34 +55,20 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           file: lcov.info
 
-  xcodebuild:
-    name: xcodebuild (15)
+  xcodebuild-legacy:
+    name: xcodebuild (15.4)
     runs-on: macos-14
     strategy:
       matrix:
         command: [test, ""]
-        platform: [IOS, MAC_CATALYST, MACOS, TVOS, VISIONOS, WATCHOS]
-        xcode: [15.2, 15.4]
-        exclude:
-          - { xcode: 15.2, command: test }
-          - { xcode: 15.2, platform: MAC_CATALYST }
-          - { xcode: 15.2, platform: TVOS }
-          - { xcode: 15.2, platform: VISIONOS }
-          - { xcode: 15.2, platform: WATCHOS }
-          - { command: test, platform: WATCHOS }
+        platform: [IOS, MACOS, MAC_CATALYST]
+        xcode: ["15.4"]
         include:
           - { command: test, skip_release: 1 }
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-      - name: Install visionOS runtime
-        if: matrix.platform == 'visionOS'
-        run: |
-          sudo xcodebuild -runFirstLaunch
-          sudo xcrun simctl list
-          sudo xcodebuild -downloadPlatform visionOS
-          sudo xcodebuild -runFirstLaunch
       - name: List available devices
         run: xcrun simctl list devices available
       - name: Cache derived data
@@ -104,55 +90,43 @@ jobs:
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
-  linux_android:
-    name: Linux and Android
-    runs-on: ubuntu-24.04
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: "Remove IntegrationTests"
         run: rm -r Tests/IntegrationTests/*
-      - name: "Build Swift Package on Linux"
+      - name: "Build Swift Package"
         run: swift build
-      - name: "Test Swift Package on Android"
-        uses: skiptools/swift-android-action@v2
-        with:
-          # need to copy over the Tests folder because it contains __Snapshots__
-          copy-files: Tests
-          # tests are not yet passing on Android
-          run-tests: false
-
-  # linux:
-  #   name: linux
-  #   strategy:
-  #     matrix:
-  #       swift-version: ["5.10"]
+      
+  # android:
+  #   name: Android
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v4
-  #     - uses: swift-actions/setup-swift@v2
+  #     - name: "Remove IntegrationTests"
+  #       run: rm -r Tests/IntegrationTests/*
+  #     - name: "Test Swift Package"
+  #       uses: skiptools/swift-android-action@v2
   #       with:
-  #         swift-version: ${{ matrix.swift-version }}
-  #     - name: Cache build
-  #       uses: actions/cache@v3
-  #       with:
-  #         path: |
-  #           .build
-  #         key: |
-  #           build-spm-linux-${{ matrix.swift-version }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Package.resolved') }}
-  #         restore-keys: |
-  #           build-spm-linux-${{ matrix.swift-version }}-
-  #     - name: Run tests
-  #       run: swift test --skip IntegrationTests
+  #         # need to copy over the Tests folder because it contains __Snapshots__
+  #         copy-files: Tests
+  #         # tests are not yet passing on Android
+  #         run-tests: false
 
-  # library-evolution:
-  #   name: Library (evolution)
-  #   runs-on: macos-14
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Select Xcode 15.4
-  #       run: sudo xcode-select -s /Applications/Xcode_15.4.app
-  #     - name: Build for library evolution
-  #       run: make build-for-library-evolution
+  library-evolution:
+    name: Library (evolution)
+    runs-on: macos-15
+    strategy:
+      matrix:
+        xcode: ["16.3"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode ${{ matrix.xcode }}
+        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+      - name: Build for library evolution
+        run: make build-for-library-evolution
 
   examples:
     name: Examples
