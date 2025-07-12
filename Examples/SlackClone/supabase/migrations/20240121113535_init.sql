@@ -161,3 +161,49 @@ values
     ('admin', 'channels.delete'),
     ('admin', 'messages.delete'),
     ('moderator', 'messages.delete');
+
+-- allow authenticated users to receive broadcasts
+create policy "Authenticated users can receive broadcasts"
+on "realtime"."messages"
+for select
+to authenticated
+using ( true );
+
+-- trigger function for channel changes
+create or replace function public.channel_changes()
+returns trigger
+security definer
+language plpgsql
+as $$
+begin
+  -- broadcast to the specific channel
+  perform realtime.broadcast_changes(
+    'channel:' || coalesce(NEW.id, OLD.id) ::text, -- topic - the topic to which we're broadcasting
+    TG_OP,                                             -- event - the event that triggered the function
+    TG_OP,                                             -- operation - the operation that triggered the function
+    TG_TABLE_NAME,                                     -- table - the table that caused the trigger
+    TG_TABLE_SCHEMA,                                   -- schema - the schema of the table that caused the trigger
+    NEW,                                               -- new record - the record after the change
+    OLD                                                -- old record - the record before the change
+  );
+
+  -- broadcast to all channels
+  perform realtime.broadcast_changes(
+    'channel:*',
+    TG_OP,
+    TG_OP,
+    TG_TABLE_NAME,
+    TG_TABLE_SCHEMA,
+    NEW,
+    OLD
+  );
+  
+  return null;
+end;
+$$;
+
+create trigger handle_channel_changes
+after insert or update or delete
+on public.channels
+for each row
+execute function channel_changes ();  

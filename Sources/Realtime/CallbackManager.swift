@@ -25,7 +25,7 @@ final class CallbackManager: Sendable {
   @discardableResult
   func addBroadcastCallback(
     event: String,
-    callback: @escaping @Sendable (JSONObject) -> Void
+    callback: @escaping @Sendable (BroadcastEvent) -> Void
   ) -> Int {
     mutableState.withValue {
       $0.id += 1
@@ -117,7 +117,7 @@ final class CallbackManager: Sendable {
     }
   }
 
-  func triggerBroadcast(event: String, json: JSONObject) {
+  func triggerBroadcast(event: String, json: BroadcastEvent) {
     let broadcastCallbacks = mutableState.callbacks.compactMap {
       if case let .broadcast(callback) = $0 {
         return callback
@@ -177,7 +177,7 @@ struct PostgresCallback {
 struct BroadcastCallback {
   var id: Int
   var event: String
-  var callback: @Sendable (JSONObject) -> Void
+  var callback: @Sendable (BroadcastEvent) -> Void
 }
 
 struct PresenceCallback {
