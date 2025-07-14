@@ -10,7 +10,7 @@ import Foundation
 @discardableResult
 package func withTimeout<R: Sendable>(
   interval: TimeInterval,
-  @_inheritActorContext operation: @escaping @Sendable () async throws -> R
+  @_inheritActorContext operation: @escaping @Sendable () async -> R
 ) async throws -> R {
   try await withThrowingTaskGroup(of: R.self) { group in
     defer {
@@ -20,7 +20,7 @@ package func withTimeout<R: Sendable>(
     let deadline = Date(timeIntervalSinceNow: interval)
 
     group.addTask {
-      try await operation()
+      await operation()
     }
 
     group.addTask {

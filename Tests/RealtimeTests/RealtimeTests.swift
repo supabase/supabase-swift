@@ -108,6 +108,23 @@ final class RealtimeTests: XCTestCase {
     }
     .store(in: &subscriptions)
 
+    // Set up server to respond to heartbeats
+    server.onEvent = { @Sendable [server] event in
+      guard let msg = event.realtimeMessage else { return }
+
+      if msg.event == "heartbeat" {
+        server?.send(
+          RealtimeMessageV2(
+            joinRef: msg.joinRef,
+            ref: msg.ref,
+            topic: "phoenix",
+            event: "phx_reply",
+            payload: ["response": [:]]
+          )
+        )
+      }
+    }
+
     await sut.connect()
 
     XCTAssertEqual(socketStatuses.value, [.disconnected, .connecting, .connected])
@@ -127,14 +144,17 @@ final class RealtimeTests: XCTestCase {
     .store(in: &subscriptions)
 
     let subscribeTask = Task {
-      await channel.subscribe()
+      try await channel.subscribeWithError()
     }
     await Task.yield()
     server.send(.messagesSubscribed)
 
     // Wait until it subscribes to assert WS events
-    await subscribeTask.value
-
+    do {
+      try await subscribeTask.value
+    } catch {
+      XCTFail("Expected .subscribed but got error: \(error)")
+    }
     XCTAssertEqual(channelStatuses.value, [.unsubscribed, .subscribing, .subscribed])
 
     assertInlineSnapshot(of: client.sentEvents.map(\.json), as: .json) {
@@ -216,11 +236,17 @@ final class RealtimeTests: XCTestCase {
     await testClock.advance(by: .seconds(heartbeatInterval))
 
     Task {
-      await channel.subscribe()
+      try await channel.subscribeWithError()
     }
 
     // Wait for the timeout for rejoining.
     await testClock.advance(by: .seconds(timeoutInterval))
+    
+    // Wait for the retry delay (base delay is 1.0s, but we need to account for jitter)
+    // The retry delay is calculated as: baseDelay * pow(2, attempt-1) + jitter
+    // For attempt 2: 1.0 * pow(2, 1) = 2.0s + jitter (up to ±25% = ±0.5s)
+    // So we need to wait at least 2.5s to ensure the retry happens
+    await testClock.advance(by: .seconds(2.5))
 
     let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
       $0.event == "phx_join"
@@ -279,6 +305,161 @@ final class RealtimeTests: XCTestCase {
       ]
       """#
     }
+  }
+
+  // Succeeds after 2 retries (on 3rd attempt)
+  func testSubscribeTimeout_successAfterRetries() async throws {
+    let successAttempt = 3
+    let channel = sut.channel("public:messages")
+    let joinEventCount = LockIsolated(0)
+
+    server.onEvent = { @Sendable [server] event in
+      guard let msg = event.realtimeMessage else { return }
+
+      if msg.event == "heartbeat" {
+        server?.send(
+          RealtimeMessageV2(
+            joinRef: msg.joinRef,
+            ref: msg.ref,
+            topic: "phoenix",
+            event: "phx_reply",
+            payload: ["response": [:]]
+          )
+        )
+      } else if msg.event == "phx_join" {
+        joinEventCount.withValue { $0 += 1 }
+        // Respond on the 3rd attempt
+        if joinEventCount.value == successAttempt {
+          server?.send(.messagesSubscribed)
+        }
+      }
+    }
+
+    await sut.connect()
+    await testClock.advance(by: .seconds(heartbeatInterval))
+
+    let subscribeTask = Task {
+      _ = try? await channel.subscribeWithError()
+    }
+
+    // Wait for each attempt and retry delay
+    for attempt in 1..<successAttempt {
+      await testClock.advance(by: .seconds(timeoutInterval))
+      let retryDelay = pow(2.0, Double(attempt))
+      await testClock.advance(by: .seconds(retryDelay))
+    }
+
+    await subscribeTask.value
+
+    let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
+      $0.event == "phx_join"
+    }
+
+    XCTAssertEqual(events.count, successAttempt)
+    XCTAssertEqual(channel.status, .subscribed)
+  }
+
+  // Fails after max retries (should unsubscribe)
+  func testSubscribeTimeout_failsAfterMaxRetries() async throws {
+    let channel = sut.channel("public:messages")
+    let joinEventCount = LockIsolated(0)
+
+    server.onEvent = { @Sendable [server] event in
+      guard let msg = event.realtimeMessage else { return }
+      if msg.event == "heartbeat" {
+        server?.send(
+          RealtimeMessageV2(
+            joinRef: msg.joinRef,
+            ref: msg.ref,
+            topic: "phoenix",
+            event: "phx_reply",
+            payload: ["response": [:]]
+          )
+        )
+      } else if msg.event == "phx_join" {
+        joinEventCount.withValue { $0 += 1 }
+        // Never respond to any join attempts
+      }
+    }
+
+    await sut.connect()
+    await testClock.advance(by: .seconds(heartbeatInterval))
+
+    let subscribeTask = Task {
+      try await channel.subscribeWithError()
+    }
+
+    for attempt in 1...5 {
+      await testClock.advance(by: .seconds(timeoutInterval))
+      if attempt < 5 {
+        let retryDelay = 2.5 * Double(attempt)
+        await testClock.advance(by: .seconds(retryDelay))
+      }
+    }
+
+    do {
+      try await subscribeTask.value
+      XCTFail("Expected error but got success")
+    } catch {
+      XCTAssertTrue(error is RealtimeError)
+    }
+
+    let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
+      $0.event == "phx_join"
+    }
+    XCTAssertEqual(events.count, 5)
+    XCTAssertEqual(channel.status, .unsubscribed)
+  }
+
+  // Cancels and unsubscribes if the subscribe task is cancelled
+  func testSubscribeTimeout_cancelsOnTaskCancel() async throws {
+    let channel = sut.channel("public:messages")
+    let joinEventCount = LockIsolated(0)
+
+    server.onEvent = { @Sendable [server] event in
+      guard let msg = event.realtimeMessage else { return }
+      if msg.event == "heartbeat" {
+        server?.send(
+          RealtimeMessageV2(
+            joinRef: msg.joinRef,
+            ref: msg.ref,
+            topic: "phoenix",
+            event: "phx_reply",
+            payload: ["response": [:]]
+          )
+        )
+      } else if msg.event == "phx_join" {
+        joinEventCount.withValue { $0 += 1 }
+        // Never respond to any join attempts
+      }
+    }
+
+    await sut.connect()
+    await testClock.advance(by: .seconds(heartbeatInterval))
+
+    let subscribeTask = Task {
+      try await channel.subscribeWithError()
+    }
+
+    await testClock.advance(by: .seconds(timeoutInterval))
+    subscribeTask.cancel()
+    
+    do {
+      try await subscribeTask.value
+      XCTFail("Expected cancellation error but got success")
+    } catch is CancellationError {
+      // Expected
+    } catch {
+      XCTFail("Expected CancellationError but got: \(error)")
+    }
+    await testClock.advance(by: .seconds(5.0))
+
+    let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
+      $0.event == "phx_join"
+    }
+
+    XCTAssertEqual(events.count, 1)
+    XCTAssertEqual(channel.status, .unsubscribed)
   }
 
   func testHeartbeat() async throws {
