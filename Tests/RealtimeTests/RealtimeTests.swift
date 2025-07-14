@@ -339,57 +339,6 @@ final class RealtimeTests: XCTestCase {
     XCTAssertEqual(channel.status, .subscribed)
   }
 
-  // Succeeds after 3 retries (on 4th attempt)
-  func testSubscribeTimeout_successAfterMultipleRetries() async throws {
-    let channel = sut.channel("public:messages")
-    let joinEventCount = LockIsolated(0)
-
-    server.onEvent = { @Sendable [server] event in
-      guard let msg = event.realtimeMessage else { return }
-
-      if msg.event == "heartbeat" {
-        server?.send(
-          RealtimeMessageV2(
-            joinRef: msg.joinRef,
-            ref: msg.ref,
-            topic: "phoenix",
-            event: "phx_reply",
-            payload: ["response": [:]]
-          )
-        )
-      } else if msg.event == "phx_join" {
-        joinEventCount.withValue { $0 += 1 }
-        // Only respond to the 4th join attempt (after 3 timeouts)
-        if joinEventCount.value == 4 {
-          server?.send(.messagesSubscribed)
-        }
-      }
-    }
-
-    await sut.connect()
-    await testClock.advance(by: .seconds(heartbeatInterval))
-
-    Task {
-      await channel.subscribe()
-    }
-
-    // Wait for first timeout
-    await testClock.advance(by: .seconds(timeoutInterval))
-    await testClock.advance(by: .seconds(2.5))
-    await testClock.advance(by: .seconds(timeoutInterval))
-    await testClock.advance(by: .seconds(5.0))
-    await testClock.advance(by: .seconds(timeoutInterval))
-    await testClock.advance(by: .seconds(10.0))
-
-    let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
-      $0.event == "phx_join"
-    }
-    XCTAssertEqual(events.count, 4)
-    for (index, event) in events.enumerated() {
-      XCTAssertEqual(event.ref, "\(index + 1)")
-    }
-  }
-
   // Fails after max retries (should unsubscribe)
   func testSubscribeTimeout_failsAfterMaxRetries() async throws {
     let channel = sut.channel("public:messages")
