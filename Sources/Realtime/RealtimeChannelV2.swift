@@ -119,7 +119,7 @@ public final class RealtimeChannelV2: Sendable {
           )
 
           do {
-            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            try await _clock.sleep(for: delay)
           } catch {
             // If sleep is cancelled, break out of retry loop
             logger?.debug("Subscription retry cancelled for channel '\(topic)'")
