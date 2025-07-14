@@ -158,6 +158,7 @@ public final class RealtimeChannelV2: Sendable {
   }
 
   /// Subscribes to the channel
+  @MainActor
   private func _subscribe() async {
     if socket.status != .connected {
       if socket.options.connectOnSubscribe != true {
@@ -237,19 +238,23 @@ public final class RealtimeChannelV2: Sendable {
   @MainActor
   public func broadcast(event: String, message: JSONObject) async {
     if status != .subscribed {
-      struct Message: Encodable {
-        let topic: String
-        let event: String
-        let payload: JSONObject
-        let `private`: Bool
-      }
-
       var headers: HTTPFields = [.contentType: "application/json"]
       if let apiKey = socket.options.apikey {
         headers[.apiKey] = apiKey
       }
       if let accessToken = await socket._getAccessToken() {
         headers[.authorization] = "Bearer \(accessToken)"
+      }
+
+      struct BroadcastMessagePayload: Encodable {
+        let messages: [Message]
+
+        struct Message: Encodable {
+          let topic: String
+          let event: String
+          let payload: JSONObject
+          let `private`: Bool
+        }
       }
 
       let task = Task { [headers] in
@@ -259,16 +264,16 @@ public final class RealtimeChannelV2: Sendable {
             method: .post,
             headers: headers,
             body: JSONEncoder().encode(
-              [
-                "messages": [
-                  Message(
+              BroadcastMessagePayload(
+                messages: [
+                  BroadcastMessagePayload.Message(
                     topic: topic,
                     event: event,
                     payload: message,
                     private: config.isPrivate
                   )
                 ]
-              ]
+              )
             )
           )
         )
