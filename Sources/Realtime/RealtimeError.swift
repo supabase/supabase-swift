@@ -14,3 +14,10 @@ struct RealtimeError: LocalizedError {
     self.errorDescription = errorDescription
   }
 }
+
+extension RealtimeError {
+  /// The maximum retry attempts reached.
+  static var maxRetryAttemptsReached: Self {
+    Self("Maximum retry attempts reached.")
+  }
+}

@@ -84,10 +84,19 @@ public final class RealtimeChannelV2: Sendable {
     callbackManager.reset()
   }
 
-  /// Subscribes to the channel
-  @MainActor
-  public func subscribe() async {
+  /// Subscribes to the channel.
+  public func subscribeWithError() async throws {
     logger?.debug("Starting subscription to channel '\(topic)' (attempt 1/\(maxRetryAttempt))")
+
+    status = .subscribing
+
+    defer {
+      // If the subscription fails, we need to set the status to unsubscribed
+      // to avoid the channel being stuck in a subscribing state.
+      if status != .subscribed {
+        status = .unsubscribed
+      }
+    }
 
     var attempts = 0
 
@@ -123,22 +132,32 @@ public final class RealtimeChannelV2: Sendable {
           } catch {
             // If sleep is cancelled, break out of retry loop
             logger?.debug("Subscription retry cancelled for channel '\(topic)'")
-            break
+            throw CancellationError()
           }
         } else {
           logger?.error(
             "Failed to subscribe to channel '\(topic)' after \(maxRetryAttempt) attempts due to timeout"
           )
         }
-
+      } catch is CancellationError {
+        logger?.debug("Subscription retry cancelled for channel '\(topic)'")
+        throw CancellationError()
       } catch {
         preconditionFailure(
-          "The only possible error here is TimeoutError, this should never happen.")
+          "The only possible error here is TimeoutError or CancellationError, this should never happen."
+        )
       }
     }
 
     logger?.error("Subscription to channel '\(topic)' failed after \(attempts) attempts")
-    status = .unsubscribed
+    throw RealtimeError.maxRetryAttemptsReached
+  }
+
+  /// Subscribes to the channel.
+  @available(*, deprecated, message: "Use `subscribeWithError` instead")
+  @MainActor
+  public func subscribe() async {
+    try? await subscribeWithError()
   }
 
   /// Calculates retry delay with exponential backoff and jitter
@@ -170,7 +189,6 @@ public final class RealtimeChannelV2: Sendable {
       await socket.connect()
     }
 
-    status = .subscribing
     logger?.debug("Subscribing to channel \(topic)")
 
     config.presence.enabled = callbackManager.callbacks.contains(where: { $0.isPresence })

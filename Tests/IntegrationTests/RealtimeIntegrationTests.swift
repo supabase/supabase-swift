@@ -70,7 +70,11 @@ struct TestLogger: SupabaseLogger {
 
       await Task.yield()
 
-      await channel.subscribe()
+      do {
+        try await channel.subscribeWithError()
+      } catch {
+        XCTFail("Expected .subscribed but got error: \(error)")
+      }
 
       struct Message: Codable {
         var value: Int
@@ -141,7 +145,11 @@ struct TestLogger: SupabaseLogger {
 
       await Task.yield()
 
-      await channel.subscribe()
+      do {
+        try await channel.subscribeWithError()
+      } catch {
+        XCTFail("Expected .subscribed but got error: \(error)")
+      }
 
       struct UserState: Codable, Equatable {
         let email: String
@@ -201,7 +209,11 @@ struct TestLogger: SupabaseLogger {
       }
 
       await Task.yield()
-      await channel.subscribe()
+      do {
+        try await channel.subscribeWithError()
+      } catch {
+        XCTFail("Expected .subscribed but got error: \(error)")
+      }
 
       struct Entry: Codable, Equatable {
         let key: String
