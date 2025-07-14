@@ -221,6 +221,12 @@ final class RealtimeTests: XCTestCase {
 
     // Wait for the timeout for rejoining.
     await testClock.advance(by: .seconds(timeoutInterval))
+    
+    // Wait for the retry delay (base delay is 1.0s, but we need to account for jitter)
+    // The retry delay is calculated as: baseDelay * pow(2, attempt-1) + jitter
+    // For attempt 2: 1.0 * pow(2, 1) = 2.0s + jitter (up to ±25% = ±0.5s)
+    // So we need to wait at least 2.5s to ensure the retry happens
+    await testClock.advance(by: .seconds(2.5))
 
     let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
       $0.event == "phx_join"
