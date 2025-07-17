@@ -80,5 +80,5 @@ To manually trigger a release:
 
 - `.releaserc.json`: Semantic-release configuration
 - `package.json`: Node.js dependencies
-- `.github/workflows/semantic-release.yml`: GitHub Actions workflow
+- `.github/workflows/release.yml`: GitHub Actions workflow
 - `scripts/update-version.sh`: Version update script
