@@ -1,3 +1,10 @@
+# [2.31.0-rc.1](https://github.com/supabase/supabase-swift/compare/v2.30.1...v2.31.0-rc.1) (2025-07-17)
+
+
+### Features
+
+* migrate from release-please to semantic-release ([95316b8](https://github.com/supabase/supabase-swift/commit/95316b8a3b28266712f24367ebf66e3721464ad0))
+
 # Changelog
 
 ## [2.30.1](https://github.com/supabase/supabase-swift/compare/v2.30.0...v2.30.1) (2025-07-10)
