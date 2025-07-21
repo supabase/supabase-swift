@@ -203,7 +203,7 @@ final class CallbackManagerTests: XCTestCase {
     callbackManager.triggerBroadcast(event: "NEW_USER", json: jsonObject)
     XCTAssertEqual(caseInsensitiveMessage.value, jsonObject)
 
-    // Match wildcard event
+    // Match any events with wildcard
     let wildcardReceivedMessage = LockIsolated<JSONObject?>(nil)
     callbackManager.addBroadcastCallback(event: "*") {
       wildcardReceivedMessage.setValue($0)
