@@ -124,7 +124,7 @@ final class CallbackManager: Sendable {
       }
       return nil
     }
-    let callbacks = broadcastCallbacks.filter { $0.event == event }
+    let callbacks = broadcastCallbacks.filter { $0.event == "*" || $0.event.lowercased() == event.lowercased() }
     callbacks.forEach { $0.callback(json) }
   }
 
