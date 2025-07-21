@@ -43,17 +43,19 @@ jobs:
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
       - name: Install lcov
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        if: matrix.command == 'test'
         run: brew install lcov
       - name: Export code coverage
         id: coverage
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        if: matrix.command == 'test'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
       - uses: coverallsapp/github-action@v2.3.4
         if: steps.coverage.outcome == 'success'
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           file: lcov.info
+          parallel: true
+          flag-name: platform-${{ matrix.platform }}-xcode-${{ matrix.xcode }}
 
   xcodebuild-legacy:
     name: xcodebuild (15.4)
@@ -89,6 +91,31 @@ jobs:
       - name: Release
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+      - name: Install lcov
+        if: matrix.command == 'test'
+        run: brew install lcov
+      - name: Export code coverage
+        id: coverage
+        if: matrix.command == 'test'
+        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
+      - uses: coverallsapp/github-action@v2.3.4
+        if: steps.coverage.outcome == 'success'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: lcov.info
+          parallel: true
+          flag-name: platform-${{ matrix.platform }}-xcode-${{ matrix.xcode }}
+
+  coveralls-finish:
+    name: Coveralls Finished
+    runs-on: macos-latest
+    needs: [xcodebuild-latest, xcodebuild-legacy]
+    steps:
+      - name: Coveralls Finished
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          parallel-finished: true
 
   linux:
     name: Linux
@@ -99,7 +126,7 @@ jobs:
         run: rm -r Tests/IntegrationTests/*
       - name: "Build Swift Package"
         run: swift build
-      
+
   # android:
   #   name: Android
   #   runs-on: ubuntu-latest
