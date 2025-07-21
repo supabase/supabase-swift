@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.30.2](https://github.com/supabase/supabase-swift/compare/v2.30.1...v2.30.2) (2025-07-21)
+
+
+### Bug Fixes
+
+* **realtime:** wildcard event not handled in onBroadcast callback ([#749](https://github.com/supabase/supabase-swift/issues/749)) ([78b7bb4](https://github.com/supabase/supabase-swift/commit/78b7bb4f04dda49b75f46744c1aa2fe79f95d19e))
+
 ## [2.30.1](https://github.com/supabase/supabase-swift/compare/v2.30.0...v2.30.1) (2025-07-10)
 
 
