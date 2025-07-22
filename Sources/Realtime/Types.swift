@@ -20,6 +20,7 @@ public struct RealtimeClientOptions: Sendable {
   var timeoutInterval: TimeInterval
   var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
+  var maxRetryAttempts: Int
 
   /// Sets the log level for Realtime
   var logLevel: LogLevel?
@@ -32,6 +33,7 @@ public struct RealtimeClientOptions: Sendable {
   public static let defaultTimeoutInterval: TimeInterval = 10
   public static let defaultDisconnectOnSessionLoss = true
   public static let defaultConnectOnSubscribe: Bool = true
+  public static let defaultMaxRetryAttempts: Int = 5
 
   public init(
     headers: [String: String] = [:],
@@ -40,6 +42,7 @@ public struct RealtimeClientOptions: Sendable {
     timeoutInterval: TimeInterval = Self.defaultTimeoutInterval,
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
+    maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     logLevel: LogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
@@ -51,6 +54,7 @@ public struct RealtimeClientOptions: Sendable {
     self.timeoutInterval = timeoutInterval
     self.disconnectOnSessionLoss = disconnectOnSessionLoss
     self.connectOnSubscribe = connectOnSubscribe
+    self.maxRetryAttempts = maxRetryAttempts
     self.logLevel = logLevel
     self.fetch = fetch
     self.accessToken = accessToken

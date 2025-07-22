@@ -40,7 +40,6 @@ public final class RealtimeChannelV2: Sendable {
 
   let logger: (any SupabaseLogger)?
   let socket: RealtimeClientV2
-  let maxRetryAttempt = 5
 
   @MainActor var joinRef: String? { mutableState.joinRef }
 
@@ -86,7 +85,7 @@ public final class RealtimeChannelV2: Sendable {
 
   /// Subscribes to the channel.
   public func subscribeWithError() async throws {
-    logger?.debug("Starting subscription to channel '\(topic)' (attempt 1/\(maxRetryAttempt))")
+    logger?.debug("Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))")
 
     status = .subscribing
 
@@ -100,12 +99,12 @@ public final class RealtimeChannelV2: Sendable {
 
     var attempts = 0
 
-    while attempts < maxRetryAttempt {
+    while attempts < socket.options.maxRetryAttempts {
       attempts += 1
 
       do {
         logger?.debug(
-          "Attempting to subscribe to channel '\(topic)' (attempt \(attempts)/\(maxRetryAttempt))"
+          "Attempting to subscribe to channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
         )
 
         try await withTimeout(interval: socket.options.timeoutInterval) { [self] in
@@ -117,10 +116,10 @@ public final class RealtimeChannelV2: Sendable {
 
       } catch is TimeoutError {
         logger?.debug(
-          "Subscribe timed out for channel '\(topic)' (attempt \(attempts)/\(maxRetryAttempt))"
+          "Subscribe timed out for channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
         )
 
-        if attempts < maxRetryAttempt {
+        if attempts < socket.options.maxRetryAttempts {
           // Add exponential backoff with jitter
           let delay = calculateRetryDelay(for: attempts)
           logger?.debug(
@@ -136,7 +135,7 @@ public final class RealtimeChannelV2: Sendable {
           }
         } else {
           logger?.error(
-            "Failed to subscribe to channel '\(topic)' after \(maxRetryAttempt) attempts due to timeout"
+            "Failed to subscribe to channel '\(topic)' after \(socket.options.maxRetryAttempts) attempts due to timeout"
           )
         }
       } catch is CancellationError {
