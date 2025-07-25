@@ -129,6 +129,8 @@ final class URLSessionWebSocket: WebSocket {
     var isClosed = false
     /// Callback for handling WebSocket events.
     var onEvent: (@Sendable (WebSocketEvent) -> Void)?
+    /// Buffer for events received before onEvent callback is attached.
+    var eventBuffer: [WebSocketEvent] = []
     /// The close code received when connection was closed.
     var closeCode: Int?
     /// The close reason received when connection was closed.
@@ -271,17 +273,44 @@ final class URLSessionWebSocket: WebSocket {
   /// - `.binary(Data)`: Binary messages received from the peer
   /// - `.close(code: Int?, reason: String)`: Connection closed events
   ///
+  /// When setting this callback, any buffered events received before the callback
+  /// was attached will be replayed immediately in the order they were received.
+  ///
   /// The callback is called on an arbitrary queue and should be thread-safe.
   var onEvent: (@Sendable (WebSocketEvent) -> Void)? {
     get { mutableState.value.onEvent }
-    set { mutableState.withValue { $0.onEvent = newValue } }
+    set {
+      mutableState.withValue { state in
+        state.onEvent = newValue
+
+        // Replay buffered events when callback is attached
+        if let onEvent = newValue, !state.eventBuffer.isEmpty {
+          let bufferedEvents = state.eventBuffer
+          state.eventBuffer.removeAll()
+
+          for event in bufferedEvents {
+            onEvent(event)
+          }
+        }
+      }
+    }
   }
 
   /// Triggers a WebSocket event and updates internal state if needed.
   /// - Parameter event: The event to trigger.
   private func _trigger(_ event: WebSocketEvent) {
     mutableState.withValue {
-      $0.onEvent?(event)
+      if let onEvent = $0.onEvent {
+        // Deliver event immediately if callback is available
+        onEvent(event)
+      } else {
+        // Buffer event if no callback is attached yet
+        // Limit buffer size to prevent memory issues (keep last 100 events)
+        $0.eventBuffer.append(event)
+        if $0.eventBuffer.count > 100 {
+          $0.eventBuffer.removeFirst()
+        }
+      }
 
       // Update state when connection closes
       if case .close(let code, let reason) = event {
@@ -289,6 +318,8 @@ final class URLSessionWebSocket: WebSocket {
         $0.isClosed = true
         $0.closeCode = code
         $0.closeReason = reason
+        // Clear buffer when connection closes
+        $0.eventBuffer.removeAll()
       }
     }
   }
