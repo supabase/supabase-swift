@@ -15,8 +15,7 @@ import Foundation
 /// ## Usage
 ///
 /// ```swift
-/// let logger = Logger(subsystem: "com.yourapp.supabase", category: "auth")
-/// let supabaseLogger = OSLogSupabaseLogger(logger)
+/// let supabaseLogger = OSLogSupabaseLogger()
 ///
 /// // Use with Supabase client
 /// let supabase = SupabaseClient(
@@ -28,17 +27,19 @@ import Foundation
 @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
 public struct OSLogSupabaseLogger: SupabaseLogger {
   private let logger: Logger
-  
+
   /// Creates a new OSLog-based logger with a provided Logger instance.
   ///
-  /// - Parameter logger: The OSLog Logger instance to use for logging
-  public init(_ logger: Logger) {
+  /// - Parameter logger: The OSLog Logger instance to use for logging.
+  public init(
+    _ logger: Logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "", category: "Supabase")
+  ) {
     self.logger = logger
   }
-  
+
   public func log(message: SupabaseLogMessage) {
     let logMessage = message.description
-    
+
     switch message.level {
     case .verbose:
       logger.info("\(logMessage, privacy: .public)")
