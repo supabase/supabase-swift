@@ -144,14 +144,32 @@ final class URLSessionWebSocketTests: XCTestCase {
   func testTriggerEventSetsCloseState() {
     let mockWebSocket = MockURLSessionWebSocket()
     
-    var receivedEvent: WebSocketEvent?
+    // Use a thread-safe wrapper for captured mutable variable
+    final class EventCapture: @unchecked Sendable {
+      var receivedEvent: WebSocketEvent?
+      private let lock = NSLock()
+      
+      func setEvent(_ event: WebSocketEvent) {
+        lock.lock()
+        defer { lock.unlock() }
+        receivedEvent = event
+      }
+      
+      func getEvent() -> WebSocketEvent? {
+        lock.lock()
+        defer { lock.unlock() }
+        return receivedEvent
+      }
+    }
+    
+    let eventCapture = EventCapture()
     mockWebSocket.onEvent = { event in
-      receivedEvent = event
+      eventCapture.setEvent(event)
     }
     
     mockWebSocket.simulateEvent(.close(code: 1000, reason: "normal"))
     
-    XCTAssertEqual(receivedEvent, .close(code: 1000, reason: "normal"))
+    XCTAssertEqual(eventCapture.getEvent(), .close(code: 1000, reason: "normal"))
     XCTAssertTrue(mockWebSocket.isClosed)
     XCTAssertEqual(mockWebSocket.closeCode, 1000)
     XCTAssertEqual(mockWebSocket.closeReason, "normal")
@@ -162,14 +180,32 @@ final class URLSessionWebSocketTests: XCTestCase {
     let mockWebSocket = MockURLSessionWebSocket()
     mockWebSocket.simulateClosed()
     
-    var eventReceived = false
+    // Use a thread-safe wrapper for captured mutable variable
+    final class EventFlag: @unchecked Sendable {
+      private var _eventReceived = false
+      private let lock = NSLock()
+      
+      func setReceived() {
+        lock.lock()
+        defer { lock.unlock() }
+        _eventReceived = true
+      }
+      
+      var eventReceived: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _eventReceived
+      }
+    }
+    
+    let eventFlag = EventFlag()
     mockWebSocket.onEvent = { _ in
-      eventReceived = true
+      eventFlag.setReceived()
     }
     
     // This should not trigger the event since the socket is closed
     mockWebSocket.simulateEvent(.text("test"))
-    XCTAssertFalse(eventReceived)
+    XCTAssertFalse(eventFlag.eventReceived)
   }
   
   // MARK: - URLSession Extension Tests
@@ -199,14 +235,56 @@ final class URLSessionWebSocketTests: XCTestCase {
   // MARK: - Delegate Tests
   
   func testDelegateInitialization() {
-    var onCompleteCalled = false
-    var onOpenedCalled = false
-    var onClosedCalled = false
+    // Use thread-safe wrappers for captured mutable variables
+    final class CallbackFlags: @unchecked Sendable {
+      private var _onCompleteCalled = false
+      private var _onOpenedCalled = false
+      private var _onClosedCalled = false
+      private let lock = NSLock()
+      
+      func setCompleteCalled() {
+        lock.lock()
+        defer { lock.unlock() }
+        _onCompleteCalled = true
+      }
+      
+      func setOpenedCalled() {
+        lock.lock()
+        defer { lock.unlock() }
+        _onOpenedCalled = true
+      }
+      
+      func setClosedCalled() {
+        lock.lock()
+        defer { lock.unlock() }
+        _onClosedCalled = true
+      }
+      
+      var onCompleteCalled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _onCompleteCalled
+      }
+      
+      var onOpenedCalled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _onOpenedCalled
+      }
+      
+      var onClosedCalled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _onClosedCalled
+      }
+    }
+    
+    let flags = CallbackFlags()
     
     let delegate = _Delegate(
-      onComplete: { _, _, _ in onCompleteCalled = true },
-      onWebSocketTaskOpened: { _, _, _ in onOpenedCalled = true },
-      onWebSocketTaskClosed: { _, _, _, _ in onClosedCalled = true }
+      onComplete: { _, _, _ in flags.setCompleteCalled() },
+      onWebSocketTaskOpened: { _, _, _ in flags.setOpenedCalled() },
+      onWebSocketTaskClosed: { _, _, _, _ in flags.setClosedCalled() }
     )
     
     XCTAssertNotNil(delegate.onComplete)

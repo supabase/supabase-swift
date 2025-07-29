@@ -115,13 +115,31 @@ final class WebSocketTests: XCTestCase {
   func testWebSocketEventHandlerSetAndTriggered() {
     let mockWebSocket = MockWebSocket()
     
-    var receivedEvent: WebSocketEvent?
+    // Use a thread-safe wrapper for captured mutable variable
+    final class EventCapture: @unchecked Sendable {
+      var receivedEvent: WebSocketEvent?
+      private let lock = NSLock()
+      
+      func setEvent(_ event: WebSocketEvent) {
+        lock.lock()
+        defer { lock.unlock() }
+        receivedEvent = event
+      }
+      
+      func getEvent() -> WebSocketEvent? {
+        lock.lock()
+        defer { lock.unlock() }
+        return receivedEvent
+      }
+    }
+    
+    let eventCapture = EventCapture()
     mockWebSocket.onEvent = { event in
-      receivedEvent = event
+      eventCapture.setEvent(event)
     }
     
     mockWebSocket.simulateEvent(.text("test"))
-    XCTAssertEqual(receivedEvent, .text("test"))
+    XCTAssertEqual(eventCapture.getEvent(), .text("test"))
   }
 }
 
