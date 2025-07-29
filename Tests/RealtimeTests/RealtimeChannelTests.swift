@@ -161,7 +161,7 @@ final class RealtimeChannelTests: XCTestCase {
     XCTAssertTrue(channel.callbackManager.callbacks.contains(where: { $0.isPresence }))
 
     // Start subscription process
-    Task {
+    let subscribeTask = Task {
       await channel.subscribe()
     }
 
@@ -191,5 +191,8 @@ final class RealtimeChannelTests: XCTestCase {
     presenceSubscription.cancel()
     await channel.unsubscribe()
     socket.disconnect()
+    
+    // Note: We don't assert the subscribe status here because the test doesn't wait for completion
+    // The subscription is still in progress when we clean up
   }
 }

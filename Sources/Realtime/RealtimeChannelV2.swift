@@ -91,9 +91,101 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     callbackManager.reset()
   }
 
-  /// Subscribes to the channel
+  /// Subscribes to the channel.
+  public func subscribeWithError() async throws {
+    logger?.debug("Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))")
+
+    status = .subscribing
+
+    defer {
+      // If the subscription fails, we need to set the status to unsubscribed
+      // to avoid the channel being stuck in a subscribing state.
+      if status != .subscribed {
+        status = .unsubscribed
+      }
+    }
+
+    var attempts = 0
+
+    while attempts < socket.options.maxRetryAttempts {
+      attempts += 1
+
+      do {
+        logger?.debug(
+          "Attempting to subscribe to channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
+        )
+
+        try await withTimeout(interval: socket.options.timeoutInterval) { [self] in
+          await _subscribe()
+        }
+
+        logger?.debug("Successfully subscribed to channel '\(topic)'")
+        return
+
+      } catch is TimeoutError {
+        logger?.debug(
+          "Subscribe timed out for channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
+        )
+
+        if attempts < socket.options.maxRetryAttempts {
+          // Add exponential backoff with jitter
+          let delay = calculateRetryDelay(for: attempts)
+          logger?.debug(
+            "Retrying subscription to channel '\(topic)' in \(String(format: "%.2f", delay)) seconds..."
+          )
+
+          do {
+            try await _clock.sleep(for: delay)
+          } catch {
+            // If sleep is cancelled, break out of retry loop
+            logger?.debug("Subscription retry cancelled for channel '\(topic)'")
+            throw CancellationError()
+          }
+        } else {
+          logger?.error(
+            "Failed to subscribe to channel '\(topic)' after \(socket.options.maxRetryAttempts) attempts due to timeout"
+          )
+        }
+      } catch is CancellationError {
+        logger?.debug("Subscription retry cancelled for channel '\(topic)'")
+        throw CancellationError()
+      } catch {
+        preconditionFailure(
+          "The only possible error here is TimeoutError or CancellationError, this should never happen."
+        )
+      }
+    }
+
+    logger?.error("Subscription to channel '\(topic)' failed after \(attempts) attempts")
+    throw RealtimeError.maxRetryAttemptsReached
+  }
+
+  /// Subscribes to the channel.
+  @available(*, deprecated, message: "Use `subscribeWithError` instead")
   @MainActor
   public func subscribe() async {
+    try? await subscribeWithError()
+  }
+
+  /// Calculates retry delay with exponential backoff and jitter
+  private func calculateRetryDelay(for attempt: Int) -> TimeInterval {
+    let baseDelay: TimeInterval = 1.0
+    let maxDelay: TimeInterval = 30.0
+    let backoffMultiplier: Double = 2.0
+
+    let exponentialDelay = baseDelay * pow(backoffMultiplier, Double(attempt - 1))
+    let cappedDelay = min(exponentialDelay, maxDelay)
+
+    // Add jitter (±25% random variation) to prevent thundering herd
+    let jitterRange = cappedDelay * 0.25
+    let jitter = Double.random(in: -jitterRange...jitterRange)
+
+    return max(0.1, cappedDelay + jitter)
+  }
+
+  /// Subscribes to the channel
+  @MainActor
+  private func _subscribe() async {
     if socket.status != .connected {
       if socket.options.connectOnSubscribe != true {
         reportIssue(
@@ -104,7 +196,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       await socket.connect()
     }
 
-    status = .subscribing
     logger?.debug("Subscribing to channel \(topic)")
 
     config.presence.enabled = callbackManager.callbacks.contains(where: { $0.isPresence })
@@ -133,18 +224,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       payload: try! JSONObject(payload)
     )
 
-    do {
-      try await withTimeout(interval: socket.options.timeoutInterval) { [self] in
-        _ = await statusChange.first { @Sendable in $0 == .subscribed }
-      }
-    } catch {
-      if error is TimeoutError {
-        logger?.debug("Subscribe timed out.")
-        await subscribe()
-      } else {
-        logger?.error("Subscribe failed: \(error)")
-      }
-    }
+    _ = await statusChange.first { @Sendable in $0 == .subscribed }
   }
 
   public func unsubscribe() async {
@@ -183,19 +263,23 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   @MainActor
   public func broadcast(event: String, message: JSONObject) async {
     if status != .subscribed {
-      struct Message: Encodable {
-        let topic: String
-        let event: String
-        let payload: JSONObject
-        let `private`: Bool
-      }
-
       var headers: HTTPFields = [.contentType: "application/json"]
       if let apiKey = socket.options.apikey {
         headers[.apiKey] = apiKey
       }
       if let accessToken = await socket._getAccessToken() {
         headers[.authorization] = "Bearer \(accessToken)"
+      }
+
+      struct BroadcastMessagePayload: Encodable {
+        let messages: [Message]
+
+        struct Message: Encodable {
+          let topic: String
+          let event: String
+          let payload: JSONObject
+          let `private`: Bool
+        }
       }
 
       let task = Task { [headers] in
@@ -205,16 +289,16 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
             method: .post,
             headers: headers,
             body: JSONEncoder().encode(
-              [
-                "messages": [
-                  Message(
+              BroadcastMessagePayload(
+                messages: [
+                  BroadcastMessagePayload.Message(
                     topic: topic,
                     event: event,
                     payload: message,
                     private: config.isPrivate
                   )
                 ]
-              ]
+              )
             )
           )
         )
