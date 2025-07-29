@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 29/07/25.
 //
 
+import ConcurrencyExtras
 import XCTest
 
 @testable import Realtime
@@ -115,31 +116,13 @@ final class WebSocketTests: XCTestCase {
   func testWebSocketEventHandlerSetAndTriggered() {
     let mockWebSocket = MockWebSocket()
     
-    // Use a thread-safe wrapper for captured mutable variable
-    final class EventCapture: @unchecked Sendable {
-      var receivedEvent: WebSocketEvent?
-      private let lock = NSLock()
-      
-      func setEvent(_ event: WebSocketEvent) {
-        lock.lock()
-        defer { lock.unlock() }
-        receivedEvent = event
-      }
-      
-      func getEvent() -> WebSocketEvent? {
-        lock.lock()
-        defer { lock.unlock() }
-        return receivedEvent
-      }
-    }
-    
-    let eventCapture = EventCapture()
+    let receivedEvent = LockIsolated<WebSocketEvent?>(nil)
     mockWebSocket.onEvent = { event in
-      eventCapture.setEvent(event)
+      receivedEvent.setValue(event)
     }
     
     mockWebSocket.simulateEvent(.text("test"))
-    XCTAssertEqual(eventCapture.getEvent(), .text("test"))
+    XCTAssertEqual(receivedEvent.value, .text("test"))
   }
 }
 
