@@ -16,7 +16,20 @@ import Foundation
 typealias WebSocketTransport = @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
   any WebSocket
 
-public final class RealtimeClientV2: Sendable {
+protocol RealtimeClientProtocol: AnyObject, Sendable {
+  var status: RealtimeClientStatus { get }
+  var options: RealtimeClientOptions { get }
+  var http: any HTTPClientType { get }
+  var broadcastURL: URL { get }
+
+  func connect() async
+  func push(_ message: RealtimeMessageV2)
+  func _getAccessToken() async -> String?
+  func makeRef() -> String
+  func _remove(_ channel: any RealtimeChannelProtocol)
+}
+
+public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   struct MutableState {
     var accessToken: String?
     var ref = 0
@@ -320,7 +333,7 @@ public final class RealtimeClientV2: Sendable {
     }
   }
 
-  func _remove(_ channel: RealtimeChannelV2) {
+  func _remove(_ channel: any RealtimeChannelProtocol) {
     mutableState.withValue {
       $0.channels[channel.topic] = nil
     }
