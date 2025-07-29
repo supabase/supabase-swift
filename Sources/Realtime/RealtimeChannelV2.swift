@@ -24,7 +24,15 @@ public struct RealtimeChannelConfig: Sendable {
   public var isPrivate: Bool
 }
 
-public final class RealtimeChannelV2: Sendable {
+protocol RealtimeChannelProtocol: AnyObject, Sendable {
+  @MainActor var config: RealtimeChannelConfig { get }
+  var topic: String { get }
+  var logger: (any SupabaseLogger)? { get }
+
+  var socket: any RealtimeClientProtocol { get }
+}
+
+public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   struct MutableState {
     var clientChanges: [PostgresJoinConfig] = []
     var joinRef: String?
@@ -39,7 +47,7 @@ public final class RealtimeChannelV2: Sendable {
   @MainActor var config: RealtimeChannelConfig
 
   let logger: (any SupabaseLogger)?
-  let socket: RealtimeClientV2
+  let socket: any RealtimeClientProtocol
 
   @MainActor var joinRef: String? { mutableState.joinRef }
 
@@ -70,7 +78,7 @@ public final class RealtimeChannelV2: Sendable {
   init(
     topic: String,
     config: RealtimeChannelConfig,
-    socket: RealtimeClientV2,
+    socket: any RealtimeClientProtocol,
     logger: (any SupabaseLogger)?
   ) {
     self.topic = topic

@@ -16,12 +16,12 @@ public enum PushStatus: String, Sendable {
 
 @MainActor
 final class PushV2 {
-  private weak var channel: RealtimeChannelV2?
+  private weak var channel: (any RealtimeChannelProtocol)?
   let message: RealtimeMessageV2
 
   private var receivedContinuation: CheckedContinuation<PushStatus, Never>?
 
-  init(channel: RealtimeChannelV2?, message: RealtimeMessageV2) {
+  init(channel: (any RealtimeChannelProtocol)?, message: RealtimeMessageV2) {
     self.channel = channel
     self.message = message
   }
