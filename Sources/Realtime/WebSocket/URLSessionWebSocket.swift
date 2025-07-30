@@ -5,8 +5,27 @@ import Foundation
   import FoundationNetworking
 #endif
 
-/// A WebSocket connection that uses `URLSession`.
+/// A WebSocket connection implementation using `URLSession`.
+///
+/// This class provides a WebSocket connection built on top of `URLSessionWebSocketTask`.
+/// It handles connection lifecycle, message sending/receiving, and proper cleanup.
+///
+/// ## Thread Safety
+/// This class is thread-safe and can be used from multiple concurrent contexts.
+/// All operations are protected by internal synchronization mechanisms.
+///
+/// ## Connection Management
+/// The connection is established asynchronously using the `connect(to:protocols:configuration:)` method.
+/// Once connected, you can send text/binary messages and listen for events through the `onEvent` callback.
+///
+/// ## Error Handling
+/// Network errors are automatically handled and converted to appropriate WebSocket close codes.
+/// The connection will be closed gracefully when errors occur, with proper cleanup of resources.
 final class URLSessionWebSocket: WebSocket {
+  /// Private initializer for creating a WebSocket instance.
+  /// - Parameters:
+  ///   - _task: The underlying `URLSessionWebSocketTask` for this connection.
+  ///   - _protocol: The negotiated WebSocket subprotocol, empty string if none.
   private init(
     _task: URLSessionWebSocketTask,
     _protocol: String
@@ -17,13 +36,18 @@ final class URLSessionWebSocket: WebSocket {
     _scheduleReceive()
   }
 
-  /// Create a new WebSocket connection.
+  /// Creates and establishes a new WebSocket connection.
+  ///
+  /// This method asynchronously connects to the specified WebSocket URL and returns
+  /// a fully initialized `URLSessionWebSocket` instance ready for use.
+  ///
   /// - Parameters:
-  ///   - url: The URL to connect to.
-  ///   - protocols: An optional array of protocols to negotiate with the server.
-  ///   - configuration: An optional `URLSessionConfiguration` to use for the connection.
-  /// - Returns: A `URLSessionWebSocket` instance.
-  /// - Throws: An error if the connection fails.
+  ///   - url: The WebSocket URL to connect to. Must use `ws://` or `wss://` scheme.
+  ///   - protocols: Optional array of WebSocket subprotocols to negotiate with the server.
+  ///   - configuration: Optional `URLSessionConfiguration` for customizing the connection.
+  ///                   Defaults to `.default` if not provided.
+  /// - Returns: A connected `URLSessionWebSocket` instance.
+  /// - Throws: `WebSocketError.connection` if the connection fails or times out.
   static func connect(
     to url: URL,
     protocols: [String]? = nil,
@@ -53,16 +77,22 @@ final class URLSessionWebSocket: WebSocket {
             // 3. an error occurred (e.g. network failure) and `_connectionClosed`
             //    will signal that and close `event`.
             webSocket._connectionClosed(
-              code: 1006, reason: Data("abnormal close".utf8))
+              code: 1006,
+              reason: Data("abnormal close".utf8)
+            )
           } else if let error {
             $0.continuation.resume(
               throwing: WebSocketError.connection(
-                message: "connection ended unexpectedly", error: error))
+                message: "connection ended unexpectedly",
+                error: error
+              )
+            )
           } else {
             // `onWebSocketTaskOpened` should have been called and resumed continuation.
             // So either there was an error creating the connection or a logic error.
             assertionFailure(
-              "expected an error or `onWebSocketTaskOpened` to have been called first")
+              "expected an error or `onWebSocketTaskOpened` to have been called first"
+            )
           }
         }
       },
@@ -88,75 +118,127 @@ final class URLSessionWebSocket: WebSocket {
     }
   }
 
+  /// The underlying URLSession WebSocket task.
   let _task: URLSessionWebSocketTask
+  /// The negotiated WebSocket subprotocol.
   let _protocol: String
 
+  /// Thread-safe mutable state for the WebSocket connection.
   struct MutableState {
+    /// Whether the connection has been closed.
     var isClosed = false
+    /// Callback for handling WebSocket events.
     var onEvent: (@Sendable (WebSocketEvent) -> Void)?
-
+    /// Buffer for events received before onEvent callback is attached.
+    var eventBuffer: [WebSocketEvent] = []
+    /// The close code received when connection was closed.
     var closeCode: Int?
+    /// The close reason received when connection was closed.
     var closeReason: String?
   }
 
+  /// Lock-isolated mutable state to ensure thread safety.
   let mutableState = LockIsolated(MutableState())
 
+  /// The close code received when the connection was closed, if any.
   var closeCode: Int? {
     mutableState.value.closeCode
   }
 
+  /// The close reason received when the connection was closed, if any.
   var closeReason: String? {
     mutableState.value.closeReason
   }
 
+  /// Whether the WebSocket connection is closed.
   var isClosed: Bool {
     mutableState.value.isClosed
   }
 
+  /// Handles incoming WebSocket messages and converts them to events.
+  /// - Parameter value: The message received from the WebSocket.
   private func _handleMessage(_ value: URLSessionWebSocketTask.Message) {
     guard !isClosed else { return }
 
-    let event =
-      switch value {
-      case .string(let string):
-        WebSocketEvent.text(string)
-      case .data(let data):
-        WebSocketEvent.binary(data)
-      @unknown default:
-        fatalError("Unsupported message.")
-      }
+    let event: WebSocketEvent
+    switch value {
+    case .string(let text):
+      event = .text(text)
+    case .data(let data):
+      event = .binary(data)
+    @unknown default:
+      // Handle unknown message types gracefully by closing the connection
+      _closeConnectionWithError(
+        WebSocketError.connection(
+          message: "Received unsupported message type",
+          error: NSError(
+            domain: "WebSocketError",
+            code: 1002,
+            userInfo: [NSLocalizedDescriptionKey: "Unsupported message type"]
+          )
+        )
+      )
+      return
+    }
     _trigger(event)
     _scheduleReceive()
   }
 
+  /// Schedules the next message receive operation.
+  /// This method continuously listens for incoming messages until the connection is closed.
   private func _scheduleReceive() {
     Task {
       let result = await Result { try await _task.receive() }
       switch result {
-      case .success(let value): _handleMessage(value)
-      case .failure(let error): _closeConnectionWithError(error)
+      case .success(let value):
+        _handleMessage(value)
+      case .failure(let error):
+        _closeConnectionWithError(error)
       }
     }
   }
 
+  /// Closes the connection due to an error and maps the error to appropriate WebSocket close codes.
+  /// - Parameter error: The error that caused the connection to close.
   private func _closeConnectionWithError(_ error: any Error) {
     let nsError = error as NSError
+
+    // Handle socket not connected error - delegate callbacks will handle this
     if nsError.domain == NSPOSIXErrorDomain && nsError.code == 57 {
       // Socket is not connected.
       // onWebsocketTaskClosed/onComplete will be invoked and may indicate a close code.
       return
     }
-    let (code, reason) =
+
+    // Map errors to appropriate WebSocket close codes per RFC 6455
+    let (code, reason): (Int, String) = {
       switch (nsError.domain, nsError.code) {
       case (NSPOSIXErrorDomain, 100):
-        (1002, nsError.localizedDescription)
-      case (_, _):
-        (1006, nsError.localizedDescription)
+        // Network protocol error
+        return (1002, nsError.localizedDescription)
+      case (NSURLErrorDomain, NSURLErrorTimedOut):
+        // Connection timeout
+        return (1006, "Connection timed out")
+      case (NSURLErrorDomain, NSURLErrorNetworkConnectionLost):
+        // Network connection lost
+        return (1006, "Network connection lost")
+      case (NSURLErrorDomain, NSURLErrorNotConnectedToInternet):
+        // No internet connection
+        return (1006, "No internet connection")
+      default:
+        // Abnormal closure for other errors
+        return (1006, nsError.localizedDescription)
       }
+    }()
+
     _task.cancel()
     _connectionClosed(code: code, reason: Data(reason.utf8))
   }
 
+  /// Handles the connection being closed and triggers the close event.
+  /// - Parameters:
+  ///   - code: The WebSocket close code, if available.
+  ///   - reason: The close reason data, if available.
   private func _connectionClosed(code: Int?, reason: Data?) {
     guard !isClosed else { return }
 
@@ -164,6 +246,12 @@ final class URLSessionWebSocket: WebSocket {
     _trigger(.close(code: code, reason: closeReason))
   }
 
+  /// Sends a text message to the connected peer.
+  /// - Parameter text: The text message to send.
+  ///
+  /// This method is non-blocking and will return immediately. If the connection
+  /// is closed, the message will be silently dropped. Any errors during sending
+  /// will cause the connection to be closed with an appropriate error code.
   func send(_ text: String) {
     guard !isClosed else {
       return
@@ -178,24 +266,70 @@ final class URLSessionWebSocket: WebSocket {
     }
   }
 
+  /// Callback for handling WebSocket events.
+  ///
+  /// Set this property to receive notifications about WebSocket events including:
+  /// - `.text(String)`: Text messages received from the peer
+  /// - `.binary(Data)`: Binary messages received from the peer
+  /// - `.close(code: Int?, reason: String)`: Connection closed events
+  ///
+  /// When setting this callback, any buffered events received before the callback
+  /// was attached will be replayed immediately in the order they were received.
+  ///
+  /// The callback is called on an arbitrary queue and should be thread-safe.
   var onEvent: (@Sendable (WebSocketEvent) -> Void)? {
     get { mutableState.value.onEvent }
-    set { mutableState.withValue { $0.onEvent = newValue } }
+    set {
+      mutableState.withValue { state in
+        state.onEvent = newValue
+
+        // Replay buffered events when callback is attached
+        if let onEvent = newValue, !state.eventBuffer.isEmpty {
+          let bufferedEvents = state.eventBuffer
+          state.eventBuffer.removeAll()
+
+          for event in bufferedEvents {
+            onEvent(event)
+          }
+        }
+      }
+    }
   }
 
+  /// Triggers a WebSocket event and updates internal state if needed.
+  /// - Parameter event: The event to trigger.
   private func _trigger(_ event: WebSocketEvent) {
     mutableState.withValue {
-      $0.onEvent?(event)
+      if let onEvent = $0.onEvent {
+        // Deliver event immediately if callback is available
+        onEvent(event)
+      } else {
+        // Buffer event if no callback is attached yet
+        // Limit buffer size to prevent memory issues (keep last 100 events)
+        $0.eventBuffer.append(event)
+        if $0.eventBuffer.count > 100 {
+          $0.eventBuffer.removeFirst()
+        }
+      }
 
+      // Update state when connection closes
       if case .close(let code, let reason) = event {
         $0.onEvent = nil
         $0.isClosed = true
         $0.closeCode = code
         $0.closeReason = reason
+        // Clear buffer when connection closes
+        $0.eventBuffer.removeAll()
       }
     }
   }
 
+  /// Sends binary data to the connected peer.
+  /// - Parameter binary: The binary data to send.
+  ///
+  /// This method is non-blocking and will return immediately. If the connection
+  /// is closed, the message will be silently dropped. Any errors during sending
+  /// will cause the connection to be closed with an appropriate error code.
   func send(_ binary: Data) {
     guard !isClosed else {
       return
@@ -210,39 +344,70 @@ final class URLSessionWebSocket: WebSocket {
     }
   }
 
+  /// Closes the WebSocket connection gracefully.
+  ///
+  /// Sends a close frame to the peer with the specified code and reason.
+  /// Valid close codes are 1000 (normal closure) or in the range 3000-4999 (application-specific).
+  ///
+  /// - Parameters:
+  ///   - code: Optional close code. Must be 1000 or in range 3000-4999. Defaults to normal closure.
+  ///   - reason: Optional reason string. Must be ≤ 123 bytes when UTF-8 encoded.
+  ///
+  /// - Note: If the connection is already closed, this method has no effect.
   func close(code: Int?, reason: String?) {
     guard !isClosed else {
       return
     }
 
-    if code != nil, code != 1000, !(code! >= 3000 && code! <= 4999) {
+    // Validate close code per RFC 6455
+    if let code = code, code != 1000, !(code >= 3000 && code <= 4999) {
       preconditionFailure(
-        "Invalid argument: \(code!), close code must be 1000 or in the range 3000-4999")
+        "Invalid close code: \(code). Must be 1000 or in range 3000-4999"
+      )
     }
 
-    if reason != nil, reason!.utf8.count > 123 {
-      preconditionFailure("reason must be <= 123 bytes long and encoded as UTF-8")
+    // Validate reason length per RFC 6455
+    if let reason = reason, reason.utf8.count > 123 {
+      preconditionFailure("Close reason must be ≤ 123 bytes when UTF-8 encoded")
     }
 
     mutableState.withValue {
-      if !$0.isClosed {
-        if code != nil {
-          let reason = reason ?? ""
-          _task.cancel(
-            with: URLSessionWebSocketTask.CloseCode(rawValue: code!)!,
-            reason: Data(reason.utf8)
-          )
-        } else {
-          _task.cancel()
-        }
+      guard !$0.isClosed else { return }
+
+      if let code = code {
+        let closeReason = reason ?? ""
+        _task.cancel(
+          with: URLSessionWebSocketTask.CloseCode(rawValue: code)!,
+          reason: Data(closeReason.utf8)
+        )
+      } else {
+        _task.cancel()
       }
     }
   }
 
+  /// The WebSocket subprotocol negotiated with the peer.
+  ///
+  /// Returns an empty string if no subprotocol was negotiated during the handshake.
+  /// See [RFC 6455 Section 1.9](https://datatracker.ietf.org/doc/html/rfc6455#section-1.9) for details.
   var `protocol`: String { _protocol }
 }
 
+// MARK: - URLSession Extension
+
 extension URLSession {
+  /// Creates a URLSession with WebSocket delegate callbacks.
+  ///
+  /// This factory method creates a URLSession configured with the specified delegate callbacks
+  /// for handling WebSocket lifecycle events. The session uses a dedicated operation queue
+  /// with maximum concurrency of 1 to ensure proper sequencing of delegate callbacks.
+  ///
+  /// - Parameters:
+  ///   - configuration: The URLSession configuration to use.
+  ///   - onComplete: Optional callback when a task completes (with or without error).
+  ///   - onWebSocketTaskOpened: Optional callback when a WebSocket connection opens successfully.
+  ///   - onWebSocketTaskClosed: Optional callback when a WebSocket connection closes.
+  /// - Returns: A configured URLSession instance.
   static func sessionWithConfiguration(
     _ configuration: URLSessionConfiguration,
     onComplete: (@Sendable (URLSession, URLSessionTask, (any Error)?) -> Void)? = nil,
@@ -273,11 +438,20 @@ extension URLSession {
   }
 }
 
+// MARK: - Private Delegate
+
+/// Internal URLSession delegate for handling WebSocket events.
+///
+/// This delegate handles the various WebSocket lifecycle events and forwards them
+/// to the appropriate callbacks provided during URLSession creation.
 final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URLSessionTaskDelegate,
   URLSessionWebSocketDelegate
 {
+  /// Callback for task completion events.
   let onComplete: (@Sendable (URLSession, URLSessionTask, (any Error)?) -> Void)?
+  /// Callback for WebSocket connection opened events.
   let onWebSocketTaskOpened: (@Sendable (URLSession, URLSessionWebSocketTask, String?) -> Void)?
+  /// Callback for WebSocket connection closed events.
   let onWebSocketTaskClosed: (@Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void)?
 
   init(
@@ -294,22 +468,30 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
     self.onWebSocketTaskClosed = onWebSocketTaskClosed
   }
 
+  /// Called when a task completes, with or without error.
   func urlSession(
-    _ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?
+    _ session: URLSession,
+    task: URLSessionTask,
+    didCompleteWithError error: (any Error)?
   ) {
     onComplete?(session, task, error)
   }
 
+  /// Called when a WebSocket connection is successfully established.
   func urlSession(
-    _ session: URLSession, webSocketTask: URLSessionWebSocketTask,
+    _ session: URLSession,
+    webSocketTask: URLSessionWebSocketTask,
     didOpenWithProtocol protocol: String?
   ) {
     onWebSocketTaskOpened?(session, webSocketTask, `protocol`)
   }
 
+  /// Called when a WebSocket connection is closed.
   func urlSession(
-    _ session: URLSession, webSocketTask: URLSessionWebSocketTask,
-    didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?
+    _ session: URLSession,
+    webSocketTask: URLSessionWebSocketTask,
+    didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+    reason: Data?
   ) {
     onWebSocketTaskClosed?(session, webSocketTask, closeCode.rawValue, reason)
   }
