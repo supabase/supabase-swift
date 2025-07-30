@@ -31,7 +31,7 @@ final class FunctionsClientTests: XCTestCase {
     headers: [
       "apikey": apiKey
     ],
-    region: region,
+    region: region.flatMap(FunctionRegion.init(rawValue:)),
     fetch: { request in
       try await self.session.data(for: request)
     },
@@ -49,7 +49,7 @@ final class FunctionsClientTests: XCTestCase {
       headers: ["apikey": apiKey],
       region: .saEast1
     )
-    XCTAssertEqual(client.region, "sa-east-1")
+    XCTAssertEqual(client.region?.rawValue, "sa-east-1")
 
     XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
     XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
