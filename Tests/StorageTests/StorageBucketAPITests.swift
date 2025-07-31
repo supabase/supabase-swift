@@ -88,7 +88,7 @@ final class StorageBucketAPITests: XCTestCase {
         XCTAssertEqual(storage.configuration.url.absoluteString, expect)
       }
 
-      XCTContext.runActivity(named: "should not modify host if ueNewHostname is false") { _ in
+      XCTContext.runActivity(named: "should not modify host if useNewHostname is false") { _ in
         let storage = SupabaseStorageClient(
           configuration: StorageClientConfiguration(
             url: URL(string: input)!,
