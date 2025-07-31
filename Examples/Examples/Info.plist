@@ -17,13 +17,30 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>DOT_REVERSED_IOS_CLIENT_ID</string>
+				<string>{{ DOT_REVERSED_IOS_CLIENT_ID }}</string>
 			</array>
 		</dict>
+    <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>fb{{ FACEBOOK APP ID }}</string>
+    </array>
+    </dict>
 	</array>
 	<key>GIDClientID</key>
-	<string>YOUR_IOS_CLIENT_ID</string>
+	<string>{{ YOUR_IOS_CLIENT_ID }}</string>
 	<key>GIDServerClientID</key>
-	<string>YOUR_SERVER_CLIENT_ID</string>
+	<string>{{ YOUR_SERVER_CLIENT_ID }}</string>
+  <key>FacebookAppID</key>
+  <string>{{ FACEBOOK APP ID }}</string>
+  <key>FacebookClientToken</key>
+  <string>{{ FACEBOOK CLIENT TOKEN }}</string>
+  <key>FacebookDisplayName</key>
+  <string>Examples</string>
+  <key>LSApplicationQueriesSchemes</key>
+  <array>
+    <string>fbapi</string>
+    <string>fb-messenger-share-api</string>
+  </array>
 </dict>
 </plist>

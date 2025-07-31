@@ -13,6 +13,7 @@ struct AuthView: View {
     case magicLink
     case signInWithPhone
     case signInWithApple
+    case signInWithFacebook
     case signInWithOAuth
     #if canImport(UIKit)
       case signInWithOAuthUsingUIKit
@@ -26,6 +27,7 @@ struct AuthView: View {
       case .magicLink: "Auth with Magic Link"
       case .signInWithPhone: "Sign in with Phone"
       case .signInWithApple: "Sign in with Apple"
+      case .signInWithFacebook: "Sign in with Facebook"
       case .signInWithOAuth: "Sign in with OAuth flow"
       #if canImport(UIKit)
         case .signInWithOAuthUsingUIKit: "Sign in with OAuth flow (UIKit)"
@@ -61,6 +63,7 @@ extension AuthView.Option: View {
     case .magicLink: AuthWithMagicLink()
     case .signInWithPhone: SignInWithPhone()
     case .signInWithApple: SignInWithApple()
+    case .signInWithFacebook: SignInWithFacebook()
     case .signInWithOAuth: SignInWithOAuth()
     #if canImport(UIKit)
       case .signInWithOAuthUsingUIKit: UIViewControllerWrapper(SignInWithOAuthViewController())
