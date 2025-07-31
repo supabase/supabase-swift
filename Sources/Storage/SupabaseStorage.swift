@@ -7,7 +7,7 @@ public struct StorageClientConfiguration: Sendable {
   public let decoder: JSONDecoder
   public let session: StorageHTTPSession
   public let logger: (any SupabaseLogger)?
-  public let useNewHostname: Bool?
+  public let useNewHostname: Bool
 
   public init(
     url: URL,
@@ -16,7 +16,7 @@ public struct StorageClientConfiguration: Sendable {
     decoder: JSONDecoder = .defaultStorageDecoder,
     session: StorageHTTPSession = .init(),
     logger: (any SupabaseLogger)? = nil,
-    useNewHostname: Bool? = nil
+    useNewHostname: Bool = false
   ) {
     self.url = url
     self.headers = headers

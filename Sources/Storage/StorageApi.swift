@@ -19,10 +19,14 @@ public class StorageApi: @unchecked Sendable {
     // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
     // "project-ref.supabase.co" becomes "project-ref.storage.supabase.co"
     if configuration.useNewHostname == true {
-      var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: false)!
-      let regex = try! NSRegularExpression(pattern: "supabase.(co|in|red)$")
+      guard
+        var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: false),
+        let host = components.host
+      else {
+        fatalError("Client initialized with invalid URL: \(configuration.url)")
+      }
 
-      let host = components.host!
+      let regex = try! NSRegularExpression(pattern: "supabase.(co|in|red)$")
 
       let isSupabaseHost =
         regex.firstMatch(in: host, range: NSRange(location: 0, length: host.utf16.count)) != nil
