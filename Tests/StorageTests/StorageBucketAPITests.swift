@@ -77,7 +77,7 @@ final class StorageBucketAPITests: XCTestCase {
     ]
 
     for (input, expect, description) in urlTestCases {
-      XCTContext.runActivity(named: "should \(description) if ueNewHostname is true") { _ in
+      XCTContext.runActivity(named: "should \(description) if useNewHostname is true") { _ in
         let storage = SupabaseStorageClient(
           configuration: StorageClientConfiguration(
             url: URL(string: input)!,
