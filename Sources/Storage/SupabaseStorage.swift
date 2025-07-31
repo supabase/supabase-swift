@@ -1,12 +1,13 @@
 import Foundation
 
 public struct StorageClientConfiguration: Sendable {
-  public let url: URL
+  public var url: URL
   public var headers: [String: String]
   public let encoder: JSONEncoder
   public let decoder: JSONDecoder
   public let session: StorageHTTPSession
   public let logger: (any SupabaseLogger)?
+  public let useNewHostname: Bool?
 
   public init(
     url: URL,
@@ -14,7 +15,8 @@ public struct StorageClientConfiguration: Sendable {
     encoder: JSONEncoder = .defaultStorageEncoder,
     decoder: JSONDecoder = .defaultStorageDecoder,
     session: StorageHTTPSession = .init(),
-    logger: (any SupabaseLogger)? = nil
+    logger: (any SupabaseLogger)? = nil,
+    useNewHostname: Bool? = nil
   ) {
     self.url = url
     self.headers = headers
@@ -22,6 +24,7 @@ public struct StorageClientConfiguration: Sendable {
     self.decoder = decoder
     self.session = session
     self.logger = logger
+    self.useNewHostname = useNewHostname
   }
 }
 

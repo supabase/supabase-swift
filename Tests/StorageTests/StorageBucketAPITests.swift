@@ -3,11 +3,11 @@ import Mocker
 import TestHelpers
 import XCTest
 
+@testable import Storage
+
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
-
-@testable import Storage
 
 final class StorageBucketAPITests: XCTestCase {
   let url = URL(string: "http://localhost:54321/storage/v1")!
@@ -45,6 +45,60 @@ final class StorageBucketAPITests: XCTestCase {
     super.tearDown()
 
     Mocker.removeAll()
+  }
+
+  func testURLConstruction() {
+    let urlTestCases = [
+      (
+        "https://blah.supabase.co/storage/v1",
+        "https://blah.storage.supabase.co/storage/v1",
+        "update legacy prod host to new host"
+      ),
+      (
+        "https://blah.supabase.red/storage/v1",
+        "https://blah.storage.supabase.red/storage/v1",
+        "update legacy staging host to new host"
+      ),
+      (
+        "https://blah.storage.supabase.co/storage/v1",
+        "https://blah.storage.supabase.co/storage/v1",
+        "accept new host without modification"
+      ),
+      (
+        "https://blah.supabase.co.example.com/storage/v1",
+        "https://blah.supabase.co.example.com/storage/v1",
+        "not modify non-platform hosts"
+      ),
+      (
+        "http://localhost:1234/storage/v1",
+        "http://localhost:1234/storage/v1",
+        "support local host with port without modification"
+      ),
+    ]
+
+    for (input, expect, description) in urlTestCases {
+      XCTContext.runActivity(named: "should \(description) if ueNewHostname is true") { _ in
+        let storage = SupabaseStorageClient(
+          configuration: StorageClientConfiguration(
+            url: URL(string: input)!,
+            headers: [:],
+            useNewHostname: true
+          )
+        )
+        XCTAssertEqual(storage.configuration.url.absoluteString, expect)
+      }
+
+      XCTContext.runActivity(named: "should not modify host if ueNewHostname is false") { _ in
+        let storage = SupabaseStorageClient(
+          configuration: StorageClientConfiguration(
+            url: URL(string: input)!,
+            headers: [:],
+            useNewHostname: false
+          )
+        )
+        XCTAssertEqual(storage.configuration.url.absoluteString, input)
+      }
+    }
   }
 
   func testGetBucket() async throws {
@@ -132,7 +186,8 @@ final class StorageBucketAPITests: XCTestCase {
             "created_at": "2024-01-01T00:00:00.000Z",
             "updated_at": "2024-01-01T00:00:00.000Z"
           }
-          """.utf8)
+          """.utf8
+        )
       ]
     )
     .snapshotRequest {
@@ -171,7 +226,8 @@ final class StorageBucketAPITests: XCTestCase {
             "created_at": "2024-01-01T00:00:00.000Z",
             "updated_at": "2024-01-01T00:00:00.000Z"
           }
-          """.utf8)
+          """.utf8
+        )
       ]
     )
     .snapshotRequest {
