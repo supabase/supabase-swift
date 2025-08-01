@@ -53,7 +53,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let wsTransport: WebSocketTransport
   let mutableState = LockIsolated(MutableState())
   let http: any HTTPClientType
-  let apikey: String?
+  let apikey: String
 
   var conn: (any WebSocket)? {
     mutableState.conn
@@ -157,13 +157,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     self.options = options
     self.wsTransport = wsTransport
     self.http = http
-    apikey = options.apikey
+
+    precondition(options.apikey != nil, "API key is required to connect to Realtime")
+    apikey = options.apikey!
 
     mutableState.withValue { [options] in
       if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
         $0.accessToken = String(accessToken)
-      } else {
-        $0.accessToken = options.apikey
       }
     }
   }
@@ -360,7 +360,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   private func rejoinChannels() {
     Task {
       for channel in channels.values {
-        await channel.subscribe()
+        try? await channel.subscribeWithError()
       }
     }
   }

@@ -22,7 +22,7 @@ final class RealtimeChannelTests: XCTestCase {
     ),
     socket: RealtimeClientV2(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions()
+      options: RealtimeClientOptions(headers: ["apikey": "test-key"])
     ),
     logger: nil
   )
@@ -161,8 +161,8 @@ final class RealtimeChannelTests: XCTestCase {
     XCTAssertTrue(channel.callbackManager.callbacks.contains(where: { $0.isPresence }))
 
     // Start subscription process
-    let subscribeTask = Task {
-      await channel.subscribe()
+    Task {
+      try? await channel.subscribeWithError()
     }
 
     // Wait for the join message to be sent

@@ -499,7 +499,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       )
       Task {
         await unsubscribe()
-        await subscribe()
+        try? await subscribeWithError()
       }
     }
 
