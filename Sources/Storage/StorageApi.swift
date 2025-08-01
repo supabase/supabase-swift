@@ -15,6 +15,29 @@ public class StorageApi: @unchecked Sendable {
     if configuration.headers["X-Client-Info"] == nil {
       configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
     }
+
+    // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
+    // "project-ref.supabase.co" becomes "project-ref.storage.supabase.co"
+    if configuration.useNewHostname == true {
+      guard
+        var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: false),
+        let host = components.host
+      else {
+        fatalError("Client initialized with invalid URL: \(configuration.url)")
+      }
+
+      let regex = try! NSRegularExpression(pattern: "supabase.(co|in|red)$")
+
+      let isSupabaseHost =
+        regex.firstMatch(in: host, range: NSRange(location: 0, length: host.utf16.count)) != nil
+
+      if isSupabaseHost, !host.contains("storage.supabase.") {
+        components.host = host.replacingOccurrences(of: "supabase.", with: "storage.supabase.")
+      }
+
+      configuration.url = components.url!
+    }
+
     self.configuration = configuration
 
     var interceptors: [any HTTPClientInterceptor] = []

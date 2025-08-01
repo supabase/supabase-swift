@@ -10,6 +10,7 @@ public struct SupabaseClientOptions: Sendable {
   public let global: GlobalOptions
   public let functions: FunctionsOptions
   public let realtime: RealtimeClientOptions
+  public let storage: StorageOptions
 
   public struct DatabaseOptions: Sendable {
     /// The Postgres schema which your tables belong to. Must be on the list of exposed schemas in
@@ -118,18 +119,29 @@ public struct SupabaseClientOptions: Sendable {
     }
   }
 
+  public struct StorageOptions: Sendable {
+    /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
+    public let useNewHostname: Bool
+    
+    public init(useNewHostname: Bool = false) {
+      self.useNewHostname = useNewHostname
+    }
+  }
+
   public init(
     db: DatabaseOptions = .init(),
     auth: AuthOptions,
     global: GlobalOptions = .init(),
     functions: FunctionsOptions = .init(),
-    realtime: RealtimeClientOptions = .init()
+    realtime: RealtimeClientOptions = .init(),
+    storage: StorageOptions = .init()
   ) {
     self.db = db
     self.auth = auth
     self.global = global
     self.functions = functions
     self.realtime = realtime
+    self.storage = storage
   }
 }
 
@@ -139,13 +151,15 @@ extension SupabaseClientOptions {
       db: DatabaseOptions = .init(),
       global: GlobalOptions = .init(),
       functions: FunctionsOptions = .init(),
-      realtime: RealtimeClientOptions = .init()
+      realtime: RealtimeClientOptions = .init(),
+      storage: StorageOptions = .init()
     ) {
       self.db = db
       auth = .init()
       self.global = global
       self.functions = functions
       self.realtime = realtime
+      self.storage = storage
     }
   #endif
 }
