@@ -1,6 +1,8 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import HTTPTypesFoundation
+import OpenAPIURLSession
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -31,6 +33,7 @@ public final class FunctionsClient: Sendable {
     var headers = HTTPFields()
   }
 
+  private let client: Client
   private let http: any HTTPClientType
   private let mutableState = LockIsolated(MutableState())
   private let sessionConfiguration: URLSessionConfiguration
@@ -85,6 +88,7 @@ public final class FunctionsClient: Sendable {
       headers: headers,
       region: region,
       http: http,
+      client: Client(serverURL: url, transport: URLSessionTransport()),
       sessionConfiguration: sessionConfiguration
     )
   }
@@ -94,11 +98,13 @@ public final class FunctionsClient: Sendable {
     headers: [String: String],
     region: String?,
     http: any HTTPClientType,
+    client: Client,
     sessionConfiguration: URLSessionConfiguration = .default
   ) {
     self.url = url
     self.region = region
     self.http = http
+    self.client = client
     self.sessionConfiguration = sessionConfiguration
 
     mutableState.withValue {
@@ -140,6 +146,39 @@ public final class FunctionsClient: Sendable {
     }
   }
 
+  /// Inokes a functions returns the raw response and body.
+  /// - Parameters:
+  ///   - functionName: The name of the function to invoke.
+  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  /// - Returns: The raw response and body.
+  public func invoke(
+    _ functionName: String,
+    options: FunctionInvokeOptions = .init()
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody) {
+    try await self.invoke(functionName, options: options) { ($0, $1) }
+  }
+
+  /// Invokes a function and decodes the response.
+  ///
+  /// - Parameters:
+  ///   - functionName: The name of the function to invoke.
+  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  ///   - decode: A closure to decode the response data and `HTTPResponse` into a `Response`
+  /// object.
+  /// - Returns: The decoded `Response` object.
+  public func invoke<Response>(
+    _ functionName: String,
+    options: FunctionInvokeOptions = .init(),
+    decode: (HTTPTypes.HTTPResponse, HTTPBody) async throws -> Response
+  ) async throws -> Response {
+    let (_, response, body) = try await _invoke(
+      functionName: functionName,
+      invokeOptions: options
+    )
+
+    return try await decode(response, body)
+  }
+
   /// Invokes a function and decodes the response.
   ///
   /// - Parameters:
@@ -148,15 +187,20 @@ public final class FunctionsClient: Sendable {
   ///   - decode: A closure to decode the response data and HTTPURLResponse into a `Response`
   /// object.
   /// - Returns: The decoded `Response` object.
+  @available(*, deprecated, message: "Use `invoke` with HTTPBody instead.")
   public func invoke<Response>(
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
     decode: (Data, HTTPURLResponse) throws -> Response
   ) async throws -> Response {
-    let response = try await rawInvoke(
-      functionName: functionName, invokeOptions: options
+    let (request, response, body) = try await _invoke(
+      functionName: functionName,
+      invokeOptions: options
     )
-    return try decode(response.data, response.underlyingResponse)
+
+    let data = try await Data(collecting: body, upTo: .max)
+
+    return try decode(data, HTTPURLResponse(httpResponse: response, url: request.url ?? self.url)!)
   }
 
   /// Invokes a function and decodes the response as a specific type.
@@ -171,8 +215,9 @@ public final class FunctionsClient: Sendable {
     options: FunctionInvokeOptions = .init(),
     decoder: JSONDecoder = JSONDecoder()
   ) async throws -> T {
-    try await invoke(functionName, options: options) { data, _ in
-      try decoder.decode(T.self, from: data)
+    try await invoke(functionName, options: options) { _, body in
+      let data = try await Data(collecting: body, upTo: .max)
+      return try decoder.decode(T.self, from: data)
     }
   }
 
@@ -185,124 +230,47 @@ public final class FunctionsClient: Sendable {
     _ functionName: String,
     options: FunctionInvokeOptions = .init()
   ) async throws {
-    try await invoke(functionName, options: options) { _, _ in () }
+    try await invoke(functionName, options: options) { (_, _: HTTPBody) in () }
   }
 
-  private func rawInvoke(
+  private func _invoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) async throws -> Helpers.HTTPResponse {
-    let request = buildRequest(functionName: functionName, options: invokeOptions)
-    let response = try await http.send(request)
+  ) async throws -> (HTTPTypes.HTTPRequest, HTTPTypes.HTTPResponse, HTTPBody) {
+    let (request, requestBody) = buildRequest(functionName: functionName, options: invokeOptions)
+    let (response, responseBody) = try await client.send(request, body: requestBody)
 
-    guard 200..<300 ~= response.statusCode else {
-      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
+    guard response.status.kind == .successful else {
+      let data = try await Data(collecting: responseBody, upTo: .max)
+      throw FunctionsError.httpError(code: response.status.code, data: data)
     }
 
-    let isRelayError = response.headers[.xRelayError] == "true"
+    let isRelayError = response.headerFields[.xRelayError] == "true"
     if isRelayError {
       throw FunctionsError.relayError
     }
 
-    return response
+    return (request, response, responseBody)
   }
 
-  /// Invokes a function with streamed response.
-  ///
-  /// Function MUST return a `text/event-stream` content type for this method to work.
-  ///
-  /// - Parameters:
-  ///   - functionName: The name of the function to invoke.
-  ///   - invokeOptions: Options for invoking the function.
-  /// - Returns: A stream of Data.
-  ///
-  /// - Warning: Experimental method.
-  /// - Note: This method doesn't use the same underlying `URLSession` as the remaining methods in the library.
-  public func _invokeWithStreamedResponse(
-    _ functionName: String,
-    options invokeOptions: FunctionInvokeOptions = .init()
-  ) -> AsyncThrowingStream<Data, any Error> {
-    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-    let delegate = StreamResponseDelegate(continuation: continuation)
-
-    let session = URLSession(
-      configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
-
-    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
-
-    let task = session.dataTask(with: urlRequest)
-    task.resume()
-
-    continuation.onTermination = { _ in
-      task.cancel()
-
-      // Hold a strong reference to delegate until continuation terminates.
-      _ = delegate
-    }
-
-    return stream
-  }
-
-  private func buildRequest(functionName: String, options: FunctionInvokeOptions)
-    -> Helpers.HTTPRequest
-  {
-    var request = HTTPRequest(
-      url: url.appendingPathComponent(functionName),
+  private func buildRequest(
+    functionName: String,
+    options: FunctionInvokeOptions
+  ) -> (HTTPTypes.HTTPRequest, HTTPBody?) {
+    var request = HTTPTypes.HTTPRequest(
       method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
-      query: options.query,
-      headers: mutableState.headers.merging(with: options.headers),
-      body: options.body,
-      timeoutInterval: FunctionsClient.requestIdleTimeout
+      url: url.appendingPathComponent(functionName).appendingQueryItems(options.query),
+      headerFields: mutableState.headers.merging(with: options.headers)
     )
 
+    // TODO: Check how to assign FunctionsClient.requestIdleTimeout
+
     if let region = options.region ?? region {
-      request.headers[.xRegion] = region
+      request.headerFields[.xRegion] = region
     }
 
-    return request
-  }
-}
+    let body = options.body.map(HTTPBody.init)
 
-final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
-  let continuation: AsyncThrowingStream<Data, any Error>.Continuation
-
-  init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
-    self.continuation = continuation
-  }
-
-  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
-    continuation.yield(data)
-  }
-
-  func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    continuation.finish(throwing: error)
-  }
-
-  func urlSession(
-    _: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse,
-    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
-  ) {
-    defer {
-      completionHandler(.allow)
-    }
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      continuation.finish(throwing: URLError(.badServerResponse))
-      return
-    }
-
-    guard 200..<300 ~= httpResponse.statusCode else {
-      let error = FunctionsError.httpError(
-        code: httpResponse.statusCode,
-        data: Data()
-      )
-      continuation.finish(throwing: error)
-      return
-    }
-
-    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
-    if isRelayError {
-      continuation.finish(throwing: FunctionsError.relayError)
-    }
+    return (request, body)
   }
 }
