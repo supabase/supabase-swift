@@ -10,6 +10,41 @@ import OpenAPIURLSession
 
 let version = Helpers.version
 
+/// A ClientTransport implementation that adapts the old Fetch api.
+struct FetchTransportAdapter: ClientTransport {
+  let fetch: FunctionsClient.FetchHandler
+
+  init(fetch: @escaping FunctionsClient.FetchHandler) {
+    self.fetch = fetch
+  }
+
+  func send(
+    _ request: HTTPTypes.HTTPRequest,
+    body: HTTPBody?,
+    baseURL: URL,
+    operationID: String
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    guard var urlRequest = URLRequest(httpRequest: request) else {
+      throw URLError(.badURL)
+    }
+
+    if let body {
+      urlRequest.httpBody = try await Data(collecting: body, upTo: .max)
+    }
+
+    let (data, response) = try await fetch(urlRequest)
+
+    guard let httpURLResponse = response as? HTTPURLResponse,
+      let httpResponse = httpURLResponse.httpResponse
+    else {
+      throw URLError(.badServerResponse)
+    }
+
+    let body = HTTPBody(data)
+    return (httpResponse, body)
+  }
+}
+
 /// An actor representing a client for invoking functions.
 public final class FunctionsClient: Sendable {
   /// Fetch handler used to make requests.
@@ -34,9 +69,7 @@ public final class FunctionsClient: Sendable {
   }
 
   private let client: Client
-  private let http: any HTTPClientType
   private let mutableState = LockIsolated(MutableState())
-  private let sessionConfiguration: URLSessionConfiguration
 
   var headers: HTTPFields {
     mutableState.headers
@@ -50,62 +83,51 @@ public final class FunctionsClient: Sendable {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
+  @available(*, deprecated, message: "Fetch handler is deprecated, use init with `transport` instead.")
   @_disfavoredOverload
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping FetchHandler
   ) {
     self.init(
       url: url,
       headers: headers,
       region: region,
       logger: logger,
-      fetch: fetch,
-      sessionConfiguration: .default
+      client: Client(serverURL: url, transport: FetchTransportAdapter(fetch: fetch))
     )
   }
 
-  convenience init(
+  @_disfavoredOverload
+  public convenience init(
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    sessionConfiguration: URLSessionConfiguration
+    transport: (any ClientTransport)? = nil
   ) {
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    let http = HTTPClient(fetch: fetch, interceptors: interceptors)
-
     self.init(
       url: url,
       headers: headers,
       region: region,
-      http: http,
-      client: Client(serverURL: url, transport: URLSessionTransport()),
-      sessionConfiguration: sessionConfiguration
+      logger: logger,
+      client: Client(serverURL: url, transport: transport ?? URLSessionTransport())
     )
   }
 
   init(
     url: URL,
-    headers: [String: String],
-    region: String?,
-    http: any HTTPClientType,
-    client: Client,
-    sessionConfiguration: URLSessionConfiguration = .default
+    headers: [String: String] = [:],
+    region: String? = nil,
+    logger: (any SupabaseLogger)? = nil,
+    client: Client
   ) {
     self.url = url
     self.region = region
-    self.http = http
     self.client = client
-    self.sessionConfiguration = sessionConfiguration
 
     mutableState.withValue {
       $0.headers = HTTPFields(headers)
@@ -123,14 +145,38 @@ public final class FunctionsClient: Sendable {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
+
+  @available(*, deprecated, message: "Fetch handler is deprecated, use init with `transport` instead.")
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping FetchHandler
   ) {
-    self.init(url: url, headers: headers, region: region?.rawValue, logger: logger, fetch: fetch)
+    self.init(
+      url: url,
+      headers: headers,
+      region: region?.rawValue,
+      logger: logger,
+      fetch: fetch
+    )
+  }
+
+  public convenience init(
+    url: URL,
+    headers: [String: String] = [:],
+    region: FunctionRegion? = nil,
+    logger: (any SupabaseLogger)? = nil,
+    transport: (any ClientTransport)? = nil
+  ) {
+    self.init(
+      url: url,
+      headers: headers,
+      region: region?.rawValue,
+      logger: logger,
+      transport: transport
+    )
   }
 
   /// Updates the authorization header.
