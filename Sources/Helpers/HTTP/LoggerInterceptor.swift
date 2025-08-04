@@ -7,6 +7,7 @@
 
 import Foundation
 
+@available(*, deprecated, message: "Use `LoggingMiddleware instead.")
 package struct LoggerInterceptor: HTTPClientInterceptor {
   let logger: any SupabaseLogger
 
