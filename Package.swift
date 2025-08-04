@@ -24,10 +24,10 @@ let package = Package(
       targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]),
   ],
   dependencies: [
+    .package(url: "https://github.com/apple/swift-collections", from: "1.0.0"),
     .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0"..<"4.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
     .package(url: "https://github.com/apple/swift-log", from: "1.0.0"),
-    .package(url: "https://github.com/apple/swift-collections", from: "1.0.0"),
     .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.0.0"),
     .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
@@ -41,15 +41,15 @@ let package = Package(
     .target(
       name: "Helpers",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "DequeModule", package: "swift-collections"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
         .product(name: "Logging", package: "swift-log"),
-        .product(name: "DequeModule", package: "swift-collections"),
-        .product(name: "Clocks", package: "swift-clocks"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
         .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
       ]
     ),
     .testTarget(
