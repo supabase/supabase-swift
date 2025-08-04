@@ -2,10 +2,29 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import IssueReporting
+import OpenAPIURLSession
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
+
+struct AuthClientTransport: ClientTransport {
+  let transport: any ClientTransport
+  let accessToken: @Sendable () async -> String?
+
+  func send(
+    _ request: HTTPTypes.HTTPRequest,
+    body: HTTPBody?,
+    baseURL: URL,
+    operationID: String
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    var request = request
+    if let token = await accessToken() {
+      request.headerFields[.authorization] = "Bearer \(token)"
+    }
+    return try await transport.send(request, body: body, baseURL: baseURL, operationID: operationID)
+  }
+}
 
 /// Supabase Client.
 public final class SupabaseClient: Sendable {
@@ -16,6 +35,7 @@ public final class SupabaseClient: Sendable {
   let databaseURL: URL
   let functionsURL: URL
 
+  private let transport: any ClientTransport
   private let _auth: AuthClient
 
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured by access policies.
@@ -89,7 +109,10 @@ public final class SupabaseClient: Sendable {
           headers: headers,
           region: options.functions.region,
           logger: options.global.logger,
-          fetch: fetchWithAuth
+          transport: AuthClientTransport(
+            transport: transport,
+            accessToken: { try? await self._getAccessToken() }
+          )
         )
       }
 
@@ -148,6 +171,12 @@ public final class SupabaseClient: Sendable {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options
+
+    self.transport = URLSessionTransport(
+      configuration: URLSessionTransport.Configuration(
+        session: options.global.session
+      )
+    )
 
     storageURL = supabaseURL.appendingPathComponent("/storage/v1")
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
