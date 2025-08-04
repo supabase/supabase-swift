@@ -1,4 +1,5 @@
 {
+  "originHash" : "006a8b9f8235c1a40761e0042fa559d6cbd9369399d90879c3f4aa5a087d194f",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -172,6 +173,15 @@
       }
     },
     {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log",
+      "state" : {
+        "revision" : "ce592ae52f982c847a4efc0dd881cc9eb32d29f2",
+        "version" : "1.6.4"
+      }
+    },
+    {
       "identity" : "swift-snapshot-testing",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-snapshot-testing",
@@ -208,5 +218,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

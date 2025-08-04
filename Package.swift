@@ -26,6 +26,8 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0"..<"4.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
+    .package(url: "https://github.com/apple/swift-log", from: "1.0.0"),
+    .package(url: "https://github.com/apple/swift-collections", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
@@ -39,6 +41,9 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
+        .product(name: "Logging", package: "swift-log"),
+        .product(name: "DequeModule", package: "swift-collections"),
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
       ]
