@@ -151,6 +151,7 @@ public final class FunctionsClient: Sendable {
   ///   - functionName: The name of the function to invoke.
   ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
   /// - Returns: The raw response and body.
+  @discardableResult
   public func invoke(
     _ functionName: String,
     options: FunctionInvokeOptions = .init()
@@ -219,18 +220,6 @@ public final class FunctionsClient: Sendable {
       let data = try await Data(collecting: body, upTo: .max)
       return try decoder.decode(T.self, from: data)
     }
-  }
-
-  /// Invokes a function without expecting a response.
-  ///
-  /// - Parameters:
-  ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
-  public func invoke(
-    _ functionName: String,
-    options: FunctionInvokeOptions = .init()
-  ) async throws {
-    try await invoke(functionName, options: options) { (_, _: HTTPBody) in () }
   }
 
   private func _invoke(
