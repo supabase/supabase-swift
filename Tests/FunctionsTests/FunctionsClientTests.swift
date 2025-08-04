@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import HTTPTypes
 import InlineSnapshotTesting
 import Mocker
+import OpenAPIURLSession
 import TestHelpers
 import XCTest
 
@@ -11,18 +12,18 @@ import XCTest
   import FoundationNetworking
 #endif
 
+extension URLSessionConfiguration {
+  static var mocking: URLSessionConfiguration {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [MockingURLProtocol.self]
+    return configuration
+  }
+}
+
 final class FunctionsClientTests: XCTestCase {
   let url = URL(string: "http://localhost:5432/functions/v1")!
   let apiKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
-
-  let sessionConfiguration: URLSessionConfiguration = {
-    let sessionConfiguration = URLSessionConfiguration.default
-    sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-    return sessionConfiguration
-  }()
-
-  lazy var session = URLSession(configuration: sessionConfiguration)
 
   var region: String?
 
@@ -32,15 +33,18 @@ final class FunctionsClientTests: XCTestCase {
       "apikey": apiKey
     ],
     region: region,
-    fetch: { request in
-      try await self.session.data(for: request)
-    },
-    sessionConfiguration: sessionConfiguration
+    client: Client(
+      serverURL: URL(string: "http://localhost:5432")!,
+      transport: URLSessionTransport(
+        configuration: URLSessionTransport.Configuration(
+          session: URLSession(configuration: .mocking)
+        )
+      )
+    )
   )
 
   override func setUp() {
     super.setUp()
-    //    isRecording = true
   }
 
   func testInit() async {
@@ -65,7 +69,6 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 19" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "X-Custom-Key: value" \
