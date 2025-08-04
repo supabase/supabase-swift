@@ -8,7 +8,7 @@ import OpenAPIRuntime
 #endif
 
 /// A client that can send HTTP requests and receive HTTP responses.
-struct Client: Sendable {
+package struct Client: Sendable {
 
   /// The URL of the server, used as the base URL for requests made by the
   /// client.
@@ -21,7 +21,7 @@ struct Client: Sendable {
   var middlewares: [any ClientMiddleware]
 
   /// Creates a new client.
-  init(
+  package init(
     serverURL: URL,
     transport: any ClientTransport,
     middlewares: [any ClientMiddleware] = []
@@ -38,33 +38,35 @@ struct Client: Sendable {
   ///   - body: The HTTP request body to send.
   /// - Returns: The HTTP response and its body.
   /// - Throws: An error if any part of the HTTP operation process fails.
-  func send(
+  package func send(
     _ request: HTTPTypes.HTTPRequest,
     body: HTTPBody? = nil
-  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody) {
     let baseURL = serverURL
     var next:
       @Sendable (HTTPTypes.HTTPRequest, HTTPBody?, URL) async throws -> (
-        HTTPTypes.HTTPResponse, HTTPBody?
+        HTTPTypes.HTTPResponse, HTTPBody
       ) = {
         (_request, _body, _url) in
-        try await transport.send(
+        let (response, body) = try await transport.send(
           _request,
           body: _body,
           baseURL: _url,
           operationID: ""
         )
+        return (response, body ?? HTTPBody())
       }
     for middleware in middlewares.reversed() {
       let tmp = next
       next = { (_request, _body, _url) in
-        try await middleware.intercept(
+        let (response, body) = try await middleware.intercept(
           _request,
           body: _body,
           baseURL: _url,
           operationID: "",
           next: tmp
         )
+        return (response, body ?? HTTPBody())
       }
     }
     return try await next(request, body, baseURL)
