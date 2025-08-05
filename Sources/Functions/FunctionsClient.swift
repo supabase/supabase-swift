@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import HTTPTypesFoundation
+import Logging
 import OpenAPIURLSession
 
 #if canImport(FoundationNetworking)
@@ -45,6 +46,20 @@ struct FetchTransportAdapter: ClientTransport {
   }
 }
 
+extension URL {
+  /// Returns a new URL which contains only `{scheme}://{host}:{port}`.
+  fileprivate var baseURL: URL {
+    guard let components = URLComponents(string: self.absoluteString) else { return self }
+
+    var newComponents = URLComponents()
+    newComponents.scheme = components.scheme
+    newComponents.host = components.host
+    newComponents.port = components.port
+
+    return newComponents.url ?? self
+  }
+}
+
 /// An actor representing a client for invoking functions.
 public final class FunctionsClient: Sendable {
   /// Fetch handler used to make requests.
@@ -83,7 +98,11 @@ public final class FunctionsClient: Sendable {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  @available(*, deprecated, message: "Fetch handler is deprecated, use init with `transport` instead.")
+  @available(
+    *,
+    deprecated,
+    message: "Fetch handler is deprecated, use init with `transport` instead."
+  )
   @_disfavoredOverload
   public convenience init(
     url: URL,
@@ -114,7 +133,11 @@ public final class FunctionsClient: Sendable {
       headers: headers,
       region: region,
       logger: logger,
-      client: Client(serverURL: url, transport: transport ?? URLSessionTransport())
+      client: Client(
+        serverURL: url.baseURL,
+        transport: transport ?? URLSessionTransport(),
+        middlewares: [LoggingMiddleware(logger: Logger(label: "functions"))]
+      )
     )
   }
 
@@ -146,7 +169,11 @@ public final class FunctionsClient: Sendable {
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
 
-  @available(*, deprecated, message: "Fetch handler is deprecated, use init with `transport` instead.")
+  @available(
+    *,
+    deprecated,
+    message: "Fetch handler is deprecated, use init with `transport` instead."
+  )
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
@@ -292,17 +319,26 @@ public final class FunctionsClient: Sendable {
     functionName: String,
     options: FunctionInvokeOptions
   ) -> (HTTPTypes.HTTPRequest, HTTPBody?) {
-    var request = HTTPTypes.HTTPRequest(
-      method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
-      url: url.appendingPathComponent(functionName).appendingQueryItems(options.query),
-      headerFields: mutableState.headers.merging(with: options.headers)
-    )
+    var region = options.region
+    var queryItems = options.query
+    var headers = options.headers
 
     // TODO: Check how to assign FunctionsClient.requestIdleTimeout
 
-    if let region = options.region ?? region {
-      request.headerFields[.xRegion] = region
+    if region == nil {
+      region = self.region
     }
+
+    if let region, region != "any" {
+      headers[.xRegion] = region
+      queryItems.append(URLQueryItem(name: "forceFunctionRegion", value: region))
+    }
+
+    let request = HTTPTypes.HTTPRequest(
+      method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
+      url: url.appendingPathComponent(functionName).appendingQueryItems(queryItems),
+      headerFields: mutableState.headers.merging(with: headers)
+    )
 
     let body = options.body.map(HTTPBody.init)
 

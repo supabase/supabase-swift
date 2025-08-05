@@ -131,6 +131,7 @@ public enum FunctionRegion: String, Sendable {
   case usEast1 = "us-east-1"
   case usWest1 = "us-west-1"
   case usWest2 = "us-west-2"
+  case any = "any"
 }
 
 extension FunctionInvokeOptions {

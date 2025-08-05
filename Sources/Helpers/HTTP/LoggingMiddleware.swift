@@ -1,5 +1,6 @@
 import Logging
 import OpenAPIRuntime
+import HTTPTypesFoundation
 
 #if canImport(Darwin)
   import struct Foundation.URL
@@ -9,14 +10,14 @@ import OpenAPIRuntime
   @preconcurrency import struct Foundation.UUID
 #endif
 
-struct LoggingMiddleware: ClientMiddleware {
+package struct LoggingMiddleware: ClientMiddleware {
   let logger: Logger
 
-  init(logger: Logger) {
+  package init(logger: Logger) {
     self.logger = logger
   }
 
-  func intercept(
+  package func intercept(
     _ request: HTTPTypes.HTTPRequest,
     body: HTTPBody?,
     baseURL: URL,
@@ -46,7 +47,7 @@ extension HTTPFields {
 
 extension HTTPTypes.HTTPRequest {
   fileprivate var prettyDescription: String {
-    "\(method.rawValue) \(path ?? "<nil>") [\(headerFields.prettyDescription)]"
+    "\(method.rawValue) \(self.url?.absoluteString ?? "<nil>") [\(headerFields.prettyDescription)]"
   }
 }
 

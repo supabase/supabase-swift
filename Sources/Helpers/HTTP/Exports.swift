@@ -1,3 +1,7 @@
 @_exported import HTTPTypes
-@_exported import protocol OpenAPIRuntime.ClientTransport
-@_exported import class OpenAPIRuntime.HTTPBody
+
+import protocol OpenAPIRuntime.ClientTransport
+import class OpenAPIRuntime.HTTPBody
+
+public typealias ClientTransport = OpenAPIRuntime.ClientTransport
+public typealias HTTPBody = OpenAPIRuntime.HTTPBody
