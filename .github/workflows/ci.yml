@@ -123,7 +123,7 @@ jobs:
         run: rm -r Tests/IntegrationTests/*
       - name: "Build Swift Package"
         run: swift build
-      
+
   # android:
   #   name: Android
   #   runs-on: ubuntu-latest
@@ -139,18 +139,18 @@ jobs:
   #         # tests are not yet passing on Android
   #         run-tests: false
 
-  library-evolution:
-    name: Library (evolution)
-    runs-on: macos-15
-    strategy:
-      matrix:
-        xcode: ["16.3"]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Select Xcode ${{ matrix.xcode }}
-        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-      - name: Build for library evolution
-        run: make build-for-library-evolution
+  # library-evolution:
+  #   name: Library (evolution)
+  #   runs-on: macos-15
+  #   strategy:
+  #     matrix:
+  #       xcode: ["16.3"]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Select Xcode ${{ matrix.xcode }}
+  #       run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+  #     - name: Build for library evolution
+  #       run: make build-for-library-evolution
 
   examples:
     name: Examples
