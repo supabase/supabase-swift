@@ -46,20 +46,6 @@ struct FetchTransportAdapter: ClientTransport {
   }
 }
 
-extension URL {
-  /// Returns a new URL which contains only `{scheme}://{host}:{port}`.
-  fileprivate var baseURL: URL {
-    guard let components = URLComponents(string: self.absoluteString) else { return self }
-
-    var newComponents = URLComponents()
-    newComponents.scheme = components.scheme
-    newComponents.host = components.host
-    newComponents.port = components.port
-
-    return newComponents.url ?? self
-  }
-}
-
 /// An actor representing a client for invoking functions.
 public final class FunctionsClient: Sendable {
   /// Fetch handler used to make requests.
@@ -134,9 +120,9 @@ public final class FunctionsClient: Sendable {
       region: region,
       logger: logger,
       client: Client(
-        serverURL: url.baseURL,
+        serverURL: url,
         transport: transport ?? URLSessionTransport(),
-        middlewares: [LoggingMiddleware(logger: Logger(label: "functions"))]
+        middlewares: [LoggingMiddleware(logger: .functions)]
       )
     )
   }

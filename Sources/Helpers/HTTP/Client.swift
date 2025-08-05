@@ -3,8 +3,10 @@ import OpenAPIRuntime
 
 #if canImport(Darwin)
   import struct Foundation.URL
+  import struct Foundation.URLComponents
 #else
   @preconcurrency import struct Foundation.URL
+  @preconcurrency import struct Foundation.URLComponents
 #endif
 
 /// A client that can send HTTP requests and receive HTTP responses.
@@ -26,7 +28,7 @@ package struct Client: Sendable {
     transport: any ClientTransport,
     middlewares: [any ClientMiddleware] = []
   ) {
-    self.serverURL = serverURL
+    self.serverURL = serverURL.baseURL
     self.transport = transport
     self.middlewares = middlewares
   }
@@ -70,5 +72,19 @@ package struct Client: Sendable {
       }
     }
     return try await next(request, body, baseURL)
+  }
+}
+
+extension URL {
+  /// Returns a new URL which contains only `{scheme}://{host}:{port}`.
+  fileprivate var baseURL: URL {
+    guard let components = URLComponents(string: self.absoluteString) else { return self }
+
+    var newComponents = URLComponents()
+    newComponents.scheme = components.scheme
+    newComponents.host = components.host
+    newComponents.port = components.port
+
+    return newComponents.url ?? self
   }
 }
