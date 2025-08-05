@@ -9,24 +9,6 @@ import struct OpenAPIURLSession.URLSessionTransport
   import FoundationNetworking
 #endif
 
-struct AuthClientTransport: ClientTransport {
-  let transport: any ClientTransport
-  let accessToken: @Sendable () async -> String?
-
-  func send(
-    _ request: HTTPTypes.HTTPRequest,
-    body: HTTPBody?,
-    baseURL: URL,
-    operationID: String
-  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-    var request = request
-    if let token = await accessToken() {
-      request.headerFields[.authorization] = "Bearer \(token)"
-    }
-    return try await transport.send(request, body: body, baseURL: baseURL, operationID: operationID)
-  }
-}
-
 /// Supabase Client.
 public final class SupabaseClient: Sendable {
   let options: SupabaseClientOptions
@@ -36,7 +18,26 @@ public final class SupabaseClient: Sendable {
   let databaseURL: URL
   let functionsURL: URL
 
+  /// The base transport used by all modules.
+  ///
+  /// Use this instance when no authentication is needed.
   private let transport: any ClientTransport
+
+  /// The transport which injects the access token before forwarding request to `transport`.
+  ///
+  /// Use this instance when authentication is needed.
+  private var authTransport: any ClientTransport {
+    mutableState.withValue {
+      if $0.authTransport == nil {
+        $0.authTransport = AuthClientTransport(
+          transport: transport,
+          accessToken: { try? await self._getAccessToken() }
+        )
+      }
+      return $0.authTransport!
+    }
+  }
+
   private let _auth: AuthClient
 
   /// Supabase Auth allows you to create and manage user sessions for access to data that is secured by access policies.
@@ -110,10 +111,7 @@ public final class SupabaseClient: Sendable {
           headers: headers,
           region: options.functions.region,
           logger: options.global.logger,
-          transport: AuthClientTransport(
-            transport: transport,
-            accessToken: { try? await self._getAccessToken() }
-          )
+          transport: authTransport
         )
       }
 
@@ -137,6 +135,7 @@ public final class SupabaseClient: Sendable {
     var realtime: RealtimeClientV2?
 
     var changedAccessToken: String?
+    var authTransport: AuthClientTransport?
   }
 
   let mutableState = LockIsolated(MutableState())
