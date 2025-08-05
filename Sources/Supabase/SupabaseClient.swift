@@ -2,7 +2,8 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import IssueReporting
-import OpenAPIURLSession
+
+import struct OpenAPIURLSession.URLSessionTransport
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
