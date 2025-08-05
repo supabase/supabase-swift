@@ -47,6 +47,11 @@ final class FunctionsClientTests: XCTestCase {
     super.setUp()
   }
 
+  override func tearDown() {
+    super.tearDown()
+    Mocker.removeAll()
+  }
+
   func testInit() async {
     let client = FunctionsClient(
       url: url,
