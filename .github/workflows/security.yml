@@ -34,13 +34,7 @@ jobs:
           queries: +security-and-quality
 
       - name: Build Supabase library
-        run: |
-          xcodebuild build \
-            -workspace Supabase.xcworkspace \
-            -scheme Supabase \
-            -destination "platform=macOS" \
-            -configuration Debug \
-            -skipMacroValidation
+        run: make XCODEBUILD_ARGUMENT=build PLATFORM=MACOS xcodebuild
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
