@@ -9,8 +9,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    reviewers:
-      - "grdsdev"
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
@@ -18,8 +16,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    reviewers:
-      - "grdsdev"
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
@@ -27,8 +23,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    reviewers:
-      - "grdsdev"
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
