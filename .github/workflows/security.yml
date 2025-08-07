@@ -33,8 +33,14 @@ jobs:
           languages: ${{ matrix.language }}
           queries: +security-and-quality
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+      - name: Build Supabase library
+        run: |
+          xcodebuild build \
+            -workspace Supabase.xcworkspace \
+            -scheme Supabase \
+            -destination "platform=macOS" \
+            -configuration Debug \
+            -skipMacroValidation
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
