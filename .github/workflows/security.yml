@@ -16,7 +16,7 @@ permissions:
 jobs:
   codeql:
     name: CodeQL Analysis
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 360
     strategy:
       fail-fast: false
