@@ -5,7 +5,24 @@
 
 version: 2
 updates:
-  - package-ecosystem: "swift" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "swift"
+    directory: "/"
     schedule:
       interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"

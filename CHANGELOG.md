@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.31.2](https://github.com/supabase/supabase-swift/compare/v2.31.1...v2.31.2) (2025-08-05)
+
+### Dependencies
+
+* bump github.com/apple/swift-crypto from 3.12.3 to 3.13.3 ([#765](https://github.com/supabase/supabase-swift/issues/765)) ([a32faf2](https://github.com/supabase/supabase-swift/commit/a32faf2))
+* bump github.com/pointfreeco/swift-snapshot-testing ([#764](https://github.com/supabase/supabase-swift/issues/764)) ([8180660](https://github.com/supabase/supabase-swift/commit/8180660))
+* bump github.com/pointfreeco/xctest-dynamic-overlay ([#763](https://github.com/supabase/supabase-swift/issues/763)) ([e072a58](https://github.com/supabase/supabase-swift/commit/e072a58))
+
+## [2.31.1](https://github.com/supabase/supabase-swift/compare/v2.31.0...v2.31.1) (2025-08-01)
+
+### Bug Fixes
+
+* **storage:** use dedicated storage host ([#761](https://github.com/supabase/supabase-swift/issues/761)) ([9272f1e](https://github.com/supabase/supabase-swift/commit/9272f1e))
+* **realtime:** make Apikey required ([#760](https://github.com/supabase/supabase-swift/issues/760)) ([237ac9c](https://github.com/supabase/supabase-swift/commit/237ac9c))
+
+## [2.31.0](https://github.com/supabase/supabase-swift/compare/v2.30.2...v2.31.0) (2025-07-30)
+
+### Features
+
+* add OSLogSupabaseLogger type ([#757](https://github.com/supabase/supabase-swift/issues/757)) ([c067c52](https://github.com/supabase/supabase-swift/commit/c067c52))
+* **realtime:** subscribe retry improvements ([#747](https://github.com/supabase/supabase-swift/issues/747)) ([34a70ac](https://github.com/supabase/supabase-swift/commit/34a70ac))
+* migrate from release-please to semantic-release ([#748](https://github.com/supabase/supabase-swift/issues/748)) ([be133fe](https://github.com/supabase/supabase-swift/commit/be133fe))
+
+### Bug Fixes
+
+* **realtime:** implement event buffering for URLSessionWebSocket ([#752](https://github.com/supabase/supabase-swift/issues/752)) ([faf2d0e](https://github.com/supabase/supabase-swift/commit/faf2d0e))
+
+### Tests
+
+* add comprehensive Realtime test coverage ([#755](https://github.com/supabase/supabase-swift/issues/755)) ([771ee18](https://github.com/supabase/supabase-swift/commit/771ee18))
+
 ## [2.30.2](https://github.com/supabase/supabase-swift/compare/v2.30.1...v2.30.2) (2025-07-21)
 
 
