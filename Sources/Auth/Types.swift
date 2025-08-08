@@ -336,6 +336,8 @@ public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
   /// Verification token received when the user completes the captcha on the site.
   public var gotrueMetaSecurity: AuthMetaSecurity?
 
+  var linkIdentity: Bool = false
+
   public init(
     provider: Provider,
     idToken: String,

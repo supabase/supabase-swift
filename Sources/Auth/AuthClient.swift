@@ -380,7 +380,15 @@ public actor AuthClient {
   /// The ID token is verified for validity and a new session is established.
   @discardableResult
   public func signInWithIdToken(credentials: OpenIDConnectCredentials) async throws -> Session {
-    try await _signIn(
+    try await _signInWithIdToken(credentials: credentials, linkIdentity: false)
+  }
+
+  private func _signInWithIdToken(credentials: OpenIDConnectCredentials, linkIdentity: Bool)
+    async throws -> Session
+  {
+    var credentials = credentials
+    credentials.linkIdentity = linkIdentity
+    return try await _signIn(
       request: .init(
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
@@ -578,7 +586,8 @@ public actor AuthClient {
 
     if codeVerifier == nil {
       logger?.error(
-        "code verifier not found, a code verifier should exist when calling this method.")
+        "code verifier not found, a code verifier should exist when calling this method."
+      )
     }
 
     let session: Session = try await api.execute(
@@ -804,7 +813,8 @@ public actor AuthClient {
     case .implicit:
       guard isImplicitGrantFlow(params: params) else {
         throw AuthError.implicitGrantRedirect(
-          message: "Not a valid implicit grant flow URL: \(url)")
+          message: "Not a valid implicit grant flow URL: \(url)"
+        )
       }
       return try await handleImplicitGrantFlow(params: params)
 
@@ -821,7 +831,8 @@ public actor AuthClient {
 
     if let errorDescription = params["error_description"] {
       throw AuthError.implicitGrantRedirect(
-        message: errorDescription.replacingOccurrences(of: "+", with: " "))
+        message: errorDescription.replacingOccurrences(of: "+", with: " ")
+      )
     }
 
     guard
@@ -1177,6 +1188,14 @@ public actor AuthClient {
     try await user().identities ?? []
   }
 
+  /// Link an identity to the current user using an ID token.
+  @discardableResult
+  public func linkIdentityWithIdToken(
+    credentials: OpenIDConnectCredentials
+  ) async throws -> Session {
+    try await _signInWithIdToken(credentials: credentials, linkIdentity: true)
+  }
+
   /// Links an OAuth identity to an existing user.
   ///
   /// This method supports the PKCE flow.
@@ -1378,7 +1397,8 @@ public actor AuthClient {
   ) throws -> URL {
     guard
       var components = URLComponents(
-        url: url, resolvingAgainstBaseURL: false
+        url: url,
+        resolvingAgainstBaseURL: false
       )
     else {
       throw URLError(.badURL)
