@@ -4,7 +4,7 @@ This document explains how to test the release workflow without actually creatin
 
 ## Overview
 
-The release workflow has been improved with better error handling, direct push triggers, and a wait-on-check action to ensure CI passes before running releases. To test these changes safely, we've created multiple testing approaches.
+The release workflow has been improved with better error handling and direct push triggers. To test these changes safely, we've created multiple testing approaches.
 
 ## Testing Approaches
 
@@ -31,7 +31,6 @@ The `release-test.yml` workflow will run automatically when:
 - Manual workflow dispatch is triggered
 
 This workflow:
-- ✅ **Waits for CI to pass** using `lewagon/wait-on-check-action@v1.4.0`
 - ✅ Uses the same setup as the real release workflow
 - ✅ Runs semantic-release in dry-run mode
 - ✅ Tests the version update script
@@ -60,17 +59,16 @@ ls -la package.json
 ### Release Workflow Improvements
 
 1. **Direct push triggers**: Replaced `workflow_run` with direct `push` triggers for better reliability
-2. **Added wait-on-check action**: The `lewagon/wait-on-check-action@v1.4.0` action ensures CI passes before running releases
-3. **Removed problematic conditional**: The `if: "!contains(github.event.head_commit.message, 'skip ci')"` condition was removed because `workflow_run` events don't have direct access to commit messages
-4. **Added better error handling**: 
+2. **Removed problematic conditional**: The `if: "!contains(github.event.head_commit.message, 'skip ci')"` condition was removed because `workflow_run` events don't have direct access to commit messages
+3. **Added better error handling**: 
    - Added `continue-on-error: false`
    - Added success check step
    - Added proper step IDs
-5. **Improved structure**: Better formatting and organization
+4. **Improved structure**: Better formatting and organization
 
 ### New Testing Infrastructure
 
-1. **`release-test.yml`**: GitHub Actions workflow for testing with wait-on-check
+1. **`release-test.yml`**: GitHub Actions workflow for testing
 2. **`test-release.sh`**: Local testing script
 3. **`RELEASE_TESTING.md`**: This documentation
 
@@ -80,16 +78,12 @@ ls -la package.json
 ```
 push (main/rc branches)
     ↓
-wait-for-ci (wait-on-check-action)
-    ↓
 release (semantic-release)
 ```
 
 ### Release Test Workflow (`release-test.yml`)
 ```
 push (test-release-workflow branch)
-    ↓
-wait-for-ci (wait-on-check-action)
     ↓
 release-test (dry-run semantic-release)
 ```
@@ -110,13 +104,12 @@ git push origin test-release-workflow
 ### Step 3: Create Test PR
 1. Go to GitHub and create a PR from `test-release-workflow` to `main`
 2. Add conventional commit messages to trigger semantic-release analysis
-3. The `release-test.yml` workflow will run automatically after CI passes
+3. The `release-test.yml` workflow will run automatically
 
 ### Step 4: Verify Results
 - Check the workflow logs in GitHub Actions
 - Verify no actual releases are created
 - Confirm all tests pass
-- Confirm wait-on-check action works correctly
 
 ## Conventional Commit Examples
 
@@ -138,7 +131,6 @@ git commit -m "chore: update dependencies"
 ## Safety Features
 
 - **Direct triggers**: Push triggers are more reliable than workflow_run
-- **Wait-on-check**: Ensures CI passes before running releases
 - **Dry-run mode**: All semantic-release operations run in dry-run mode
 - **Test branch**: Workflow only runs on `test-release-workflow` branch
 - **No actual releases**: No GitHub releases or tags are created
@@ -151,7 +143,6 @@ git commit -m "chore: update dependencies"
 1. **Node.js not found**: Install Node.js 20 or later
 2. **npm ci fails**: Delete `node_modules` and `package-lock.json`, then run `npm install`
 3. **Permission denied**: Make sure `scripts/test-release.sh` is executable (`chmod +x scripts/test-release.sh`)
-4. **Wait-on-check timeout**: The action waits for CI to pass with 30-second intervals
 
 ### Debug Commands
 
@@ -175,14 +166,13 @@ Once testing is complete:
 
 1. ✅ Verify all tests pass
 2. ✅ Review workflow logs
-3. ✅ Confirm wait-on-check action works
-4. ✅ Create PR to main branch
-5. ✅ Merge changes
-6. ✅ Monitor first real release
+3. ✅ Create PR to main branch
+4. ✅ Merge changes
+5. ✅ Monitor first real release
 
 ## Files Modified
 
-- `.github/workflows/release.yml` - Improved release workflow with direct push triggers and wait-on-check
-- `.github/workflows/release-test.yml` - New test workflow with direct push triggers and wait-on-check
+- `.github/workflows/release.yml` - Improved release workflow with direct push triggers
+- `.github/workflows/release-test.yml` - New test workflow with direct push triggers
 - `scripts/test-release.sh` - Local testing script
 - `RELEASE_TESTING.md` - This documentation
