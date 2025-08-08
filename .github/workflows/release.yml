@@ -14,8 +14,23 @@ permissions:
   contents: read
 
 jobs:
+  wait-for-ci:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.wait.outputs.sha }}
+    steps:
+      - name: Wait for CI to pass
+        id: wait
+        uses: lewagon/wait-on-check-action@v1.4.0
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          check-name: 'CI'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+
   release:
     runs-on: ubuntu-latest
+    needs: wait-for-ci
     # Remove the problematic conditional since workflow_run events don't have direct access to commit messages
     permissions:
       contents: write
