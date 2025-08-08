@@ -3,6 +3,8 @@ import Foundation
 import HTTPTypes
 import IssueReporting
 
+import struct OpenAPIURLSession.URLSessionTransport
+
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
@@ -15,6 +17,26 @@ public final class SupabaseClient: Sendable {
   let storageURL: URL
   let databaseURL: URL
   let functionsURL: URL
+
+  /// The base transport used by all modules.
+  ///
+  /// Use this instance when no authentication is needed.
+  private let transport: any ClientTransport
+
+  /// The transport which injects the access token before forwarding request to `transport`.
+  ///
+  /// Use this instance when authentication is needed.
+  private var authTransport: any ClientTransport {
+    mutableState.withValue {
+      if $0.authTransport == nil {
+        $0.authTransport = AuthClientTransport(
+          transport: transport,
+          accessToken: { try? await self._getAccessToken() }
+        )
+      }
+      return $0.authTransport!
+    }
+  }
 
   private let _auth: AuthClient
 
@@ -89,7 +111,7 @@ public final class SupabaseClient: Sendable {
           headers: headers,
           region: options.functions.region,
           logger: options.global.logger,
-          fetch: fetchWithAuth
+          transport: authTransport
         )
       }
 
@@ -113,6 +135,7 @@ public final class SupabaseClient: Sendable {
     var realtime: RealtimeClientV2?
 
     var changedAccessToken: String?
+    var authTransport: AuthClientTransport?
   }
 
   let mutableState = LockIsolated(MutableState())
@@ -148,6 +171,12 @@ public final class SupabaseClient: Sendable {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options
+
+    self.transport = URLSessionTransport(
+      configuration: URLSessionTransport.Configuration(
+        session: options.global.session
+      )
+    )
 
     storageURL = supabaseURL.appendingPathComponent("/storage/v1")
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")

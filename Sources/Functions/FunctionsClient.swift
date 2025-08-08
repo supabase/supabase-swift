@@ -1,12 +1,50 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import HTTPTypesFoundation
+import Logging
+import OpenAPIURLSession
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
 let version = Helpers.version
+
+/// A ClientTransport implementation that adapts the old Fetch api.
+struct FetchTransportAdapter: ClientTransport {
+  let fetch: FunctionsClient.FetchHandler
+
+  init(fetch: @escaping FunctionsClient.FetchHandler) {
+    self.fetch = fetch
+  }
+
+  func send(
+    _ request: HTTPTypes.HTTPRequest,
+    body: HTTPBody?,
+    baseURL: URL,
+    operationID: String
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    guard var urlRequest = URLRequest(httpRequest: request) else {
+      throw URLError(.badURL)
+    }
+
+    if let body {
+      urlRequest.httpBody = try await Data(collecting: body, upTo: .max)
+    }
+
+    let (data, response) = try await fetch(urlRequest)
+
+    guard let httpURLResponse = response as? HTTPURLResponse,
+      let httpResponse = httpURLResponse.httpResponse
+    else {
+      throw URLError(.badServerResponse)
+    }
+
+    let body = HTTPBody(data)
+    return (httpResponse, body)
+  }
+}
 
 /// An actor representing a client for invoking functions.
 public final class FunctionsClient: Sendable {
@@ -31,9 +69,8 @@ public final class FunctionsClient: Sendable {
     var headers = HTTPFields()
   }
 
-  private let http: any HTTPClientType
+  private let client: Client
   private let mutableState = LockIsolated(MutableState())
-  private let sessionConfiguration: URLSessionConfiguration
 
   var headers: HTTPFields {
     mutableState.headers
@@ -47,59 +84,59 @@ public final class FunctionsClient: Sendable {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
+  @available(
+    *,
+    deprecated,
+    message: "Fetch handler is deprecated, use init with `transport` instead."
+  )
   @_disfavoredOverload
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping FetchHandler
   ) {
     self.init(
       url: url,
       headers: headers,
       region: region,
       logger: logger,
-      fetch: fetch,
-      sessionConfiguration: .default
+      client: Client(serverURL: url, transport: FetchTransportAdapter(fetch: fetch))
     )
   }
 
-  convenience init(
+  @_disfavoredOverload
+  public convenience init(
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    sessionConfiguration: URLSessionConfiguration
+    transport: (any ClientTransport)? = nil
   ) {
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    let http = HTTPClient(fetch: fetch, interceptors: interceptors)
-
     self.init(
       url: url,
       headers: headers,
       region: region,
-      http: http,
-      sessionConfiguration: sessionConfiguration
+      logger: logger,
+      client: Client(
+        serverURL: url,
+        transport: transport ?? URLSessionTransport(),
+        middlewares: [LoggingMiddleware(logger: .functions)]
+      )
     )
   }
 
   init(
     url: URL,
-    headers: [String: String],
-    region: String?,
-    http: any HTTPClientType,
-    sessionConfiguration: URLSessionConfiguration = .default
+    headers: [String: String] = [:],
+    region: String? = nil,
+    logger: (any SupabaseLogger)? = nil,
+    client: Client
   ) {
     self.url = url
     self.region = region
-    self.http = http
-    self.sessionConfiguration = sessionConfiguration
+    self.client = client
 
     mutableState.withValue {
       $0.headers = HTTPFields(headers)
@@ -117,14 +154,42 @@ public final class FunctionsClient: Sendable {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
+
+  @available(
+    *,
+    deprecated,
+    message: "Fetch handler is deprecated, use init with `transport` instead."
+  )
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+    fetch: @escaping FetchHandler
   ) {
-    self.init(url: url, headers: headers, region: region?.rawValue, logger: logger, fetch: fetch)
+    self.init(
+      url: url,
+      headers: headers,
+      region: region?.rawValue,
+      logger: logger,
+      fetch: fetch
+    )
+  }
+
+  public convenience init(
+    url: URL,
+    headers: [String: String] = [:],
+    region: FunctionRegion? = nil,
+    logger: (any SupabaseLogger)? = nil,
+    transport: (any ClientTransport)? = nil
+  ) {
+    self.init(
+      url: url,
+      headers: headers,
+      region: region?.rawValue,
+      logger: logger,
+      transport: transport
+    )
   }
 
   /// Updates the authorization header.
@@ -140,6 +205,40 @@ public final class FunctionsClient: Sendable {
     }
   }
 
+  /// Inokes a functions returns the raw response and body.
+  /// - Parameters:
+  ///   - functionName: The name of the function to invoke.
+  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  /// - Returns: The raw response and body.
+  @discardableResult
+  public func invoke(
+    _ functionName: String,
+    options: FunctionInvokeOptions = .init()
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody) {
+    try await self.invoke(functionName, options: options) { ($0, $1) }
+  }
+
+  /// Invokes a function and decodes the response.
+  ///
+  /// - Parameters:
+  ///   - functionName: The name of the function to invoke.
+  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  ///   - decode: A closure to decode the response data and `HTTPResponse` into a `Response`
+  /// object.
+  /// - Returns: The decoded `Response` object.
+  public func invoke<Response>(
+    _ functionName: String,
+    options: FunctionInvokeOptions = .init(),
+    decode: (HTTPTypes.HTTPResponse, HTTPBody) async throws -> Response
+  ) async throws -> Response {
+    let (_, response, body) = try await _invoke(
+      functionName: functionName,
+      invokeOptions: options
+    )
+
+    return try await decode(response, body)
+  }
+
   /// Invokes a function and decodes the response.
   ///
   /// - Parameters:
@@ -148,15 +247,20 @@ public final class FunctionsClient: Sendable {
   ///   - decode: A closure to decode the response data and HTTPURLResponse into a `Response`
   /// object.
   /// - Returns: The decoded `Response` object.
+  @available(*, deprecated, message: "Use `invoke` with HTTPBody instead.")
   public func invoke<Response>(
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
     decode: (Data, HTTPURLResponse) throws -> Response
   ) async throws -> Response {
-    let response = try await rawInvoke(
-      functionName: functionName, invokeOptions: options
+    let (request, response, body) = try await _invoke(
+      functionName: functionName,
+      invokeOptions: options
     )
-    return try decode(response.data, response.underlyingResponse)
+
+    let data = try await Data(collecting: body, upTo: .max)
+
+    return try decode(data, HTTPURLResponse(httpResponse: response, url: request.url ?? self.url)!)
   }
 
   /// Invokes a function and decodes the response as a specific type.
@@ -171,138 +275,59 @@ public final class FunctionsClient: Sendable {
     options: FunctionInvokeOptions = .init(),
     decoder: JSONDecoder = JSONDecoder()
   ) async throws -> T {
-    try await invoke(functionName, options: options) { data, _ in
-      try decoder.decode(T.self, from: data)
+    try await invoke(functionName, options: options) { _, body in
+      let data = try await Data(collecting: body, upTo: .max)
+      return try decoder.decode(T.self, from: data)
     }
   }
 
-  /// Invokes a function without expecting a response.
-  ///
-  /// - Parameters:
-  ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
-  public func invoke(
-    _ functionName: String,
-    options: FunctionInvokeOptions = .init()
-  ) async throws {
-    try await invoke(functionName, options: options) { _, _ in () }
-  }
-
-  private func rawInvoke(
+  private func _invoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) async throws -> Helpers.HTTPResponse {
-    let request = buildRequest(functionName: functionName, options: invokeOptions)
-    let response = try await http.send(request)
+  ) async throws -> (HTTPTypes.HTTPRequest, HTTPTypes.HTTPResponse, HTTPBody) {
+    let (request, requestBody) = buildRequest(functionName: functionName, options: invokeOptions)
+    let (response, responseBody) = try await client.send(request, body: requestBody)
 
-    guard 200..<300 ~= response.statusCode else {
-      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
+    guard response.status.kind == .successful else {
+      let data = try await Data(collecting: responseBody, upTo: .max)
+      throw FunctionsError.httpError(code: response.status.code, data: data)
     }
 
-    let isRelayError = response.headers[.xRelayError] == "true"
+    let isRelayError = response.headerFields[.xRelayError] == "true"
     if isRelayError {
       throw FunctionsError.relayError
     }
 
-    return response
+    return (request, response, responseBody)
   }
 
-  /// Invokes a function with streamed response.
-  ///
-  /// Function MUST return a `text/event-stream` content type for this method to work.
-  ///
-  /// - Parameters:
-  ///   - functionName: The name of the function to invoke.
-  ///   - invokeOptions: Options for invoking the function.
-  /// - Returns: A stream of Data.
-  ///
-  /// - Warning: Experimental method.
-  /// - Note: This method doesn't use the same underlying `URLSession` as the remaining methods in the library.
-  public func _invokeWithStreamedResponse(
-    _ functionName: String,
-    options invokeOptions: FunctionInvokeOptions = .init()
-  ) -> AsyncThrowingStream<Data, any Error> {
-    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-    let delegate = StreamResponseDelegate(continuation: continuation)
+  private func buildRequest(
+    functionName: String,
+    options: FunctionInvokeOptions
+  ) -> (HTTPTypes.HTTPRequest, HTTPBody?) {
+    var region = options.region
+    var queryItems = options.query
+    var headers = options.headers
 
-    let session = URLSession(
-      configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
+    // TODO: Check how to assign FunctionsClient.requestIdleTimeout
 
-    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
-
-    let task = session.dataTask(with: urlRequest)
-    task.resume()
-
-    continuation.onTermination = { _ in
-      task.cancel()
-
-      // Hold a strong reference to delegate until continuation terminates.
-      _ = delegate
+    if region == nil {
+      region = self.region
     }
 
-    return stream
-  }
+    if let region, region != "any" {
+      headers[.xRegion] = region
+      queryItems.append(URLQueryItem(name: "forceFunctionRegion", value: region))
+    }
 
-  private func buildRequest(functionName: String, options: FunctionInvokeOptions)
-    -> Helpers.HTTPRequest
-  {
-    var request = HTTPRequest(
-      url: url.appendingPathComponent(functionName),
+    let request = HTTPTypes.HTTPRequest(
       method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
-      query: options.query,
-      headers: mutableState.headers.merging(with: options.headers),
-      body: options.body,
-      timeoutInterval: FunctionsClient.requestIdleTimeout
+      url: url.appendingPathComponent(functionName).appendingQueryItems(queryItems),
+      headerFields: mutableState.headers.merging(with: headers)
     )
 
-    if let region = options.region ?? region {
-      request.headers[.xRegion] = region
-    }
+    let body = options.body.map(HTTPBody.init)
 
-    return request
-  }
-}
-
-final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
-  let continuation: AsyncThrowingStream<Data, any Error>.Continuation
-
-  init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
-    self.continuation = continuation
-  }
-
-  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
-    continuation.yield(data)
-  }
-
-  func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    continuation.finish(throwing: error)
-  }
-
-  func urlSession(
-    _: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse,
-    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
-  ) {
-    defer {
-      completionHandler(.allow)
-    }
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      continuation.finish(throwing: URLError(.badServerResponse))
-      return
-    }
-
-    guard 200..<300 ~= httpResponse.statusCode else {
-      let error = FunctionsError.httpError(
-        code: httpResponse.statusCode,
-        data: Data()
-      )
-      continuation.finish(throwing: error)
-      return
-    }
-
-    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
-    if isRelayError {
-      continuation.finish(throwing: FunctionsError.relayError)
-    }
+    return (request, body)
   }
 }
