@@ -484,6 +484,43 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(receivedURL.value?.absoluteString, url)
   }
 
+  func testLinkIdentityWithIdToken() async throws {
+    Mock(
+      url: clientURL.appendingPathComponent("token"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: MockData.session]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 166" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"access_token\":\"access-token\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"id_token\":\"id-token\",\"link_identity\":true,\"nonce\":\"nonce\",\"provider\":\"apple\"}" \
+      	"http://localhost:54321/auth/v1/token?grant_type=id_token"
+      """#
+    }
+    .register()
+
+    let sut = makeSUT()
+
+    try await sut.linkIdentityWithIdToken(
+      credentials: OpenIDConnectCredentials(
+        provider: .apple,
+        idToken: "id-token",
+        accessToken: "access-token",
+        nonce: "nonce",
+        gotrueMetaSecurity: AuthMetaSecurity(
+          captchaToken: "captcha-token"
+        )
+      )
+    )
+  }
+
   func testAdminListUsers() async throws {
     Mock(
       url: clientURL.appendingPathComponent("admin/users"),
