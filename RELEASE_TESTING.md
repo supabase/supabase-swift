@@ -4,7 +4,7 @@ This document explains how to test the release workflow without actually creatin
 
 ## Overview
 
-The release workflow has been improved with better error handling, more reliable triggering, and a wait-on-check action to ensure CI passes before running releases. To test these changes safely, we've created multiple testing approaches.
+The release workflow has been improved with better error handling, direct push triggers, and a wait-on-check action to ensure CI passes before running releases. To test these changes safely, we've created multiple testing approaches.
 
 ## Testing Approaches
 
@@ -27,7 +27,7 @@ This script will:
 ### 2. GitHub Actions Testing
 
 The `release-test.yml` workflow will run automatically when:
-- CI completes on the `test-release-workflow` branch
+- Code is pushed to the `test-release-workflow` branch
 - Manual workflow dispatch is triggered
 
 This workflow:
@@ -59,13 +59,14 @@ ls -la package.json
 
 ### Release Workflow Improvements
 
-1. **Added wait-on-check action**: The `lewagon/wait-on-check-action@v1.4.0` action ensures CI passes before running releases
-2. **Removed problematic conditional**: The `if: "!contains(github.event.head_commit.message, 'skip ci')"` condition was removed because `workflow_run` events don't have direct access to commit messages
-3. **Added better error handling**: 
+1. **Direct push triggers**: Replaced `workflow_run` with direct `push` triggers for better reliability
+2. **Added wait-on-check action**: The `lewagon/wait-on-check-action@v1.4.0` action ensures CI passes before running releases
+3. **Removed problematic conditional**: The `if: "!contains(github.event.head_commit.message, 'skip ci')"` condition was removed because `workflow_run` events don't have direct access to commit messages
+4. **Added better error handling**: 
    - Added `continue-on-error: false`
    - Added success check step
    - Added proper step IDs
-4. **Improved structure**: Better formatting and organization
+5. **Improved structure**: Better formatting and organization
 
 ### New Testing Infrastructure
 
@@ -77,7 +78,7 @@ ls -la package.json
 
 ### Release Workflow (`release.yml`)
 ```
-workflow_run (CI completed) 
+push (main/rc branches)
     ↓
 wait-for-ci (wait-on-check-action)
     ↓
@@ -86,7 +87,7 @@ release (semantic-release)
 
 ### Release Test Workflow (`release-test.yml`)
 ```
-workflow_run (CI completed)
+push (test-release-workflow branch)
     ↓
 wait-for-ci (wait-on-check-action)
     ↓
@@ -136,6 +137,7 @@ git commit -m "chore: update dependencies"
 
 ## Safety Features
 
+- **Direct triggers**: Push triggers are more reliable than workflow_run
 - **Wait-on-check**: Ensures CI passes before running releases
 - **Dry-run mode**: All semantic-release operations run in dry-run mode
 - **Test branch**: Workflow only runs on `test-release-workflow` branch
@@ -149,7 +151,7 @@ git commit -m "chore: update dependencies"
 1. **Node.js not found**: Install Node.js 20 or later
 2. **npm ci fails**: Delete `node_modules` and `package-lock.json`, then run `npm install`
 3. **Permission denied**: Make sure `scripts/test-release.sh` is executable (`chmod +x scripts/test-release.sh`)
-4. **Wait-on-check timeout**: The action waits for CI to pass with 10-second intervals
+4. **Wait-on-check timeout**: The action waits for CI to pass with 30-second intervals
 
 ### Debug Commands
 
@@ -180,7 +182,7 @@ Once testing is complete:
 
 ## Files Modified
 
-- `.github/workflows/release.yml` - Improved release workflow with wait-on-check
-- `.github/workflows/release-test.yml` - New test workflow with wait-on-check
+- `.github/workflows/release.yml` - Improved release workflow with direct push triggers and wait-on-check
+- `.github/workflows/release-test.yml` - New test workflow with direct push triggers and wait-on-check
 - `scripts/test-release.sh` - Local testing script
 - `RELEASE_TESTING.md` - This documentation

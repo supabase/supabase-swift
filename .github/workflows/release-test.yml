@@ -1,9 +1,7 @@
 name: Release Test
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
     branches:
       - test-release-workflow
 
@@ -22,10 +20,10 @@ jobs:
         id: wait
         uses: lewagon/wait-on-check-action@v1.4.0
         with:
-          ref: ${{ github.event.workflow_run.head_branch }}
+          ref: ${{ github.ref }}
           check-name: 'CI'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 10
+          wait-interval: 30
 
   release-test:
     runs-on: ubuntu-latest
