@@ -4,9 +4,33 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Examples/**'
+      - '*.swift'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - '.github/workflows/ci.yml'
+      - 'Makefile'
+      - '*.xcodeproj/**'
+      - '*.xcworkspace/**'
+      - '.swiftpm/**'
   pull_request:
     branches:
       - "*"
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Examples/**'
+      - '*.swift'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - '.github/workflows/ci.yml'
+      - 'Makefile'
+      - '*.xcodeproj/**'
+      - '*.xcworkspace/**'
+      - '.swiftpm/**'
   workflow_dispatch:
 
 concurrency:
