@@ -14,7 +14,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Remove the problematic conditional since workflow_run events don't have direct access to commit messages
+    if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
     permissions:
       contents: write
       issues: write
