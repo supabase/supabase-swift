@@ -11,40 +11,6 @@ import OpenAPIURLSession
 
 let version = Helpers.version
 
-/// A ClientTransport implementation that adapts the old Fetch api.
-struct FetchTransportAdapter: ClientTransport {
-  let fetch: FunctionsClient.FetchHandler
-
-  init(fetch: @escaping FunctionsClient.FetchHandler) {
-    self.fetch = fetch
-  }
-
-  func send(
-    _ request: HTTPTypes.HTTPRequest,
-    body: HTTPBody?,
-    baseURL: URL,
-    operationID: String
-  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-    guard var urlRequest = URLRequest(httpRequest: request) else {
-      throw URLError(.badURL)
-    }
-
-    if let body {
-      urlRequest.httpBody = try await Data(collecting: body, upTo: .max)
-    }
-
-    let (data, response) = try await fetch(urlRequest)
-
-    guard let httpURLResponse = response as? HTTPURLResponse,
-      let httpResponse = httpURLResponse.httpResponse
-    else {
-      throw URLError(.badServerResponse)
-    }
-
-    let body = HTTPBody(data)
-    return (httpResponse, body)
-  }
-}
 
 /// An actor representing a client for invoking functions.
 public final class FunctionsClient: Sendable {
