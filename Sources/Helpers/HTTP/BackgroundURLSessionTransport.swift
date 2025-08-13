@@ -13,7 +13,7 @@ package struct BackgroundURLSessionTransport: BackgroundClientTransport {
   private let delegate: BackgroundSessionDelegate
   private let identifier: String
   
-  package init(identifier: String) {
+  package init(identifier: String, handler: (any BackgroundUploadHandler)? = nil) {
     self.identifier = identifier
     let config = URLSessionConfiguration.background(withIdentifier: identifier)
     config.isDiscretionary = false
@@ -23,6 +23,9 @@ package struct BackgroundURLSessionTransport: BackgroundClientTransport {
     }
     
     self.delegate = BackgroundSessionDelegate.shared
+    if let handler = handler {
+      self.delegate.setHandler(handler)
+    }
     self.session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
   }
   
@@ -59,102 +62,53 @@ package struct BackgroundURLSessionTransport: BackgroundClientTransport {
     
     // Create upload task
     let uploadTask = session.uploadTask(with: urlRequest, fromFile: fileURL)
+    uploadTask.taskDescription = taskIdentifier
     
     // Create progress object
     let progress = Progress()
-    progress.totalUnitCount = uploadTask.progress.totalUnitCount
-    progress.addChild(uploadTask.progress, withPendingUnitCount: uploadTask.progress.totalUnitCount)
+    progress.totalUnitCount = 100
     
-    // Store task metadata for lifecycle management
-    let metadata = BackgroundTaskMetadata(
+    // Create background upload task
+    let backgroundTask = BackgroundUploadTask(
       identifier: taskIdentifier,
-      taskIdentifier: uploadTask.taskIdentifier,
-      startTime: Date(),
+      path: "",
       fileURL: fileURL,
-      request: urlRequest
+      uploadTask: uploadTask,
+      progress: progress,
+      state: .pending
     )
     
-    BackgroundUploadManager.shared.registerTask(
-      uploadTask,
-      metadata: metadata
-    )
+    // Register task with delegate
+    delegate.registerTask(identifier: taskIdentifier, task: backgroundTask)
     
     // Start the task
     uploadTask.resume()
     
-    return BackgroundUploadTask(
-      identifier: taskIdentifier,
-      uploadTask: uploadTask,
-      progress: progress,
-      state: .running
-    )
-  }
-}
-
-/// Manages background upload tasks across app lifecycle.
-package class BackgroundUploadManager: @unchecked Sendable {
-  package static let shared = BackgroundUploadManager()
-  
-  private let userDefaults: UserDefaults
-  private let taskMetadata = NSLock()
-  private var _taskMetadata: [String: BackgroundTaskMetadata] = [:]
-  
-  private init() {
-    self.userDefaults = UserDefaults(suiteName: "com.supabase.storage.background") ?? .standard
-    restorePendingTasks()
-  }
-  
-  package func registerTask(
-    _ task: URLSessionUploadTask,
-    metadata: BackgroundTaskMetadata
-  ) {
-    taskMetadata.lock()
-    defer { taskMetadata.unlock() }
-    
-    _taskMetadata[metadata.identifier] = metadata
-    
-    // Persist to UserDefaults for app lifecycle survival
-    if let data = try? JSONEncoder().encode(metadata) {
-      userDefaults.set(data, forKey: "task_\(metadata.identifier)")
-    }
-  }
-  
-  package func removeTask(_ identifier: String) {
-    taskMetadata.lock()
-    defer { taskMetadata.unlock() }
-    
-    _taskMetadata.removeValue(forKey: identifier)
-    userDefaults.removeObject(forKey: "task_\(identifier)")
-  }
-  
-  private func restorePendingTasks() {
-    let keys = userDefaults.dictionaryRepresentation().keys.filter { $0.hasPrefix("task_") }
-    
-    taskMetadata.lock()
-    defer { taskMetadata.unlock() }
-    
-    for key in keys {
-      guard let data = userDefaults.data(forKey: key),
-            let metadata = try? JSONDecoder().decode(BackgroundTaskMetadata.self, from: data) else {
-        continue
-      }
-      
-      _taskMetadata[metadata.identifier] = metadata
-    }
-  }
-  
-  package func handleBackgroundEvents(for identifier: String, completionHandler: @escaping () -> Void) {
-    // Handle background URL session events
-    completionHandler()
+    return backgroundTask
   }
 }
 
 /// URLSessionDelegate for background operations.
+@available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
 package class BackgroundSessionDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate, @unchecked Sendable {
   package static let shared = BackgroundSessionDelegate()
   
+  private var handler: (any BackgroundUploadHandler)?
+  private var activeTasks: [String: BackgroundUploadTask] = [:]
+  private let taskLock = NSLock()
+  
   private override init() {
     super.init()
+  }
+  
+  package func setHandler(_ handler: any BackgroundUploadHandler) {
+    self.handler = handler
+  }
+  
+  package func registerTask(identifier: String, task: BackgroundUploadTask) {
+    taskLock.lock()
+    activeTasks[identifier] = task
+    taskLock.unlock()
   }
   
   package func urlSession(
@@ -162,8 +116,52 @@ package class BackgroundSessionDelegate: NSObject, URLSessionDelegate, URLSessio
     task: URLSessionTask,
     didCompleteWithError error: (any Error)?
   ) {
-    // Handle task completion
-    // Notify BackgroundUploadManager
+    guard let taskIdentifier = task.taskDescription else { return }
+    
+    Task {
+      let response: Result<BackgroundUploadResponse, any Error>
+      
+      if let error = error {
+        response = .failure(error)
+      } else if let httpResponse = task.response as? HTTPURLResponse {
+        let uploadResponse = BackgroundUploadResponse(
+          identifier: taskIdentifier,
+          path: "",
+          statusCode: httpResponse.statusCode,
+          responseData: nil
+        )
+        
+        if (200..<300).contains(httpResponse.statusCode) {
+          response = .success(uploadResponse)
+        } else {
+          let error = NSError(
+            domain: "BackgroundUpload",
+            code: httpResponse.statusCode,
+            userInfo: [NSLocalizedDescriptionKey: "Upload failed with status code \(httpResponse.statusCode)"]
+          )
+          response = .failure(error)
+        }
+      } else {
+        let error = NSError(
+          domain: "BackgroundUpload",
+          code: -1,
+          userInfo: [NSLocalizedDescriptionKey: "Unknown error occurred"]
+        )
+        response = .failure(error)
+      }
+      
+      // Notify handler
+      await handler?.handleTaskCompletion(identifier: taskIdentifier, result: response)
+      
+      // Complete the task
+      taskLock.lock()
+      let backgroundTask = activeTasks.removeValue(forKey: taskIdentifier)
+      taskLock.unlock()
+      
+      if let backgroundTask = backgroundTask {
+        backgroundTask.complete(with: response)
+      }
+    }
   }
   
   package func urlSession(
@@ -173,92 +171,21 @@ package class BackgroundSessionDelegate: NSObject, URLSessionDelegate, URLSessio
     totalBytesSent: Int64,
     totalBytesExpectedToSend: Int64
   ) {
-    // Handle progress updates
+    guard let taskIdentifier = task.taskDescription else { return }
+    
+    Task {
+      taskLock.lock()
+      let backgroundTask = activeTasks[taskIdentifier]
+      taskLock.unlock()
+      
+      if let backgroundTask = backgroundTask {
+        let progress = Double(totalBytesSent) / Double(totalBytesExpectedToSend)
+        backgroundTask.updateProgress(progress)
+      }
+    }
   }
   
   package func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
     // Background session completed all tasks
-  }
-}
-
-/// Metadata for background tasks.
-package struct BackgroundTaskMetadata: Codable, Sendable {
-  let identifier: String
-  let taskIdentifier: Int
-  let startTime: Date
-  let fileURL: URL
-  let request: URLRequest
-  var bytesUploaded: Int64 = 0
-  var totalBytes: Int64 = 0
-  
-  private enum CodingKeys: String, CodingKey {
-    case identifier
-    case taskIdentifier  
-    case startTime
-    case fileURL
-    case requestURL
-    case requestMethod
-    case requestHeaders
-    case bytesUploaded
-    case totalBytes
-  }
-  
-  package init(
-    identifier: String,
-    taskIdentifier: Int,
-    startTime: Date,
-    fileURL: URL,
-    request: URLRequest
-  ) {
-    self.identifier = identifier
-    self.taskIdentifier = taskIdentifier
-    self.startTime = startTime
-    self.fileURL = fileURL
-    self.request = request
-  }
-  
-  package init(from decoder: any Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    
-    identifier = try container.decode(String.self, forKey: .identifier)
-    taskIdentifier = try container.decode(Int.self, forKey: .taskIdentifier)
-    startTime = try container.decode(Date.self, forKey: .startTime)
-    fileURL = try container.decode(URL.self, forKey: .fileURL)
-    bytesUploaded = try container.decode(Int64.self, forKey: .bytesUploaded)
-    totalBytes = try container.decode(Int64.self, forKey: .totalBytes)
-    
-    // Reconstruct URLRequest
-    let url = try container.decode(URL.self, forKey: .requestURL)
-    let method = try container.decode(String.self, forKey: .requestMethod)
-    let headers = try container.decode([String: String].self, forKey: .requestHeaders)
-    
-    var reconstructedRequest = URLRequest(url: url)
-    reconstructedRequest.httpMethod = method
-    for (key, value) in headers {
-      reconstructedRequest.setValue(value, forHTTPHeaderField: key)
-    }
-    
-    self.request = reconstructedRequest
-  }
-  
-  package func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: CodingKeys.self)
-    
-    try container.encode(identifier, forKey: .identifier)
-    try container.encode(taskIdentifier, forKey: .taskIdentifier)
-    try container.encode(startTime, forKey: .startTime)
-    try container.encode(fileURL, forKey: .fileURL)
-    try container.encode(bytesUploaded, forKey: .bytesUploaded)
-    try container.encode(totalBytes, forKey: .totalBytes)
-    
-    // Encode URLRequest components
-    if let url = request.url {
-      try container.encode(url, forKey: .requestURL)
-    }
-    try container.encode(request.httpMethod ?? "POST", forKey: .requestMethod)
-    
-    var headers: [String: String] = [:]
-    request.allHTTPHeaderFields?.forEach { headers[$0.key] = $0.value }
-    try container.encode(headers, forKey: .requestHeaders)
   }
 }

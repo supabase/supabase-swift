@@ -26,34 +26,69 @@ package protocol BackgroundClientTransport: ClientTransport {
 }
 
 /// Represents a background upload task.
-public struct BackgroundUploadTask: Sendable {
+public class BackgroundUploadTask: @unchecked Sendable {
   public let identifier: String
+  public let path: String
+  public let fileURL: URL
   public let progress: Progress
-  public let state: BackgroundTaskState
+  public private(set) var state: BackgroundTaskState
   private let uploadTask: URLSessionUploadTask
+  
+  // Completion handler for when the task completes
+  public var completionHandler: (@Sendable (Result<BackgroundUploadResponse, any Error>) -> Void)?
   
   package init(
     identifier: String,
+    path: String,
+    fileURL: URL,
     uploadTask: URLSessionUploadTask,
     progress: Progress,
-    state: BackgroundTaskState
+    state: BackgroundTaskState = .pending
   ) {
     self.identifier = identifier
+    self.path = path
+    self.fileURL = fileURL
     self.uploadTask = uploadTask
     self.progress = progress
     self.state = state
   }
   
-  public func cancel() async throws {
+  public func cancel() {
     uploadTask.cancel()
+    state = .cancelled
   }
   
-  public func pause() async throws {
+  public func pause() {
     uploadTask.suspend()
+    state = .paused
   }
   
-  public func resume() async throws {
+  public func resume() {
     uploadTask.resume()
+    state = .running
+  }
+  
+  /// Updates the progress of the upload task.
+  /// - Parameter newProgress: The new progress value (0.0 to 1.0).
+  public func updateProgress(_ newProgress: Double) {
+    progress.completedUnitCount = Int64(newProgress * Double(progress.totalUnitCount))
+    if state == .pending {
+      state = .running
+    }
+  }
+  
+  /// Called when the background task completes.
+  /// - Parameter result: The completion result.
+  public func complete(with result: Result<BackgroundUploadResponse, any Error>) {
+    switch result {
+    case .success:
+      state = .completed
+      progress.completedUnitCount = progress.totalUnitCount
+    case .failure:
+      state = .failed
+    }
+    
+    completionHandler?(result)
   }
 }
 

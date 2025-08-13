@@ -90,6 +90,9 @@ package struct ResumableURLSessionTransport: ResumableClientTransport {
       uploadTask = session.uploadTask(with: urlRequest, fromFile: fileURL)
     }
     
+    // Set task description for delegate tracking
+    uploadTask.taskDescription = taskIdentifier
+    
     // Create resumable task wrapper
     let resumableTask = ResumableUploadTask(
       identifier: taskIdentifier,
@@ -100,7 +103,7 @@ package struct ResumableURLSessionTransport: ResumableClientTransport {
     )
     
     // Register with delegate for progress tracking
-    delegate.registerTask(resumableTask)
+    delegate.registerTask(uploadTask.taskIdentifier, resumableTask: resumableTask)
     
     // Start the task
     uploadTask.resume()
@@ -114,11 +117,9 @@ private class ResumableSessionDelegate: NSObject, URLSessionTaskDelegate, @unche
   private let tasks = NSLock()
   private var _tasks: [Int: ResumableUploadTask] = [:]
   
-  func registerTask(_ task: ResumableUploadTask) {
+  func registerTask(_ taskIdentifier: Int, resumableTask: ResumableUploadTask) {
     tasks.lock()
-    // Note: We'd need access to the URLSessionTask's taskIdentifier
-    // This is a simplified implementation - would need to be enhanced
-    // to properly track tasks by their URLSessionTask identifiers
+    _tasks[taskIdentifier] = resumableTask
     tasks.unlock()
   }
   

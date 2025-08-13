@@ -17,7 +17,7 @@ package struct Client: Sendable {
   let serverURL: URL
 
   /// A type capable of sending HTTP requests and receiving HTTP responses.
-  var transport: any ClientTransport
+  package var transport: any ClientTransport
 
   /// The middlewares to be invoked before the transport.
   var middlewares: [any ClientMiddleware]
