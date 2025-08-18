@@ -52,7 +52,7 @@ jobs:
         include:
           - { command: test, skip_release: 1 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: List available devices
@@ -90,7 +90,7 @@ jobs:
         include:
           - { command: test, skip_release: 1 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: List available devices
@@ -118,7 +118,7 @@ jobs:
     name: Linux
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: "Remove IntegrationTests"
         run: rm -r Tests/IntegrationTests/*
       - name: "Build Swift Package"
@@ -128,7 +128,7 @@ jobs:
   #   name: Android
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
   #     - name: "Remove IntegrationTests"
   #       run: rm -r Tests/IntegrationTests/*
   #     - name: "Test Swift Package"
@@ -146,7 +146,7 @@ jobs:
       matrix:
         xcode: ["16.3"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: Build for library evolution
@@ -156,7 +156,7 @@ jobs:
     name: Examples
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Cache derived data
         uses: actions/cache@v4
         with:
@@ -182,6 +182,6 @@ jobs:
     name: Test docs
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Test docs
         run: make test-docs
