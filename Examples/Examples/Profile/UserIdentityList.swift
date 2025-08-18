@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 22/03/24.
 //
 
+import AuthenticationServices
 import Supabase
 import SwiftUI
 
@@ -62,7 +63,11 @@ struct UserIdentityList: View {
               Button(provider.rawValue) {
                 Task {
                   do {
-                    try await supabase.auth.linkIdentity(provider: provider)
+                    if provider == .apple {
+                      try await linkAppleIdentity()
+                    } else {
+                      try await supabase.auth.linkIdentity(provider: provider)
+                    }
                   } catch {
                     self.error = error
                   }
@@ -74,8 +79,67 @@ struct UserIdentityList: View {
       }
     #endif
   }
+
+  private func linkAppleIdentity() async throws {
+    let provider = ASAuthorizationAppleIDProvider()
+    let request = provider.createRequest()
+    request.requestedScopes = [.email, .fullName]
+
+    let controller = ASAuthorizationController(authorizationRequests: [request])
+    let authorization = try await controller.performRequests()
+
+    guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+      debug("Invalid credential")
+      return
+    }
+
+    guard
+      let identityToken = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) })
+    else {
+      debug("Invalid identity token")
+      return
+    }
+
+    try await supabase.auth.linkIdentityWithIdToken(
+      credentials: OpenIDConnectCredentials(
+        provider: .apple,
+        idToken: identityToken
+      )
+    )
+  }
 }
 
 #Preview {
   UserIdentityList()
+}
+
+extension ASAuthorizationController {
+  @MainActor
+  func performRequests() async throws -> ASAuthorization {
+    let delegate = _Delegate()
+    self.delegate = delegate
+    return try await withCheckedThrowingContinuation { continuation in
+      delegate.continuation = continuation
+
+      self.performRequests()
+    }
+  }
+
+  private final class _Delegate: NSObject, ASAuthorizationControllerDelegate {
+    var continuation: CheckedContinuation<ASAuthorization, any Error>?
+
+    func authorizationController(
+      controller: ASAuthorizationController,
+      didCompleteWithAuthorization authorization: ASAuthorization
+    ) {
+      continuation?.resume(returning: authorization)
+    }
+
+    func authorizationController(
+      controller: ASAuthorizationController,
+      didCompleteWithError error: any Error
+    ) {
+      continuation?.resume(throwing: error)
+    }
+  }
 }
