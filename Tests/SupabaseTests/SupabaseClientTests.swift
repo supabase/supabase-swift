@@ -81,7 +81,7 @@ final class SupabaseClientTests: XCTestCase {
     expectNoDifference(client.headers, client.storage.configuration.headers)
     expectNoDifference(client.headers, client.rest.configuration.headers)
 
-    XCTAssertEqual(client.functions.region, "ap-northeast-1")
+    XCTAssertEqual(client.functions.region?.rawValue, "ap-northeast-1")
 
     let realtimeURL = client.realtimeV2.url
     XCTAssertEqual(realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")
