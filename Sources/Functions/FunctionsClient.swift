@@ -1,7 +1,6 @@
 import Alamofire
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -25,13 +24,13 @@ public final class FunctionsClient: Sendable {
 
   struct MutableState {
     /// Headers to be included in the requests.
-    var headers = HTTPFields()
+    var headers = HTTPHeaders()
   }
 
   private let session: Alamofire.Session
   private let mutableState = LockIsolated(MutableState())
 
-  var headers: HTTPFields {
+  var headers: HTTPHeaders {
     mutableState.headers
   }
 
@@ -59,7 +58,6 @@ public final class FunctionsClient: Sendable {
     )
   }
 
-
   init(
     url: URL,
     headers: [String: String],
@@ -71,9 +69,9 @@ public final class FunctionsClient: Sendable {
     self.session = session
 
     mutableState.withValue {
-      $0.headers = HTTPFields(headers)
-      if $0.headers[.xClientInfo] == nil {
-        $0.headers[.xClientInfo] = "functions-swift/\(version)"
+      $0.headers = HTTPHeaders(headers)
+      if $0.headers["X-Client-Info"] == nil {
+        $0.headers["X-Client-Info"] = "functions-swift/\(version)"
       }
     }
   }
@@ -102,9 +100,9 @@ public final class FunctionsClient: Sendable {
   public func setAuth(token: String?) {
     mutableState.withValue {
       if let token {
-        $0.headers[.authorization] = "Bearer \(token)"
+        $0.headers["Authorization"] = "Bearer \(token)"
       } else {
-        $0.headers[.authorization] = nil
+        $0.headers["Authorization"] = nil
       }
     }
   }
@@ -125,7 +123,7 @@ public final class FunctionsClient: Sendable {
     let data = try await rawInvoke(
       functionName: functionName, invokeOptions: options
     )
-    
+
     // Create a mock HTTPURLResponse for backward compatibility
     // This is a temporary solution until we can update the decode closure signature
     let mockResponse = HTTPURLResponse(
@@ -134,7 +132,7 @@ public final class FunctionsClient: Sendable {
       httpVersion: nil,
       headerFields: nil
     )!
-    
+
     return try decode(data, mockResponse)
   }
 
@@ -145,7 +143,7 @@ public final class FunctionsClient: Sendable {
   ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
   ///   - decoder: The JSON decoder to use for decoding the response. (Default: `JSONDecoder()`)
   /// - Returns: The decoded object of type `T`.
-  public func invoke<T: Decodable>(
+  public func invoke<T: Decodable & Sendable>(
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
     decoder: JSONDecoder = JSONDecoder()
@@ -175,8 +173,7 @@ public final class FunctionsClient: Sendable {
     invokeOptions: FunctionInvokeOptions
   ) async throws -> Data {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
-    
-    return try await session.request(request.urlRequest)
+    return try await session.request(request)
       .validate(statusCode: 200..<300)
       .serializingData()
       .value
@@ -192,92 +189,59 @@ public final class FunctionsClient: Sendable {
   /// - Returns: A stream of Data.
   ///
   /// - Warning: Experimental method.
-  /// - Note: This method doesn't use the same underlying `URLSession` as the remaining methods in the library.
   public func _invokeWithStreamedResponse(
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()
   ) -> AsyncThrowingStream<Data, any Error> {
     let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-    let delegate = StreamResponseDelegate(continuation: continuation)
-
-    let urlSession = URLSession(
-      configuration: .default, delegate: delegate, delegateQueue: nil)
-
-    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
-
-    let task = urlSession.dataTask(with: urlRequest)
-    task.resume()
-
+    
+    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions)
+    
+    let dataStreamRequest = session.streamRequest(urlRequest)
+      .validate(statusCode: 200..<300)
+      .responseStream { stream in
+        switch stream.event {
+        case .stream(let result):
+          switch result {
+          case .success(let data):
+            continuation.yield(data)
+          case .failure(let error):
+            continuation.finish(throwing: error)
+          }
+        case .complete(let response):
+          if let error = response.error {
+            continuation.finish(throwing: error)
+          } else {
+            continuation.finish()
+          }
+        }
+      }
+    
     continuation.onTermination = { _ in
-      task.cancel()
-
-      // Hold a strong reference to delegate until continuation terminates.
-      _ = delegate
+      dataStreamRequest.cancel()
     }
-
+    
     return stream
   }
 
-  private func buildRequest(functionName: String, options: FunctionInvokeOptions)
-    -> Helpers.HTTPRequest
-  {
-    var request = HTTPRequest(
-      url: url.appendingPathComponent(functionName),
-      method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
-      query: options.query,
-      headers: mutableState.headers.merging(with: options.headers),
-      body: options.body,
-      timeoutInterval: FunctionsClient.requestIdleTimeout
-    )
+  private func buildRequest(functionName: String, options: FunctionInvokeOptions) -> URLRequest {
+    var headers = mutableState.headers
+    options.headers.forEach {
+      headers[$0.name] = $0.value
+    }
 
     if let region = options.region ?? region {
-      request.headers[.xRegion] = region
+      headers["X-Region"] = region
     }
+
+    var request = URLRequest(
+      url: url.appendingPathComponent(functionName).appendingQueryItems(options.query)
+    )
+    request.httpMethod = FunctionInvokeOptions.httpMethod(options.method)?.rawValue ?? "POST"
+    request.headers = headers
+    request.httpBody = options.body
+    request.timeoutInterval = FunctionsClient.requestIdleTimeout
 
     return request
-  }
-}
-
-final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
-  let continuation: AsyncThrowingStream<Data, any Error>.Continuation
-
-  init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
-    self.continuation = continuation
-  }
-
-  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
-    continuation.yield(data)
-  }
-
-  func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    continuation.finish(throwing: error)
-  }
-
-  func urlSession(
-    _: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse,
-    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
-  ) {
-    defer {
-      completionHandler(.allow)
-    }
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      continuation.finish(throwing: URLError(.badServerResponse))
-      return
-    }
-
-    guard 200..<300 ~= httpResponse.statusCode else {
-      let error = FunctionsError.httpError(
-        code: httpResponse.statusCode,
-        data: Data()
-      )
-      continuation.finish(throwing: error)
-      return
-    }
-
-    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
-    if isRelayError {
-      continuation.finish(throwing: FunctionsError.relayError)
-    }
   }
 }
