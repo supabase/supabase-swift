@@ -1,3 +1,4 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -117,7 +118,7 @@ public final class SupabaseClient: Sendable {
 
   let mutableState = LockIsolated(MutableState())
 
-  private var session: URLSession {
+  private var session: Alamofire.Session {
     options.global.session
   }
 
@@ -177,9 +178,22 @@ public final class SupabaseClient: Sendable {
       logger: options.global.logger,
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
-      fetch: {
+      fetch: { request in
         // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: $0)
+        try await withCheckedThrowingContinuation { continuation in
+          options.global.session.request(request).responseData { response in
+            switch response.result {
+            case .success(let data):
+              if let httpResponse = response.response {
+                continuation.resume(returning: (data, httpResponse))
+              } else {
+                continuation.resume(throwing: URLError(.badServerResponse))
+              }
+            case .failure(let error):
+              continuation.resume(throwing: error)
+            }
+          }
+        }
       },
       autoRefreshToken: options.auth.autoRefreshToken
     )
@@ -330,7 +344,21 @@ public final class SupabaseClient: Sendable {
 
   @Sendable
   private func fetchWithAuth(_ request: URLRequest) async throws -> (Data, URLResponse) {
-    try await session.data(for: adapt(request: request))
+    let adaptedRequest = await adapt(request: request)
+    return try await withCheckedThrowingContinuation { continuation in
+      session.request(adaptedRequest).responseData { response in
+        switch response.result {
+        case .success(let data):
+          if let httpResponse = response.response {
+            continuation.resume(returning: (data, httpResponse))
+          } else {
+            continuation.resume(throwing: URLError(.badServerResponse))
+          }
+        case .failure(let error):
+          continuation.resume(throwing: error)
+        }
+      }
+    }
   }
 
   @Sendable
@@ -338,7 +366,21 @@ public final class SupabaseClient: Sendable {
     _ request: URLRequest,
     from data: Data
   ) async throws -> (Data, URLResponse) {
-    try await session.upload(for: adapt(request: request), from: data)
+    let adaptedRequest = await adapt(request: request)
+    return try await withCheckedThrowingContinuation { continuation in
+      session.upload(data, with: adaptedRequest).responseData { response in
+        switch response.result {
+        case .success(let responseData):
+          if let httpResponse = response.response {
+            continuation.resume(returning: (responseData, httpResponse))
+          } else {
+            continuation.resume(throwing: URLError(.badServerResponse))
+          }
+        case .failure(let error):
+          continuation.resume(throwing: error)
+        }
+      }
+    }
   }
 
   private func adapt(request: URLRequest) async -> URLRequest {
@@ -370,7 +412,7 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
+  private func handleTokenChanged(event: AuthChangeEvent, session: Auth.Session?) async {
     let accessToken: String? = mutableState.withValue {
       if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
         $0.changedAccessToken != session?.accessToken
