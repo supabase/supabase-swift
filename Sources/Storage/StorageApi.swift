@@ -1,3 +1,4 @@
+import Alamofire
 import Foundation
 import HTTPTypes
 
@@ -8,7 +9,7 @@ import HTTPTypes
 public class StorageApi: @unchecked Sendable {
   public let configuration: StorageClientConfiguration
 
-  private let http: any HTTPClientType
+  private let session: Alamofire.Session
 
   public init(configuration: StorageClientConfiguration) {
     var configuration = configuration
@@ -39,16 +40,7 @@ public class StorageApi: @unchecked Sendable {
     }
 
     self.configuration = configuration
-
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    http = HTTPClient(
-      fetch: configuration.session.fetch,
-      interceptors: interceptors
-    )
+    self.session = configuration.session
   }
 
   @discardableResult
@@ -56,7 +48,23 @@ public class StorageApi: @unchecked Sendable {
     var request = request
     request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
 
-    let response = try await http.send(request)
+    let urlRequest = request.urlRequest
+    let (data, httpResponse) = try await withCheckedThrowingContinuation { continuation in
+      session.request(urlRequest).responseData { response in
+        switch response.result {
+        case .success(let responseData):
+          if let httpResponse = response.response {
+            continuation.resume(returning: (responseData, httpResponse))
+          } else {
+            continuation.resume(throwing: URLError(.badServerResponse))
+          }
+        case .failure(let error):
+          continuation.resume(throwing: error)
+        }
+      }
+    }
+    
+    let response = HTTPResponse(data: data, response: httpResponse)
 
     guard (200..<300).contains(response.statusCode) else {
       if let error = try? configuration.decoder.decode(
