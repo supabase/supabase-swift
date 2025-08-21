@@ -1,3 +1,4 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -10,7 +11,7 @@ import HTTPTypes
 public class PostgrestBuilder: @unchecked Sendable {
   /// The configuration for the PostgREST client.
   let configuration: PostgrestClient.Configuration
-  let http: any HTTPClientType
+  let session: Alamofire.Session
 
   struct MutableState {
     var request: Helpers.HTTPRequest
@@ -26,13 +27,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     request: Helpers.HTTPRequest
   ) {
     self.configuration = configuration
-
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    http = HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
+    self.session = configuration.session
 
     mutableState = LockIsolated(
       MutableState(
@@ -124,7 +119,24 @@ public class PostgrestBuilder: @unchecked Sendable {
       return $0.request
     }
 
-    let response = try await http.send(request)
+    let urlRequest = request.urlRequest
+    
+    let (data, httpResponse) = try await withCheckedThrowingContinuation { continuation in
+      session.request(urlRequest).responseData { response in
+        switch response.result {
+        case .success(let responseData):
+          if let httpResponse = response.response {
+            continuation.resume(returning: (responseData, httpResponse))
+          } else {
+            continuation.resume(throwing: URLError(.badServerResponse))
+          }
+        case .failure(let error):
+          continuation.resume(throwing: error)
+        }
+      }
+    }
+    
+    let response = HTTPResponse(data: data, response: httpResponse)
 
     guard 200 ..< 300 ~= response.statusCode else {
       if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
