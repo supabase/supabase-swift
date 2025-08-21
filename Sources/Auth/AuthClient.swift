@@ -98,7 +98,7 @@ public actor AuthClient {
 
     Dependencies[clientID] = Dependencies(
       configuration: configuration,
-      http: HTTPClient(configuration: configuration),
+      session: configuration.session,
       api: APIClient(clientID: clientID),
       codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
