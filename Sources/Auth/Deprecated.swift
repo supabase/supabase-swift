@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 14/12/23.
 //
 
+import Alamofire
 import Foundation
 
 #if canImport(FoundationNetworking)
@@ -75,8 +76,7 @@ extension AuthClient.Configuration {
     flowType: AuthFlowType = Self.defaultFlowType,
     localStorage: any AuthLocalStorage,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) }
+    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
   ) {
     self.init(
       url: url,
@@ -86,7 +86,7 @@ extension AuthClient.Configuration {
       logger: nil,
       encoder: encoder,
       decoder: decoder,
-      fetch: fetch
+      session: .default
     )
   }
 }
@@ -114,8 +114,7 @@ extension AuthClient {
     flowType: AuthFlowType = Configuration.defaultFlowType,
     localStorage: any AuthLocalStorage,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) }
+    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder
   ) {
     self.init(
       url: url,
@@ -125,7 +124,7 @@ extension AuthClient {
       logger: nil,
       encoder: encoder,
       decoder: decoder,
-      fetch: fetch
+      session: .default
     )
   }
 }

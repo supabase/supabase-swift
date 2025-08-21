@@ -1,9 +1,10 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 
 struct Dependencies: Sendable {
   var configuration: AuthClient.Configuration
-  var http: any HTTPClientType
+  var session: Alamofire.Session
   var api: APIClient
   var codeVerifierStorage: CodeVerifierStorage
   var sessionStorage: SessionStorage

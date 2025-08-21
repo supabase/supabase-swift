@@ -1,24 +1,6 @@
+import Alamofire
 import Foundation
 import HTTPTypes
-
-extension HTTPClient {
-  init(configuration: AuthClient.Configuration) {
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    interceptors.append(
-      RetryRequestInterceptor(
-        retryableHTTPMethods: RetryRequestInterceptor.defaultRetryableHTTPMethods.union(
-          [.post]  // Add POST method so refresh token are also retried.
-        )
-      )
-    )
-
-    self.init(fetch: configuration.fetch, interceptors: interceptors)
-  }
-}
 
 struct APIClient: Sendable {
   let clientID: AuthClientID
@@ -27,8 +9,8 @@ struct APIClient: Sendable {
     Dependencies[clientID].configuration
   }
 
-  var http: any HTTPClientType {
-    Dependencies[clientID].http
+  var session: Alamofire.Session {
+    Dependencies[clientID].session
   }
 
   func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
@@ -39,7 +21,23 @@ struct APIClient: Sendable {
       request.headers[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
     }
 
-    let response = try await http.send(request)
+    let urlRequest = request.urlRequest
+    let (data, httpResponse) = try await withCheckedThrowingContinuation { continuation in
+      session.request(urlRequest).responseData { response in
+        switch response.result {
+        case .success(let responseData):
+          if let httpResponse = response.response {
+            continuation.resume(returning: (responseData, httpResponse))
+          } else {
+            continuation.resume(throwing: URLError(.badServerResponse))
+          }
+        case .failure(let error):
+          continuation.resume(throwing: error)
+        }
+      }
+    }
+    
+    let response = HTTPResponse(data: data, response: httpResponse)
 
     guard 200..<300 ~= response.statusCode else {
       throw handleError(response: response)
