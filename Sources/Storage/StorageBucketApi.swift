@@ -8,26 +8,28 @@ import Foundation
 public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// Retrieves the details of all Storage buckets within an existing project.
   public func listBuckets() async throws -> [Bucket] {
-    try await execute(
+    let data = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("bucket"),
         method: .get
       )
     )
-    .decoded(decoder: configuration.decoder)
+    
+    return try configuration.decoder.decode([Bucket].self, from: data)
   }
 
   /// Retrieves the details of an existing Storage bucket.
   /// - Parameters:
   ///   - id: The unique identifier of the bucket you would like to retrieve.
   public func getBucket(_ id: String) async throws -> Bucket {
-    try await execute(
+    let data = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("bucket/\(id)"),
         method: .get
       )
     )
-    .decoded(decoder: configuration.decoder)
+    
+    return try configuration.decoder.decode(Bucket.self, from: data)
   }
 
   struct BucketParameters: Encodable {

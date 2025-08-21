@@ -102,7 +102,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let cleanPath = _removeEmptyFolders(path)
     let _path = _getFinalPath(cleanPath)
 
-    let response = try await execute(
+    let data = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/\(_path)"),
         method: method,
@@ -112,7 +112,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         headers: headers
       )
     )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
+    
+    let response = try configuration.decoder.decode(UploadResponse.self, from: data)
 
     return FileUploadResponse(
       id: response.Id,
@@ -238,7 +239,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let Key: String
     }
 
-    return try await execute(
+    let data = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/copy"),
         method: .post,
@@ -252,8 +253,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         )
       )
     )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
-    .Key
+    
+    let response = try configuration.decoder.decode(UploadResponse.self, from: data)
+    return response.Key
   }
 
   /// Creates a signed URL. Use a signed URL to share a file for a fixed amount of time.
@@ -275,7 +277,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     let encoder = JSONEncoder.unconfiguredEncoder
 
-    let response = try await execute(
+    let data = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/sign/\(bucketId)/\(path)"),
         method: .post,
@@ -284,7 +286,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         )
       )
     )
-    .decoded(as: SignedURLResponse.self, decoder: configuration.decoder)
+    
+    let response = try configuration.decoder.decode(SignedURLResponse.self, from: data)
 
     return try makeSignedURL(response.signedURL, download: download)
   }
@@ -326,7 +329,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     let encoder = JSONEncoder.unconfiguredEncoder
 
-    let response = try await execute(
+    let data = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/sign/\(bucketId)"),
         method: .post,
@@ -335,7 +338,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         )
       )
     )
-    .decoded(as: [SignedURLResponse].self, decoder: configuration.decoder)
+    
+    let response = try configuration.decoder.decode([SignedURLResponse].self, from: data)
 
     return try response.map { try makeSignedURL($0.signedURL, download: download) }
   }
@@ -384,14 +388,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Returns: A list of removed ``FileObject``.
   @discardableResult
   public func remove(paths: [String]) async throws -> [FileObject] {
-    try await execute(
+    let data = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/\(bucketId)"),
         method: .delete,
         body: configuration.encoder.encode(["prefixes": paths])
       )
     )
-    .decoded(decoder: configuration.decoder)
+    
+    return try configuration.decoder.decode([FileObject].self, from: data)
   }
 
   /// Lists all the files within a bucket.
@@ -407,14 +412,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     var options = options ?? defaultSearchOptions
     options.prefix = path ?? ""
 
-    return try await execute(
+    let data = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/list/\(bucketId)"),
         method: .post,
         body: encoder.encode(options)
       )
     )
-    .decoded(decoder: configuration.decoder)
+    
+    return try configuration.decoder.decode([FileObject].self, from: data)
   }
 
   /// Downloads a file from a private bucket. For public buckets, make a request to the URL returned
@@ -439,20 +445,20 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         query: queryItems
       )
     )
-    .data
   }
 
   /// Retrieves the details of an existing file.
   public func info(path: String) async throws -> FileObjectV2 {
     let _path = _getFinalPath(path)
 
-    return try await execute(
+    let data = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/info/\(_path)"),
         method: .get
       )
     )
-    .decoded(decoder: configuration.decoder)
+    
+    return try configuration.decoder.decode(FileObjectV2.self, from: data)
   }
 
   /// Checks the existence of file.
@@ -553,14 +559,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       headers[.xUpsert] = "true"
     }
 
-    let response = try await execute(
+    let data = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
         method: .post,
         headers: headers
       )
     )
-    .decoded(as: Response.self, decoder: configuration.decoder)
+    
+    let response = try configuration.decoder.decode(Response.self, from: data)
 
     let signedURL = try makeSignedURL(response.url, download: nil)
 
@@ -650,7 +657,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let Key: String
     }
 
-    let fullPath = try await execute(
+    let data = try await execute(
       HTTPRequest(
         url: configuration.url
           .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
@@ -661,8 +668,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         headers: headers
       )
     )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
-    .Key
+    
+    let response = try configuration.decoder.decode(UploadResponse.self, from: data)
+    let fullPath = response.Key
 
     return SignedURLUploadResponse(path: path, fullPath: fullPath)
   }
