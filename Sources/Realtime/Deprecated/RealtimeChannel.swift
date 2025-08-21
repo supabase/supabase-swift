@@ -764,7 +764,7 @@ public class RealtimeChannel {
             }
           }
         }
-        guard let response, 200 ..< 300 ~= response.statusCode else {
+        guard 200 ..< 300 ~= response.statusCode else {
           return .error
         }
         return .ok
