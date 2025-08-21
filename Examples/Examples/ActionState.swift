@@ -19,6 +19,11 @@ enum ActionState<Success, Failure: Error> {
     if case let .result(.success(success)) = self { return success }
     return nil
   }
+
+  var isInFlight: Bool {
+    if case .inFlight = self { return true }
+    return false
+  }
 }
 
 struct ActionStateView<Success: Sendable, SuccessContent: View>: View {

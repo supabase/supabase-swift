@@ -26,6 +26,10 @@ struct BucketDetailView: View {
       case let .result(.success(files)):
         List {
           Section("Actions") {
+            NavigationLink("Upload Files") {
+              StorageUploadView(bucket: bucket)
+            }
+            
             Button("createSignedUploadURL") {
               Task {
                 do {

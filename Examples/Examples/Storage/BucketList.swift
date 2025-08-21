@@ -49,7 +49,7 @@ struct BucketList: View {
         Button("Add") {
           Task {
             do {
-              try await supabase.storage.createBucket("bucket-\(UUID().uuidString)")
+              try await supabase.storage.createBucket("bucket-\(UUID().uuidString.lowercased())")
               await load()
             } catch {}
           }
