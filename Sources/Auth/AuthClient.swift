@@ -516,7 +516,7 @@ public actor AuthClient {
   ) async throws -> SSOResponse {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    return try await api.execute(
+    let data = try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("sso"),
         method: .post,
@@ -532,7 +532,8 @@ public actor AuthClient {
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    
+    return try configuration.decoder.decode(SSOResponse.self, from: data)
   }
 
   /// Attempts a single-sign on using an enterprise Identity Provider.
