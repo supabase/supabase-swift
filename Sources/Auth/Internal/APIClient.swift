@@ -13,7 +13,7 @@ struct APIClient: Sendable {
     Dependencies[clientID].session
   }
 
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  func execute(_ request: Helpers.HTTPRequest) async throws -> Data {
     var request = request
     request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
 
@@ -22,32 +22,15 @@ struct APIClient: Sendable {
     }
 
     let urlRequest = request.urlRequest
-    let (data, httpResponse) = try await withCheckedThrowingContinuation { continuation in
-      session.request(urlRequest).responseData { response in
-        switch response.result {
-        case .success(let responseData):
-          if let httpResponse = response.response {
-            continuation.resume(returning: (responseData, httpResponse))
-          } else {
-            continuation.resume(throwing: URLError(.badServerResponse))
-          }
-        case .failure(let error):
-          continuation.resume(throwing: error)
-        }
-      }
-    }
     
-    let response = HTTPResponse(data: data, response: httpResponse)
-
-    guard 200..<300 ~= response.statusCode else {
-      throw handleError(response: response)
-    }
-
-    return response
+    return try await session.request(urlRequest)
+      .validate(statusCode: 200..<300)
+      .serializingData()
+      .value
   }
 
   @discardableResult
-  func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> Data {
     var sessionManager: SessionManager {
       Dependencies[clientID].sessionManager
     }
