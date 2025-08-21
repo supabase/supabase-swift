@@ -283,30 +283,39 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       }
 
       let task = Task { [headers] in
-        _ = try? await socket.http.send(
-          HTTPRequest(
-            url: socket.broadcastURL,
-            method: .post,
-            headers: headers,
-            body: JSONEncoder().encode(
-              BroadcastMessagePayload(
-                messages: [
-                  BroadcastMessagePayload.Message(
-                    topic: topic,
-                    event: event,
-                    payload: message,
-                    private: config.isPrivate
-                  )
-                ]
-              )
+        let request = HTTPRequest(
+          url: socket.broadcastURL,
+          method: .post,
+          headers: headers,
+          body: try JSONEncoder().encode(
+            BroadcastMessagePayload(
+              messages: [
+                BroadcastMessagePayload.Message(
+                  topic: topic,
+                  event: event,
+                  payload: message,
+                  private: config.isPrivate
+                )
+              ]
             )
           )
         )
+        
+        _ = try? await withCheckedThrowingContinuation { continuation in
+          socket.session.request(request.urlRequest).responseData { response in
+            switch response.result {
+            case .success:
+              continuation.resume(returning: ())
+            case .failure(let error):
+              continuation.resume(throwing: error)
+            }
+          }
+        }
       }
 
       if config.broadcast.acknowledgeBroadcasts {
         try? await withTimeout(interval: socket.options.timeoutInterval) {
-          await task.value
+          try? await task.value
         }
       }
     } else {

@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 13/05/24.
 //
 
+import Alamofire
 import Foundation
 import HTTPTypes
 
@@ -24,7 +25,7 @@ public struct RealtimeClientOptions: Sendable {
 
   /// Sets the log level for Realtime
   var logLevel: LogLevel?
-  var fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))?
+  var session: Alamofire.Session?
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: (any SupabaseLogger)?
 
@@ -44,7 +45,7 @@ public struct RealtimeClientOptions: Sendable {
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     logLevel: LogLevel? = nil,
-    fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
+    session: Alamofire.Session? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: (any SupabaseLogger)? = nil
   ) {
@@ -56,7 +57,7 @@ public struct RealtimeClientOptions: Sendable {
     self.connectOnSubscribe = connectOnSubscribe
     self.maxRetryAttempts = maxRetryAttempts
     self.logLevel = logLevel
-    self.fetch = fetch
+    self.session = session
     self.accessToken = accessToken
     self.logger = logger
   }
