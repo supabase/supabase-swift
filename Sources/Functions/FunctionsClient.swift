@@ -187,45 +187,32 @@ public final class FunctionsClient: Sendable {
   ///   - functionName: The name of the function to invoke.
   ///   - invokeOptions: Options for invoking the function.
   /// - Returns: A stream of Data.
-  ///
-  /// - Warning: Experimental method.
-  public func _invokeWithStreamedResponse(
+  public func invokeWithStreamedResponse(
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()
   ) -> AsyncThrowingStream<Data, any Error> {
-    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-    
     let urlRequest = buildRequest(functionName: functionName, options: invokeOptions)
-    
-    let dataStreamRequest = session.streamRequest(urlRequest)
+
+    let stream = session.streamRequest(urlRequest)
       .validate(statusCode: 200..<300)
-      .responseStream { stream in
-        switch stream.event {
-        case .stream(let result):
-          switch result {
-          case .success(let data):
-            continuation.yield(data)
-          case .failure(let error):
-            continuation.finish(throwing: error)
+      .streamTask()
+      .streamingData()
+      .map {
+        switch $0.event {
+        case let .stream(.success(data)): return data
+        case .complete(let completion):
+          if let error = completion.error {
+            throw error
           }
-        case .complete(let response):
-          if let error = response.error {
-            continuation.finish(throwing: error)
-          } else {
-            continuation.finish()
-          }
+          return Data()
         }
       }
-    
-    continuation.onTermination = { _ in
-      dataStreamRequest.cancel()
-    }
-    
-    return stream
+
+    return AsyncThrowingStream(UncheckedSendable(stream))
   }
 
   private func buildRequest(functionName: String, options: FunctionInvokeOptions) -> URLRequest {
-    var headers = mutableState.headers
+    var headers = headers
     options.headers.forEach {
       headers[$0.name] = $0.value
     }
