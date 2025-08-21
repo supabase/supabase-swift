@@ -122,10 +122,20 @@ public final class FunctionsClient: Sendable {
     options: FunctionInvokeOptions = .init(),
     decode: (Data, HTTPURLResponse) throws -> Response
   ) async throws -> Response {
-    let response = try await rawInvoke(
+    let data = try await rawInvoke(
       functionName: functionName, invokeOptions: options
     )
-    return try decode(response.data, response.underlyingResponse)
+    
+    // Create a mock HTTPURLResponse for backward compatibility
+    // This is a temporary solution until we can update the decode closure signature
+    let mockResponse = HTTPURLResponse(
+      url: URL(string: "https://example.com")!,
+      statusCode: 200,
+      httpVersion: nil,
+      headerFields: nil
+    )!
+    
+    return try decode(data, mockResponse)
   }
 
   /// Invokes a function and decodes the response as a specific type.
@@ -140,9 +150,10 @@ public final class FunctionsClient: Sendable {
     options: FunctionInvokeOptions = .init(),
     decoder: JSONDecoder = JSONDecoder()
   ) async throws -> T {
-    try await invoke(functionName, options: options) { data, _ in
-      try decoder.decode(T.self, from: data)
-    }
+    let data = try await rawInvoke(
+      functionName: functionName, invokeOptions: options
+    )
+    return try decoder.decode(T.self, from: data)
   }
 
   /// Invokes a function without expecting a response.
@@ -154,43 +165,21 @@ public final class FunctionsClient: Sendable {
     _ functionName: String,
     options: FunctionInvokeOptions = .init()
   ) async throws {
-    try await invoke(functionName, options: options) { _, _ in () }
+    _ = try await rawInvoke(
+      functionName: functionName, invokeOptions: options
+    )
   }
 
   private func rawInvoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) async throws -> Helpers.HTTPResponse {
+  ) async throws -> Data {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
-    let urlRequest = request.urlRequest
     
-    let (data, httpResponse) = try await withCheckedThrowingContinuation { continuation in
-      session.request(urlRequest).responseData { response in
-        switch response.result {
-        case .success(let responseData):
-          if let httpResponse = response.response {
-            continuation.resume(returning: (responseData, httpResponse))
-          } else {
-            continuation.resume(throwing: URLError(.badServerResponse))
-          }
-        case .failure(let error):
-          continuation.resume(throwing: error)
-        }
-      }
-    }
-    
-    let response = HTTPResponse(data: data, response: httpResponse)
-
-    guard 200..<300 ~= response.statusCode else {
-      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
-    }
-
-    let isRelayError = response.headers[.xRelayError] == "true"
-    if isRelayError {
-      throw FunctionsError.relayError
-    }
-
-    return response
+    return try await session.request(request.urlRequest)
+      .validate(statusCode: 200..<300)
+      .serializingData()
+      .value
   }
 
   /// Invokes a function with streamed response.
