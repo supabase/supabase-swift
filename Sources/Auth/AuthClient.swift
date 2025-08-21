@@ -309,10 +309,8 @@ public actor AuthClient {
   }
 
   private func _signUp(request: HTTPRequest) async throws -> AuthResponse {
-    let response = try await api.execute(request).decoded(
-      as: AuthResponse.self,
-      decoder: configuration.decoder
-    )
+    let data = try await api.execute(request)
+    let response = try configuration.decoder.decode(AuthResponse.self, from: data)
 
     if let session = response.session {
       await sessionManager.update(session)
@@ -416,10 +414,8 @@ public actor AuthClient {
   }
 
   private func _signIn(request: HTTPRequest) async throws -> Session {
-    let session = try await api.execute(request).decoded(
-      as: Session.self,
-      decoder: configuration.decoder
-    )
+    let data = try await api.execute(request)
+    let session = try configuration.decoder.decode(Session.self, from: data)
 
     await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
@@ -553,7 +549,7 @@ public actor AuthClient {
   ) async throws -> SSOResponse {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    return try await api.execute(
+    let data = try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("sso"),
         method: .post,
@@ -569,7 +565,8 @@ public actor AuthClient {
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    
+    return try configuration.decoder.decode(SSOResponse.self, from: data)
   }
 
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
@@ -582,7 +579,7 @@ public actor AuthClient {
       )
     }
 
-    let session: Session = try await api.execute(
+    let data = try await api.execute(
       .init(
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
@@ -595,7 +592,8 @@ public actor AuthClient {
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    
+    let session: Session = try configuration.decoder.decode(Session.self, from: data)
 
     codeVerifierStorage.set(nil)
 
