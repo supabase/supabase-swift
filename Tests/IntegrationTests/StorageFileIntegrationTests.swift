@@ -179,10 +179,10 @@ final class StorageFileIntegrationTests: XCTestCase {
         """
         ▿ StorageError
           ▿ error: Optional<String>
-            - some: "invalid_mime_type"
+            - some: "InvalidRequest"
           - message: "mime type image/jpeg is not supported"
           ▿ statusCode: Optional<String>
-            - some: "415"
+            - some: "400"
 
         """
       }
@@ -381,7 +381,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     let httpResponse = try XCTUnwrap(response as? HTTPURLResponse)
     let cacheControl = try XCTUnwrap(httpResponse.value(forHTTPHeaderField: "cache-control"))
 
-    XCTAssertEqual(cacheControl, "public, max-age=14400")
+    XCTAssertEqual(cacheControl, "max-age=14400")
   }
 
   func testUploadWithFileURL() async throws {

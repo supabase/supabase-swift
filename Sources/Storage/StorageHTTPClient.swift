@@ -4,6 +4,7 @@ import Foundation
   import FoundationNetworking
 #endif
 
+@available(*, deprecated, message: "Use transport instead")
 public struct StorageHTTPSession: Sendable {
   public var fetch: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
   public var upload:

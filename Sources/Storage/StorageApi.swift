@@ -1,5 +1,6 @@
 import Foundation
 import HTTPTypes
+import OpenAPIURLSession
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -8,7 +9,7 @@ import HTTPTypes
 public class StorageApi: @unchecked Sendable {
   public let configuration: StorageClientConfiguration
 
-  private let http: any HTTPClientType
+  private let client: Client
 
   public init(configuration: StorageClientConfiguration) {
     var configuration = configuration
@@ -40,61 +41,42 @@ public class StorageApi: @unchecked Sendable {
 
     self.configuration = configuration
 
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    http = HTTPClient(
-      fetch: configuration.session.fetch,
-      interceptors: interceptors
+    client = Client(
+      serverURL: configuration.url,
+      transport: configuration.transport
+        ?? FetchTransportAdapter(fetch: configuration.session.fetch),
+      middlewares: [LoggingMiddleware(logger: .storage)]
     )
   }
 
   @discardableResult
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  func execute(
+    _ request: HTTPTypes.HTTPRequest,
+    requestBody: HTTPBody? = nil
+  ) async throws -> (response: HTTPTypes.HTTPResponse, responseBody: HTTPBody) {
     var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+    request.headerFields.merge(with: HTTPFields(configuration.headers))
 
-    let response = try await http.send(request)
+    let (response, responseBody) = try await client.send(request, body: requestBody)
 
-    guard (200..<300).contains(response.statusCode) else {
+    guard response.status.kind == .successful else {
+      let data = try await Data(collecting: responseBody, upTo: .max)
       if let error = try? configuration.decoder.decode(
         StorageError.self,
-        from: response.data
+        from: data
       ) {
         throw error
       }
 
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
+      throw HTTPError(
+        data: data,
+        response: HTTPURLResponse(
+          httpResponse: response,
+          url: request.url!
+        )!
+      )
     }
 
-    return response
-  }
-}
-
-extension Helpers.HTTPRequest {
-  init(
-    url: URL,
-    method: HTTPTypes.HTTPRequest.Method,
-    query: [URLQueryItem],
-    formData: MultipartFormData,
-    options: FileOptions,
-    headers: HTTPFields = [:]
-  ) throws {
-    var headers = headers
-    if headers[.contentType] == nil {
-      headers[.contentType] = formData.contentType
-    }
-    if headers[.cacheControl] == nil {
-      headers[.cacheControl] = "max-age=\(options.cacheControl)"
-    }
-    try self.init(
-      url: url,
-      method: method,
-      query: query,
-      headers: headers,
-      body: formData.encode()
-    )
+    return (response, responseBody)
   }
 }

@@ -1,6 +1,6 @@
+import HTTPTypesFoundation
 import Logging
 import OpenAPIRuntime
-import HTTPTypesFoundation
 
 #if canImport(Darwin)
   import struct Foundation.URL
@@ -54,5 +54,3 @@ extension HTTPTypes.HTTPRequest {
 extension HTTPTypes.HTTPResponse {
   fileprivate var prettyDescription: String { "\(status.code) [\(headerFields.prettyDescription)]" }
 }
-
-extension HTTPBody { fileprivate var prettyDescription: String { String(describing: self) } }

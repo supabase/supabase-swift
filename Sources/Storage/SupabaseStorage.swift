@@ -6,6 +6,7 @@ public struct StorageClientConfiguration: Sendable {
   public let encoder: JSONEncoder
   public let decoder: JSONDecoder
   public let session: StorageHTTPSession
+  public let transport: (any ClientTransport)?
   public let logger: (any SupabaseLogger)?
   public let useNewHostname: Bool
 
@@ -15,6 +16,7 @@ public struct StorageClientConfiguration: Sendable {
     encoder: JSONEncoder = .defaultStorageEncoder,
     decoder: JSONDecoder = .defaultStorageDecoder,
     session: StorageHTTPSession = .init(),
+    transport: (any ClientTransport)? = nil,
     logger: (any SupabaseLogger)? = nil,
     useNewHostname: Bool = false
   ) {
@@ -23,6 +25,7 @@ public struct StorageClientConfiguration: Sendable {
     self.encoder = encoder
     self.decoder = decoder
     self.session = session
+    self.transport = transport
     self.logger = logger
     self.useNewHostname = useNewHostname
   }
