@@ -839,13 +839,15 @@ public actor AuthClient {
     let providerToken = params["provider_token"]
     let providerRefreshToken = params["provider_refresh_token"]
 
-    let user = try await api.execute(
+    let data = try await api.execute(
       .init(
         url: configuration.url.appendingPathComponent("user"),
         method: .get,
         headers: [.authorization: "\(tokenType) \(accessToken)"]
       )
-    ).decoded(as: User.self, decoder: configuration.decoder)
+    )
+    
+    let user = try configuration.decoder.decode(User.self, from: data)
 
     let session = Session(
       providerToken: providerToken,
@@ -1041,10 +1043,8 @@ public actor AuthClient {
   }
 
   private func _verifyOTP(request: HTTPRequest) async throws -> AuthResponse {
-    let response = try await api.execute(request).decoded(
-      as: AuthResponse.self,
-      decoder: configuration.decoder
-    )
+    let data = try await api.execute(request)
+    let response = try configuration.decoder.decode(AuthResponse.self, from: data)
 
     if let session = response.session {
       await sessionManager.update(session)
@@ -1099,7 +1099,7 @@ public actor AuthClient {
     type: ResendMobileType,
     captchaToken: String? = nil
   ) async throws -> ResendMobileResponse {
-    try await api.execute(
+    let data = try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("resend"),
         method: .post,
@@ -1112,7 +1112,8 @@ public actor AuthClient {
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    
+    return try configuration.decoder.decode(ResendMobileResponse.self, from: data)
   }
 
   /// Sends a re-authentication OTP to the user's email or phone number.
@@ -1135,10 +1136,12 @@ public actor AuthClient {
 
     if let jwt {
       request.headers[.authorization] = "Bearer \(jwt)"
-      return try await api.execute(request).decoded(decoder: configuration.decoder)
+      let data = try await api.execute(request)
+      return try configuration.decoder.decode(User.self, from: data)
     }
 
-    return try await api.authorizedExecute(request).decoded(decoder: configuration.decoder)
+    let data = try await api.authorizedExecute(request)
+    return try configuration.decoder.decode(User.self, from: data)
   }
 
   /// Updates user data, if there is a logged in user.
@@ -1153,7 +1156,7 @@ public actor AuthClient {
     }
 
     var session = try await sessionManager.session()
-    let updatedUser = try await api.authorizedExecute(
+    let data = try await api.authorizedExecute(
       .init(
         url: configuration.url.appendingPathComponent("user"),
         method: .put,
@@ -1167,7 +1170,9 @@ public actor AuthClient {
         ].compactMap { $0 },
         body: configuration.encoder.encode(user)
       )
-    ).decoded(as: User.self, decoder: configuration.decoder)
+    )
+    
+    let updatedUser = try configuration.decoder.decode(User.self, from: data)
     session.user = updatedUser
     await sessionManager.update(session)
     eventEmitter.emit(.userUpdated, session: session)
@@ -1284,13 +1289,14 @@ public actor AuthClient {
       let url: URL
     }
 
-    let response = try await api.authorizedExecute(
+    let data = try await api.authorizedExecute(
       HTTPRequest(
         url: url,
         method: .get
       )
     )
-    .decoded(as: Response.self, decoder: configuration.decoder)
+    
+    let response = try configuration.decoder.decode(Response.self, from: data)
 
     return OAuthResponse(provider: provider, url: response.url)
   }
