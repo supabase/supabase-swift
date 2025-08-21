@@ -40,7 +40,7 @@ public final class SupabaseClient: Sendable {
           schema: options.db.schema,
           headers: headers,
           logger: options.global.logger,
-          fetch: fetchWithAuth,
+          session: session,
           encoder: options.db.encoder,
           decoder: options.db.decoder
         )
@@ -90,7 +90,7 @@ public final class SupabaseClient: Sendable {
           headers: headers,
           region: options.functions.region,
           logger: options.global.logger,
-          fetch: fetchWithAuth
+          session: session
         )
       }
 
@@ -178,23 +178,7 @@ public final class SupabaseClient: Sendable {
       logger: options.global.logger,
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
-      fetch: { request in
-        // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await withCheckedThrowingContinuation { continuation in
-          options.global.session.request(request).responseData { response in
-            switch response.result {
-            case .success(let data):
-              if let httpResponse = response.response {
-                continuation.resume(returning: (data, httpResponse))
-              } else {
-                continuation.resume(throwing: URLError(.badServerResponse))
-              }
-            case .failure(let error):
-              continuation.resume(throwing: error)
-            }
-          }
-        }
-      },
+      session: options.global.session,
       autoRefreshToken: options.auth.autoRefreshToken
     )
 
