@@ -749,7 +749,21 @@ public class RealtimeChannel {
           body: JSONSerialization.data(withJSONObject: body)
         )
 
-        let response = try await socket?.http.send(request)
+        let response = try await withCheckedThrowingContinuation { continuation in
+          socket?.session.request(request.urlRequest).responseData { response in
+            switch response.result {
+            case .success(let data):
+              if let httpResponse = response.response {
+                let httpResp = HTTPResponse(data: data, response: httpResponse)
+                continuation.resume(returning: httpResp)
+              } else {
+                continuation.resume(throwing: URLError(.badServerResponse))
+              }
+            case .failure(let error):
+              continuation.resume(throwing: error)
+            }
+          }
+        }
         guard let response, 200 ..< 300 ~= response.statusCode else {
           return .error
         }
