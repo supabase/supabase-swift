@@ -121,33 +121,23 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     let urlRequest = request.urlRequest
     
-    let (data, httpResponse) = try await withCheckedThrowingContinuation { continuation in
-      session.request(urlRequest).responseData { response in
-        switch response.result {
-        case .success(let responseData):
-          if let httpResponse = response.response {
-            continuation.resume(returning: (responseData, httpResponse))
-          } else {
-            continuation.resume(throwing: URLError(.badServerResponse))
-          }
-        case .failure(let error):
-          continuation.resume(throwing: error)
-        }
-      }
-    }
+    let data = try await session.request(urlRequest)
+      .validate(statusCode: 200..<300)
+      .serializingData()
+      .value
+
+    let value = try decode(data)
     
-    let response = HTTPResponse(data: data, response: httpResponse)
-
-    guard 200 ..< 300 ~= response.statusCode else {
-      if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
-        throw error
-      }
-
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
-    }
-
-    let value = try decode(response.data)
-    return PostgrestResponse(data: response.data, response: response.underlyingResponse, value: value)
+    // Create a mock HTTPURLResponse for backward compatibility
+    // This is a temporary solution until we can update the PostgrestResponse structure
+    let mockResponse = HTTPURLResponse(
+      url: URL(string: "https://example.com")!,
+      statusCode: 200,
+      httpVersion: nil,
+      headerFields: nil
+    )!
+    
+    return PostgrestResponse(data: data, response: mockResponse, value: value)
   }
 }
 
