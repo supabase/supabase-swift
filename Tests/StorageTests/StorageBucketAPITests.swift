@@ -254,7 +254,7 @@ final class StorageBucketAPITests: XCTestCase {
       url: url.appendingPathComponent("bucket/bucket123"),
       statusCode: 200,
       data: [
-        .delete: Data()
+        .delete: Data(#"{"message":"Bucket deleted"}"#.utf8)
       ]
     )
     .snapshotRequest {
@@ -276,7 +276,7 @@ final class StorageBucketAPITests: XCTestCase {
       url: url.appendingPathComponent("bucket/bucket123/empty"),
       statusCode: 200,
       data: [
-        .post: Data()
+        .post: Data(#"{"message":"Bucket emptied"}"#.utf8)
       ]
     )
     .snapshotRequest {

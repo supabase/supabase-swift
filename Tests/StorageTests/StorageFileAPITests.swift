@@ -1,14 +1,15 @@
 import Alamofire
 import InlineSnapshotTesting
 import Mocker
+import SnapshotTestingCustomDump
 import TestHelpers
 import XCTest
+
+@testable import Storage
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
-
-@testable import Storage
 
 final class StorageFileAPITests: XCTestCase {
   let url = URL(string: "http://localhost:54321/storage/v1")!
@@ -85,7 +86,7 @@ final class StorageFileAPITests: XCTestCase {
       url: url.appendingPathComponent("object/move"),
       statusCode: 200,
       data: [
-        .post: Data()
+        .post: Data(#"{"Key":"object\/new\/path.txt"}"#.utf8)
       ]
     )
     .snapshotRequest {
@@ -396,9 +397,21 @@ final class StorageFileAPITests: XCTestCase {
     do {
       try await storage.from("bucket")
         .move(from: "source", to: "destination")
-      XCTFail()
-    } catch let error as StorageError {
-      XCTAssertEqual(error.message, "Error")
+      XCTFail("Expected error")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AFError.responseValidationFailed(
+          reason: .customValidationFailed(
+            error: StorageError(
+              statusCode: nil,
+              message: "Error",
+              error: nil
+            )
+          )
+        )
+        """
+      }
     }
   }
 
@@ -427,10 +440,20 @@ final class StorageFileAPITests: XCTestCase {
     do {
       try await storage.from("bucket")
         .move(from: "source", to: "destination")
-      XCTFail()
-    } catch let error as HTTPError {
-      XCTAssertEqual(error.data, Data("error".utf8))
-      XCTAssertEqual(error.response.statusCode, 412)
+      XCTFail("Expected error")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AFError.responseValidationFailed(
+          reason: .customValidationFailed(
+            error: HTTPError(
+              data: Data(5 bytes),
+              response: NSHTTPURLResponse()
+            )
+          )
+        )
+        """
+      }
     }
   }
 
@@ -670,7 +693,7 @@ final class StorageFileAPITests: XCTestCase {
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 400,
       data: [
-        .head: Data()
+        .head: Data(#"{"message":"Error", "statusCode":"400"}"#.utf8)
       ]
     )
     .snapshotRequest {
@@ -694,7 +717,7 @@ final class StorageFileAPITests: XCTestCase {
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 404,
       data: [
-        .head: Data()
+        .head: Data(#"{"message":"Error", "statusCode":"404"}"#.utf8)
       ]
     )
     .snapshotRequest {
