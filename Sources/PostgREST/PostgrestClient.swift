@@ -114,7 +114,8 @@ public final class PostgrestClient: Sendable {
         url: configuration.url.appendingPathComponent(table),
         method: .get,
         headers: HTTPHeaders(configuration.headers)
-      )
+      ),
+      query: [:]
     )
   }
 
@@ -133,9 +134,10 @@ public final class PostgrestClient: Sendable {
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     let method: HTTPMethod
-    var url = configuration.url.appendingPathComponent("rpc/\(fn)")
+    let url = configuration.url.appendingPathComponent("rpc/\(fn)")
     let bodyData = try configuration.encoder.encode(params)
     var body: Data?
+    var query: Parameters = [:]
 
     if head || get {
       method = head ? .head : .get
@@ -148,7 +150,7 @@ public final class PostgrestClient: Sendable {
 
       for (key, value) in json {
         let formattedValue = (value as? [Any]).map(cleanFilterArray) ?? String(describing: value)
-        url.appendQueryItems([URLQueryItem(name: key, value: formattedValue)])
+        query[key] = formattedValue
       }
 
     } else {
@@ -169,7 +171,8 @@ public final class PostgrestClient: Sendable {
 
     return PostgrestFilterBuilder(
       configuration: configuration,
-      request: request
+      request: request,
+      query: query
     )
   }
 

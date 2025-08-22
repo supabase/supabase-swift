@@ -33,14 +33,14 @@ extension Result {
 }
 
 extension URL {
-  package var queryItems: [URLQueryItem] {
-    get {
-      URLComponents(url: self, resolvingAgainstBaseURL: false)?.percentEncodedQueryItems ?? []
-    }
-    set {
-      appendOrUpdateQueryItems(newValue)
-    }
-  }
+  // package var queryItems: [URLQueryItem] {
+  //   get {
+  //     URLComponents(url: self, resolvingAgainstBaseURL: false)?.percentEncodedQueryItems ?? []
+  //   }
+  //   set {
+  //     appendOrUpdateQueryItems(newValue)
+  //   }
+  // }
 
   package mutating func appendQueryItems(_ queryItems: [URLQueryItem]) {
     guard !queryItems.isEmpty else {
@@ -73,37 +73,39 @@ extension URL {
     return url
   }
 
-  package mutating func appendOrUpdateQueryItems(_ queryItems: [URLQueryItem]) {
-    guard !queryItems.isEmpty else {
-      return
-    }
+  // package mutating func appendOrUpdateQueryItems(_ queryItems: [URLQueryItem]) {
+  //   guard !queryItems.isEmpty else {
+  //     return
+  //   }
 
-    guard var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else {
-      return
-    }
+  //   guard var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else {
+  //     return
+  //   }
 
-    var currentQueryItems = components.percentEncodedQueryItems ?? []
+  //   var currentQueryItems = components.percentEncodedQueryItems ?? []
 
-    for queryItem in queryItems {
-      if let index = currentQueryItems.firstIndex(where: { $0.name == queryItem.name }) {
-        currentQueryItems[index] = queryItem
-      } else {
-        currentQueryItems.append(queryItem)
-      }
-    }
+  //   for var queryItem in queryItems {
+  //     queryItem.name = escape(queryItem.name)
+  //     queryItem.value = queryItem.value.map(escape)
+  //     if let index = currentQueryItems.firstIndex(where: { $0.name == queryItem.name }) {
+  //       currentQueryItems[index] = queryItem
+  //     } else {
+  //       currentQueryItems.append(queryItem)
+  //     }
+  //   }
 
-    components.percentEncodedQueryItems = currentQueryItems
+  //   components.percentEncodedQueryItems = currentQueryItems
 
-    if let newURL = components.url {
-      self = newURL
-    }
-  }
+  //   if let newURL = components.url {
+  //     self = newURL
+  //   }
+  // }
 
-  package func appendingOrUpdatingQueryItems(_ queryItems: [URLQueryItem]) -> URL {
-    var url = self
-    url.appendOrUpdateQueryItems(queryItems)
-    return url
-  }
+  // package func appendingOrUpdatingQueryItems(_ queryItems: [URLQueryItem]) -> URL {
+  //   var url = self
+  //   url.appendOrUpdateQueryItems(queryItems)
+  //   return url
+  // }
 }
 
 func escape(_ string: String) -> String {

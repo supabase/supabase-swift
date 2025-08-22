@@ -26,7 +26,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       }
       .joined(separator: "")
 
-      $0.request.url?.appendOrUpdateQueryItems([URLQueryItem(name: "select", value: cleanedColumns)])
+      $0.query["select"] = cleanedColumns
 
       if let count {
         $0.request.headers.appendOrUpdate("Prefer", value: "count=\(count.rawValue)")
@@ -74,9 +74,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       {
         let allKeys = jsonObject.flatMap(\.keys)
         let uniqueKeys = Set(allKeys).sorted()
-        $0.request.url?.appendOrUpdateQueryItems([
-          URLQueryItem(name: "columns", value: uniqueKeys.joined(separator: ","))
-        ])
+        $0.query["columns"] = uniqueKeys.joined(separator: ",")
       }
     }
 
@@ -110,7 +108,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
         "return=\(returning.rawValue)",
       ]
       if let onConflict {
-        $0.request.url?.appendOrUpdateQueryItems([URLQueryItem(name: "on_conflict", value: onConflict)])
+        $0.query["on_conflict"] = onConflict
       }
       $0.request.httpBody = try configuration.encoder.encode(values)
       if let count {
@@ -128,9 +126,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       {
         let allKeys = jsonObject.flatMap(\.keys)
         let uniqueKeys = Set(allKeys).sorted()
-        $0.request.url?.appendOrUpdateQueryItems([
-          URLQueryItem(name: "columns", value: uniqueKeys.joined(separator: ","))
-        ])
+        $0.query["columns"] = uniqueKeys.joined(separator: ",")
       }
     }
     return PostgrestFilterBuilder(self)
