@@ -1,3 +1,4 @@
+import Alamofire
 import Foundation
 import HTTPTypes
 
@@ -112,7 +113,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         headers: headers
       )
     )
-    
+
     let response = try configuration.decoder.decode(UploadResponse.self, from: data)
 
     return FileUploadResponse(
@@ -253,7 +254,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         )
       )
     )
-    
+
     let response = try configuration.decoder.decode(UploadResponse.self, from: data)
     return response.Key
   }
@@ -286,7 +287,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         )
       )
     )
-    
+
     let response = try configuration.decoder.decode(SignedURLResponse.self, from: data)
 
     return try makeSignedURL(response.signedURL, download: download)
@@ -338,7 +339,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         )
       )
     )
-    
+
     let response = try configuration.decoder.decode([SignedURLResponse].self, from: data)
 
     return try response.map { try makeSignedURL($0.signedURL, download: download) }
@@ -395,7 +396,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         body: configuration.encoder.encode(["prefixes": paths])
       )
     )
-    
+
     return try configuration.decoder.decode([FileObject].self, from: data)
   }
 
@@ -419,7 +420,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         body: encoder.encode(options)
       )
     )
-    
+
     return try configuration.decoder.decode([FileObject].self, from: data)
   }
 
@@ -457,7 +458,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         method: .get
       )
     )
-    
+
     return try configuration.decoder.decode(FileObjectV2.self, from: data)
   }
 
@@ -471,7 +472,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         )
       )
       return true
-    } catch {
+    } catch AFError.responseValidationFailed(.customValidationFailed(let error)) {
       var statusCode: Int?
 
       if let error = error as? StorageError {
@@ -566,7 +567,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         headers: headers
       )
     )
-    
+
     let response = try configuration.decoder.decode(Response.self, from: data)
 
     let signedURL = try makeSignedURL(response.url, download: nil)
@@ -668,7 +669,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         headers: headers
       )
     )
-    
+
     let response = try configuration.decoder.decode(UploadResponse.self, from: data)
     let fullPath = response.Key
 

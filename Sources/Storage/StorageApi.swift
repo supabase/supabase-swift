@@ -49,9 +49,22 @@ public class StorageApi: @unchecked Sendable {
     request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
 
     let urlRequest = request.urlRequest
-    
+
     return try await session.request(urlRequest)
-      .validate(statusCode: 200..<300)
+      .validate { request, response, data in
+        guard 200..<300 ~= response.statusCode else {
+          guard let data else {
+            return .failure(AFError.responseSerializationFailed(reason: .inputDataNilOrZeroLength))
+          }
+
+          do {
+            return .failure(try self.configuration.decoder.decode(StorageError.self, from: data))
+          } catch {
+            return .failure(HTTPError(data: data, response: response))
+          }
+        }
+        return .success(())
+      }
       .serializingData()
       .value
   }
