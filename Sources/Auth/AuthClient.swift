@@ -309,8 +309,9 @@ public actor AuthClient {
   }
 
   private func _signUp(request: HTTPRequest) async throws -> AuthResponse {
-    let data = try await api.execute(request)
-    let response = try configuration.decoder.decode(AuthResponse.self, from: data)
+    let response = try await api.execute(request)
+      .serializingDecodable(AuthResponse.self, decoder: configuration.decoder)
+      .value
 
     if let session = response.session {
       await sessionManager.update(session)
@@ -414,8 +415,9 @@ public actor AuthClient {
   }
 
   private func _signIn(request: HTTPRequest) async throws -> Session {
-    let data = try await api.execute(request)
-    let session = try configuration.decoder.decode(Session.self, from: data)
+    let session = try await api.execute(request)
+      .serializingDecodable(Session.self, decoder: configuration.decoder)
+      .value
 
     await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
@@ -516,7 +518,7 @@ public actor AuthClient {
   ) async throws -> SSOResponse {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    let data = try await api.execute(
+    return try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("sso"),
         method: .post,
@@ -532,8 +534,8 @@ public actor AuthClient {
         )
       )
     )
-    
-    return try configuration.decoder.decode(SSOResponse.self, from: data)
+    .serializingDecodable(SSOResponse.self, decoder: configuration.decoder)
+    .value
   }
 
   /// Attempts a single-sign on using an enterprise Identity Provider.
@@ -550,7 +552,7 @@ public actor AuthClient {
   ) async throws -> SSOResponse {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    let data = try await api.execute(
+    return try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("sso"),
         method: .post,
@@ -566,8 +568,8 @@ public actor AuthClient {
         )
       )
     )
-    
-    return try configuration.decoder.decode(SSOResponse.self, from: data)
+    .serializingDecodable(SSOResponse.self, decoder: configuration.decoder)
+    .value
   }
 
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
@@ -580,7 +582,7 @@ public actor AuthClient {
       )
     }
 
-    let data = try await api.execute(
+    let session = try await api.execute(
       .init(
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
@@ -592,9 +594,8 @@ public actor AuthClient {
           ]
         )
       )
-    )
-    
-    let session: Session = try configuration.decoder.decode(Session.self, from: data)
+    ).serializingDecodable(Session.self, decoder: configuration.decoder)
+      .value
 
     codeVerifierStorage.set(nil)
 
@@ -839,15 +840,15 @@ public actor AuthClient {
     let providerToken = params["provider_token"]
     let providerRefreshToken = params["provider_refresh_token"]
 
-    let data = try await api.execute(
+    let user = try await api.execute(
       .init(
         url: configuration.url.appendingPathComponent("user"),
         method: .get,
         headers: [.authorization: "\(tokenType) \(accessToken)"]
       )
     )
-    
-    let user = try configuration.decoder.decode(User.self, from: data)
+    .serializingDecodable(User.self, decoder: configuration.decoder)
+    .value
 
     let session = Session(
       providerToken: providerToken,
@@ -1043,8 +1044,9 @@ public actor AuthClient {
   }
 
   private func _verifyOTP(request: HTTPRequest) async throws -> AuthResponse {
-    let data = try await api.execute(request)
-    let response = try configuration.decoder.decode(AuthResponse.self, from: data)
+    let response = try await api.execute(request)
+      .serializingDecodable(AuthResponse.self, decoder: configuration.decoder)
+      .value
 
     if let session = response.session {
       await sessionManager.update(session)
@@ -1099,7 +1101,7 @@ public actor AuthClient {
     type: ResendMobileType,
     captchaToken: String? = nil
   ) async throws -> ResendMobileResponse {
-    let data = try await api.execute(
+    return try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("resend"),
         method: .post,
@@ -1112,8 +1114,8 @@ public actor AuthClient {
         )
       )
     )
-    
-    return try configuration.decoder.decode(ResendMobileResponse.self, from: data)
+    .serializingDecodable(ResendMobileResponse.self, decoder: configuration.decoder)
+    .value
   }
 
   /// Sends a re-authentication OTP to the user's email or phone number.
@@ -1136,12 +1138,14 @@ public actor AuthClient {
 
     if let jwt {
       request.headers[.authorization] = "Bearer \(jwt)"
-      let data = try await api.execute(request)
-      return try configuration.decoder.decode(User.self, from: data)
+      let user = try await api.execute(request)
+        .serializingDecodable(User.self, decoder: configuration.decoder)
+        .value
     }
 
-    let data = try await api.authorizedExecute(request)
-    return try configuration.decoder.decode(User.self, from: data)
+    return try await api.authorizedExecute(request)
+      .serializingDecodable(User.self, decoder: configuration.decoder)
+      .value
   }
 
   /// Updates user data, if there is a logged in user.
@@ -1156,7 +1160,7 @@ public actor AuthClient {
     }
 
     var session = try await sessionManager.session()
-    let data = try await api.authorizedExecute(
+    let updatedUser = try await api.authorizedExecute(
       .init(
         url: configuration.url.appendingPathComponent("user"),
         method: .put,
@@ -1171,8 +1175,9 @@ public actor AuthClient {
         body: configuration.encoder.encode(user)
       )
     )
-    
-    let updatedUser = try configuration.decoder.decode(User.self, from: data)
+    .serializingDecodable(User.self, decoder: configuration.decoder)
+    .value
+
     session.user = updatedUser
     await sessionManager.update(session)
     eventEmitter.emit(.userUpdated, session: session)
@@ -1289,14 +1294,14 @@ public actor AuthClient {
       let url: URL
     }
 
-    let data = try await api.authorizedExecute(
+    let response = try await api.authorizedExecute(
       HTTPRequest(
         url: url,
         method: .get
       )
     )
-    
-    let response = try configuration.decoder.decode(Response.self, from: data)
+    .serializingDecodable(Response.self, decoder: configuration.decoder)
+    .value
 
     return OAuthResponse(provider: provider, url: response.url)
   }
@@ -1304,12 +1309,14 @@ public actor AuthClient {
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
   /// with that identity once it's unlinked.
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
-    try await api.authorizedExecute(
+    _ = try await api.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("user/identities/\(identity.identityId)"),
         method: .delete
       )
     )
+    .serializingData()
+    .value
   }
 
   /// Sends a reset request to an email address.
@@ -1341,7 +1348,7 @@ public actor AuthClient {
           )
         )
       )
-    )
+    ).serializingData().value
   }
 
   /// Refresh and return a new session, regardless of expiry status.

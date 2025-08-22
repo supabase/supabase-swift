@@ -30,7 +30,8 @@ public struct AuthMFA: Sendable {
         body: encoder.encode(params)
       )
     )
-    .decoded(decoder: decoder)
+    .serializingDecodable(AuthMFAEnrollResponse.self, decoder: configuration.decoder)
+    .value
   }
 
   /// Prepares a challenge used to verify that a user has access to a MFA factor.
@@ -45,7 +46,8 @@ public struct AuthMFA: Sendable {
         body: params.channel == nil ? nil : encoder.encode(["channel": params.channel])
       )
     )
-    .decoded(decoder: decoder)
+    .serializingDecodable(AuthMFAChallengeResponse.self, decoder: configuration.decoder)
+    .value
   }
 
   /// Verifies a code against a challenge. The verification code is
@@ -61,7 +63,9 @@ public struct AuthMFA: Sendable {
         method: .post,
         body: encoder.encode(params)
       )
-    ).decoded(decoder: decoder)
+    )
+    .serializingDecodable(AuthMFAVerifyResponse.self, decoder: configuration.decoder)
+    .value
 
     await sessionManager.update(response)
 
@@ -83,7 +87,8 @@ public struct AuthMFA: Sendable {
         method: .delete
       )
     )
-    .decoded(decoder: decoder)
+    .serializingDecodable(AuthMFAUnenrollResponse.self, decoder: configuration.decoder)
+    .value
   }
 
   /// Helper method which creates a challenge and immediately uses the given code to verify against
@@ -122,7 +127,9 @@ public struct AuthMFA: Sendable {
   /// Returns the Authenticator Assurance Level (AAL) for the active session.
   ///
   /// - Returns: An authentication response with the Authenticator Assurance Level.
-  public func getAuthenticatorAssuranceLevel() async throws -> AuthMFAGetAuthenticatorAssuranceLevelResponse {
+  public func getAuthenticatorAssuranceLevel() async throws
+    -> AuthMFAGetAuthenticatorAssuranceLevelResponse
+  {
     do {
       let session = try await sessionManager.session()
       let payload = JWT.decodePayload(session.accessToken)
