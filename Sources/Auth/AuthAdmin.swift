@@ -24,7 +24,9 @@ public struct AuthAdmin: Sendable {
         url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
         method: .get
       )
-    ).decoded(decoder: configuration.decoder)
+    )
+    .serializingDecodable(User.self, decoder: configuration.decoder)
+    .value
   }
 
   /// Updates the user data.
@@ -39,7 +41,9 @@ public struct AuthAdmin: Sendable {
         method: .put,
         body: configuration.encoder.encode(attributes)
       )
-    ).decoded(decoder: configuration.decoder)
+    )
+    .serializingDecodable(User.self, decoder: configuration.decoder)
+    .value
   }
 
   /// Creates a new user.
@@ -57,7 +61,8 @@ public struct AuthAdmin: Sendable {
         body: encoder.encode(attributes)
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .serializingDecodable(User.self, decoder: configuration.decoder)
+    .value
   }
 
   /// Sends an invite link to an email address.
@@ -95,7 +100,8 @@ public struct AuthAdmin: Sendable {
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .serializingDecodable(User.self, decoder: configuration.decoder)
+    .value
   }
 
   /// Delete a user. Requires `service_role` key.
@@ -114,7 +120,7 @@ public struct AuthAdmin: Sendable {
           DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
         )
       )
-    )
+    ).serializingData().value
   }
 
   /// Get a list of users.
@@ -128,7 +134,7 @@ public struct AuthAdmin: Sendable {
       let aud: String
     }
 
-    let httpResponse = try await api.execute(
+    let httpResponse = await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/users"),
         method: .get,
@@ -138,17 +144,20 @@ public struct AuthAdmin: Sendable {
         ]
       )
     )
+    .serializingDecodable(Response.self, decoder: configuration.decoder)
+    .response
 
-    let response = try httpResponse.decoded(as: Response.self, decoder: configuration.decoder)
+    let response = try httpResponse.result.get()
 
     var pagination = ListUsersPaginatedResponse(
       users: response.users,
       aud: response.aud,
       lastPage: 0,
-      total: httpResponse.headers[.xTotalCount].flatMap(Int.init) ?? 0
+      total: httpResponse.response?.headers["X-Total-Count"].flatMap(Int.init) ?? 0
     )
 
-    let links = httpResponse.headers[.link]?.components(separatedBy: ",") ?? []
+    let links =
+      httpResponse.response?.headers["Link"].flatMap { $0.components(separatedBy: ",") } ?? []
     if !links.isEmpty {
       for link in links {
         let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
@@ -170,7 +179,7 @@ public struct AuthAdmin: Sendable {
   /*
    Generate link is commented out temporarily due issues with they Auth's decoding is configured.
    Will revisit it later.
-
+  
   /// Generates email links and OTPs to be sent via a custom email provider.
   ///
   /// - Parameter params: The parameters for the link generation.

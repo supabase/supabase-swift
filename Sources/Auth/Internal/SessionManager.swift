@@ -89,7 +89,8 @@ private actor LiveSessionManager {
               )
             )
           )
-          .decoded(as: Session.self, decoder: configuration.decoder)
+          .serializingDecodable(Session.self, decoder: configuration.decoder)
+          .value
 
           update(session)
           eventEmitter.emit(.tokenRefreshed, session: session)

@@ -13,7 +13,7 @@ struct APIClient: Sendable {
     Dependencies[clientID].session
   }
 
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Data {
+  func execute(_ request: Helpers.HTTPRequest) -> DataRequest {
     var request = request
     request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
 
@@ -22,15 +22,13 @@ struct APIClient: Sendable {
     }
 
     let urlRequest = request.urlRequest
-    
-    return try await session.request(urlRequest)
+
+    return session.request(urlRequest)
       .validate(statusCode: 200..<300)
-      .serializingData()
-      .value
   }
 
   @discardableResult
-  func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> Data {
+  func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> DataRequest {
     var sessionManager: SessionManager {
       Dependencies[clientID].sessionManager
     }
@@ -40,7 +38,7 @@ struct APIClient: Sendable {
     var request = request
     request.headers[.authorization] = "Bearer \(session.accessToken)"
 
-    return try await execute(request)
+    return execute(request)
   }
 
   func handleError(response: Helpers.HTTPResponse) -> AuthError {
