@@ -2,6 +2,8 @@ import Alamofire
 import Foundation
 import HTTPTypes
 
+struct NoopParameter: Encodable, Sendable {}
+
 struct APIClient: Sendable {
   let clientID: AuthClientID
 
@@ -21,6 +23,9 @@ struct APIClient: Sendable {
     Dependencies[clientID].session
   }
 
+  private let urlQueryEncoder: any ParameterEncoding = URLEncoding.queryString
+  private var defaultEncoder: any ParameterEncoder {
+    JSONParameterEncoder(encoder: configuration.encoder)
   /// Error codes that should clean up local session.
   private let sessionCleanupErrorCodes: [ErrorCode] = [
     .sessionNotFound,
@@ -28,47 +33,38 @@ struct APIClient: Sendable {
     .refreshTokenNotFound,
     .refreshTokenAlreadyUsed,
   ]
-
-  func execute(_ request: Helpers.HTTPRequest) -> DataRequest {
-    var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
-
-    if request.headers[.apiVersionHeaderName] == nil {
-      request.headers[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
-    }
-
-    let urlRequest = request.urlRequest
-
-    return session.request(urlRequest)
-      .validate(statusCode: 200..<300)
   }
 
-  @discardableResult
-  func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> DataRequest {
-    var sessionManager: SessionManager {
-      Dependencies[clientID].sessionManager
+  func execute<RequestBody: Encodable & Sendable>(
+    _ url: URL,
+    method: HTTPMethod = .get,
+    headers: HTTPHeaders = [:],
+    query: Parameters? = nil,
+    body: RequestBody? = NoopParameter(),
+    encoder: (any ParameterEncoder)? = nil
+  ) throws -> DataRequest {
+    var request = try URLRequest(url: url, method: method, headers: headers)
+
+    request = try urlQueryEncoder.encode(request, with: query)
+    if RequestBody.self != NoopParameter.self {
+      request = try (encoder ?? defaultEncoder).encode(body, into: request)
     }
 
-    let session = try await sessionManager.session()
-
-    var request = request
-    request.headers[.authorization] = "Bearer \(session.accessToken)"
-
-    return execute(request)
+    return session.request(request)
   }
 
-  func handleError(response: Helpers.HTTPResponse) async -> AuthError {
+  func handleError(response: HTTPURLResponse, data: Data) -> AuthError {
     guard
-      let error = try? response.decoded(
-        as: _RawAPIErrorResponse.self,
-        decoder: configuration.decoder
+      let error = try? configuration.decoder.decode(
+        _RawAPIErrorResponse.self,
+        from: data
       )
     else {
       return .api(
         message: "Unexpected error",
         errorCode: .unexpectedFailure,
-        underlyingData: response.data,
-        underlyingResponse: response.underlyingResponse
+        underlyingData: data,
+        underlyingResponse: response
       )
     }
 
@@ -104,14 +100,14 @@ struct APIClient: Sendable {
       return .api(
         message: error._getErrorMessage(),
         errorCode: errorCode ?? .unknown,
-        underlyingData: response.data,
-        underlyingResponse: response.underlyingResponse
+        underlyingData: data,
+        underlyingResponse: response
       )
     }
   }
 
-  private func parseResponseAPIVersion(_ response: Helpers.HTTPResponse) -> Date? {
-    guard let apiVersion = response.headers[.apiVersionHeaderName] else { return nil }
+  private func parseResponseAPIVersion(_ response: HTTPURLResponse) -> Date? {
+    guard let apiVersion = response.headers["X-Supabase-Api-Version"] else { return nil }
 
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -135,5 +131,38 @@ struct _RawAPIErrorResponse: Decodable {
 
   func _getErrorMessage() -> String {
     msg ?? message ?? errorDescription ?? error ?? "Unknown"
+  }
+}
+
+extension Alamofire.Session {
+  /// Create a new session with the same configuration but with some overridden properties.
+  func newSession(
+    adapter: (any RequestAdapter)? = nil
+  ) -> Alamofire.Session {
+    return Alamofire.Session(
+      session: session,
+      delegate: delegate,
+      rootQueue: rootQueue,
+      startRequestsImmediately: startRequestsImmediately,
+      requestQueue: requestQueue,
+      serializationQueue: serializationQueue,
+      interceptor: Interceptor(adapters: [self.interceptor, adapter].compactMap { $0 }),
+      serverTrustManager: serverTrustManager,
+      redirectHandler: redirectHandler,
+      cachedResponseHandler: cachedResponseHandler,
+      eventMonitors: [eventMonitor]
+    )
+  }
+}
+
+struct SupabaseApiVersionAdapter: RequestAdapter {
+  func adapt(
+    _ urlRequest: URLRequest,
+    for session: Alamofire.Session,
+    completion: @escaping @Sendable (_ result: Result<URLRequest, any Error>) -> Void
+  ) {
+    var request = urlRequest
+    request.headers["X-Supabase-Api-Version"] = apiVersions[._20240101]!.name.rawValue
+    completion(.success(request))
   }
 }
