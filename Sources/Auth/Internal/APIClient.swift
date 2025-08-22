@@ -51,6 +51,12 @@ struct APIClient: Sendable {
     }
 
     return session.request(request)
+      .validate { _, response, data in
+        guard 200..<300 ~= response.statusCode else {
+          return .failure(handleError(response: response, data: data ?? Data()))
+        }
+        return .success(())
+      }
   }
 
   func handleError(response: HTTPURLResponse, data: Data) -> AuthError {
