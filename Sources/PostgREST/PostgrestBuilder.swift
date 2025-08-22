@@ -15,6 +15,7 @@ public class PostgrestBuilder: @unchecked Sendable {
 
   struct MutableState {
     var request: URLRequest
+    var query: Parameters
 
     /// The options for fetching data from the PostgREST server.
     var fetchOptions: FetchOptions
@@ -24,7 +25,8 @@ public class PostgrestBuilder: @unchecked Sendable {
 
   init(
     configuration: PostgrestClient.Configuration,
-    request: URLRequest
+    request: URLRequest,
+    query: Parameters
   ) {
     self.configuration = configuration
     self.session = configuration.session
@@ -32,6 +34,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     mutableState = LockIsolated(
       MutableState(
         request: request,
+        query: query,
         fetchOptions: FetchOptions()
       )
     )
@@ -40,7 +43,8 @@ public class PostgrestBuilder: @unchecked Sendable {
   convenience init(_ other: PostgrestBuilder) {
     self.init(
       configuration: other.configuration,
-      request: other.mutableState.value.request
+      request: other.mutableState.value.request,
+      query: other.mutableState.value.query
     )
   }
 
@@ -86,7 +90,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     options: FetchOptions,
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    let request = mutableState.withValue {
+    let (request, query) = mutableState.withValue {
       $0.fetchOptions = options
 
       if $0.fetchOptions.head {
@@ -110,16 +114,35 @@ public class PostgrestBuilder: @unchecked Sendable {
         }
       }
 
-      return $0.request
+      return ($0.request, $0.query)
     }
 
-    let response = await session.request(request)
-      .validate(statusCode: 200..<300)
+    let urlEncoder = URLEncoding(destination: .queryString)
+
+    let response = await session.request(try urlEncoder.encode(request, with: query))
+      .validate { request, response, data in
+        guard 200..<300 ~= response.statusCode else {
+
+          guard let data else {
+            return .failure(AFError.responseSerializationFailed(reason: .inputDataNilOrZeroLength))
+          }
+
+          do {
+            return .failure(
+              try self.configuration.decoder.decode(PostgrestError.self, from: data)
+            )
+          } catch {
+            return .failure(HTTPError(data: data, response: response))
+          }
+        }
+        return .success(())
+      }
       .serializingData()
       .response
 
     let value = try decode(response.result.get())
 
-    return PostgrestResponse(data: response.data!, response: response.response!, value: value)
+    return PostgrestResponse(
+      data: response.data ?? Data(), response: response.response!, value: value)
   }
 }
