@@ -110,10 +110,10 @@ public final class PostgrestClient: Sendable {
   public func from(_ table: String) -> PostgrestQueryBuilder {
     PostgrestQueryBuilder(
       configuration: configuration,
-      request: .init(
+      request: try! .init(
         url: configuration.url.appendingPathComponent(table),
         method: .get,
-        headers: HTTPFields(configuration.headers)
+        headers: HTTPHeaders(configuration.headers)
       )
     )
   }
@@ -132,7 +132,7 @@ public final class PostgrestClient: Sendable {
     get: Bool = false,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    let method: HTTPTypes.HTTPRequest.Method
+    let method: HTTPMethod
     var url = configuration.url.appendingPathComponent("rpc/\(fn)")
     let bodyData = try configuration.encoder.encode(params)
     var body: Data?
@@ -156,15 +156,15 @@ public final class PostgrestClient: Sendable {
       body = bodyData
     }
 
-    var request = HTTPRequest(
+    var request = try! URLRequest(
       url: url,
       method: method,
-      headers: HTTPFields(configuration.headers),
-      body: params is NoParams ? nil : body
+      headers: HTTPHeaders(configuration.headers)
     )
+    request.httpBody = params is NoParams ? nil : body
 
     if let count {
-      request.headers[.prefer] = "count=\(count.rawValue)"
+      request.headers["Prefer"] = "count=\(count.rawValue)"
     }
 
     return PostgrestFilterBuilder(
