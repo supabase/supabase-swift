@@ -1,3 +1,4 @@
+import Alamofire
 import ConcurrencyExtras
 import HTTPTypes
 import InlineSnapshotTesting
@@ -32,10 +33,7 @@ final class FunctionsClientTests: XCTestCase {
       "apikey": apiKey
     ],
     region: region,
-    fetch: { request in
-      try await self.session.data(for: request)
-    },
-    sessionConfiguration: sessionConfiguration
+    session: Alamofire.Session(configuration: sessionConfiguration)
   )
 
   override func setUp() {

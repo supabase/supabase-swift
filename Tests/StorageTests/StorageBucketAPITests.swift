@@ -1,3 +1,4 @@
+import Alamofire
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -32,10 +33,7 @@ final class StorageBucketAPITests: XCTestCase {
           "apikey":
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
         ],
-        session: StorageHTTPSession(
-          fetch: { try await session.data(for: $0) },
-          upload: { try await session.upload(for: $0, from: $1) }
-        ),
+        session: Alamofire.Session(configuration: configuration),
         logger: nil
       )
     )
