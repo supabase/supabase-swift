@@ -1,3 +1,4 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 
@@ -98,7 +99,7 @@ public actor AuthClient {
 
     Dependencies[clientID] = Dependencies(
       configuration: configuration,
-      session: configuration.session,
+      session: configuration.session.newSession(adapter: SupabaseApiVersionAdapter()),
       api: APIClient(clientID: clientID),
       codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
@@ -251,28 +252,17 @@ public actor AuthClient {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     return try await _signUp(
-      request: .init(
-        url: configuration.url.appendingPathComponent("signup"),
-        method: .post,
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(
-          SignUpRequest(
-            email: email,
-            password: password,
-            data: data,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
-            codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
-          )
-        )
-      )
+      body: SignUpRequest(
+        email: email,
+        password: password,
+        data: data,
+        gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+        codeChallenge: codeChallenge,
+        codeChallengeMethod: codeChallengeMethod
+      ),
+      query: (redirectTo ?? configuration.redirectToURL).map {
+        ["redirect_to": $0.absoluteString]
+      }
     )
   }
 
@@ -292,26 +282,25 @@ public actor AuthClient {
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
     try await _signUp(
-      request: .init(
-        url: configuration.url.appendingPathComponent("signup"),
-        method: .post,
-        body: configuration.encoder.encode(
-          SignUpRequest(
-            password: password,
-            phone: phone,
-            channel: channel,
-            data: data,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
+      body: SignUpRequest(
+        password: password,
+        phone: phone,
+        channel: channel,
+        data: data,
+        gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
       )
     )
   }
 
-  private func _signUp(request: HTTPRequest) async throws -> AuthResponse {
-    let response = try await api.execute(request)
-      .serializingDecodable(AuthResponse.self, decoder: configuration.decoder)
-      .value
+  private func _signUp(body: SignUpRequest, query: Parameters? = nil) async throws -> AuthResponse {
+    let response = try await api.execute(
+      configuration.url.appendingPathComponent("signup"),
+      method: .post,
+      query: query,
+      body: body
+    )
+    .serializingDecodable(AuthResponse.self, decoder: configuration.decoder)
+    .value
 
     if let session = response.session {
       await sessionManager.update(session)
@@ -333,17 +322,11 @@ public actor AuthClient {
     captchaToken: String? = nil
   ) async throws -> Session {
     try await _signIn(
-      request: .init(
-        url: configuration.url.appendingPathComponent("token"),
-        method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "password")],
-        body: configuration.encoder.encode(
-          UserCredentials(
-            email: email,
-            password: password,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
+      grantType: "password",
+      credentials: UserCredentials(
+        email: email,
+        password: password,
+        gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
       )
     )
   }
@@ -360,17 +343,11 @@ public actor AuthClient {
     captchaToken: String? = nil
   ) async throws -> Session {
     try await _signIn(
-      request: .init(
-        url: configuration.url.appendingPathComponent("token"),
-        method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "password")],
-        body: configuration.encoder.encode(
-          UserCredentials(
-            password: password,
-            phone: phone,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
+      grantType: "password",
+      credentials: UserCredentials(
+        password: password,
+        phone: phone,
+        gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
       )
     )
   }
@@ -380,12 +357,8 @@ public actor AuthClient {
   @discardableResult
   public func signInWithIdToken(credentials: OpenIDConnectCredentials) async throws -> Session {
     try await _signIn(
-      request: .init(
-        url: configuration.url.appendingPathComponent("token"),
-        method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "id_token")],
-        body: configuration.encoder.encode(credentials)
-      )
+      grantType: "id_token",
+      credentials: credentials
     )
   }
 
@@ -400,24 +373,26 @@ public actor AuthClient {
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
   ) async throws -> Session {
-    try await _signIn(
-      request: HTTPRequest(
-        url: configuration.url.appendingPathComponent("signup"),
-        method: .post,
-        body: configuration.encoder.encode(
-          SignUpRequest(
-            data: data,
-            gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) }
-          )
-        )
+    try await _signUp(
+      body: SignUpRequest(
+        data: data,
+        gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) }
       )
-    )
+    ).session!  // anonymous sign in will always return a session
   }
 
-  private func _signIn(request: HTTPRequest) async throws -> Session {
-    let session = try await api.execute(request)
-      .serializingDecodable(Session.self, decoder: configuration.decoder)
-      .value
+  private func _signIn<Credentials: Encodable & Sendable>(
+    grantType: String,
+    credentials: Credentials
+  ) async throws -> Session {
+    let session = try await api.execute(
+      configuration.url.appendingPathComponent("token"),
+      method: .post,
+      query: ["grant_type": grantType],
+      body: credentials
+    )
+    .serializingDecodable(Session.self, decoder: configuration.decoder)
+    .value
 
     await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
@@ -446,29 +421,23 @@ public actor AuthClient {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     _ = try await api.execute(
-      .init(
-        url: configuration.url.appendingPathComponent("otp"),
-        method: .post,
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(
-          OTPParams(
-            email: email,
-            createUser: shouldCreateUser,
-            data: data,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
-            codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
-          )
+      configuration.url.appendingPathComponent("otp"),
+      method: .post,
+      query: (redirectTo ?? configuration.redirectToURL).map {
+        ["redirect_to": $0.absoluteString]
+      },
+      body:
+        OTPParams(
+          email: email,
+          createUser: shouldCreateUser,
+          data: data,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+          codeChallenge: codeChallenge,
+          codeChallengeMethod: codeChallengeMethod
         )
-      )
     )
+    .serializingData()
+    .value
   }
 
   /// Log in user using a one-time password (OTP)..
@@ -489,20 +458,18 @@ public actor AuthClient {
     captchaToken: String? = nil
   ) async throws {
     _ = try await api.execute(
-      .init(
-        url: configuration.url.appendingPathComponent("otp"),
-        method: .post,
-        body: configuration.encoder.encode(
-          OTPParams(
-            phone: phone,
-            createUser: shouldCreateUser,
-            channel: channel,
-            data: data,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
+      configuration.url.appendingPathComponent("otp"),
+      method: .post,
+      body: OTPParams(
+        phone: phone,
+        createUser: shouldCreateUser,
+        channel: channel,
+        data: data,
+        gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
       )
     )
+    .serializingData()
+    .value
   }
 
   /// Attempts a single-sign on using an enterprise Identity Provider.
@@ -519,19 +486,15 @@ public actor AuthClient {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     return try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("sso"),
-        method: .post,
-        body: configuration.encoder.encode(
-          SignInWithSSORequest(
-            providerId: nil,
-            domain: domain,
-            redirectTo: redirectTo ?? configuration.redirectToURL,
-            gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
-            codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
-          )
-        )
+      configuration.url.appendingPathComponent("sso"),
+      method: .post,
+      body: SignInWithSSORequest(
+        providerId: nil,
+        domain: domain,
+        redirectTo: redirectTo ?? configuration.redirectToURL,
+        gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
+        codeChallenge: codeChallenge,
+        codeChallengeMethod: codeChallengeMethod
       )
     )
     .serializingDecodable(SSOResponse.self, decoder: configuration.decoder)
@@ -553,19 +516,15 @@ public actor AuthClient {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     return try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("sso"),
-        method: .post,
-        body: configuration.encoder.encode(
-          SignInWithSSORequest(
-            providerId: providerId,
-            domain: nil,
-            redirectTo: redirectTo ?? configuration.redirectToURL,
-            gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
-            codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
-          )
-        )
+      configuration.url.appendingPathComponent("sso"),
+      method: .post,
+      body: SignInWithSSORequest(
+        providerId: providerId,
+        domain: nil,
+        redirectTo: redirectTo ?? configuration.redirectToURL,
+        gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
+        codeChallenge: codeChallenge,
+        codeChallengeMethod: codeChallengeMethod
       )
     )
     .serializingDecodable(SSOResponse.self, decoder: configuration.decoder)
@@ -582,19 +541,13 @@ public actor AuthClient {
     }
 
     let session = try await api.execute(
-      .init(
-        url: configuration.url.appendingPathComponent("token"),
-        method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "pkce")],
-        body: configuration.encoder.encode(
-          [
-            "auth_code": authCode,
-            "code_verifier": codeVerifier,
-          ]
-        )
-      )
-    ).serializingDecodable(Session.self, decoder: configuration.decoder)
-      .value
+      configuration.url.appendingPathComponent("token"),
+      method: .post,
+      query: ["grant_type": "pkce"],
+      body: ["auth_code": authCode, "code_verifier": codeVerifier]
+    )
+    .serializingDecodable(Session.self, decoder: configuration.decoder)
+    .value
 
     codeVerifierStorage.set(nil)
 
@@ -838,11 +791,9 @@ public actor AuthClient {
     let providerRefreshToken = params["provider_refresh_token"]
 
     let user = try await api.execute(
-      .init(
-        url: configuration.url.appendingPathComponent("user"),
-        method: .get,
-        headers: [.authorization: "\(tokenType) \(accessToken)"]
-      )
+      configuration.url.appendingPathComponent("user"),
+      method: .get,
+      headers: [.authorization(bearerToken: accessToken)]
     )
     .serializingDecodable(User.self, decoder: configuration.decoder)
     .value
@@ -945,13 +896,13 @@ public actor AuthClient {
 
     do {
       _ = try await api.execute(
-        .init(
-          url: configuration.url.appendingPathComponent("logout"),
-          method: .post,
-          query: [URLQueryItem(name: "scope", value: scope.rawValue)],
-          headers: [.authorization: "Bearer \(accessToken)"]
-        )
+        configuration.url.appendingPathComponent("logout"),
+        method: .post,
+        headers: [.authorization(bearerToken: accessToken)],
+        query: ["scope": scope.rawValue]
       )
+      .serializingData()
+      .value
     } catch let AuthError.api(_, _, _, response)
       where [404, 403, 401].contains(response.statusCode)
     {
@@ -970,26 +921,15 @@ public actor AuthClient {
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
     try await _verifyOTP(
-      request: .init(
-        url: configuration.url.appendingPathComponent("verify"),
-        method: .post,
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(
-          VerifyOTPParams.email(
-            VerifyEmailOTPParams(
-              email: email,
-              token: token,
-              type: type,
-              gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-            )
-          )
+      query: (redirectTo ?? configuration.redirectToURL).map {
+        ["redirect_to": $0.absoluteString]
+      },
+      body: .email(
+        VerifyEmailOTPParams(
+          email: email,
+          token: token,
+          type: type,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       )
     )
@@ -1004,18 +944,12 @@ public actor AuthClient {
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
     try await _verifyOTP(
-      request: .init(
-        url: configuration.url.appendingPathComponent("verify"),
-        method: .post,
-        body: configuration.encoder.encode(
-          VerifyOTPParams.mobile(
-            VerifyMobileOTPParams(
-              phone: phone,
-              token: token,
-              type: type,
-              gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-            )
-          )
+      body: .mobile(
+        VerifyMobileOTPParams(
+          phone: phone,
+          token: token,
+          type: type,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       )
     )
@@ -1028,22 +962,22 @@ public actor AuthClient {
     type: EmailOTPType
   ) async throws -> AuthResponse {
     try await _verifyOTP(
-      request: .init(
-        url: configuration.url.appendingPathComponent("verify"),
-        method: .post,
-        body: configuration.encoder.encode(
-          VerifyOTPParams.tokenHash(
-            VerifyTokenHashParams(tokenHash: tokenHash, type: type)
-          )
-        )
-      )
+      body: .tokenHash(VerifyTokenHashParams(tokenHash: tokenHash, type: type))
     )
   }
 
-  private func _verifyOTP(request: HTTPRequest) async throws -> AuthResponse {
-    let response = try await api.execute(request)
-      .serializingDecodable(AuthResponse.self, decoder: configuration.decoder)
-      .value
+  private func _verifyOTP(
+    query: Parameters? = nil,
+    body: VerifyOTPParams
+  ) async throws -> AuthResponse {
+    let response = try await api.execute(
+      configuration.url.appendingPathComponent("verify"),
+      method: .post,
+      query: query,
+      body: body
+    )
+    .serializingDecodable(AuthResponse.self, decoder: configuration.decoder)
+    .value
 
     if let session = response.session {
       await sessionManager.update(session)
@@ -1064,26 +998,19 @@ public actor AuthClient {
     captchaToken: String? = nil
   ) async throws {
     _ = try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("resend"),
-        method: .post,
-        query: [
-          (emailRedirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(
-          ResendEmailParams(
-            type: type,
-            email: email,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
+      configuration.url.appendingPathComponent("resend"),
+      method: .post,
+      query: (emailRedirectTo ?? configuration.redirectToURL).map {
+        ["redirect_to": $0.absoluteString]
+      },
+      body: ResendEmailParams(
+        type: type,
+        email: email,
+        gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
       )
     )
+    .serializingData()
+    .value
   }
 
   /// Resends an existing SMS OTP or phone change OTP.
@@ -1099,16 +1026,12 @@ public actor AuthClient {
     captchaToken: String? = nil
   ) async throws -> ResendMobileResponse {
     return try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("resend"),
-        method: .post,
-        body: configuration.encoder.encode(
-          ResendMobileParams(
-            type: type,
-            phone: phone,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
+      configuration.url.appendingPathComponent("resend"),
+      method: .post,
+      body: ResendMobileParams(
+        type: type,
+        phone: phone,
+        gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
       )
     )
     .serializingDecodable(ResendMobileResponse.self, decoder: configuration.decoder)
@@ -1117,12 +1040,15 @@ public actor AuthClient {
 
   /// Sends a re-authentication OTP to the user's email or phone number.
   public func reauthenticate() async throws {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("reauthenticate"),
-        method: .get
-      )
+    _ = try await api.execute(
+      configuration.url.appendingPathComponent("reauthenticate"),
+      method: .get,
+      headers: [
+        .authorization(bearerToken: try await session.accessToken)
+      ]
     )
+    .serializingData()
+    .value
   }
 
   /// Gets the current user details if there is an existing session.
@@ -1131,18 +1057,25 @@ public actor AuthClient {
   ///
   /// Should be used only when you require the most current user data. For faster results, ``currentUser`` is recommended.
   public func user(jwt: String? = nil) async throws -> User {
-    var request = HTTPRequest(url: configuration.url.appendingPathComponent("user"), method: .get)
-
     if let jwt {
-      request.headers[.authorization] = "Bearer \(jwt)"
-      let user = try await api.execute(request)
-        .serializingDecodable(User.self, decoder: configuration.decoder)
-        .value
-    }
-
-    return try await api.authorizedExecute(request)
+      return try await api.execute(
+        configuration.url.appendingPathComponent("user"),
+        headers: [
+          .authorization(bearerToken: jwt)
+        ]
+      )
       .serializingDecodable(User.self, decoder: configuration.decoder)
       .value
+    }
+
+    return try await api.execute(
+      configuration.url.appendingPathComponent("user"),
+      headers: [
+        .authorization(bearerToken: try await session.accessToken)
+      ]
+    )
+    .serializingDecodable(User.self, decoder: configuration.decoder)
+    .value
   }
 
   /// Updates user data, if there is a logged in user.
@@ -1157,20 +1090,13 @@ public actor AuthClient {
     }
 
     var session = try await sessionManager.session()
-    let updatedUser = try await api.authorizedExecute(
-      .init(
-        url: configuration.url.appendingPathComponent("user"),
-        method: .put,
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(user)
-      )
+    let updatedUser = try await api.execute(
+      configuration.url.appendingPathComponent("user"),
+      method: .put,
+      query: (redirectTo ?? configuration.redirectToURL).map {
+        ["redirect_to": $0.absoluteString]
+      },
+      body: user
     )
     .serializingDecodable(User.self, decoder: configuration.decoder)
     .value
@@ -1267,11 +1193,12 @@ public actor AuthClient {
       let url: URL
     }
 
-    let response = try await api.authorizedExecute(
-      HTTPRequest(
-        url: url,
-        method: .get
-      )
+    let response = try await api.execute(
+      url,
+      method: .get,
+      headers: [
+        .authorization(bearerToken: try await session.accessToken)
+      ]
     )
     .serializingDecodable(Response.self, decoder: configuration.decoder)
     .value
@@ -1282,11 +1209,12 @@ public actor AuthClient {
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
   /// with that identity once it's unlinked.
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
-    _ = try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("user/identities/\(identity.identityId)"),
-        method: .delete
-      )
+    _ = try await api.execute(
+      configuration.url.appendingPathComponent("user/identities/\(identity.identityId)"),
+      method: .delete,
+      headers: [
+        .authorization(bearerToken: try await session.accessToken)
+      ]
     )
     .serializingData()
     .value
@@ -1301,25 +1229,16 @@ public actor AuthClient {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     _ = try await api.execute(
-      .init(
-        url: configuration.url.appendingPathComponent("recover"),
-        method: .post,
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(
-          RecoverParams(
-            email: email,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
-            codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
-          )
-        )
+      configuration.url.appendingPathComponent("recover"),
+      method: .post,
+      query: (redirectTo ?? configuration.redirectToURL).map {
+        ["redirect_to": $0.absoluteString]
+      },
+      body: RecoverParams(
+        email: email,
+        gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+        codeChallenge: codeChallenge,
+        codeChallengeMethod: codeChallengeMethod
       )
     ).serializingData().value
   }

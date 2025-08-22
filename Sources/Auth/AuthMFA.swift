@@ -23,12 +23,13 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for enrolling a new MFA factor.
   /// - Returns: An authentication response after enrolling the factor.
   public func enroll(params: any MFAEnrollParamsType) async throws -> AuthMFAEnrollResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors"),
-        method: .post,
-        body: encoder.encode(params)
-      )
+    try await api.execute(
+      configuration.url.appendingPathComponent("factors"),
+      method: .post,
+      headers: [
+        .authorization(bearerToken: try await sessionManager.session().accessToken)
+      ],
+      body: params
     )
     .serializingDecodable(AuthMFAEnrollResponse.self, decoder: configuration.decoder)
     .value
@@ -39,12 +40,13 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for creating a challenge.
   /// - Returns: An authentication response with the challenge information.
   public func challenge(params: MFAChallengeParams) async throws -> AuthMFAChallengeResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
-        method: .post,
-        body: params.channel == nil ? nil : encoder.encode(["channel": params.channel])
-      )
+    try await api.execute(
+      configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
+      method: .post,
+      headers: [
+        .authorization(bearerToken: try await sessionManager.session().accessToken)
+      ],
+      body: params.channel == nil ? nil : ["channel": params.channel]
     )
     .serializingDecodable(AuthMFAChallengeResponse.self, decoder: configuration.decoder)
     .value
@@ -57,12 +59,13 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response after verifying the factor.
   @discardableResult
   public func verify(params: MFAVerifyParams) async throws -> AuthMFAVerifyResponse {
-    let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
-        method: .post,
-        body: encoder.encode(params)
-      )
+    let response: AuthMFAVerifyResponse = try await api.execute(
+      configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
+      method: .post,
+      headers: [
+        .authorization(bearerToken: try await sessionManager.session().accessToken)
+      ],
+      body: params
     )
     .serializingDecodable(AuthMFAVerifyResponse.self, decoder: configuration.decoder)
     .value
@@ -81,11 +84,12 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response after unenrolling the factor.
   @discardableResult
   public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)"),
-        method: .delete
-      )
+    try await api.execute(
+      configuration.url.appendingPathComponent("factors/\(params.factorId)"),
+      method: .delete,
+      headers: [
+        .authorization(bearerToken: try await sessionManager.session().accessToken)
+      ]
     )
     .serializingDecodable(AuthMFAUnenrollResponse.self, decoder: configuration.decoder)
     .value

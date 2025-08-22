@@ -39,6 +39,16 @@ extension HTTPField.Name {
 }
 
 extension HTTPHeaders {
+  package func merging(with other: Self) -> Self {
+    var copy = self
+
+    for field in other {
+      copy[field.name] = field.value
+    }
+
+    return copy
+  }
+
   /// Append or update a value in header.
   ///
   /// Example:

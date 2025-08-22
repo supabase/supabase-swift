@@ -20,10 +20,7 @@ public struct AuthAdmin: Sendable {
   /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
   public func getUserById(_ uid: UUID) async throws -> User {
     try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
-        method: .get
-      )
+      configuration.url.appendingPathComponent("admin/users/\(uid)")
     )
     .serializingDecodable(User.self, decoder: configuration.decoder)
     .value
@@ -36,11 +33,9 @@ public struct AuthAdmin: Sendable {
   @discardableResult
   public func updateUserById(_ uid: UUID, attributes: AdminUserAttributes) async throws -> User {
     try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
-        method: .put,
-        body: configuration.encoder.encode(attributes)
-      )
+      configuration.url.appendingPathComponent("admin/users/\(uid)"),
+      method: .put,
+      body: attributes
     )
     .serializingDecodable(User.self, decoder: configuration.decoder)
     .value
@@ -55,11 +50,9 @@ public struct AuthAdmin: Sendable {
   @discardableResult
   public func createUser(attributes: AdminUserAttributes) async throws -> User {
     try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users"),
-        method: .post,
-        body: encoder.encode(attributes)
-      )
+      configuration.url.appendingPathComponent("admin/users"),
+      method: .post,
+      body: attributes
     )
     .serializingDecodable(User.self, decoder: configuration.decoder)
     .value
@@ -81,24 +74,15 @@ public struct AuthAdmin: Sendable {
     redirectTo: URL? = nil
   ) async throws -> User {
     try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/invite"),
-        method: .post,
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 },
-        body: encoder.encode(
-          [
-            "email": .string(email),
-            "data": data.map({ AnyJSON.object($0) }) ?? .null,
-          ]
-        )
-      )
+      configuration.url.appendingPathComponent("admin/invite"),
+      method: .post,
+      query: (redirectTo ?? configuration.redirectToURL).map {
+        ["redirect_to": $0.absoluteString]
+      },
+      body: [
+        "email": .string(email),
+        "data": data.map({ AnyJSON.object($0) }) ?? .null,
+      ]
     )
     .serializingDecodable(User.self, decoder: configuration.decoder)
     .value
@@ -113,13 +97,9 @@ public struct AuthAdmin: Sendable {
   /// - Warning: Never expose your `service_role` key on the client.
   public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws {
     _ = try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(id)"),
-        method: .delete,
-        body: encoder.encode(
-          DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
-        )
-      )
+      configuration.url.appendingPathComponent("admin/users/\(id)"),
+      method: .delete,
+      body: DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
     ).serializingData().value
   }
 
@@ -134,15 +114,12 @@ public struct AuthAdmin: Sendable {
       let aud: String
     }
 
-    let httpResponse = await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users"),
-        method: .get,
-        query: [
-          URLQueryItem(name: "page", value: params?.page?.description ?? ""),
-          URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
-        ]
-      )
+    let httpResponse = try await api.execute(
+      configuration.url.appendingPathComponent("admin/users"),
+      query: [
+        "page": params?.page?.description ?? "",
+        "per_page": params?.perPage?.description ?? "",
+      ]
     )
     .serializingDecodable(Response.self, decoder: configuration.decoder)
     .response
