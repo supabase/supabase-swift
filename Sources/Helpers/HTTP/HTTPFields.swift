@@ -1,3 +1,4 @@
+import Alamofire
 import HTTPTypes
 
 extension HTTPFields {
@@ -29,19 +30,28 @@ extension HTTPFields {
     return copy
   }
 
+}
+
+extension HTTPField.Name {
+  package static let xClientInfo = HTTPField.Name("X-Client-Info")!
+  package static let xRegion = HTTPField.Name("x-region")!
+  package static let xRelayError = HTTPField.Name("x-relay-error")!
+}
+
+extension HTTPHeaders {
   /// Append or update a value in header.
   ///
   /// Example:
   /// ```swift
-  /// var headers: HTTPFields = [
+  /// var headers: HTTPHeaders = [
   ///   "Prefer": "count=exact,return=representation"
   /// ]
   ///
-  /// headers.appendOrUpdate(.prefer, value: "return=minimal")
+  /// headers.appendOrUpdate("Prefer", value: "return=minimal")
   /// #expect(headers == ["Prefer": "count=exact,return=minimal"]
   /// ```
   package mutating func appendOrUpdate(
-    _ name: HTTPField.Name,
+    _ name: String,
     value: String,
     separator: String = ","
   ) {
@@ -61,10 +71,4 @@ extension HTTPFields {
       self[name] = value
     }
   }
-}
-
-extension HTTPField.Name {
-  package static let xClientInfo = HTTPField.Name("X-Client-Info")!
-  package static let xRegion = HTTPField.Name("x-region")!
-  package static let xRelayError = HTTPField.Name("x-relay-error")!
 }
