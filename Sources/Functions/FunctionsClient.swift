@@ -174,7 +174,7 @@ public final class FunctionsClient: Sendable {
   ) async throws -> Data {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
     return try await session.request(request)
-      .validate(statusCode: 200..<300)
+      .validate(self.validate)
       .serializingData()
       .value
   }
@@ -194,17 +194,19 @@ public final class FunctionsClient: Sendable {
     let urlRequest = buildRequest(functionName: functionName, options: invokeOptions)
 
     let stream = session.streamRequest(urlRequest)
-      .validate(statusCode: 200..<300)
+      .validate { request, response in
+        self.validate(request: request, response: response, data: nil)
+      }
       .streamTask()
       .streamingData()
-      .map {
+      .compactMap {
         switch $0.event {
         case let .stream(.success(data)): return data
         case .complete(let completion):
           if let error = completion.error {
             throw error
           }
-          return Data()
+          return nil
         }
       }
 
@@ -230,5 +232,23 @@ public final class FunctionsClient: Sendable {
     request.timeoutInterval = FunctionsClient.requestIdleTimeout
 
     return request
+  }
+
+  @Sendable
+  private func validate(
+    request: URLRequest?,
+    response: HTTPURLResponse,
+    data: Data?
+  ) -> DataRequest.ValidationResult {
+    guard 200..<300 ~= response.statusCode else {
+      return .failure(FunctionsError.httpError(code: response.statusCode, data: data ?? Data()))
+    }
+
+    let isRelayError = response.headers["X-Relay-Error"] == "true"
+    if isRelayError {
+      return .failure(FunctionsError.relayError)
+    }
+
+    return .success(())
   }
 }

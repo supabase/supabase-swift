@@ -3,6 +3,7 @@ import ConcurrencyExtras
 import HTTPTypes
 import InlineSnapshotTesting
 import Mocker
+import SnapshotTestingCustomDump
 import TestHelpers
 import XCTest
 
@@ -36,11 +37,6 @@ final class FunctionsClientTests: XCTestCase {
     session: Alamofire.Session(configuration: sessionConfiguration)
   )
 
-  override func setUp() {
-    super.setUp()
-    //    isRecording = true
-  }
-
   func testInit() async {
     let client = FunctionsClient(
       url: url,
@@ -57,7 +53,9 @@ final class FunctionsClientTests: XCTestCase {
     Mock(
       url: self.url.appendingPathComponent("hello_world"),
       statusCode: 200,
-      data: [.post: Data()]
+      data: [
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
+      ]
     )
     .snapshotRequest {
       #"""
@@ -112,7 +110,7 @@ final class FunctionsClientTests: XCTestCase {
   func testInvokeWithCustomMethod() async throws {
     Mock(
       url: url.appendingPathComponent("hello-world"),
-      statusCode: 200,
+      statusCode: 204,
       data: [.delete: Data()]
     )
     .snapshotRequest {
@@ -135,7 +133,7 @@ final class FunctionsClientTests: XCTestCase {
       ignoreQuery: true,
       statusCode: 200,
       data: [
-        .post: Data()
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
       ]
     )
     .snapshotRequest {
@@ -163,15 +161,17 @@ final class FunctionsClientTests: XCTestCase {
     Mock(
       url: url.appendingPathComponent("hello-world"),
       statusCode: 200,
-      data: [.post: Data()]
+      data: [
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
+      ]
     )
     .snapshotRequest {
       #"""
       curl \
       	--request POST \
       	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Region: ca-central-1" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--header "x-region: ca-central-1" \
       	"http://localhost:5432/functions/v1/hello-world"
       """#
     }
@@ -184,15 +184,17 @@ final class FunctionsClientTests: XCTestCase {
     Mock(
       url: url.appendingPathComponent("hello-world"),
       statusCode: 200,
-      data: [.post: Data()]
+      data: [
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
+      ]
     )
     .snapshotRequest {
       #"""
       curl \
       	--request POST \
       	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Region: ca-central-1" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--header "x-region: ca-central-1" \
       	"http://localhost:5432/functions/v1/hello-world"
       """#
     }
@@ -207,7 +209,9 @@ final class FunctionsClientTests: XCTestCase {
     Mock(
       url: url.appendingPathComponent("hello-world"),
       statusCode: 200,
-      data: [.post: Data()]
+      data: [
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
+      ]
     )
     .snapshotRequest {
       #"""
@@ -223,7 +227,9 @@ final class FunctionsClientTests: XCTestCase {
     try await sut.invoke("hello-world")
   }
 
-  func testInvoke_shouldThrow_URLError_badServerResponse() async {
+  func testInvoke_shouldThrow_error() async throws {
+    struct TestError: Error {}
+
     Mock(
       url: url.appendingPathComponent("hello_world"),
       statusCode: 200,
@@ -244,10 +250,8 @@ final class FunctionsClientTests: XCTestCase {
     do {
       try await sut.invoke("hello_world")
       XCTFail("Invoke should fail.")
-    } catch let urlError as URLError {
-      XCTAssertEqual(urlError.code, .badServerResponse)
-    } catch {
-      XCTFail("Unexpected error thrown \(error)")
+    } catch let AFError.sessionTaskFailed(error) {
+      XCTAssertEqual((error as NSError).code, URLError.Code.badServerResponse.rawValue)
     }
   }
 
@@ -271,10 +275,12 @@ final class FunctionsClientTests: XCTestCase {
     do {
       try await sut.invoke("hello_world")
       XCTFail("Invoke should fail.")
-    } catch let FunctionsError.httpError(code, _) {
-      XCTAssertEqual(code, 300)
     } catch {
-      XCTFail("Unexpected error thrown \(error)")
+      assertInlineSnapshot(of: error, as: .description) {
+        """
+        responseValidationFailed(reason: Alamofire.AFError.ResponseValidationFailureReason.customValidationFailed(error: Functions.FunctionsError.httpError(code: 300, data: 0 bytes)))
+        """
+      }
     }
   }
 
@@ -301,9 +307,12 @@ final class FunctionsClientTests: XCTestCase {
     do {
       try await sut.invoke("hello_world")
       XCTFail("Invoke should fail.")
-    } catch FunctionsError.relayError {
     } catch {
-      XCTFail("Unexpected error thrown \(error)")
+      assertInlineSnapshot(of: error, as: .description) {
+        """
+        responseValidationFailed(reason: Alamofire.AFError.ResponseValidationFailureReason.customValidationFailed(error: Functions.FunctionsError.relayError))
+        """
+      }
     }
   }
 
@@ -362,8 +371,12 @@ final class FunctionsClientTests: XCTestCase {
       for try await _ in stream {
         XCTFail("should throw error")
       }
-    } catch let FunctionsError.httpError(code, _) {
-      XCTAssertEqual(code, 300)
+    } catch {
+      assertInlineSnapshot(of: error, as: .description) {
+        """
+        responseValidationFailed(reason: Alamofire.AFError.ResponseValidationFailureReason.customValidationFailed(error: Functions.FunctionsError.httpError(code: 300, data: 0 bytes)))
+        """
+      }
     }
   }
 
@@ -393,7 +406,12 @@ final class FunctionsClientTests: XCTestCase {
       for try await _ in stream {
         XCTFail("should throw error")
       }
-    } catch FunctionsError.relayError {
+    } catch {
+      assertInlineSnapshot(of: error, as: .description) {
+        """
+        responseValidationFailed(reason: Alamofire.AFError.ResponseValidationFailureReason.customValidationFailed(error: Functions.FunctionsError.relayError))
+        """
+      }
     }
   }
 }
