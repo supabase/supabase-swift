@@ -49,8 +49,8 @@ final class FunctionsClientTests: XCTestCase {
     )
     XCTAssertEqual(client.region, "sa-east-1")
 
-    XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
-    XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
+    XCTAssertEqual(client.headers["apikey"], apiKey)
+    XCTAssertNotNil(client.headers["X-Client-Info"])
   }
 
   func testInvoke() async throws {
@@ -309,10 +309,10 @@ final class FunctionsClientTests: XCTestCase {
 
   func test_setAuth() {
     sut.setAuth(token: "access.token")
-    XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
+    XCTAssertEqual(sut.headers["Authorization"], "Bearer access.token")
 
     sut.setAuth(token: nil)
-    XCTAssertNil(sut.headers[.authorization])
+    XCTAssertNil(sut.headers["Authorization"])
   }
 
   func testInvokeWithStreamedResponse() async throws {
@@ -332,7 +332,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let stream = sut.invokeWithStreamedResponse("stream")
 
     for try await value in stream {
       XCTAssertEqual(String(decoding: value, as: UTF8.self), "hello world")
@@ -356,7 +356,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let stream = sut.invokeWithStreamedResponse("stream")
 
     do {
       for try await _ in stream {
@@ -387,7 +387,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let stream = sut.invokeWithStreamedResponse("stream")
 
     do {
       for try await _ in stream {
