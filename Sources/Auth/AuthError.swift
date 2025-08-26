@@ -116,7 +116,7 @@ extension ErrorCode {
   public static let emailAddressNotAuthorized = ErrorCode("email_address_not_authorized")
 }
 
-public enum AuthError: LocalizedError, Equatable {
+public enum AuthError: LocalizedError {
   @available(
     *,
     deprecated,
@@ -261,6 +261,9 @@ public enum AuthError: LocalizedError, Equatable {
   /// Error thrown when an error happens during implicit grant flow.
   case implicitGrantRedirect(message: String)
 
+  case unknown(any Error)
+
+  /// The message of the error.
   public var message: String {
     switch self {
     case .sessionMissing: "Auth session missing."
@@ -274,9 +277,11 @@ public enum AuthError: LocalizedError, Equatable {
     case .malformedJWT: "A malformed JWT received."
     case .invalidRedirectScheme: "Invalid redirect scheme."
     case .missingURL: "Missing URL."
+    case .unknown(let error): "Unkown error: \(error.localizedDescription)"
     }
   }
 
+  /// The error code of the error.
   public var errorCode: ErrorCode {
     switch self {
     case .sessionMissing: .sessionNotFound
@@ -284,16 +289,55 @@ public enum AuthError: LocalizedError, Equatable {
     case let .api(_, errorCode, _, _): errorCode
     case .pkceGrantCodeExchange, .implicitGrantRedirect: .unknown
     // Deprecated cases
-    case .missingExpClaim, .malformedJWT, .invalidRedirectScheme, .missingURL: .unknown
+    case .missingExpClaim, .malformedJWT, .invalidRedirectScheme, .missingURL, .unknown: .unknown
     }
   }
 
+  /// The description of the error.
   public var errorDescription: String? {
     message
   }
 
-  public static func ~= (lhs: AuthError, rhs: any Error) -> Bool {
-    guard let rhs = rhs as? AuthError else { return false }
-    return lhs == rhs
+  /// The underlying error if the error is an ``AuthError/unknown(any Error)`` error.
+  public var underlyingError: (any Error)? {
+    switch self {
+    case .unknown(let error): error
+    default: nil
+    }
   }
+}
+
+/// Wraps an error in an ``AuthError`` if it's not already one.
+func wrappingError<R: Sendable>(
+  _ block: () throws -> R
+) throws(AuthError) -> R {
+  do {
+    return try block()
+  } catch {
+    throw mapError(error)
+  }
+}
+
+/// Wraps an error in an ``AuthError`` if it's not already one.
+func wrappingError<R: Sendable>(
+  @_inheritActorContext _ block: @escaping @Sendable () async throws -> R
+) async throws(AuthError) -> R {
+  do {
+    return try await block()
+  } catch {
+    throw mapError(error)
+  }
+}
+
+/// Maps an error to an ``AuthError``.
+func mapError(_ error: any Error) -> AuthError {
+  if let error = error as? AuthError {
+    return error
+  }
+  if let error = error.asAFError {
+    if let underlyingError = error.underlyingError as? AuthError {
+      return underlyingError
+    }
+  }
+  return AuthError.unknown(error)
 }
