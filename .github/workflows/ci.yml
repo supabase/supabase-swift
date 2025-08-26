@@ -79,40 +79,40 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           file: lcov.info
 
-  xcodebuild-legacy:
-    name: xcodebuild (15.4)
-    runs-on: macos-14
-    strategy:
-      matrix:
-        command: [test, ""]
-        platform: [IOS, MACOS, MAC_CATALYST]
-        xcode: ["15.4"]
-        include:
-          - { command: test, skip_release: 1 }
-    steps:
-      - uses: actions/checkout@v5
-      - name: Select Xcode ${{ matrix.xcode }}
-        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-      - name: List available devices
-        run: xcrun simctl list devices available
-      - name: Cache derived data
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.derivedData
-          key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
-          restore-keys: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
-      - name: Set IgnoreFileSystemDeviceInodeChanges flag
-        run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
-      - name: Update mtime for incremental builds
-        uses: chetan/git-restore-mtime-action@v2
-      - name: Debug
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
-      - name: Release
-        if: matrix.skip_release != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+  # xcodebuild-legacy:
+  #   name: xcodebuild (15.4)
+  #   runs-on: macos-14
+  #   strategy:
+  #     matrix:
+  #       command: [test, ""]
+  #       platform: [IOS, MACOS, MAC_CATALYST]
+  #       xcode: ["15.4"]
+  #       include:
+  #         - { command: test, skip_release: 1 }
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - name: Select Xcode ${{ matrix.xcode }}
+  #       run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+  #     - name: List available devices
+  #       run: xcrun simctl list devices available
+  #     - name: Cache derived data
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: |
+  #           ~/.derivedData
+  #         key: |
+  #           deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
+  #         restore-keys: |
+  #           deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
+  #     - name: Set IgnoreFileSystemDeviceInodeChanges flag
+  #       run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+  #     - name: Update mtime for incremental builds
+  #       uses: chetan/git-restore-mtime-action@v2
+  #     - name: Debug
+  #       run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
+  #     - name: Release
+  #       if: matrix.skip_release != '1'
+  #       run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
   linux:
     name: Linux
