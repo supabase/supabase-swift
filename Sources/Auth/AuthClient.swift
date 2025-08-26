@@ -97,14 +97,16 @@ public actor AuthClient {
     AuthClient.globalClientID += 1
     clientID = AuthClient.globalClientID
 
+    var adapters: [any RequestAdapter] = []
+
+    if let apiKey = configuration.headers["apikey"] {
+      adapters.append(SupabaseApiKeyAdapter(apiKey: apiKey))
+    }
+    adapters.append(SupabaseApiVersionAdapter())
+
     Dependencies[clientID] = Dependencies(
       configuration: configuration,
-      session: configuration.session.newSession(
-        adapters: [
-          configuration.headers["apikey"].map(SupabaseApiKeyAdapter.init(apiKey:)),
-          SupabaseApiVersionAdapter(),
-        ].compactMap { $0 }
-      ),
+      session: configuration.session.newSession(adapters: adapters),
       api: APIClient(clientID: clientID),
       codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
