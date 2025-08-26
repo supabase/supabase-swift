@@ -18,12 +18,14 @@ public struct AuthAdmin: Sendable {
   /// Get user by id.
   /// - Parameter uid: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
-  public func getUserById(_ uid: UUID) async throws -> User {
-    try await api.execute(
-      configuration.url.appendingPathComponent("admin/users/\(uid)")
-    )
-    .serializingDecodable(User.self, decoder: configuration.decoder)
-    .value
+  public func getUserById(_ uid: UUID) async throws(AuthError) -> User {
+    try await wrappingError {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/users/\(uid)")
+      )
+      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .value
+    }
   }
 
   /// Updates the user data.
@@ -31,14 +33,18 @@ public struct AuthAdmin: Sendable {
   ///   - uid: The user id you want to update.
   ///   - attributes: The data you want to update.
   @discardableResult
-  public func updateUserById(_ uid: UUID, attributes: AdminUserAttributes) async throws -> User {
-    try await api.execute(
-      configuration.url.appendingPathComponent("admin/users/\(uid)"),
-      method: .put,
-      body: attributes
-    )
-    .serializingDecodable(User.self, decoder: configuration.decoder)
-    .value
+  public func updateUserById(_ uid: UUID, attributes: AdminUserAttributes) async throws(AuthError)
+    -> User
+  {
+    try await wrappingError {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/users/\(uid)"),
+        method: .put,
+        body: attributes
+      )
+      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .value
+    }
   }
 
   /// Creates a new user.
@@ -48,14 +54,16 @@ public struct AuthAdmin: Sendable {
   /// - If you are sure that the created user's email or phone number is legitimate and verified, you can set the ``AdminUserAttributes/emailConfirm`` or ``AdminUserAttributes/phoneConfirm`` param to true.
   /// - Warning: Never expose your `service_role` key on the client.
   @discardableResult
-  public func createUser(attributes: AdminUserAttributes) async throws -> User {
-    try await api.execute(
-      configuration.url.appendingPathComponent("admin/users"),
-      method: .post,
-      body: attributes
-    )
-    .serializingDecodable(User.self, decoder: configuration.decoder)
-    .value
+  public func createUser(attributes: AdminUserAttributes) async throws(AuthError) -> User {
+    try await wrappingError {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/users"),
+        method: .post,
+        body: attributes
+      )
+      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .value
+    }
   }
 
   /// Sends an invite link to an email address.
@@ -72,20 +80,22 @@ public struct AuthAdmin: Sendable {
     _ email: String,
     data: [String: AnyJSON]? = nil,
     redirectTo: URL? = nil
-  ) async throws -> User {
-    try await api.execute(
-      configuration.url.appendingPathComponent("admin/invite"),
-      method: .post,
-      query: (redirectTo ?? configuration.redirectToURL).map {
-        ["redirect_to": $0.absoluteString]
-      },
-      body: [
-        "email": .string(email),
-        "data": data.map({ AnyJSON.object($0) }) ?? .null,
-      ]
-    )
-    .serializingDecodable(User.self, decoder: configuration.decoder)
-    .value
+  ) async throws(AuthError) -> User {
+    try await wrappingError {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/invite"),
+        method: .post,
+        query: (redirectTo ?? self.configuration.redirectToURL).map {
+          ["redirect_to": $0.absoluteString]
+        },
+        body: [
+          "email": .string(email),
+          "data": data.map({ AnyJSON.object($0) }) ?? .null,
+        ]
+      )
+      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .value
+    }
   }
 
   /// Delete a user. Requires `service_role` key.
@@ -95,12 +105,14 @@ public struct AuthAdmin: Sendable {
   /// from the auth schema.
   ///
   /// - Warning: Never expose your `service_role` key on the client.
-  public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws {
-    _ = try await api.execute(
-      configuration.url.appendingPathComponent("admin/users/\(id)"),
-      method: .delete,
-      body: DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
-    ).serializingData().value
+  public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws(AuthError) {
+    _ = try await wrappingError {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/users/\(id)"),
+        method: .delete,
+        body: DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
+      ).serializingData().value
+    }
   }
 
   /// Get a list of users.
@@ -108,49 +120,53 @@ public struct AuthAdmin: Sendable {
   /// This function should only be called on a server.
   ///
   /// - Warning: Never expose your `service_role` key in the client.
-  public func listUsers(params: PageParams? = nil) async throws -> ListUsersPaginatedResponse {
+  public func listUsers(
+    params: PageParams? = nil
+  ) async throws(AuthError) -> ListUsersPaginatedResponse {
     struct Response: Decodable {
       let users: [User]
       let aud: String
     }
 
-    let httpResponse = try await api.execute(
-      configuration.url.appendingPathComponent("admin/users"),
-      query: [
-        "page": params?.page?.description ?? "",
-        "per_page": params?.perPage?.description ?? "",
-      ]
-    )
-    .serializingDecodable(Response.self, decoder: configuration.decoder)
-    .response
+    return try await wrappingError {
+      let httpResponse = try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/users"),
+        query: [
+          "page": params?.page?.description ?? "",
+          "per_page": params?.perPage?.description ?? "",
+        ]
+      )
+      .serializingDecodable(Response.self, decoder: self.configuration.decoder)
+      .response
 
-    let response = try httpResponse.result.get()
+      let response = try httpResponse.result.get()
 
-    var pagination = ListUsersPaginatedResponse(
-      users: response.users,
-      aud: response.aud,
-      lastPage: 0,
-      total: httpResponse.response?.headers["X-Total-Count"].flatMap(Int.init) ?? 0
-    )
+      var pagination = ListUsersPaginatedResponse(
+        users: response.users,
+        aud: response.aud,
+        lastPage: 0,
+        total: httpResponse.response?.headers["X-Total-Count"].flatMap(Int.init) ?? 0
+      )
 
-    let links =
-      httpResponse.response?.headers["Link"].flatMap { $0.components(separatedBy: ",") } ?? []
-    if !links.isEmpty {
-      for link in links {
-        let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
-          while: \.isNumber
-        )
-        let rel = link.components(separatedBy: ";")[1].components(separatedBy: "=")[1]
+      let links =
+        httpResponse.response?.headers["Link"].flatMap { $0.components(separatedBy: ",") } ?? []
+      if !links.isEmpty {
+        for link in links {
+          let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
+            while: \.isNumber
+          )
+          let rel = link.components(separatedBy: ";")[1].components(separatedBy: "=")[1]
 
-        if rel == "\"last\"", let lastPage = Int(page) {
-          pagination.lastPage = lastPage
-        } else if rel == "\"next\"", let nextPage = Int(page) {
-          pagination.nextPage = nextPage
+          if rel == "\"last\"", let lastPage = Int(page) {
+            pagination.lastPage = lastPage
+          } else if rel == "\"next\"", let nextPage = Int(page) {
+            pagination.nextPage = nextPage
+          }
         }
       }
-    }
 
-    return pagination
+      return pagination
+    }
   }
 
   /*
