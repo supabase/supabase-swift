@@ -99,7 +99,12 @@ public actor AuthClient {
 
     Dependencies[clientID] = Dependencies(
       configuration: configuration,
-      session: configuration.session.newSession(adapter: SupabaseApiVersionAdapter()),
+      session: configuration.session.newSession(
+        adapters: [
+          configuration.headers["apikey"].map(SupabaseApiKeyAdapter.init(apiKey:)),
+          SupabaseApiVersionAdapter(),
+        ].compactMap { $0 }
+      ),
       api: APIClient(clientID: clientID),
       codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
@@ -782,7 +787,8 @@ public actor AuthClient {
       case .implicit:
         guard self.isImplicitGrantFlow(params: params) else {
           throw AuthError.implicitGrantRedirect(
-            message: "Not a valid implicit grant flow URL: \(url)")
+            message: "Not a valid implicit grant flow URL: \(url)"
+          )
         }
         return try await self.handleImplicitGrantFlow(params: params)
 

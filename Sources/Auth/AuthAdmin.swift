@@ -14,6 +14,7 @@ public struct AuthAdmin: Sendable {
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
   var api: APIClient { Dependencies[clientID].api }
   var encoder: JSONEncoder { Dependencies[clientID].encoder }
+  var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
 
   /// Get user by id.
   /// - Parameter uid: The user's unique identifier.
