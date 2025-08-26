@@ -99,7 +99,12 @@ public actor AuthClient {
 
     Dependencies[clientID] = Dependencies(
       configuration: configuration,
-      session: configuration.session.newSession(adapter: SupabaseApiVersionAdapter()),
+      session: configuration.session.newSession(
+        adapters: [
+          configuration.headers["apikey"].map(SupabaseApiKeyAdapter.init(apiKey:)),
+          SupabaseApiVersionAdapter(),
+        ].compactMap { $0 }
+      ),
       api: APIClient(clientID: clientID),
       codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
@@ -553,7 +558,8 @@ public actor AuthClient {
 
     if codeVerifier == nil {
       logger?.error(
-        "code verifier not found, a code verifier should exist when calling this method.")
+        "code verifier not found, a code verifier should exist when calling this method."
+      )
     }
 
     let session = try await wrappingError {
@@ -781,7 +787,8 @@ public actor AuthClient {
       case .implicit:
         guard self.isImplicitGrantFlow(params: params) else {
           throw AuthError.implicitGrantRedirect(
-            message: "Not a valid implicit grant flow URL: \(url)")
+            message: "Not a valid implicit grant flow URL: \(url)"
+          )
         }
         return try await self.handleImplicitGrantFlow(params: params)
 
@@ -799,7 +806,8 @@ public actor AuthClient {
 
     if let errorDescription = params["error_description"] {
       throw AuthError.implicitGrantRedirect(
-        message: errorDescription.replacingOccurrences(of: "+", with: " "))
+        message: errorDescription.replacingOccurrences(of: "+", with: " ")
+      )
     }
 
     guard
@@ -1361,7 +1369,8 @@ public actor AuthClient {
   ) throws -> URL {
     guard
       var components = URLComponents(
-        url: url, resolvingAgainstBaseURL: false
+        url: url,
+        resolvingAgainstBaseURL: false
       )
     else {
       throw URLError(.badURL)

@@ -123,7 +123,7 @@ struct _RawAPIErrorResponse: Decodable {
 extension Alamofire.Session {
   /// Create a new session with the same configuration but with some overridden properties.
   func newSession(
-    adapter: (any RequestAdapter)? = nil
+    adapters: [any RequestAdapter] = []
   ) -> Alamofire.Session {
     return Alamofire.Session(
       session: session,
@@ -132,7 +132,9 @@ extension Alamofire.Session {
       startRequestsImmediately: startRequestsImmediately,
       requestQueue: requestQueue,
       serializationQueue: serializationQueue,
-      interceptor: Interceptor(adapters: [self.interceptor, adapter].compactMap { $0 }),
+      interceptor: Interceptor(
+        adapters: self.interceptor != nil ? [self.interceptor!] + adapters : adapters
+      ),
       serverTrustManager: serverTrustManager,
       redirectHandler: redirectHandler,
       cachedResponseHandler: cachedResponseHandler,
