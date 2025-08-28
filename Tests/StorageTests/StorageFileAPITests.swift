@@ -4,6 +4,7 @@ import Mocker
 import SnapshotTestingCustomDump
 import TestHelpers
 import XCTest
+import Helpers
 
 @testable import Storage
 
@@ -913,5 +914,215 @@ final class StorageFileAPITests: XCTestCase {
 
     XCTAssertEqual(response.path, "file.txt")
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
+  }
+
+  // MARK: - Upload Tests
+
+  func testUploadWithData() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/test.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Key": "bucket/test.txt",
+            "Id": "123"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 390" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      \#r
+      3600\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"metadata\"\#r
+      \#r
+      {\"mode\":\"test\"}\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"\"; filename=\"test.txt\"\#r
+      Content-Type: text/plain\#r
+      \#r
+      hello world\#r
+      --alamofire.boundary.e56f43407f772505--\#r
+      " \
+      	"http://localhost:54321/storage/v1/object/bucket/test.txt"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket").upload(
+      "test.txt",
+      data: Data("hello world".utf8),
+      options: FileOptions(
+        metadata: ["mode": "test"]
+      )
+    )
+
+    XCTAssertEqual(response.path, "test.txt")
+    XCTAssertEqual(response.fullPath, "bucket/test.txt")
+    XCTAssertEqual(response.id, "123")
+  }
+
+  func testUploadWithFileURL() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/test.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Key": "bucket/test.txt",
+            "Id": "456"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 392" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505
+      Content-Disposition: form-data; name=\"cacheControl\"
+      
+      3600
+      --alamofire.boundary.e56f43407f772505
+      Content-Disposition: form-data; name=\"metadata\"
+      
+      {\"mode\":\"test\"}
+      --alamofire.boundary.e56f43407f772505
+      Content-Disposition: form-data; name=\"\"; filename=\"test.txt\"
+      Content-Type: text/plain
+      
+      hello world!
+      --alamofire.boundary.e56f43407f772505--
+      " \
+      	"http://localhost:54321/storage/v1/object/bucket/test.txt"
+      """#
+    }
+    .register()
+
+    // Create a temporary file for testing
+    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("test.txt")
+    try Data("hello world!".utf8).write(to: tempURL)
+
+    let response = try await storage.from("bucket").upload(
+      "test.txt",
+      fileURL: tempURL,
+      options: FileOptions(
+        metadata: ["mode": "test"]
+      )
+    )
+
+    XCTAssertEqual(response.path, "test.txt")
+    XCTAssertEqual(response.fullPath, "bucket/test.txt")
+    XCTAssertEqual(response.id, "456")
+
+    // Clean up
+    try? FileManager.default.removeItem(at: tempURL)
+  }
+
+  func testUploadWithOptions() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/test.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Key": "bucket/test.txt",
+            "Id": "789"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Cache-Control: max-age=3600" \
+      	--header "Content-Length: 390" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505
+      Content-Disposition: form-data; name=\"cacheControl\"
+      
+      7200
+      --alamofire.boundary.e56f43407f772505
+      Content-Disposition: form-data; name=\"metadata\"
+      
+      {\"custom\":\"value\",\"number\":42}
+      --alamofire.boundary.e56f43407f772505
+      Content-Disposition: form-data; name=\"\"; filename=\"test.txt\"
+      Content-Type: text/plain
+      
+      hello world
+      --alamofire.boundary.e56f43407f772505--
+      " \
+      	"http://localhost:54321/storage/v1/object/bucket/test.txt"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket").upload(
+      "test.txt",
+      data: Data("hello world".utf8),
+      options: FileOptions(
+        cacheControl: "7200",
+        metadata: [
+          "custom": "value",
+          "number": 42
+        ]
+      )
+    )
+
+    XCTAssertEqual(response.path, "test.txt")
+    XCTAssertEqual(response.fullPath, "bucket/test.txt")
+    XCTAssertEqual(response.id, "789")
+  }
+
+  func testUploadErrorScenarios() async throws {
+    // Test upload with network error
+    Mock(
+      url: url.appendingPathComponent("object/bucket/test.txt"),
+      statusCode: 500,
+      data: [
+        .post: Data(
+          """
+          {
+            "statusCode": "500",
+            "message": "Internal server error",
+            "error": "InternalError"
+          }
+          """.utf8)
+      ]
+    )
+    .register()
+
+    do {
+      _ = try await storage.from("bucket").upload("test.txt", data: Data("hello world".utf8))
+      XCTFail("Expected error but got success")
+    } catch let error as StorageError {
+      XCTAssertEqual(error.statusCode, "500")
+      XCTAssertEqual(error.message, "Internal server error")
+      XCTAssertEqual(error.error, "InternalError")
+    }
   }
 }
