@@ -91,7 +91,13 @@ public class StorageApi: @unchecked Sendable {
     headers: HTTPHeaders = [:],
     query: Parameters? = nil
   ) throws -> URLRequest {
-    let request = try URLRequest(url: url, method: method, headers: headers)
+    // Merge configuration headers with request headers
+    var mergedHeaders = HTTPHeaders(configuration.headers)
+    for header in headers {
+      mergedHeaders[header.name] = header.value
+    }
+    
+    let request = try URLRequest(url: url, method: method, headers: mergedHeaders)
     return try urlQueryEncoder.encode(request, with: query)
   }
 
