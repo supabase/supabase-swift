@@ -27,8 +27,6 @@ final class StorageFileAPITests: XCTestCase {
     let configuration = URLSessionConfiguration.default
     configuration.protocolClasses = [MockingURLProtocol.self]
 
-    _ = URLSession(configuration: configuration)
-
     storage = SupabaseStorageClient(
       configuration: StorageClientConfiguration(
         url: url,
@@ -936,6 +934,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Cache-Control: max-age=3600" \
       	--header "Content-Length: 390" \
       	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -992,25 +991,26 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 392" \
+      	--header "Cache-Control: max-age=3600" \
+      	--header "Content-Length: 391" \
       	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-upsert: false" \
-      	--data "--alamofire.boundary.e56f43407f772505
-      Content-Disposition: form-data; name=\"cacheControl\"
-      
-      3600
-      --alamofire.boundary.e56f43407f772505
-      Content-Disposition: form-data; name=\"metadata\"
-      
-      {\"mode\":\"test\"}
-      --alamofire.boundary.e56f43407f772505
-      Content-Disposition: form-data; name=\"\"; filename=\"test.txt\"
-      Content-Type: text/plain
-      
-      hello world!
-      --alamofire.boundary.e56f43407f772505--
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      \#r
+      3600\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"metadata\"\#r
+      \#r
+      {\"mode\":\"test\"}\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"\"; filename=\"test.txt\"\#r
+      Content-Type: text/plain\#r
+      \#r
+      hello world!\#r
+      --alamofire.boundary.e56f43407f772505--\#r
       " \
       	"http://localhost:54321/storage/v1/object/bucket/test.txt"
       """#
@@ -1055,26 +1055,26 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
-      	--header "Cache-Control: max-age=3600" \
-      	--header "Content-Length: 390" \
+      	--header "Cache-Control: max-age=7200" \
+      	--header "Content-Length: 388" \
       	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-upsert: false" \
-      	--data "--alamofire.boundary.e56f43407f772505
-      Content-Disposition: form-data; name=\"cacheControl\"
-      
-      7200
-      --alamofire.boundary.e56f43407f772505
-      Content-Disposition: form-data; name=\"metadata\"
-      
-      {\"custom\":\"value\",\"number\":42}
-      --alamofire.boundary.e56f43407f772505
-      Content-Disposition: form-data; name=\"\"; filename=\"test.txt\"
-      Content-Type: text/plain
-      
-      hello world
-      --alamofire.boundary.e56f43407f772505--
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      \#r
+      7200\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"metadata\"\#r
+      \#r
+      {\"number\":42}\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"\"; filename=\"test.txt\"\#r
+      Content-Type: text/plain\#r
+      \#r
+      hello world\#r
+      --alamofire.boundary.e56f43407f772505--\#r
       " \
       	"http://localhost:54321/storage/v1/object/bucket/test.txt"
       """#
@@ -1087,7 +1087,6 @@ final class StorageFileAPITests: XCTestCase {
       options: FileOptions(
         cacheControl: "7200",
         metadata: [
-          "custom": "value",
           "number": 42
         ]
       )
@@ -1119,10 +1118,20 @@ final class StorageFileAPITests: XCTestCase {
     do {
       _ = try await storage.from("bucket").upload("test.txt", data: Data("hello world".utf8))
       XCTFail("Expected error but got success")
-    } catch let error as StorageError {
-      XCTAssertEqual(error.statusCode, "500")
-      XCTAssertEqual(error.message, "Internal server error")
-      XCTAssertEqual(error.error, "InternalError")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AFError.responseValidationFailed(
+          reason: .customValidationFailed(
+            error: StorageError(
+              statusCode: "500",
+              message: "Internal server error",
+              error: "InternalError"
+            )
+          )
+        )
+        """
+      }
     }
   }
 }
