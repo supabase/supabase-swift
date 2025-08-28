@@ -20,7 +20,7 @@ public struct AuthAdmin: Sendable {
   /// - Parameter uid: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
   public func getUserById(_ uid: UUID) async throws(AuthError) -> User {
-    try await wrappingError {
+    try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("admin/users/\(uid)")
       )
@@ -37,7 +37,7 @@ public struct AuthAdmin: Sendable {
   public func updateUserById(_ uid: UUID, attributes: AdminUserAttributes) async throws(AuthError)
     -> User
   {
-    try await wrappingError {
+    try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("admin/users/\(uid)"),
         method: .put,
@@ -56,7 +56,7 @@ public struct AuthAdmin: Sendable {
   /// - Warning: Never expose your `service_role` key on the client.
   @discardableResult
   public func createUser(attributes: AdminUserAttributes) async throws(AuthError) -> User {
-    try await wrappingError {
+    try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("admin/users"),
         method: .post,
@@ -82,7 +82,7 @@ public struct AuthAdmin: Sendable {
     data: [String: AnyJSON]? = nil,
     redirectTo: URL? = nil
   ) async throws(AuthError) -> User {
-    try await wrappingError {
+    try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("admin/invite"),
         method: .post,
@@ -107,7 +107,7 @@ public struct AuthAdmin: Sendable {
   ///
   /// - Warning: Never expose your `service_role` key on the client.
   public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws(AuthError) {
-    _ = try await wrappingError {
+    _ = try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("admin/users/\(id)"),
         method: .delete,
@@ -129,7 +129,7 @@ public struct AuthAdmin: Sendable {
       let aud: String
     }
 
-    return try await wrappingError {
+    return try await wrappingError(or: mapToAuthError) {
       let httpResponse = try await self.api.execute(
         self.configuration.url.appendingPathComponent("admin/users"),
         query: [

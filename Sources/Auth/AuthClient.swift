@@ -302,7 +302,7 @@ public actor AuthClient {
   private func _signUp(body: SignUpRequest, query: Parameters? = nil) async throws(AuthError)
     -> AuthResponse
   {
-    let response = try await wrappingError {
+    let response = try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("signup"),
         method: .post,
@@ -398,7 +398,7 @@ public actor AuthClient {
     grantType: String,
     credentials: Credentials
   ) async throws(AuthError) -> Session {
-    let session = try await wrappingError {
+    let session = try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("token"),
         method: .post,
@@ -435,7 +435,7 @@ public actor AuthClient {
   ) async throws(AuthError) {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    _ = try await wrappingError {
+    _ = try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("otp"),
         method: .post,
@@ -474,7 +474,7 @@ public actor AuthClient {
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
   ) async throws(AuthError) {
-    _ = try await wrappingError {
+    _ = try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("otp"),
         method: .post,
@@ -504,7 +504,7 @@ public actor AuthClient {
   ) async throws(AuthError) -> SSOResponse {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    return try await wrappingError {
+    return try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("sso"),
         method: .post,
@@ -536,7 +536,7 @@ public actor AuthClient {
   ) async throws(AuthError) -> SSOResponse {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    return try await wrappingError {
+    return try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("sso"),
         method: .post,
@@ -564,7 +564,7 @@ public actor AuthClient {
       )
     }
 
-    let session = try await wrappingError {
+    let session = try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("token"),
         method: .post,
@@ -598,7 +598,7 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
   ) throws(AuthError) -> URL {
-    try wrappingError {
+    try wrappingError(or: mapToAuthError) {
       try self.getURLForProvider(
         url: self.configuration.url.appendingPathComponent("authorize"),
         provider: provider,
@@ -639,7 +639,7 @@ public actor AuthClient {
       let resultURL = try await launchFlow(url)
       return try await session(from: resultURL)
     } catch {
-      throw mapError(error)
+      throw mapToAuthError(error)
     }
   }
 
@@ -784,7 +784,7 @@ public actor AuthClient {
 
     let params = extractParams(from: url)
 
-    return try await wrappingError {
+    return try await wrappingError(or: mapToAuthError) {
       switch self.configuration.flowType {
       case .implicit:
         guard self.isImplicitGrantFlow(params: params) else {
@@ -932,7 +932,7 @@ public actor AuthClient {
     }
 
     do {
-      try await wrappingError {
+      try await wrappingError(or: mapToAuthError) {
         _ = try await self.api.execute(
           self.configuration.url.appendingPathComponent("logout"),
           method: .post,
@@ -1009,7 +1009,7 @@ public actor AuthClient {
     query: Parameters? = nil,
     body: VerifyOTPParams
   ) async throws(AuthError) -> AuthResponse {
-    let response = try await wrappingError {
+    let response = try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("verify"),
         method: .post,
@@ -1038,7 +1038,7 @@ public actor AuthClient {
     emailRedirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws(AuthError) {
-    _ = try await wrappingError {
+    _ = try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("resend"),
         method: .post,
@@ -1068,7 +1068,7 @@ public actor AuthClient {
     type: ResendMobileType,
     captchaToken: String? = nil
   ) async throws(AuthError) -> ResendMobileResponse {
-    return try await wrappingError {
+    return try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("resend"),
         method: .post,
@@ -1085,7 +1085,7 @@ public actor AuthClient {
 
   /// Sends a re-authentication OTP to the user's email or phone number.
   public func reauthenticate() async throws(AuthError) {
-    _ = try await wrappingError {
+    _ = try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("reauthenticate"),
         method: .get,
@@ -1104,7 +1104,7 @@ public actor AuthClient {
   ///
   /// Should be used only when you require the most current user data. For faster results, ``currentUser`` is recommended.
   public func user(jwt: String? = nil) async throws(AuthError) -> User {
-    return try await wrappingError {
+    return try await wrappingError(or: mapToAuthError) {
       if let jwt {
         return try await self.api.execute(
           self.configuration.url.appendingPathComponent("user"),
@@ -1139,7 +1139,7 @@ public actor AuthClient {
       user.codeChallengeMethod = codeChallengeMethod
     }
 
-    return try await wrappingError {
+    return try await wrappingError(or: mapToAuthError) {
       var session = try await self.sessionManager.session()
       let updatedUser = try await self.api.execute(
         self.configuration.url.appendingPathComponent("user"),
@@ -1256,7 +1256,7 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
   ) async throws(AuthError) -> OAuthResponse {
-    try await wrappingError {
+    try await wrappingError(or: mapToAuthError) {
       let url = try self.getURLForProvider(
         url: self.configuration.url.appendingPathComponent("user/identities/authorize"),
         provider: provider,
@@ -1287,7 +1287,7 @@ public actor AuthClient {
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
   /// with that identity once it's unlinked.
   public func unlinkIdentity(_ identity: UserIdentity) async throws(AuthError) {
-    _ = try await wrappingError {
+    _ = try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("user/identities/\(identity.identityId)"),
         method: .delete,
@@ -1308,7 +1308,7 @@ public actor AuthClient {
   ) async throws(AuthError) {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
-    _ = try await wrappingError {
+    _ = try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("recover"),
         method: .post,
@@ -1337,7 +1337,7 @@ public actor AuthClient {
       throw AuthError.sessionMissing
     }
 
-    return try await wrappingError {
+    return try await wrappingError(or: mapToAuthError) {
       try await self.sessionManager.refreshSession(refreshToken)
     }
   }

@@ -307,30 +307,8 @@ public enum AuthError: LocalizedError {
   }
 }
 
-/// Wraps an error in an ``AuthError`` if it's not already one.
-func wrappingError<R: Sendable>(
-  _ block: () throws -> R
-) throws(AuthError) -> R {
-  do {
-    return try block()
-  } catch {
-    throw mapError(error)
-  }
-}
-
-/// Wraps an error in an ``AuthError`` if it's not already one.
-func wrappingError<R: Sendable>(
-  @_inheritActorContext _ block: @escaping @Sendable () async throws -> R
-) async throws(AuthError) -> R {
-  do {
-    return try await block()
-  } catch {
-    throw mapError(error)
-  }
-}
-
 /// Maps an error to an ``AuthError``.
-func mapError(_ error: any Error) -> AuthError {
+func mapToAuthError(_ error: any Error) -> AuthError {
   if let error = error as? AuthError {
     return error
   }
