@@ -59,28 +59,51 @@ public class StorageApi: @unchecked Sendable {
     body: RequestBody? = NoopParameter(),
     encoder: (any ParameterEncoder)? = nil
   ) throws -> DataRequest {
-    var request = try URLRequest(url: url, method: method, headers: headers)
+    var request = try makeRequest(url, method: method, headers: headers, query: query)
 
-    request = try urlQueryEncoder.encode(request, with: query)
     if RequestBody.self != NoopParameter.self {
       request = try (encoder ?? defaultEncoder).encode(body, into: request)
     }
 
     return session.request(request)
-      .validate { request, response, data in
-        guard 200..<300 ~= response.statusCode else {
-          guard let data else {
-            return .failure(AFError.responseSerializationFailed(reason: .inputDataNilOrZeroLength))
-          }
-
-          do {
-            return .failure(try self.configuration.decoder.decode(StorageError.self, from: data))
-          } catch {
-            return .failure(HTTPError(data: data, response: response))
-          }
-        }
-        return .success(())
+      .validate { _, response, data in
+        self.validate(response: response, data: data ?? Data())
       }
+  }
+
+  func upload(
+    _ url: URL,
+    method: HTTPMethod = .get,
+    headers: HTTPHeaders = [:],
+    query: Parameters? = nil,
+    multipartFormData: @escaping (MultipartFormData) -> Void,
+  ) throws -> UploadRequest {
+    let request = try makeRequest(url, method: method, headers: headers, query: query)
+    return session.upload(multipartFormData: multipartFormData, with: request)
+      .validate { _, response, data in
+        self.validate(response: response, data: data ?? Data())
+      }
+  }
+
+  private func makeRequest(
+    _ url: URL,
+    method: HTTPMethod = .get,
+    headers: HTTPHeaders = [:],
+    query: Parameters? = nil
+  ) throws -> URLRequest {
+    let request = try URLRequest(url: url, method: method, headers: headers)
+    return try urlQueryEncoder.encode(request, with: query)
+  }
+
+  private func validate(response: HTTPURLResponse, data: Data) -> DataRequest.ValidationResult {
+    guard 200..<300 ~= response.statusCode else {
+      do {
+        return .failure(try self.configuration.decoder.decode(StorageError.self, from: data))
+      } catch {
+        return .failure(HTTPError(data: data, response: response))
+      }
+    }
+    return .success(())
   }
 }
 

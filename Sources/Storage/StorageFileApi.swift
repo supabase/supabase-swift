@@ -1,6 +1,5 @@
 import Alamofire
 import Foundation
-import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -74,26 +73,19 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   }
 
   private func _uploadOrUpdate(
-    method: HTTPTypes.HTTPRequest.Method,
+    method: HTTPMethod,
     path: String,
     file: FileUpload,
     options: FileOptions?
   ) async throws -> FileUploadResponse {
     let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    var headers = options.headers.map { HTTPHeaders($0) } ?? HTTPHeaders()
 
     if method == .post {
-      headers[.xUpsert] = "\(options.upsert)"
+      headers["x-upsert"] = "\(options.upsert)"
     }
 
-    headers[.duplex] = options.duplex
-
-    #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary.value)
-    #else
-      let formData = MultipartFormData()
-    #endif
-    file.encode(to: formData, withPath: path, options: options)
+    headers["duplex"] = options.duplex
 
     struct UploadResponse: Decodable {
       let Key: String
@@ -103,12 +95,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let cleanPath = _removeEmptyFolders(path)
     let _path = _getFinalPath(cleanPath)
 
-    let response = try await execute(
+    let response = try await upload(
       configuration.url.appendingPathComponent("object/\(_path)"),
-      method: HTTPMethod(rawValue: method.rawValue),
-      headers: HTTPHeaders(headers.map { HTTPHeader(name: $0.name.rawName, value: $0.value) }),
-      body: formData.encode()
-    ).serializingDecodable(UploadResponse.self, decoder: configuration.decoder).value
+      method: method,
+      headers: headers
+    ) { formData in
+      file.encode(to: formData, withPath: path, options: options)
+    }
+    .serializingDecodable(UploadResponse.self, decoder: configuration.decoder)
+    .value
 
     return FileUploadResponse(
       id: response.Id,
@@ -514,15 +509,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let url: String
     }
 
-    var headers = HTTPFields()
+    var headers = HTTPHeaders()
     if let upsert = options?.upsert, upsert {
-      headers[.xUpsert] = "true"
+      headers["x-upsert"] = "true"
     }
 
     let response = try await execute(
       configuration.url.appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
       method: .post,
-      headers: HTTPHeaders(headers.map { HTTPHeader(name: $0.name.rawName, value: $0.value) })
+      headers: headers
     ).serializingDecodable(Response.self, decoder: configuration.decoder).value
 
     let signedURL = try makeSignedURL(response.url, download: nil)
@@ -597,10 +592,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
     let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    var headers = options.headers.map { HTTPHeaders($0) } ?? HTTPHeaders()
 
-    headers[.xUpsert] = "\(options.upsert)"
-    headers[.duplex] = options.duplex
+    headers["x-upsert"] = "\(options.upsert)"
+    headers["duplex"] = options.duplex
 
     #if DEBUG
       let formData = MultipartFormData(boundary: testingBoundary.value)
@@ -613,14 +608,16 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let Key: String
     }
 
-    let response = try await execute(
-      configuration.url
-        .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
+    let response = try await upload(
+      configuration.url.appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
       method: .put,
-      headers: HTTPHeaders(headers.map { HTTPHeader(name: $0.name.rawName, value: $0.value) }),
-      query: ["token": token],
-      body: formData.encode()
-    ).serializingDecodable(UploadResponse.self, decoder: configuration.decoder).value
+      headers: headers,
+      query: ["token": token]
+    ) { formData in
+      file.encode(to: formData, withPath: path, options: options)
+    }
+    .serializingDecodable(UploadResponse.self, decoder: configuration.decoder)
+    .value
 
     let fullPath = response.Key
 
@@ -640,9 +637,4 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     )
     return cleanedPath
   }
-}
-
-extension HTTPField.Name {
-  static let duplex = Self("duplex")!
-  static let xUpsert = Self("x-upsert")!
 }
