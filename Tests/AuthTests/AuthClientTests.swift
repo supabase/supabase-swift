@@ -9,6 +9,7 @@ import ConcurrencyExtras
 import CustomDump
 import InlineSnapshotTesting
 import Mocker
+import SnapshotTestingCustomDump
 import TestHelpers
 import XCTest
 
@@ -23,7 +24,6 @@ final class AuthClientTests: XCTestCase {
 
   var storage: InMemoryLocalStorage!
 
-  var http: HTTPClientMock!
   var sut: AuthClient!
 
   #if !os(Windows) && !os(Linux) && !os(Android)
@@ -38,7 +38,7 @@ final class AuthClientTests: XCTestCase {
     super.setUp()
     storage = InMemoryLocalStorage()
 
-    //    isRecording = true
+//        isRecording = true
   }
 
   override func tearDown() {
@@ -89,7 +89,7 @@ final class AuthClientTests: XCTestCase {
     Mock(
       url: clientURL.appendingPathComponent("logout"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [
         .post: Data()
       ]
@@ -134,7 +134,7 @@ final class AuthClientTests: XCTestCase {
       url: clientURL.appendingPathComponent("logout").appendingQueryItems([
         URLQueryItem(name: "scope", value: "others")
       ]),
-      statusCode: 200,
+      statusCode: 204,
       data: [
         .post: Data()
       ]
@@ -779,7 +779,7 @@ final class AuthClientTests: XCTestCase {
     Mock(
       url: clientURL.appendingPathComponent("otp"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -812,7 +812,7 @@ final class AuthClientTests: XCTestCase {
     Mock(
       url: clientURL.appendingPathComponent("otp"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -1277,7 +1277,7 @@ final class AuthClientTests: XCTestCase {
     Mock(
       url: clientURL.appendingPathComponent("recover"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -1307,7 +1307,7 @@ final class AuthClientTests: XCTestCase {
     Mock(
       url: clientURL.appendingPathComponent("resend"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -1398,7 +1398,7 @@ final class AuthClientTests: XCTestCase {
   func testReauthenticate() async throws {
     Mock(
       url: clientURL.appendingPathComponent("reauthenticate"),
-      statusCode: 200,
+      statusCode: 204,
       data: [.get: Data()]
     )
     .snapshotRequest {
@@ -2245,9 +2245,7 @@ final class AuthClientTests: XCTestCase {
       localStorage: storage,
       logger: nil,
       encoder: encoder,
-      fetch: { request in
-        try await session.data(for: request)
-      }
+      session: .init(configuration: sessionConfiguration)
     )
 
     let sut = AuthClient(configuration: configuration)
