@@ -26,7 +26,7 @@ final class StorageFileAPITests: XCTestCase {
     let configuration = URLSessionConfiguration.default
     configuration.protocolClasses = [MockingURLProtocol.self]
 
-    let session = URLSession(configuration: configuration)
+    _ = URLSession(configuration: configuration)
 
     storage = SupabaseStorageClient(
       configuration: StorageClientConfiguration(

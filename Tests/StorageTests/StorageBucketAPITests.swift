@@ -20,7 +20,7 @@ final class StorageBucketAPITests: XCTestCase {
     let configuration = URLSessionConfiguration.default
     configuration.protocolClasses = [MockingURLProtocol.self]
 
-    let session = URLSession(configuration: configuration)
+    _ = URLSession(configuration: configuration)
 
     JSONEncoder.defaultStorageEncoder.outputFormatting = [
       .sortedKeys

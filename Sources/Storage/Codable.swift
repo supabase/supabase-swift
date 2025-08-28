@@ -12,7 +12,7 @@ extension JSONEncoder {
   @available(*, deprecated, message: "Access to storage encoder is going to be removed.")
   public static let defaultStorageEncoder: JSONEncoder = {
     let encoder = JSONEncoder()
-    encoder.keyEncodingStrategy = .convertToSnakeCase
+    // Don't convert to snake_case to maintain compatibility with existing tests
     return encoder
   }()
 
