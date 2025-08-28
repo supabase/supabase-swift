@@ -69,7 +69,10 @@ final class APIClientTests: XCTestCase {
 
     // Then: Should not throw an error and return a valid response
     do {
-      let result: Session = try await request.serializingDecodable(Session.self).value
+      let result: Session = try await request.serializingDecodable(
+        Session.self,
+        decoder: AuthClient.Configuration.jsonDecoder
+      ).value
       XCTAssertNotNil(result)
       XCTAssertNotNil(result.accessToken)
       XCTAssertNotNil(result.refreshToken)
@@ -112,7 +115,8 @@ final class APIClientTests: XCTestCase {
       let errorMessage = String(describing: error)
       XCTAssertTrue(
         errorMessage.contains("Invalid refresh token")
-          || errorMessage.contains("invalid_grant"))
+          || errorMessage.contains("invalid_grant")
+      )
     }
   }
 
@@ -139,7 +143,10 @@ final class APIClientTests: XCTestCase {
 
     // Then: Should not throw an error
     do {
-      let result: Session = try await request.serializingDecodable(Session.self).value
+      let result: Session = try await request.serializingDecodable(
+        Session.self,
+        decoder: AuthClient.Configuration.jsonDecoder
+      ).value
       XCTAssertNotNil(result)
     } catch {
       XCTFail("Expected successful response, got error: \(error)")
@@ -170,7 +177,10 @@ final class APIClientTests: XCTestCase {
 
     // Then: Should not throw an error
     do {
-      let result: Session = try await request.serializingDecodable(Session.self).value
+      let result: Session = try await request.serializingDecodable(
+        Session.self,
+        decoder: AuthClient.Configuration.jsonDecoder
+      ).value
       XCTAssertNotNil(result)
     } catch {
       XCTFail("Expected successful response, got error: \(error)")
@@ -200,7 +210,10 @@ final class APIClientTests: XCTestCase {
 
     // Then: Should not throw an error
     do {
-      let postResult: Session = try await postRequest.serializingDecodable(Session.self).value
+      let postResult: Session = try await postRequest.serializingDecodable(
+        Session.self,
+        decoder: AuthClient.Configuration.jsonDecoder
+      ).value
       XCTAssertNotNil(postResult)
     } catch {
       XCTFail("Expected successful response, got error: \(error)")
@@ -255,7 +268,10 @@ final class APIClientTests: XCTestCase {
 
     // Then: Should not throw an error after delay
     do {
-      let result: Session = try await request.serializingDecodable(Session.self).value
+      let result: Session = try await request.serializingDecodable(
+        Session.self,
+        decoder: AuthClient.Configuration.jsonDecoder
+      ).value
       XCTAssertNotNil(result)
     } catch {
       XCTFail("Expected successful response, got error: \(error)")
