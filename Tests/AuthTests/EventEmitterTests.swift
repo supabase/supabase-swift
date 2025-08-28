@@ -45,11 +45,11 @@ final class EventEmitterTests: XCTestCase {
   func testEventEmitterAttachListener() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
-    var receivedEvents: [AuthChangeEvent] = []
+    let receivedEvents = LockIsolated<[AuthChangeEvent]>([])
 
     // When: Attaching a listener
     let token = emitter.attach { event, _ in
-      receivedEvents.append(event)
+      receivedEvents.withValue { $0.append(event) }
     }
 
     // And: Emitting an event
@@ -60,26 +60,26 @@ final class EventEmitterTests: XCTestCase {
     // Note: We need to wait a bit for the async event processing
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
 
-    XCTAssertEqual(receivedEvents.count, 1)
-    XCTAssertEqual(receivedEvents.first, .signedIn)
+    XCTAssertEqual(receivedEvents.value.count, 1)
+    XCTAssertEqual(receivedEvents.value.first, .signedIn)
 
     // Cleanup
-    token.remove()
+    token.cancel()
   }
 
   func testEventEmitterMultipleListeners() async throws {
     // Given: An event emitter and multiple listeners
     let emitter = AuthStateChangeEventEmitter()
-    var listener1Events: [AuthChangeEvent] = []
-    var listener2Events: [AuthChangeEvent] = []
+    let listener1Events = LockIsolated<[AuthChangeEvent]>([])
+    let listener2Events = LockIsolated<[AuthChangeEvent]>([])
 
     // When: Attaching multiple listeners
     let token1 = emitter.attach { event, _ in
-      listener1Events.append(event)
+      listener1Events.withValue { $0.append(event) }
     }
 
     let token2 = emitter.attach { event, _ in
-      listener2Events.append(event)
+      listener2Events.withValue { $0.append(event) }
     }
 
     // And: Emitting events
@@ -90,24 +90,24 @@ final class EventEmitterTests: XCTestCase {
     // Then: Both listeners should receive all events
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
 
-    XCTAssertEqual(listener1Events.count, 2)
-    XCTAssertEqual(listener2Events.count, 2)
-    XCTAssertEqual(listener1Events, [.signedIn, .tokenRefreshed])
-    XCTAssertEqual(listener2Events, [.signedIn, .tokenRefreshed])
+    XCTAssertEqual(listener1Events.value.count, 2)
+    XCTAssertEqual(listener2Events.value.count, 2)
+    XCTAssertEqual(listener1Events.value, [.signedIn, .tokenRefreshed])
+    XCTAssertEqual(listener2Events.value, [.signedIn, .tokenRefreshed])
 
     // Cleanup
-    token1.remove()
-    token2.remove()
+    token1.cancel()
+    token2.cancel()
   }
 
   func testEventEmitterRemoveListener() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
-    var receivedEvents: [AuthChangeEvent] = []
+    let receivedEvents = LockIsolated<[AuthChangeEvent]>([])
 
     // When: Attaching a listener
     let token = emitter.attach { event, _ in
-      receivedEvents.append(event)
+      receivedEvents.withValue { $0.append(event) }
     }
 
     // And: Emitting an event
@@ -116,27 +116,27 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive the event
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.count, 1)
+    XCTAssertEqual(receivedEvents.value.count, 1)
 
     // When: Removing the listener
-    token.remove()
+    token.cancel()
 
     // And: Emitting another event
     emitter.emit(.signedOut, session: nil)
 
     // Then: Listener should not receive the new event
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.count, 1)  // Should still be 1
+    XCTAssertEqual(receivedEvents.value.count, 1)  // Should still be 1
   }
 
   func testEventEmitterEmitWithSession() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
-    var receivedSessions: [Session?] = []
+    let receivedSessions = LockIsolated<[Session?]>([])
 
     // When: Attaching a listener
     let token = emitter.attach { _, session in
-      receivedSessions.append(session)
+      receivedSessions.withValue { $0.append(session) }
     }
 
     // And: Emitting an event with session
@@ -145,21 +145,21 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive the session
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedSessions.count, 1)
-    XCTAssertEqual(receivedSessions.first??.accessToken, session.accessToken)
+    XCTAssertEqual(receivedSessions.value.count, 1)
+    XCTAssertEqual(receivedSessions.value.first??.accessToken, session.accessToken)
 
     // Cleanup
-    token.remove()
+    token.cancel()
   }
 
   func testEventEmitterEmitWithoutSession() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
-    var receivedSessions: [Session?] = []
+    let receivedSessions = LockIsolated<[Session?]>([])
 
     // When: Attaching a listener
     let token = emitter.attach { _, session in
-      receivedSessions.append(session)
+      receivedSessions.withValue { $0.append(session) }
     }
 
     // And: Emitting an event without session
@@ -167,21 +167,21 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive nil session
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedSessions.count, 1)
-    XCTAssertNil(receivedSessions.first)
+    XCTAssertEqual(receivedSessions.value.count, 1)
+    XCTAssertNil(receivedSessions.value.first)
 
     // Cleanup
-    token.remove()
+    token.cancel()
   }
 
   func testEventEmitterEmitWithToken() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
-    var receivedEvents: [AuthChangeEvent] = []
+    let receivedEvents = LockIsolated<[AuthChangeEvent]>([])
 
     // When: Attaching a listener
     let token = emitter.attach { event, _ in
-      receivedEvents.append(event)
+      receivedEvents.withValue { $0.append(event) }
     }
 
     // And: Emitting an event with specific token
@@ -190,21 +190,21 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive the event
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.count, 1)
-    XCTAssertEqual(receivedEvents.first, .signedIn)
+    XCTAssertEqual(receivedEvents.value.count, 1)
+    XCTAssertEqual(receivedEvents.value.first, .signedIn)
 
     // Cleanup
-    token.remove()
+    token.cancel()
   }
 
   func testEventEmitterAllAuthChangeEvents() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
-    var receivedEvents: [AuthChangeEvent] = []
+    let receivedEvents = LockIsolated<[AuthChangeEvent]>([])
 
     // When: Attaching a listener
     let token = emitter.attach { event, _ in
-      receivedEvents.append(event)
+      receivedEvents.withValue { $0.append(event) }
     }
 
     // And: Emitting all possible auth change events
@@ -226,30 +226,30 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive all events
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.count, allEvents.count)
-    XCTAssertEqual(receivedEvents, allEvents)
+    XCTAssertEqual(receivedEvents.value.count, allEvents.count)
+    XCTAssertEqual(receivedEvents.value, allEvents)
 
     // Cleanup
-    token.remove()
+    token.cancel()
   }
 
   func testEventEmitterConcurrentEmissions() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
-    var receivedEvents: [AuthChangeEvent] = []
+    let receivedEvents = LockIsolated<[AuthChangeEvent]>([])
     let lock = NSLock()
 
     // When: Attaching a listener
     let token = emitter.attach { event, _ in
       lock.lock()
-      receivedEvents.append(event)
+      receivedEvents.withValue { $0.append(event) }
       lock.unlock()
     }
 
     // And: Emitting events concurrently
     let session = Session.validSession
     await withTaskGroup(of: Void.self) { group in
-      for i in 0..<10 {
+      for _ in 0..<10 {
         group.addTask {
           emitter.emit(.signedIn, session: session)
         }
@@ -258,20 +258,20 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive all events
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.count, 10)
+    XCTAssertEqual(receivedEvents.value.count, 10)
 
     // Cleanup
-    token.remove()
+    token.cancel()
   }
 
   func testEventEmitterMemoryManagement() async throws {
     // Given: An event emitter and a weak reference to a listener
     let emitter = AuthStateChangeEventEmitter()
-    var receivedEvents: [AuthChangeEvent] = []
+    let receivedEvents = LockIsolated<[AuthChangeEvent]>([])
 
     // When: Attaching a listener
     let token = emitter.attach { event, _ in
-      receivedEvents.append(event)
+      receivedEvents.withValue { $0.append(event) }
     }
 
     // And: Emitting an event
@@ -280,17 +280,17 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive the event
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.count, 1)
+    XCTAssertEqual(receivedEvents.value.count, 1)
 
     // When: Removing the token
-    token.remove()
+    token.cancel()
 
     // Then: No memory leaks should occur
     // (This is more of a manual verification, but we can test that the token is properly removed)
     XCTAssertNotNil(token)
 
     // Cleanup
-    token.remove()
+    token.cancel()
   }
 
   // MARK: - Integration Tests
