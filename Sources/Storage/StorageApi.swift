@@ -6,6 +6,8 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
+struct NoopParameter: Encodable, Sendable {}
+
 public class StorageApi: @unchecked Sendable {
   public let configuration: StorageClientConfiguration
 
@@ -43,14 +45,28 @@ public class StorageApi: @unchecked Sendable {
     self.session = configuration.session
   }
 
+  private let urlQueryEncoder: any ParameterEncoding = URLEncoding.queryString
+  private var defaultEncoder: any ParameterEncoder {
+    JSONParameterEncoder(encoder: configuration.encoder)
+  }
+
   @discardableResult
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Data {
-    var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+  func execute<RequestBody: Encodable & Sendable>(
+    _ url: URL,
+    method: HTTPMethod = .get,
+    headers: HTTPHeaders = [:],
+    query: Parameters? = nil,
+    body: RequestBody? = NoopParameter(),
+    encoder: (any ParameterEncoder)? = nil
+  ) throws -> DataRequest {
+    var request = try URLRequest(url: url, method: method, headers: headers)
 
-    let urlRequest = request.urlRequest
+    request = try urlQueryEncoder.encode(request, with: query)
+    if RequestBody.self != NoopParameter.self {
+      request = try (encoder ?? defaultEncoder).encode(body, into: request)
+    }
 
-    return try await session.request(urlRequest)
+    return session.request(request)
       .validate { request, response, data in
         guard 200..<300 ~= response.statusCode else {
           guard let data else {
@@ -65,8 +81,6 @@ public class StorageApi: @unchecked Sendable {
         }
         return .success(())
       }
-      .serializingData()
-      .value
   }
 }
 
