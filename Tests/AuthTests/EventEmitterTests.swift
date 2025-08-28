@@ -168,7 +168,7 @@ final class EventEmitterTests: XCTestCase {
     // Then: Listener should receive nil session
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
     XCTAssertEqual(receivedSessions.value.count, 1)
-    XCTAssertNil(receivedSessions.value.first)
+    XCTAssertEqual(receivedSessions.value, [nil])
 
     // Cleanup
     token.cancel()
