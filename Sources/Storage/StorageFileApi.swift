@@ -87,6 +87,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     headers["duplex"] = options.duplex
 
+    if headers["cache-control"] == nil {
+      headers["cache-control"] = "max-age=\(options.cacheControl)"
+    }
+
     struct UploadResponse: Decodable {
       let Key: String
       let Id: String
@@ -263,7 +267,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let response = try await execute(
       configuration.url.appendingPathComponent("object/sign/\(bucketId)/\(path)"),
       method: .post,
-      body: Body(expiresIn: expiresIn, transform: transform)
+      body: Body(expiresIn: expiresIn, transform: transform),
+      encoder: JSONParameterEncoder(encoder: JSONEncoder.unconfiguredEncoder)
     ).serializingDecodable(SignedURLResponse.self, decoder: configuration.decoder).value
 
     return try makeSignedURL(response.signedURL, download: download)
@@ -307,7 +312,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let response = try await execute(
       configuration.url.appendingPathComponent("object/sign/\(bucketId)"),
       method: .post,
-      body: Params(expiresIn: expiresIn, paths: paths)
+      body: Params(expiresIn: expiresIn, paths: paths),
+      encoder: JSONParameterEncoder(encoder: JSONEncoder.unconfiguredEncoder)
     ).serializingDecodable([SignedURLResponse].self, decoder: configuration.decoder).value
 
     return try response.map { try makeSignedURL($0.signedURL, download: download) }
@@ -380,7 +386,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     return try await execute(
       configuration.url.appendingPathComponent("object/list/\(bucketId)"),
       method: .post,
-      body: options
+      body: options,
+      encoder: JSONParameterEncoder(encoder: JSONEncoder.unconfiguredEncoder)
     ).serializingDecodable([FileObject].self, decoder: configuration.decoder).value
   }
 
@@ -594,15 +601,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let options = options ?? defaultFileOptions
     var headers = options.headers.map { HTTPHeaders($0) } ?? HTTPHeaders()
 
+    if headers["cache-control"] == nil {
+      headers["cache-control"] = "max-age=\(options.cacheControl)"
+    }
+
     headers["x-upsert"] = "\(options.upsert)"
     headers["duplex"] = options.duplex
-
-    #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary.value)
-    #else
-      let formData = MultipartFormData()
-    #endif
-    file.encode(to: formData, withPath: path, options: options)
 
     struct UploadResponse: Decodable {
       let Key: String

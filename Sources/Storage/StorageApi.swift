@@ -79,7 +79,16 @@ public class StorageApi: @unchecked Sendable {
     multipartFormData: @escaping (MultipartFormData) -> Void,
   ) throws -> UploadRequest {
     let request = try makeRequest(url, method: method, headers: headers, query: query)
-    return session.upload(multipartFormData: multipartFormData, with: request)
+
+    #if DEBUG
+      let formData = MultipartFormData(boundary: testingBoundary.value)
+    #else
+      let formData = MultipartFormData()
+    #endif
+
+    multipartFormData(formData)
+
+    return session.upload(multipartFormData: formData, with: request)
       .validate { _, response, data in
         self.validate(response: response, data: data ?? Data())
       }
@@ -96,7 +105,7 @@ public class StorageApi: @unchecked Sendable {
     for header in headers {
       mergedHeaders[header.name] = header.value
     }
-    
+
     let request = try URLRequest(url: url, method: method, headers: mergedHeaders)
     return try urlQueryEncoder.encode(request, with: query)
   }
