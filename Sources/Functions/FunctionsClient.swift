@@ -1,6 +1,7 @@
 import Alamofire
 import ConcurrencyExtras
 import Foundation
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -119,9 +120,10 @@ public final class FunctionsClient: Sendable {
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
     decode: (Data, HTTPURLResponse) throws -> Response
-  ) async throws -> Response {
+  ) async throws(FunctionsError) -> Response {
     let data = try await rawInvoke(
-      functionName: functionName, invokeOptions: options
+      functionName: functionName,
+      invokeOptions: options
     )
 
     // Create a mock HTTPURLResponse for backward compatibility
@@ -133,7 +135,11 @@ public final class FunctionsClient: Sendable {
       headerFields: nil
     )!
 
-    return try decode(data, mockResponse)
+    do {
+      return try decode(data, mockResponse)
+    } catch {
+      throw mapToFunctionsError(error)
+    }
   }
 
   /// Invokes a function and decodes the response as a specific type.
@@ -147,11 +153,10 @@ public final class FunctionsClient: Sendable {
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
     decoder: JSONDecoder = JSONDecoder()
-  ) async throws -> T {
-    let data = try await rawInvoke(
-      functionName: functionName, invokeOptions: options
-    )
-    return try decoder.decode(T.self, from: data)
+  ) async throws(FunctionsError) -> T {
+    try await self.invoke(functionName, options: options) { data, _ in
+      try decoder.decode(T.self, from: data)
+    }
   }
 
   /// Invokes a function without expecting a response.
@@ -162,21 +167,24 @@ public final class FunctionsClient: Sendable {
   public func invoke(
     _ functionName: String,
     options: FunctionInvokeOptions = .init()
-  ) async throws {
+  ) async throws(FunctionsError) {
     _ = try await rawInvoke(
-      functionName: functionName, invokeOptions: options
+      functionName: functionName,
+      invokeOptions: options
     )
   }
 
   private func rawInvoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) async throws -> Data {
+  ) async throws(FunctionsError) -> Data {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
-    return try await session.request(request)
-      .validate(self.validate)
-      .serializingData()
-      .value
+    return try await wrappingError(or: mapToFunctionsError) {
+      return try await self.session.request(request)
+        .validate(self.validate)
+        .serializingData()
+        .value
+    }
   }
 
   /// Invokes a function with streamed response.
@@ -204,7 +212,7 @@ public final class FunctionsClient: Sendable {
         case let .stream(.success(data)): return data
         case .complete(let completion):
           if let error = completion.error {
-            throw error
+            throw mapToFunctionsError(error)
           }
           return nil
         }
@@ -226,7 +234,7 @@ public final class FunctionsClient: Sendable {
     var request = URLRequest(
       url: url.appendingPathComponent(functionName).appendingQueryItems(options.query)
     )
-    request.httpMethod = FunctionInvokeOptions.httpMethod(options.method)?.rawValue ?? "POST"
+    request.method = FunctionInvokeOptions.httpMethod(options.method) ?? .post
     request.headers = headers
     request.httpBody = options.body
     request.timeoutInterval = FunctionsClient.requestIdleTimeout

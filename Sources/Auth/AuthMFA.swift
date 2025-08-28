@@ -25,7 +25,7 @@ public struct AuthMFA: Sendable {
   public func enroll(params: any MFAEnrollParamsType) async throws(AuthError)
     -> AuthMFAEnrollResponse
   {
-    try await wrappingError {
+    try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("factors"),
         method: .post,
@@ -46,7 +46,7 @@ public struct AuthMFA: Sendable {
   public func challenge(params: MFAChallengeParams) async throws(AuthError)
     -> AuthMFAChallengeResponse
   {
-    try await wrappingError {
+    try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
         method: .post,
@@ -67,7 +67,7 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response after verifying the factor.
   @discardableResult
   public func verify(params: MFAVerifyParams) async throws(AuthError) -> AuthMFAVerifyResponse {
-    return try await wrappingError {
+    return try await wrappingError(or: mapToAuthError) {
       let response = try await self.api.execute(
         self.configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
         method: .post,
@@ -95,7 +95,7 @@ public struct AuthMFA: Sendable {
   @discardableResult
   public func unenroll(params: MFAUnenrollParams) async throws(AuthError) -> AuthMFAUnenrollResponse
   {
-    try await wrappingError {
+    try await wrappingError(or: mapToAuthError) {
       try await self.api.execute(
         self.configuration.url.appendingPathComponent("factors/\(params.factorId)"),
         method: .delete,
@@ -130,7 +130,7 @@ public struct AuthMFA: Sendable {
   ///
   /// - Returns: An authentication response with the list of MFA factors.
   public func listFactors() async throws(AuthError) -> AuthMFAListFactorsResponse {
-    try await wrappingError {
+    try await wrappingError(or: mapToAuthError) {
       let user = try await sessionManager.session().user
       let factors = user.factors ?? []
       let totp = factors.filter {
@@ -150,7 +150,7 @@ public struct AuthMFA: Sendable {
     -> AuthMFAGetAuthenticatorAssuranceLevelResponse
   {
     do {
-      return try await wrappingError {
+      return try await wrappingError(or: mapToAuthError) {
         let session = try await sessionManager.session()
         let payload = JWT.decodePayload(session.accessToken)
 
