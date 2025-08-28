@@ -507,7 +507,7 @@
 //
 //  // TODO: Update makeSUT for Alamofire - temporarily commented out
 //  // This function requires custom fetch handling which doesn't exist with Alamofire
-//  
+//
 //  private func makeSUT(
 //    record: Bool = false,
 //    flowType: AuthFlowType = .implicit,
