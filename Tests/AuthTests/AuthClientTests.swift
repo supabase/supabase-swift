@@ -38,7 +38,7 @@ final class AuthClientTests: XCTestCase {
     super.setUp()
     storage = InMemoryLocalStorage()
 
-//        isRecording = true
+    //        isRecording = true
   }
 
   override func tearDown() {
