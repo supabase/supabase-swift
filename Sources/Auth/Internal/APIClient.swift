@@ -143,14 +143,16 @@ extension Alamofire.Session {
   }
 }
 
-struct SupabaseApiVersionAdapter: RequestAdapter {
+struct DefaultHeadersRequestAdapter: RequestAdapter {
+  let headers: HTTPHeaders
+
   func adapt(
     _ urlRequest: URLRequest,
     for session: Alamofire.Session,
-    completion: @escaping @Sendable (_ result: Result<URLRequest, any Error>) -> Void
+    completion: @escaping (Result<URLRequest, any Error>) -> Void
   ) {
-    var request = urlRequest
-    request.headers["X-Supabase-Api-Version"] = apiVersions[._20240101]!.name.rawValue
-    completion(.success(request))
+    var urlRequest = urlRequest
+    urlRequest.headers = urlRequest.headers.merging(with: headers)
+    completion(.success(urlRequest))
   }
 }

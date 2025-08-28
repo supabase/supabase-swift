@@ -97,16 +97,18 @@ public actor AuthClient {
     AuthClient.globalClientID += 1
     clientID = AuthClient.globalClientID
 
-    var adapters: [any RequestAdapter] = []
-
-    if let apiKey = configuration.headers["apikey"] {
-      adapters.append(SupabaseApiKeyAdapter(apiKey: apiKey))
+    var headers = HTTPHeaders(configuration.headers)
+    if headers["X-Client-Info"] == nil {
+      headers["X-Client-Info"] = "auth-swift/\(version)"
     }
-    adapters.append(SupabaseApiVersionAdapter())
+
+    headers["X-Supabase-Api-Version"] = apiVersions[._20240101]!.name.rawValue
 
     Dependencies[clientID] = Dependencies(
       configuration: configuration,
-      session: configuration.session.newSession(adapters: adapters),
+      session: configuration.session.newSession(adapters: [
+        DefaultHeadersRequestAdapter(headers: headers)
+      ]),
       api: APIClient(clientID: clientID),
       codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
