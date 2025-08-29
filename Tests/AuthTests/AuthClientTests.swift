@@ -57,6 +57,25 @@ final class AuthClientTests: XCTestCase {
     storage = nil
   }
 
+  func testAuthClientInitialization() {
+    let client = makeSUT()
+
+    assertInlineSnapshot(of: client.configuration.headers, as: .customDump) {
+      """
+      [
+        "X-Client-Info": "auth-swift/0.0.0",
+        "X-Supabase-Api-Version": "2024-01-01",
+        "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+      ]
+      """
+    }
+
+    XCTAssertEqual(client.clientID, 1)
+
+    let client2 = makeSUT()
+    XCTAssertEqual(client2.clientID, 2)
+  }
+
   func testOnAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
