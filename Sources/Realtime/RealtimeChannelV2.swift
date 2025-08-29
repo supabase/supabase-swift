@@ -296,6 +296,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
               private: config.isPrivate
             )
           ]),
+          encoder: JSONParameterEncoder(encoder: .supabase()),
           headers: headers
         )
         .validate()
