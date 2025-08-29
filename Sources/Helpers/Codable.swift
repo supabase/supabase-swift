@@ -36,6 +36,11 @@ extension JSONEncoder {
       let string = date.iso8601String
       try container.encode(string)
     }
+
+    #if DEBUG
+    encoder.outputFormatting = [.sortedKeys]
+    #endif
+
     return encoder
   }
 }
