@@ -138,7 +138,7 @@ jobs:
         run: rm -r Tests/IntegrationTests/*
       - name: "Build Swift Package"
         run: swift build
-      
+
   # android:
   #   name: Android
   #   runs-on: ubuntu-latest
