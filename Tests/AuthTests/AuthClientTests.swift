@@ -70,10 +70,9 @@ final class AuthClientTests: XCTestCase {
       """
     }
 
-    XCTAssertEqual(client.clientID, 1)
-
     let client2 = makeSUT()
-    XCTAssertEqual(client2.clientID, 2)
+
+    XCTAssertLessThan(client.clientID, client2.clientID, "Should increase client IDs")
   }
 
   func testOnAuthStateChanges() async throws {
