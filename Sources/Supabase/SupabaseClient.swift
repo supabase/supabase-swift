@@ -1,7 +1,6 @@
 import Alamofire
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 import IssueReporting
 
 #if canImport(FoundationNetworking)
@@ -98,7 +97,7 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  let _headers: HTTPFields
+  let _headers: HTTPHeaders
   /// Headers provided to the inner clients on initialization.
   ///
   /// - Note: This collection is non-mutable, if you want to provide different headers, pass it in ``SupabaseClientOptions/GlobalOptions/headers``.
@@ -154,16 +153,16 @@ public final class SupabaseClient: Sendable {
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
-    _headers = HTTPFields(defaultHeaders)
+    _headers = HTTPHeaders(defaultHeaders)
       .merging(
-        with: HTTPFields(
+        with: HTTPHeaders(
           [
             "Authorization": "Bearer \(supabaseKey)",
             "Apikey": supabaseKey,
           ]
         )
       )
-      .merging(with: HTTPFields(options.global.headers))
+      .merging(with: HTTPHeaders(options.global.headers))
 
     // default storage key uses the supabase project ref as a namespace
     let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"

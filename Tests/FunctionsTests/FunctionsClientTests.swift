@@ -1,6 +1,5 @@
 import Alamofire
 import ConcurrencyExtras
-import HTTPTypes
 import InlineSnapshotTesting
 import Mocker
 import SnapshotTestingCustomDump

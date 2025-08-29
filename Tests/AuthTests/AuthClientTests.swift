@@ -2316,56 +2316,6 @@ final class AuthClientTests: XCTestCase {
   }
 }
 
-extension HTTPResponse {
-  static func stub(
-    _ body: String = "",
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: body.data(using: .utf8)!,
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
-  }
-
-  static func stub(
-    fromFileName fileName: String,
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: json(named: fileName),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
-  }
-
-  static func stub(
-    _ value: some Encodable,
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: try! AuthClient.Configuration.jsonEncoder.encode(value),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
-  }
-}
-
 enum MockData {
   static let listUsersResponse = try! Data(
     contentsOf: Bundle.module.url(forResource: "list-users-response", withExtension: "json")!

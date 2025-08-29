@@ -18,10 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 import Swift
-import HTTPTypes
 
 /// Container class of bindings to the channel
 struct Binding {
@@ -41,7 +41,10 @@ public struct ChannelFilter {
   public let filter: String?
 
   public init(
-    event: String? = nil, schema: String? = nil, table: String? = nil, filter: String? = nil
+    event: String? = nil,
+    schema: String? = nil,
+    table: String? = nil,
+    filter: String? = nil
   ) {
     self.event = event
     self.schema = schema
@@ -94,13 +97,13 @@ public struct RealtimeChannelOptions {
     [
       "config": [
         "presence": [
-          "key": presenceKey ?? "",
+          "key": presenceKey ?? ""
         ],
         "broadcast": [
           "ack": broadcastAcknowledge,
           "self": broadcastSelf,
         ],
-      ],
+      ]
     ]
   }
 }
@@ -135,7 +138,8 @@ public enum RealtimeSubscribeStates {
 @available(
   *,
   deprecated,
-  message: "Use new RealtimeChannelV2 class instead. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
+  message:
+    "Use new RealtimeChannelV2 class instead. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
 )
 public class RealtimeChannel {
   /// The topic of the RealtimeChannel. e.g. "rooms:friends"
@@ -255,7 +259,8 @@ public class RealtimeChannel {
     joinPush.delegateReceive(.timeout, to: self) { (self, _) in
       // log that the channel timed out
       self.socket?.logItems(
-        "channel", "timeout \(self.topic) \(self.joinRef ?? "") after \(self.timeout)s"
+        "channel",
+        "timeout \(self.topic) \(self.joinRef ?? "") after \(self.timeout)s"
       )
 
       // Send a Push to the server to leave the channel
@@ -280,7 +285,8 @@ public class RealtimeChannel {
 
       // Log that the channel was left
       self.socket?.logItems(
-        "channel", "close topic: \(self.topic) joinRef: \(self.joinRef ?? "nil")"
+        "channel",
+        "close topic: \(self.topic) joinRef: \(self.joinRef ?? "nil")"
       )
 
       // Mark the channel as closed and remove it from the socket
@@ -292,7 +298,8 @@ public class RealtimeChannel {
     delegateOnError(to: self) { (self, message) in
       // Log that the channel received an error
       self.socket?.logItems(
-        "channel", "error topic: \(self.topic) joinRef: \(self.joinRef ?? "nil") mesage: \(message)"
+        "channel",
+        "error topic: \(self.topic) joinRef: \(self.joinRef ?? "nil") mesage: \(message)"
       )
 
       // If error was received while joining, then reset the Push
@@ -377,7 +384,7 @@ public class RealtimeChannel {
 
     var accessTokenPayload: Payload = [:]
     var config: Payload = [
-      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? [],
+      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? []
     ]
 
     config["broadcast"] = broadcast
@@ -408,7 +415,7 @@ public class RealtimeChannel {
         let bindingsCount = clientPostgresBindings.count
         var newPostgresBindings: [Binding] = []
 
-        for i in 0 ..< bindingsCount {
+        for i in 0..<bindingsCount {
           let clientPostgresBinding = clientPostgresBindings[i]
 
           let event = clientPostgresBinding.filter["event"]
@@ -419,9 +426,9 @@ public class RealtimeChannel {
           let serverPostgresFilter = serverPostgresFilters[i]
 
           if serverPostgresFilter["event", as: String.self] == event,
-             serverPostgresFilter["schema", as: String.self] == schema,
-             serverPostgresFilter["table", as: String.self] == table,
-             serverPostgresFilter["filter", as: String.self] == filter
+            serverPostgresFilter["schema", as: String.self] == schema,
+            serverPostgresFilter["table", as: String.self] == table,
+            serverPostgresFilter["filter", as: String.self] == filter
           {
             newPostgresBindings.append(
               Binding(
@@ -517,7 +524,10 @@ public class RealtimeChannel {
     callback: @escaping ((Target, RealtimeMessage) -> Void)
   ) -> RealtimeChannel {
     delegateOn(
-      ChannelEvent.close, filter: ChannelFilter(), to: owner, callback: callback
+      ChannelEvent.close,
+      filter: ChannelFilter(),
+      to: owner,
+      callback: callback
     )
   }
 
@@ -560,7 +570,10 @@ public class RealtimeChannel {
     callback: @escaping ((Target, RealtimeMessage) -> Void)
   ) -> RealtimeChannel {
     delegateOn(
-      ChannelEvent.error, filter: ChannelFilter(), to: owner, callback: callback
+      ChannelEvent.error,
+      filter: ChannelFilter(),
+      to: owner,
+      callback: callback
     )
   }
 
@@ -639,7 +652,9 @@ public class RealtimeChannel {
   /// Shared method between `on` and `manualOn`
   @discardableResult
   private func on(
-    _ type: String, filter: ChannelFilter, delegated: Delegated<RealtimeMessage, Void>
+    _ type: String,
+    filter: ChannelFilter,
+    delegated: Delegated<RealtimeMessage, Void>
   ) -> RealtimeChannel {
     bindings.withValue {
       $0[type.lowercased(), default: []].append(
@@ -738,35 +753,19 @@ public class RealtimeChannel {
           "topic": subTopic,
           "payload": payload,
           "event": event as Any,
-        ],
+        ]
       ]
 
       do {
-        let request = try HTTPRequest(
-          url: broadcastEndpointURL,
+        _ = try await socket?.session.request(
+          broadcastEndpointURL,
           method: .post,
-          headers: HTTPFields(headers.compactMapValues { $0 }),
-          body: JSONSerialization.data(withJSONObject: body)
+          parameters: body,
+          headers: HTTPHeaders(headers.compactMapValues { $0 })
         )
-
-        let response = try await withCheckedThrowingContinuation { continuation in
-          socket?.session.request(request.urlRequest).responseData { response in
-            switch response.result {
-            case .success(let data):
-              if let httpResponse = response.response {
-                let httpResp = HTTPResponse(data: data, response: httpResponse)
-                continuation.resume(returning: httpResp)
-              } else {
-                continuation.resume(throwing: URLError(.badServerResponse))
-              }
-            case .failure(let error):
-              continuation.resume(throwing: error)
-            }
-          }
-        }
-        guard 200 ..< 300 ~= response.statusCode else {
-          return .error
-        }
+        .validate()
+        .serializingData()
+        .value
         return .ok
       } catch {
         return .error
@@ -774,13 +773,14 @@ public class RealtimeChannel {
     } else {
       return await withCheckedContinuation { continuation in
         let push = self.push(
-          type.rawValue, payload: payload,
+          type.rawValue,
+          payload: payload,
           timeout: (opts["timeout"] as? TimeInterval) ?? self.timeout
         )
 
         if let type = payload["type"] as? String, type == "broadcast",
-           let config = self.params["config"] as? [String: Any],
-           let broadcast = config["broadcast"] as? [String: Any]
+          let config = self.params["config"] as? [String: Any],
+          let broadcast = config["broadcast"] as? [String: Any]
         {
           let ack = broadcast["ack"] as? Bool
           if ack == nil || ack == false {
@@ -884,7 +884,11 @@ public class RealtimeChannel {
     else { return true }
 
     socket?.logItems(
-      "channel", "dropping outdated message", message.topic, message.event, message.rawPayload,
+      "channel",
+      "dropping outdated message",
+      message.topic,
+      message.event,
+      message.rawPayload,
       safeJoinRef
     )
     return false
@@ -928,33 +932,32 @@ public class RealtimeChannel {
 
     let handledMessage = message
 
-    let bindings: [Binding] = if ["insert", "update", "delete"].contains(typeLower) {
-      self.bindings.value["postgres_changes", default: []].filter { bind in
-        bind.filter["event"] == "*" || bind.filter["event"] == typeLower
-      }
-    } else {
-      self.bindings.value[typeLower, default: []].filter { bind in
-        if ["broadcast", "presence", "postgres_changes"].contains(typeLower) {
-          let bindEvent = bind.filter["event"]?.lowercased()
+    let bindings: [Binding] =
+      if ["insert", "update", "delete"].contains(typeLower) {
+        self.bindings.value["postgres_changes", default: []].filter { bind in
+          bind.filter["event"] == "*" || bind.filter["event"] == typeLower
+        }
+      } else {
+        self.bindings.value[typeLower, default: []].filter { bind in
+          if ["broadcast", "presence", "postgres_changes"].contains(typeLower) {
+            let bindEvent = bind.filter["event"]?.lowercased()
 
-          if let bindId = bind.id.flatMap(Int.init) {
-            let ids = message.payload["ids", as: [Int].self] ?? []
-            return ids.contains(bindId)
-              && (
-                bindEvent == "*"
+            if let bindId = bind.id.flatMap(Int.init) {
+              let ids = message.payload["ids", as: [Int].self] ?? []
+              return ids.contains(bindId)
+                && (bindEvent == "*"
                   || bindEvent
-                  == message.payload["data", as: [String: Any].self]?["type", as: String.self]?
-                  .lowercased()
-              )
+                    == message.payload["data", as: [String: Any].self]?["type", as: String.self]?
+                    .lowercased())
+            }
+
+            return bindEvent == "*"
+              || bindEvent == message.payload["event", as: String.self]?.lowercased()
           }
 
-          return bindEvent == "*"
-            || bindEvent == message.payload["event", as: String.self]?.lowercased()
+          return bind.type.lowercased() == typeLower
         }
-
-        return bind.type.lowercased() == typeLower
       }
-    }
 
     bindings.forEach { $0.callback.call(handledMessage) }
   }
@@ -1003,7 +1006,9 @@ public class RealtimeChannel {
     var url = socket?.endPoint ?? ""
     url = url.replacingOccurrences(of: "^ws", with: "http", options: .regularExpression, range: nil)
     url = url.replacingOccurrences(
-      of: "(/socket/websocket|/socket|/websocket)/?$", with: "", options: .regularExpression,
+      of: "(/socket/websocket|/socket|/websocket)/?$",
+      with: "",
+      options: .regularExpression,
       range: nil
     )
     url =

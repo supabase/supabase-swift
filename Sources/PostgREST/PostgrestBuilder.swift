@@ -1,7 +1,6 @@
 import Alamofire
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

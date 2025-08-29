@@ -7,7 +7,6 @@
 
 import Alamofire
 import Foundation
-import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -15,7 +14,7 @@ import HTTPTypes
 
 /// Options for initializing ``RealtimeClientV2``.
 public struct RealtimeClientOptions: Sendable {
-  package var headers: HTTPFields
+  package var headers: HTTPHeaders
   var heartbeatInterval: TimeInterval
   var reconnectDelay: TimeInterval
   var timeoutInterval: TimeInterval
@@ -49,7 +48,7 @@ public struct RealtimeClientOptions: Sendable {
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: (any SupabaseLogger)? = nil
   ) {
-    self.headers = HTTPFields(headers)
+    self.headers = HTTPHeaders(headers)
     self.heartbeatInterval = heartbeatInterval
     self.reconnectDelay = reconnectDelay
     self.timeoutInterval = timeoutInterval
@@ -63,7 +62,7 @@ public struct RealtimeClientOptions: Sendable {
   }
 
   var apikey: String? {
-    headers[.apiKey]
+    headers["apikey"]
   }
 }
 
@@ -101,10 +100,6 @@ public enum HeartbeatStatus: Sendable {
   case timeout
   /// Socket is disconnected.
   case disconnected
-}
-
-extension HTTPField.Name {
-  static let apiKey = Self("apiKey")!
 }
 
 /// Log level for Realtime.
