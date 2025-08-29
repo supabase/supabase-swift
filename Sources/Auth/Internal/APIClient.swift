@@ -1,6 +1,5 @@
 import Alamofire
 import Foundation
-import HTTPTypes
 
 struct NoopParameter: Encodable, Sendable {}
 
@@ -93,7 +92,7 @@ struct APIClient: Sendable {
   }
 
   private func parseResponseAPIVersion(_ response: HTTPURLResponse) -> Date? {
-    guard let apiVersion = response.headers["X-Supabase-Api-Version"] else { return nil }
+    guard let apiVersion = response.headers[apiVersionHeaderNameHeaderKey] else { return nil }
 
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -117,42 +116,5 @@ struct _RawAPIErrorResponse: Decodable {
 
   func _getErrorMessage() -> String {
     msg ?? message ?? errorDescription ?? error ?? "Unknown"
-  }
-}
-
-extension Alamofire.Session {
-  /// Create a new session with the same configuration but with some overridden properties.
-  func newSession(
-    adapters: [any RequestAdapter] = []
-  ) -> Alamofire.Session {
-    return Alamofire.Session(
-      session: session,
-      delegate: delegate,
-      rootQueue: rootQueue,
-      startRequestsImmediately: startRequestsImmediately,
-      requestQueue: requestQueue,
-      serializationQueue: serializationQueue,
-      interceptor: Interceptor(
-        adapters: self.interceptor != nil ? [self.interceptor!] + adapters : adapters
-      ),
-      serverTrustManager: serverTrustManager,
-      redirectHandler: redirectHandler,
-      cachedResponseHandler: cachedResponseHandler,
-      eventMonitors: [eventMonitor]
-    )
-  }
-}
-
-struct DefaultHeadersRequestAdapter: RequestAdapter {
-  let headers: HTTPHeaders
-
-  func adapt(
-    _ urlRequest: URLRequest,
-    for session: Alamofire.Session,
-    completion: @escaping (Result<URLRequest, any Error>) -> Void
-  ) {
-    var urlRequest = urlRequest
-    urlRequest.headers = urlRequest.headers.merging(with: headers)
-    completion(.success(urlRequest))
   }
 }

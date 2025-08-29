@@ -1,7 +1,6 @@
 import Alamofire
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -206,7 +205,3 @@ public final class PostgrestClient: Sendable {
 }
 
 struct NoParams: Encodable {}
-
-extension HTTPField.Name {
-  static let prefer = Self("Prefer")!
-}

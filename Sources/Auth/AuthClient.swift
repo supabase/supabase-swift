@@ -97,12 +97,15 @@ public actor AuthClient {
     AuthClient.globalClientID += 1
     clientID = AuthClient.globalClientID
 
+    var configuration = configuration
     var headers = HTTPHeaders(configuration.headers)
     if headers["X-Client-Info"] == nil {
       headers["X-Client-Info"] = "auth-swift/\(version)"
     }
 
-    headers["X-Supabase-Api-Version"] = apiVersions[._20240101]!.name.rawValue
+    headers[apiVersionHeaderNameHeaderKey] = apiVersions[._20240101]!.name.rawValue
+
+    configuration.headers = headers.dictionary
 
     Dependencies[clientID] = Dependencies(
       configuration: configuration,

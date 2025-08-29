@@ -1,6 +1,5 @@
 import Alamofire
 import CustomDump
-import HTTPTypes
 import Helpers
 import InlineSnapshotTesting
 import IssueReporting
@@ -91,10 +90,10 @@ final class SupabaseClientTests: XCTestCase {
 
     let realtimeOptions = client.realtimeV2.options
     let expectedRealtimeHeader = client._headers.merging(with: [
-      HTTPField.Name("custom_realtime_header_key")!: "custom_realtime_header_value"
+      "custom_realtime_header_key": "custom_realtime_header_value"
     ]
     )
-    expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
+    expectNoDifference(realtimeOptions.headers.sorted(), expectedRealtimeHeader.sorted())
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
 
     XCTAssertFalse(client.auth.configuration.autoRefreshToken)

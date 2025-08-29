@@ -1,5 +1,4 @@
 import Alamofire
-import HTTPTypes
 import XCTest
 
 @testable import Functions

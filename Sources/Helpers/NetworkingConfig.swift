@@ -1,6 +1,5 @@
 import Alamofire
 import Foundation
-import HTTPTypes
 
 package struct SupabaseNetworkingConfig: Sendable {
   package let session: Alamofire.Session

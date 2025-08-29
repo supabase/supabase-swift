@@ -141,20 +141,20 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     session: Alamofire.Session
   ) {
     var options = options
-    if options.headers[.xClientInfo] == nil {
-      options.headers[.xClientInfo] = "realtime-swift/\(version)"
+    if options.headers["X-Client-Info"] == nil {
+      options.headers["X-Client-Info"] = "realtime-swift/\(version)"
     }
 
     self.url = url
     self.options = options
     self.wsTransport = wsTransport
-    self.session = session
+    self.session = session.newSession(adapters: [DefaultHeadersRequestAdapter(headers: options.headers)])
 
     precondition(options.apikey != nil, "API key is required to connect to Realtime")
     apikey = options.apikey!
 
     mutableState.withValue { [options] in
-      if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
+      if let accessToken = options.headers["Authorization"]?.split(separator: " ").last {
         $0.accessToken = String(accessToken)
       }
     }
