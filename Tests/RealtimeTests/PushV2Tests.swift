@@ -288,11 +288,16 @@ private final class MockRealtimeChannel: RealtimeChannelProtocol {
   }
 }
 
+// TODO: Update for Alamofire - temporarily commented out
+// These mocks need to be updated to work with Alamofire instead of HTTPClientType
+
+import Alamofire
+
 private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Sendable {
   private let _pushedMessages = LockIsolated<[RealtimeMessageV2]>([])
   private let _status = LockIsolated<RealtimeClientStatus>(.connected)
   let options: RealtimeClientOptions
-  let http: any HTTPClientType = MockHTTPClient()
+  let session: Alamofire.Session = .default
   let broadcastURL = URL(string: "https://test.supabase.co/api/broadcast")!
 
   var status: RealtimeClientStatus {
@@ -329,11 +334,5 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
 
   func _remove(_ channel: any RealtimeChannelProtocol) {
     // No-op for mock
-  }
-}
-
-private struct MockHTTPClient: HTTPClientType {
-  func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-    return HTTPResponse(data: Data(), response: HTTPURLResponse())
   }
 }

@@ -73,7 +73,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
       ignoreQuery: true,
       statusCode: 200,
       data: [
-        .get: Data()
+        .get: Data("{\"username\":\"test\"}".utf8)
       ]
     )
     .snapshotRequest {
@@ -100,7 +100,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
       ignoreQuery: true,
       statusCode: 200,
       data: [
-        .get: Data()
+        .get: Data("{\"username\":\"test\"}".utf8)
       ]
     )
     .snapshotRequest {
@@ -163,7 +163,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
       ignoreQuery: true,
       statusCode: 201,
       data: [
-        .post: Data()
+        .post: Data(#"[{"id":1,"username":"supabase"},{"id":1,"username":"supa"}]"#.utf8)
       ]
     )
     .snapshotRequest {
@@ -200,7 +200,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
       url: url.appendingPathComponent("users"),
       statusCode: 201,
       data: [
-        .post: Data()
+        .post: Data(#"[{"id":1,"username":"supabase"}]"#.utf8)
       ]
     )
     .snapshotRequest {
@@ -232,7 +232,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
       ignoreQuery: true,
       statusCode: 201,
       data: [
-        .patch: Data()
+        .patch: Data(#"{"username":"supabase2"}"#.utf8)
       ]
     )
     .snapshotRequest {
@@ -265,7 +265,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
       ignoreQuery: true,
       statusCode: 201,
       data: [
-        .post: Data()
+        .post: Data(#"[{"id":1,"username":"admin"},{"id":2,"username":"supabase"}]"#.utf8)
       ]
     )
     .snapshotRequest {
@@ -305,7 +305,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
       ignoreQuery: true,
       statusCode: 201,
       data: [
-        .post: Data()
+        .post: Data(#"{"username":"admin"}"#.utf8)
       ]
     )
     .snapshotRequest {

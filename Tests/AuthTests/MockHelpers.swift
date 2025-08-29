@@ -1,3 +1,4 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 import TestHelpers
@@ -22,7 +23,7 @@ extension Dependencies {
       localStorage: InMemoryLocalStorage(),
       logger: nil
     ),
-    http: HTTPClientMock(),
+    session: .default,
     api: APIClient(clientID: AuthClientID()),
     codeVerifierStorage: CodeVerifierStorage.mock,
     sessionStorage: SessionStorage.live(clientID: AuthClientID()),

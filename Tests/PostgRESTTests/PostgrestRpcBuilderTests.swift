@@ -135,7 +135,7 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
         "sum",
         params: [
           "numbers": [1, 2, 3],
-          "key": "value"
+          "key": "value",
         ] as JSONObject,
         get: true
       )
@@ -149,7 +149,7 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
     Mock(
       url: url.appendingPathComponent("rpc/hello"),
       statusCode: 200,
-      data: [.post: Data()]
+      data: [.post: Data(#"{"hello":"world"}"#.utf8)]
     )
     .snapshotRequest {
       #"""
@@ -165,6 +165,6 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
     }
     .register()
 
-    try await sut.rpc("hello", count: .estimated).execute()
+    try await sut.rpc("hello", count: CountOption.estimated).execute()
   }
 }

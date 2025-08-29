@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 16/01/24.
 //
 
+import Alamofire
 import Foundation
 
 extension StorageClientConfiguration {
@@ -19,7 +20,7 @@ extension StorageClientConfiguration {
     headers: [String: String],
     encoder: JSONEncoder = .defaultStorageEncoder,
     decoder: JSONDecoder = .defaultStorageDecoder,
-    session: StorageHTTPSession = .init()
+    session: Alamofire.Session = .default
   ) {
     self.init(
       url: url,

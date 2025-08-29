@@ -1,13 +1,16 @@
+import Alamofire
 import InlineSnapshotTesting
 import Mocker
+import SnapshotTestingCustomDump
 import TestHelpers
 import XCTest
+import Helpers
+
+@testable import Storage
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
-
-@testable import Storage
 
 final class StorageFileAPITests: XCTestCase {
   let url = URL(string: "http://localhost:54321/storage/v1")!
@@ -24,8 +27,6 @@ final class StorageFileAPITests: XCTestCase {
     let configuration = URLSessionConfiguration.default
     configuration.protocolClasses = [MockingURLProtocol.self]
 
-    let session = URLSession(configuration: configuration)
-
     storage = SupabaseStorageClient(
       configuration: StorageClientConfiguration(
         url: url,
@@ -33,10 +34,7 @@ final class StorageFileAPITests: XCTestCase {
           "apikey":
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
         ],
-        session: StorageHTTPSession(
-          fetch: { try await session.data(for: $0) },
-          upload: { try await session.upload(for: $0, from: $1) }
-        ),
+        session: Alamofire.Session(configuration: configuration),
         logger: nil
       )
     )
@@ -87,7 +85,7 @@ final class StorageFileAPITests: XCTestCase {
       url: url.appendingPathComponent("object/move"),
       statusCode: 200,
       data: [
-        .post: Data()
+        .post: Data(#"{"Key":"object\/new\/path.txt"}"#.utf8)
       ]
     )
     .snapshotRequest {
@@ -398,9 +396,21 @@ final class StorageFileAPITests: XCTestCase {
     do {
       try await storage.from("bucket")
         .move(from: "source", to: "destination")
-      XCTFail()
-    } catch let error as StorageError {
-      XCTAssertEqual(error.message, "Error")
+      XCTFail("Expected error")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AFError.responseValidationFailed(
+          reason: .customValidationFailed(
+            error: StorageError(
+              statusCode: nil,
+              message: "Error",
+              error: nil
+            )
+          )
+        )
+        """
+      }
     }
   }
 
@@ -429,10 +439,20 @@ final class StorageFileAPITests: XCTestCase {
     do {
       try await storage.from("bucket")
         .move(from: "source", to: "destination")
-      XCTFail()
-    } catch let error as HTTPError {
-      XCTAssertEqual(error.data, Data("error".utf8))
-      XCTAssertEqual(error.response.statusCode, 412)
+      XCTFail("Expected error")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AFError.responseValidationFailed(
+          reason: .customValidationFailed(
+            error: HTTPError(
+              data: Data(5 bytes),
+              response: NSHTTPURLResponse()
+            )
+          )
+        )
+        """
+      }
     }
   }
 
@@ -672,7 +692,7 @@ final class StorageFileAPITests: XCTestCase {
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 400,
       data: [
-        .head: Data()
+        .head: Data(#"{"message":"Error", "statusCode":"400"}"#.utf8)
       ]
     )
     .snapshotRequest {
@@ -696,7 +716,7 @@ final class StorageFileAPITests: XCTestCase {
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 404,
       data: [
-        .head: Data()
+        .head: Data(#"{"message":"Error", "statusCode":"404"}"#.utf8)
       ]
     )
     .snapshotRequest {
@@ -892,5 +912,226 @@ final class StorageFileAPITests: XCTestCase {
 
     XCTAssertEqual(response.path, "file.txt")
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
+  }
+
+  // MARK: - Upload Tests
+
+  func testUploadWithData() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/test.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Key": "bucket/test.txt",
+            "Id": "123"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Cache-Control: max-age=3600" \
+      	--header "Content-Length: 390" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      \#r
+      3600\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"metadata\"\#r
+      \#r
+      {\"mode\":\"test\"}\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"\"; filename=\"test.txt\"\#r
+      Content-Type: text/plain\#r
+      \#r
+      hello world\#r
+      --alamofire.boundary.e56f43407f772505--\#r
+      " \
+      	"http://localhost:54321/storage/v1/object/bucket/test.txt"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket").upload(
+      "test.txt",
+      data: Data("hello world".utf8),
+      options: FileOptions(
+        metadata: ["mode": "test"]
+      )
+    )
+
+    XCTAssertEqual(response.path, "test.txt")
+    XCTAssertEqual(response.fullPath, "bucket/test.txt")
+    XCTAssertEqual(response.id, "123")
+  }
+
+  func testUploadWithFileURL() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/test.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Key": "bucket/test.txt",
+            "Id": "456"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Cache-Control: max-age=3600" \
+      	--header "Content-Length: 391" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      \#r
+      3600\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"metadata\"\#r
+      \#r
+      {\"mode\":\"test\"}\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"\"; filename=\"test.txt\"\#r
+      Content-Type: text/plain\#r
+      \#r
+      hello world!\#r
+      --alamofire.boundary.e56f43407f772505--\#r
+      " \
+      	"http://localhost:54321/storage/v1/object/bucket/test.txt"
+      """#
+    }
+    .register()
+
+    // Create a temporary file for testing
+    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("test.txt")
+    try Data("hello world!".utf8).write(to: tempURL)
+
+    let response = try await storage.from("bucket").upload(
+      "test.txt",
+      fileURL: tempURL,
+      options: FileOptions(
+        metadata: ["mode": "test"]
+      )
+    )
+
+    XCTAssertEqual(response.path, "test.txt")
+    XCTAssertEqual(response.fullPath, "bucket/test.txt")
+    XCTAssertEqual(response.id, "456")
+
+    // Clean up
+    try? FileManager.default.removeItem(at: tempURL)
+  }
+
+  func testUploadWithOptions() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/test.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Key": "bucket/test.txt",
+            "Id": "789"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Cache-Control: max-age=7200" \
+      	--header "Content-Length: 388" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      \#r
+      7200\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"metadata\"\#r
+      \#r
+      {\"number\":42}\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"\"; filename=\"test.txt\"\#r
+      Content-Type: text/plain\#r
+      \#r
+      hello world\#r
+      --alamofire.boundary.e56f43407f772505--\#r
+      " \
+      	"http://localhost:54321/storage/v1/object/bucket/test.txt"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket").upload(
+      "test.txt",
+      data: Data("hello world".utf8),
+      options: FileOptions(
+        cacheControl: "7200",
+        metadata: [
+          "number": 42
+        ]
+      )
+    )
+
+    XCTAssertEqual(response.path, "test.txt")
+    XCTAssertEqual(response.fullPath, "bucket/test.txt")
+    XCTAssertEqual(response.id, "789")
+  }
+
+  func testUploadErrorScenarios() async throws {
+    // Test upload with network error
+    Mock(
+      url: url.appendingPathComponent("object/bucket/test.txt"),
+      statusCode: 500,
+      data: [
+        .post: Data(
+          """
+          {
+            "statusCode": "500",
+            "message": "Internal server error",
+            "error": "InternalError"
+          }
+          """.utf8)
+      ]
+    )
+    .register()
+
+    do {
+      _ = try await storage.from("bucket").upload("test.txt", data: Data("hello world".utf8))
+      XCTFail("Expected error but got success")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AFError.responseValidationFailed(
+          reason: .customValidationFailed(
+            error: StorageError(
+              statusCode: "500",
+              message: "Internal server error",
+              error: "InternalError"
+            )
+          )
+        )
+        """
+      }
+    }
   }
 }

@@ -1,6 +1,6 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 import IssueReporting
 
 #if canImport(FoundationNetworking)
@@ -39,7 +39,7 @@ public final class SupabaseClient: Sendable {
           schema: options.db.schema,
           headers: headers,
           logger: options.global.logger,
-          fetch: fetchWithAuth,
+          session: session,
           encoder: options.db.encoder,
           decoder: options.db.decoder
         )
@@ -57,7 +57,7 @@ public final class SupabaseClient: Sendable {
           configuration: StorageClientConfiguration(
             url: storageURL,
             headers: headers,
-            session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+            session: session,
             logger: options.global.logger,
             useNewHostname: options.storage.useNewHostname
           )
@@ -89,7 +89,7 @@ public final class SupabaseClient: Sendable {
           headers: headers,
           region: options.functions.region,
           logger: options.global.logger,
-          fetch: fetchWithAuth
+          session: session
         )
       }
 
@@ -97,7 +97,7 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  let _headers: HTTPFields
+  let _headers: HTTPHeaders
   /// Headers provided to the inner clients on initialization.
   ///
   /// - Note: This collection is non-mutable, if you want to provide different headers, pass it in ``SupabaseClientOptions/GlobalOptions/headers``.
@@ -117,7 +117,7 @@ public final class SupabaseClient: Sendable {
 
   let mutableState = LockIsolated(MutableState())
 
-  private var session: URLSession {
+  private var session: Alamofire.Session {
     options.global.session
   }
 
@@ -153,16 +153,16 @@ public final class SupabaseClient: Sendable {
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
-    _headers = HTTPFields(defaultHeaders)
+    _headers = HTTPHeaders(defaultHeaders)
       .merging(
-        with: HTTPFields(
+        with: HTTPHeaders(
           [
             "Authorization": "Bearer \(supabaseKey)",
             "Apikey": supabaseKey,
           ]
         )
       )
-      .merging(with: HTTPFields(options.global.headers))
+      .merging(with: HTTPHeaders(options.global.headers))
 
     // default storage key uses the supabase project ref as a namespace
     let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"
@@ -177,10 +177,7 @@ public final class SupabaseClient: Sendable {
       logger: options.global.logger,
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
-      fetch: {
-        // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: $0)
-      },
+      session: options.global.session,
       autoRefreshToken: options.auth.autoRefreshToken
     )
 
@@ -330,7 +327,21 @@ public final class SupabaseClient: Sendable {
 
   @Sendable
   private func fetchWithAuth(_ request: URLRequest) async throws -> (Data, URLResponse) {
-    try await session.data(for: adapt(request: request))
+    let adaptedRequest = await adapt(request: request)
+    return try await withCheckedThrowingContinuation { continuation in
+      session.request(adaptedRequest).responseData { response in
+        switch response.result {
+        case .success(let data):
+          if let httpResponse = response.response {
+            continuation.resume(returning: (data, httpResponse))
+          } else {
+            continuation.resume(throwing: URLError(.badServerResponse))
+          }
+        case .failure(let error):
+          continuation.resume(throwing: error)
+        }
+      }
+    }
   }
 
   @Sendable
@@ -338,7 +349,21 @@ public final class SupabaseClient: Sendable {
     _ request: URLRequest,
     from data: Data
   ) async throws -> (Data, URLResponse) {
-    try await session.upload(for: adapt(request: request), from: data)
+    let adaptedRequest = await adapt(request: request)
+    return try await withCheckedThrowingContinuation { continuation in
+      session.upload(data, with: adaptedRequest).responseData { response in
+        switch response.result {
+        case .success(let responseData):
+          if let httpResponse = response.response {
+            continuation.resume(returning: (responseData, httpResponse))
+          } else {
+            continuation.resume(throwing: URLError(.badServerResponse))
+          }
+        case .failure(let error):
+          continuation.resume(throwing: error)
+        }
+      }
+    }
   }
 
   private func adapt(request: URLRequest) async -> URLRequest {
@@ -370,7 +395,7 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
+  private func handleTokenChanged(event: AuthChangeEvent, session: Auth.Session?) async {
     let accessToken: String? = mutableState.withValue {
       if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
         $0.changedAccessToken != session?.accessToken

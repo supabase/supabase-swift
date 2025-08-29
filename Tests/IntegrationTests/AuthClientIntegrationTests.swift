@@ -30,7 +30,7 @@ final class AuthClientIntegrationTests: XCTestCase {
           "Authorization": "Bearer \(key)",
         ],
         localStorage: InMemoryLocalStorage(),
-        logger: TestLogger()
+        logger: OSLogSupabaseLogger()
       )
     )
   }
@@ -102,11 +102,7 @@ final class AuthClientIntegrationTests: XCTestCase {
       try await authClient.signIn(email: email, password: password)
       XCTFail("Expect failure")
     } catch {
-      if let error = error as? AuthError {
-        XCTAssertEqual(error.localizedDescription, "Invalid login credentials")
-      } else {
-        XCTFail("Unexpected error: \(error)")
-      }
+      XCTAssertEqual(error.localizedDescription, "Invalid login credentials")
     }
   }
 
@@ -186,7 +182,7 @@ final class AuthClientIntegrationTests: XCTestCase {
     do {
       try await authClient.unlinkIdentity(identity)
       XCTFail("Expect failure")
-    } catch let error as AuthError {
+    } catch {
       XCTAssertEqual(error.errorCode, .singleIdentityNotDeletable)
     }
   }
@@ -269,8 +265,9 @@ final class AuthClientIntegrationTests: XCTestCase {
       do {
         _ = try await authClient.session
         XCTFail("Expected to throw AuthError.sessionMissing")
-      } catch let error as AuthError {
-        XCTAssertEqual(error, .sessionMissing)
+      } catch AuthError.sessionMissing {
+      } catch {
+        XCTFail("Expected \(AuthError.sessionMissing) error")
       }
       XCTAssertNil(authClient.currentSession)
     }

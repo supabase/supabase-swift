@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import HTTPTypes
 
 public struct AuthAdmin: Sendable {
   let clientID: AuthClientID
@@ -14,17 +13,19 @@ public struct AuthAdmin: Sendable {
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
   var api: APIClient { Dependencies[clientID].api }
   var encoder: JSONEncoder { Dependencies[clientID].encoder }
+  var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
 
   /// Get user by id.
   /// - Parameter uid: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
-  public func getUserById(_ uid: UUID) async throws -> User {
-    try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
-        method: .get
+  public func getUserById(_ uid: UUID) async throws(AuthError) -> User {
+    try await wrappingError(or: mapToAuthError) {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/users/\(uid)")
       )
-    ).decoded(decoder: configuration.decoder)
+      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .value
+    }
   }
 
   /// Updates the user data.
@@ -32,14 +33,18 @@ public struct AuthAdmin: Sendable {
   ///   - uid: The user id you want to update.
   ///   - attributes: The data you want to update.
   @discardableResult
-  public func updateUserById(_ uid: UUID, attributes: AdminUserAttributes) async throws -> User {
-    try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
+  public func updateUserById(_ uid: UUID, attributes: AdminUserAttributes) async throws(AuthError)
+    -> User
+  {
+    try await wrappingError(or: mapToAuthError) {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/users/\(uid)"),
         method: .put,
-        body: configuration.encoder.encode(attributes)
+        body: attributes
       )
-    ).decoded(decoder: configuration.decoder)
+      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .value
+    }
   }
 
   /// Creates a new user.
@@ -49,15 +54,16 @@ public struct AuthAdmin: Sendable {
   /// - If you are sure that the created user's email or phone number is legitimate and verified, you can set the ``AdminUserAttributes/emailConfirm`` or ``AdminUserAttributes/phoneConfirm`` param to true.
   /// - Warning: Never expose your `service_role` key on the client.
   @discardableResult
-  public func createUser(attributes: AdminUserAttributes) async throws -> User {
-    try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users"),
+  public func createUser(attributes: AdminUserAttributes) async throws(AuthError) -> User {
+    try await wrappingError(or: mapToAuthError) {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/users"),
         method: .post,
-        body: encoder.encode(attributes)
+        body: attributes
       )
-    )
-    .decoded(decoder: configuration.decoder)
+      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .value
+    }
   }
 
   /// Sends an invite link to an email address.
@@ -74,28 +80,22 @@ public struct AuthAdmin: Sendable {
     _ email: String,
     data: [String: AnyJSON]? = nil,
     redirectTo: URL? = nil
-  ) async throws -> User {
-    try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/invite"),
+  ) async throws(AuthError) -> User {
+    try await wrappingError(or: mapToAuthError) {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/invite"),
         method: .post,
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 },
-        body: encoder.encode(
-          [
-            "email": .string(email),
-            "data": data.map({ AnyJSON.object($0) }) ?? .null,
-          ]
-        )
+        query: (redirectTo ?? self.configuration.redirectToURL).map {
+          ["redirect_to": $0.absoluteString]
+        },
+        body: [
+          "email": .string(email),
+          "data": data.map({ AnyJSON.object($0) }) ?? .null,
+        ]
       )
-    )
-    .decoded(decoder: configuration.decoder)
+      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .value
+    }
   }
 
   /// Delete a user. Requires `service_role` key.
@@ -105,16 +105,14 @@ public struct AuthAdmin: Sendable {
   /// from the auth schema.
   ///
   /// - Warning: Never expose your `service_role` key on the client.
-  public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws {
-    _ = try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(id)"),
+  public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws(AuthError) {
+    _ = try await wrappingError(or: mapToAuthError) {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/users/\(id)"),
         method: .delete,
-        body: encoder.encode(
-          DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
-        )
-      )
-    )
+        body: DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
+      ).serializingData().value
+    }
   }
 
   /// Get a list of users.
@@ -122,55 +120,59 @@ public struct AuthAdmin: Sendable {
   /// This function should only be called on a server.
   ///
   /// - Warning: Never expose your `service_role` key in the client.
-  public func listUsers(params: PageParams? = nil) async throws -> ListUsersPaginatedResponse {
+  public func listUsers(
+    params: PageParams? = nil
+  ) async throws(AuthError) -> ListUsersPaginatedResponse {
     struct Response: Decodable {
       let users: [User]
       let aud: String
     }
 
-    let httpResponse = try await api.execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users"),
-        method: .get,
+    return try await wrappingError(or: mapToAuthError) {
+      let httpResponse = try await self.api.execute(
+        self.configuration.url.appendingPathComponent("admin/users"),
         query: [
-          URLQueryItem(name: "page", value: params?.page?.description ?? ""),
-          URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
+          "page": params?.page?.description ?? "",
+          "per_page": params?.perPage?.description ?? "",
         ]
       )
-    )
+      .serializingDecodable(Response.self, decoder: self.configuration.decoder)
+      .response
 
-    let response = try httpResponse.decoded(as: Response.self, decoder: configuration.decoder)
+      let response = try httpResponse.result.get()
 
-    var pagination = ListUsersPaginatedResponse(
-      users: response.users,
-      aud: response.aud,
-      lastPage: 0,
-      total: httpResponse.headers[.xTotalCount].flatMap(Int.init) ?? 0
-    )
+      var pagination = ListUsersPaginatedResponse(
+        users: response.users,
+        aud: response.aud,
+        lastPage: 0,
+        total: httpResponse.response?.headers["X-Total-Count"].flatMap(Int.init) ?? 0
+      )
 
-    let links = httpResponse.headers[.link]?.components(separatedBy: ",") ?? []
-    if !links.isEmpty {
-      for link in links {
-        let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
-          while: \.isNumber
-        )
-        let rel = link.components(separatedBy: ";")[1].components(separatedBy: "=")[1]
+      let links =
+        httpResponse.response?.headers["Link"].flatMap { $0.components(separatedBy: ",") } ?? []
+      if !links.isEmpty {
+        for link in links {
+          let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
+            while: \.isNumber
+          )
+          let rel = link.components(separatedBy: ";")[1].components(separatedBy: "=")[1]
 
-        if rel == "\"last\"", let lastPage = Int(page) {
-          pagination.lastPage = lastPage
-        } else if rel == "\"next\"", let nextPage = Int(page) {
-          pagination.nextPage = nextPage
+          if rel == "\"last\"", let lastPage = Int(page) {
+            pagination.lastPage = lastPage
+          } else if rel == "\"next\"", let nextPage = Int(page) {
+            pagination.nextPage = nextPage
+          }
         }
       }
-    }
 
-    return pagination
+      return pagination
+    }
   }
 
   /*
    Generate link is commented out temporarily due issues with they Auth's decoding is configured.
    Will revisit it later.
-
+  
   /// Generates email links and OTPs to be sent via a custom email provider.
   ///
   /// - Parameter params: The parameters for the link generation.
@@ -195,9 +197,4 @@ public struct AuthAdmin: Sendable {
     ).decoded(decoder: configuration.decoder)
   }
    */
-}
-
-extension HTTPField.Name {
-  static let xTotalCount = Self("x-total-count")!
-  static let link = Self("link")!
 }

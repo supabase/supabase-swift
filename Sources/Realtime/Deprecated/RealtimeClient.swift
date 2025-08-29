@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 
@@ -175,8 +176,8 @@ public class RealtimeClient: PhoenixTransportDelegate {
   /// The connection to the server
   var connection: (any PhoenixTransport)? = nil
 
-  /// The HTTPClient to perform HTTP requests.
-  let http: any HTTPClientType
+  /// The Alamofire session to perform HTTP requests.
+  let session: Alamofire.Session
 
   var accessToken: String?
 
@@ -234,7 +235,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
       headers["X-Client-Info"] = "realtime-swift/\(version)"
     }
     self.headers = headers
-    http = HTTPClient(fetch: { try await URLSession.shared.data(for: $0) }, interceptors: [])
+    session = .default
 
     let params = paramsClosure?()
     if let jwt = (params?["Authorization"] as? String)?.split(separator: " ").last {

@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 29/04/24.
 //
 
+import Alamofire
 import Foundation
 
 #if canImport(FoundationNetworking)
@@ -40,8 +41,8 @@ extension AuthClient {
     public let encoder: JSONEncoder
     public let decoder: JSONDecoder
 
-    /// A custom fetch implementation.
-    public let fetch: FetchHandler
+    /// The Alamofire session to use for network requests.
+    public let session: Alamofire.Session
 
     /// Set to `true` if you want to automatically refresh the token before expiring.
     public let autoRefreshToken: Bool
@@ -58,7 +59,7 @@ extension AuthClient {
     ///   - logger: The logger to use.
     ///   - encoder: The JSON encoder to use for encoding requests.
     ///   - decoder: The JSON decoder to use for decoding responses.
-    ///   - fetch: The asynchronous fetch handler for network requests.
+    ///   - session: The Alamofire session to use for network requests.
     ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
     public init(
       url: URL? = nil,
@@ -70,7 +71,7 @@ extension AuthClient {
       logger: (any SupabaseLogger)? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      session: Alamofire.Session = .default,
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
@@ -84,7 +85,7 @@ extension AuthClient {
       self.logger = logger
       self.encoder = encoder
       self.decoder = decoder
-      self.fetch = fetch
+      self.session = session
       self.autoRefreshToken = autoRefreshToken
     }
   }
@@ -101,7 +102,7 @@ extension AuthClient {
   ///   - logger: The logger to use.
   ///   - encoder: The JSON encoder to use for encoding requests.
   ///   - decoder: The JSON decoder to use for decoding responses.
-  ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - session: The Alamofire session to use for network requests.
   ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
   public init(
     url: URL? = nil,
@@ -113,7 +114,7 @@ extension AuthClient {
     logger: (any SupabaseLogger)? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    session: Alamofire.Session = .default,
     autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
   ) {
     self.init(
@@ -127,7 +128,7 @@ extension AuthClient {
         logger: logger,
         encoder: encoder,
         decoder: decoder,
-        fetch: fetch,
+        session: session,
         autoRefreshToken: autoRefreshToken
       )
     )

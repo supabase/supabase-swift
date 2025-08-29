@@ -1,24 +1,7 @@
+import Alamofire
 import Foundation
-import HTTPTypes
 
-extension HTTPClient {
-  init(configuration: AuthClient.Configuration) {
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    interceptors.append(
-      RetryRequestInterceptor(
-        retryableHTTPMethods: RetryRequestInterceptor.defaultRetryableHTTPMethods.union(
-          [.post]  // Add POST method so refresh token are also retried.
-        )
-      )
-    )
-
-    self.init(fetch: configuration.fetch, interceptors: interceptors)
-  }
-}
+struct NoopParameter: Encodable, Sendable {}
 
 struct APIClient: Sendable {
   let clientID: AuthClientID
@@ -27,53 +10,51 @@ struct APIClient: Sendable {
     Dependencies[clientID].configuration
   }
 
-  var http: any HTTPClientType {
-    Dependencies[clientID].http
+  var session: Alamofire.Session {
+    Dependencies[clientID].session
   }
 
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
-    var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
-
-    if request.headers[.apiVersionHeaderName] == nil {
-      request.headers[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
-    }
-
-    let response = try await http.send(request)
-
-    guard 200..<300 ~= response.statusCode else {
-      throw handleError(response: response)
-    }
-
-    return response
+  private let urlQueryEncoder: any ParameterEncoding = URLEncoding.queryString
+  private var defaultEncoder: any ParameterEncoder {
+    JSONParameterEncoder(encoder: configuration.encoder)
   }
 
-  @discardableResult
-  func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
-    var sessionManager: SessionManager {
-      Dependencies[clientID].sessionManager
+  func execute<RequestBody: Encodable & Sendable>(
+    _ url: URL,
+    method: HTTPMethod = .get,
+    headers: HTTPHeaders = [:],
+    query: Parameters? = nil,
+    body: RequestBody? = NoopParameter(),
+    encoder: (any ParameterEncoder)? = nil
+  ) throws -> DataRequest {
+    var request = try URLRequest(url: url, method: method, headers: headers)
+
+    request = try urlQueryEncoder.encode(request, with: query)
+    if RequestBody.self != NoopParameter.self {
+      request = try (encoder ?? defaultEncoder).encode(body, into: request)
     }
 
-    let session = try await sessionManager.session()
-
-    var request = request
-    request.headers[.authorization] = "Bearer \(session.accessToken)"
-
-    return try await execute(request)
+    return session.request(request)
+      .validate { _, response, data in
+        guard 200..<300 ~= response.statusCode else {
+          return .failure(handleError(response: response, data: data ?? Data()))
+        }
+        return .success(())
+      }
   }
 
-  func handleError(response: Helpers.HTTPResponse) -> AuthError {
+  func handleError(response: HTTPURLResponse, data: Data) -> AuthError {
     guard
-      let error = try? response.decoded(
-        as: _RawAPIErrorResponse.self,
-        decoder: configuration.decoder
+      let error = try? configuration.decoder.decode(
+        _RawAPIErrorResponse.self,
+        from: data
       )
     else {
       return .api(
         message: "Unexpected error",
         errorCode: .unexpectedFailure,
-        underlyingData: response.data,
-        underlyingResponse: response.underlyingResponse
+        underlyingData: data,
+        underlyingResponse: response
       )
     }
 
@@ -104,14 +85,14 @@ struct APIClient: Sendable {
       return .api(
         message: error._getErrorMessage(),
         errorCode: errorCode ?? .unknown,
-        underlyingData: response.data,
-        underlyingResponse: response.underlyingResponse
+        underlyingData: data,
+        underlyingResponse: response
       )
     }
   }
 
-  private func parseResponseAPIVersion(_ response: Helpers.HTTPResponse) -> Date? {
-    guard let apiVersion = response.headers[.apiVersionHeaderName] else { return nil }
+  private func parseResponseAPIVersion(_ response: HTTPURLResponse) -> Date? {
+    guard let apiVersion = response.headers[apiVersionHeaderNameHeaderKey] else { return nil }
 
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

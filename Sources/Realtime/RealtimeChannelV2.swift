@@ -1,6 +1,6 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 import IssueReporting
 
 #if canImport(FoundationNetworking)
@@ -93,7 +93,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   /// Subscribes to the channel.
   public func subscribeWithError() async throws {
-    logger?.debug("Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))")
+    logger?.debug(
+      "Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))"
+    )
 
     status = .subscribing
 
@@ -210,7 +212,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     let payload = RealtimeJoinPayload(
       config: joinConfig,
       accessToken: await socket._getAccessToken(),
-      version: socket.options.headers[.xClientInfo]
+      version: socket.options.headers["X-Client-Info"]
     )
 
     let joinRef = socket.makeRef()
@@ -263,12 +265,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   @MainActor
   public func broadcast(event: String, message: JSONObject) async {
     if status != .subscribed {
-      var headers: HTTPFields = [.contentType: "application/json"]
+      var headers = HTTPHeaders([.contentType("application/json")])
       if let apiKey = socket.options.apikey {
-        headers[.apiKey] = apiKey
+        headers["apikey"] = apiKey
       }
       if let accessToken = await socket._getAccessToken() {
-        headers[.authorization] = "Bearer \(accessToken)"
+        headers["Authorization"] = "Bearer \(accessToken)"
       }
 
       struct BroadcastMessagePayload: Encodable {
@@ -283,30 +285,28 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       }
 
       let task = Task { [headers] in
-        _ = try? await socket.http.send(
-          HTTPRequest(
-            url: socket.broadcastURL,
-            method: .post,
-            headers: headers,
-            body: JSONEncoder().encode(
-              BroadcastMessagePayload(
-                messages: [
-                  BroadcastMessagePayload.Message(
-                    topic: topic,
-                    event: event,
-                    payload: message,
-                    private: config.isPrivate
-                  )
-                ]
-              )
+        _ = try await socket.session.request(
+          socket.broadcastURL,
+          method: .post,
+          parameters: BroadcastMessagePayload(messages: [
+            BroadcastMessagePayload.Message(
+              topic: topic,
+              event: event,
+              payload: message,
+              private: config.isPrivate
             )
-          )
+          ]),
+          encoder: JSONParameterEncoder(encoder: .supabase()),
+          headers: headers
         )
+        .validate()
+        .serializingData()
+        .value
       }
 
       if config.broadcast.acknowledgeBroadcasts {
         try? await withTimeout(interval: socket.options.timeoutInterval) {
-          await task.value
+          try? await task.value
         }
       }
     } else {
