@@ -511,7 +511,13 @@ final class AuthClientTests: XCTestCase {
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
-    try await sut.linkIdentityWithIdToken(
+    let eventsTask = Task {
+      await sut.authStateChanges.prefix(2).collect()
+    }
+
+    await Task.megaYield()
+
+    let updatedSession = try await sut.linkIdentityWithIdToken(
       credentials: OpenIDConnectCredentials(
         provider: .apple,
         idToken: "id-token",
@@ -522,6 +528,13 @@ final class AuthClientTests: XCTestCase {
         )
       )
     )
+
+    let events = await eventsTask.value.map(\.event)
+    let sessions = await eventsTask.value.map(\.session)
+
+    expectNoDifference(events, [.initialSession, .userUpdated])
+    expectNoDifference(sessions, [.validSession, updatedSession])
+    expectNoDifference(sut.currentSession, updatedSession)
   }
 
   func testAdminListUsers() async throws {
