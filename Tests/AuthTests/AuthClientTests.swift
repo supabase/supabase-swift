@@ -111,12 +111,11 @@ final class AuthClientTests: XCTestCase {
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
-    let eventsTask = Task {
-      await sut.authStateChanges.prefix(2).collect()
-    }
-    await Task.megaYield()
-
-    try await sut.signOut()
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: { try await sut.signOut() },
+      expectedEvents: [.initialSession, .signedOut]
+    )
 
     do {
       _ = try await sut.session
@@ -128,9 +127,6 @@ final class AuthClientTests: XCTestCase {
         """
       }
     }
-
-    let events = await eventsTask.value.map(\.event)
-    expectNoDifference(events, [.initialSession, .signedOut])
   }
 
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
@@ -331,19 +327,12 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    let eventsTask = Task {
-      await sut.authStateChanges.prefix(2).collect()
-    }
-
-    await Task.megaYield()
-
-    try await sut.signInAnonymously()
-
-    let events = await eventsTask.value.map(\.event)
-    let sessions = await eventsTask.value.map(\.session)
-
-    expectNoDifference(events, [.initialSession, .signedIn])
-    expectNoDifference(sessions, [nil, session])
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: { try await sut.signInAnonymously() },
+      expectedEvents: [.initialSession, .signedIn],
+      expectedSessions: [nil, session]
+    )
 
     expectNoDifference(sut.currentSession, session)
     expectNoDifference(sut.currentUser, session.user)
@@ -482,6 +471,54 @@ final class AuthClientTests: XCTestCase {
     try await sut.linkIdentity(provider: .github)
 
     expectNoDifference(receivedURL.value?.absoluteString, url)
+  }
+
+  func testLinkIdentityWithIdToken() async throws {
+    Mock(
+      url: clientURL.appendingPathComponent("token"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: MockData.session]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "Content-Length: 166" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"access_token\":\"access-token\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"id_token\":\"id-token\",\"link_identity\":true,\"nonce\":\"nonce\",\"provider\":\"apple\"}" \
+      	"http://localhost:54321/auth/v1/token?grant_type=id_token"
+      """#
+    }
+    .register()
+
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    let updatedSession = try await assertAuthStateChanges(
+      sut: sut,
+      action: {
+        try await sut.linkIdentityWithIdToken(
+          credentials: OpenIDConnectCredentials(
+            provider: .apple,
+            idToken: "id-token",
+            accessToken: "access-token",
+            nonce: "nonce",
+            gotrueMetaSecurity: AuthMetaSecurity(
+              captchaToken: "captcha-token"
+            )
+          )
+        )
+      },
+      expectedEvents: [.initialSession, .userUpdated]
+    )
+
+    expectNoDifference(sut.currentSession, updatedSession)
   }
 
   func testAdminListUsers() async throws {
@@ -712,12 +749,12 @@ final class AuthClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 145" \
+      	--header "Content-Length: 167" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"access_token\":\"access-token\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"id_token\":\"id-token\",\"nonce\":\"nonce\",\"provider\":\"apple\"}" \
+      	--data "{\"access_token\":\"access-token\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"id_token\":\"id-token\",\"link_identity\":false,\"nonce\":\"nonce\",\"provider\":\"apple\"}" \
       	"http://localhost:54321/auth/v1/token?grant_type=id_token"
       """#
     }
@@ -2042,46 +2079,46 @@ final class AuthClientTests: XCTestCase {
     _ = try await sut.admin.createUser(attributes: attributes)
   }
 
-//  func testGenerateLink_signUp() async throws {
-//    let sut = makeSUT()
-//
-//    let user = User(fromMockNamed: "user")
-//    let encoder = JSONEncoder.supabase()
-//    encoder.keyEncodingStrategy = .convertToSnakeCase
-//
-//    let userData = try encoder.encode(user)
-//    var json = try JSONSerialization.jsonObject(with: userData, options: []) as! [String: Any]
-//
-//    json["action_link"] = "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com"
-//    json["email_otp"] = "123456"
-//    json["hashed_token"] = "hashed_token"
-//    json["redirect_to"] = "https://example.com"
-//    json["verification_type"] = "signup"
-//
-//    let responseData = try JSONSerialization.data(withJSONObject: json)
-//
-//    Mock(
-//      url: clientURL.appendingPathComponent("admin/generate_link"),
-//      statusCode: 200,
-//      data: [
-//        .post: responseData
-//      ]
-//    )
-//    .register()
-//
-//    let link = try await sut.admin.generateLink(
-//      params: .signUp(
-//        email: "test@example.com",
-//        password: "password",
-//        data: ["full_name": "John Doe"]
-//      )
-//    )
-//
-//    expectNoDifference(
-//      link.properties.actionLink.absoluteString,
-//      "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-//    )
-//  }
+  //  func testGenerateLink_signUp() async throws {
+  //    let sut = makeSUT()
+  //
+  //    let user = User(fromMockNamed: "user")
+  //    let encoder = JSONEncoder.supabase()
+  //    encoder.keyEncodingStrategy = .convertToSnakeCase
+  //
+  //    let userData = try encoder.encode(user)
+  //    var json = try JSONSerialization.jsonObject(with: userData, options: []) as! [String: Any]
+  //
+  //    json["action_link"] = "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com"
+  //    json["email_otp"] = "123456"
+  //    json["hashed_token"] = "hashed_token"
+  //    json["redirect_to"] = "https://example.com"
+  //    json["verification_type"] = "signup"
+  //
+  //    let responseData = try JSONSerialization.data(withJSONObject: json)
+  //
+  //    Mock(
+  //      url: clientURL.appendingPathComponent("admin/generate_link"),
+  //      statusCode: 200,
+  //      data: [
+  //        .post: responseData
+  //      ]
+  //    )
+  //    .register()
+  //
+  //    let link = try await sut.admin.generateLink(
+  //      params: .signUp(
+  //        email: "test@example.com",
+  //        password: "password",
+  //        data: ["full_name": "John Doe"]
+  //      )
+  //    )
+  //
+  //    expectNoDifference(
+  //      link.properties.actionLink.absoluteString,
+  //      "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+  //    )
+  //  }
 
   func testInviteUserByEmail() async throws {
     let sut = makeSUT()
@@ -2148,6 +2185,43 @@ final class AuthClientTests: XCTestCase {
     }
 
     return sut
+  }
+
+  /// Convenience method for testing auth state changes and asserting events
+  /// - Parameters:
+  ///   - sut: The AuthClient instance to monitor
+  ///   - action: The async action to perform that should trigger events
+  ///   - expectedEvents: Array of expected AuthChangeEvent values
+  ///   - expectedSessions: Array of expected Session values (optional)
+  private func assertAuthStateChanges<T>(
+    sut: AuthClient,
+    action: () async throws -> T,
+    expectedEvents: [AuthChangeEvent],
+    expectedSessions: [Session?]? = nil,
+    fileID: StaticString = #fileID,
+    filePath: StaticString = #filePath,
+    line: UInt = #line,
+    column: UInt = #column
+  ) async throws -> T {
+    let eventsTask = Task {
+      await sut.authStateChanges.prefix(expectedEvents.count).collect()
+    }
+
+    await Task.megaYield()
+
+    let result = try await action()
+
+    let authStateChanges = await eventsTask.value
+    let events = authStateChanges.map(\.event)
+    let sessions = authStateChanges.map(\.session)
+
+    expectNoDifference(events, expectedEvents, fileID: fileID, filePath: filePath, line: line, column: column)
+
+    if let expectedSessions = expectedSessions {
+      expectNoDifference(sessions, expectedSessions, fileID: fileID, filePath: filePath, line: line, column: column)
+    }
+
+    return result
   }
 }
 
