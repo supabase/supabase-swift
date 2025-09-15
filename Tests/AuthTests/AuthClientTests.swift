@@ -495,6 +495,7 @@ final class AuthClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
       	--header "Content-Length: 166" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
@@ -507,6 +508,8 @@ final class AuthClientTests: XCTestCase {
     .register()
 
     let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     try await sut.linkIdentityWithIdToken(
       credentials: OpenIDConnectCredentials(

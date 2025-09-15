@@ -380,15 +380,7 @@ public actor AuthClient {
   /// The ID token is verified for validity and a new session is established.
   @discardableResult
   public func signInWithIdToken(credentials: OpenIDConnectCredentials) async throws -> Session {
-    try await _signInWithIdToken(credentials: credentials, linkIdentity: false)
-  }
-
-  private func _signInWithIdToken(credentials: OpenIDConnectCredentials, linkIdentity: Bool)
-    async throws -> Session
-  {
-    var credentials = credentials
-    credentials.linkIdentity = linkIdentity
-    return try await _signIn(
+    try await _signIn(
       request: .init(
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
@@ -1193,7 +1185,17 @@ public actor AuthClient {
   public func linkIdentityWithIdToken(
     credentials: OpenIDConnectCredentials
   ) async throws -> Session {
-    try await _signInWithIdToken(credentials: credentials, linkIdentity: true)
+    var credentials = credentials
+    credentials.linkIdentity = true
+    return try await _signIn(
+      request: .init(
+        url: configuration.url.appendingPathComponent("token"),
+        method: .post,
+        query: [URLQueryItem(name: "grant_type", value: "id_token")],
+        headers: [.authorization: "Bearer \(session.accessToken)"],
+        body: configuration.encoder.encode(credentials)
+      )
+    )
   }
 
   /// Links an OAuth identity to an existing user.
