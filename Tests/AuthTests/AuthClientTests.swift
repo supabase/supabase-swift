@@ -500,22 +500,22 @@ final class AuthClientTests: XCTestCase {
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
-    let updatedSession = try await sut.linkIdentityWithIdToken(
-      credentials: OpenIDConnectCredentials(
-        provider: .apple,
-        idToken: "id-token",
-        accessToken: "access-token",
-        nonce: "nonce",
-        gotrueMetaSecurity: AuthMetaSecurity(
-          captchaToken: "captcha-token"
-        )
-      )
-    )
-
-    await assertAuthStateChanges(
+    let updatedSession = try await assertAuthStateChanges(
       sut: sut,
-      expectedEvents: [.initialSession, .userUpdated],
-      expectedSessions: [.validSession, updatedSession]
+      action: {
+        try await sut.linkIdentityWithIdToken(
+          credentials: OpenIDConnectCredentials(
+            provider: .apple,
+            idToken: "id-token",
+            accessToken: "access-token",
+            nonce: "nonce",
+            gotrueMetaSecurity: AuthMetaSecurity(
+              captchaToken: "captcha-token"
+            )
+          )
+        )
+      },
+      expectedEvents: [.initialSession, .userUpdated]
     )
 
     expectNoDifference(sut.currentSession, updatedSession)
@@ -2079,46 +2079,46 @@ final class AuthClientTests: XCTestCase {
     _ = try await sut.admin.createUser(attributes: attributes)
   }
 
-//  func testGenerateLink_signUp() async throws {
-//    let sut = makeSUT()
-//
-//    let user = User(fromMockNamed: "user")
-//    let encoder = JSONEncoder.supabase()
-//    encoder.keyEncodingStrategy = .convertToSnakeCase
-//
-//    let userData = try encoder.encode(user)
-//    var json = try JSONSerialization.jsonObject(with: userData, options: []) as! [String: Any]
-//
-//    json["action_link"] = "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com"
-//    json["email_otp"] = "123456"
-//    json["hashed_token"] = "hashed_token"
-//    json["redirect_to"] = "https://example.com"
-//    json["verification_type"] = "signup"
-//
-//    let responseData = try JSONSerialization.data(withJSONObject: json)
-//
-//    Mock(
-//      url: clientURL.appendingPathComponent("admin/generate_link"),
-//      statusCode: 200,
-//      data: [
-//        .post: responseData
-//      ]
-//    )
-//    .register()
-//
-//    let link = try await sut.admin.generateLink(
-//      params: .signUp(
-//        email: "test@example.com",
-//        password: "password",
-//        data: ["full_name": "John Doe"]
-//      )
-//    )
-//
-//    expectNoDifference(
-//      link.properties.actionLink.absoluteString,
-//      "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-//    )
-//  }
+  //  func testGenerateLink_signUp() async throws {
+  //    let sut = makeSUT()
+  //
+  //    let user = User(fromMockNamed: "user")
+  //    let encoder = JSONEncoder.supabase()
+  //    encoder.keyEncodingStrategy = .convertToSnakeCase
+  //
+  //    let userData = try encoder.encode(user)
+  //    var json = try JSONSerialization.jsonObject(with: userData, options: []) as! [String: Any]
+  //
+  //    json["action_link"] = "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com"
+  //    json["email_otp"] = "123456"
+  //    json["hashed_token"] = "hashed_token"
+  //    json["redirect_to"] = "https://example.com"
+  //    json["verification_type"] = "signup"
+  //
+  //    let responseData = try JSONSerialization.data(withJSONObject: json)
+  //
+  //    Mock(
+  //      url: clientURL.appendingPathComponent("admin/generate_link"),
+  //      statusCode: 200,
+  //      data: [
+  //        .post: responseData
+  //      ]
+  //    )
+  //    .register()
+  //
+  //    let link = try await sut.admin.generateLink(
+  //      params: .signUp(
+  //        email: "test@example.com",
+  //        password: "password",
+  //        data: ["full_name": "John Doe"]
+  //      )
+  //    )
+  //
+  //    expectNoDifference(
+  //      link.properties.actionLink.absoluteString,
+  //      "https://example.com/auth/v1/verify?type=signup&token={hashed_token}&redirect_to=https://example.com".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+  //    )
+  //  }
 
   func testInviteUserByEmail() async throws {
     let sut = makeSUT()
@@ -2197,7 +2197,11 @@ final class AuthClientTests: XCTestCase {
     sut: AuthClient,
     action: () async throws -> T,
     expectedEvents: [AuthChangeEvent],
-    expectedSessions: [Session?]? = nil
+    expectedSessions: [Session?]? = nil,
+    fileID: StaticString = #fileID,
+    filePath: StaticString = #filePath,
+    line: UInt = #line,
+    column: UInt = #column
   ) async throws -> T {
     let eventsTask = Task {
       await sut.authStateChanges.prefix(expectedEvents.count).collect()
@@ -2211,34 +2215,13 @@ final class AuthClientTests: XCTestCase {
     let events = authStateChanges.map(\.event)
     let sessions = authStateChanges.map(\.session)
 
-    expectNoDifference(events, expectedEvents)
-    
+    expectNoDifference(events, expectedEvents, fileID: fileID, filePath: filePath, line: line, column: column)
+
     if let expectedSessions = expectedSessions {
-      expectNoDifference(sessions, expectedSessions)
+      expectNoDifference(sessions, expectedSessions, fileID: fileID, filePath: filePath, line: line, column: column)
     }
-    
+
     return result
-  }
-
-  /// Convenience method for asserting auth state changes when the action has already been performed
-  /// - Parameters:
-  ///   - sut: The AuthClient instance to monitor
-  ///   - expectedEvents: Array of expected AuthChangeEvent values
-  ///   - expectedSessions: Array of expected Session values (optional)
-  private func assertAuthStateChanges(
-    sut: AuthClient,
-    expectedEvents: [AuthChangeEvent],
-    expectedSessions: [Session?]? = nil
-  ) async {
-    let authStateChanges = await sut.authStateChanges.prefix(expectedEvents.count).collect()
-    let events = authStateChanges.map(\.event)
-    let sessions = authStateChanges.map(\.session)
-
-    expectNoDifference(events, expectedEvents)
-    
-    if let expectedSessions = expectedSessions {
-      expectNoDifference(sessions, expectedSessions)
-    }
   }
 }
 
