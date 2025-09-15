@@ -1,3 +1,9 @@
+## [2.32.0](https://github.com/supabase/supabase-swift/compare/v2.31.2...v2.32.0) (2025-09-15)
+
+### Features
+
+* **auth:** implement linkIdentity with OIDC ([#776](https://github.com/supabase/supabase-swift/issues/776)) ([661e321](https://github.com/supabase/supabase-swift/commit/661e3218d18235179efc30c33b456a8f485f9ff7))
+
 # Changelog
 
 ## [2.31.2](https://github.com/supabase/supabase-swift/compare/v2.31.1...v2.31.2) (2025-08-05)
