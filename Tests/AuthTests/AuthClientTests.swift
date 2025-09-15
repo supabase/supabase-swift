@@ -2190,19 +2190,17 @@ final class AuthClientTests: XCTestCase {
   /// Convenience method for testing auth state changes and asserting events
   /// - Parameters:
   ///   - sut: The AuthClient instance to monitor
-  ///   - expectedEventCount: Number of events to collect (default: 2)
   ///   - action: The async action to perform that should trigger events
   ///   - expectedEvents: Array of expected AuthChangeEvent values
   ///   - expectedSessions: Array of expected Session values (optional)
   private func assertAuthStateChanges<T>(
     sut: AuthClient,
-    expectedEventCount: Int = 2,
     action: () async throws -> T,
     expectedEvents: [AuthChangeEvent],
     expectedSessions: [Session?]? = nil
   ) async throws -> T {
     let eventsTask = Task {
-      await sut.authStateChanges.prefix(expectedEventCount).collect()
+      await sut.authStateChanges.prefix(expectedEvents.count).collect()
     }
 
     await Task.megaYield()
@@ -2225,16 +2223,14 @@ final class AuthClientTests: XCTestCase {
   /// Convenience method for asserting auth state changes when the action has already been performed
   /// - Parameters:
   ///   - sut: The AuthClient instance to monitor
-  ///   - expectedEventCount: Number of events to collect (default: 2)
   ///   - expectedEvents: Array of expected AuthChangeEvent values
   ///   - expectedSessions: Array of expected Session values (optional)
   private func assertAuthStateChanges(
     sut: AuthClient,
-    expectedEventCount: Int = 2,
     expectedEvents: [AuthChangeEvent],
     expectedSessions: [Session?]? = nil
   ) async {
-    let authStateChanges = await sut.authStateChanges.prefix(expectedEventCount).collect()
+    let authStateChanges = await sut.authStateChanges.prefix(expectedEvents.count).collect()
     let events = authStateChanges.map(\.event)
     let sessions = authStateChanges.map(\.session)
 
