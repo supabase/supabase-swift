@@ -1187,15 +1187,21 @@ public actor AuthClient {
   ) async throws -> Session {
     var credentials = credentials
     credentials.linkIdentity = true
-    return try await _signIn(
-      request: .init(
+
+    let session = try await api.execute(
+      .init(
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "id_token")],
         headers: [.authorization: "Bearer \(session.accessToken)"],
         body: configuration.encoder.encode(credentials)
       )
-    )
+    ).decoded(as: Session.self, decoder: configuration.decoder)
+
+    await sessionManager.update(session)
+    eventEmitter.emit(.userUpdated, session: session)
+
+    return session
   }
 
   /// Links an OAuth identity to an existing user.
