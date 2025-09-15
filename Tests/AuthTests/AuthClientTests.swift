@@ -111,12 +111,11 @@ final class AuthClientTests: XCTestCase {
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
-    let eventsTask = Task {
-      await sut.authStateChanges.prefix(2).collect()
-    }
-    await Task.megaYield()
-
-    try await sut.signOut()
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: { try await sut.signOut() },
+      expectedEvents: [.initialSession, .signedOut]
+    )
 
     do {
       _ = try await sut.session
@@ -128,9 +127,6 @@ final class AuthClientTests: XCTestCase {
         """
       }
     }
-
-    let events = await eventsTask.value.map(\.event)
-    expectNoDifference(events, [.initialSession, .signedOut])
   }
 
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
@@ -331,19 +327,12 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    let eventsTask = Task {
-      await sut.authStateChanges.prefix(2).collect()
-    }
-
-    await Task.megaYield()
-
-    try await sut.signInAnonymously()
-
-    let events = await eventsTask.value.map(\.event)
-    let sessions = await eventsTask.value.map(\.session)
-
-    expectNoDifference(events, [.initialSession, .signedIn])
-    expectNoDifference(sessions, [nil, session])
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: { try await sut.signInAnonymously() },
+      expectedEvents: [.initialSession, .signedIn],
+      expectedSessions: [nil, session]
+    )
 
     expectNoDifference(sut.currentSession, session)
     expectNoDifference(sut.currentUser, session.user)
@@ -511,12 +500,6 @@ final class AuthClientTests: XCTestCase {
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
-    let eventsTask = Task {
-      await sut.authStateChanges.prefix(2).collect()
-    }
-
-    await Task.megaYield()
-
     let updatedSession = try await sut.linkIdentityWithIdToken(
       credentials: OpenIDConnectCredentials(
         provider: .apple,
@@ -529,11 +512,12 @@ final class AuthClientTests: XCTestCase {
       )
     )
 
-    let events = await eventsTask.value.map(\.event)
-    let sessions = await eventsTask.value.map(\.session)
+    await assertAuthStateChanges(
+      sut: sut,
+      expectedEvents: [.initialSession, .userUpdated],
+      expectedSessions: [.validSession, updatedSession]
+    )
 
-    expectNoDifference(events, [.initialSession, .userUpdated])
-    expectNoDifference(sessions, [.validSession, updatedSession])
     expectNoDifference(sut.currentSession, updatedSession)
   }
 
@@ -2201,6 +2185,64 @@ final class AuthClientTests: XCTestCase {
     }
 
     return sut
+  }
+
+  /// Convenience method for testing auth state changes and asserting events
+  /// - Parameters:
+  ///   - sut: The AuthClient instance to monitor
+  ///   - expectedEventCount: Number of events to collect (default: 2)
+  ///   - action: The async action to perform that should trigger events
+  ///   - expectedEvents: Array of expected AuthChangeEvent values
+  ///   - expectedSessions: Array of expected Session values (optional)
+  private func assertAuthStateChanges<T>(
+    sut: AuthClient,
+    expectedEventCount: Int = 2,
+    action: () async throws -> T,
+    expectedEvents: [AuthChangeEvent],
+    expectedSessions: [Session?]? = nil
+  ) async throws -> T {
+    let eventsTask = Task {
+      await sut.authStateChanges.prefix(expectedEventCount).collect()
+    }
+
+    await Task.megaYield()
+
+    let result = try await action()
+
+    let authStateChanges = await eventsTask.value
+    let events = authStateChanges.map(\.event)
+    let sessions = authStateChanges.map(\.session)
+
+    expectNoDifference(events, expectedEvents)
+    
+    if let expectedSessions = expectedSessions {
+      expectNoDifference(sessions, expectedSessions)
+    }
+    
+    return result
+  }
+
+  /// Convenience method for asserting auth state changes when the action has already been performed
+  /// - Parameters:
+  ///   - sut: The AuthClient instance to monitor
+  ///   - expectedEventCount: Number of events to collect (default: 2)
+  ///   - expectedEvents: Array of expected AuthChangeEvent values
+  ///   - expectedSessions: Array of expected Session values (optional)
+  private func assertAuthStateChanges(
+    sut: AuthClient,
+    expectedEventCount: Int = 2,
+    expectedEvents: [AuthChangeEvent],
+    expectedSessions: [Session?]? = nil
+  ) async {
+    let authStateChanges = await sut.authStateChanges.prefix(expectedEventCount).collect()
+    let events = authStateChanges.map(\.event)
+    let sessions = authStateChanges.map(\.session)
+
+    expectNoDifference(events, expectedEvents)
+    
+    if let expectedSessions = expectedSessions {
+      expectNoDifference(sessions, expectedSessions)
+    }
   }
 }
 
