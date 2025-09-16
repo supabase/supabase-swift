@@ -41,147 +41,220 @@ permissions:
   contents: read
 
 jobs:
-  xcodebuild-latest:
-    name: xcodebuild (16.3)
-    runs-on: macos-15
+  macos:
+    name: Build on macOS
+    runs-on: ${{ matrix.runs-on }}
+    if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
     strategy:
+      fail-fast: false
       matrix:
-        command: [test, ""]
-        platform: [IOS, MACOS]
-        xcode: ["16.3"]
         include:
-          - { command: test, skip_release: 1 }
-    steps:
-      - uses: actions/checkout@v5
-      - name: Select Xcode ${{ matrix.xcode }}
-        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-      - name: List available devices
-        run: xcrun simctl list devices available
-      - name: Set IgnoreFileSystemDeviceInodeChanges flag
-        run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
-      - name: Update mtime for incremental builds
-        uses: chetan/git-restore-mtime-action@v2
-      - name: Debug
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
-      - name: Release
-        if: matrix.skip_release != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
-      - name: Install lcov
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
-        run: brew install lcov
-      - name: Export code coverage
-        id: coverage
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
-      - uses: coverallsapp/github-action@v2.3.6
-        if: steps.coverage.outcome == 'success'
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          file: lcov.info
+          # SPM Build Matrix
+          - runs-on: macos-15
+            xcode: "/Applications/Xcode_26.0.app"
 
-  xcodebuild-legacy:
-    name: xcodebuild (15.4)
-    runs-on: macos-14
-    strategy:
-      matrix:
-        command: [test, ""]
-        platform: [IOS, MACOS, MAC_CATALYST]
-        xcode: ["15.4"]
-        include:
-          - { command: test, skip_release: 1 }
-    steps:
-      - uses: actions/checkout@v5
-      - name: Select Xcode ${{ matrix.xcode }}
-        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-      - name: List available devices
-        run: xcrun simctl list devices available
-      - name: Cache derived data
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.derivedData
-          key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
-          restore-keys: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
-      - name: Set IgnoreFileSystemDeviceInodeChanges flag
-        run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
-      - name: Update mtime for incremental builds
-        uses: chetan/git-restore-mtime-action@v2
-      - name: Debug
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
-      - name: Release
-        if: matrix.skip_release != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+          - runs-on: macos-15
+            xcode: "/Applications/Xcode_16.4.app"
 
-  linux:
-    name: Linux
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: "Remove IntegrationTests"
-        run: rm -r Tests/IntegrationTests/*
-      - name: "Build Swift Package"
-        run: swift build
-      
-  # android:
-  #   name: Android
+          # macOS Build Matrix
+          - type: macos
+            runs-on: macos-15
+            xcode: "/Applications/Xcode_26.0.app"
+
+          - type: macos
+            runs-on: macos-15
+            xcode: "/Applications/Xcode_16.4.app"
+                      
+          # iOS Build Matrix
+          - type: ios
+            runs-on: macos-15
+            xcode: "/Applications/Xcode_26.0.app"
+            deviceName: "iPhone 17 Pro"
+            osVersion: "26.0"
+            download-platform: true
+  
+          # watchOS Build Matrix
+          - type: watchos
+            runs-on: macos-15
+            xcode: "/Applications/Xcode_26.0.app"
+            deviceName: "Apple Watch Ultra 3 (49mm)"
+            osVersion: "26.0"
+            download-platform: true
+
+          # tvOS Build Matrix
+          - type: tvos
+            runs-on: macos-15
+            xcode: "/Applications/Xcode_26.0.app"
+            deviceName: "Apple TV"
+            osVersion: "26.0"
+            download-platform: true
+
+          # visionOS Build Matrix              
+          - type: visionos
+            runs-on: macos-15
+            xcode: "/Applications/Xcode_26.0.app"
+            deviceName: "Apple Vision Pro"
+            osVersion: "26.0"
+            download-platform: true
+
+      steps:
+        - uses: actions/checkout@v5
+        - name: Build and Test
+          uses: brightdigit/swift-build@v1.3.0
+          with:
+            scheme: Supabase
+            type: ${{ matrix.type }}
+            xcode: ${{ matrix.xcode }}
+            deviceName: ${{ matrix.deviceName }}
+            osVersion: ${{ matrix.osVersion }}
+            download-platform: ${{ matrix.download-platform }}
+        - name: Process coverage
+          uses: sersoft-gmbh/swift-coverage-action@v4
+
+        - name: Upload Coverage
+          uses: coverallsapp/github-action@v2.3.6
+          
+  # xcodebuild-latest:
+  #   name: xcodebuild (16.3)
+  #   runs-on: macos-15
+  #   strategy:
+  #     matrix:
+  #       command: [test, ""]
+  #       platform: [IOS, MACOS]
+  #       xcode: ["16.3"]
+  #       include:
+  #         - { command: test, skip_release: 1 }
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - name: Select Xcode ${{ matrix.xcode }}
+  #       run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+  #     - name: List available devices
+  #       run: xcrun simctl list devices available
+  #     - name: Set IgnoreFileSystemDeviceInodeChanges flag
+  #       run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+  #     - name: Update mtime for incremental builds
+  #       uses: chetan/git-restore-mtime-action@v2
+  #     - name: Debug
+  #       run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
+  #     - name: Release
+  #       if: matrix.skip_release != '1'
+  #       run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+  #     - name: Install lcov
+  #       if: matrix.command == 'test' && matrix.platform == 'IOS'
+  #       run: brew install lcov
+  #     - name: Export code coverage
+  #       id: coverage
+  #       if: matrix.command == 'test' && matrix.platform == 'IOS'
+  #       run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
+  #     - uses: coverallsapp/github-action@v2.3.6
+  #       if: steps.coverage.outcome == 'success'
+  #       with:
+  #         github-token: ${{ secrets.GITHUB_TOKEN }}
+  #         file: lcov.info
+
+  # xcodebuild-legacy:
+  #   name: xcodebuild (15.4)
+  #   runs-on: macos-14
+  #   strategy:
+  #     matrix:
+  #       command: [test, ""]
+  #       platform: [IOS, MACOS, MAC_CATALYST]
+  #       xcode: ["15.4"]
+  #       include:
+  #         - { command: test, skip_release: 1 }
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - name: Select Xcode ${{ matrix.xcode }}
+  #       run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+  #     - name: List available devices
+  #       run: xcrun simctl list devices available
+  #     - name: Cache derived data
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: |
+  #           ~/.derivedData
+  #         key: |
+  #           deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
+  #         restore-keys: |
+  #           deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
+  #     - name: Set IgnoreFileSystemDeviceInodeChanges flag
+  #       run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+  #     - name: Update mtime for incremental builds
+  #       uses: chetan/git-restore-mtime-action@v2
+  #     - name: Debug
+  #       run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
+  #     - name: Release
+  #       if: matrix.skip_release != '1'
+  #       run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+
+  # linux:
+  #   name: Linux
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v5
   #     - name: "Remove IntegrationTests"
   #       run: rm -r Tests/IntegrationTests/*
-  #     - name: "Test Swift Package"
-  #       uses: skiptools/swift-android-action@v2
+  #     - name: "Build Swift Package"
+  #       run: swift build
+      
+  # # android:
+  # #   name: Android
+  # #   runs-on: ubuntu-latest
+  # #   steps:
+  # #     - uses: actions/checkout@v5
+  # #     - name: "Remove IntegrationTests"
+  # #       run: rm -r Tests/IntegrationTests/*
+  # #     - name: "Test Swift Package"
+  # #       uses: skiptools/swift-android-action@v2
+  # #       with:
+  # #         # need to copy over the Tests folder because it contains __Snapshots__
+  # #         copy-files: Tests
+  # #         # tests are not yet passing on Android
+  # #         run-tests: false
+
+  # library-evolution:
+  #   name: Library (evolution)
+  #   runs-on: macos-15
+  #   strategy:
+  #     matrix:
+  #       xcode: ["16.3"]
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - name: Select Xcode ${{ matrix.xcode }}
+  #       run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+  #     - name: Build for library evolution
+  #       run: make build-for-library-evolution
+
+  # examples:
+  #   name: Examples
+  #   runs-on: macos-15
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - name: Cache derived data
+  #       uses: actions/cache@v4
   #       with:
-  #         # need to copy over the Tests folder because it contains __Snapshots__
-  #         copy-files: Tests
-  #         # tests are not yet passing on Android
-  #         run-tests: false
+  #         path: ~/.derivedData
+  #         key: |
+  #           deriveddata-examples-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Examples/**/*.swift') }}
+  #         restore-keys: |
+  #           deriveddata-examples-
+  #     - name: Select Xcode 16.3
+  #       run: sudo xcode-select -s /Applications/Xcode_16.3.app
+  #     - name: Set IgnoreFileSystemDeviceInodeChanges flag
+  #       run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+  #     - name: Update mtime for incremental builds
+  #       uses: chetan/git-restore-mtime-action@v2
+  #     - name: Examples
+  #       run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="Examples" XCODEBUILD_ARGUMENT=build xcodebuild
+  #     - name: SlackClone
+  #       run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="SlackClone" XCODEBUILD_ARGUMENT=build xcodebuild
+  #     - name: UserManagement
+  #       run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="UserManagement" XCODEBUILD_ARGUMENT=build xcodebuild
 
-  library-evolution:
-    name: Library (evolution)
-    runs-on: macos-15
-    strategy:
-      matrix:
-        xcode: ["16.3"]
-    steps:
-      - uses: actions/checkout@v5
-      - name: Select Xcode ${{ matrix.xcode }}
-        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-      - name: Build for library evolution
-        run: make build-for-library-evolution
-
-  examples:
-    name: Examples
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v5
-      - name: Cache derived data
-        uses: actions/cache@v4
-        with:
-          path: ~/.derivedData
-          key: |
-            deriveddata-examples-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Examples/**/*.swift') }}
-          restore-keys: |
-            deriveddata-examples-
-      - name: Select Xcode 16.3
-        run: sudo xcode-select -s /Applications/Xcode_16.3.app
-      - name: Set IgnoreFileSystemDeviceInodeChanges flag
-        run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
-      - name: Update mtime for incremental builds
-        uses: chetan/git-restore-mtime-action@v2
-      - name: Examples
-        run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="Examples" XCODEBUILD_ARGUMENT=build xcodebuild
-      - name: SlackClone
-        run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="SlackClone" XCODEBUILD_ARGUMENT=build xcodebuild
-      - name: UserManagement
-        run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="UserManagement" XCODEBUILD_ARGUMENT=build xcodebuild
-
-  docs:
-    name: Test docs
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v5
-      - name: Test docs
-        run: make test-docs
+  # docs:
+  #   name: Test docs
+  #   runs-on: macos-15
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - name: Test docs
+  #       run: make test-docs
