@@ -111,6 +111,11 @@ jobs:
       - name: Process coverage
         id: coverage-files
         uses: sersoft-gmbh/swift-coverage-action@v4
+        with:
+          search-paths: |
+            ./.build
+            $HOME/Library/Developer/Xcode/DerivedData
+            $DERIVED_DATA_PATH
       - name: Upload Coverage
         uses: coverallsapp/github-action@v2.3.6
         with:
