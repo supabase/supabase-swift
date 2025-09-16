@@ -97,22 +97,22 @@ jobs:
             osVersion: "26.0"
             download-platform: true
 
-      steps:
-        - uses: actions/checkout@v5
-        - name: Build and Test
-          uses: brightdigit/swift-build@v1.3.0
-          with:
-            scheme: Supabase
-            type: ${{ matrix.type }}
-            xcode: ${{ matrix.xcode }}
-            deviceName: ${{ matrix.deviceName }}
-            osVersion: ${{ matrix.osVersion }}
-            download-platform: ${{ matrix.download-platform }}
-        - name: Process coverage
-          uses: sersoft-gmbh/swift-coverage-action@v4
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build and Test
+        uses: brightdigit/swift-build@v1.3.0
+        with:
+          scheme: Supabase
+          type: ${{ matrix.type }}
+          xcode: ${{ matrix.xcode }}
+          deviceName: ${{ matrix.deviceName }}
+          osVersion: ${{ matrix.osVersion }}
+          download-platform: ${{ matrix.download-platform }}
+      - name: Process coverage
+        uses: sersoft-gmbh/swift-coverage-action@v4
 
-        - name: Upload Coverage
-          uses: coverallsapp/github-action@v2.3.6
+      - name: Upload Coverage
+        uses: coverallsapp/github-action@v2.3.6
           
   # xcodebuild-latest:
   #   name: xcodebuild (16.3)
