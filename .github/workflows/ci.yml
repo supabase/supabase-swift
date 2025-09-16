@@ -114,8 +114,8 @@ jobs:
         with:
           search-paths: |
             ./.build
+            /Users/runner/work/_temp/DerivedData
             $HOME/Library/Developer/Xcode/DerivedData
-            $DERIVED_DATA_PATH
       - name: Upload Coverage
         uses: coverallsapp/github-action@v2.3.6
         with:
