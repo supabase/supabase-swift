@@ -109,10 +109,13 @@ jobs:
           osVersion: ${{ matrix.osVersion }}
           download-platform: ${{ matrix.download-platform }}
       - name: Process coverage
+        id: coverage-files
         uses: sersoft-gmbh/swift-coverage-action@v4
-
       - name: Upload Coverage
         uses: coverallsapp/github-action@v2.3.6
+        with:
+          github-token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ join(fromJSON(steps.coverage-files.outputs.files), ',') }}
           
   # xcodebuild-latest:
   #   name: xcodebuild (16.3)
