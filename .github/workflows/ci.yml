@@ -116,7 +116,7 @@ jobs:
             ./.build
             /Users/runner/work/_temp/DerivedData
             $HOME/Library/Developer/Xcode/DerivedData
-          ignore-filename-regex: "Tests/|.build|DerivedData|.derivedData|Deprecated/|Deprecated.swift"
+          ignore-filename-regex: "/Users/|Tests/|.build|DerivedData|.derivedData|Deprecated/|Deprecated.swift"
       - name: Upload Coverage
         uses: coverallsapp/github-action@v2.3.6
         with:
