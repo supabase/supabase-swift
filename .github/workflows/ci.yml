@@ -110,17 +110,44 @@ jobs:
           download-platform: ${{ matrix.download-platform }}
       - name: Process coverage
         id: coverage-files
-        uses: sersoft-gmbh/swift-coverage-action@v4
+        uses: grdsdev/swift-coverage-action@eeab9a07a3e2b9ba1aac631e287fd2ac3faadd6a
         with:
           search-paths: |
             ./.build
             /Users/runner/work/_temp/DerivedData
             $HOME/Library/Developer/Xcode/DerivedData
+          ignore-filename-regex: "Tests/|.build|DerivedData|.derivedData|Deprecated/|Deprecated.swift"
       - name: Upload Coverage
         uses: coverallsapp/github-action@v2.3.6
         with:
           github-token: ${{ secrets.COVERALLS_TOKEN }}
           files: ${{ join(fromJSON(steps.coverage-files.outputs.files), ' ') }}
+
+  # Linux:
+  #   name: Build on Linux
+  #   runs-on: ubuntu-latest
+  #   container: ${{ matrix.swift.nightly && format('swiftlang/swift:nightly-{0}-{1}', matrix.swift.version, matrix.os) || format('swift:{0}-{1}', matrix.swift.version, matrix.os) }}
+  #   if: ${{ !contains(github.event.head_commit.message, 'ci skip') }}
+  #   strategy:
+  #     matrix:
+  #       os: [noble, jammy]
+  #       swift:
+  #         - version: "6.0"
+  #         - version: "6.1"
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: brightdigit/swift-build@v1.3.0
+  #       with:
+  #         scheme: Supabase-Package
+  #     - uses: sersoft-gmbh/swift-coverage-action@v4
+  #       id: coverage-files
+  #       with:          
+  #         fail-on-empty-output: true
+  #     - name: Upload Coverage
+  #       uses: coverallsapp/github-action@v2.3.6
+  #       with:
+  #         github-token: ${{ secrets.COVERALLS_TOKEN }}
+  #         files: ${{ join(fromJSON(steps.coverage-files.outputs.files), ' ') }}
           
   # xcodebuild-latest:
   #   name: xcodebuild (16.3)
