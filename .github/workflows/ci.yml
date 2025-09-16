@@ -66,36 +66,36 @@ jobs:
             xcode: "/Applications/Xcode_16.4.app"
                       
           # iOS Build Matrix
-          - type: ios
-            runs-on: macos-15
-            xcode: "/Applications/Xcode_26.0.app"
-            deviceName: "iPhone 17 Pro"
-            osVersion: "26.0"
-            download-platform: true
+          # - type: ios
+          #   runs-on: macos-15
+          #   xcode: "/Applications/Xcode_26.0.app"
+          #   deviceName: "iPhone 17 Pro"
+          #   osVersion: "26.0"
+          #   download-platform: true
   
-          # watchOS Build Matrix
-          - type: watchos
-            runs-on: macos-15
-            xcode: "/Applications/Xcode_26.0.app"
-            deviceName: "Apple Watch Ultra 3 (49mm)"
-            osVersion: "26.0"
-            download-platform: true
+          # # watchOS Build Matrix
+          # - type: watchos
+          #   runs-on: macos-15
+          #   xcode: "/Applications/Xcode_26.0.app"
+          #   deviceName: "Apple Watch Ultra 3 (49mm)"
+          #   osVersion: "26.0"
+          #   download-platform: true
 
-          # tvOS Build Matrix
-          - type: tvos
-            runs-on: macos-15
-            xcode: "/Applications/Xcode_26.0.app"
-            deviceName: "Apple TV"
-            osVersion: "26.0"
-            download-platform: true
+          # # tvOS Build Matrix
+          # - type: tvos
+          #   runs-on: macos-15
+          #   xcode: "/Applications/Xcode_26.0.app"
+          #   deviceName: "Apple TV"
+          #   osVersion: "26.0"
+          #   download-platform: true
 
-          # visionOS Build Matrix              
-          - type: visionos
-            runs-on: macos-15
-            xcode: "/Applications/Xcode_26.0.app"
-            deviceName: "Apple Vision Pro"
-            osVersion: "26.0"
-            download-platform: true
+          # # visionOS Build Matrix              
+          # - type: visionos
+          #   runs-on: macos-15
+          #   xcode: "/Applications/Xcode_26.0.app"
+          #   deviceName: "Apple Vision Pro"
+          #   osVersion: "26.0"
+          #   download-platform: true
 
     steps:
       - uses: actions/checkout@v5
@@ -120,7 +120,7 @@ jobs:
         uses: coverallsapp/github-action@v2.3.6
         with:
           github-token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ join(fromJSON(steps.coverage-files.outputs.files), ',') }}
+          files: ${{ join(fromJSON(steps.coverage-files.outputs.files), ' ') }}
           
   # xcodebuild-latest:
   #   name: xcodebuild (16.3)
