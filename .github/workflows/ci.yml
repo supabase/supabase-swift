@@ -102,7 +102,7 @@ jobs:
       - name: Build and Test
         uses: brightdigit/swift-build@v1.3.0
         with:
-          scheme: Supabase
+          scheme: Supabase-Package
           type: ${{ matrix.type }}
           xcode: ${{ matrix.xcode }}
           deviceName: ${{ matrix.deviceName }}
