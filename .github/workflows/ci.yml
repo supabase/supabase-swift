@@ -100,7 +100,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Build and Test
-        uses: brightdigit/swift-build@v1.3.0
+        uses: brightdigit/swift-build@38-xcbeautify
         with:
           scheme: Supabase-Package
           type: ${{ matrix.type }}
@@ -108,6 +108,7 @@ jobs:
           deviceName: ${{ matrix.deviceName }}
           osVersion: ${{ matrix.osVersion }}
           download-platform: ${{ matrix.download-platform }}
+          use-xcbeautify: true
       - name: Process coverage
         id: coverage-files
         continue-on-error: true
