@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
+#if !os(watchOS)
 import ConcurrencyExtras
 import CustomDump
 import InlineSnapshotTesting
@@ -2292,3 +2293,4 @@ enum MockData {
     contentsOf: Bundle.module.url(forResource: "anonymous-sign-in-response", withExtension: "json")!
   )
 }
+#endif

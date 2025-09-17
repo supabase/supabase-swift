@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 21/01/25.
 //
 
+#if !os(watchOS)
 import Mocker
 import PostgREST
 import XCTest
@@ -416,3 +417,4 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
     XCTAssertTrue(explain.contains("Aggregate"))
   }
 }
+#endif

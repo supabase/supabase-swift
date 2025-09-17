@@ -1,3 +1,4 @@
+#if !os(watchOS)
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -894,3 +895,4 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
 }
+#endif

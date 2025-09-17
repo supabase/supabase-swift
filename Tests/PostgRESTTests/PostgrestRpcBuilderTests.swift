@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 21/01/25.
 //
 
+#if !os(watchOS)
 import InlineSnapshotTesting
 import Mocker
 import PostgREST
@@ -168,3 +169,4 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
     try await sut.rpc("hello", count: .estimated).execute()
   }
 }
+#endif

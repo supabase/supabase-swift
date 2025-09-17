@@ -1,3 +1,4 @@
+#if !os(watchOS)
 import ConcurrencyExtras
 import HTTPTypes
 import InlineSnapshotTesting
@@ -399,3 +400,4 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 }
+#endif

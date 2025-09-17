@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 20/08/24.
 //
 
+#if !os(watchOS)
 import InlineSnapshotTesting
 import Mocker
 import XCTest
@@ -225,3 +226,4 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     XCTAssertEqual(query.mutableState.request.headers[.init("key")!], "value")
   }
 }
+#endif

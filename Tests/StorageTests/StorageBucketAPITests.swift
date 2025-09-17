@@ -1,3 +1,4 @@
+#if !os(watchOS)
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -295,3 +296,4 @@ final class StorageBucketAPITests: XCTestCase {
     try await storage.emptyBucket("bucket123")
   }
 }
+#endif
