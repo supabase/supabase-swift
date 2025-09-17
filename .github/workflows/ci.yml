@@ -128,14 +128,13 @@ jobs:
   linux:
     name: Build on Linux
     runs-on: ubuntu-latest
-    container: ${{ format('swift:{0}-{1}', matrix.swift.version, matrix.os) }}
+    container: ${{ format('swift:{0}', matrix.swift.version) }}
     if: ${{ !contains(github.event.head_commit.message, 'ci skip') }}
     strategy:
       matrix:
-        os: [noble, jammy]
         swift:
-          - version: "6.0"
-          - version: "6.1"
+          - version: "5.10"
+          - version: "6.2"
     steps:
       - uses: actions/checkout@v4
       - uses: brightdigit/swift-build@v1.3.0
