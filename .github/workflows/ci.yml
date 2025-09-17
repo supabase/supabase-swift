@@ -195,6 +195,11 @@ jobs:
         uses: brightdigit/swift-build@v1.3.0
         with:
           scheme: ${{ matrix.scheme }}
+          type: ios
+          xcode: "/Applications/Xcode_26.0.app"
+          deviceName: "iPhone 17 Pro"
+          osVersion: "26.0"
+          download-platform: true
           working-directory: ./Examples
 
   docs:
