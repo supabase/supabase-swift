@@ -2,6 +2,10 @@ import ConcurrencyExtras
 import Foundation
 import TestHelpers
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 @testable import Auth
 
 func json(named name: String) -> Data {
