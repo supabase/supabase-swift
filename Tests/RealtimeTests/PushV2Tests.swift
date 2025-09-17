@@ -8,6 +8,10 @@
 import ConcurrencyExtras
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 @testable import Realtime
 
 final class PushV2Tests: XCTestCase {

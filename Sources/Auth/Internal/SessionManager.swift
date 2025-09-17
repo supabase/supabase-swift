@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 struct SessionManager: Sendable {
   var session: @Sendable () async throws -> Session
   var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session

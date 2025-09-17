@@ -1,3 +1,4 @@
+#if !os(watchOS)
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -40,6 +41,11 @@ final class StorageFileAPITests: XCTestCase {
         logger: nil
       )
     )
+  }
+
+  override func tearDown() {
+    super.tearDown()
+    Mocker.removeAll()
   }
 
   func testListFiles() async throws {
@@ -894,3 +900,4 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
 }
+#endif

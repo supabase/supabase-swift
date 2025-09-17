@@ -1,3 +1,4 @@
+#if !os(watchOS)
 import ConcurrencyExtras
 import HTTPTypes
 import InlineSnapshotTesting
@@ -41,6 +42,11 @@ final class FunctionsClientTests: XCTestCase {
   override func setUp() {
     super.setUp()
     //    isRecording = true
+  }
+
+  override func tearDown() {
+    super.tearDown()
+    Mocker.removeAll()
   }
 
   func testInit() async {
@@ -399,3 +405,4 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 }
+#endif

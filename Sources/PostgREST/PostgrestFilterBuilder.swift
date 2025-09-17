@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Sendable {
   public enum Operator: String, CaseIterable, Sendable {
     case eq, neq, gt, gte, lt, lte, like, ilike, `is`, `in`, cs, cd, sl, sr, nxl, nxr, adj, ov, fts,

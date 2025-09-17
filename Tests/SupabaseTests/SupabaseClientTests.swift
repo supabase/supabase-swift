@@ -4,6 +4,10 @@ import IssueReporting
 import SnapshotTestingCustomDump
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 @testable import Auth
 @testable import Functions
 @testable import Realtime

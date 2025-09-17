@@ -9,6 +9,10 @@ import Foundation
 import Helpers
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class HTTPErrorTests: XCTestCase {
 
   func testInitialization() {
@@ -19,9 +23,9 @@ final class HTTPErrorTests: XCTestCase {
       httpVersion: "1.1",
       headerFields: ["Content-Type": "application/json"]
     )!
-    
+
     let error = HTTPError(data: data, response: response)
-    
+
     XCTAssertEqual(error.data, data)
     XCTAssertEqual(error.response, response)
   }
@@ -34,9 +38,9 @@ final class HTTPErrorTests: XCTestCase {
       httpVersion: "1.1",
       headerFields: nil
     )!
-    
+
     let error = HTTPError(data: data, response: response)
-    
+
     XCTAssertEqual(
       error.errorDescription,
       "Status Code: 400 Body: Bad Request: Invalid parameters"
@@ -51,9 +55,9 @@ final class HTTPErrorTests: XCTestCase {
       httpVersion: "1.1",
       headerFields: nil
     )!
-    
+
     let error = HTTPError(data: data, response: response)
-    
+
     XCTAssertEqual(error.errorDescription, "Status Code: 404 Body: ")
   }
 
@@ -67,19 +71,19 @@ final class HTTPErrorTests: XCTestCase {
       httpVersion: "1.1",
       headerFields: nil
     )!
-    
+
     let error = HTTPError(data: data, response: response)
-    
+
     XCTAssertEqual(error.errorDescription, "Status Code: 500")
   }
 
   func testLocalizedErrorDescription_WithJSONData() {
     let jsonString = """
-    {
-      "error": "Validation failed",
-      "details": "Email format is invalid"
-    }
-    """
+      {
+        "error": "Validation failed",
+        "details": "Email format is invalid"
+      }
+      """
     let data = Data(jsonString.utf8)
     let response = HTTPURLResponse(
       url: URL(string: "https://example.com")!,
@@ -87,9 +91,9 @@ final class HTTPErrorTests: XCTestCase {
       httpVersion: "1.1",
       headerFields: ["Content-Type": "application/json"]
     )!
-    
+
     let error = HTTPError(data: data, response: response)
-    
+
     XCTAssertEqual(
       error.errorDescription,
       "Status Code: 422 Body: \(jsonString)"
@@ -105,9 +109,9 @@ final class HTTPErrorTests: XCTestCase {
       httpVersion: "1.1",
       headerFields: nil
     )!
-    
+
     let error = HTTPError(data: data, response: response)
-    
+
     XCTAssertEqual(
       error.errorDescription,
       "Status Code: 400 Body: \(message)"
@@ -123,15 +127,14 @@ final class HTTPErrorTests: XCTestCase {
       httpVersion: "1.1",
       headerFields: nil
     )!
-    
+
     let error = HTTPError(data: data, response: response)
-    
+
     XCTAssertEqual(
       error.errorDescription,
       "Status Code: 413 Body: \(largeMessage)"
     )
   }
-
 
   func testProperties() {
     let data = Data("test error".utf8)
@@ -141,13 +144,13 @@ final class HTTPErrorTests: XCTestCase {
       httpVersion: "1.1",
       headerFields: ["Content-Type": "application/json"]
     )!
-    
+
     let error = HTTPError(data: data, response: response)
-    
+
     // Test that properties are correctly set
     XCTAssertEqual(error.data, data)
     XCTAssertEqual(error.response, response)
     XCTAssertEqual(error.response.statusCode, 400)
     XCTAssertEqual(error.response.url, URL(string: "https://example.com")!)
   }
-} 
+}

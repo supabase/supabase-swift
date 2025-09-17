@@ -1,6 +1,10 @@
 import Foundation
 import HTTPTypes
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
     var interceptors: [any HTTPClientInterceptor] = []

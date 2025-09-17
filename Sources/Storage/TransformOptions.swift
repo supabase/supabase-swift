@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// Transform the asset before serving it to the client.
 public struct TransformOptions: Encodable, Sendable {
   /// The width of the image in pixels.

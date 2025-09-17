@@ -73,6 +73,11 @@ import Foundation
 
 func encodeMetadata(_ metadata: JSONObject) -> Data {
   let encoder = AnyJSON.encoder
+
+  #if DEBUG
+    encoder.outputFormatting = []
+  #endif
+
   return (try? encoder.encode(metadata)) ?? "{}".data(using: .utf8)!
 }
 

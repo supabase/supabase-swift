@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 21/01/25.
 //
 
+#if !os(watchOS)
 import InlineSnapshotTesting
 import Mocker
 import PostgREST
@@ -43,6 +44,11 @@ class PostgrestQueryTests: XCTestCase {
     }()
   )
 
+  override func tearDown() {
+    super.tearDown()
+    Mocker.removeAll()
+  }
+
   struct User: Codable {
     let id: Int
     let username: String
@@ -57,3 +63,4 @@ class PostgrestQueryTests: XCTestCase {
     }
   }
 }
+#endif

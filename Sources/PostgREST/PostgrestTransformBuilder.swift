@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Perform a SELECT on the query result.
   ///

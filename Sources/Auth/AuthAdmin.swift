@@ -8,6 +8,10 @@
 import Foundation
 import HTTPTypes
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 public struct AuthAdmin: Sendable {
   let clientID: AuthClientID
 

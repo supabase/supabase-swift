@@ -1,6 +1,10 @@
 import Foundation
 import HTTPTypes
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// An error type representing various errors that can occur while invoking functions.
 public enum FunctionsError: Error, LocalizedError {
   /// Error indicating a relay error while invoking the Edge Function.
