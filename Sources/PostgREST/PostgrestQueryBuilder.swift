@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Perform a SELECT query on the table or view.
   /// - Parameters:

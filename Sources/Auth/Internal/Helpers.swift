@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// Extracts parameters encoded in the URL both in the query and fragment.
 func extractParams(from url: URL) -> [String: String] {
   guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {

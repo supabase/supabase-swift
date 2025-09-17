@@ -10,6 +10,10 @@ import InlineSnapshotTesting
 import Mocker
 import XCTest
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 @testable import PostgREST
 
 final class PostgrestBuilderTests: PostgrestQueryTests {

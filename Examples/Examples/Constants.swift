@@ -7,6 +7,10 @@
 
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 enum Constants {
   static let redirectToURL = URL(string: "com.supabase.swift-examples://")!
 }
