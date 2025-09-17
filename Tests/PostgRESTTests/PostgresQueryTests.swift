@@ -44,6 +44,11 @@ class PostgrestQueryTests: XCTestCase {
     }()
   )
 
+  override func tearDown() {
+    super.tearDown()
+    Mocker.removeAll()
+  }
+
   struct User: Codable {
     let id: Int
     let username: String

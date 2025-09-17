@@ -43,6 +43,11 @@ final class StorageFileAPITests: XCTestCase {
     )
   }
 
+  override func tearDown() {
+    super.tearDown()
+    Mocker.removeAll()
+  }
+
   func testListFiles() async throws {
     Mock(
       url: url.appendingPathComponent("object/list/bucket"),
