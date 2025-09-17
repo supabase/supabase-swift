@@ -4,55 +4,18 @@ on:
   push:
     branches:
       - main
-      - rc
-
+      - release/*
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
-  release:
+  release-please:
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-      id-token: write
-      attestations: write
-
     steps:
-      - name: Generate token
-        id: app-token
-        uses: actions/create-github-app-token@v2
+      - uses: googleapis/release-please-action@v4
+        id: release
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.PRIVATE_KEY }}
-      
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run semantic-release
-        id: semantic-release
-        run: npx semantic-release
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        continue-on-error: false
-
-      - name: Check if release was created
-        if: steps.semantic-release.outcome == 'success'
-        run: echo "Release created successfully"
+          target-branch: ${{ github.ref_name }}
