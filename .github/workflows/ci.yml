@@ -131,9 +131,9 @@ jobs:
     container: ${{ format('swift:{0}', matrix.swift.version) }}
     if: ${{ !contains(github.event.head_commit.message, 'ci skip') }}
     strategy:
+      fail-fast: false
       matrix:
         swift:
-          - version: "5.10"
           - version: "6.2"
     steps:
       - uses: actions/checkout@v4
