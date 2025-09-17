@@ -40,6 +40,10 @@ concurrency:
 permissions:
   contents: read
 
+defaults:
+  run:
+    timeout-minutes: 60
+
 jobs:
   xcodebuild-latest:
     name: xcodebuild (16.3)
