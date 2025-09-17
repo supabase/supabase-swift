@@ -110,6 +110,7 @@ jobs:
           download-platform: ${{ matrix.download-platform }}
       - name: Process coverage
         id: coverage-files
+        continue-on-error: true
         uses: grdsdev/swift-coverage-action@eeab9a07a3e2b9ba1aac631e287fd2ac3faadd6a
         with:
           search-paths: |
@@ -118,6 +119,7 @@ jobs:
             $HOME/Library/Developer/Xcode/DerivedData
           ignore-filename-regex: "/Users/|Tests/|.build|DerivedData|.derivedData|Deprecated/|Deprecated.swift"
       - name: Upload Coverage
+        continue-on-error: true
         uses: coverallsapp/github-action@v2.3.6
         with:
           github-token: ${{ secrets.COVERALLS_TOKEN }}
