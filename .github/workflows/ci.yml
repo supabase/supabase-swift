@@ -195,6 +195,7 @@ jobs:
         uses: brightdigit/swift-build@v1.3.0
         with:
           scheme: ${{ matrix.scheme }}
+          working-directory: ./Examples
 
   docs:
     name: Test docs
