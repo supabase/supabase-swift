@@ -227,7 +227,9 @@ public actor FunctionsClient {
     switch options.body {
     case .data(let data):
       request.httpBody = data
-      request.headers["Content-Type"] = "application/octet-stream"
+      if request.headers["Content-Type"] == nil {
+        request.headers["Content-Type"] = "application/octet-stream"
+      }
 
     case .encodable(let encodable, let encoder):
       do {
@@ -238,7 +240,9 @@ public actor FunctionsClient {
       }
     case .string(let string):
       request.httpBody = string.data(using: .utf8)
-      request.headers["Content-Type"] = "text/plain"
+      if request.headers["Content-Type"] == nil {
+        request.headers["Content-Type"] = "text/plain"
+      }
 
     case .multipartFormData, .fileURL:
       // multipartFormData and fileURL are handled by calling a different method
