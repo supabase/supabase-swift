@@ -15,9 +15,9 @@ public enum FunctionsError: Error, LocalizedError {
     switch self {
     case .relayError:
       "Relay Error invoking the Edge Function"
-    case let .httpError(code, _):
+    case .httpError(let code, _):
       "Edge Function returned a non-2xx status code: \(code)"
-    case let .unknown(error):
+    case .unknown(let error):
       "Unkown error: \(error.localizedDescription)"
     }
   }
@@ -41,112 +41,54 @@ func mapToFunctionsError(_ error: any Error) -> FunctionsError {
 public struct FunctionInvokeOptions: Sendable {
   /// The HTTP method to use for the request.
   public var method: HTTPMethod = .post
-  
+
   /// The body of the request.
-  public var body: Data?
-  
+  public var rawBody: Data?
+
   /// Query parameters to include in the request.
   public var query: [URLQueryItem] = []
-  
+
   /// Headers to include in the request.
-  public var headers: [HTTPHeader] = []
-  
+  public var headers: HTTPHeaders = []
+
   /// The region to invoke the function in.
   public var region: FunctionRegion?
-  
+
   /// Timeout for the request.
   public var timeout: TimeInterval?
-  
-  /// Retry configuration for failed requests.
-  public var retryConfiguration: RetryConfiguration?
-  
+
+  /// Set the body of the request to a data.
+  public mutating func setBody(_ body: Data) {
+    self.rawBody = body
+    headers["Content-Type"] = "application/octet-stream"
+  }
+
+  /// Set the body of the request to a string.
+  public mutating func setBody(_ body: String) {
+    self.rawBody = body.data(using: .utf8)
+    headers["Content-Type"] = "text/plain"
+  }
+
+  /// Set the body of the request to a JSON encodable.
+  public mutating func setBody(_ body: some Encodable) {
+    self.rawBody = try? JSONEncoder().encode(body)
+    headers["Content-Type"] = "application/json"
+  }
+
   public init(
     method: HTTPMethod = .post,
-    body: Data? = nil,
+    rawBody: Data? = nil,
     query: [URLQueryItem] = [],
-    headers: [HTTPHeader] = [],
+    headers: HTTPHeaders = [],
     region: FunctionRegion? = nil,
     timeout: TimeInterval? = nil,
-    retryConfiguration: RetryConfiguration? = nil
   ) {
     self.method = method
-    self.body = body
+    self.rawBody = rawBody
     self.query = query
     self.headers = headers
     self.region = region
     self.timeout = timeout
-    self.retryConfiguration = retryConfiguration
-  }
-  
-  /// Configuration for retrying failed requests.
-  public struct RetryConfiguration: Sendable {
-    /// Maximum number of retry attempts.
-    public let maxRetries: Int
-    
-    /// Base delay between retries (exponential backoff will be applied).
-    public let baseDelay: TimeInterval
-    
-    /// Maximum delay between retries.
-    public let maxDelay: TimeInterval
-    
-    /// HTTP status codes that should trigger a retry.
-    public let retryableStatusCodes: Set<Int>
-    
-    public init(
-      maxRetries: Int = 3,
-      baseDelay: TimeInterval = 1.0,
-      maxDelay: TimeInterval = 30.0,
-      retryableStatusCodes: Set<Int> = [408, 429, 500, 502, 503, 504]
-    ) {
-      self.maxRetries = maxRetries
-      self.baseDelay = baseDelay
-      self.maxDelay = maxDelay
-      self.retryableStatusCodes = retryableStatusCodes
-    }
-  }
-  
-  /// Convenience initializer for JSON body.
-  public init(
-    method: HTTPMethod = .post,
-    jsonBody: some Encodable,
-    query: [URLQueryItem] = [],
-    headers: [HTTPHeader] = [],
-    region: FunctionRegion? = nil,
-    timeout: TimeInterval? = nil,
-    retryConfiguration: RetryConfiguration? = nil
-  ) throws {
-    let body = try JSONEncoder().encode(jsonBody)
-    self.init(
-      method: method,
-      body: body,
-      query: query,
-      headers: headers + [.contentType("application/json")],
-      region: region,
-      timeout: timeout,
-      retryConfiguration: retryConfiguration
-    )
-  }
-  
-  /// Convenience initializer for string body.
-  public init(
-    method: HTTPMethod = .post,
-    stringBody: String,
-    query: [URLQueryItem] = [],
-    headers: [HTTPHeader] = [],
-    region: FunctionRegion? = nil,
-    timeout: TimeInterval? = nil,
-    retryConfiguration: RetryConfiguration? = nil
-  ) {
-    let body = stringBody.data(using: .utf8)
-    self.init(
-      method: method,
-      body: body,
-      query: query,
-      headers: headers + [.contentType("text/plain")],
-      region: region,
-      timeout: timeout,
-      retryConfiguration: retryConfiguration
-    )
   }
 }
 

@@ -31,13 +31,13 @@ public actor FunctionsClient {
   ///
   /// - Parameters:
   ///   - url: The base URL for the functions.
-  ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
+  ///   - headers: Headers to be included in the requests. (Default: empty HTTPHeaders)
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - session: The Alamofire session to use for requests. (Default: Alamofire.Session.default)
   public init(
     url: URL,
-    headers: [String: String] = [:],
+    headers: HTTPHeaders = [],
     region: FunctionRegion? = nil,
     logger: SupabaseLogger? = nil,
     session: Alamofire.Session = .default
@@ -46,8 +46,8 @@ public actor FunctionsClient {
     self.region = region
     self.session = session
 
-    self.headers = HTTPHeaders(headers)
-    if headers["X-Client-Info"] == nil {
+    self.headers = headers
+    if self.headers["X-Client-Info"] == nil {
       self.headers["X-Client-Info"] = "functions-swift/\(version)"
     }
   }
@@ -67,18 +67,21 @@ public actor FunctionsClient {
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  ///   - options: A closure to configure the options for invoking the function.
   ///   - decode: A closure to decode the response data and HTTPURLResponse into a `Response`
   /// object.
   /// - Returns: The decoded `Response` object.
   public func invoke<Response>(
     _ functionName: String,
-    options: FunctionInvokeOptions = .init(),
+    options: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in },
     decode: (Data, HTTPURLResponse) throws -> Response
   ) async throws(FunctionsError) -> Response {
+    var opt = FunctionInvokeOptions()
+    options(&opt)
+
     let dataTask = self.rawInvoke(
       functionName: functionName,
-      invokeOptions: options
+      invokeOptions: opt
     )
     .serializingData()
 
@@ -100,18 +103,21 @@ public actor FunctionsClient {
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  ///   - options: A closure to configure the options for invoking the function.
   ///   - decoder: The JSON decoder to use for decoding the response. (Default: `JSONDecoder()`)
   /// - Returns: The decoded object of type `T`.
   public func invoke<T: Decodable & Sendable>(
     _ functionName: String,
-    options: FunctionInvokeOptions = .init(),
+    options: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in },
     decoder: JSONDecoder = JSONDecoder()
   ) async throws(FunctionsError) -> T {
-    try await wrappingError(or: mapToFunctionsError) {
+    var opt = FunctionInvokeOptions()
+    options(&opt)
+
+    return try await wrappingError(or: mapToFunctionsError) {
       try await self.rawInvoke(
         functionName: functionName,
-        invokeOptions: options
+        invokeOptions: opt
       )
       .serializingDecodable(T.self, decoder: decoder)
       .value
@@ -122,15 +128,18 @@ public actor FunctionsClient {
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  ///   - options: A closure to configure the options for invoking the function.
   public func invoke(
     _ functionName: String,
-    options: FunctionInvokeOptions = .init()
+    options: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in },
   ) async throws(FunctionsError) {
+    var opt = FunctionInvokeOptions()
+    options(&opt)
+
     _ = try await wrappingError(or: mapToFunctionsError) {
       try await self.rawInvoke(
         functionName: functionName,
-        invokeOptions: options
+        invokeOptions: opt
       )
       .serializingData()
       .value
@@ -151,13 +160,16 @@ public actor FunctionsClient {
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - invokeOptions: Options for invoking the function.
+  ///   - options: A closure to configure the options for invoking the function.
   /// - Returns: A stream of Data.
   public func invokeWithStreamedResponse(
     _ functionName: String,
-    options invokeOptions: FunctionInvokeOptions = .init()
+    options: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in },
   ) -> AsyncThrowingStream<Data, any Error> {
-    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions)
+    var opt = FunctionInvokeOptions()
+    options(&opt)
+
+    let urlRequest = buildRequest(functionName: functionName, options: opt)
 
     let stream = session.streamRequest(urlRequest)
       .validate { request, response in
@@ -194,7 +206,7 @@ public actor FunctionsClient {
     )
     request.method = options.method
     request.headers = headers
-    request.httpBody = options.body
+    request.httpBody = options.rawBody
     request.timeoutInterval = FunctionsClient.requestIdleTimeout
 
     return request

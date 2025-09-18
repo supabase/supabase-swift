@@ -355,18 +355,45 @@ let stream = channel.broadcastStream(event: "test") // Returns AsyncStream
 
 ### 8. Functions Changes
 
-#### Function Invocation
+#### Function Client Initialization (Thread Safety)
+FunctionsClient is now an actor for thread safety:
 
 **Before (v2.x):**
 ```swift
-let response: MyResponse = try await client.functions
-    .invoke("my-function", parameters: ["key": "value"])
+let functionsClient = FunctionsClient(
+    url: url,
+    headers: ["key": "value"],  // [String: String]
+    region: "us-east-1"         // String
+)
 ```
 
 **After (v3.x):**
 ```swift
-// 🔄 Function invocation may have enhanced type safety
-// Specific changes to be documented during implementation
+let functionsClient = FunctionsClient(
+    url: url,
+    headers: HTTPHeaders([("key", "value")]),  // HTTPHeaders type
+    region: FunctionRegion.usEast1             // FunctionRegion type
+)
+```
+
+#### Function Invoke Options
+The options API has been simplified:
+
+**Before (v2.x):**
+```swift
+let options = FunctionInvokeOptions()
+options.body = myData
+```
+
+**After (v3.x):**
+```swift
+let options = FunctionInvokeOptions()
+options.rawBody = myData  // renamed from 'body' to 'rawBody'
+
+// Or use the new convenience methods:
+options.setBody(myData)           // for Data
+options.setBody("my string")      // for String
+options.setBody(myJsonObject)     // for Encodable
 ```
 
 ### 9. Error Handling Changes

@@ -86,8 +86,8 @@ public final class SupabaseClient: @unchecked Sendable {
       if $0.functions == nil {
         $0.functions = FunctionsClient(
           url: functionsURL,
-          headers: headers,
-          region: options.functions.region,
+          headers: HTTPHeaders(headers),
+          region: options.functions.region.map { FunctionRegion(rawValue: $0) },
           logger: options.global.logger,
           session: session
         )

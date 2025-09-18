@@ -1,10 +1,11 @@
 import Alamofire
 import ConcurrencyExtras
+import Foundation
 import InlineSnapshotTesting
 import Mocker
 import SnapshotTestingCustomDump
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Functions
 
@@ -12,7 +13,7 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class FunctionsClientTests: XCTestCase {
+@Suite struct FunctionsClientTests {
   let url = URL(string: "http://localhost:5432/functions/v1")!
   let apiKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
@@ -23,29 +24,36 @@ final class FunctionsClientTests: XCTestCase {
     return sessionConfiguration
   }()
 
-  var region: String?
+  private var _region: FunctionRegion? = nil
+  
+  var region: FunctionRegion? {
+    get { _region }
+    set { _region = newValue }
+  }
 
-  lazy var sut = FunctionsClient(
-    url: url,
-    headers: [
-      "apikey": apiKey
-    ],
-    region: region,
-    session: Alamofire.Session(configuration: sessionConfiguration)
-  )
+  var sut: FunctionsClient {
+    FunctionsClient(
+      url: url,
+      headers: HTTPHeaders(["apikey": apiKey]),
+      region: _region,
+      session: Alamofire.Session(configuration: sessionConfiguration)
+    )
+  }
 
+  @Test("Initialize FunctionsClient with correct properties")
   func testInit() async {
     let client = FunctionsClient(
       url: url,
-      headers: ["apikey": apiKey],
+      headers: HTTPHeaders(["apikey": apiKey]),
       region: .usEast1
     )
-    XCTAssertEqual(client.region, "us-east-1")
+    #expect(await client.region?.rawValue == "us-east-1")
 
-    XCTAssertEqual(client.headers["apikey"], apiKey)
-    XCTAssertNotNil(client.headers["X-Client-Info"])
+    #expect(await client.headers["apikey"] == apiKey)
+    #expect(await client.headers["X-Client-Info"] != nil)
   }
 
+  @Test("Invoke function with custom body and headers")
   func testInvoke() async throws {
     Mock(
       url: self.url.appendingPathComponent("hello_world"),
@@ -70,15 +78,13 @@ final class FunctionsClientTests: XCTestCase {
     .register()
 
     let bodyData = try! JSONEncoder().encode(["name": "Supabase"])
-    try await sut.invoke(
-      "hello_world",
-      options: .init(
-        body: bodyData,
-        headers: [HTTPHeader(name: "X-Custom-Key", value: "value")]
-      )
-    )
+    try await sut.invoke("hello_world") { options in
+      options.setBody(bodyData)
+      options.headers["X-Custom-Key"] = "value"
+    }
   }
 
+  @Test("Invoke function returning decodable response")
   func testInvokeReturningDecodable() async throws {
     Mock(
       url: url.appendingPathComponent("hello"),
@@ -104,10 +110,11 @@ final class FunctionsClientTests: XCTestCase {
     }
 
     let response = try await sut.invoke("hello") as Payload
-    XCTAssertEqual(response.message, "Hello, world!")
-    XCTAssertEqual(response.status, "ok")
+    #expect(response.message == "Hello, world!")
+    #expect(response.status == "ok")
   }
 
+  @Test("Invoke function with custom decoding closure")
   func testInvokeWithCustomDecodingClosure() async throws {
     Mock(
       url: url.appendingPathComponent("hello"),
@@ -135,10 +142,11 @@ final class FunctionsClientTests: XCTestCase {
     let response = try await sut.invoke("hello") { data, _ in
       try JSONDecoder().decode(Payload.self, from: data)
     }
-    XCTAssertEqual(response.message, "Hello, world!")
-    XCTAssertEqual(response.status, "ok")
+    #expect(response.message == "Hello, world!")
+    #expect(response.status == "ok")
   }
 
+  @Test("Invoke function with decoding error")
   func testInvokeDecodingThrowsError() async throws {
     Mock(
       url: url.appendingPathComponent("hello"),
@@ -156,7 +164,7 @@ final class FunctionsClientTests: XCTestCase {
 
     do {
       _ = try await sut.invoke("hello") as Payload
-      XCTFail("Should throw error")
+      Issue.record("Should throw error")
     } catch {
       assertInlineSnapshot(of: error, as: .customDump) {
         """
@@ -175,6 +183,7 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 
+  @Test("Invoke function with custom HTTP method")
   func testInvokeWithCustomMethod() async throws {
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -192,9 +201,12 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke("hello-world", options: .init(method: .delete))
+    try await sut.invoke("hello-world") { options in
+      options.method = .delete
+    }
   }
 
+  @Test("Invoke function with query parameters")
   func testInvokeWithQuery() async throws {
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -215,16 +227,19 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke(
-      "hello-world",
-      options: .init(
-        query: [URLQueryItem(name: "key", value: "value")]
-      )
-    )
+    try await sut.invoke("hello-world") { options in
+      options.query = [URLQueryItem(name: "key", value: "value")]
+    }
   }
 
+  @Test("Invoke function with region defined in client")
   func testInvokeWithRegionDefinedInClient() async throws {
-    region = FunctionRegion.usEast1.rawValue
+    let clientWithRegion = FunctionsClient(
+      url: url,
+      headers: HTTPHeaders(["apikey": apiKey]),
+      region: .usEast1,
+      session: Alamofire.Session(configuration: sessionConfiguration)
+    )
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -238,16 +253,17 @@ final class FunctionsClientTests: XCTestCase {
       curl \
       	--request POST \
       	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "X-Region: ca-central-1" \
+      	--header "X-Region: us-east-1" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world"
       """#
     }
     .register()
 
-    try await sut.invoke("hello-world")
+    try await clientWithRegion.invoke("hello-world")
   }
 
+  @Test("Invoke function with region in options")
   func testInvokeWithRegion() async throws {
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -261,16 +277,19 @@ final class FunctionsClientTests: XCTestCase {
       curl \
       	--request POST \
       	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "X-Region: ca-central-1" \
+      	--header "X-Region: us-east-1" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world"
       """#
     }
     .register()
 
-    try await sut.invoke("hello-world", options: .init(region: FunctionRegion.usEast1.rawValue))
+    try await sut.invoke("hello-world") { options in
+      options.region = .usEast1
+    }
   }
 
+  @Test("Invoke function with region using string literal")
   func testInvokeWithRegion_usingExpressibleByLiteral() async throws {
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -291,11 +310,19 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke("hello-world", options: .init(region: "ca-central-1"))
+    try await sut.invoke("hello-world") { options in
+      options.region = "ca-central-1"
+    }
   }
 
+  @Test("Invoke function without region")
   func testInvokeWithoutRegion() async throws {
-    region = nil
+    let clientWithoutRegion = FunctionsClient(
+      url: url,
+      headers: HTTPHeaders(["apikey": apiKey]),
+      region: nil,
+      session: Alamofire.Session(configuration: sessionConfiguration)
+    )
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -315,9 +342,10 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke("hello-world")
+    try await clientWithoutRegion.invoke("hello-world")
   }
 
+  @Test("Invoke function should throw error on request failure")
   func testInvoke_shouldThrow_error() async throws {
     Mock(
       url: url.appendingPathComponent("hello_world"),
@@ -338,17 +366,20 @@ final class FunctionsClientTests: XCTestCase {
 
     do {
       try await sut.invoke("hello_world")
-      XCTFail("Invoke should fail.")
-    } catch let FunctionsError.unknown(error) {
-      guard case let AFError.sessionTaskFailed(underlyingError as URLError) = error else {
-        XCTFail()
+      Issue.record("Should throw error")
+    } catch let FunctionsError.unknown(underlyingError) {
+      guard case let AFError.sessionTaskFailed(urleError as URLError) = underlyingError else {
+        Issue.record("Expected AFError.sessionTaskFailed with URLError")
         return
       }
 
-      XCTAssertEqual(underlyingError.code, .badServerResponse)
+      #expect(urleError.code == .badServerResponse)
+    } catch {
+      Issue.record("Expected FunctionsError.unknown, got \(error)")
     }
   }
 
+  @Test("Invoke function should throw HTTP error")
   func testInvoke_shouldThrow_FunctionsError_httpError() async {
     Mock(
       url: url.appendingPathComponent("hello_world"),
@@ -368,7 +399,7 @@ final class FunctionsClientTests: XCTestCase {
 
     do {
       try await sut.invoke("hello_world")
-      XCTFail("Invoke should fail.")
+      Issue.record("Should throw error")
     } catch {
       assertInlineSnapshot(of: error, as: .description) {
         """
@@ -378,6 +409,7 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 
+  @Test("Invoke function should throw relay error")
   func testInvoke_shouldThrow_FunctionsError_relayError() async {
     Mock(
       url: url.appendingPathComponent("hello_world"),
@@ -400,7 +432,7 @@ final class FunctionsClientTests: XCTestCase {
 
     do {
       try await sut.invoke("hello_world")
-      XCTFail("Invoke should fail.")
+      Issue.record("Should throw error")
     } catch {
       assertInlineSnapshot(of: error, as: .description) {
         """
@@ -410,14 +442,16 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 
-  func test_setAuth() {
-    sut.setAuth(token: "access.token")
-    XCTAssertEqual(sut.headers["Authorization"], "Bearer access.token")
+  @Test("Set and clear authentication token")
+  func test_setAuth() async {
+    await sut.setAuth(token: "access.token")
+    #expect(await sut.headers["Authorization"] == "Bearer access.token")
 
-    sut.setAuth(token: nil)
-    XCTAssertNil(sut.headers["Authorization"])
+    await sut.setAuth(token: nil)
+    #expect(await sut.headers["Authorization"] == nil)
   }
 
+  @Test("Invoke function with streamed response")
   func testInvokeWithStreamedResponse() async throws {
     Mock(
       url: url.appendingPathComponent("stream"),
@@ -435,13 +469,14 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut.invokeWithStreamedResponse("stream")
+    let stream = await sut.invokeWithStreamedResponse("stream")
 
     for try await value in stream {
-      XCTAssertEqual(String(decoding: value, as: UTF8.self), "hello world")
+      #expect(String(decoding: value, as: UTF8.self) == "hello world")
     }
   }
 
+  @Test("Invoke function with streamed response HTTP error")
   func testInvokeWithStreamedResponseHTTPError() async throws {
     Mock(
       url: url.appendingPathComponent("stream"),
@@ -459,11 +494,11 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut.invokeWithStreamedResponse("stream")
+    let stream = await sut.invokeWithStreamedResponse("stream")
 
     do {
       for try await _ in stream {
-        XCTFail("should throw error")
+        Issue.record("Should not receive data")
       }
     } catch {
       assertInlineSnapshot(of: error, as: .description) {
@@ -474,6 +509,7 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 
+  @Test("Invoke function with streamed response relay error")
   func testInvokeWithStreamedResponseRelayError() async throws {
     Mock(
       url: url.appendingPathComponent("stream"),
@@ -494,11 +530,11 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut.invokeWithStreamedResponse("stream")
+    let stream = await sut.invokeWithStreamedResponse("stream")
 
     do {
       for try await _ in stream {
-        XCTFail("should throw error")
+        Issue.record("Should not receive data")
       }
     } catch {
       assertInlineSnapshot(of: error, as: .description) {

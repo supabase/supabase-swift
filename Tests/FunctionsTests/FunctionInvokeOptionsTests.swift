@@ -1,51 +1,49 @@
 import Alamofire
-import XCTest
+import Foundation
+import Testing
 
 @testable import Functions
 
-final class FunctionInvokeOptionsTests: XCTestCase {
-  func test_initWithStringBody() {
-    let bodyData = "string value".data(using: .utf8)!
-    let options = FunctionInvokeOptions(body: bodyData)
-    XCTAssertEqual(options.headers.first { $0.name == "Content-Type" }?.value, "text/plain")
-    XCTAssertNotNil(options.body)
+@Suite struct FunctionInvokeOptionsTests {
+  @Test("Initialize with string body sets correct content type")
+  func initWithStringBody() {
+    var options = FunctionInvokeOptions()
+    options.setBody("string value")
+    #expect(options.headers["Content-Type"] == "text/plain")
   }
 
-  func test_initWithDataBody() {
+  @Test("Initialize with data body sets correct content type")
+  func initWithDataBody() {
     let bodyData = "binary value".data(using: .utf8)!
-    let options = FunctionInvokeOptions(body: bodyData)
-    XCTAssertEqual(options.headers.first { $0.name == "Content-Type" }?.value, "application/octet-stream")
-    XCTAssertNotNil(options.body)
+    var options = FunctionInvokeOptions()
+    options.setBody(bodyData)
+    #expect(options.headers["Content-Type"] == "application/octet-stream")
   }
 
-  func test_initWithEncodableBody() {
+  @Test("Initialize with encodable body sets correct content type")
+  func initWithEncodableBody() {
     struct Body: Encodable {
       let value: String
     }
-    let bodyData = try! JSONEncoder().encode(Body(value: "value"))
-    let options = FunctionInvokeOptions(body: bodyData)
-    XCTAssertEqual(options.headers.first { $0.name == "Content-Type" }?.value, "application/json")
-    XCTAssertNotNil(options.body)
+    var options = FunctionInvokeOptions()
+    options.setBody(Body(value: "value"))
+    #expect(options.headers["Content-Type"] == "application/json")
   }
 
-  func test_initWithCustomContentType() {
+  @Test("Initialize with custom content type preserves custom header")
+  func initWithCustomContentType() {
     let boundary = "Boundary-\(UUID().uuidString)"
     let contentType = "multipart/form-data; boundary=\(boundary)"
     let bodyData = "binary value".data(using: .utf8)!
-    let options = FunctionInvokeOptions(
-      body: bodyData,
-      headers: [HTTPHeader(name: "Content-Type", value: contentType)]
-    )
-    XCTAssertEqual(options.headers.first { $0.name == "Content-Type" }?.value, contentType)
-    XCTAssertNotNil(options.body)
+    var options = FunctionInvokeOptions()
+    options.setBody(bodyData)
+    options.headers["Content-Type"] = contentType
+    #expect(options.headers["Content-Type"] == contentType)
   }
 
-  func testMethod() {
-    let testCases: [HTTPMethod] = [.get, .post, .put, .patch, .delete]
-
-    for method in testCases {
-      let options = FunctionInvokeOptions(method: method)
-      XCTAssertEqual(options.method, method)
-    }
+  @Test("HTTP method is set correctly", arguments: [HTTPMethod.get, .post, .put, .patch, .delete])
+  func testMethod(method: HTTPMethod) {
+    let options = FunctionInvokeOptions(method: method)
+    #expect(options.method == method)
   }
 }
