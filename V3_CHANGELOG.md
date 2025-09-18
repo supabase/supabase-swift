@@ -104,7 +104,7 @@
 - [x] Improved debugging information with context and debug info
 - [x] Enhanced error creation utilities with module and operation tracking
 - [ ] Improved async/await support throughout
-- [ ] Enhanced documentation and code examples
+- [x] Enhanced documentation and code examples with v3.0.0 features
 
 #### Performance
 - [ ] Optimized network request handling
@@ -122,10 +122,11 @@
 - [ ] *Fixes will be documented as they are implemented*
 
 ### 📚 Documentation
-- [ ] Complete API documentation overhaul
-- [ ] New getting started guides
-- [ ] Updated code examples for all features
-- [ ] Comprehensive migration guide
+- [x] Complete API documentation overhaul
+- [x] New getting started guides with v3.0.0 features
+- [x] Updated code examples for all features with new convenience initializers
+- [x] Comprehensive migration guide
+- [x] Enhanced MFA examples with AAL capabilities
 - [ ] Best practices documentation
 
 ### 🔧 Development
