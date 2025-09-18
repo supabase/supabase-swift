@@ -377,23 +377,44 @@ let functionsClient = FunctionsClient(
 ```
 
 #### Function Invoke Options
-The options API has been simplified:
+The options API now uses a type-safe enum for body handling:
 
 **Before (v2.x):**
 ```swift
 let options = FunctionInvokeOptions()
-options.body = myData
+options.body = myData  // Simple Data property
 ```
 
 **After (v3.x):**
 ```swift
 let options = FunctionInvokeOptions()
-options.rawBody = myData  // renamed from 'body' to 'rawBody'
 
-// Or use the new convenience methods:
-options.setBody(myData)           // for Data
-options.setBody("my string")      // for String
-options.setBody(myJsonObject)     // for Encodable
+// Type-safe body options using FunctionInvokeSupportedBody enum:
+options.body = .data(myData)                    // for binary data
+options.body = .string("my string")             // for text data
+options.body = .encodable(myObject)             // for JSON objects
+options.body = .fileURL(fileURL)                // for file uploads
+options.body = .multipartFormData { formData in // for form uploads
+    formData.append(data, withName: "file", fileName: "test.txt", mimeType: "text/plain")
+}
+```
+
+#### Enhanced Upload Support
+v3.x adds native support for file and multipart uploads:
+
+```swift
+// File upload
+let result = try await functionsClient.invoke("upload-handler") { options in
+    options.body = .fileURL(URL(fileURLWithPath: "/path/to/file.pdf"))
+}
+
+// Multipart form data
+let result = try await functionsClient.invoke("form-handler") { options in
+    options.body = .multipartFormData { formData in
+        formData.append("value1".data(using: .utf8)!, withName: "field1")
+        formData.append(imageData, withName: "image", fileName: "photo.jpg", mimeType: "image/jpeg")
+    }
+}
 ```
 
 ### 9. Error Handling Changes

@@ -79,7 +79,7 @@ public actor FunctionsClient {
     var opt = FunctionInvokeOptions()
     options(&opt)
 
-    let dataTask = self.rawInvoke(
+    let dataTask = try self.rawInvoke(
       functionName: functionName,
       invokeOptions: opt
     )
@@ -149,9 +149,20 @@ public actor FunctionsClient {
   private func rawInvoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) -> DataRequest {
-    let request = buildRequest(functionName: functionName, options: invokeOptions)
-    return self.session.request(request).validate(self.validate)
+  ) throws(FunctionsError) -> DataRequest {
+    let urlRequest = try buildRequest(functionName: functionName, options: invokeOptions)
+
+    let request =
+      switch invokeOptions.body {
+      case .multipartFormData(let formData):
+        self.session.upload(multipartFormData: formData, with: urlRequest)
+      case .fileURL(let url):
+        self.session.upload(url, with: urlRequest)
+      default:
+        self.session.request(urlRequest)
+      }
+
+    return request.validate(self.validate)
   }
 
   /// Invokes a function with streamed response.
@@ -169,29 +180,35 @@ public actor FunctionsClient {
     var opt = FunctionInvokeOptions()
     options(&opt)
 
-    let urlRequest = buildRequest(functionName: functionName, options: opt)
-
-    let stream = session.streamRequest(urlRequest)
-      .validate { request, response in
-        self.validate(request: request, response: response, data: nil)
-      }
-      .streamTask()
-      .streamingData()
-      .compactMap {
-        switch $0.event {
-        case .stream(.success(let data)): return data
-        case .complete(let completion):
-          if let error = completion.error {
-            throw mapToFunctionsError(error)
-          }
-          return nil
+    do {
+      let urlRequest = try buildRequest(functionName: functionName, options: opt)
+      let stream = session.streamRequest(urlRequest)
+        .validate { request, response in
+          self.validate(request: request, response: response, data: nil)
         }
-      }
+        .streamTask()
+        .streamingData()
+        .compactMap {
+          switch $0.event {
+          case .stream(.success(let data)): return data
+          case .complete(let completion):
+            if let error = completion.error {
+              throw mapToFunctionsError(error)
+            }
+            return nil
+          }
+        }
 
-    return AsyncThrowingStream(UncheckedSendable(stream))
+      return AsyncThrowingStream(UncheckedSendable(stream))
+    } catch {
+      return AsyncThrowingStream.finished(throwing: mapToFunctionsError(error))
+    }
   }
 
-  private func buildRequest(functionName: String, options: FunctionInvokeOptions) -> URLRequest {
+  private func buildRequest(
+    functionName: String,
+    options: FunctionInvokeOptions
+  ) throws(FunctionsError) -> URLRequest {
     var headers = headers
     options.headers.forEach {
       headers[$0.name] = $0.value
@@ -206,7 +223,31 @@ public actor FunctionsClient {
     )
     request.method = options.method
     request.headers = headers
-    request.httpBody = options.rawBody
+
+    switch options.body {
+    case .data(let data):
+      request.httpBody = data
+      request.headers["Content-Type"] = "application/octet-stream"
+
+    case .encodable(let encodable, let encoder):
+      do {
+        request = try JSONParameterEncoder(encoder: encoder ?? JSONEncoder.supabase())
+          .encode(encodable, into: request)
+      } catch {
+        throw mapToFunctionsError(error)
+      }
+    case .string(let string):
+      request.httpBody = string.data(using: .utf8)
+      request.headers["Content-Type"] = "text/plain"
+
+    case .multipartFormData, .fileURL:
+      // multipartFormData and fileURL are handled by calling a different method
+      break
+
+    case nil:
+      break
+    }
+
     request.timeoutInterval = FunctionsClient.requestIdleTimeout
 
     return request

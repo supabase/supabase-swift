@@ -1,4 +1,5 @@
 import Alamofire
+import ConcurrencyExtras
 import Foundation
 
 /// An error type representing various errors that can occur while invoking functions.
@@ -37,13 +38,27 @@ func mapToFunctionsError(_ error: any Error) -> FunctionsError {
   return FunctionsError.unknown(error)
 }
 
-/// Options for invoking a function.
+/// Supported body types for invoking a function.
+public enum FunctionInvokeSupportedBody: Sendable {
+  /// A data body, used for binary data, sent with the `Content-Type` header set to `application/octet-stream`.
+  case data(Data)
+  /// An encodable body, used for JSON data, sent with the `Content-Type` header set to `application/json`.
+  case encodable(any Sendable & Encodable, encoder: JSONEncoder?)
+  /// A multipart form data body, uploaded using Alamofire's built-in multipart form data support.
+  case multipartFormData(@Sendable (MultipartFormData) -> Void)
+  /// A string body, used for text data, sent with the `Content-Type` header set to `text/plain`.
+  case string(String)
+  /// A file URL body, uploaded using Alamofire's built-in file upload support.
+  case fileURL(URL)
+}
+
+/// Options for invoking a function, used to configure the request.
 public struct FunctionInvokeOptions: Sendable {
   /// The HTTP method to use for the request.
   public var method: HTTPMethod = .post
 
   /// The body of the request.
-  public var rawBody: Data?
+  public var body: FunctionInvokeSupportedBody?
 
   /// Query parameters to include in the request.
   public var query: [URLQueryItem] = []
@@ -57,34 +72,16 @@ public struct FunctionInvokeOptions: Sendable {
   /// Timeout for the request.
   public var timeout: TimeInterval?
 
-  /// Set the body of the request to a data.
-  public mutating func setBody(_ body: Data) {
-    self.rawBody = body
-    headers["Content-Type"] = "application/octet-stream"
-  }
-
-  /// Set the body of the request to a string.
-  public mutating func setBody(_ body: String) {
-    self.rawBody = body.data(using: .utf8)
-    headers["Content-Type"] = "text/plain"
-  }
-
-  /// Set the body of the request to a JSON encodable.
-  public mutating func setBody(_ body: some Encodable) {
-    self.rawBody = try? JSONEncoder().encode(body)
-    headers["Content-Type"] = "application/json"
-  }
-
   public init(
     method: HTTPMethod = .post,
-    rawBody: Data? = nil,
+    body: FunctionInvokeSupportedBody? = nil,
     query: [URLQueryItem] = [],
     headers: HTTPHeaders = [],
     region: FunctionRegion? = nil,
     timeout: TimeInterval? = nil,
   ) {
     self.method = method
-    self.rawBody = rawBody
+    self.body = body
     self.query = query
     self.headers = headers
     self.region = region
@@ -92,7 +89,7 @@ public struct FunctionInvokeOptions: Sendable {
   }
 }
 
-/// Function region for specifying AWS regions.
+/// Function region for specifying AWS regions, used to configure the request.
 public struct FunctionRegion: RawRepresentable, Sendable {
   public let rawValue: String
   public init(rawValue: String) {
@@ -115,6 +112,7 @@ public struct FunctionRegion: RawRepresentable, Sendable {
   public static let usWest2 = FunctionRegion(rawValue: "us-west-2")
 }
 
+/// Allows creating a `FunctionRegion` from a string literal.
 extension FunctionRegion: ExpressibleByStringLiteral {
   public init(stringLiteral value: String) {
     self.init(rawValue: value)

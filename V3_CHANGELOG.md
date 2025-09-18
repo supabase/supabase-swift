@@ -54,7 +54,8 @@
 - **BREAKING**: Enhanced with Alamofire networking integration
 - **BREAKING**: FunctionsClient converted to actor for thread safety
 - **BREAKING**: Headers parameter type changed from [String: String] to HTTPHeaders
-- **BREAKING**: Simplified FunctionInvokeOptions with rawBody property
+- **BREAKING**: Replaced rawBody with FunctionInvokeSupportedBody enum for type-safe body handling
+- **BREAKING**: Enhanced upload support with multipart form data and file URL options
 
 #### Logging System
 - **BREAKING**: Drop SupabaseLogger in favor of `swift-log` dependency
@@ -109,12 +110,13 @@
 - [ ] Improved subscription lifecycle management
 
 #### Functions
-- [x] Better parameter type safety with enhanced options
+- [x] Better parameter type safety with FunctionInvokeSupportedBody enum
 - [x] Enhanced error handling with improved FunctionsError descriptions
 - [x] Improved response parsing with actor-based client
 - [x] Retry configuration and timeout support
 - [x] Thread-safe FunctionsClient using Swift actor model
-- [x] Simplified FunctionInvokeOptions API with rawBody property
+- [x] Type-safe body handling with support for Data, String, Encodable, multipart forms, and file uploads
+- [x] Native multipart form data and file upload support via Alamofire integration
 - [x] Improved FunctionRegion type with RawRepresentable and ExpressibleByStringLiteral
 - [x] Added support for more AWS regions (ap-northeast-2, ap-south-1, ap-southeast-2, ca-central-1, eu-central-1, eu-west-2, eu-west-3, sa-east-1, us-west-2)
 
