@@ -116,7 +116,7 @@ extension ErrorCode {
   public static let emailAddressNotAuthorized = ErrorCode("email_address_not_authorized")
 }
 
-public enum AuthError: SupabaseError {
+public enum AuthError: LocalizedError {
   @available(
     *,
     deprecated,
@@ -178,7 +178,7 @@ public enum AuthError: SupabaseError {
   }
 
   /// The error code of the error.
-  public var authErrorCode: ErrorCode {
+  public var errorCode: ErrorCode {
     switch self {
     case .sessionMissing: .sessionNotFound
     case .weakPassword: .weakPassword
@@ -199,46 +199,6 @@ public enum AuthError: SupabaseError {
     switch self {
     case .unknown(let error): error
     default: nil
-    }
-  }
-  
-  // MARK: - SupabaseError Protocol Conformance
-  
-  public var errorCode: String {
-    switch self {
-    case .sessionMissing: return SupabaseErrorCode.sessionMissing.rawValue
-    case .weakPassword: return SupabaseErrorCode.weakPassword.rawValue
-    case let .api(_, errorCode, _, _): return errorCode.rawValue
-    case .pkceGrantCodeExchange, .implicitGrantRedirect: return SupabaseErrorCode.unknown.rawValue
-    case .missingExpClaim, .malformedJWT, .unknown: return SupabaseErrorCode.unknown.rawValue
-    }
-  }
-  
-  public var underlyingData: Data? {
-    switch self {
-    case let .api(_, _, data, _): return data
-    default: return nil
-    }
-  }
-  
-  public var underlyingResponse: HTTPURLResponse? {
-    switch self {
-    case let .api(_, _, _, response): return response
-    default: return nil
-    }
-  }
-  
-  public var context: [String: String] {
-    switch self {
-    case let .weakPassword(_, reasons):
-      return ["reasons": reasons.joined(separator: ", ")]
-    case let .pkceGrantCodeExchange(_, error, code):
-      var context: [String: String] = [:]
-      if let error = error { context["error"] = error }
-      if let code = code { context["code"] = code }
-      return context
-    default:
-      return [:]
     }
   }
 }

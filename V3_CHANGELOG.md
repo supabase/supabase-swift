@@ -99,10 +99,9 @@
 ### 🛠️ Improvements
 
 #### Developer Experience
-- [x] Consistent error handling across all modules with unified SupabaseError protocol
-- [x] Better error messages with standardized error codes and actionable guidance
-- [x] Improved debugging information with context and debug info
-- [x] Enhanced error creation utilities with module and operation tracking
+- [ ] Consistent error handling across all modules
+- [ ] Better error messages with actionable guidance
+- [ ] Improved debugging information
 - [ ] Improved async/await support throughout
 - [x] Enhanced documentation and code examples with v3.0.0 features
 
