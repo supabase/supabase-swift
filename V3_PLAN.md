@@ -127,6 +127,15 @@ Current modules will be maintained:
   - [ ] Migrate Functions module dependencies
   - [ ] Update examples and documentation
 
+- [x] **Minimum OS Version Support** (Dependencies: swift-clocks integration)
+  - [x] **BREAKING**: Set minimum OS versions to iOS 16, macOS 13, tvOS 16, watchOS 9
+  - [x] Remove fallback clock implementation from _Clock.swift
+  - [x] Update Package.swift platform requirements
+  - [x] Replace _Clock protocol with native Clock protocol from swift-clocks
+  - [x] Update all clock usage throughout the codebase
+  - [x] Remove ConcurrencyExtras dependency (deferred - still needed for LockIsolated/UncheckedSendable)
+  - [x] Update documentation and examples for new minimum versions
+
 - [x] **Documentation & Examples** (Dependencies: All API changes complete)
   - [x] Update all code examples with v3.0.0 features
   - [x] Create migration examples

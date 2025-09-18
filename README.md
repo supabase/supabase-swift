@@ -24,7 +24,7 @@ Supabase Swift v3.0.0 is a major release with significant improvements:
 ## Usage
 
 ### Requirements
-- iOS 13.0+ / macOS 10.15+ / tvOS 13+ / watchOS 6+ / visionOS 1+
+- iOS 16.0+ / macOS 13.0+ / tvOS 16.0+ / watchOS 9.0+ / visionOS 1+
 - Xcode 16.0+
 - Swift 6.0+
 

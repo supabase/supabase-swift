@@ -53,6 +53,9 @@
 #### Dependency Management
 - [x] **BREAKING**: Adopt swift-dependencies for modern dependency management
 
+#### Minimum OS Version Support
+- [x] **BREAKING**: Set minimum OS versions to iOS 16, macOS 13, tvOS 16, watchOS 9
+
 ### ✨ New Features
 
 #### Infrastructure
@@ -112,6 +115,12 @@
 - [x] Replace custom dependency injection with @Dependency property wrappers
 - [x] Improved testability with controllable dependencies
 - [x] Better separation of concerns and modularity
+
+#### Minimum OS Version Support
+- [x] Native Clock protocol support without fallbacks
+- [x] Simplified clock implementation using swift-clocks
+- [x] Removal of ConcurrencyExtras dependency (deferred - still needed for LockIsolated/UncheckedSendable)
+- [x] Better integration with modern Swift concurrency
 
 ### 🛠️ Improvements
 

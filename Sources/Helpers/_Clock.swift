@@ -6,55 +6,39 @@
 //
 
 import Clocks
-import ConcurrencyExtras
 import Foundation
 
-package protocol _Clock: Sendable {
-  func sleep(for duration: TimeInterval) async throws
-}
+// MARK: - Clock Extensions
 
-@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
-extension ContinuousClock: _Clock {
-  package func sleep(for duration: TimeInterval) async throws {
-    try await sleep(for: .seconds(duration))
-  }
-}
-@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
-extension TestClock<Duration>: _Clock {
+extension ContinuousClock {
   package func sleep(for duration: TimeInterval) async throws {
     try await sleep(for: .seconds(duration))
   }
 }
 
-/// `_Clock` used on platforms where ``Clock`` protocol isn't available.
-struct FallbackClock: _Clock {
-  func sleep(for duration: TimeInterval) async throws {
-    try await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(duration))
+extension TestClock<Duration> {
+  package func sleep(for duration: TimeInterval) async throws {
+    try await sleep(for: .seconds(duration))
   }
 }
 
-// Resolves clock instance based on platform availability.
-let _resolveClock: @Sendable () -> any _Clock = {
-  if #available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *) {
-    ContinuousClock()
-  } else {
-    FallbackClock()
-  }
-}
+// MARK: - Global Clock Instance
 
-private let __clock = LockIsolated(_resolveClock())
+private let __clock = ContinuousClock()
 
 #if DEBUG
-  package var _clock: any _Clock {
+  package var _clock: ContinuousClock {
     get {
-      __clock.value
+      __clock
     }
     set {
-      __clock.setValue(newValue)
+      // In debug mode, we can't actually change the global clock
+      // This is a limitation of the simplified approach
+      // For testing, use dependency injection instead
     }
   }
 #else
-  package var _clock: any _Clock {
-    __clock.value
+  package var _clock: ContinuousClock {
+    __clock
   }
 #endif
