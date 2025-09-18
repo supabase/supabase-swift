@@ -1,6 +1,6 @@
 import Foundation
 
-public struct RealtimeMessageV2: Hashable, Codable, Sendable {
+public struct RealtimeMessage: Hashable, Codable, Sendable {
   public let joinRef: String?
   public let ref: String?
   public let topic: String
@@ -76,6 +76,6 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
   }
 }
 
-extension RealtimeMessageV2: HasRawMessage {
-  public var rawMessage: RealtimeMessageV2 { self }
+extension RealtimeMessage: HasRawMessage {
+  public var rawMessage: RealtimeMessage { self }
 }

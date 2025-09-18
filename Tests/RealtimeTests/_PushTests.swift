@@ -16,7 +16,7 @@ import XCTest
  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
  final class _PushTests: XCTestCase {
    var ws: FakeWebSocket!
-   var socket: RealtimeClientV2!
+   var socket: RealtimeClient!
 
    override func setUp() {
      super.setUp()
@@ -24,7 +24,7 @@ import XCTest
      let (client, server) = FakeWebSocket.fakes()
      ws = server
 
-     socket = RealtimeClientV2(
+     socket = RealtimeClient(
        url: URL(string: "https://localhost:54321/v1/realtime")!,
        options: RealtimeClientOptions(
          headers: ["apiKey": "apikey"]
@@ -35,7 +35,7 @@ import XCTest
    }
 
    func testPushWithoutAck() async {
-     let channel = RealtimeChannelV2(
+     let channel = RealtimeChannel(
        topic: "realtime:users",
        config: RealtimeChannelConfig(
          broadcast: .init(acknowledgeBroadcasts: false),
@@ -45,9 +45,9 @@ import XCTest
        socket: socket,
        logger: nil
      )
-     let push = PushV2(
+     let push = Push(
        channel: channel,
-       message: RealtimeMessageV2(
+       message: RealtimeMessage(
          joinRef: nil,
          ref: "1",
          topic: "realtime:users",
@@ -61,7 +61,7 @@ import XCTest
    }
 
    func testPushWithAck() async {
-     let channel = RealtimeChannelV2(
+     let channel = RealtimeChannel(
        topic: "realtime:users",
        config: RealtimeChannelConfig(
          broadcast: .init(acknowledgeBroadcasts: true),
@@ -71,9 +71,9 @@ import XCTest
        socket: socket,
        logger: nil
      )
-     let push = PushV2(
+     let push = Push(
        channel: channel,
-       message: RealtimeMessageV2(
+       message: RealtimeMessage(
          joinRef: nil,
          ref: "1",
          topic: "realtime:users",

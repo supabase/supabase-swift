@@ -34,7 +34,7 @@ final class RealtimeTests: XCTestCase {
 
   var server: FakeWebSocket!
   var client: FakeWebSocket!
-  var sut: RealtimeClientV2!
+  var sut: RealtimeClient!
   var testClock: TestClock<Duration>!
 
   let heartbeatInterval: TimeInterval = RealtimeClientOptions.defaultHeartbeatInterval
@@ -48,7 +48,7 @@ final class RealtimeTests: XCTestCase {
     testClock = TestClock()
     _clock = testClock
 
-    sut = RealtimeClientV2(
+    sut = RealtimeClient(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
@@ -69,7 +69,7 @@ final class RealtimeTests: XCTestCase {
   }
 
   func test_transport() async {
-    let client = RealtimeClientV2(
+    let client = RealtimeClient(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
@@ -121,7 +121,7 @@ final class RealtimeTests: XCTestCase {
 
       if msg.event == "heartbeat" {
         server?.send(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: msg.joinRef,
             ref: msg.ref,
             topic: "phoenix",
@@ -221,7 +221,7 @@ final class RealtimeTests: XCTestCase {
 
       if msg.event == "heartbeat" {
         server?.send(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: msg.joinRef,
             ref: msg.ref,
             topic: "phoenix",
@@ -325,7 +325,7 @@ final class RealtimeTests: XCTestCase {
 
       if msg.event == "heartbeat" {
         server?.send(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: msg.joinRef,
             ref: msg.ref,
             topic: "phoenix",
@@ -375,7 +375,7 @@ final class RealtimeTests: XCTestCase {
       guard let msg = event.realtimeMessage else { return }
       if msg.event == "heartbeat" {
         server?.send(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: msg.joinRef,
             ref: msg.ref,
             topic: "phoenix",
@@ -427,7 +427,7 @@ final class RealtimeTests: XCTestCase {
       guard let msg = event.realtimeMessage else { return }
       if msg.event == "heartbeat" {
         server?.send(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: msg.joinRef,
             ref: msg.ref,
             topic: "phoenix",
@@ -479,7 +479,7 @@ final class RealtimeTests: XCTestCase {
       if msg.event == "heartbeat" {
         expectation.fulfill()
         server?.send(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: msg.joinRef,
             ref: msg.ref,
             topic: "phoenix",
@@ -624,7 +624,7 @@ final class RealtimeTests: XCTestCase {
   }
 }
 
-extension RealtimeMessageV2 {
+extension RealtimeMessage {
   static let messagesSubscribed = Self(
     joinRef: nil,
     ref: "2",
@@ -644,7 +644,7 @@ extension RealtimeMessageV2 {
 }
 
 extension FakeWebSocket {
-  func send(_ message: RealtimeMessageV2) {
+  func send(_ message: RealtimeMessage) {
     try! self.send(String(decoding: JSONEncoder().encode(message), as: UTF8.self))
   }
 }
@@ -668,8 +668,8 @@ extension WebSocketEvent {
     }
   }
 
-  var realtimeMessage: RealtimeMessageV2? {
+  var realtimeMessage: RealtimeMessage? {
     guard case .text(let text) = self else { return nil }
-    return try? JSONDecoder().decode(RealtimeMessageV2.self, from: Data(text.utf8))
+    return try? JSONDecoder().decode(RealtimeMessage.self, from: Data(text.utf8))
   }
 }

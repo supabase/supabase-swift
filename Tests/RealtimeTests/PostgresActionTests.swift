@@ -10,7 +10,7 @@ import XCTest
 @testable import Realtime
 
 final class PostgresActionTests: XCTestCase {
-  private let sampleMessage = RealtimeMessageV2(
+  private let sampleMessage = RealtimeMessage(
     joinRef: nil,
     ref: nil,
     topic: "test:table",

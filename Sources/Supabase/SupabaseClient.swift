@@ -71,7 +71,7 @@ public final class SupabaseClient: Sendable {
   let _realtime: UncheckedSendable<RealtimeClient>
 
   /// Realtime client for Supabase
-  public var realtimeV2: RealtimeClientV2 {
+  public var realtime: RealtimeClient {
     mutableState.withValue {
       if $0.realtime == nil {
         $0.realtime = _initRealtimeClient()
@@ -110,7 +110,7 @@ public final class SupabaseClient: Sendable {
     var storage: SupabaseStorageClient?
     var rest: PostgrestClient?
     var functions: FunctionsClient?
-    var realtime: RealtimeClientV2?
+    var realtime: RealtimeClient?
 
     var changedAccessToken: String?
   }
@@ -240,8 +240,8 @@ public final class SupabaseClient: Sendable {
   }
 
   /// Returns all Realtime channels.
-  public var channels: [RealtimeChannelV2] {
-    Array(realtimeV2.subscriptions.values)
+  public var channels: [RealtimeChannel] {
+    Array(realtime.channels.values)
   }
 
   /// Creates a Realtime channel with Broadcast, Presence, and Postgres Changes.
@@ -251,19 +251,19 @@ public final class SupabaseClient: Sendable {
   public func channel(
     _ name: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
-  ) -> RealtimeChannelV2 {
-    realtimeV2.channel(name, options: options)
+  ) -> RealtimeChannel {
+    realtime.channel(name, options: options)
   }
 
   /// Unsubscribes and removes Realtime channel from Realtime client.
   /// - Parameter channel: The Realtime channel to remove.
-  public func removeChannel(_ channel: RealtimeChannelV2) async {
-    await realtimeV2.removeChannel(channel)
+  public func removeChannel(_ channel: RealtimeChannel) async {
+    await realtime.removeChannel(channel)
   }
 
   /// Unsubscribes and removes all Realtime channels from Realtime client.
   public func removeAllChannels() async {
-    await realtimeV2.removeAllChannels()
+    await realtime.removeAllChannels()
   }
 
   /// Handles an incoming URL received by the app.
@@ -413,10 +413,10 @@ public final class SupabaseClient: Sendable {
     }
 
     realtime.setAuth(accessToken)
-    await realtimeV2.setAuth(accessToken)
+    await realtime.setAuth(accessToken)
   }
 
-  private func _initRealtimeClient() -> RealtimeClientV2 {
+  private func _initRealtimeClient() -> RealtimeClient {
     var realtimeOptions = options.realtime
     realtimeOptions.headers.merge(with: _headers)
 
@@ -431,7 +431,7 @@ public final class SupabaseClient: Sendable {
     } else {
       reportIssue(
         """
-        You assigned a custom `accessToken` closure to the RealtimeClientV2. This might not work as you expect
+        You assigned a custom `accessToken` closure to the RealtimeClient. This might not work as you expect
         as SupabaseClient uses Auth for pulling an access token to send on the realtime channels.
 
         Please make sure you know what you're doing.
@@ -439,7 +439,7 @@ public final class SupabaseClient: Sendable {
       )
     }
 
-    return RealtimeClientV2(
+    return RealtimeClient(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
       options: realtimeOptions
     )
