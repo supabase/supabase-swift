@@ -203,6 +203,8 @@ Current modules will be maintained:
 - **Functions Improvements**:
   - Enhanced parameter handling with retry configuration
   - Better error responses and timeout support
+  - Improved FunctionRegion type with RawRepresentable and ExpressibleByStringLiteral
+  - Added support for more AWS regions
 - **PostgREST Enhancements**: Fixed missing text search methods (plfts, phfts, wfts)
 
 ### Recent Accomplishments ✨

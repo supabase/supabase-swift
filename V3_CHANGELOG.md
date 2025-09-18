@@ -109,6 +109,8 @@
 - [x] Enhanced error handling
 - [x] Improved response parsing
 - [x] Retry configuration and timeout support
+- [x] Improved FunctionRegion type with RawRepresentable and ExpressibleByStringLiteral
+- [x] Added support for more AWS regions (ap-northeast-2, ap-south-1, ap-southeast-2, ca-central-1, eu-central-1, eu-west-2, eu-west-3, sa-east-1, us-west-2)
 
 #### Logging System
 - [x] Modern logging system using `swift-log` dependency
