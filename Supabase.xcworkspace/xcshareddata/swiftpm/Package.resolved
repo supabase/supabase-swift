@@ -1,5 +1,5 @@
 {
-  "originHash" : "4cba1f451240f579fdc32dc51548f635551d2fb63bcc425e41e4489314fcb213",
+  "originHash" : "757d0953d6756a02f623a39439c00b12edbfb7e415781c4455b98909dc190365",
   "pins" : [
     {
       "identity" : "alamofire",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "1ab675fa2551729016b5f222c8c161e0cff1b366",
         "version" : "0.52.0"
+      }
+    },
+    {
+      "identity" : "combine-schedulers",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/combine-schedulers",
+      "state" : {
+        "revision" : "5928286acce13def418ec36d05a001a9641086f2",
+        "version" : "1.0.3"
       }
     },
     {
@@ -170,6 +179,15 @@
       "state" : {
         "revision" : "82645ec760917961cfa08c9c0c7104a57a0fa4b1",
         "version" : "1.3.3"
+      }
+    },
+    {
+      "identity" : "swift-dependencies",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-dependencies",
+      "state" : {
+        "revision" : "a10f9feeb214bc72b5337b6ef6d5a029360db4cc",
+        "version" : "1.9.5"
       }
     },
     {

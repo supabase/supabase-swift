@@ -115,6 +115,18 @@ Current modules will be maintained:
   - [x] Update configuration options to use swift-log
   - [ ] Update examples and documentation
 
+- [ ] **Dependency Management Modernization** (Dependencies: Core API redesign complete)
+  - [ ] **BREAKING**: Adopt swift-dependencies for dependency management
+  - [ ] Replace custom dependency injection with @Dependency property wrappers
+  - [ ] Start with easiest module first (Helpers/TestHelpers)
+  - [ ] Create comprehensive tests for dependency management
+  - [ ] Migrate Auth module dependencies
+  - [ ] Migrate PostgREST module dependencies
+  - [ ] Migrate Storage module dependencies
+  - [ ] Migrate Realtime module dependencies
+  - [ ] Migrate Functions module dependencies
+  - [ ] Update examples and documentation
+
 - [x] **Documentation & Examples** (Dependencies: All API changes complete)
   - [x] Update all code examples with v3.0.0 features
   - [x] Create migration examples
