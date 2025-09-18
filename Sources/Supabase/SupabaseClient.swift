@@ -8,7 +8,7 @@ import IssueReporting
 #endif
 
 /// Supabase Client.
-public final class SupabaseClient: SupabaseClientProtocol {
+public final class SupabaseClient: @unchecked Sendable {
   let options: SupabaseClientOptions
   let supabaseURL: URL
   let supabaseKey: String
@@ -134,52 +134,6 @@ public final class SupabaseClient: SupabaseClientProtocol {
       )
     }
 
-    /// Create a new client optimized for production environments.
-    /// - Parameters:
-    ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in your project dashboard.
-    ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in your project dashboard.
-    ///   - auth: Authentication options for the client.
-    ///   - customHeaders: Additional headers to include in requests.
-    ///   - timeoutInterval: Global timeout interval for requests.
-    ///   - logger: Optional logger for debugging.
-    public convenience init(
-      supabaseURL: URL,
-      supabaseKey: String,
-      production auth: SupabaseClientOptions.AuthOptions,
-      customHeaders: [String: String] = [:],
-      timeoutInterval: TimeInterval = 30.0,
-      logger: (any SupabaseLogger)? = nil
-    ) {
-      self.init(
-        supabaseURL: supabaseURL,
-        supabaseKey: supabaseKey,
-        options: .production(
-          auth: auth,
-          customHeaders: customHeaders,
-          timeoutInterval: timeoutInterval,
-          logger: logger
-        )
-      )
-    }
-
-    /// Create a new client optimized for development environments.
-    /// - Parameters:
-    ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in your project dashboard.
-    ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in your project dashboard.
-    ///   - auth: Authentication options for the client.
-    ///   - logger: Optional logger for debugging.
-    public convenience init(
-      supabaseURL: URL,
-      supabaseKey: String,
-      development auth: SupabaseClientOptions.AuthOptions,
-      logger: (any SupabaseLogger)? = nil
-    ) {
-      self.init(
-        supabaseURL: supabaseURL,
-        supabaseKey: supabaseKey,
-        options: .development(auth: auth, logger: logger)
-      )
-    }
   #endif
 
   /// Create a new client.

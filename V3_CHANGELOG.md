@@ -57,8 +57,8 @@
 
 #### Core Client
 - [x] Simplified and modernized API surface (deprecated code removed)
-- [x] Improved configuration system with better defaults and convenience initializers
-- [x] Enhanced dependency injection capabilities with protocol-based architecture
+- [x] Improved configuration system with better defaults
+- [x] Enhanced dependency injection capabilities
 - [x] Better debugging and logging options with global timeout configuration
 
 #### Authentication
@@ -123,7 +123,7 @@
 ### 📚 Documentation
 - [x] Complete API documentation overhaul
 - [x] New getting started guides with v3.0.0 features
-- [x] Updated code examples for all features with new convenience initializers
+- [x] Updated code examples for all features
 - [x] Comprehensive migration guide
 - [x] Enhanced MFA examples with AAL capabilities
 - [ ] Best practices documentation

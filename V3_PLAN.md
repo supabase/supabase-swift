@@ -64,9 +64,8 @@ Current modules will be maintained:
 - [x] **SupabaseClient Redesign** (Dependencies: Alamofire integration, cleanup complete)
   - [x] Simplify initialization options (leveraging Alamofire)
   - [x] Improve configuration structure with better defaults
-  - [x] Better dependency injection with SupabaseClientProtocol and factory pattern
+  - [x] Better dependency injection capabilities
   - [x] Update networking to use Alamofire throughout
-  - [x] Add convenience initializers (.production(), .development())
   - [x] Enhanced global timeout configuration
   - [x] Better session management integration
 
@@ -112,7 +111,7 @@ Current modules will be maintained:
 
 - [x] **Documentation & Examples** (Dependencies: All API changes complete)
   - [x] Update all code examples with v3.0.0 features
-  - [x] Create migration examples and showcase new convenience initializers
+  - [x] Create migration examples
   - [x] Update README with v3.0.0 features and migration notice
   - [x] Enhance MFA examples with AAL capabilities
 
@@ -158,9 +157,6 @@ Current modules will be maintained:
 
 ### Phase 4-5 (Complete) ✅
 - **SupabaseClient Redesign**:
-  - New protocol-based architecture with `SupabaseClientProtocol`
-  - Factory pattern for dependency injection (`SupabaseClientFactory`)
-  - Convenience initializers (`.production()`, `.development()`)
   - Enhanced configuration with better defaults and global timeout
   - Complete Alamofire integration throughout networking layer
 - **Authentication Improvements**:

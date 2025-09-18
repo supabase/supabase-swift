@@ -64,8 +64,7 @@ struct ExamplesApp: App {
   }
 }
 
-// v3.0.0: Using convenience initializer for development environment
-let supabase = SupabaseClient.development(
+let supabase = SupabaseClient(
   supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
   supabaseKey: SupabaseConfig["SUPABASE_ANON_KEY"]!,
   options: .init(
@@ -75,18 +74,6 @@ let supabase = SupabaseClient.development(
     )
   )
 )
-
-// Alternative: Traditional initialization (still supported)
-// let supabase = SupabaseClient(
-//   supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
-//   supabaseKey: SupabaseConfig["SUPABASE_ANON_KEY"]!,
-//   options: .init(
-//     auth: .init(redirectToURL: Constants.redirectToURL),
-//     global: .init(
-//       logger: ConsoleLogger()
-//     )
-//   )
-// )
 
 struct ConsoleLogger: SupabaseLogger {
   func log(message: SupabaseLogMessage) {

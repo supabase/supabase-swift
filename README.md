@@ -88,21 +88,6 @@ let client = SupabaseClient(
 )
 ```
 
-### v3.0.0 Convenience Initializers
-
-```swift
-// Production environment with optimized settings
-let productionClient = SupabaseClient.production(
-    supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
-    supabaseKey: "public-anon-key"
-)
-
-// Development environment with debug settings
-let developmentClient = SupabaseClient.development(
-    supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
-    supabaseKey: "public-anon-key"
-)
-```
 
 ## Support Policy
 

@@ -99,21 +99,17 @@ public struct SupabaseClientOptions: Sendable {
     /// Request timeout interval in seconds. Defaults to 60 seconds.
     public let timeoutInterval: TimeInterval
 
-    /// Optional factory for creating sub-clients. Useful for dependency injection and testing.
-    public let clientFactory: (any SupabaseClientFactory)?
 
     public init(
       headers: [String: String] = [:],
       session: Alamofire.Session = .default,
       logger: (any SupabaseLogger)? = nil,
-      timeoutInterval: TimeInterval = 60.0,
-      clientFactory: (any SupabaseClientFactory)? = nil
+      timeoutInterval: TimeInterval = 60.0
     ) {
       self.headers = headers
       self.session = session
       self.logger = logger
       self.timeoutInterval = timeoutInterval
-      self.clientFactory = clientFactory
     }
   }
 
@@ -213,49 +209,3 @@ extension SupabaseClientOptions.AuthOptions {
   #endif
 }
 
-// MARK: - Additional Convenience Initializers
-extension SupabaseClientOptions {
-  /// Creates options optimized for production environments with enhanced security and performance.
-  public static func production(
-    auth: AuthOptions,
-    customHeaders: [String: String] = [:],
-    timeoutInterval: TimeInterval = 30.0,
-    logger: (any SupabaseLogger)? = nil
-  ) -> SupabaseClientOptions {
-    SupabaseClientOptions(
-      db: DatabaseOptions(),
-      auth: auth,
-      global: GlobalOptions(
-        headers: customHeaders,
-        session: .default,
-        logger: logger,
-        timeoutInterval: timeoutInterval
-      ),
-      functions: FunctionsOptions(),
-      realtime: RealtimeClientOptions(timeoutInterval: timeoutInterval),
-      storage: StorageOptions(useNewHostname: true)
-    )
-  }
-
-  /// Creates options optimized for development environments with debug logging.
-  public static func development(
-    auth: AuthOptions,
-    logger: (any SupabaseLogger)? = nil
-  ) -> SupabaseClientOptions {
-    SupabaseClientOptions(
-      db: DatabaseOptions(),
-      auth: auth,
-      global: GlobalOptions(
-        headers: ["X-Environment": "development"],
-        logger: logger,
-        timeoutInterval: 60.0
-      ),
-      functions: FunctionsOptions(),
-      realtime: RealtimeClientOptions(
-        timeoutInterval: 60.0,
-        logLevel: .info
-      ),
-      storage: StorageOptions()
-    )
-  }
-}
