@@ -3,11 +3,11 @@ import Foundation
 
 package struct SupabaseNetworkingConfig: Sendable {
   package let session: Alamofire.Session
-  package let logger: (any SupabaseLogger)?
+  package let logger: SupabaseLogger?
   
   package init(
     session: Alamofire.Session = .default,
-    logger: (any SupabaseLogger)? = nil
+    logger: SupabaseLogger? = nil
   ) {
     self.session = session
     self.logger = logger

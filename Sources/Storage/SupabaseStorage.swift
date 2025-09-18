@@ -7,7 +7,7 @@ public struct StorageClientConfiguration: Sendable {
   public let encoder: JSONEncoder
   public let decoder: JSONDecoder
   public let session: Alamofire.Session
-  public let logger: (any SupabaseLogger)?
+  public let logger: SupabaseLogger?
   public let useNewHostname: Bool
   public let uploadRetryAttempts: Int
   public let uploadTimeoutInterval: TimeInterval
@@ -18,7 +18,7 @@ public struct StorageClientConfiguration: Sendable {
     encoder: JSONEncoder = JSONEncoder(),
     decoder: JSONDecoder = JSONDecoder(),
     session: Alamofire.Session = .default,
-    logger: (any SupabaseLogger)? = nil,
+    logger: SupabaseLogger? = nil,
     useNewHostname: Bool = false,
     uploadRetryAttempts: Int = 3,
     uploadTimeoutInterval: TimeInterval = 300.0

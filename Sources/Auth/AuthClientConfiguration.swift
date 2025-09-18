@@ -37,7 +37,7 @@ extension AuthClient {
     public let localStorage: any AuthLocalStorage
 
     /// Custom SupabaseLogger implementation used to inspecting log messages from the Auth library.
-    public let logger: (any SupabaseLogger)?
+    public let logger: SupabaseLogger?
     public let encoder: JSONEncoder
     public let decoder: JSONDecoder
 
@@ -68,7 +68,7 @@ extension AuthClient {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
-      logger: (any SupabaseLogger)? = nil,
+      logger: SupabaseLogger? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       session: Alamofire.Session = .default,
@@ -111,7 +111,7 @@ extension AuthClient {
     redirectToURL: URL? = nil,
     storageKey: String? = nil,
     localStorage: any AuthLocalStorage,
-    logger: (any SupabaseLogger)? = nil,
+      logger: SupabaseLogger? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     session: Alamofire.Session = .default,

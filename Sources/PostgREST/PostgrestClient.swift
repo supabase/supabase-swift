@@ -18,7 +18,7 @@ public final class PostgrestClient: Sendable {
     public var encoder: JSONEncoder
     public var decoder: JSONDecoder
 
-    let logger: (any SupabaseLogger)?
+    let logger: SupabaseLogger?
 
     /// Creates a PostgREST client.
     /// - Parameters:
@@ -33,7 +33,7 @@ public final class PostgrestClient: Sendable {
       url: URL,
       schema: String? = nil,
       headers: [String: String] = [:],
-      logger: (any SupabaseLogger)? = nil,
+      logger: SupabaseLogger? = nil,
       session: Alamofire.Session = .default,
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
@@ -73,7 +73,7 @@ public final class PostgrestClient: Sendable {
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
-    logger: (any SupabaseLogger)? = nil,
+    logger: SupabaseLogger? = nil,
     session: Alamofire.Session = .default,
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder

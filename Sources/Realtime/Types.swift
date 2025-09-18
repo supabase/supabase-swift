@@ -26,7 +26,7 @@ public struct RealtimeClientOptions: Sendable {
   var logLevel: LogLevel?
   public var session: Alamofire.Session?
   package var accessToken: (@Sendable () async throws -> String?)?
-  package var logger: (any SupabaseLogger)?
+  package var logger: SupabaseLogger?
 
   public static let defaultHeartbeatInterval: TimeInterval = 25
   public static let defaultReconnectDelay: TimeInterval = 7
@@ -46,7 +46,7 @@ public struct RealtimeClientOptions: Sendable {
     logLevel: LogLevel? = nil,
     session: Alamofire.Session? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
-    logger: (any SupabaseLogger)? = nil
+    logger: SupabaseLogger? = nil
   ) {
     self.headers = HTTPHeaders(headers)
     self.heartbeatInterval = heartbeatInterval

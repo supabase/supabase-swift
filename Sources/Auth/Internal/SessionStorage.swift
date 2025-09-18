@@ -26,7 +26,7 @@ extension SessionStorage {
       Dependencies[clientID].configuration.localStorage
     }
 
-    var logger: (any SupabaseLogger)? {
+    var logger: SupabaseLogger? {
       Dependencies[clientID].configuration.logger
     }
 

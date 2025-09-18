@@ -94,7 +94,7 @@ public struct SupabaseClientOptions: Sendable {
     public let session: Alamofire.Session
 
     /// The logger to use across all Supabase sub-packages.
-    public let logger: (any SupabaseLogger)?
+    public let logger: SupabaseLogger?
 
     /// Request timeout interval in seconds. Defaults to 60 seconds.
     public let timeoutInterval: TimeInterval
@@ -103,7 +103,7 @@ public struct SupabaseClientOptions: Sendable {
     public init(
       headers: [String: String] = [:],
       session: Alamofire.Session = .default,
-      logger: (any SupabaseLogger)? = nil,
+      logger: SupabaseLogger? = nil,
       timeoutInterval: TimeInterval = 60.0
     ) {
       self.headers = headers

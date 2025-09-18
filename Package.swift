@@ -26,6 +26,7 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.9.0"),
     .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0"..<"4.0.0"),
+    .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
@@ -40,6 +41,7 @@ let package = Package(
         .product(name: "Alamofire", package: "Alamofire"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Clocks", package: "swift-clocks"),
+        .product(name: "Logging", package: "swift-log"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
       ]
     ),
@@ -55,6 +57,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Crypto", package: "swift-crypto"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),

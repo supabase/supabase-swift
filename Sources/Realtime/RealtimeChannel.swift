@@ -27,7 +27,7 @@ public struct RealtimeChannelConfig: Sendable {
 protocol RealtimeChannelProtocol: AnyObject, Sendable {
   @MainActor var config: RealtimeChannelConfig { get }
   var topic: String { get }
-  var logger: (any SupabaseLogger)? { get }
+  var logger: SupabaseLogger? { get }
 
   var socket: any RealtimeClientProtocol { get }
 }
@@ -46,7 +46,7 @@ public final class RealtimeChannel: Sendable, RealtimeChannelProtocol {
 
   @MainActor var config: RealtimeChannelConfig
 
-  let logger: (any SupabaseLogger)?
+  let logger: SupabaseLogger?
   let socket: any RealtimeClientProtocol
 
   @MainActor var joinRef: String? { mutableState.joinRef }
@@ -79,7 +79,7 @@ public final class RealtimeChannel: Sendable, RealtimeChannelProtocol {
     topic: String,
     config: RealtimeChannelConfig,
     socket: any RealtimeClientProtocol,
-    logger: (any SupabaseLogger)?
+    logger: SupabaseLogger?
   ) {
     self.topic = topic
     self.config = config

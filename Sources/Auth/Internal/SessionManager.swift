@@ -28,7 +28,7 @@ private actor LiveSessionManager {
   private var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
   private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
   private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
-  private var logger: (any SupabaseLogger)? { Dependencies[clientID].logger }
+  private var logger: SupabaseLogger? { Dependencies[clientID].logger }
   private var api: APIClient { Dependencies[clientID].api }
 
   private var inFlightRefreshTask: Task<Session, any Error>?
@@ -57,43 +57,36 @@ private actor LiveSessionManager {
   }
 
   func refreshSession(_ refreshToken: String) async throws -> Session {
-    try await SupabaseLoggerTaskLocal.$additionalContext.withValue(
-      merging: [
-        "refresh_id": .string(UUID().uuidString),
-        "refresh_token": .string(refreshToken),
-      ]
-    ) {
-      try await trace(using: logger) {
-        if let inFlightRefreshTask {
-          logger?.debug("Refresh already in flight")
-          return try await inFlightRefreshTask.value
-        }
-
-        inFlightRefreshTask = Task {
-          logger?.debug("Refresh task started")
-
-          defer {
-            inFlightRefreshTask = nil
-            logger?.debug("Refresh task ended")
-          }
-
-          let session = try await api.execute(
-            configuration.url.appendingPathComponent("token"),
-            method: .post,
-            query: ["grant_type": "refresh_token"],
-            body: UserCredentials(refreshToken: refreshToken)
-          )
-          .serializingDecodable(Session.self, decoder: configuration.decoder)
-          .value
-
-          update(session)
-          eventEmitter.emit(.tokenRefreshed, session: session)
-
-          return session
-        }
-
-        return try await inFlightRefreshTask!.value
+    try await trace(using: logger) {
+      if let inFlightRefreshTask {
+        logger?.debug("Refresh already in flight")
+        return try await inFlightRefreshTask.value
       }
+
+      inFlightRefreshTask = Task {
+        logger?.debug("Refresh task started")
+
+        defer {
+          inFlightRefreshTask = nil
+          logger?.debug("Refresh task ended")
+        }
+
+        let session = try await api.execute(
+          configuration.url.appendingPathComponent("token"),
+          method: .post,
+          query: ["grant_type": "refresh_token"],
+          body: UserCredentials(refreshToken: refreshToken)
+        )
+        .serializingDecodable(Session.self, decoder: configuration.decoder)
+        .value
+
+        update(session)
+        eventEmitter.emit(.tokenRefreshed, session: session)
+
+        return session
+      }
+
+      return try await inFlightRefreshTask!.value
     }
   }
 

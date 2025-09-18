@@ -1,6 +1,7 @@
 import Alamofire
 import ConcurrencyExtras
 import Foundation
+import Logging
 
 #if canImport(AuthenticationServices)
   import AuthenticationServices
@@ -20,16 +21,7 @@ import Foundation
 
 typealias AuthClientID = Int
 
-struct AuthClientLoggerDecorator: SupabaseLogger {
-  let clientID: AuthClientID
-  let decoratee: any SupabaseLogger
-
-  func log(message: SupabaseLogMessage) {
-    var message = message
-    message.additionalContext["client_id"] = .integer(clientID)
-    decoratee.log(message: message)
-  }
-}
+// Note: AuthClientLoggerDecorator removed for now - will be reimplemented in a future update
 
 public actor AuthClient {
   private static let globalClientID = LockIsolated(0)
@@ -48,7 +40,7 @@ public actor AuthClient {
   nonisolated private var eventEmitter: AuthStateChangeEventEmitter {
     Dependencies[clientID].eventEmitter
   }
-  nonisolated private var logger: (any SupabaseLogger)? {
+  nonisolated private var logger: SupabaseLogger? {
     Dependencies[clientID].configuration.logger
   }
   nonisolated private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
@@ -119,9 +111,7 @@ public actor AuthClient {
       codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
       sessionManager: .live(clientID: clientID),
-      logger: configuration.logger.map {
-        AuthClientLoggerDecorator(clientID: clientID, decoratee: $0)
-      }
+      logger: configuration.logger
     )
 
     Task { @MainActor in observeAppLifecycleChanges() }

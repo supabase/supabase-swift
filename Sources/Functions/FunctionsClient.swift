@@ -48,7 +48,7 @@ public final class FunctionsClient: Sendable {
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
-    logger: (any SupabaseLogger)? = nil,
+    logger: SupabaseLogger? = nil,
     session: Alamofire.Session = .default
   ) {
     self.init(
@@ -89,7 +89,7 @@ public final class FunctionsClient: Sendable {
     url: URL,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
-    logger: (any SupabaseLogger)? = nil,
+    logger: SupabaseLogger? = nil,
     session: Alamofire.Session = .default
   ) {
     self.init(url: url, headers: headers, region: region?.rawValue, session: session)
