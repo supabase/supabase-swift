@@ -234,7 +234,7 @@ public final class FunctionsClient: Sendable {
     var request = URLRequest(
       url: url.appendingPathComponent(functionName).appendingQueryItems(options.query)
     )
-    request.method = FunctionInvokeOptions.httpMethod(options.method) ?? .post
+    request.method = options.method
     request.headers = headers
     request.httpBody = options.body
     request.timeoutInterval = FunctionsClient.requestIdleTimeout

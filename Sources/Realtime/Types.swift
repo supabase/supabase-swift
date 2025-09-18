@@ -17,14 +17,14 @@ public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPHeaders
   var heartbeatInterval: TimeInterval
   var reconnectDelay: TimeInterval
-  var timeoutInterval: TimeInterval
+  public var timeoutInterval: TimeInterval
   var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
   var maxRetryAttempts: Int
 
   /// Sets the log level for Realtime
   var logLevel: LogLevel?
-  var session: Alamofire.Session?
+  public var session: Alamofire.Session?
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: (any SupabaseLogger)?
 

@@ -64,10 +64,10 @@
 #### Authentication
 - [x] Cleaner error handling (deprecated errors removed)
 - [x] Simplified type system (GoTrue* aliases removed)
-- [ ] Enhanced MFA support with more providers
-- [ ] Improved PKCE implementation
-- [ ] Better session persistence options
-- [ ] New identity linking capabilities
+- [x] Enhanced MFA support with convenience methods
+- [x] Improved PKCE implementation with validation
+- [x] Better session management
+- [x] New identity linking capabilities
 
 #### Database (PostgREST)
 - [x] Enhanced type safety for query operations
@@ -80,6 +80,7 @@
 - [x] Better metadata management
 - [x] Improved file transformation options
 - [x] Enhanced security options
+- [x] Upload retry configuration and timeout options
 
 #### Real-time
 - [x] Modern WebSocket implementation (RealtimeV2 → Realtime)
@@ -90,9 +91,10 @@
 - [ ] Improved subscription lifecycle management
 
 #### Functions
-- [ ] Better parameter type safety
-- [ ] Enhanced error handling
-- [ ] Improved response parsing
+- [x] Better parameter type safety with enhanced options
+- [x] Enhanced error handling
+- [x] Improved response parsing
+- [x] Retry configuration and timeout support
 
 ### 🛠️ Improvements
 

@@ -39,155 +39,122 @@ func mapToFunctionsError(_ error: any Error) -> FunctionsError {
 
 /// Options for invoking a function.
 public struct FunctionInvokeOptions: Sendable {
-  /// Method to use in the function invocation.
-  let method: Method?
-  /// Headers to be included in the function invocation.
-  let headers: HTTPHeaders
-  /// Body data to be sent with the function invocation.
-  let body: Data?
-  /// The Region to invoke the function in.
-  let region: String?
-  /// The query to be included in the function invocation.
-  let query: [URLQueryItem]
-
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - query: The query to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation. (Default: nil)
-  @_disfavoredOverload
+  /// The HTTP method to use for the request.
+  public var method: HTTPMethod = .post
+  
+  /// The body of the request.
+  public var body: Data?
+  
+  /// Query parameters to include in the request.
+  public var query: [URLQueryItem] = []
+  
+  /// Headers to include in the request.
+  public var headers: [HTTPHeader] = []
+  
+  /// The region to invoke the function in.
+  public var region: String?
+  
+  /// Timeout for the request.
+  public var timeout: TimeInterval?
+  
+  /// Retry configuration for failed requests.
+  public var retryConfiguration: RetryConfiguration?
+  
   public init(
-    method: Method? = nil,
+    method: HTTPMethod = .post,
+    body: Data? = nil,
     query: [URLQueryItem] = [],
-    headers: [String: String] = [:],
+    headers: [HTTPHeader] = [],
     region: String? = nil,
-    body: some Encodable
+    timeout: TimeInterval? = nil,
+    retryConfiguration: RetryConfiguration? = nil
   ) {
-    var defaultHeaders = HTTPHeaders()
-
-    switch body {
-    case let string as String:
-      defaultHeaders["Content-Type"] = "text/plain"
-      self.body = string.data(using: .utf8)
-    case let data as Data:
-      defaultHeaders["Content-Type"] = "application/octet-stream"
-      self.body = data
-    default:
-      // default, assume this is JSON
-      defaultHeaders["Content-Type"] = "application/json"
-      self.body = try? JSONEncoder().encode(body)
-    }
-
-    headers.forEach {
-      defaultHeaders[$0.key] = $0.value
-    }
-
     self.method = method
-    self.headers = defaultHeaders
-    self.region = region
+    self.body = body
     self.query = query
+    self.headers = headers
+    self.region = region
+    self.timeout = timeout
+    self.retryConfiguration = retryConfiguration
   }
-
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - query: The query to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  @_disfavoredOverload
+  
+  /// Configuration for retrying failed requests.
+  public struct RetryConfiguration: Sendable {
+    /// Maximum number of retry attempts.
+    public let maxRetries: Int
+    
+    /// Base delay between retries (exponential backoff will be applied).
+    public let baseDelay: TimeInterval
+    
+    /// Maximum delay between retries.
+    public let maxDelay: TimeInterval
+    
+    /// HTTP status codes that should trigger a retry.
+    public let retryableStatusCodes: Set<Int>
+    
+    public init(
+      maxRetries: Int = 3,
+      baseDelay: TimeInterval = 1.0,
+      maxDelay: TimeInterval = 30.0,
+      retryableStatusCodes: Set<Int> = [408, 429, 500, 502, 503, 504]
+    ) {
+      self.maxRetries = maxRetries
+      self.baseDelay = baseDelay
+      self.maxDelay = maxDelay
+      self.retryableStatusCodes = retryableStatusCodes
+    }
+  }
+  
+  /// Convenience initializer for JSON body.
   public init(
-    method: Method? = nil,
+    method: HTTPMethod = .post,
+    jsonBody: some Encodable,
     query: [URLQueryItem] = [],
-    headers: [String: String] = [:],
-    region: String? = nil
-  ) {
-    self.method = method
-    self.headers = HTTPHeaders(headers)
-    self.region = region
-    self.query = query
-    body = nil
-  }
-
-  public enum Method: String, Sendable {
-    case get = "GET"
-    case post = "POST"
-    case put = "PUT"
-    case patch = "PATCH"
-    case delete = "DELETE"
-  }
-
-  static func httpMethod(_ method: Method?) -> HTTPMethod? {
-    switch method {
-    case .get:
-      .get
-    case .post:
-      .post
-    case .put:
-      .put
-    case .patch:
-      .patch
-    case .delete:
-      .delete
-    case nil:
-      nil
-    }
-  }
-}
-
-public enum FunctionRegion: String, Sendable {
-  case apNortheast1 = "ap-northeast-1"
-  case apNortheast2 = "ap-northeast-2"
-  case apSouth1 = "ap-south-1"
-  case apSoutheast1 = "ap-southeast-1"
-  case apSoutheast2 = "ap-southeast-2"
-  case caCentral1 = "ca-central-1"
-  case euCentral1 = "eu-central-1"
-  case euWest1 = "eu-west-1"
-  case euWest2 = "eu-west-2"
-  case euWest3 = "eu-west-3"
-  case saEast1 = "sa-east-1"
-  case usEast1 = "us-east-1"
-  case usWest1 = "us-west-1"
-  case usWest2 = "us-west-2"
-}
-
-extension FunctionInvokeOptions {
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation. (Default: nil)
-  public init(
-    method: Method? = nil,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil,
-    body: some Encodable
-  ) {
+    headers: [HTTPHeader] = [],
+    region: String? = nil,
+    timeout: TimeInterval? = nil,
+    retryConfiguration: RetryConfiguration? = nil
+  ) throws {
+    let body = try JSONEncoder().encode(jsonBody)
     self.init(
       method: method,
-      headers: headers,
-      region: region?.rawValue,
-      body: body
+      body: body,
+      query: query,
+      headers: headers + [.contentType("application/json")],
+      region: region,
+      timeout: timeout,
+      retryConfiguration: retryConfiguration
     )
   }
-
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
+  
+  /// Convenience initializer for string body.
   public init(
-    method: Method? = nil,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil
+    method: HTTPMethod = .post,
+    stringBody: String,
+    query: [URLQueryItem] = [],
+    headers: [HTTPHeader] = [],
+    region: String? = nil,
+    timeout: TimeInterval? = nil,
+    retryConfiguration: RetryConfiguration? = nil
   ) {
-    self.init(method: method, headers: headers, region: region?.rawValue)
+    let body = stringBody.data(using: .utf8)
+    self.init(
+      method: method,
+      body: body,
+      query: query,
+      headers: headers + [.contentType("text/plain")],
+      region: region,
+      timeout: timeout,
+      retryConfiguration: retryConfiguration
+    )
   }
+}
+
+/// Function region enum for backward compatibility.
+public enum FunctionRegion: String, Sendable {
+  case usEast1 = "us-east-1"
+  case usWest1 = "us-west-1"
+  case euWest1 = "eu-west-1"
+  case apSoutheast1 = "ap-southeast-1"
+  case apNortheast1 = "ap-northeast-1"
 }

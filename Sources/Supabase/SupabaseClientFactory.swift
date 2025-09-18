@@ -20,7 +20,9 @@ public protocol SupabaseClientFactory: Sendable {
   func createAuthClient(
     url: URL,
     headers: [String: String],
-    options: SupabaseClientOptions.AuthOptions
+    options: SupabaseClientOptions.AuthOptions,
+    session: Alamofire.Session,
+    logger: (any SupabaseLogger)?
   ) -> AuthClient
 
   /// Creates a PostgreST client.
@@ -64,20 +66,24 @@ public struct DefaultSupabaseClientFactory: SupabaseClientFactory {
   public func createAuthClient(
     url: URL,
     headers: [String: String],
-    options: SupabaseClientOptions.AuthOptions
+    options: SupabaseClientOptions.AuthOptions,
+    session: Alamofire.Session,
+    logger: (any SupabaseLogger)?
   ) -> AuthClient {
     AuthClient(
-      url: url,
-      headers: headers,
-      flowType: options.flowType,
-      redirectToURL: options.redirectToURL,
-      storageKey: options.storageKey,
-      localStorage: options.storage,
-      logger: nil, // Will be set by SupabaseClient
-      encoder: options.encoder,
-      decoder: options.decoder,
-      session: nil, // Will be set by SupabaseClient
-      autoRefreshToken: options.autoRefreshToken
+      configuration: AuthClient.Configuration(
+        url: url,
+        headers: headers,
+        flowType: options.flowType,
+        redirectToURL: options.redirectToURL,
+        storageKey: options.storageKey,
+        localStorage: options.storage,
+        logger: logger,
+        encoder: options.encoder,
+        decoder: options.decoder,
+        session: session,
+        autoRefreshToken: options.autoRefreshToken
+      )
     )
   }
 

@@ -9,6 +9,8 @@ public struct StorageClientConfiguration: Sendable {
   public let session: Alamofire.Session
   public let logger: (any SupabaseLogger)?
   public let useNewHostname: Bool
+  public let uploadRetryAttempts: Int
+  public let uploadTimeoutInterval: TimeInterval
 
   public init(
     url: URL,
@@ -17,7 +19,9 @@ public struct StorageClientConfiguration: Sendable {
     decoder: JSONDecoder = JSONDecoder(),
     session: Alamofire.Session = .default,
     logger: (any SupabaseLogger)? = nil,
-    useNewHostname: Bool = false
+    useNewHostname: Bool = false,
+    uploadRetryAttempts: Int = 3,
+    uploadTimeoutInterval: TimeInterval = 300.0
   ) {
     self.url = url
     self.headers = headers
@@ -26,6 +30,8 @@ public struct StorageClientConfiguration: Sendable {
     self.session = session
     self.logger = logger
     self.useNewHostname = useNewHostname
+    self.uploadRetryAttempts = uploadRetryAttempts
+    self.uploadTimeoutInterval = uploadTimeoutInterval
   }
 }
 

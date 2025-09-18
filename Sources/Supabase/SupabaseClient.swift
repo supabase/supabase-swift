@@ -133,6 +133,53 @@ public final class SupabaseClient: SupabaseClientProtocol {
         options: SupabaseClientOptions()
       )
     }
+
+    /// Create a new client optimized for production environments.
+    /// - Parameters:
+    ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in your project dashboard.
+    ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in your project dashboard.
+    ///   - auth: Authentication options for the client.
+    ///   - customHeaders: Additional headers to include in requests.
+    ///   - timeoutInterval: Global timeout interval for requests.
+    ///   - logger: Optional logger for debugging.
+    public convenience init(
+      supabaseURL: URL,
+      supabaseKey: String,
+      production auth: SupabaseClientOptions.AuthOptions,
+      customHeaders: [String: String] = [:],
+      timeoutInterval: TimeInterval = 30.0,
+      logger: (any SupabaseLogger)? = nil
+    ) {
+      self.init(
+        supabaseURL: supabaseURL,
+        supabaseKey: supabaseKey,
+        options: .production(
+          auth: auth,
+          customHeaders: customHeaders,
+          timeoutInterval: timeoutInterval,
+          logger: logger
+        )
+      )
+    }
+
+    /// Create a new client optimized for development environments.
+    /// - Parameters:
+    ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in your project dashboard.
+    ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in your project dashboard.
+    ///   - auth: Authentication options for the client.
+    ///   - logger: Optional logger for debugging.
+    public convenience init(
+      supabaseURL: URL,
+      supabaseKey: String,
+      development auth: SupabaseClientOptions.AuthOptions,
+      logger: (any SupabaseLogger)? = nil
+    ) {
+      self.init(
+        supabaseURL: supabaseURL,
+        supabaseKey: supabaseKey,
+        options: .development(auth: auth, logger: logger)
+      )
+    }
   #endif
 
   /// Create a new client.
@@ -183,9 +230,8 @@ public final class SupabaseClient: SupabaseClientProtocol {
 
     _realtime = UncheckedSendable(
       RealtimeClient(
-        supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
-        headers: _headers.dictionary,
-        params: _headers.dictionary
+        url: supabaseURL.appendingPathComponent("/realtime/v1"),
+        options: RealtimeClientOptions()
       )
     )
 
@@ -412,7 +458,6 @@ public final class SupabaseClient: SupabaseClientProtocol {
       return nil
     }
 
-    realtime.setAuth(accessToken)
     await realtime.setAuth(accessToken)
   }
 

@@ -32,7 +32,7 @@ struct AuthClientLoggerDecorator: SupabaseLogger {
 }
 
 public actor AuthClient {
-  static var globalClientID = 0
+  private static let globalClientID = LockIsolated(0)
   nonisolated let clientID: AuthClientID
 
   nonisolated private var api: APIClient { Dependencies[clientID].api }
@@ -94,8 +94,11 @@ public actor AuthClient {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    AuthClient.globalClientID += 1
-    clientID = AuthClient.globalClientID
+    clientID = AuthClient.globalClientID.withValue { currentID in
+      let newID = currentID + 1
+      AuthClient.globalClientID.setValue(newID)
+      return newID
+    }
 
     var configuration = configuration
     var headers = HTTPHeaders(configuration.headers)
@@ -1177,20 +1180,23 @@ public actor AuthClient {
     var credentials = credentials
     credentials.linkIdentity = true
 
-    let session = try await api.execute(
-      .init(
-        url: configuration.url.appendingPathComponent("token"),
+    let currentSession = try await session
+    let newSession = try await wrappingError(or: mapToAuthError) {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("token"),
         method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "id_token")],
-        headers: [.authorization: "Bearer \(session.accessToken)"],
-        body: configuration.encoder.encode(credentials)
+        headers: ["Authorization": "Bearer \(currentSession.accessToken)"],
+        query: ["grant_type": "id_token"],
+        body: credentials
       )
-    ).decoded(as: Session.self, decoder: configuration.decoder)
+      .serializingDecodable(Session.self, decoder: self.configuration.decoder)
+      .value
+    }
 
-    await sessionManager.update(session)
-    eventEmitter.emit(.userUpdated, session: session)
+    await sessionManager.update(newSession)
+    eventEmitter.emit(.userUpdated, session: newSession)
 
-    return session
+    return newSession
   }
 
   /// Links an OAuth identity to an existing user.
