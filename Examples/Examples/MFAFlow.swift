@@ -180,7 +180,7 @@ struct MFAVerifiedView: View {
 
   var body: some View {
     List {
-      // v3.0.0: Show AAL information using new convenience methods
+      // Show AAL information
       if let aalInfo = aalInfo {
         Section("Authentication Level") {
           LabeledContent("Current Level", value: aalInfo.currentLevel?.rawValue ?? "Unknown")
@@ -213,7 +213,6 @@ struct MFAVerifiedView: View {
     .navigationTitle("MFA Status")
     .task {
       do {
-        // v3.0.0: Use new convenience method to get AAL information
         aalInfo = try await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
       } catch {
         self.error = error

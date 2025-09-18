@@ -64,7 +64,7 @@
 #### Authentication
 - [x] Cleaner error handling (deprecated errors removed)
 - [x] Simplified type system (GoTrue* aliases removed)
-- [x] Enhanced MFA support with convenience methods
+- [x] Enhanced MFA support
 - [x] Improved PKCE implementation with validation
 - [x] Better session management
 - [x] New identity linking capabilities

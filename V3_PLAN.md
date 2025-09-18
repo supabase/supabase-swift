@@ -74,7 +74,7 @@ Current modules will be maintained:
   - [x] Streamline auth flow APIs (deprecated code removed)
   - [x] Fix compilation issues from deprecated code removal
   - [x] Improve session management
-  - [x] Better MFA support with enhanced convenience methods
+  - [x] Better MFA support
   - [x] Enhanced PKCE implementation with validation
   - [x] Update networking calls to use Alamofire
 
@@ -114,7 +114,7 @@ Current modules will be maintained:
   - [x] Update all code examples with v3.0.0 features
   - [x] Create migration examples and showcase new convenience initializers
   - [x] Update README with v3.0.0 features and migration notice
-  - [x] Enhance MFA examples with new AAL capabilities
+  - [x] Enhance MFA examples with AAL capabilities
 
 ### Phase 7: Testing & Quality Assurance
 - [ ] **Test Suite Updates** (Dependencies: All feature development complete)
@@ -164,7 +164,7 @@ Current modules will be maintained:
   - Enhanced configuration with better defaults and global timeout
   - Complete Alamofire integration throughout networking layer
 - **Authentication Improvements**:
-  - Enhanced MFA support with convenience methods
+  - Enhanced MFA support
   - Improved PKCE implementation with validation
   - Better session management
 - **Storage Enhancements**:
