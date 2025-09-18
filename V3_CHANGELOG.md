@@ -51,7 +51,7 @@
 - **BREAKING**: Drop SupabaseLogger in favor of `swift-log` dependency
 
 #### Dependency Management
-- **BREAKING**: Adopt swift-dependencies for modern dependency management
+- [x] **BREAKING**: Adopt swift-dependencies for modern dependency management
 
 ### ✨ New Features
 
@@ -108,10 +108,10 @@
 - [x] Better integration with Swift ecosystem logging tools
 
 #### Dependency Management
-- [ ] Modern dependency management using swift-dependencies
-- [ ] Replace custom dependency injection with @Dependency property wrappers
-- [ ] Improved testability with controllable dependencies
-- [ ] Better separation of concerns and modularity
+- [x] Modern dependency management using swift-dependencies
+- [x] Replace custom dependency injection with @Dependency property wrappers
+- [x] Improved testability with controllable dependencies
+- [x] Better separation of concerns and modularity
 
 ### 🛠️ Improvements
 

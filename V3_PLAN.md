@@ -116,10 +116,10 @@ Current modules will be maintained:
   - [ ] Update examples and documentation
 
 - [ ] **Dependency Management Modernization** (Dependencies: Core API redesign complete)
-  - [ ] **BREAKING**: Adopt swift-dependencies for dependency management
-  - [ ] Replace custom dependency injection with @Dependency property wrappers
-  - [ ] Start with easiest module first (Helpers/TestHelpers)
-  - [ ] Create comprehensive tests for dependency management
+  - [x] **BREAKING**: Adopt swift-dependencies for dependency management
+  - [x] Replace custom dependency injection with @Dependency property wrappers
+  - [x] Start with easiest module first (Helpers/TestHelpers)
+  - [x] Create comprehensive tests for dependency management
   - [ ] Migrate Auth module dependencies
   - [ ] Migrate PostgREST module dependencies
   - [ ] Migrate Storage module dependencies
