@@ -9,7 +9,66 @@ import Helpers
 
 let version = Helpers.version
 
-/// An actor representing a client for invoking functions.
+/// A client for invoking Supabase Edge Functions.
+///
+/// The `FunctionsClient` provides a type-safe, async/await interface for calling Supabase Edge Functions.
+/// It supports various request types including JSON, binary data, file uploads, and streaming responses.
+///
+/// ## Basic Usage
+///
+/// ```swift
+/// // Initialize the client
+/// let functionsClient = FunctionsClient(
+///   url: URL(string: "https://your-project.supabase.co/functions/v1")!,
+///   headers: HTTPHeaders(["apikey": "your-anon-key"])
+/// )
+///
+/// // Invoke a simple function
+/// try await functionsClient.invoke("hello-world")
+///
+/// // Invoke with JSON data and get a typed response
+/// struct User: Codable {
+///   let name: String
+///   let email: String
+/// }
+///
+/// let user = try await functionsClient.invoke("get-user") as User
+/// print("User: \(user.name)")
+/// ```
+///
+/// ## Advanced Usage
+///
+/// ```swift
+/// // Invoke with custom options
+/// let result = try await functionsClient.invoke("process-data") { options in
+///   options.method = .post
+///   options.body = .encodable(["input": "data"])
+///   options.headers["X-Custom-Header"] = "value"
+///   options.region = .usEast1
+/// }
+///
+/// // File upload
+/// let fileURL = URL(fileURLWithPath: "/path/to/file.pdf")
+/// try await functionsClient.invoke("upload-file") { options in
+///   options.body = .fileURL(fileURL)
+/// }
+///
+/// // Streaming response
+/// let stream = functionsClient.invokeWithStreamedResponse("stream-data")
+/// for try await data in stream {
+///   print("Received: \(String(data: data, encoding: .utf8) ?? "")")
+/// }
+/// ```
+///
+/// ## Authentication
+///
+/// ```swift
+/// // Set authentication token
+/// await functionsClient.setAuth(token: "your-jwt-token")
+///
+/// // Clear authentication
+/// await functionsClient.setAuth(token: nil)
+/// ```
 public actor FunctionsClient {
 
   /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
@@ -63,14 +122,28 @@ public actor FunctionsClient {
     }
   }
 
-  /// Invokes a function and decodes the response.
+  /// Invokes a function with custom response decoding.
+  ///
+  /// This method allows you to provide a custom decoding closure for handling the response data.
+  /// Use this when you need fine-grained control over how the response is processed.
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - options: A closure to configure the options for invoking the function.
-  ///   - decode: A closure to decode the response data and HTTPURLResponse into a `Response`
-  /// object.
+  ///   - decode: A closure to decode the response data and HTTPURLResponse into a `Response` object.
   /// - Returns: The decoded `Response` object.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // Custom decoding with error handling
+  /// let result = try await functionsClient.invoke("get-data") { data, response in
+  ///   guard response.statusCode == 200 else {
+  ///     throw MyCustomError.invalidResponse
+  ///   }
+  ///   return try JSONDecoder().decode(MyData.self, from: data)
+  /// }
+  /// ```
   public func invoke<Response>(
     _ functionName: String,
     options: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in },
@@ -99,13 +172,39 @@ public actor FunctionsClient {
     }
   }
 
-  /// Invokes a function and decodes the response as a specific type.
+  /// Invokes a function and decodes the response as a specific `Decodable` type.
+  ///
+  /// This is the most commonly used method for invoking functions that return JSON data.
+  /// The response will be automatically decoded to the specified type using JSON decoding.
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - options: A closure to configure the options for invoking the function.
   ///   - decoder: The JSON decoder to use for decoding the response. (Default: `JSONDecoder()`)
   /// - Returns: The decoded object of type `T`.
+  ///
+  /// ## Examples
+  ///
+  /// ```swift
+  /// // Simple invocation with typed response
+  /// struct User: Codable {
+  ///   let id: String
+  ///   let name: String
+  ///   let email: String
+  /// }
+  ///
+  /// let user = try await functionsClient.invoke("get-user") as User
+  ///
+  /// // With custom options
+  /// let users = try await functionsClient.invoke("get-users") { options in
+  ///   options.query = [URLQueryItem(name: "limit", value: "10")]
+  /// } as [User]
+  ///
+  /// // With custom decoder
+  /// let customDecoder = JSONDecoder()
+  /// customDecoder.dateDecodingStrategy = .iso8601
+  /// let data = try await functionsClient.invoke("get-data", decoder: customDecoder) as MyData
+  /// ```
   public func invoke<T: Decodable & Sendable>(
     _ functionName: String,
     options: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in },
@@ -126,9 +225,32 @@ public actor FunctionsClient {
 
   /// Invokes a function without expecting a response.
   ///
+  /// Use this method when you need to trigger a function but don't need to process the response.
+  /// This is commonly used for fire-and-forget operations, webhooks, or background tasks.
+  ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - options: A closure to configure the options for invoking the function.
+  ///
+  /// ## Examples
+  ///
+  /// ```swift
+  /// // Simple fire-and-forget invocation
+  /// try await functionsClient.invoke("send-notification")
+  ///
+  /// // With custom options
+  /// try await functionsClient.invoke("process-webhook") { options in
+  ///   options.method = .post
+  ///   options.body = .encodable(["event": "user_signup"])
+  ///   options.headers["X-Webhook-Source"] = "mobile-app"
+  /// }
+  ///
+  /// // Background task with specific region
+  /// try await functionsClient.invoke("cleanup-data") { options in
+  ///   options.region = .usEast1
+  ///   options.query = [URLQueryItem(name: "batch_size", value: "100")]
+  /// }
+  /// ```
   public func invoke(
     _ functionName: String,
     options: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in },
@@ -167,12 +289,37 @@ public actor FunctionsClient {
 
   /// Invokes a function with streamed response.
   ///
-  /// Function MUST return a `text/event-stream` content type for this method to work.
+  /// This method is used for functions that return streaming data, such as Server-Sent Events (SSE)
+  /// or real-time data streams. The function MUST return a `text/event-stream` content type.
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - options: A closure to configure the options for invoking the function.
-  /// - Returns: A stream of Data.
+  /// - Returns: An `AsyncThrowingStream` of `Data` chunks.
+  ///
+  /// ## Examples
+  ///
+  /// ```swift
+  /// // Basic streaming
+  /// let stream = functionsClient.invokeWithStreamedResponse("stream-data")
+  /// for try await data in stream {
+  ///   let message = String(data: data, encoding: .utf8) ?? ""
+  ///   print("Received: \(message)")
+  /// }
+  ///
+  /// // With custom options
+  /// let stream = functionsClient.invokeWithStreamedResponse("chat-stream") { options in
+  ///   options.body = .encodable(["room_id": "general"])
+  ///   options.headers["X-User-ID"] = "user123"
+  /// }
+  ///
+  /// // Processing streaming JSON
+  /// for try await data in stream {
+  ///   if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+  ///     print("JSON chunk: \(json)")
+  ///   }
+  /// }
+  /// ```
   public func invokeWithStreamedResponse(
     _ functionName: String,
     options: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in },

@@ -2,13 +2,40 @@ import Alamofire
 import ConcurrencyExtras
 import Foundation
 
-/// An error type representing various errors that can occur while invoking functions.
+/// Errors that can occur while invoking Supabase Edge Functions.
+///
+/// This enum provides specific error types for different failure scenarios when calling Edge Functions.
+/// All errors include localized descriptions for better user experience.
+///
+/// ## Examples
+///
+/// ```swift
+/// do {
+///   let result = try await functionsClient.invoke("my-function")
+/// } catch let error as FunctionsError {
+///   switch error {
+///   case .relayError:
+///     print("Function relay failed")
+///   case .httpError(let code, let data):
+///     print("HTTP error \(code): \(String(data: data, encoding: .utf8) ?? "")")
+///   case .unknown(let underlyingError):
+///     print("Unknown error: \(underlyingError)")
+///   }
+/// }
+/// ```
 public enum FunctionsError: Error, LocalizedError {
   /// Error indicating a relay error while invoking the Edge Function.
+  /// This typically occurs when there's an issue with the Supabase infrastructure.
   case relayError
+  
   /// Error indicating a non-2xx status code returned by the Edge Function.
+  /// - Parameters:
+  ///   - code: The HTTP status code returned by the function
+  ///   - data: The response body data (may contain error details)
   case httpError(code: Int, data: Data)
 
+  /// An unknown error that doesn't fit into the other categories.
+  /// - Parameter error: The underlying error that occurred
   case unknown(any Error)
 
   /// A localized description of the error.
@@ -38,38 +65,115 @@ func mapToFunctionsError(_ error: any Error) -> FunctionsError {
   return FunctionsError.unknown(error)
 }
 
-/// Supported body types for invoking a function.
+/// Supported body types for invoking Edge Functions.
+///
+/// This enum provides type-safe options for different types of request bodies when invoking functions.
+/// Each case automatically sets the appropriate `Content-Type` header.
+///
+/// ## Examples
+///
+/// ```swift
+/// // JSON data
+/// let user = User(name: "John", email: "john@example.com")
+/// options.body = .encodable(user)
+///
+/// // Binary data
+/// let imageData = Data(contentsOf: imageURL)
+/// options.body = .data(imageData)
+///
+/// // Text data
+/// options.body = .string("Hello, World!")
+///
+/// // File upload
+/// let fileURL = URL(fileURLWithPath: "/path/to/file.pdf")
+/// options.body = .fileURL(fileURL)
+///
+/// // Multipart form data
+/// options.body = .multipartFormData { formData in
+///   formData.append("value1".data(using: .utf8)!, withName: "field1")
+///   formData.append(imageData, withName: "image", fileName: "photo.jpg", mimeType: "image/jpeg")
+/// }
+/// ```
 public enum FunctionInvokeSupportedBody: Sendable {
-  /// A data body, used for binary data, sent with the `Content-Type` header set to `application/octet-stream`.
+  /// A data body for binary data.
+  /// Sets `Content-Type: application/octet-stream`
+  /// - Parameter data: The binary data to send
   case data(Data)
-  /// An encodable body, used for JSON data, sent with the `Content-Type` header set to `application/json`.
+  
+  /// An encodable body for JSON data.
+  /// Sets `Content-Type: application/json`
+  /// - Parameters:
+  ///   - encodable: The object to encode as JSON
+  ///   - encoder: Optional custom JSON encoder (defaults to standard JSONEncoder)
   case encodable(any Sendable & Encodable, encoder: JSONEncoder?)
-  /// A multipart form data body, uploaded using Alamofire's built-in multipart form data support.
+  
+  /// A multipart form data body for file uploads and form submissions.
+  /// Uses Alamofire's built-in multipart form data support.
+  /// - Parameter formData: A closure to configure the multipart form data
   case multipartFormData(@Sendable (MultipartFormData) -> Void)
-  /// A string body, used for text data, sent with the `Content-Type` header set to `text/plain`.
+  
+  /// A string body for text data.
+  /// Sets `Content-Type: text/plain`
+  /// - Parameter string: The text string to send
   case string(String)
-  /// A file URL body, uploaded using Alamofire's built-in file upload support.
+  
+  /// A file URL body for file uploads.
+  /// Uses Alamofire's built-in file upload support.
+  /// - Parameter url: The URL of the file to upload
   case fileURL(URL)
 }
 
-/// Options for invoking a function, used to configure the request.
+/// Configuration options for invoking Edge Functions.
+///
+/// This struct provides a comprehensive set of options to customize how functions are invoked.
+/// All properties have sensible defaults, so you only need to specify what you want to change.
+///
+/// ## Examples
+///
+/// ```swift
+/// // Basic usage with defaults
+/// let options = FunctionInvokeOptions()
+///
+/// // Custom configuration
+/// let options = FunctionInvokeOptions(
+///   method: .post,
+///   body: .encodable(["key": "value"]),
+///   query: [URLQueryItem(name: "limit", value: "10")],
+///   headers: HTTPHeaders(["X-Custom": "header"]),
+///   region: .usEast1,
+///   timeout: 30.0
+/// )
+///
+/// // Using in function invocation
+/// try await functionsClient.invoke("my-function") { options in
+///   options.method = .put
+///   options.body = .string("Hello, World!")
+///   options.query.append(URLQueryItem(name: "id", value: "123"))
+/// }
+/// ```
 public struct FunctionInvokeOptions: Sendable {
   /// The HTTP method to use for the request.
+  /// Defaults to `.post`
   public var method: HTTPMethod = .post
 
   /// The body of the request.
+  /// Can be JSON, binary data, text, file upload, or multipart form data.
   public var body: FunctionInvokeSupportedBody?
 
-  /// Query parameters to include in the request.
+  /// Query parameters to include in the request URL.
+  /// Defaults to an empty array.
   public var query: [URLQueryItem] = []
 
-  /// Headers to include in the request.
+  /// Additional headers to include in the request.
+  /// These will be merged with the client's default headers.
   public var headers: HTTPHeaders = []
 
-  /// The region to invoke the function in.
+  /// The AWS region to invoke the function in.
+  /// If not specified, uses the client's default region or Supabase's default.
   public var region: FunctionRegion?
 
-  /// Timeout for the request.
+  /// Timeout for the request in seconds.
+  /// If not specified, uses the client's default timeout (150 seconds).
   public var timeout: TimeInterval?
 
   public init(
@@ -89,9 +193,34 @@ public struct FunctionInvokeOptions: Sendable {
   }
 }
 
-/// Function region for specifying AWS regions, used to configure the request.
+/// AWS regions for Edge Function deployment and invocation.
+///
+/// This struct represents AWS regions where Supabase Edge Functions can be deployed and invoked.
+/// It conforms to `ExpressibleByStringLiteral` for convenient string-based initialization.
+///
+/// ## Examples
+///
+/// ```swift
+/// // Using predefined regions
+/// let region = FunctionRegion.usEast1
+///
+/// // Using string literal
+/// let region: FunctionRegion = "eu-west-1"
+///
+/// // Custom region
+/// let customRegion = FunctionRegion(rawValue: "ap-southeast-1")
+///
+/// // In function invocation
+/// try await functionsClient.invoke("my-function") { options in
+///   options.region = .usWest2
+/// }
+/// ```
 public struct FunctionRegion: RawRepresentable, Sendable {
+  /// The raw string value of the region.
   public let rawValue: String
+  
+  /// Creates a new region with the specified raw value.
+  /// - Parameter rawValue: The AWS region identifier (e.g., "us-east-1")
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
