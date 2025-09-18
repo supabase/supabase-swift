@@ -1,12 +1,12 @@
-# Semantic Release Setup
+# Release-Please Setup
 
-This project uses [semantic-release](https://semantic-release.gitbook.io/) to automate version management and package publishing.
+This project uses [release-please](https://github.com/googleapis/release-please) to automate version management and package publishing.
 
 ## How it works
 
 1. **Commit messages** follow the [Conventional Commits](https://www.conventionalcommits.org/) specification
-2. **Semantic-release** analyzes commits and determines the next version number
-3. **GitHub Actions** automatically creates releases when changes are pushed to `main`
+2. **Release-please** analyzes commits and determines the next version number
+3. **GitHub Actions** automatically creates release PRs and publishes releases
 
 ## Commit Message Format
 
@@ -47,38 +47,30 @@ BREAKING CHANGE: This removes the old API
 
 ## Release Process
 
-### Regular Releases (main branch)
+### Automated Release Flow
 
-1. Push commits to `main` branch
-2. GitHub Actions runs semantic-release
-3. If there are releasable changes:
+1. **Push commits** to `main` branch with conventional commit messages
+2. **Release-please** analyzes commits and creates a release PR when needed
+3. **Review and merge** the release PR to trigger the actual release:
    - Version is updated in `Sources/Helpers/Version.swift`
    - `CHANGELOG.md` is updated
-   - Git tag is created
+   - Git tag is created (e.g., `v2.33.0`)
    - GitHub release is published
 
-### Release Candidates (rc branch)
+### Release Branches
 
-1. Push commits to `rc` branch
-2. GitHub Actions runs semantic-release
-3. If there are releasable changes:
-   - Prerelease version is created (e.g., `2.31.0-rc.1`)
-   - Version is updated in `Sources/Helpers/Version.swift`
-   - `CHANGELOG.md` is updated
-   - Git tag is created
-   - GitHub prerelease is published
+Release-please also supports `release/*` branches for managing releases from feature branches if needed.
 
 ## Manual Release
 
-To manually trigger a release:
+To manually trigger the release-please workflow:
 
 1. Go to Actions tab in GitHub
-2. Select "Semantic Release" workflow
+2. Select "Release" workflow
 3. Click "Run workflow"
 
 ## Configuration Files
 
-- `.releaserc.json`: Semantic-release configuration
-- `package.json`: Node.js dependencies
+- `release-please-config.json`: Release-please configuration
+- `.release-please-manifest.json`: Current version tracking
 - `.github/workflows/release.yml`: GitHub Actions workflow
-- `scripts/update-version.sh`: Version update script
