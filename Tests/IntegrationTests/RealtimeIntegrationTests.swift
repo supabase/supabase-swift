@@ -9,16 +9,15 @@ import Clocks
 import ConcurrencyExtras
 import CustomDump
 import InlineSnapshotTesting
+import Logging
 import Supabase
 import TestHelpers
 import XCTest
 
 @testable import Realtime
 
-struct TestLogger: SupabaseLogger {
-  func log(message: SupabaseLogMessage) {
-    print(message.description)
-  }
+struct TestLogger {
+  let logger = Logger(label: "test")
 }
 
 #if !os(Android) && !os(Linux)
@@ -35,7 +34,7 @@ struct TestLogger: SupabaseLogger {
     override func setUp() {
       super.setUp()
 
-      _clock = testClock
+      // _clock = testClock // TODO: Fix clock assignment for testing
     }
 
     #if !os(Windows) && !os(Linux) && !os(Android)
@@ -47,20 +46,20 @@ struct TestLogger: SupabaseLogger {
     #endif
 
     func testDisconnectByUser_shouldNotReconnect() async {
-      await client.realtimeV2.connect()
-      let status: RealtimeClientStatus = client.realtimeV2.status
+      await client.realtime.connect()
+      let status: RealtimeClientStatus = client.realtime.status
       XCTAssertEqual(status, .connected)
 
-      client.realtimeV2.disconnect()
+      client.realtime.disconnect()
 
       /// Wait for the reconnection delay
       await testClock.advance(by: .seconds(RealtimeClientOptions.defaultReconnectDelay))
 
-      XCTAssertEqual(client.realtimeV2.status, .disconnected)
+      XCTAssertEqual(client.realtime.status, .disconnected)
     }
 
     func testBroadcast() async throws {
-      let channel = client.realtimeV2.channel("integration") {
+      let channel = client.realtime.channel("integration") {
         $0.broadcast.receiveOwnBroadcasts = true
       }
 
@@ -121,7 +120,7 @@ struct TestLogger: SupabaseLogger {
     }
 
     func testBroadcastWithUnsubscribedChannel() async throws {
-      let channel = client.realtimeV2.channel("integration") {
+      let channel = client.realtime.channel("integration") {
         $0.broadcast.acknowledgeBroadcasts = true
       }
 
@@ -135,7 +134,7 @@ struct TestLogger: SupabaseLogger {
     }
 
     func testPresence() async throws {
-      let channel = client.realtimeV2.channel("integration") {
+      let channel = client.realtime.channel("integration") {
         $0.broadcast.receiveOwnBroadcasts = true
       }
 
@@ -190,7 +189,7 @@ struct TestLogger: SupabaseLogger {
     }
 
     func testPostgresChanges() async throws {
-      let channel = client.realtimeV2.channel("db-changes")
+      let channel = client.realtime.channel("db-changes")
 
       let receivedInsertActions = Task {
         await channel.postgresChange(InsertAction.self, schema: "public").prefix(1).collect()

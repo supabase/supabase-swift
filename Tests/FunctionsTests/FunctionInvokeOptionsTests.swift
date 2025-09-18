@@ -5,14 +5,16 @@ import XCTest
 
 final class FunctionInvokeOptionsTests: XCTestCase {
   func test_initWithStringBody() {
-    let options = FunctionInvokeOptions(body: "string value")
-    XCTAssertEqual(options.headers["Content-Type"], "text/plain")
+    let bodyData = "string value".data(using: .utf8)!
+    let options = FunctionInvokeOptions(body: bodyData)
+    XCTAssertEqual(options.headers.first { $0.name == "Content-Type" }?.value, "text/plain")
     XCTAssertNotNil(options.body)
   }
 
   func test_initWithDataBody() {
-    let options = FunctionInvokeOptions(body: "binary value".data(using: .utf8)!)
-    XCTAssertEqual(options.headers["Content-Type"], "application/octet-stream")
+    let bodyData = "binary value".data(using: .utf8)!
+    let options = FunctionInvokeOptions(body: bodyData)
+    XCTAssertEqual(options.headers.first { $0.name == "Content-Type" }?.value, "application/octet-stream")
     XCTAssertNotNil(options.body)
   }
 
@@ -20,33 +22,30 @@ final class FunctionInvokeOptionsTests: XCTestCase {
     struct Body: Encodable {
       let value: String
     }
-    let options = FunctionInvokeOptions(body: Body(value: "value"))
-    XCTAssertEqual(options.headers["Content-Type"], "application/json")
+    let bodyData = try! JSONEncoder().encode(Body(value: "value"))
+    let options = FunctionInvokeOptions(body: bodyData)
+    XCTAssertEqual(options.headers.first { $0.name == "Content-Type" }?.value, "application/json")
     XCTAssertNotNil(options.body)
   }
 
   func test_initWithCustomContentType() {
     let boundary = "Boundary-\(UUID().uuidString)"
     let contentType = "multipart/form-data; boundary=\(boundary)"
+    let bodyData = "binary value".data(using: .utf8)!
     let options = FunctionInvokeOptions(
-      headers: ["Content-Type": contentType],
-      body: "binary value".data(using: .utf8)!
+      body: bodyData,
+      headers: [HTTPHeader(name: "Content-Type", value: contentType)]
     )
-    XCTAssertEqual(options.headers["Content-Type"], contentType)
+    XCTAssertEqual(options.headers.first { $0.name == "Content-Type" }?.value, contentType)
     XCTAssertNotNil(options.body)
   }
 
   func testMethod() {
-    let testCases: [FunctionInvokeOptions.Method: Alamofire.HTTPMethod] = [
-      .get: .get,
-      .post: .post,
-      .put: .put,
-      .patch: .patch,
-      .delete: .delete,
-    ]
+    let testCases: [HTTPMethod] = [.get, .post, .put, .patch, .delete]
 
-    for (method, expected) in testCases {
-      XCTAssertEqual(FunctionInvokeOptions.httpMethod(method), expected)
+    for method in testCases {
+      let options = FunctionInvokeOptions(method: method)
+      XCTAssertEqual(options.method, method)
     }
   }
 }

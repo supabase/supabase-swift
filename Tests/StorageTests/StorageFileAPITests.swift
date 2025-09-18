@@ -21,9 +21,6 @@ final class StorageFileAPITests: XCTestCase {
 
     testingBoundary.setValue("alamofire.boundary.e56f43407f772505")
 
-    JSONEncoder.defaultStorageEncoder.outputFormatting = [.sortedKeys]
-    JSONEncoder.unconfiguredEncoder.outputFormatting = [.sortedKeys]
-
     let configuration = URLSessionConfiguration.default
     configuration.protocolClasses = [MockingURLProtocol.self]
 

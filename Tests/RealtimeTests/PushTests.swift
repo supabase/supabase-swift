@@ -273,13 +273,13 @@ private final class MockRealtimeChannel: RealtimeChannelProtocol {
   let topic: String
   var config: RealtimeChannelConfig
   let socket: any RealtimeClientProtocol
-  let logger: (any SupabaseLogger)?
+  let logger: SupabaseLogger?
 
   init(
     topic: String,
     config: RealtimeChannelConfig,
     socket: any RealtimeClientProtocol,
-    logger: (any SupabaseLogger)?
+    logger: SupabaseLogger?
   ) {
     self.topic = topic
     self.config = config

@@ -3,6 +3,7 @@ import CustomDump
 import Helpers
 import InlineSnapshotTesting
 import IssueReporting
+import Logging
 import SnapshotTestingCustomDump
 import XCTest
 
@@ -23,13 +24,7 @@ final class AuthLocalStorageMock: AuthLocalStorage {
 
 final class SupabaseClientTests: XCTestCase {
   func testClientInitialization() async {
-    final class Logger: SupabaseLogger {
-      func log(message _: SupabaseLogMessage) {
-        // no-op
-      }
-    }
-
-    let logger = Logger()
+    let logger = Logger(label: "test")
     let customSchema = "custom_schema"
     let localStorage = AuthLocalStorageMock()
     let customHeaders = ["header_field": "header_value"]
@@ -84,16 +79,16 @@ final class SupabaseClientTests: XCTestCase {
 
     XCTAssertEqual(client.functions.region, "ap-northeast-1")
 
-    let realtimeURL = client.realtimeV2.url
+    let realtimeURL = client.realtime.url
     XCTAssertEqual(realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")
 
-    let realtimeOptions = client.realtimeV2.options
+    let realtimeOptions = client.realtime.options
     let expectedRealtimeHeader = client._headers.merging(with: [
       "custom_realtime_header_key": "custom_realtime_header_value"
     ]
     )
     expectNoDifference(realtimeOptions.headers.sorted(), expectedRealtimeHeader.sorted())
-    XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
+    XCTAssertEqual(realtimeOptions.logger?.label, logger.label)
 
     XCTAssertFalse(client.auth.configuration.autoRefreshToken)
     XCTAssertEqual(client.auth.configuration.storageKey, "sb-project-ref-auth-token")

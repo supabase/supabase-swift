@@ -38,9 +38,9 @@ final class FunctionsClientTests: XCTestCase {
     let client = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      region: .saEast1
+      region: .usEast1
     )
-    XCTAssertEqual(client.region, "sa-east-1")
+    XCTAssertEqual(client.region, "us-east-1")
 
     XCTAssertEqual(client.headers["apikey"], apiKey)
     XCTAssertNotNil(client.headers["X-Client-Info"])
@@ -69,9 +69,13 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
+    let bodyData = try! JSONEncoder().encode(["name": "Supabase"])
     try await sut.invoke(
       "hello_world",
-      options: .init(headers: ["X-Custom-Key": "value"], body: ["name": "Supabase"])
+      options: .init(
+        body: bodyData,
+        headers: [HTTPHeader(name: "X-Custom-Key", value: "value")]
+      )
     )
   }
 
@@ -220,7 +224,7 @@ final class FunctionsClientTests: XCTestCase {
   }
 
   func testInvokeWithRegionDefinedInClient() async throws {
-    region = FunctionRegion.caCentral1.rawValue
+    region = FunctionRegion.usEast1.rawValue
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -264,7 +268,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke("hello-world", options: .init(region: .caCentral1))
+    try await sut.invoke("hello-world", options: .init(region: FunctionRegion.usEast1.rawValue))
   }
 
   func testInvokeWithoutRegion() async throws {

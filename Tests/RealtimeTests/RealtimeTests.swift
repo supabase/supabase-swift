@@ -46,7 +46,7 @@ final class RealtimeTests: XCTestCase {
 
     (client, server) = FakeWebSocket.fakes()
     testClock = TestClock()
-    _clock = testClock
+    // _clock = testClock // TODO: Fix clock assignment for testing
 
     sut = RealtimeClient(
       url: url,
