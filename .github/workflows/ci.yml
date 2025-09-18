@@ -45,6 +45,7 @@ jobs:
     name: xcodebuild (26.0)
     runs-on: macos-15
     strategy:
+      fail-fast: false
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS]
@@ -83,6 +84,7 @@ jobs:
     name: xcodebuild (16.3)
     runs-on: macos-15
     strategy:
+      fail-fast: false
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS, MAC_CATALYST]
