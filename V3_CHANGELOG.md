@@ -47,6 +47,9 @@
 #### Functions
 - **BREAKING**: Enhanced with Alamofire networking integration
 
+#### Logging System
+- **BREAKING**: Drop SupabaseLogger in favor of `swift-log` dependency
+
 ### ✨ New Features
 
 #### Infrastructure
@@ -95,6 +98,11 @@
 - [x] Enhanced error handling
 - [x] Improved response parsing
 - [x] Retry configuration and timeout support
+
+#### Logging System
+- [ ] Modern logging system using `swift-log` dependency
+- [ ] Standardized logging across all modules
+- [ ] Better integration with Swift ecosystem logging tools
 
 ### 🛠️ Improvements
 
