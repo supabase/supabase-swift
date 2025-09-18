@@ -170,6 +170,8 @@ struct MFAVerifyView: View {
 
 struct MFAVerifiedView: View {
   @Environment(AuthController.self) var auth
+  @State private var aalInfo: AuthMFAGetAuthenticatorAssuranceLevelResponse?
+  @State private var error: Error?
 
   @MainActor
   var factors: [Factor] {
@@ -178,26 +180,45 @@ struct MFAVerifiedView: View {
 
   var body: some View {
     List {
-      ForEach(factors) { factor in
-        VStack {
-          LabeledContent("ID", value: factor.id)
-          LabeledContent("Type", value: factor.factorType)
-          LabeledContent("Friendly name", value: factor.friendlyName ?? "-")
-          LabeledContent("Status", value: factor.status.rawValue)
+      // v3.0.0: Show AAL information using new convenience methods
+      if let aalInfo = aalInfo {
+        Section("Authentication Level") {
+          LabeledContent("Current Level", value: aalInfo.currentLevel?.rawValue ?? "Unknown")
+          LabeledContent("Next Level", value: aalInfo.nextLevel?.rawValue ?? "Unknown")
+          LabeledContent("Verified Factors", value: "\(aalInfo.currentAuthenticationMethods.count)")
         }
       }
-      .onDelete { indexSet in
-        Task {
-          do {
-            let factorsToRemove = indexSet.map { factors[$0] }
-            for factor in factorsToRemove {
-              try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factor.id))
-            }
-          } catch {}
+      
+      Section("MFA Factors") {
+        ForEach(factors) { factor in
+          VStack {
+            LabeledContent("ID", value: factor.id)
+            LabeledContent("Type", value: factor.factorType)
+            LabeledContent("Friendly name", value: factor.friendlyName ?? "-")
+            LabeledContent("Status", value: factor.status.rawValue)
+          }
+        }
+        .onDelete { indexSet in
+          Task {
+            do {
+              let factorsToRemove = indexSet.map { factors[$0] }
+              for factor in factorsToRemove {
+                try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factor.id))
+              }
+            } catch {}
+          }
         }
       }
     }
-    .navigationTitle("Factors")
+    .navigationTitle("MFA Status")
+    .task {
+      do {
+        // v3.0.0: Use new convenience method to get AAL information
+        aalInfo = try await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      } catch {
+        self.error = error
+      }
+    }
   }
 }
 
