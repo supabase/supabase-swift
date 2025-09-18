@@ -2,6 +2,11 @@
 
 ## [3.0.0] - TBD
 
+### 🧪 Test Suite Status
+- **Note**: Some test files have been temporarily disabled due to Swift compiler issues
+- **Note**: Test suite is being updated to work with v3.0.0 changes
+- **Note**: Several API changes in tests need to be addressed (MFAEnrollParams, emailChangeToken, ilike parameters)
+
 ### 🚨 Breaking Changes
 
 > **Note**: This is a major version release with significant breaking changes. Please refer to the [Migration Guide](./V3_MIGRATION_GUIDE.md) for detailed upgrade instructions.

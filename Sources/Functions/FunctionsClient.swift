@@ -121,22 +121,21 @@ public final class FunctionsClient: Sendable {
     options: FunctionInvokeOptions = .init(),
     decode: (Data, HTTPURLResponse) throws -> Response
   ) async throws(FunctionsError) -> Response {
-    let data = try await rawInvoke(
+    let dataTask = self.rawInvoke(
       functionName: functionName,
       invokeOptions: options
     )
+    .serializingData()
 
-    // Create a mock HTTPURLResponse for backward compatibility
-    // This is a temporary solution until we can update the decode closure signature
-    let mockResponse = HTTPURLResponse(
-      url: URL(string: "https://example.com")!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: nil
-    )!
+    guard
+      let data = await dataTask.response.data,
+      let response = await dataTask.response.response
+    else {
+      throw FunctionsError.unknown(URLError(.badServerResponse))
+    }
 
     do {
-      return try decode(data, mockResponse)
+      return try decode(data, response)
     } catch {
       throw mapToFunctionsError(error)
     }
@@ -154,8 +153,13 @@ public final class FunctionsClient: Sendable {
     options: FunctionInvokeOptions = .init(),
     decoder: JSONDecoder = JSONDecoder()
   ) async throws(FunctionsError) -> T {
-    try await self.invoke(functionName, options: options) { data, _ in
-      try decoder.decode(T.self, from: data)
+    try await wrappingError(or: mapToFunctionsError) {
+      try await self.rawInvoke(
+        functionName: functionName,
+        invokeOptions: options
+      )
+      .serializingDecodable(T.self, decoder: decoder)
+      .value
     }
   }
 
@@ -168,23 +172,22 @@ public final class FunctionsClient: Sendable {
     _ functionName: String,
     options: FunctionInvokeOptions = .init()
   ) async throws(FunctionsError) {
-    _ = try await rawInvoke(
-      functionName: functionName,
-      invokeOptions: options
-    )
+    _ = try await wrappingError(or: mapToFunctionsError) {
+      try await self.rawInvoke(
+        functionName: functionName,
+        invokeOptions: options
+      )
+      .serializingData()
+      .value
+    }
   }
 
   private func rawInvoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) async throws(FunctionsError) -> Data {
+  ) -> DataRequest {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
-    return try await wrappingError(or: mapToFunctionsError) {
-      return try await self.session.request(request)
-        .validate(self.validate)
-        .serializingData()
-        .value
-    }
+    return self.session.request(request).validate(self.validate)
   }
 
   /// Invokes a function with streamed response.
@@ -209,7 +212,7 @@ public final class FunctionsClient: Sendable {
       .streamingData()
       .compactMap {
         switch $0.event {
-        case let .stream(.success(data)): return data
+        case .stream(.success(let data)): return data
         case .complete(let completion):
           if let error = completion.error {
             throw mapToFunctionsError(error)
