@@ -89,20 +89,31 @@ public struct SupabaseClientOptions: Sendable {
     /// Optional headers for initializing the client, it will be passed down to all sub-clients.
     public let headers: [String: String]
 
-    /// An Alamofire session to use for making requests, defaults to `Alamofire.Session.default`.
+    /// An Alamofire session to use for making requests across all Supabase modules.
+    /// Defaults to `Alamofire.Session.default`.
     public let session: Alamofire.Session
 
-    /// The logger  to use across all Supabase sub-packages.
+    /// The logger to use across all Supabase sub-packages.
     public let logger: (any SupabaseLogger)?
+
+    /// Request timeout interval in seconds. Defaults to 60 seconds.
+    public let timeoutInterval: TimeInterval
+
+    /// Optional factory for creating sub-clients. Useful for dependency injection and testing.
+    public let clientFactory: (any SupabaseClientFactory)?
 
     public init(
       headers: [String: String] = [:],
       session: Alamofire.Session = .default,
-      logger: (any SupabaseLogger)? = nil
+      logger: (any SupabaseLogger)? = nil,
+      timeoutInterval: TimeInterval = 60.0,
+      clientFactory: (any SupabaseClientFactory)? = nil
     ) {
       self.headers = headers
       self.session = session
       self.logger = logger
+      self.timeoutInterval = timeoutInterval
+      self.clientFactory = clientFactory
     }
   }
 
@@ -123,9 +134,21 @@ public struct SupabaseClientOptions: Sendable {
   public struct StorageOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let useNewHostname: Bool
-    
-    public init(useNewHostname: Bool = false) {
+
+    /// Upload retry count for failed uploads. Defaults to 3.
+    public let uploadRetryCount: Int
+
+    /// Timeout for upload operations in seconds. Defaults to 60 seconds.
+    public let uploadTimeoutInterval: TimeInterval
+
+    public init(
+      useNewHostname: Bool = false,
+      uploadRetryCount: Int = 3,
+      uploadTimeoutInterval: TimeInterval = 60.0
+    ) {
       self.useNewHostname = useNewHostname
+      self.uploadRetryCount = uploadRetryCount
+      self.uploadTimeoutInterval = uploadTimeoutInterval
     }
   }
 
@@ -188,4 +211,51 @@ extension SupabaseClientOptions.AuthOptions {
       )
     }
   #endif
+}
+
+// MARK: - Additional Convenience Initializers
+extension SupabaseClientOptions {
+  /// Creates options optimized for production environments with enhanced security and performance.
+  public static func production(
+    auth: AuthOptions,
+    customHeaders: [String: String] = [:],
+    timeoutInterval: TimeInterval = 30.0,
+    logger: (any SupabaseLogger)? = nil
+  ) -> SupabaseClientOptions {
+    SupabaseClientOptions(
+      db: DatabaseOptions(),
+      auth: auth,
+      global: GlobalOptions(
+        headers: customHeaders,
+        session: .default,
+        logger: logger,
+        timeoutInterval: timeoutInterval
+      ),
+      functions: FunctionsOptions(),
+      realtime: RealtimeClientOptions(timeoutInterval: timeoutInterval),
+      storage: StorageOptions(useNewHostname: true)
+    )
+  }
+
+  /// Creates options optimized for development environments with debug logging.
+  public static func development(
+    auth: AuthOptions,
+    logger: (any SupabaseLogger)? = nil
+  ) -> SupabaseClientOptions {
+    SupabaseClientOptions(
+      db: DatabaseOptions(),
+      auth: auth,
+      global: GlobalOptions(
+        headers: ["X-Environment": "development"],
+        logger: logger,
+        timeoutInterval: 60.0
+      ),
+      functions: FunctionsOptions(),
+      realtime: RealtimeClientOptions(
+        timeoutInterval: 60.0,
+        logLevel: .info
+      ),
+      storage: StorageOptions()
+    )
+  }
 }

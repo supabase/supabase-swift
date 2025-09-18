@@ -173,8 +173,6 @@ public enum AuthError: LocalizedError {
     // Deprecated cases
     case .missingExpClaim: "Missing expiration claim in the access token."
     case .malformedJWT: "A malformed JWT received."
-    case .invalidRedirectScheme: "Invalid redirect scheme."
-    case .missingURL: "Missing URL."
     case .unknown(let error): "Unkown error: \(error.localizedDescription)"
     }
   }
@@ -187,7 +185,7 @@ public enum AuthError: LocalizedError {
     case let .api(_, errorCode, _, _): errorCode
     case .pkceGrantCodeExchange, .implicitGrantRedirect: .unknown
     // Deprecated cases
-    case .missingExpClaim, .malformedJWT, .invalidRedirectScheme, .missingURL, .unknown: .unknown
+    case .missingExpClaim, .malformedJWT, .unknown: .unknown
     }
   }
 

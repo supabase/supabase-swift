@@ -106,3 +106,19 @@ public enum HeartbeatStatus: Sendable {
 public enum LogLevel: String, Sendable {
   case info, warn, error
 }
+
+/// Channel event constants.
+public enum ChannelEvent {
+  public static let system = "system"
+  public static let postgresChanges = "postgres_changes"
+  public static let broadcast = "broadcast"
+  public static let close = "close"
+  public static let error = "error"
+  public static let presenceDiff = "presence_diff"
+  public static let presenceState = "presence_state"
+  public static let reply = "reply"
+  public static let join = "phx_join"
+  public static let leave = "phx_leave"
+  public static let accessToken = "access_token"
+  public static let presence = "presence"
+}

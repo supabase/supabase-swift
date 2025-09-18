@@ -8,7 +8,7 @@ import IssueReporting
 #endif
 
 /// Supabase Client.
-public final class SupabaseClient: Sendable {
+public final class SupabaseClient: SupabaseClientProtocol {
   let options: SupabaseClientOptions
   let supabaseURL: URL
   let supabaseKey: String
@@ -420,8 +420,18 @@ public final class SupabaseClient: Sendable {
     var realtimeOptions = options.realtime
     realtimeOptions.headers.merge(with: _headers)
 
+    // Use global session and logger if not specified
+    if realtimeOptions.session == nil {
+      realtimeOptions.session = options.global.session
+    }
+
     if realtimeOptions.logger == nil {
       realtimeOptions.logger = options.global.logger
+    }
+
+    // Use global timeout if realtime timeout is default
+    if realtimeOptions.timeoutInterval == RealtimeClientOptions.defaultTimeoutInterval {
+      realtimeOptions.timeoutInterval = options.global.timeoutInterval
     }
 
     if realtimeOptions.accessToken == nil {

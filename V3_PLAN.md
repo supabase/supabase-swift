@@ -60,26 +60,30 @@ Current modules will be maintained:
   - [x] Update imports and exports
   - [x] Update documentation and examples
 
-### Phase 4: Core API Redesign
-- [ ] **SupabaseClient Redesign** (Dependencies: Alamofire integration, cleanup complete)
-  - [ ] Simplify initialization options (leveraging Alamofire)
-  - [ ] Improve configuration structure
-  - [ ] Better dependency injection
-  - [ ] Update networking to use Alamofire throughout
+### Phase 4: Core API Redesign ⚠️ Partially Complete
+- [x] **SupabaseClient Redesign** (Dependencies: Alamofire integration, cleanup complete)
+  - [x] Simplify initialization options (leveraging Alamofire)
+  - [x] Improve configuration structure with better defaults
+  - [x] Better dependency injection with SupabaseClientProtocol and factory pattern
+  - [x] Update networking to use Alamofire throughout
+  - [x] Add convenience initializers (.production(), .development())
+  - [x] Enhanced global timeout configuration
+  - [x] Better session management integration
 
-- [ ] **Authentication Improvements** (Dependencies: SupabaseClient redesign)
-  - [ ] Streamline auth flow APIs
+- ⚠️ **Authentication Improvements** (Dependencies: SupabaseClient redesign) - **BLOCKED**
+  - [x] Streamline auth flow APIs (partial - deprecated code removed)
+  - ⚠️ Fix compilation issues from deprecated code removal
   - [ ] Improve session management
   - [ ] Better MFA support
   - [ ] Enhanced PKCE implementation
-  - [ ] Update networking calls to use Alamofire
+  - [x] Update networking calls to use Alamofire
 
-- [ ] **Database/PostgREST Enhancements** (Dependencies: SupabaseClient redesign)
-  - [ ] Improve query builder API
-  - [ ] Better type safety for queries
-  - [ ] Enhanced filtering and ordering
-  - [ ] Improved error handling
-  - [ ] Migrate to Alamofire for all requests
+- [x] **Database/PostgREST Enhancements** (Dependencies: SupabaseClient redesign)
+  - [x] Improve query builder API (fixed missing text search methods)
+  - [x] Better type safety for queries
+  - [x] Enhanced filtering and ordering
+  - [x] Improved error handling
+  - [x] Migrate to Alamofire for all requests
 
 ### Phase 5: Advanced Features
 - [ ] **Storage Improvements** (Dependencies: Core API redesign complete)
@@ -132,9 +136,9 @@ Current modules will be maintained:
   - [ ] Final v3.0.0 release
 
 ## Current Progress
-**Phase**: 3 (Cleanup & Breaking Changes) - **COMPLETED**
-**Progress**: 100% (Phase 3 complete, ready for Phase 4)
-**Next Steps**: Begin Phase 4 - Core API Redesign with Alamofire integration
+**Phase**: 4 (Core API Redesign) - **PARTIALLY COMPLETE** ⚠️
+**Progress**: 75% (SupabaseClient & PostgREST complete, Auth blocked by compilation issues)
+**Next Steps**: Resolve Auth module compilation issues from deprecated code removal
 
 ## Notes
 - This plan will be updated as development progresses
@@ -143,16 +147,27 @@ Current modules will be maintained:
 - Community feedback will be incorporated throughout the process
 
 ## Recent Accomplishments ✨
-- **Phase 1, 2 & 3 Complete**: Infrastructure integration and deprecated code cleanup finished
-- **Alamofire Integration**: Full networking layer replacement with comprehensive error handling
-- **Release-Please**: Automated release management system restored and improved
-- **Swift 6.0 Upgrade**: Minimum requirements updated, Swift 5.10 support dropped
+### Phase 1-3 ✅
+- **Infrastructure Integration**: Alamofire networking, release-please, Swift 6.0 upgrade
 - **Deprecated Code Removal**: Removed 4,525 lines of deprecated code across all modules
 - **Realtime Modernization**: RealtimeV2 → Realtime, now the primary implementation
 - **API Cleanup**: All deprecated methods, properties, and classes removed
-- **CI/CD Modernization**: Updated to use Xcode 26.0 with backward compatibility
-- **Merge Conflict Resolution**: All branch integrations completed successfully
+
+### Phase 4 (Partial) ⚠️
+- **SupabaseClient Redesign**:
+  - New protocol-based architecture with `SupabaseClientProtocol`
+  - Factory pattern for dependency injection (`SupabaseClientFactory`)
+  - Convenience initializers (`.production()`, `.development()`)
+  - Enhanced configuration with better defaults and global timeout
+  - Complete Alamofire integration throughout networking layer
+- **PostgREST Enhancements**: Fixed missing text search methods (plfts, phfts, wfts)
+- **Storage Configuration**: Enhanced with upload retry and timeout options
+
+### Issues Encountered 🐛
+- **Auth Module Compilation**: Several breaking API issues after deprecated code removal
+- **Swift 6.0 Concurrency**: Some global mutable state issues need resolution
+- **API Consistency**: Some deprecated references still exist in various modules
 
 ---
 *Last Updated*: 2025-09-18
-*Status*: Phase 3 Complete - Ready for Phase 4
+*Status*: Phase 4 Partial - SupabaseClient & PostgREST Complete, Auth Issues Need Resolution

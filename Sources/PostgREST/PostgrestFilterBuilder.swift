@@ -549,6 +549,30 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     fts(column, query: query, config: config)
   }
 
+  public func plfts(
+    _ column: String,
+    query: any PostgrestFilterValue,
+    config: String? = nil
+  ) -> PostgrestFilterBuilder {
+    textSearch(column, query: query, config: config, type: .plain)
+  }
+
+  public func phfts(
+    _ column: String,
+    query: any PostgrestFilterValue,
+    config: String? = nil
+  ) -> PostgrestFilterBuilder {
+    textSearch(column, query: query, config: config, type: .phrase)
+  }
+
+  public func wfts(
+    _ column: String,
+    query: any PostgrestFilterValue,
+    config: String? = nil
+  ) -> PostgrestFilterBuilder {
+    textSearch(column, query: query, config: config, type: .websearch)
+  }
+
   public func plainToFullTextSearch(
     _ column: String,
     query: String,

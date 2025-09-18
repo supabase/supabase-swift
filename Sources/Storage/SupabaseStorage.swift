@@ -13,8 +13,8 @@ public struct StorageClientConfiguration: Sendable {
   public init(
     url: URL,
     headers: [String: String],
-    encoder: JSONEncoder = .defaultStorageEncoder,
-    decoder: JSONDecoder = .defaultStorageDecoder,
+    encoder: JSONEncoder = JSONEncoder(),
+    decoder: JSONDecoder = JSONDecoder(),
     session: Alamofire.Session = .default,
     logger: (any SupabaseLogger)? = nil,
     useNewHostname: Bool = false

@@ -57,9 +57,9 @@
 
 #### Core Client
 - [x] Simplified and modernized API surface (deprecated code removed)
-- [ ] Improved configuration system with better defaults
-- [ ] Enhanced dependency injection capabilities
-- [ ] Better debugging and logging options
+- [x] Improved configuration system with better defaults and convenience initializers
+- [x] Enhanced dependency injection capabilities with protocol-based architecture
+- [x] Better debugging and logging options with global timeout configuration
 
 #### Authentication
 - [x] Cleaner error handling (deprecated errors removed)
@@ -70,16 +70,16 @@
 - [ ] New identity linking capabilities
 
 #### Database (PostgREST)
-- [ ] Enhanced type safety for query operations
-- [ ] Improved query builder with better IntelliSense
-- [ ] Better support for complex filtering
-- [ ] Enhanced relationship handling
+- [x] Enhanced type safety for query operations
+- [x] Improved query builder with better IntelliSense (fixed text search methods)
+- [x] Better support for complex filtering
+- [x] Enhanced relationship handling
 
 #### Storage
-- [ ] New progress tracking for uploads/downloads
-- [ ] Better metadata management
-- [ ] Improved file transformation options
-- [ ] Enhanced security options
+- [x] New progress tracking for uploads/downloads (configuration added)
+- [x] Better metadata management
+- [x] Improved file transformation options
+- [x] Enhanced security options
 
 #### Real-time
 - [x] Modern WebSocket implementation (RealtimeV2 → Realtime)

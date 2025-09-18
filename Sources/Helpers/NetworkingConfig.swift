@@ -40,9 +40,9 @@ package final class SupabaseAuthenticator: Authenticator, @unchecked Sendable {
   package func refresh(
     _ credential: SupabaseCredential,
     for session: Alamofire.Session,
-    completion: @escaping (Result<SupabaseCredential, any Error>) -> Void
+    completion: @escaping @Sendable (Result<SupabaseCredential, any Error>) -> Void
   ) {
-    Task {
+    Task { @Sendable in
       do {
         let token = try await getAccessToken()
         if let token = token {
