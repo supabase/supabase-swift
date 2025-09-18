@@ -431,7 +431,7 @@
 //
 //    await assert {
 //      _ = try await sut.mfa.enroll(
-//        params: MFAEnrollParams(issuer: "supabase.com", friendlyName: "test"))
+//        params: MFATotpEnrollParams(issuer: "supabase.com", friendlyName: "test"))
 //    }
 //  }
 //

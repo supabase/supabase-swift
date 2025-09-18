@@ -30,7 +30,7 @@ final class AuthClientIntegrationTests: XCTestCase {
           "Authorization": "Bearer \(key)",
         ],
         localStorage: InMemoryLocalStorage(),
-        logger: OSLogSupabaseLogger()
+        logger: nil
       )
     )
   }

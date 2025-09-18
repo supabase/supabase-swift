@@ -1285,7 +1285,6 @@ final class AuthClientTests: XCTestCase {
         phone: "+1 202-918-2132",
         password: "another.pass",
         nonce: "abcdef",
-        emailChangeToken: "123456",
         data: ["custom_key": .string("custom_value")]
       )
     )
@@ -1578,7 +1577,7 @@ final class AuthClientTests: XCTestCase {
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.enroll(
-      params: MFAEnrollParams(
+      params: MFATotpEnrollParams(
         issuer: "supabase.com",
         friendlyName: "test"
       )

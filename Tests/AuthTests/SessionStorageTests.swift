@@ -153,10 +153,11 @@ final class SessionStorageTests: XCTestCase {
     let session = Session.validSession
 
     // When: Accessing storage concurrently
+    let storage = sessionStorage!
     await withTaskGroup(of: Void.self) { group in
       for _ in 0..<10 {
         group.addTask {
-          self.sessionStorage.store(session)
+          storage.store(session)
         }
       }
     }
