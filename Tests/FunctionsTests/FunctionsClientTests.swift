@@ -271,6 +271,29 @@ final class FunctionsClientTests: XCTestCase {
     try await sut.invoke("hello-world", options: .init(region: FunctionRegion.usEast1.rawValue))
   }
 
+  func testInvokeWithRegion_usingExpressibleByLiteral() async throws {
+    Mock(
+      url: url.appendingPathComponent("hello-world"),
+      statusCode: 200,
+      data: [
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "X-Region: ca-central-1" \
+      	"http://localhost:5432/functions/v1/hello-world"
+      """#
+    }
+    .register()
+
+    try await sut.invoke("hello-world", options: .init(region: "ca-central-1"))
+  }
+
   func testInvokeWithoutRegion() async throws {
     region = nil
 

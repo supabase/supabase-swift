@@ -150,11 +150,31 @@ public struct FunctionInvokeOptions: Sendable {
   }
 }
 
-/// Function region enum for backward compatibility.
-public enum FunctionRegion: String, Sendable {
-  case usEast1 = "us-east-1"
-  case usWest1 = "us-west-1"
-  case euWest1 = "eu-west-1"
-  case apSoutheast1 = "ap-southeast-1"
-  case apNortheast1 = "ap-northeast-1"
+/// Function region for specifying AWS regions.
+public struct FunctionRegion: RawRepresentable, Sendable {
+  public let rawValue: String
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  public static let apNortheast1 = FunctionRegion(rawValue: "ap-northeast-1")
+  public static let apNortheast2 = FunctionRegion(rawValue: "ap-northeast-2")
+  public static let apSouth1 = FunctionRegion(rawValue: "ap-south-1")
+  public static let apSoutheast1 = FunctionRegion(rawValue: "ap-southeast-1")
+  public static let apSoutheast2 = FunctionRegion(rawValue: "ap-southeast-2")
+  public static let caCentral1 = FunctionRegion(rawValue: "ca-central-1")
+  public static let euCentral1 = FunctionRegion(rawValue: "eu-central-1")
+  public static let euWest1 = FunctionRegion(rawValue: "eu-west-1")
+  public static let euWest2 = FunctionRegion(rawValue: "eu-west-2")
+  public static let euWest3 = FunctionRegion(rawValue: "eu-west-3")
+  public static let saEast1 = FunctionRegion(rawValue: "sa-east-1")
+  public static let usEast1 = FunctionRegion(rawValue: "us-east-1")
+  public static let usWest1 = FunctionRegion(rawValue: "us-west-1")
+  public static let usWest2 = FunctionRegion(rawValue: "us-west-2")
+}
+
+extension FunctionRegion: ExpressibleByStringLiteral {
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
 }
