@@ -79,7 +79,7 @@ import Testing
 
     let bodyData = try! JSONEncoder().encode(["name": "Supabase"])
     try await sut.invoke("hello_world") { options in
-      options.setBody(bodyData)
+      options.body = .data(bodyData)
       options.headers["X-Custom-Key"] = "value"
     }
   }
