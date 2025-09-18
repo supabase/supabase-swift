@@ -46,13 +46,13 @@ defaults:
 
 jobs:
   xcodebuild-latest:
-    name: xcodebuild (16.4)
+    name: xcodebuild (26.0)
     runs-on: macos-15
     strategy:
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS]
-        xcode: ["16.4"]
+        xcode: ["26.0"]
         include:
           - { command: test, skip_release: 1 }
     steps:
@@ -83,40 +83,40 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           file: lcov.info
 
-  # xcodebuild-legacy:
-  #   name: xcodebuild (15.4)
-  #   runs-on: macos-14
-  #   strategy:
-  #     matrix:
-  #       command: [test, ""]
-  #       platform: [IOS, MACOS, MAC_CATALYST]
-  #       xcode: ["15.4"]
-  #       include:
-  #         - { command: test, skip_release: 1 }
-  #   steps:
-  #     - uses: actions/checkout@v5
-  #     - name: Select Xcode ${{ matrix.xcode }}
-  #       run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-  #     - name: List available devices
-  #       run: xcrun simctl list devices available
-  #     - name: Cache derived data
-  #       uses: actions/cache@v4
-  #       with:
-  #         path: |
-  #           ~/.derivedData
-  #         key: |
-  #           deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
-  #         restore-keys: |
-  #           deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
-  #     - name: Set IgnoreFileSystemDeviceInodeChanges flag
-  #       run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
-  #     - name: Update mtime for incremental builds
-  #       uses: chetan/git-restore-mtime-action@v2
-  #     - name: Debug
-  #       run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
-  #     - name: Release
-  #       if: matrix.skip_release != '1'
-  #       run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+  xcodebuild-legacy:
+    name: xcodebuild (16.3)
+    runs-on: macos-15
+    strategy:
+      matrix:
+        command: [test, ""]
+        platform: [IOS, MACOS, MAC_CATALYST]
+        xcode: ["16.3"]
+        include:
+          - { command: test, skip_release: 1 }
+    steps:
+      - uses: actions/checkout@v5
+      - name: Select Xcode ${{ matrix.xcode }}
+        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+      - name: List available devices
+        run: xcrun simctl list devices available
+      - name: Cache derived data
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.derivedData
+          key: |
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
+          restore-keys: |
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
+      - name: Set IgnoreFileSystemDeviceInodeChanges flag
+        run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+      - name: Update mtime for incremental builds
+        uses: chetan/git-restore-mtime-action@v2
+      - name: Debug
+        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
+      - name: Release
+        if: matrix.skip_release != '1'
+        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
   linux:
     name: Linux
@@ -148,7 +148,7 @@ jobs:
     runs-on: macos-15
     strategy:
       matrix:
-        xcode: ["16.3"]
+        xcode: ["26.0"]
     steps:
       - uses: actions/checkout@v5
       - name: Select Xcode ${{ matrix.xcode }}
@@ -169,8 +169,8 @@ jobs:
             deriveddata-examples-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Examples/**/*.swift') }}
           restore-keys: |
             deriveddata-examples-
-      - name: Select Xcode 16.3
-        run: sudo xcode-select -s /Applications/Xcode_16.3.app
+      - name: Select Xcode 26.0
+        run: sudo xcode-select -s /Applications/Xcode_26.0.app
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds
