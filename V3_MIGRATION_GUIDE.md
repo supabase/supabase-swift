@@ -6,16 +6,17 @@ This guide will help you migrate your project from Supabase Swift v2.x to v3.0.0
 
 Supabase Swift v3.0.0 introduces several breaking changes designed to improve the developer experience, enhance type safety, and modernize the API. While there are breaking changes, most can be addressed with find-and-replace operations.
 
-**Migration Complexity**: Medium
-**Estimated Time**: 1-8 hours depending on project size
+**Migration Complexity**: Medium-High
+**Estimated Time**: 1-12 hours depending on project size
 **Automation Available**: Partial (method renames, imports)
 
 ## Before You Begin
 
 1. **Backup your project** - Commit all changes and create a backup
-2. **Review dependencies** - Ensure all your dependencies support Swift 5.10+
+2. **Review dependencies** - Ensure all your dependencies support Swift 6.0+
 3. **Update gradually** - Consider updating one module at a time
 4. **Test thoroughly** - Run your test suite after each major change
+5. **Check for deprecated usage** - Review compiler warnings for deprecated API usage
 
 ## Step-by-Step Migration
 
@@ -33,7 +34,73 @@ Update your `Package.swift` or Xcode project dependencies:
 .package(url: "https://github.com/supabase/supabase-swift.git", from: "3.0.0")
 ```
 
-### 2. Import Changes
+### 2. Requirements Update
+
+v3.0.0 has updated minimum requirements:
+
+**Before (v2.x):**
+- iOS 13.0+ / macOS 10.15+ / tvOS 13+ / watchOS 6+ / visionOS 1+
+- Xcode 15.3+
+- Swift 5.10+
+
+**After (v3.x):**
+- iOS 13.0+ / macOS 10.15+ / tvOS 13+ / watchOS 6+ / visionOS 1+
+- Xcode 16.0+
+- Swift 6.0+
+
+### 3. Deprecated API Removal
+
+⚠️ **All deprecated APIs have been removed in v3.0.0**
+
+If your code uses any deprecated APIs, you must update them before migrating:
+
+#### Authentication Changes
+```swift
+// ❌ Removed - Update these before migrating to v3
+GoTrueClient // Use AuthClient instead
+GoTrueMFA // Use AuthMFA instead
+GoTrueLocalStorage // Use AuthLocalStorage instead
+GoTrueError // Use AuthError instead
+
+// ❌ Removed error cases
+AuthError.sessionNotFound // Use .sessionMissing
+AuthError.pkce(.codeVerifierNotFound) // Use .pkceGrantCodeExchange(message:)
+AuthError.invalidImplicitGrantFlowURL // Use .implicitGrantRedirect(message:)
+
+// ❌ Removed deprecated struct
+APIError // Use new AuthError.api(message:errorCode:underlyingData:underlyingResponse:)
+```
+
+#### PostgREST Changes
+```swift
+// ❌ Removed property
+someFilterValue.queryValue // Use .rawValue instead
+```
+
+#### Storage Changes
+```swift
+// ❌ Removed - Use local encoder/decoder instead
+JSONEncoder.defaultStorageEncoder // Create your own encoder
+JSONDecoder.defaultStorageDecoder // Create your own decoder
+```
+
+#### Realtime Changes
+```swift
+// ❌ Removed methods
+channel.broadcast(event: "test") // Use .broadcastStream(event:)
+channel.subscribe() // Use .subscribeWithError()
+
+// ❌ Removed property
+token.remove() // Use .cancel()
+```
+
+#### UserCredentials Changes
+```swift
+// ❌ No longer public - Use internal equivalent or AuthClient methods
+UserCredentials(...) // This type is now internal
+```
+
+### 4. Import Changes
 
 Import statements remain the same:
 ```swift
@@ -204,23 +271,86 @@ let data = try await client.storage
 // Specific changes to be documented during implementation
 ```
 
-### 7. Real-time Changes
+### 7. Major Realtime Modernization
 
-#### Channel Subscriptions
+⚠️ **This is the largest breaking change in v3.0.0**
+
+All Realtime V2 classes have been renamed to become the primary implementation:
+
+#### Class and Property Renames
 
 **Before (v2.x):**
 ```swift
-let channel = client.realtime.channel("public:users")
-await channel.on(.postgresChanges(event: .all, schema: "public", table: "users")) { payload in
-    print("Received change: \\(payload)")
-}
-try await channel.subscribe()
+import Realtime
+
+// Old naming
+let client = SupabaseClient(...)
+let realtimeClient: RealtimeClientV2 = client.realtimeV2
+let channel: RealtimeChannelV2 = realtimeClient.channel("test")
+let message = RealtimeMessageV2(...)
 ```
 
 **After (v3.x):**
 ```swift
-// 🔄 Real-time API may be modernized
-// Specific changes to be documented during implementation
+import Realtime
+
+// ✅ New naming (V2 suffix removed)
+let client = SupabaseClient(...)
+let realtimeClient: RealtimeClient = client.realtime  // ← realtimeV2 became realtime
+let channel: RealtimeChannel = realtimeClient.channel("test")  // ← V2 suffix removed
+let message = RealtimeMessage(...)  // ← V2 suffix removed
+```
+
+#### Find and Replace Operations
+
+Use these find-and-replace operations to update your code:
+
+```bash
+# Find and replace in your codebase:
+RealtimeClientV2 → RealtimeClient
+RealtimeChannelV2 → RealtimeChannel
+RealtimeMessageV2 → RealtimeMessage
+PushV2 → Push
+.realtimeV2 → .realtime
+```
+
+#### Updated Channel Subscriptions
+
+**Before (v2.x):**
+```swift
+let channel = client.realtimeV2.channel("public:users")
+await channel.on(.postgresChanges(event: .all, schema: "public", table: "users")) { payload in
+    print("Received change: \\(payload)")
+}
+try await channel.subscribeWithError() // ✅ This method is still available
+```
+
+**After (v3.x):**
+```swift
+// ✅ Same API, just different property name
+let channel = client.realtime.channel("public:users")  // ← realtimeV2 became realtime
+await channel.on(.postgresChanges(event: .all, schema: "public", table: "users")) { payload in
+    print("Received change: \\(payload)")
+}
+try await channel.subscribeWithError() // ✅ Same method
+```
+
+### 8. Real-time API Updates
+
+#### Removed Deprecated Methods
+
+**Before (v2.x):**
+```swift
+// ❌ These deprecated methods were removed
+channel.subscribe() // Use subscribeWithError() instead
+channel.broadcast(event: "test") // Use broadcastStream(event:) instead
+```
+
+**After (v3.x):**
+```swift
+// ✅ Use the non-deprecated equivalents
+try await channel.subscribeWithError() // Throws errors instead of silently failing
+let stream = channel.broadcastStream(event: "test") // Returns AsyncStream
 ```
 
 ### 8. Functions Changes
@@ -337,8 +467,16 @@ Use this checklist to track your migration progress:
 
 - [ ] **Dependencies**
   - [ ] Update Package.swift or Xcode project
+  - [ ] Update minimum Swift/Xcode versions
   - [ ] Resolve any dependency conflicts
   - [ ] Update minimum platform versions if needed
+
+- [ ] **Deprecated API Removal**
+  - [ ] Replace all GoTrue* type aliases with Auth* equivalents
+  - [ ] Update deprecated AuthError cases
+  - [ ] Replace queryValue with rawValue
+  - [ ] Replace deprecated storage encoder/decoder usage
+  - [ ] Update deprecated realtime methods
 
 - [ ] **Client Initialization**
   - [ ] Update basic client setup (if needed)
@@ -346,7 +484,8 @@ Use this checklist to track your migration progress:
   - [ ] Test client initialization
 
 - [ ] **Authentication**
-  - [ ] Update sign-in methods
+  - [ ] Remove deprecated error handling
+  - [ ] Update sign-in methods (if affected)
   - [ ] Migrate session management code
   - [ ] Update MFA implementation (if used)
   - [ ] Test authentication flows
@@ -358,15 +497,21 @@ Use this checklist to track your migration progress:
   - [ ] Test database operations
 
 - [ ] **Storage**
+  - [ ] Replace deprecated encoder/decoder usage
   - [ ] Update file upload code
   - [ ] Update file download code
   - [ ] Migrate progress tracking (if used)
   - [ ] Test storage operations
 
-- [ ] **Real-time**
+- [ ] **Real-time (Major Changes)**
+  - [ ] Replace RealtimeClientV2 with RealtimeClient
+  - [ ] Replace RealtimeChannelV2 with RealtimeChannel
+  - [ ] Replace RealtimeMessageV2 with RealtimeMessage
+  - [ ] Update .realtimeV2 to .realtime
+  - [ ] Replace deprecated subscribe() with subscribeWithError()
+  - [ ] Replace deprecated broadcast() with broadcastStream()
   - [ ] Update channel subscriptions
   - [ ] Migrate presence features (if used)
-  - [ ] Update connection management
   - [ ] Test real-time functionality
 
 - [ ] **Functions**

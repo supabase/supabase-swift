@@ -6,44 +6,64 @@
 
 > **Note**: This is a major version release with significant breaking changes. Please refer to the [Migration Guide](./V3_MIGRATION_GUIDE.md) for detailed upgrade instructions.
 
-#### Core Client
-- **BREAKING**: `SupabaseClient` initialization has been redesigned
-- **BREAKING**: Configuration options have been restructured for better organization
-- **BREAKING**: Some default behaviors have changed for improved consistency
+#### Infrastructure & Requirements
+- **BREAKING**: Minimum Swift version is now 6.0+ (was 5.10+)
+- **BREAKING**: Minimum Xcode version is now 16.0+ (was 15.3+)
+- **BREAKING**: Networking layer completely replaced with Alamofire
+- **BREAKING**: Release management switched to release-please
+
+#### Deprecated Code Removal (4,525 lines removed)
+- **BREAKING**: All `@available(*, deprecated)` methods and properties removed
+- **BREAKING**: All `Deprecated.swift` files removed from all modules
+- **BREAKING**: `UserCredentials` is now internal (was public deprecated)
 
 #### Authentication
-- **BREAKING**: Auth flow methods have been streamlined and renamed
-- **BREAKING**: Session management API has been updated
-- **BREAKING**: Some auth configuration options have been moved or renamed
-- **BREAKING**: Error types for authentication have been consolidated
+- **BREAKING**: Removed deprecated GoTrue* type aliases (`GoTrueClient`, `GoTrueMFA`, etc.)
+- **BREAKING**: Removed deprecated `AuthError` cases: `sessionNotFound`, `pkce(_:)`, `invalidImplicitGrantFlowURL`, `missingURL`, `invalidRedirectScheme`
+- **BREAKING**: Removed deprecated `APIError` struct and related methods
+- **BREAKING**: Removed deprecated `PKCEFailureReason` enum
+- **BREAKING**: Removed `emailChangeToken` property from user attributes
 
 #### Database (PostgREST)
-- **BREAKING**: Query builder method signatures have been updated
-- **BREAKING**: Filter and ordering methods have been refined
-- **BREAKING**: Some response types have been changed for better type safety
+- **BREAKING**: Removed deprecated `queryValue` property (use `rawValue` instead)
 
 #### Storage
-- **BREAKING**: File upload/download method signatures updated
-- **BREAKING**: Progress tracking API has been redesigned
-- **BREAKING**: Metadata handling has been streamlined
+- **BREAKING**: Removed deprecated `JSONEncoder.defaultStorageEncoder`
+- **BREAKING**: Removed deprecated `JSONDecoder.defaultStorageDecoder`
 
-#### Real-time
-- **BREAKING**: WebSocket connection management has been overhauled
-- **BREAKING**: Subscription API has been modernized
-- **BREAKING**: Channel management methods have been updated
+#### Real-time (Major Modernization)
+- **BREAKING**: `RealtimeClientV2` renamed to `RealtimeClient` (now primary implementation)
+- **BREAKING**: `RealtimeChannelV2` renamed to `RealtimeChannel`
+- **BREAKING**: `RealtimeMessageV2` renamed to `RealtimeMessage`
+- **BREAKING**: `PushV2` renamed to `Push`
+- **BREAKING**: `SupabaseClient.realtimeV2` renamed to `SupabaseClient.realtime`
+- **BREAKING**: Entire legacy `Realtime/Deprecated/` folder removed (11 files)
+- **BREAKING**: Removed deprecated `broadcast(event:)` method (use `broadcastStream(event:)`)
+- **BREAKING**: Removed deprecated `subscribe()` method (use `subscribeWithError()`)
+
+#### Helpers & Utilities
+- **BREAKING**: Removed deprecated `ObservationToken.remove()` method (use `cancel()`)
 
 #### Functions
-- **BREAKING**: Edge function invocation API has been simplified
-- **BREAKING**: Parameter passing has been streamlined
+- **BREAKING**: Enhanced with Alamofire networking integration
 
 ### ✨ New Features
 
+#### Infrastructure
+- [x] Alamofire networking layer integration with enhanced error handling
+- [x] Release-please automated release management
+- [x] Swift 6.0 strict concurrency support
+- [x] Modernized CI/CD pipeline with Xcode 26.0
+
 #### Core Client
+- [x] Simplified and modernized API surface (deprecated code removed)
 - [ ] Improved configuration system with better defaults
 - [ ] Enhanced dependency injection capabilities
 - [ ] Better debugging and logging options
 
 #### Authentication
+- [x] Cleaner error handling (deprecated errors removed)
+- [x] Simplified type system (GoTrue* aliases removed)
 - [ ] Enhanced MFA support with more providers
 - [ ] Improved PKCE implementation
 - [ ] Better session persistence options
@@ -62,7 +82,9 @@
 - [ ] Enhanced security options
 
 #### Real-time
-- [ ] Modern WebSocket implementation
+- [x] Modern WebSocket implementation (RealtimeV2 → Realtime)
+- [x] Simplified API (deprecated methods removed)
+- [x] Consistent naming conventions
 - [ ] Better connection management
 - [ ] Enhanced presence features
 - [ ] Improved subscription lifecycle management
@@ -128,11 +150,11 @@
 **From v2.x to v3.0**: See the [Migration Guide](./V3_MIGRATION_GUIDE.md) for step-by-step instructions.
 
 **Estimated Migration Time**:
-- Small projects: 1-2 hours
-- Medium projects: 2-4 hours
-- Large projects: 4-8 hours
+- Small projects: 1-3 hours
+- Medium projects: 3-6 hours
+- Large projects: 6-12 hours
 
-**Migration Complexity**: Medium - Most changes involve method renames and parameter updates.
+**Migration Complexity**: Medium-High - Includes deprecated code removal, Realtime API changes, and infrastructure updates.
 
 ---
 
