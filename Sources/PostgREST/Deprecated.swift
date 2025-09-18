@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 16/01/24.
 //
 
+import Alamofire
 import Foundation
 
 #if canImport(FoundationNetworking)
@@ -30,7 +31,7 @@ extension PostgrestClient.Configuration {
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
-    fetch: @escaping PostgrestClient.FetchHandler = { try await URLSession.shared.data(for: $0) },
+    session: Alamofire.Session = .default,
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
@@ -39,7 +40,7 @@ extension PostgrestClient.Configuration {
       schema: schema,
       headers: headers,
       logger: nil,
-      fetch: fetch,
+      session: session,
       encoder: encoder,
       decoder: decoder
     )
@@ -65,7 +66,7 @@ extension PostgrestClient {
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    session: Alamofire.Session = .default,
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
@@ -74,7 +75,7 @@ extension PostgrestClient {
       schema: schema,
       headers: headers,
       logger: nil,
-      fetch: fetch,
+      session: session,
       encoder: encoder,
       decoder: decoder
     )

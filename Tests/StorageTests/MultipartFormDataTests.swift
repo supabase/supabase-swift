@@ -1,4 +1,5 @@
 import XCTest
+import Alamofire
 
 @testable import Storage
 

@@ -1,3 +1,4 @@
+import Alamofire
 import ConcurrencyExtras
 import SnapshotTesting
 import TestHelpers
@@ -10,7 +11,7 @@ final class StoredSessionTests: XCTestCase {
 
   func testStoredSession() throws {
     #if os(Android)
-    throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
+      throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
     #endif
 
     Dependencies[clientID] = Dependencies(
@@ -20,7 +21,7 @@ final class StoredSessionTests: XCTestCase {
         localStorage: try! DiskTestStorage(),
         logger: nil
       ),
-      http: HTTPClientMock(),
+      session: .default,
       api: .init(clientID: clientID),
       codeVerifierStorage: .mock,
       sessionStorage: .live(clientID: clientID),

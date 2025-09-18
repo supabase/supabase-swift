@@ -22,30 +22,42 @@ public struct AuthMFA: Sendable {
   ///
   /// - Parameter params: The parameters for enrolling a new MFA factor.
   /// - Returns: An authentication response after enrolling the factor.
-  public func enroll(params: any MFAEnrollParamsType) async throws -> AuthMFAEnrollResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors"),
+  public func enroll(params: any MFAEnrollParamsType) async throws(AuthError)
+    -> AuthMFAEnrollResponse
+  {
+    try await wrappingError(or: mapToAuthError) {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("factors"),
         method: .post,
-        body: encoder.encode(params)
+        headers: [
+          .authorization(bearerToken: try await sessionManager.session().accessToken)
+        ],
+        body: params
       )
-    )
-    .decoded(decoder: decoder)
+      .serializingDecodable(AuthMFAEnrollResponse.self, decoder: configuration.decoder)
+      .value
+    }
   }
 
   /// Prepares a challenge used to verify that a user has access to a MFA factor.
   ///
   /// - Parameter params: The parameters for creating a challenge.
   /// - Returns: An authentication response with the challenge information.
-  public func challenge(params: MFAChallengeParams) async throws -> AuthMFAChallengeResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
+  public func challenge(params: MFAChallengeParams) async throws(AuthError)
+    -> AuthMFAChallengeResponse
+  {
+    try await wrappingError(or: mapToAuthError) {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
         method: .post,
-        body: params.channel == nil ? nil : encoder.encode(["channel": params.channel])
+        headers: [
+          .authorization(bearerToken: try await sessionManager.session().accessToken)
+        ],
+        body: params.channel == nil ? nil : ["channel": params.channel]
       )
-    )
-    .decoded(decoder: decoder)
+      .serializingDecodable(AuthMFAChallengeResponse.self, decoder: configuration.decoder)
+      .value
+    }
   }
 
   /// Verifies a code against a challenge. The verification code is
@@ -54,20 +66,25 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for verifying the MFA factor.
   /// - Returns: An authentication response after verifying the factor.
   @discardableResult
-  public func verify(params: MFAVerifyParams) async throws -> AuthMFAVerifyResponse {
-    let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
+  public func verify(params: MFAVerifyParams) async throws(AuthError) -> AuthMFAVerifyResponse {
+    return try await wrappingError(or: mapToAuthError) {
+      let response = try await self.api.execute(
+        self.configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
         method: .post,
-        body: encoder.encode(params)
+        headers: [
+          .authorization(bearerToken: try await sessionManager.session().accessToken)
+        ],
+        body: params
       )
-    ).decoded(decoder: decoder)
+      .serializingDecodable(AuthMFAVerifyResponse.self, decoder: configuration.decoder)
+      .value
 
-    await sessionManager.update(response)
+      await sessionManager.update(response)
 
-    eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
+      eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
 
-    return response
+      return response
+    }
   }
 
   /// Unenroll removes a MFA factor.
@@ -76,14 +93,19 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for unenrolling an MFA factor.
   /// - Returns: An authentication response after unenrolling the factor.
   @discardableResult
-  public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)"),
-        method: .delete
+  public func unenroll(params: MFAUnenrollParams) async throws(AuthError) -> AuthMFAUnenrollResponse
+  {
+    try await wrappingError(or: mapToAuthError) {
+      try await self.api.execute(
+        self.configuration.url.appendingPathComponent("factors/\(params.factorId)"),
+        method: .delete,
+        headers: [
+          .authorization(bearerToken: try await sessionManager.session().accessToken)
+        ]
       )
-    )
-    .decoded(decoder: decoder)
+      .serializingDecodable(AuthMFAUnenrollResponse.self, decoder: configuration.decoder)
+      .value
+    }
   }
 
   /// Helper method which creates a challenge and immediately uses the given code to verify against
@@ -95,7 +117,7 @@ public struct AuthMFA: Sendable {
   @discardableResult
   public func challengeAndVerify(
     params: MFAChallengeAndVerifyParams
-  ) async throws -> AuthMFAVerifyResponse {
+  ) async throws(AuthError) -> AuthMFAVerifyResponse {
     let response = try await challenge(params: MFAChallengeParams(factorId: params.factorId))
     return try await verify(
       params: MFAVerifyParams(
@@ -107,50 +129,56 @@ public struct AuthMFA: Sendable {
   /// Returns the list of MFA factors enabled for this user.
   ///
   /// - Returns: An authentication response with the list of MFA factors.
-  public func listFactors() async throws -> AuthMFAListFactorsResponse {
-    let user = try await sessionManager.session().user
-    let factors = user.factors ?? []
-    let totp = factors.filter {
-      $0.factorType == "totp" && $0.status == .verified
+  public func listFactors() async throws(AuthError) -> AuthMFAListFactorsResponse {
+    try await wrappingError(or: mapToAuthError) {
+      let user = try await sessionManager.session().user
+      let factors = user.factors ?? []
+      let totp = factors.filter {
+        $0.factorType == "totp" && $0.status == .verified
+      }
+      let phone = factors.filter {
+        $0.factorType == "phone" && $0.status == .verified
+      }
+      return AuthMFAListFactorsResponse(all: factors, totp: totp, phone: phone)
     }
-    let phone = factors.filter {
-      $0.factorType == "phone" && $0.status == .verified
-    }
-    return AuthMFAListFactorsResponse(all: factors, totp: totp, phone: phone)
   }
 
   /// Returns the Authenticator Assurance Level (AAL) for the active session.
   ///
   /// - Returns: An authentication response with the Authenticator Assurance Level.
-  public func getAuthenticatorAssuranceLevel() async throws -> AuthMFAGetAuthenticatorAssuranceLevelResponse {
+  public func getAuthenticatorAssuranceLevel() async throws(AuthError)
+    -> AuthMFAGetAuthenticatorAssuranceLevelResponse
+  {
     do {
-      let session = try await sessionManager.session()
-      let payload = JWT.decodePayload(session.accessToken)
+      return try await wrappingError(or: mapToAuthError) {
+        let session = try await sessionManager.session()
+        let payload = JWT.decodePayload(session.accessToken)
 
-      var currentLevel: AuthenticatorAssuranceLevels?
+        var currentLevel: AuthenticatorAssuranceLevels?
 
-      if let aal = payload?["aal"] as? AuthenticatorAssuranceLevels {
-        currentLevel = aal
+        if let aal = payload?["aal"] as? AuthenticatorAssuranceLevels {
+          currentLevel = aal
+        }
+
+        var nextLevel = currentLevel
+
+        let verifiedFactors = session.user.factors?.filter { $0.status == .verified } ?? []
+        if !verifiedFactors.isEmpty {
+          nextLevel = "aal2"
+        }
+
+        var currentAuthenticationMethods: [AMREntry] = []
+
+        if let amr = payload?["amr"] as? [Any] {
+          currentAuthenticationMethods = amr.compactMap(AMREntry.init(value:))
+        }
+
+        return AuthMFAGetAuthenticatorAssuranceLevelResponse(
+          currentLevel: currentLevel,
+          nextLevel: nextLevel,
+          currentAuthenticationMethods: currentAuthenticationMethods
+        )
       }
-
-      var nextLevel = currentLevel
-
-      let verifiedFactors = session.user.factors?.filter { $0.status == .verified } ?? []
-      if !verifiedFactors.isEmpty {
-        nextLevel = "aal2"
-      }
-
-      var currentAuthenticationMethods: [AMREntry] = []
-
-      if let amr = payload?["amr"] as? [Any] {
-        currentAuthenticationMethods = amr.compactMap(AMREntry.init(value:))
-      }
-
-      return AuthMFAGetAuthenticatorAssuranceLevelResponse(
-        currentLevel: currentLevel,
-        nextLevel: nextLevel,
-        currentAuthenticationMethods: currentAuthenticationMethods
-      )
     } catch AuthError.sessionMissing {
       return AuthMFAGetAuthenticatorAssuranceLevelResponse(
         currentLevel: nil,

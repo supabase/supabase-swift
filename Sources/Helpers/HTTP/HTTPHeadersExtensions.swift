@@ -1,16 +1,10 @@
-import HTTPTypes
+import Alamofire
 
-extension HTTPFields {
-  package init(_ dictionary: [String: String]) {
-    self.init(dictionary.map { .init(name: .init($0.key)!, value: $0.value) })
-  }
-
-  package var dictionary: [String: String] {
-    let keyValues = self.map {
-      ($0.name.rawName, $0.value)
-    }
-
-    return .init(keyValues, uniquingKeysWith: { $1 })
+extension HTTPHeaders {
+  package func merging(with other: Self) -> Self {
+    var copy = self
+    copy.merge(with: other)
+    return copy
   }
 
   package mutating func merge(with other: Self) {
@@ -19,29 +13,19 @@ extension HTTPFields {
     }
   }
 
-  package func merging(with other: Self) -> Self {
-    var copy = self
-
-    for field in other {
-      copy[field.name] = field.value
-    }
-
-    return copy
-  }
-
   /// Append or update a value in header.
   ///
   /// Example:
   /// ```swift
-  /// var headers: HTTPFields = [
+  /// var headers: HTTPHeaders = [
   ///   "Prefer": "count=exact,return=representation"
   /// ]
   ///
-  /// headers.appendOrUpdate(.prefer, value: "return=minimal")
+  /// headers.appendOrUpdate("Prefer", value: "return=minimal")
   /// #expect(headers == ["Prefer": "count=exact,return=minimal"]
   /// ```
   package mutating func appendOrUpdate(
-    _ name: HTTPField.Name,
+    _ name: String,
     value: String,
     separator: String = ","
   ) {
@@ -61,10 +45,4 @@ extension HTTPFields {
       self[name] = value
     }
   }
-}
-
-extension HTTPField.Name {
-  package static let xClientInfo = HTTPField.Name("X-Client-Info")!
-  package static let xRegion = HTTPField.Name("x-region")!
-  package static let xRelayError = HTTPField.Name("x-relay-error")!
 }

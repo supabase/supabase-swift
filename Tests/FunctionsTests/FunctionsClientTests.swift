@@ -1,7 +1,8 @@
+import Alamofire
 import ConcurrencyExtras
-import HTTPTypes
 import InlineSnapshotTesting
 import Mocker
+import SnapshotTestingCustomDump
 import TestHelpers
 import XCTest
 
@@ -22,8 +23,6 @@ final class FunctionsClientTests: XCTestCase {
     return sessionConfiguration
   }()
 
-  lazy var session = URLSession(configuration: sessionConfiguration)
-
   var region: String?
 
   lazy var sut = FunctionsClient(
@@ -32,16 +31,8 @@ final class FunctionsClientTests: XCTestCase {
       "apikey": apiKey
     ],
     region: region,
-    fetch: { request in
-      try await self.session.data(for: request)
-    },
-    sessionConfiguration: sessionConfiguration
+    session: Alamofire.Session(configuration: sessionConfiguration)
   )
-
-  override func setUp() {
-    super.setUp()
-    //    isRecording = true
-  }
 
   func testInit() async {
     let client = FunctionsClient(
@@ -51,15 +42,17 @@ final class FunctionsClientTests: XCTestCase {
     )
     XCTAssertEqual(client.region, "sa-east-1")
 
-    XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
-    XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
+    XCTAssertEqual(client.headers["apikey"], apiKey)
+    XCTAssertNotNil(client.headers["X-Client-Info"])
   }
 
   func testInvoke() async throws {
     Mock(
       url: self.url.appendingPathComponent("hello_world"),
       statusCode: 200,
-      data: [.post: Data()]
+      data: [
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
+      ]
     )
     .snapshotRequest {
       #"""
@@ -111,10 +104,77 @@ final class FunctionsClientTests: XCTestCase {
     XCTAssertEqual(response.status, "ok")
   }
 
+  func testInvokeWithCustomDecodingClosure() async throws {
+    Mock(
+      url: url.appendingPathComponent("hello"),
+      statusCode: 200,
+      data: [
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:5432/functions/v1/hello"
+      """#
+    }
+    .register()
+
+    struct Payload: Decodable {
+      var message: String
+      var status: String
+    }
+
+    let response = try await sut.invoke("hello") { data, _ in
+      try JSONDecoder().decode(Payload.self, from: data)
+    }
+    XCTAssertEqual(response.message, "Hello, world!")
+    XCTAssertEqual(response.status, "ok")
+  }
+
+  func testInvokeDecodingThrowsError() async throws {
+    Mock(
+      url: url.appendingPathComponent("hello"),
+      statusCode: 200,
+      data: [
+        .post: #"{"message":"invalid"}"#.data(using: .utf8)!
+      ]
+    )
+    .register()
+
+    struct Payload: Decodable {
+      var message: String
+      var status: String
+    }
+
+    do {
+      _ = try await sut.invoke("hello") as Payload
+      XCTFail("Should throw error")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        FunctionsError.unknown(
+          .keyNotFound(
+            .CodingKeys(stringValue: "status", intValue: nil),
+            DecodingError.Context(
+              codingPath: [],
+              debugDescription: #"No value associated with key CodingKeys(stringValue: "status", intValue: nil) ("status")."#,
+              underlyingError: nil
+            )
+          )
+        )
+        """
+      }
+    }
+  }
+
   func testInvokeWithCustomMethod() async throws {
     Mock(
       url: url.appendingPathComponent("hello-world"),
-      statusCode: 200,
+      statusCode: 204,
       data: [.delete: Data()]
     )
     .snapshotRequest {
@@ -137,7 +197,7 @@ final class FunctionsClientTests: XCTestCase {
       ignoreQuery: true,
       statusCode: 200,
       data: [
-        .post: Data()
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
       ]
     )
     .snapshotRequest {
@@ -165,15 +225,17 @@ final class FunctionsClientTests: XCTestCase {
     Mock(
       url: url.appendingPathComponent("hello-world"),
       statusCode: 200,
-      data: [.post: Data()]
+      data: [
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
+      ]
     )
     .snapshotRequest {
       #"""
       curl \
       	--request POST \
       	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Region: ca-central-1" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--header "x-region: ca-central-1" \
       	"http://localhost:5432/functions/v1/hello-world"
       """#
     }
@@ -186,15 +248,17 @@ final class FunctionsClientTests: XCTestCase {
     Mock(
       url: url.appendingPathComponent("hello-world"),
       statusCode: 200,
-      data: [.post: Data()]
+      data: [
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
+      ]
     )
     .snapshotRequest {
       #"""
       curl \
       	--request POST \
       	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Region: ca-central-1" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--header "x-region: ca-central-1" \
       	"http://localhost:5432/functions/v1/hello-world"
       """#
     }
@@ -209,7 +273,9 @@ final class FunctionsClientTests: XCTestCase {
     Mock(
       url: url.appendingPathComponent("hello-world"),
       statusCode: 200,
-      data: [.post: Data()]
+      data: [
+        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
+      ]
     )
     .snapshotRequest {
       #"""
@@ -225,7 +291,7 @@ final class FunctionsClientTests: XCTestCase {
     try await sut.invoke("hello-world")
   }
 
-  func testInvoke_shouldThrow_URLError_badServerResponse() async {
+  func testInvoke_shouldThrow_error() async throws {
     Mock(
       url: url.appendingPathComponent("hello_world"),
       statusCode: 200,
@@ -246,10 +312,13 @@ final class FunctionsClientTests: XCTestCase {
     do {
       try await sut.invoke("hello_world")
       XCTFail("Invoke should fail.")
-    } catch let urlError as URLError {
-      XCTAssertEqual(urlError.code, .badServerResponse)
-    } catch {
-      XCTFail("Unexpected error thrown \(error)")
+    } catch let FunctionsError.unknown(error) {
+      guard case let AFError.sessionTaskFailed(underlyingError as URLError) = error else {
+        XCTFail()
+        return
+      }
+
+      XCTAssertEqual(underlyingError.code, .badServerResponse)
     }
   }
 
@@ -273,10 +342,12 @@ final class FunctionsClientTests: XCTestCase {
     do {
       try await sut.invoke("hello_world")
       XCTFail("Invoke should fail.")
-    } catch let FunctionsError.httpError(code, _) {
-      XCTAssertEqual(code, 300)
     } catch {
-      XCTFail("Unexpected error thrown \(error)")
+      assertInlineSnapshot(of: error, as: .description) {
+        """
+        httpError(code: 300, data: 0 bytes)
+        """
+      }
     }
   }
 
@@ -303,18 +374,21 @@ final class FunctionsClientTests: XCTestCase {
     do {
       try await sut.invoke("hello_world")
       XCTFail("Invoke should fail.")
-    } catch FunctionsError.relayError {
     } catch {
-      XCTFail("Unexpected error thrown \(error)")
+      assertInlineSnapshot(of: error, as: .description) {
+        """
+        relayError
+        """
+      }
     }
   }
 
   func test_setAuth() {
     sut.setAuth(token: "access.token")
-    XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
+    XCTAssertEqual(sut.headers["Authorization"], "Bearer access.token")
 
     sut.setAuth(token: nil)
-    XCTAssertNil(sut.headers[.authorization])
+    XCTAssertNil(sut.headers["Authorization"])
   }
 
   func testInvokeWithStreamedResponse() async throws {
@@ -334,7 +408,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let stream = sut.invokeWithStreamedResponse("stream")
 
     for try await value in stream {
       XCTAssertEqual(String(decoding: value, as: UTF8.self), "hello world")
@@ -358,14 +432,18 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let stream = sut.invokeWithStreamedResponse("stream")
 
     do {
       for try await _ in stream {
         XCTFail("should throw error")
       }
-    } catch let FunctionsError.httpError(code, _) {
-      XCTAssertEqual(code, 300)
+    } catch {
+      assertInlineSnapshot(of: error, as: .description) {
+        """
+        httpError(code: 300, data: 0 bytes)
+        """
+      }
     }
   }
 
@@ -389,13 +467,18 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let stream = sut.invokeWithStreamedResponse("stream")
 
     do {
       for try await _ in stream {
         XCTFail("should throw error")
       }
-    } catch FunctionsError.relayError {
+    } catch {
+      assertInlineSnapshot(of: error, as: .description) {
+        """
+        relayError
+        """
+      }
     }
   }
 }

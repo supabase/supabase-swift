@@ -9,6 +9,7 @@ import ConcurrencyExtras
 import CustomDump
 import InlineSnapshotTesting
 import Mocker
+import SnapshotTestingCustomDump
 import TestHelpers
 import XCTest
 
@@ -23,7 +24,6 @@ final class AuthClientTests: XCTestCase {
 
   var storage: InMemoryLocalStorage!
 
-  var http: HTTPClientMock!
   var sut: AuthClient!
 
   #if !os(Windows) && !os(Linux) && !os(Android)
@@ -38,7 +38,7 @@ final class AuthClientTests: XCTestCase {
     super.setUp()
     storage = InMemoryLocalStorage()
 
-    //    isRecording = true
+    //        isRecording = true
   }
 
   override func tearDown() {
@@ -55,6 +55,24 @@ final class AuthClientTests: XCTestCase {
     sut = nil
     sessionManager = nil
     storage = nil
+  }
+
+  func testAuthClientInitialization() {
+    let client = makeSUT()
+
+    assertInlineSnapshot(of: client.configuration.headers, as: .customDump) {
+      """
+      [
+        "X-Client-Info": "auth-swift/0.0.0",
+        "X-Supabase-Api-Version": "2024-01-01",
+        "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+      ]
+      """
+    }
+
+    let client2 = makeSUT()
+
+    XCTAssertLessThan(client.clientID, client2.clientID, "Should increase client IDs")
   }
 
   func testOnAuthStateChanges() async throws {
@@ -89,7 +107,7 @@ final class AuthClientTests: XCTestCase {
     Mock(
       url: clientURL.appendingPathComponent("logout"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [
         .post: Data()
       ]
@@ -134,7 +152,7 @@ final class AuthClientTests: XCTestCase {
       url: clientURL.appendingPathComponent("logout").appendingQueryItems([
         URLQueryItem(name: "scope", value: "others")
       ]),
-      statusCode: 200,
+      statusCode: 204,
       data: [
         .post: Data()
       ]
@@ -600,14 +618,15 @@ final class AuthClientTests: XCTestCase {
       try await sut.session(from: url)
       XCTFail("Expect failure")
     } catch {
-      expectNoDifference(
-        error as? AuthError,
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
         AuthError.pkceGrantCodeExchange(
           message: "Identity is already linked to another user",
           error: "server_error",
           code: "422"
         )
-      )
+        """
+      }
     }
   }
 
@@ -779,7 +798,7 @@ final class AuthClientTests: XCTestCase {
     Mock(
       url: clientURL.appendingPathComponent("otp"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -812,7 +831,7 @@ final class AuthClientTests: XCTestCase {
     Mock(
       url: clientURL.appendingPathComponent("otp"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -894,7 +913,7 @@ final class AuthClientTests: XCTestCase {
       .snapshotRequest {
         #"""
         curl \
-        	--header "Authorization: bearer accesstoken" \
+        	--header "Authorization: Bearer accesstoken" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -938,7 +957,7 @@ final class AuthClientTests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
-      	--header "Authorization: bearer accesstoken" \
+      	--header "Authorization: Bearer accesstoken" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -997,7 +1016,7 @@ final class AuthClientTests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
-      	--header "Authorization: bearer accesstoken" \
+      	--header "Authorization: Bearer accesstoken" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -1245,7 +1264,6 @@ final class AuthClientTests: XCTestCase {
       #"""
       curl \
       	--request PUT \
-      	--header "Authorization: Bearer accesstoken" \
       	--header "Content-Length: 258" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
@@ -1277,7 +1295,7 @@ final class AuthClientTests: XCTestCase {
     Mock(
       url: clientURL.appendingPathComponent("recover"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -1307,7 +1325,7 @@ final class AuthClientTests: XCTestCase {
     Mock(
       url: clientURL.appendingPathComponent("resend"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -1398,7 +1416,7 @@ final class AuthClientTests: XCTestCase {
   func testReauthenticate() async throws {
     Mock(
       url: clientURL.appendingPathComponent("reauthenticate"),
-      statusCode: 200,
+      statusCode: 204,
       data: [.get: Data()]
     )
     .snapshotRequest {
@@ -2154,7 +2172,6 @@ final class AuthClientTests: XCTestCase {
   private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-    let session = URLSession(configuration: sessionConfiguration)
 
     let encoder = AuthClient.Configuration.jsonEncoder
     encoder.outputFormatting = [.sortedKeys]
@@ -2169,9 +2186,7 @@ final class AuthClientTests: XCTestCase {
       localStorage: storage,
       logger: nil,
       encoder: encoder,
-      fetch: { request in
-        try await session.data(for: request)
-      }
+      session: .init(configuration: sessionConfiguration)
     )
 
     let sut = AuthClient(configuration: configuration)
@@ -2222,56 +2237,6 @@ final class AuthClientTests: XCTestCase {
     }
 
     return result
-  }
-}
-
-extension HTTPResponse {
-  static func stub(
-    _ body: String = "",
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: body.data(using: .utf8)!,
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
-  }
-
-  static func stub(
-    fromFileName fileName: String,
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: json(named: fileName),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
-  }
-
-  static func stub(
-    _ value: some Encodable,
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: try! AuthClient.Configuration.jsonEncoder.encode(value),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
   }
 }
 

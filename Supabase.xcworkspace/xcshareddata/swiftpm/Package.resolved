@@ -1,6 +1,15 @@
 {
-  "originHash" : "68a31593121bf823182bc731b17208689dafb38f7cb085035de5e74a0ed41e89",
+  "originHash" : "16b637b66d3448723d8c2cfb0fc58192ebb52c7da55e9368fe7a3efe06068a6f",
   "pins" : [
+    {
+      "identity" : "alamofire",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Alamofire/Alamofire",
+      "state" : {
+        "revision" : "513364f870f6bfc468f9d2ff0a95caccc10044c5",
+        "version" : "5.10.2"
+      }
+    },
     {
       "identity" : "appauth-ios",
       "kind" : "remoteSourceControl",
@@ -161,15 +170,6 @@
       "state" : {
         "revision" : "82645ec760917961cfa08c9c0c7104a57a0fa4b1",
         "version" : "1.3.3"
-      }
-    },
-    {
-      "identity" : "swift-http-types",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-http-types.git",
-      "state" : {
-        "revision" : "ef18d829e8b92d731ad27bb81583edd2094d1ce3",
-        "version" : "1.3.1"
       }
     },
     {

@@ -12,84 +12,84 @@ import XCTest
 @testable import Realtime
 
 #if !os(Android) && !os(Linux) && !os(Windows)
-  @MainActor
-  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
-  final class _PushTests: XCTestCase {
-    var ws: FakeWebSocket!
-    var socket: RealtimeClientV2!
+ @MainActor
+ @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
+ final class _PushTests: XCTestCase {
+   var ws: FakeWebSocket!
+   var socket: RealtimeClientV2!
 
-    override func setUp() {
-      super.setUp()
+   override func setUp() {
+     super.setUp()
 
-      let (client, server) = FakeWebSocket.fakes()
-      ws = server
+     let (client, server) = FakeWebSocket.fakes()
+     ws = server
 
-      socket = RealtimeClientV2(
-        url: URL(string: "https://localhost:54321/v1/realtime")!,
-        options: RealtimeClientOptions(
-          headers: ["apiKey": "apikey"]
-        ),
-        wsTransport: { _, _ in client },
-        http: HTTPClientMock()
-      )
-    }
+     socket = RealtimeClientV2(
+       url: URL(string: "https://localhost:54321/v1/realtime")!,
+       options: RealtimeClientOptions(
+         headers: ["apiKey": "apikey"]
+       ),
+       wsTransport: { _, _ in client },
+       session: .default
+     )
+   }
 
-    func testPushWithoutAck() async {
-      let channel = RealtimeChannelV2(
-        topic: "realtime:users",
-        config: RealtimeChannelConfig(
-          broadcast: .init(acknowledgeBroadcasts: false),
-          presence: .init(),
-          isPrivate: false
-        ),
-        socket: socket,
-        logger: nil
-      )
-      let push = PushV2(
-        channel: channel,
-        message: RealtimeMessageV2(
-          joinRef: nil,
-          ref: "1",
-          topic: "realtime:users",
-          event: "broadcast",
-          payload: [:]
-        )
-      )
+   func testPushWithoutAck() async {
+     let channel = RealtimeChannelV2(
+       topic: "realtime:users",
+       config: RealtimeChannelConfig(
+         broadcast: .init(acknowledgeBroadcasts: false),
+         presence: .init(),
+         isPrivate: false
+       ),
+       socket: socket,
+       logger: nil
+     )
+     let push = PushV2(
+       channel: channel,
+       message: RealtimeMessageV2(
+         joinRef: nil,
+         ref: "1",
+         topic: "realtime:users",
+         event: "broadcast",
+         payload: [:]
+       )
+     )
 
-      let status = await push.send()
-      XCTAssertEqual(status, .ok)
-    }
+     let status = await push.send()
+     XCTAssertEqual(status, .ok)
+   }
 
-    func testPushWithAck() async {
-      let channel = RealtimeChannelV2(
-        topic: "realtime:users",
-        config: RealtimeChannelConfig(
-          broadcast: .init(acknowledgeBroadcasts: true),
-          presence: .init(),
-          isPrivate: false
-        ),
-        socket: socket,
-        logger: nil
-      )
-      let push = PushV2(
-        channel: channel,
-        message: RealtimeMessageV2(
-          joinRef: nil,
-          ref: "1",
-          topic: "realtime:users",
-          event: "broadcast",
-          payload: [:]
-        )
-      )
+   func testPushWithAck() async {
+     let channel = RealtimeChannelV2(
+       topic: "realtime:users",
+       config: RealtimeChannelConfig(
+         broadcast: .init(acknowledgeBroadcasts: true),
+         presence: .init(),
+         isPrivate: false
+       ),
+       socket: socket,
+       logger: nil
+     )
+     let push = PushV2(
+       channel: channel,
+       message: RealtimeMessageV2(
+         joinRef: nil,
+         ref: "1",
+         topic: "realtime:users",
+         event: "broadcast",
+         payload: [:]
+       )
+     )
 
-      let task = Task {
-        await push.send()
-      }
-      await Task.megaYield()
-      push.didReceive(status: .ok)
+     let task = Task {
+       await push.send()
+     }
+     await Task.megaYield()
+     push.didReceive(status: .ok)
 
-      let status = await task.value
-      XCTAssertEqual(status, .ok)
-    }
-  }
+     let status = await task.value
+     XCTAssertEqual(status, .ok)
+   }
+ }
 #endif
