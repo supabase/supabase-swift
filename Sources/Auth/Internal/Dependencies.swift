@@ -2,23 +2,13 @@ import Alamofire
 import ConcurrencyExtras
 import Foundation
 
-struct Dependencies: Sendable {
-  var configuration: AuthClient.Configuration
-  var session: Alamofire.Session
-  var api: APIClient
-  var codeVerifierStorage: CodeVerifierStorage
-  var sessionStorage: SessionStorage
-  var sessionManager: SessionManager
+struct Dependencies {
+  // var sessionManager: SessionManager
 
   var eventEmitter = AuthStateChangeEventEmitter()
   var date: @Sendable () -> Date = { Date() }
 
   var urlOpener: URLOpener = .live
-  var pkce: PKCE = .live
-  var logger: SupabaseLogger?
-
-  var encoder: JSONEncoder { configuration.encoder }
-  var decoder: JSONDecoder { configuration.decoder }
 }
 
 extension Dependencies {

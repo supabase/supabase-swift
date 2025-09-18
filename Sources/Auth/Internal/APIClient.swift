@@ -3,18 +3,8 @@ import Foundation
 
 struct NoopParameter: Encodable, Sendable {}
 
-struct APIClient: Sendable {
-  let clientID: AuthClientID
+extension AuthClient {
 
-  var configuration: AuthClient.Configuration {
-    Dependencies[clientID].configuration
-  }
-
-  var session: Alamofire.Session {
-    Dependencies[clientID].session
-  }
-
-  private let urlQueryEncoder: any ParameterEncoding = URLEncoding.queryString
   private var defaultEncoder: any ParameterEncoder {
     JSONParameterEncoder(encoder: configuration.encoder)
   }
@@ -29,15 +19,15 @@ struct APIClient: Sendable {
   ) throws -> DataRequest {
     var request = try URLRequest(url: url, method: method, headers: headers)
 
-    request = try urlQueryEncoder.encode(request, with: query)
+    request = try URLEncoding.queryString.encode(request, with: query)
     if RequestBody.self != NoopParameter.self {
       request = try (encoder ?? defaultEncoder).encode(body, into: request)
     }
 
-    return session.request(request)
+    return alamofireSession.request(request)
       .validate { _, response, data in
         guard 200..<300 ~= response.statusCode else {
-          return .failure(handleError(response: response, data: data ?? Data()))
+          return .failure(self.handleError(response: response, data: data ?? Data()))  // swiftlint:disable:this redundant_discardable_result
         }
         return .success(())
       }

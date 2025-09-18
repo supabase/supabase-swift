@@ -1,15 +1,67 @@
 import Foundation
 
-/// Contains the full multi-factor authentication API.
+/// Multi-factor authentication API for Supabase Auth.
+///
+/// The `AuthMFA` struct provides comprehensive multi-factor authentication functionality
+/// including enrolling factors, challenging users, and verifying MFA codes. It supports
+/// TOTP (Time-based One-Time Password) factors for authenticator apps.
+///
+/// ## Basic Usage
+///
+/// ```swift
+/// // Enroll a new MFA factor
+/// let enrollment = try await authClient.mfa.enroll(
+///   params: MFAEnrollParams(
+///     factorType: .totp,
+///     friendlyName: "My Authenticator App"
+///   )
+/// )
+///
+/// // Challenge the user with the factor
+/// let challenge = try await authClient.mfa.challenge(
+///   params: MFAChallengeParams(factorId: enrollment.id)
+/// )
+///
+/// // Verify the MFA code
+/// let verification = try await authClient.mfa.verify(
+///   params: MFAVerifyParams(
+///     factorId: enrollment.id,
+///     code: "123456"
+///   )
+/// )
+/// ```
+///
+/// ## Complete MFA Flow
+///
+/// ```swift
+/// // 1. Enroll factor
+/// let enrollment = try await authClient.mfa.enroll(
+///   params: MFAEnrollParams(
+///     factorType: .totp,
+///     friendlyName: "My Phone"
+///   )
+/// )
+///
+/// // 2. Show QR code to user (enrollment.totp.qrCode)
+/// // User scans QR code with authenticator app
+///
+/// // 3. Challenge the factor
+/// let challenge = try await authClient.mfa.challenge(
+///   params: MFAChallengeParams(factorId: enrollment.id)
+/// )
+///
+/// // 4. User enters code from authenticator app
+/// let verification = try await authClient.mfa.verify(
+///   params: MFAVerifyParams(
+///     factorId: enrollment.id,
+///     code: userEnteredCode
+///   )
+/// )
+///
+/// // 5. MFA is now enabled for the user
+/// ```
 public struct AuthMFA: Sendable {
-  let clientID: AuthClientID
-
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].encoder }
-  var decoder: JSONDecoder { Dependencies[clientID].decoder }
-  var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
-  var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
+  let client: AuthClient
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
   /// creates a new `unverified` factor.
@@ -26,15 +78,15 @@ public struct AuthMFA: Sendable {
     -> AuthMFAEnrollResponse
   {
     try await wrappingError(or: mapToAuthError) {
-      try await self.api.execute(
-        self.configuration.url.appendingPathComponent("factors"),
+      try await self.client.execute(
+        self.client.url.appendingPathComponent("factors"),
         method: .post,
         headers: [
-          .authorization(bearerToken: try await sessionManager.session().accessToken)
+          .authorization(bearerToken: try await self.client.sessionManager.session().accessToken)
         ],
         body: params
       )
-      .serializingDecodable(AuthMFAEnrollResponse.self, decoder: configuration.decoder)
+      .serializingDecodable(AuthMFAEnrollResponse.self, decoder: self.client.configuration.decoder)
       .value
     }
   }
@@ -47,15 +99,17 @@ public struct AuthMFA: Sendable {
     -> AuthMFAChallengeResponse
   {
     try await wrappingError(or: mapToAuthError) {
-      try await self.api.execute(
-        self.configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
+      try await self.client.execute(
+        self.client.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
         method: .post,
         headers: [
-          .authorization(bearerToken: try await sessionManager.session().accessToken)
+          .authorization(bearerToken: try await self.client.sessionManager.session().accessToken)
         ],
         body: params.channel == nil ? nil : ["channel": params.channel]
       )
-      .serializingDecodable(AuthMFAChallengeResponse.self, decoder: configuration.decoder)
+      .serializingDecodable(
+        AuthMFAChallengeResponse.self, decoder: self.client.configuration.decoder
+      )
       .value
     }
   }
@@ -68,20 +122,20 @@ public struct AuthMFA: Sendable {
   @discardableResult
   public func verify(params: MFAVerifyParams) async throws(AuthError) -> AuthMFAVerifyResponse {
     return try await wrappingError(or: mapToAuthError) {
-      let response = try await self.api.execute(
-        self.configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
+      let response = try await self.client.execute(
+        self.client.url.appendingPathComponent("factors/\(params.factorId)/verify"),
         method: .post,
         headers: [
-          .authorization(bearerToken: try await sessionManager.session().accessToken)
+          .authorization(bearerToken: try await self.client.sessionManager.session().accessToken)
         ],
         body: params
       )
-      .serializingDecodable(AuthMFAVerifyResponse.self, decoder: configuration.decoder)
+      .serializingDecodable(AuthMFAVerifyResponse.self, decoder: self.client.configuration.decoder)
       .value
 
-      await sessionManager.update(response)
+      await self.client.sessionManager.update(response)
 
-      eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
+      self.client.eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
 
       return response
     }
@@ -96,14 +150,16 @@ public struct AuthMFA: Sendable {
   public func unenroll(params: MFAUnenrollParams) async throws(AuthError) -> AuthMFAUnenrollResponse
   {
     try await wrappingError(or: mapToAuthError) {
-      try await self.api.execute(
-        self.configuration.url.appendingPathComponent("factors/\(params.factorId)"),
+      try await self.client.execute(
+        self.client.url.appendingPathComponent("factors/\(params.factorId)"),
         method: .delete,
         headers: [
-          .authorization(bearerToken: try await sessionManager.session().accessToken)
+          .authorization(bearerToken: try await self.client.sessionManager.session().accessToken)
         ]
       )
-      .serializingDecodable(AuthMFAUnenrollResponse.self, decoder: configuration.decoder)
+      .serializingDecodable(
+        AuthMFAUnenrollResponse.self, decoder: self.client.configuration.decoder
+      )
       .value
     }
   }
@@ -131,7 +187,7 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response with the list of MFA factors.
   public func listFactors() async throws(AuthError) -> AuthMFAListFactorsResponse {
     try await wrappingError(or: mapToAuthError) {
-      let user = try await sessionManager.session().user
+      let user = try await self.client.sessionManager.session().user
       let factors = user.factors ?? []
       let totp = factors.filter {
         $0.factorType == "totp" && $0.status == .verified
@@ -151,7 +207,7 @@ public struct AuthMFA: Sendable {
   {
     do {
       return try await wrappingError(or: mapToAuthError) {
-        let session = try await sessionManager.session()
+        let session = try await self.client.sessionManager.session()
         let payload = JWT.decodePayload(session.accessToken)
 
         var currentLevel: AuthenticatorAssuranceLevels?

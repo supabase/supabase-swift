@@ -118,6 +118,8 @@
 - [x] Type-safe body handling with support for Data, String, Encodable, multipart forms, and file uploads
 - [x] Native multipart form data and file upload support via Alamofire integration
 - [x] Smart Content-Type header handling (sets defaults only when not explicitly provided)
+- [x] Comprehensive DocC documentation with detailed usage examples and best practices
+- [x] Streaming response support with AsyncThrowingStream
 - [x] Improved FunctionRegion type with RawRepresentable and ExpressibleByStringLiteral
 - [x] Added support for more AWS regions (ap-northeast-2, ap-south-1, ap-southeast-2, ca-central-1, eu-central-1, eu-west-2, eu-west-3, sa-east-1, us-west-2)
 
@@ -167,12 +169,15 @@
 - [x] Addressed auth client global state thread safety issues ✅
 
 ### 📚 Documentation
-- [x] Complete API documentation overhaul
+- [x] Complete API documentation overhaul with DocC-style documentation
 - [x] New getting started guides with v3.0.0 features
-- [x] Updated code examples for all features
+- [x] Updated code examples for all features with comprehensive async/await examples
 - [x] Comprehensive migration guide
 - [x] Enhanced MFA examples with AAL capabilities
-- [ ] Best practices documentation
+- [x] Module-specific README files (Auth module documentation added)
+- [x] Detailed function and type documentation with usage examples
+- [x] Improved URL handling examples for auth flows
+- [x] Best practices documentation embedded in API docs
 
 ### 🔧 Development
 - [x] Updated minimum Swift version requirement (Swift 6.0+) ✅

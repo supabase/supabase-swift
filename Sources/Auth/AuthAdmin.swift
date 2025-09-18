@@ -7,23 +7,83 @@
 
 import Foundation
 
+/// Administrative API for Supabase Auth.
+///
+/// The `AuthAdmin` struct provides administrative functionality for user management.
+/// These methods require elevated permissions and should only be used on the server side
+/// with the `service_role` key.
+///
+/// - Warning: These methods require `service_role` key and should never be exposed to client-side code.
+///
+/// ## Basic Usage
+///
+/// ```swift
+/// // Get user by ID
+/// let user = try await authClient.admin.getUserById(userId)
+///
+/// // Create a new user
+/// let newUser = try await authClient.admin.createUser(
+///   attributes: AdminUserAttributes(
+///     email: "admin@example.com",
+///     password: "securepassword",
+///     emailConfirm: true
+///   )
+/// )
+///
+/// // Update user attributes
+/// let updatedUser = try await authClient.admin.updateUser(
+///   uid: userId,
+///   attributes: AdminUserAttributes(
+///     data: ["role": "admin"]
+///   )
+/// )
+/// ```
+///
+/// ## User Management
+///
+/// ```swift
+/// // List users with pagination
+/// let users = try await authClient.admin.listUsers(
+///   params: AdminListUsersParams(
+///     page: 1,
+///     perPage: 50
+///   )
+/// )
+///
+/// // Delete a user
+/// try await authClient.admin.deleteUser(id: userId)
+///
+/// // Invite a user
+/// let invitedUser = try await authClient.admin.inviteUserByEmail(
+///   email: "newuser@example.com",
+///   redirectTo: URL(string: "myapp://invite")
+/// )
+/// ```
+///
+/// ## Link Generation
+///
+/// ```swift
+/// // Generate a magic link
+/// let link = try await authClient.admin.generateLink(
+///   params: GenerateLinkParams(
+///     type: .magicLink,
+///     email: "user@example.com",
+///     redirectTo: URL(string: "myapp://auth/callback")
+///   )
+/// )
+/// ```
 public struct AuthAdmin: Sendable {
-  let clientID: AuthClientID
-
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].encoder }
-  var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
+  let client: AuthClient
 
   /// Get user by id.
   /// - Parameter uid: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
   public func getUserById(_ uid: UUID) async throws(AuthError) -> User {
     try await wrappingError(or: mapToAuthError) {
-      try await self.api.execute(
-        self.configuration.url.appendingPathComponent("admin/users/\(uid)")
+      try await self.client.execute(
+        self.client.url.appendingPathComponent("admin/users/\(uid)")
       )
-      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .serializingDecodable(User.self, decoder: self.client.configuration.decoder)
       .value
     }
   }
@@ -37,12 +97,12 @@ public struct AuthAdmin: Sendable {
     -> User
   {
     try await wrappingError(or: mapToAuthError) {
-      try await self.api.execute(
-        self.configuration.url.appendingPathComponent("admin/users/\(uid)"),
+      try await self.client.execute(
+        self.client.url.appendingPathComponent("admin/users/\(uid)"),
         method: .put,
         body: attributes
       )
-      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .serializingDecodable(User.self, decoder: self.client.configuration.decoder)
       .value
     }
   }
@@ -56,12 +116,12 @@ public struct AuthAdmin: Sendable {
   @discardableResult
   public func createUser(attributes: AdminUserAttributes) async throws(AuthError) -> User {
     try await wrappingError(or: mapToAuthError) {
-      try await self.api.execute(
-        self.configuration.url.appendingPathComponent("admin/users"),
+      try await self.client.execute(
+        self.client.url.appendingPathComponent("admin/users"),
         method: .post,
         body: attributes
       )
-      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .serializingDecodable(User.self, decoder: self.client.configuration.decoder)
       .value
     }
   }
@@ -82,10 +142,10 @@ public struct AuthAdmin: Sendable {
     redirectTo: URL? = nil
   ) async throws(AuthError) -> User {
     try await wrappingError(or: mapToAuthError) {
-      try await self.api.execute(
-        self.configuration.url.appendingPathComponent("admin/invite"),
+      try await self.client.execute(
+        self.client.url.appendingPathComponent("admin/invite"),
         method: .post,
-        query: (redirectTo ?? self.configuration.redirectToURL).map {
+        query: (redirectTo ?? self.client.configuration.redirectToURL).map {
           ["redirect_to": $0.absoluteString]
         },
         body: [
@@ -93,7 +153,7 @@ public struct AuthAdmin: Sendable {
           "data": data.map({ AnyJSON.object($0) }) ?? .null,
         ]
       )
-      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .serializingDecodable(User.self, decoder: self.client.configuration.decoder)
       .value
     }
   }
@@ -107,8 +167,8 @@ public struct AuthAdmin: Sendable {
   /// - Warning: Never expose your `service_role` key on the client.
   public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws(AuthError) {
     _ = try await wrappingError(or: mapToAuthError) {
-      try await self.api.execute(
-        self.configuration.url.appendingPathComponent("admin/users/\(id)"),
+      try await self.client.execute(
+        self.client.url.appendingPathComponent("admin/users/\(id)"),
         method: .delete,
         body: DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
       ).serializingData().value
@@ -129,14 +189,14 @@ public struct AuthAdmin: Sendable {
     }
 
     return try await wrappingError(or: mapToAuthError) {
-      let httpResponse = try await self.api.execute(
-        self.configuration.url.appendingPathComponent("admin/users"),
+      let httpResponse = try await self.client.execute(
+        self.client.url.appendingPathComponent("admin/users"),
         query: [
           "page": params?.page?.description ?? "",
           "per_page": params?.perPage?.description ?? "",
         ]
       )
-      .serializingDecodable(Response.self, decoder: self.configuration.decoder)
+      .serializingDecodable(Response.self, decoder: self.client.configuration.decoder)
       .response
 
       let response = try httpResponse.result.get()
@@ -179,7 +239,7 @@ public struct AuthAdmin: Sendable {
   /// - Throws: An error if the link generation fails.
   /// - Returns: The generated link.
   public func generateLink(params: GenerateLinkParams) async throws -> GenerateLinkResponse {
-    try await api.execute(
+    try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/generate_link").appendingQueryItems(
           [

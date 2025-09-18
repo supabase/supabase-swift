@@ -21,23 +21,23 @@ extension SessionStorage {
     Dependencies[clientID].configuration.storageKey ?? defaultStorageKey
   }
 
-  static func live(clientID: AuthClientID) -> SessionStorage {
+  static func live(client: AuthClient) -> SessionStorage {
     var storage: any AuthLocalStorage {
-      Dependencies[clientID].configuration.localStorage
+      client.configuration.localStorage
     }
 
     var logger: SupabaseLogger? {
-      Dependencies[clientID].configuration.logger
+      client.configuration.logger
     }
 
     let migrations: [StorageMigration] = [
-      .sessionNewKey(clientID: clientID),
-      .storeSessionDirectly(clientID: clientID),
-      .useDefaultEncoder(clientID: clientID),
+      .sessionNewKey(client: client),
+      .storeSessionDirectly(client: client),
+      .useDefaultEncoder(client: client),
     ]
 
     var key: String {
-      SessionStorage.key(clientID)
+      SessionStorage.key(client.clientID)
     }
 
     return SessionStorage(
@@ -91,10 +91,10 @@ struct StorageMigration {
 extension StorageMigration {
   /// Migrate stored session from `supabase.session` key to the custom provided storage key
   /// or the default `supabase.auth.token` key.
-  static func sessionNewKey(clientID: AuthClientID) -> StorageMigration {
+  static func sessionNewKey(client: AuthClient) -> StorageMigration {
     StorageMigration(name: "sessionNewKey") {
-      let storage = Dependencies[clientID].configuration.localStorage
-      let newKey = SessionStorage.key(clientID)
+      let storage = client.configuration.localStorage
+      let newKey = SessionStorage.key(client.clientID)
 
       if let storedData = try? storage.retrieve(key: "supabase.session") {
         // migrate to new key.
@@ -114,15 +114,15 @@ extension StorageMigration {
   /// }
   /// ```
   /// To directly store the `Session` object.
-  static func storeSessionDirectly(clientID: AuthClientID) -> StorageMigration {
+  static func storeSessionDirectly(client: AuthClient) -> StorageMigration {
     struct StoredSession: Codable {
       var session: Session
       var expirationDate: Date
     }
 
     return StorageMigration(name: "storeSessionDirectly") {
-      let storage = Dependencies[clientID].configuration.localStorage
-      let key = SessionStorage.key(clientID)
+      let storage = client.configuration.localStorage
+      let key = SessionStorage.key(client.clientID)
 
       if let data = try? storage.retrieve(key: key),
         let storedSession = try? AuthClient.Configuration.jsonDecoder.decode(
@@ -136,10 +136,10 @@ extension StorageMigration {
     }
   }
 
-  static func useDefaultEncoder(clientID: AuthClientID) -> StorageMigration {
+  static func useDefaultEncoder(client: AuthClient) -> StorageMigration {
     StorageMigration(name: "useDefaultEncoder") {
-      let storage = Dependencies[clientID].configuration.localStorage
-      let key = SessionStorage.key(clientID)
+      let storage = client.configuration.localStorage
+      let key = SessionStorage.key(client.clientID)
 
       let storedData = try? storage.retrieve(key: key)
       let sessionUsingOldDecoder = storedData.flatMap {

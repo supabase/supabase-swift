@@ -11,8 +11,8 @@ struct SessionManager: Sendable {
 }
 
 extension SessionManager {
-  static func live(clientID: AuthClientID) -> Self {
-    let instance = LiveSessionManager(clientID: clientID)
+  static func live(client: AuthClient) -> Self {
+    let instance = LiveSessionManager(client: client)
     return Self(
       session: { try await instance.session() },
       refreshSession: { try await instance.refreshSession($0) },
@@ -25,25 +25,19 @@ extension SessionManager {
 }
 
 private actor LiveSessionManager {
-  private var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
-  private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
-  private var logger: SupabaseLogger? { Dependencies[clientID].logger }
-  private var api: APIClient { Dependencies[clientID].api }
-
   private var inFlightRefreshTask: Task<Session, any Error>?
   private var startAutoRefreshTokenTask: Task<Void, Never>?
 
-  let clientID: AuthClientID
+  let client: AuthClient
 
-  init(clientID: AuthClientID) {
-    self.clientID = clientID
+  init(client: AuthClient) {
+    self.client = client
   }
 
   func session() async throws -> Session {
-    try await trace(using: logger) {
-      guard let currentSession = sessionStorage.get() else {
-        logger?.debug("session missing")
+    try await trace(using: client.configuration.logger) {
+      guard let currentSession = await client.sessionStorage.get() else {
+        client.configuration.logger?.debug("session missing")
         throw AuthError.sessionMissing
       }
 
@@ -51,37 +45,37 @@ private actor LiveSessionManager {
         return currentSession
       }
 
-      logger?.debug("session expired")
+      client.configuration.logger?.debug("session expired")
       return try await refreshSession(currentSession.refreshToken)
     }
   }
 
   func refreshSession(_ refreshToken: String) async throws -> Session {
-    try await trace(using: logger) {
+    try await trace(using: client.configuration.logger) {
       if let inFlightRefreshTask {
-        logger?.debug("Refresh already in flight")
+        client.configuration.logger?.debug("Refresh already in flight")
         return try await inFlightRefreshTask.value
       }
 
       inFlightRefreshTask = Task {
-        logger?.debug("Refresh task started")
+        client.configuration.logger?.debug("Refresh task started")
 
         defer {
           inFlightRefreshTask = nil
-          logger?.debug("Refresh task ended")
+          client.configuration.logger?.debug("Refresh task ended")
         }
 
-        let session = try await api.execute(
-          configuration.url.appendingPathComponent("token"),
+        let session = try await client.execute(
+          client.url.appendingPathComponent("token"),
           method: .post,
           query: ["grant_type": "refresh_token"],
           body: UserCredentials(refreshToken: refreshToken)
         )
-        .serializingDecodable(Session.self, decoder: configuration.decoder)
+        .serializingDecodable(Session.self, decoder: client.configuration.decoder)
         .value
 
-        update(session)
-        eventEmitter.emit(.tokenRefreshed, session: session)
+        await update(session)
+        await client.eventEmitter.emit(.tokenRefreshed, session: session)
 
         return session
       }
@@ -90,16 +84,16 @@ private actor LiveSessionManager {
     }
   }
 
-  func update(_ session: Session) {
-    sessionStorage.store(session)
+  func update(_ session: Session) async {
+    await client.sessionStorage.store(session)
   }
 
-  func remove() {
-    sessionStorage.delete()
+  func remove() async {
+    await client.sessionStorage.delete()
   }
 
   func startAutoRefreshToken() {
-    logger?.debug("start auto refresh token")
+    client.configuration.logger?.debug("start auto refresh token")
 
     startAutoRefreshTokenTask?.cancel()
     startAutoRefreshTokenTask = Task {
@@ -111,21 +105,21 @@ private actor LiveSessionManager {
   }
 
   func stopAutoRefreshToken() {
-    logger?.debug("stop auto refresh token")
+    client.configuration.logger?.debug("stop auto refresh token")
     startAutoRefreshTokenTask?.cancel()
     startAutoRefreshTokenTask = nil
   }
 
   private func autoRefreshTokenTick() async {
-    await trace(using: logger) {
+    await trace(using: client.configuration.logger) {
       let now = Date().timeIntervalSince1970
 
-      guard let session = sessionStorage.get() else {
+      guard let session = await client.sessionStorage.get() else {
         return
       }
 
       let expiresInTicks = Int((session.expiresAt - now) / autoRefreshTickDuration)
-      logger?.debug(
+      client.configuration.logger?.debug(
         "access token expires in \(expiresInTicks) ticks, a tick lasts \(autoRefreshTickDuration)s, refresh threshold is \(autoRefreshTickThreshold) ticks"
       )
 

@@ -280,7 +280,13 @@ public final class SupabaseClient: @unchecked Sendable {
   ///   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   /// ) -> Bool {
   ///   if let url = launchOptions?[.url] as? URL {
-  ///     supabase.handle(url)
+  ///     Task {
+  ///       do {
+  ///         try await supabase.handle(url)
+  ///       } catch {
+  ///         print("Error handling URL: \(error)")
+  ///       }
+  ///     }
   ///   }
   ///
   ///   return true
@@ -291,7 +297,13 @@ public final class SupabaseClient: @unchecked Sendable {
   ///   open url: URL,
   ///   options: [UIApplication.OpenURLOptionsKey: Any]
   /// ) -> Bool {
-  ///   supabase.handle(url)
+  ///   Task {
+  ///     do {
+  ///       try await supabase.handle(url)
+  ///     } catch {
+  ///       print("Error handling URL: \(error)")
+  ///     }
+  ///   }
   ///   return true
   /// }
   /// ```
@@ -303,7 +315,13 @@ public final class SupabaseClient: @unchecked Sendable {
   /// ```swift
   /// func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
   ///   guard let url = URLContexts.first?.url else { return }
-  ///   supabase.handle(url)
+  ///   Task {
+  ///     do {
+  ///       try await supabase.handle(url)
+  ///     } catch {
+  ///       print("Error handling URL: \(error)")
+  ///     }
+  ///   }
   /// }
   /// ```
   ///
@@ -314,11 +332,17 @@ public final class SupabaseClient: @unchecked Sendable {
   /// ```swift
   /// SomeView()
   ///   .onOpenURL { url in
-  ///     supabase.handle(url)
+  ///     Task {
+  ///       do {
+  ///         try await supabase.handle(url)
+  ///       } catch {
+  ///         print("Error handling URL: \(error)")
+  ///       }
+  ///     }
   ///   }
   /// ```
-  public func handle(_ url: URL) {
-    auth.handle(url)
+  public func handle(_ url: URL) async throws {
+    try await auth.handle(url)
   }
 
   deinit {
@@ -386,7 +410,7 @@ public final class SupabaseClient: @unchecked Sendable {
 
   private func listenForAuthEvents() {
     let task = Task {
-      for await (event, session) in auth.authStateChanges {
+      for await (event, session) in await auth.authStateChanges {
         await handleTokenChanged(event: event, session: session)
       }
     }
