@@ -2,11 +2,15 @@ import Alamofire
 import Foundation
 
 /// An error type representing various errors that can occur while invoking functions.
-public enum FunctionsError: Error, LocalizedError {
+public enum FunctionsError: SupabaseError {
   /// Error indicating a relay error while invoking the Edge Function.
   case relayError
   /// Error indicating a non-2xx status code returned by the Edge Function.
   case httpError(code: Int, data: Data)
+  /// Error indicating a function was not found.
+  case functionNotFound(functionName: String)
+  /// Error indicating a function execution failed.
+  case functionError(message: String, data: Data?)
 
   case unknown(any Error)
 
@@ -17,8 +21,50 @@ public enum FunctionsError: Error, LocalizedError {
       "Relay Error invoking the Edge Function"
     case let .httpError(code, _):
       "Edge Function returned a non-2xx status code: \(code)"
+    case let .functionNotFound(functionName):
+      "Function '\(functionName)' not found"
+    case let .functionError(message, _):
+      "Function execution failed: \(message)"
     case let .unknown(error):
-      "Unkown error: \(error.localizedDescription)"
+      "Unknown error: \(error.localizedDescription)"
+    }
+  }
+  
+  // MARK: - SupabaseError Protocol Conformance
+  
+  public var errorCode: String {
+    switch self {
+    case .relayError: return SupabaseErrorCode.relayError.rawValue
+    case .httpError: return SupabaseErrorCode.functionError.rawValue
+    case .functionNotFound: return SupabaseErrorCode.functionNotFound.rawValue
+    case .functionError: return SupabaseErrorCode.functionError.rawValue
+    case .unknown: return SupabaseErrorCode.unknown.rawValue
+    }
+  }
+  
+  public var underlyingData: Data? {
+    switch self {
+    case let .httpError(_, data), let .functionError(_, data?):
+      return data
+    default:
+      return nil
+    }
+  }
+  
+  public var underlyingResponse: HTTPURLResponse? {
+    return nil
+  }
+  
+  public var context: [String: String] {
+    switch self {
+    case let .httpError(code, _):
+      return ["statusCode": String(code)]
+    case let .functionNotFound(functionName):
+      return ["functionName": functionName]
+    case .functionError:
+      return [:]
+    default:
+      return [:]
     }
   }
 }

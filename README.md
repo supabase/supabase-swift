@@ -7,6 +7,20 @@ Supabase client for Swift. Mirrors the design of [supabase-js](https://github.co
 
 * Documentation: [https://supabase.com/docs/reference/swift/introduction](https://supabase.com/docs/reference/swift/introduction)
 
+## 🚀 v3.0.0 Release
+
+Supabase Swift v3.0.0 is a major release with significant improvements:
+
+- **Modernized API**: Cleaner, more consistent APIs across all modules
+- **Enhanced Error Handling**: Unified error system with better debugging information
+- **Improved Performance**: Optimized networking with Alamofire integration
+- **Better Type Safety**: Enhanced compile-time checks and type inference
+- **Streamlined Authentication**: Simplified auth flows with better MFA support
+- **Real-time Improvements**: Modernized WebSocket handling and subscription management
+
+> [!IMPORTANT]
+> v3.0.0 contains breaking changes. See the [Migration Guide](./V3_MIGRATION_GUIDE.md) for upgrade instructions.
+
 ## Usage
 
 ### Requirements
@@ -27,7 +41,7 @@ let package = Package(
         ...
         .package(
             url: "https://github.com/supabase/supabase-swift.git",
-            from: "2.0.0"
+            from: "3.0.0"
         ),
     ],
     targets: [
@@ -71,6 +85,22 @@ let client = SupabaseClient(
             session: URLSession.myCustomSession
         )
     )
+)
+```
+
+### v3.0.0 Convenience Initializers
+
+```swift
+// Production environment with optimized settings
+let productionClient = SupabaseClient.production(
+    supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
+    supabaseKey: "public-anon-key"
+)
+
+// Development environment with debug settings
+let developmentClient = SupabaseClient.development(
+    supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
+    supabaseKey: "public-anon-key"
 )
 ```
 
