@@ -52,7 +52,7 @@ public struct FunctionInvokeOptions: Sendable {
   public var headers: [HTTPHeader] = []
   
   /// The region to invoke the function in.
-  public var region: String?
+  public var region: FunctionRegion?
   
   /// Timeout for the request.
   public var timeout: TimeInterval?
@@ -65,7 +65,7 @@ public struct FunctionInvokeOptions: Sendable {
     body: Data? = nil,
     query: [URLQueryItem] = [],
     headers: [HTTPHeader] = [],
-    region: String? = nil,
+    region: FunctionRegion? = nil,
     timeout: TimeInterval? = nil,
     retryConfiguration: RetryConfiguration? = nil
   ) {
@@ -111,7 +111,7 @@ public struct FunctionInvokeOptions: Sendable {
     jsonBody: some Encodable,
     query: [URLQueryItem] = [],
     headers: [HTTPHeader] = [],
-    region: String? = nil,
+    region: FunctionRegion? = nil,
     timeout: TimeInterval? = nil,
     retryConfiguration: RetryConfiguration? = nil
   ) throws {
@@ -133,7 +133,7 @@ public struct FunctionInvokeOptions: Sendable {
     stringBody: String,
     query: [URLQueryItem] = [],
     headers: [HTTPHeader] = [],
-    region: String? = nil,
+    region: FunctionRegion? = nil,
     timeout: TimeInterval? = nil,
     retryConfiguration: RetryConfiguration? = nil
   ) {

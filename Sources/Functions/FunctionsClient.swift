@@ -10,7 +10,7 @@ import Helpers
 let version = Helpers.version
 
 /// An actor representing a client for invoking functions.
-public final class FunctionsClient: Sendable {
+public actor FunctionsClient {
 
   /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
   ///
@@ -21,19 +21,11 @@ public final class FunctionsClient: Sendable {
   let url: URL
 
   /// The Region to invoke the functions in.
-  let region: String?
-
-  struct MutableState {
-    /// Headers to be included in the requests.
-    var headers = HTTPHeaders()
-  }
+  let region: FunctionRegion?
 
   private let session: Alamofire.Session
-  private let mutableState = LockIsolated(MutableState())
 
-  var headers: HTTPHeaders {
-    mutableState.headers
-  }
+  private(set) public var headers: HTTPHeaders
 
   /// Initializes a new instance of `FunctionsClient`.
   ///
@@ -43,68 +35,31 @@ public final class FunctionsClient: Sendable {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - session: The Alamofire session to use for requests. (Default: Alamofire.Session.default)
-  @_disfavoredOverload
-  public convenience init(
-    url: URL,
-    headers: [String: String] = [:],
-    region: String? = nil,
-    logger: SupabaseLogger? = nil,
-    session: Alamofire.Session = .default
-  ) {
-    self.init(
-      url: url,
-      headers: headers,
-      region: region,
-      session: session
-    )
-  }
-
-  init(
-    url: URL,
-    headers: [String: String],
-    region: String?,
-    session: Alamofire.Session
-  ) {
-    self.url = url
-    self.region = region
-    self.session = session
-
-    mutableState.withValue {
-      $0.headers = HTTPHeaders(headers)
-      if $0.headers["X-Client-Info"] == nil {
-        $0.headers["X-Client-Info"] = "functions-swift/\(version)"
-      }
-    }
-  }
-
-  /// Initializes a new instance of `FunctionsClient`.
-  ///
-  /// - Parameters:
-  ///   - url: The base URL for the functions.
-  ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
-  ///   - region: The Region to invoke the functions in.
-  ///   - logger: SupabaseLogger instance to use.
-  ///   - session: The Alamofire session to use for requests. (Default: Alamofire.Session.default)
-  public convenience init(
+  public init(
     url: URL,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     logger: SupabaseLogger? = nil,
     session: Alamofire.Session = .default
   ) {
-    self.init(url: url, headers: headers, region: region?.rawValue, session: session)
+    self.url = url
+    self.region = region
+    self.session = session
+
+    self.headers = HTTPHeaders(headers)
+    if headers["X-Client-Info"] == nil {
+      self.headers["X-Client-Info"] = "functions-swift/\(version)"
+    }
   }
 
   /// Updates the authorization header.
   ///
   /// - Parameter token: The new JWT token sent in the authorization header.
   public func setAuth(token: String?) {
-    mutableState.withValue {
-      if let token {
-        $0.headers["Authorization"] = "Bearer \(token)"
-      } else {
-        $0.headers["Authorization"] = nil
-      }
+    if let token {
+      headers["Authorization"] = "Bearer \(token)"
+    } else {
+      headers["Authorization"] = nil
     }
   }
 
@@ -231,7 +186,7 @@ public final class FunctionsClient: Sendable {
     }
 
     if let region = options.region ?? region {
-      headers["X-Region"] = region
+      headers["X-Region"] = region.rawValue
     }
 
     var request = URLRequest(
@@ -245,8 +200,7 @@ public final class FunctionsClient: Sendable {
     return request
   }
 
-  @Sendable
-  private func validate(
+  private nonisolated func validate(
     request: URLRequest?,
     response: HTTPURLResponse,
     data: Data?

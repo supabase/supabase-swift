@@ -418,12 +418,38 @@ We may provide migration scripts for common patterns:
 swift build
 ```
 
-### 2. Run Your Test Suite
+### 2. Update Test Code
+You may need to update test-specific code:
+
+```swift
+// Update MFA enrollment in tests
+// Before:
+params: MFAEnrollParams(issuer: "supabase.com", friendlyName: "test")
+
+// After:
+params: MFATotpEnrollParams(issuer: "supabase.com", friendlyName: "test")
+
+// Update PostgREST filters in tests
+// Before:
+.ilike("email", value: "pattern%")
+
+// After:
+.ilike("email", pattern: "pattern%")
+
+// Remove deprecated properties from user attributes
+// Before:
+UserAttributes(email: "...", emailChangeToken: "...")
+
+// After:
+UserAttributes(email: "...")
+```
+
+### 3. Run Your Test Suite
 ```bash
 swift test
 ```
 
-### 3. Integration Testing
+### 4. Integration Testing
 Test your app thoroughly, especially:
 - Authentication flows
 - Database operations
