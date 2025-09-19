@@ -21,14 +21,6 @@ import Testing
 #endif
 
 @Suite final class AuthClientTests {
-  let storage: InMemoryLocalStorage
-  var sut: AuthClient
-
-  init() async {
-    self.storage = InMemoryLocalStorage()
-    self.sut = await makeSUT()
-  }
-
   deinit {
     Mocker.removeAll()
   }
@@ -108,7 +100,7 @@ import Testing
     }
     .register()
 
-    sut = await makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -154,7 +146,7 @@ import Testing
     }
     .register()
 
-    sut = await makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -188,7 +180,7 @@ import Testing
     }
     .register()
 
-    sut = await makeSUT()
+    let sut = await makeSUT()
 
     let validSession = Session.validSession
     await sut.sessionStorage.store(validSession)
@@ -235,7 +227,7 @@ import Testing
     }
     .register()
 
-    sut = await makeSUT()
+    let sut = await makeSUT()
 
     let validSession = Session.validSession
     await sut.sessionStorage.store(validSession)
@@ -282,7 +274,7 @@ import Testing
     }
     .register()
 
-    sut = await makeSUT()
+    let sut = await makeSUT()
 
     let validSession = Session.validSession
     await sut.sessionStorage.store(validSession)
@@ -606,7 +598,7 @@ import Testing
 
   @Test("Session from URL with error works correctly")
   func testSessionFromURL_withError() async throws {
-    sut = await makeSUT()
+    let sut = await makeSUT()
 
     await sut.setCodeVerifier("code-verifier")
 
@@ -1000,8 +992,11 @@ import Testing
 
     do {
       try await sut.session(from: url)
+      Issue.record("Expected an error to be thrown, but none was thrown")
     } catch let AuthError.implicitGrantRedirect(message) {
       expectNoDifference(message, "Not a valid implicit grant flow URL: \(url)")
+    } catch {
+      Issue.record("Unexpected error type: \(error)")
     }
   }
 
@@ -1016,8 +1011,11 @@ import Testing
 
     do {
       try await sut.session(from: url)
+      Issue.record("Expected an error to be thrown, but none was thrown")
     } catch let AuthError.implicitGrantRedirect(message) {
       expectNoDifference(message, "Invalid code")
+    } catch {
+      Issue.record("Unexpected error type: \(error)")
     }
   }
 
@@ -1076,6 +1074,8 @@ import Testing
       expectNoDifference(message, "Invalid code")
       expectNoDifference(error, "invalid_grant")
       expectNoDifference(code, "500")
+    } catch {
+      Issue.record("Unexpected error type: \(error)")
     }
   }
 
@@ -1094,6 +1094,8 @@ import Testing
       expectNoDifference(message, "Error in URL with unspecified error_description.")
       expectNoDifference(error, "invalid_grant")
       expectNoDifference(code, "500")
+    } catch {
+      Issue.record("Unexpected error type: \(error)")
     }
   }
 
@@ -2229,7 +2231,7 @@ import Testing
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
       ],
       flowType: flowType,
-      localStorage: storage,
+      localStorage: InMemoryLocalStorage(),
       logger: nil,
       session: .init(configuration: sessionConfiguration)
     )

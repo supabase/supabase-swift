@@ -150,7 +150,7 @@ public actor AuthClient {
   let url: URL
   let configuration: AuthClient.Configuration
 
-  var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
+  let eventEmitter = AuthStateChangeEventEmitter()
   let alamofireSession: Alamofire.Session
 
   #if DEBUG  // Make sure there properties are mutable for testing.

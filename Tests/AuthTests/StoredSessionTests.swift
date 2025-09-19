@@ -16,8 +16,6 @@ import Testing
       throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
     #endif
 
-    Dependencies[clientID] = Dependencies()
-
     let authClient = AuthClient(
       url: URL(string: "http://localhost")!,
       configuration: AuthClient.Configuration(

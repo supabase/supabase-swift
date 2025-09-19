@@ -25,11 +25,13 @@
 - **BREAKING**: `UserCredentials` is now internal (was public deprecated)
 
 #### Authentication
+- **BREAKING**: AuthClient converted to actor for Swift 6.0 thread safety (requires await for property access)
 - **BREAKING**: Removed deprecated GoTrue* type aliases (`GoTrueClient`, `GoTrueMFA`, etc.)
 - **BREAKING**: Removed deprecated `AuthError` cases: `sessionNotFound`, `pkce(_:)`, `invalidImplicitGrantFlowURL`, `missingURL`, `invalidRedirectScheme`
 - **BREAKING**: Removed deprecated `APIError` struct and related methods
 - **BREAKING**: Removed deprecated `PKCEFailureReason` enum
 - **BREAKING**: Removed `emailChangeToken` property from user attributes
+- **BREAKING**: Simplified dependency management (removed global Dependencies system)
 
 #### Database (PostgREST)
 - **BREAKING**: Removed deprecated `queryValue` property (use `rawValue` instead)
@@ -52,8 +54,8 @@
 - **BREAKING**: Removed deprecated `ObservationToken.remove()` method (use `cancel()`)
 
 #### Functions
+- **BREAKING**: FunctionsClient converted to actor for Swift 6.0 thread safety (requires await for property access)
 - **BREAKING**: Enhanced with Alamofire networking integration
-- **BREAKING**: FunctionsClient converted to actor for thread safety
 - **BREAKING**: Headers parameter type changed from [String: String] to HTTPHeaders
 - **BREAKING**: Replaced rawBody with FunctionInvokeSupportedBody enum for type-safe body handling
 - **BREAKING**: Enhanced upload support with multipart form data and file URL options
@@ -84,6 +86,7 @@
 - [x] Comprehensive DocC documentation with detailed usage examples
 
 #### Authentication
+- [x] **BREAKING**: AuthClient converted to actor for Swift 6.0 thread safety
 - [x] Cleaner error handling (deprecated errors removed)
 - [x] Simplified type system (GoTrue* aliases removed)
 - [x] Enhanced MFA support with comprehensive async/await patterns
@@ -92,6 +95,7 @@
 - [x] New identity linking capabilities
 - [x] Comprehensive DocC documentation with detailed examples
 - [x] Enhanced configuration options with better parameter documentation
+- [x] Modernized dependency management without global state
 
 #### Database (PostgREST)
 - [x] Enhanced type safety for query operations
