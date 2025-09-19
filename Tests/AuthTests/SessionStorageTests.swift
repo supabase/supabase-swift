@@ -5,7 +5,7 @@ import Testing
 
 @testable import Auth
 
-@Suite struct SessionStorageTests {
+@Suite final class SessionStorageTests {
   let storage: InMemoryLocalStorage
   let sut: AuthClient
   let sessionStorage: SessionStorage
@@ -51,7 +51,7 @@ import Testing
     // Given: A stored session
     let session = Session.validSession
     sessionStorage.store(session)
-    XCTAssertNotNil(sessionStorage.get())
+    #expect(sessionStorage.get() != nil)
 
     // When: Deleting the session
     sessionStorage.delete()
@@ -75,8 +75,8 @@ import Testing
     // Then: Should retrieve the updated session
     let retrievedSession = sessionStorage.get()
     #expect(retrievedSession != nil)
-    XCTAssertEqual(retrievedSession?.accessToken, "new_access_token")
-    XCTAssertNotEqual(retrievedSession?.accessToken, originalSession.accessToken)
+    #expect(retrievedSession?.accessToken == "new_access_token")
+    #expect(retrievedSession?.accessToken != originalSession.accessToken)
   }
 
   @Test("Session storage handles expired sessions correctly")
@@ -91,8 +91,8 @@ import Testing
 
     // Then: Should still return the session (storage doesn't validate expiration)
     #expect(retrievedSession != nil)
-    XCTAssertEqual(retrievedSession?.accessToken, expiredSession.accessToken)
-    XCTAssertTrue(retrievedSession?.isExpired == true)
+    #expect(retrievedSession?.accessToken == expiredSession.accessToken)
+    #expect(retrievedSession?.isExpired == true)
   }
 
   @Test("Session storage handles valid sessions correctly")
@@ -107,8 +107,8 @@ import Testing
 
     // Then: Should return the valid session
     #expect(retrievedSession != nil)
-    XCTAssertEqual(retrievedSession?.accessToken, validSession.accessToken)
-    XCTAssertTrue(retrievedSession?.isExpired == false)
+    #expect(retrievedSession?.accessToken == validSession.accessToken)
+    #expect(retrievedSession?.isExpired == false)
   }
 
   @Test("Session storage handles nil sessions correctly")
@@ -132,7 +132,7 @@ import Testing
     sessionStorage.store(session)
 
     // And: Creating a new session storage instance
-    let newSessionStorage = SessionStorage.live(clientID: sut.clientID)
+    let newSessionStorage = SessionStorage.live(client: sut)
 
     // Then: Should still retrieve the session (persistence through localStorage)
     let retrievedSession = newSessionStorage.get()
@@ -146,7 +146,7 @@ import Testing
     let session = Session.validSession
 
     // When: Accessing storage concurrently
-    let storage = sessionStorage!
+    let storage = sessionStorage
     await withTaskGroup(of: Void.self) { group in
       for _ in 0..<10 {
         group.addTask {
@@ -171,8 +171,8 @@ import Testing
     let sut2 = makeSUTWithStorage(storage2)
 
     // And: Two session storage instances
-    let sessionStorage1 = SessionStorage.live(clientID: sut1.clientID)
-    let sessionStorage2 = SessionStorage.live(clientID: sut2.clientID)
+    let sessionStorage1 = SessionStorage.live(client: sut1)
+    let sessionStorage2 = SessionStorage.live(client: sut2)
 
     // When: Storing sessions in different storages
     var session1 = Session.validSession
@@ -189,11 +189,11 @@ import Testing
     let retrieved1 = sessionStorage1.get()
     let retrieved2 = sessionStorage2.get()
 
-    XCTAssertNotNil(retrieved1)
-    XCTAssertNotNil(retrieved2)
-    XCTAssertEqual(retrieved1?.accessToken, session1.accessToken)
-    XCTAssertEqual(retrieved2?.accessToken, session2.accessToken)
-    XCTAssertNotEqual(retrieved1?.accessToken, retrieved2?.accessToken)
+    #expect(retrieved1 != nil)
+    #expect(retrieved2 != nil)
+    #expect(retrieved1?.accessToken == session1.accessToken)
+    #expect(retrieved2?.accessToken == session2.accessToken)
+    #expect(retrieved1?.accessToken != retrieved2?.accessToken)
   }
 
   @Test("Session storage can delete all sessions")
@@ -234,7 +234,7 @@ import Testing
     // Then: Should handle large sessions correctly
     #expect(retrievedSession != nil)
     #expect(retrievedSession?.accessToken == session.accessToken)
-    XCTAssertEqual(retrievedSession?.user.userMetadata.count, largeMetadata.count)
+    #expect(retrievedSession?.user.userMetadata.count == largeMetadata.count)
   }
 
   @Test("Session storage handles special characters correctly")
@@ -292,7 +292,7 @@ import Testing
     // Given: A stored session
     let session = Session.validSession
     sessionStorage.store(session)
-    XCTAssertNotNil(sessionStorage.get())
+    #expect(sessionStorage.get() != nil)
 
     // And: Mock sign out response
     Mock(
@@ -322,11 +322,10 @@ import Testing
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
 
-    let encoder = AuthClient.Configuration.jsonEncoder
+    let encoder = JSONEncoder.supabase()
     encoder.outputFormatting = [.sortedKeys]
 
     let configuration = AuthClient.Configuration(
-      url: clientURL,
       headers: [
         "apikey":
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
@@ -334,11 +333,10 @@ import Testing
       flowType: flowType,
       localStorage: storage,
       logger: nil,
-      encoder: encoder,
       session: .init(configuration: sessionConfiguration)
     )
 
-    let sut = AuthClient(configuration: configuration)
+    let sut = AuthClient(url: clientURL, configuration: configuration)
 
     await sut.clientID.pkce.generateCodeVerifier = {
       "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"

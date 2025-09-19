@@ -12,7 +12,7 @@ import Testing
 
 @testable import Auth
 
-@Suite struct SessionManagerTests {
+@Suite final class SessionManagerTests {
   let storage: InMemoryLocalStorage
   let sut: AuthClient
 
@@ -158,11 +158,11 @@ import Testing
     // Then: Should throw error
     do {
       _ = try await manager.refreshSession("invalid_token")
-      XCTFail("Expected error to be thrown")
+      #expect(Bool(false), "Expected error to be thrown")
     } catch {
       // The error is wrapped in Alamofire's responseValidationFailed, but contains our AuthError
       let errorMessage = String(describing: error)
-      XCTAssertTrue(
+      #expect(
         errorMessage.contains("Invalid refresh token")
           || errorMessage.contains("invalid_grant") || error is AuthError,
         "Unexpected error: \(error)")
@@ -209,8 +209,8 @@ import Testing
 
     // Then: Both should succeed
     let (result1, result2) = try await (refresh1, refresh2)
-    XCTAssertEqual(result1.accessToken, result2.accessToken)
-    XCTAssertEqual(result1.accessToken, refreshedSession.accessToken)
+    #expect(result1.accessToken == result2.accessToken)
+    #expect(result1.accessToken == refreshedSession.accessToken)
   }
 
   // MARK: - Integration Tests
@@ -259,11 +259,10 @@ import Testing
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
 
-    let encoder = AuthClient.Configuration.jsonEncoder
+    let encoder = JSONEncoder.supabase()
     encoder.outputFormatting = [.sortedKeys]
 
     let configuration = AuthClient.Configuration(
-      url: clientURL,
       headers: [
         "apikey":
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
@@ -271,11 +270,10 @@ import Testing
       flowType: flowType,
       localStorage: storage,
       logger: nil,
-      encoder: encoder,
       session: .init(configuration: sessionConfiguration)
     )
 
-    let sut = AuthClient(configuration: configuration)
+    let sut = AuthClient(url: clientURL, configuration: configuration)
 
     await sut.clientID.pkce.generateCodeVerifier = {
       "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"

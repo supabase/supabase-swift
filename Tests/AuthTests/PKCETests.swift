@@ -1,4 +1,5 @@
 import Crypto
+import Foundation
 import Testing
 
 @testable import Auth
