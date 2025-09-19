@@ -1,22 +1,25 @@
-import Auth
-import SnapshotTesting
-import XCTest
+import Foundation
+import Testing
 
-final class AuthResponseTests: XCTestCase {
+@testable import Auth
+
+@Suite struct AuthResponseTests {
+  @Test("Session response contains valid session and user")
   func testSession() throws {
-    let response = try AuthClient.Configuration.jsonDecoder.decode(
+    let response = try JSONDecoder.supabase().decode(
       AuthResponse.self,
       from: json(named: "session")
     )
-    XCTAssertNotNil(response.session)
-    XCTAssertEqual(response.user, response.session?.user)
+    #expect(response.session != nil)
+    #expect(response.user == response.session?.user)
   }
 
+  @Test("User response contains no session")
   func testUser() throws {
-    let response = try AuthClient.Configuration.jsonDecoder.decode(
+    let response = try JSONDecoder.supabase().decode(
       AuthResponse.self,
       from: json(named: "user")
     )
-    XCTAssertNil(response.session)
+    #expect(response.session == nil)
   }
 }

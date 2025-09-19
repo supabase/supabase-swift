@@ -23,14 +23,14 @@ final class AuthClientIntegrationTests: XCTestCase {
   static func makeClient(serviceRole: Bool = false) -> AuthClient {
     let key = serviceRole ? DotEnv.SUPABASE_SERVICE_ROLE_KEY : DotEnv.SUPABASE_ANON_KEY
     return AuthClient(
+      url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
       configuration: AuthClient.Configuration(
-        url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
         headers: [
           "apikey": key,
           "Authorization": "Bearer \(key)",
         ],
         localStorage: InMemoryLocalStorage(),
-        logger: TestLogger()
+        logger: nil
       )
     )
   }
@@ -102,11 +102,7 @@ final class AuthClientIntegrationTests: XCTestCase {
       try await authClient.signIn(email: email, password: password)
       XCTFail("Expect failure")
     } catch {
-      if let error = error as? AuthError {
-        XCTAssertEqual(error.localizedDescription, "Invalid login credentials")
-      } else {
-        XCTFail("Unexpected error: \(error)")
-      }
+      XCTAssertEqual(error.localizedDescription, "Invalid login credentials")
     }
   }
 
@@ -186,7 +182,7 @@ final class AuthClientIntegrationTests: XCTestCase {
     do {
       try await authClient.unlinkIdentity(identity)
       XCTFail("Expect failure")
-    } catch let error as AuthError {
+    } catch {
       XCTAssertEqual(error.errorCode, .singleIdentityNotDeletable)
     }
   }
@@ -262,17 +258,20 @@ final class AuthClientIntegrationTests: XCTestCase {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
       _ = try await authClient.session
-      XCTAssertNotNil(authClient.currentSession)
+      let currentSession = await authClient.currentSession
+      XCTAssertNotNil(currentSession)
 
       try await authClient.signOut()
 
       do {
         _ = try await authClient.session
         XCTFail("Expected to throw AuthError.sessionMissing")
-      } catch let error as AuthError {
-        XCTAssertEqual(error, .sessionMissing)
+      } catch AuthError.sessionMissing {
+      } catch {
+        XCTFail("Expected \(AuthError.sessionMissing) error")
       }
-      XCTAssertNil(authClient.currentSession)
+      let nilSession = await authClient.currentSession
+      XCTAssertNil(nilSession)
     }
   }
 

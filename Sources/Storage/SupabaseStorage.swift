@@ -1,3 +1,4 @@
+import Alamofire
 import Foundation
 
 public struct StorageClientConfiguration: Sendable {
@@ -5,18 +6,22 @@ public struct StorageClientConfiguration: Sendable {
   public var headers: [String: String]
   public let encoder: JSONEncoder
   public let decoder: JSONDecoder
-  public let session: StorageHTTPSession
-  public let logger: (any SupabaseLogger)?
+  public let session: Alamofire.Session
+  public let logger: SupabaseLogger?
   public let useNewHostname: Bool
+  public let uploadRetryAttempts: Int
+  public let uploadTimeoutInterval: TimeInterval
 
   public init(
     url: URL,
     headers: [String: String],
-    encoder: JSONEncoder = .defaultStorageEncoder,
-    decoder: JSONDecoder = .defaultStorageDecoder,
-    session: StorageHTTPSession = .init(),
-    logger: (any SupabaseLogger)? = nil,
-    useNewHostname: Bool = false
+    encoder: JSONEncoder = JSONEncoder(),
+    decoder: JSONDecoder = JSONDecoder(),
+    session: Alamofire.Session = .default,
+    logger: SupabaseLogger? = nil,
+    useNewHostname: Bool = false,
+    uploadRetryAttempts: Int = 3,
+    uploadTimeoutInterval: TimeInterval = 300.0
   ) {
     self.url = url
     self.headers = headers
@@ -25,6 +30,8 @@ public struct StorageClientConfiguration: Sendable {
     self.session = session
     self.logger = logger
     self.useNewHostname = useNewHostname
+    self.uploadRetryAttempts = uploadRetryAttempts
+    self.uploadTimeoutInterval = uploadTimeoutInterval
   }
 }
 

@@ -7,6 +7,7 @@
 
 import InlineSnapshotTesting
 import Mocker
+import SnapshotTestingCustomDump
 import XCTest
 
 @testable import PostgREST
@@ -15,16 +16,16 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
   func testCustomHeaderOnAPerCallBasis() throws {
     let url = URL(string: "http://localhost:54321/rest/v1")!
     let postgrest1 = PostgrestClient(url: url, headers: ["apikey": "foo"], logger: nil)
-    let postgrest2 = try postgrest1.rpc("void_func").setHeader(name: .init("apikey")!, value: "bar")
+    let postgrest2 = try postgrest1.rpc("void_func").setHeader(name: "apikey", value: "bar")
 
     // Original client object isn't affected
     XCTAssertEqual(
-      postgrest1.from("users").select().mutableState.request.headers[.init("apikey")!], "foo")
+      postgrest1.from("users").select().mutableState.request.headers["apikey"], "foo")
     // Derived client object uses new header value
-    XCTAssertEqual(postgrest2.mutableState.request.headers[.init("apikey")!], "bar")
+    XCTAssertEqual(postgrest2.mutableState.request.headers["apikey"], "bar")
   }
 
-  func testExecuteWithNonSuccessStatusCode() async throws {
+  func testExecuteWithNonSuccessStatusCode() async {
     Mock(
       url: url.appendingPathComponent("users"),
       ignoreQuery: true,
@@ -39,6 +40,16 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
         )
       ]
     )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/users?select=*"
+      """#
+    }
     .register()
 
     do {
@@ -46,12 +57,25 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
         .from("users")
         .select()
         .execute()
-    } catch let error as PostgrestError {
-      XCTAssertEqual(error.message, "Bad Request")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AFError.responseValidationFailed(
+          reason: .customValidationFailed(
+            error: PostgrestError(
+              detail: nil,
+              hint: nil,
+              code: nil,
+              message: "Bad Request"
+            )
+          )
+        )
+        """
+      }
     }
   }
 
-  func testExecuteWithNonJSONError() async throws {
+  func testExecuteWithNonJSONError() async {
     Mock(
       url: url.appendingPathComponent("users"),
       ignoreQuery: true,
@@ -60,6 +84,16 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
         .get: Data("Bad Request".utf8)
       ]
     )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/users?select=*"
+      """#
+    }
     .register()
 
     do {
@@ -67,9 +101,20 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
         .from("users")
         .select()
         .execute()
-    } catch let error as HTTPError {
-      XCTAssertEqual(error.data, Data("Bad Request".utf8))
-      XCTAssertEqual(error.response.statusCode, 400)
+      XCTFail("Expected error")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AFError.responseValidationFailed(
+          reason: .customValidationFailed(
+            error: HTTPError(
+              data: Data(11 bytes),
+              response: NSHTTPURLResponse()
+            )
+          )
+        )
+        """
+      }
     }
   }
 
@@ -94,7 +139,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
       """#
     }
     .register()
-    
+
     try await sut.from("users")
       .select()
       .execute(options: FetchOptions(head: true))
@@ -192,7 +237,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
       ignoreQuery: true,
       statusCode: 201,
       data: [
-        .post: Data()
+        .post: Data("{\"username\":\"test\"}".utf8)
       ]
     )
     .snapshotRequest {
@@ -222,6 +267,6 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     let query = sut.from("users")
       .setHeader(name: "key", value: "value")
 
-    XCTAssertEqual(query.mutableState.request.headers[.init("key")!], "value")
+    XCTAssertEqual(query.mutableState.request.headers["key"], "value")
   }
 }

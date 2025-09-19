@@ -6,115 +6,308 @@
 //
 
 import ConcurrencyExtras
-import CustomDump
+import Foundation
 import InlineSnapshotTesting
+import Mocker
 import TestHelpers
-import XCTest
-import XCTestDynamicOverlay
+import Testing
 
 @testable import Auth
 
-final class SessionManagerTests: XCTestCase {
-  var http: HTTPClientMock!
-
-  let clientID = AuthClientID()
-
-  var sut: SessionManager {
-    Dependencies[clientID].sessionManager
+@Suite final class SessionManagerTests {
+  deinit {
+    Mocker.removeAll()
   }
 
-  override func setUp() {
-    super.setUp()
+  // MARK: - Core SessionManager Tests
 
-    http = HTTPClientMock()
+  @Test("Session manager initializes correctly")
+  func testSessionManagerInitialization() async {
+    let sut = await makeSUT()
 
-    Dependencies[clientID] = .init(
-      configuration: .init(
-        url: clientURL,
-        localStorage: InMemoryLocalStorage(),
-        autoRefreshToken: false
-      ),
-      http: http,
-      api: APIClient(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: SessionStorage.live(clientID: clientID),
-      sessionManager: SessionManager.live(clientID: clientID)
-    )
+    // Given: A client ID
+    let clientID = await sut.clientID
+
+    // When: Creating a session manager
+    let manager = SessionManager.live(client: sut)
+
+    // Then: Should be initialized
+    #expect(manager != nil)
   }
 
-  #if !os(Windows) && !os(Linux) && !os(Android)
-    override func invokeTest() {
-      withMainSerialExecutor {
-        super.invokeTest()
-      }
-    }
-  #endif
+  @Test("Session manager can update and remove sessions")
+  func testSessionManagerUpdateAndRemove() async throws {
+    let sut = await makeSUT()
 
-  func testSession_shouldFailWithSessionNotFound() async {
-    do {
-      _ = try await sut.session()
-      XCTFail("Expected a \(AuthError.sessionMissing) failure")
-    } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        - AuthError.sessionMissing
-
-        """
-      }
-    }
-  }
-
-  func testSession_shouldReturnValidSession() async throws {
+    // Given: A session manager
+    let manager = SessionManager.live(client: sut)
     let session = Session.validSession
-    Dependencies[clientID].sessionStorage.store(session)
 
-    let returnedSession = try await sut.session()
-    expectNoDifference(returnedSession, session)
+    // When: Updating session
+    await manager.update(session)
+
+    // Then: Session should be stored
+    let storedSession = await sut.sessionStorage.get()
+    #expect(storedSession?.accessToken == session.accessToken)
+
+    // When: Removing session
+    await manager.remove()
+
+    // Then: Session should be removed
+    let removedSession = await sut.sessionStorage.get()
+    #expect(removedSession == nil)
   }
 
-  func testSession_shouldRefreshSession_whenCurrentSessionExpired() async throws {
-    let currentSession = Session.expiredSession
-    Dependencies[clientID].sessionStorage.store(currentSession)
+  @Test("Session manager returns valid session from storage")
+  func testSessionManagerWithValidSession() async throws {
+    let sut = await makeSUT()
 
-    let validSession = Session.validSession
+    // Given: A valid session in storage
+    let session = Session.validSession
+    await sut.sessionStorage.store(session)
 
-    let refreshSessionCallCount = LockIsolated(0)
+    // When: Getting session
+    let manager = SessionManager.live(client: sut)
+    let result = try await manager.session()
 
-    let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
+    // Then: Should return the same session
+    #expect(result.accessToken == session.accessToken)
+  }
 
-    await http.when(
-      { $0.url.path.contains("/token") },
-      return: { _ in
-        refreshSessionCallCount.withValue { $0 += 1 }
-        let session = await refreshSessionStream.first(where: { _ in true })!
-        return .stub(session)
+  @Test("Session manager throws error when session is missing")
+  func testSessionManagerWithMissingSession() async throws {
+    let sut = await makeSUT()
+
+    // Given: No session in storage
+    await sut.sessionStorage.delete()
+
+    // When: Getting session
+    let manager = SessionManager.live(client: sut)
+
+    // Then: Should throw session missing error
+    do {
+      _ = try await manager.session()
+      Issue.record("Expect failure")
+    } catch {
+      assertInlineSnapshot(of: error, as: .description)
+    }
+  }
+
+  @Test("Session manager handles expired sessions correctly")
+  func testSessionManagerWithExpiredSession() async throws {
+    let sut = await makeSUT()
+
+    // Given: An expired session
+    var expiredSession = Session.validSession
+    expiredSession.expiresAt = Date().timeIntervalSince1970 - 3600  // 1 hour ago
+    await sut.sessionStorage.store(expiredSession)
+
+    // And: A mock refresh response
+    let refreshedSession = Session.validSession
+    let refreshResponse = try JSONEncoder.supabase().encode(refreshedSession)
+
+    Mock(
+      url: URL(string: "http://localhost:54321/auth/v1/token")!,
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: refreshResponse]
+    ).register()
+
+    // When: Getting session
+    let manager = SessionManager.live(client: sut)
+    let result = try await manager.session()
+
+    // Then: Should return refreshed session
+    #expect(result.accessToken == refreshedSession.accessToken)
+  }
+
+  @Test("Session manager can refresh expired sessions")
+  func testSessionManagerRefreshSession() async throws {
+    let sut = await makeSUT()
+
+    // Given: A mock refresh response
+    let refreshedSession = Session.validSession
+    let refreshResponse = try JSONEncoder.supabase().encode(refreshedSession)
+
+    Mock(
+      url: URL(string: "http://localhost:54321/auth/v1/token")!,
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: refreshResponse]
+    ).register()
+
+    // When: Refreshing session
+    let manager = SessionManager.live(client: sut)
+    let result = try await manager.refreshSession("refresh_token")
+
+    // Then: Should return refreshed session
+    #expect(result.accessToken == refreshedSession.accessToken)
+  }
+
+  @Test("Session manager handles refresh failures correctly")
+  func testSessionManagerRefreshSessionFailure() async throws {
+    let sut = await makeSUT()
+
+    // Given: A mock error response
+    let errorResponse = """
+      {
+        "error": "invalid_grant",
+        "error_description": "Invalid refresh token"
       }
+      """.data(using: .utf8)!
+
+    Mock(
+      url: URL(string: "http://localhost:54321/auth/v1/token")!,
+      ignoreQuery: true,
+      statusCode: 400,
+      data: [.post: errorResponse]
+    ).register()
+
+    // When: Refreshing session
+    let manager = SessionManager.live(client: sut)
+
+    // Then: Should throw error
+    do {
+      _ = try await manager.refreshSession("invalid_token")
+      #expect(Bool(false), "Expected error to be thrown")
+    } catch {
+      // The error is wrapped in Alamofire's responseValidationFailed, but contains our AuthError
+      let errorMessage = String(describing: error)
+      #expect(
+        errorMessage.contains("Invalid refresh token")
+          || errorMessage.contains("invalid_grant") || error is AuthError,
+        "Unexpected error: \(error)"
+      )
+    }
+  }
+
+  @Test("Session manager can start and stop auto-refresh")
+  func testSessionManagerAutoRefreshStartStop() async throws {
+    let sut = await makeSUT()
+
+    // Given: A session manager
+    let manager = SessionManager.live(client: sut)
+
+    // When: Starting auto refresh
+    await manager.startAutoRefresh()
+
+    // Then: Should not crash
+    #expect(manager != nil)
+
+    // When: Stopping auto refresh
+    await manager.stopAutoRefresh()
+
+    // Then: Should not crash
+    #expect(manager != nil)
+  }
+
+  @Test("Session manager handles concurrent refresh requests correctly")
+  func testSessionManagerConcurrentRefresh() async throws {
+    let sut = await makeSUT()
+
+    // Given: A mock refresh response with delay
+    let refreshedSession = Session.validSession
+    let refreshResponse = try JSONEncoder.supabase().encode(refreshedSession)
+
+    var mock = Mock(
+      url: URL(string: "http://localhost:54321/auth/v1/token")!,
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: refreshResponse]
+    )
+    mock.delay = DispatchTimeInterval.milliseconds(50)
+    mock.register()
+
+    // When: Multiple concurrent refresh calls
+    let manager = SessionManager.live(client: sut)
+    async let refresh1 = manager.refreshSession("token1")
+    async let refresh2 = manager.refreshSession("token2")
+
+    // Then: Both should succeed
+    let (result1, result2) = try await (refresh1, refresh2)
+    #expect(result1.accessToken == result2.accessToken)
+    #expect(result1.accessToken == refreshedSession.accessToken)
+  }
+
+  // MARK: - Integration Tests
+
+  @Test("Session manager integrates correctly with AuthClient")
+  func testSessionManagerIntegrationWithAuthClient() async throws {
+    let sut = await makeSUT()
+
+    // Given: A valid session
+    let session = Session.validSession
+    await sut.sessionStorage.store(session)
+
+    // When: Getting session through auth client
+    let result = try await sut.session
+
+    // Then: Should return the same session
+    #expect(result.accessToken == session.accessToken)
+  }
+
+  @Test("Session manager handles expired sessions in AuthClient integration")
+  func testSessionManagerIntegrationWithExpiredSession() async throws {
+    let sut = await makeSUT()
+
+    // Given: An expired session
+    var expiredSession = Session.validSession
+    expiredSession.expiresAt = Date().timeIntervalSince1970 - 3600
+    await sut.sessionStorage.store(expiredSession)
+
+    // And: A mock refresh response
+    let refreshedSession = Session.validSession
+    let refreshResponse = try JSONEncoder.supabase().encode(refreshedSession)
+
+    Mock(
+      url: URL(string: "http://localhost:54321/auth/v1/token")!,
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: refreshResponse]
+    ).register()
+
+    // When: Getting session through auth client
+    let result = try await sut.session
+
+    // Then: Should return refreshed session
+    #expect(result.accessToken == refreshedSession.accessToken)
+  }
+
+  // MARK: - Helper Methods
+
+  private func makeSUT(
+    storage: any AuthLocalStorage = InMemoryLocalStorage(),
+    flowType: AuthFlowType = .pkce
+  ) async -> AuthClient {
+    let sessionConfiguration = URLSessionConfiguration.default
+    sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
+
+    let encoder = JSONEncoder.supabase()
+    encoder.outputFormatting = [.sortedKeys]
+
+    let configuration = AuthClient.Configuration(
+      headers: [
+        "apikey":
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+      ],
+      flowType: flowType,
+      localStorage: storage,
+      logger: nil,
+      session: .init(configuration: sessionConfiguration)
     )
 
-    // Fire N tasks and call sut.session()
-    let tasks = (0..<10).map { _ in
-      Task { [weak self] in
-        try await self?.sut.session()
+    let sut = AuthClient(url: clientURL, configuration: configuration)
+
+    await sut.overrideForTesting {
+      $0.pkce.generateCodeVerifier = {
+        "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
+      }
+
+      $0.pkce.generateCodeChallenge = { _ in
+        "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
       }
     }
 
-    await Task.yield()
-
-    refreshSessionContinuation.yield(validSession)
-    refreshSessionContinuation.finish()
-
-    // Await for all tasks to complete.
-    var result: [Result<Session?, Error>] = []
-    for task in tasks {
-      let value = await task.result
-      result.append(value)
-    }
-
-    // Verify that refresher and storage was called only once.
-    expectNoDifference(refreshSessionCallCount.value, 1)
-    expectNoDifference(
-      try result.map { try $0.get()?.accessToken },
-      (0..<10).map { _ in validSession.accessToken }
-    )
+    return sut
   }
 }

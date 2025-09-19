@@ -1,14 +1,16 @@
+import Alamofire
 import Foundation
-import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
+struct NoopParameter: Encodable, Sendable {}
+
 public class StorageApi: @unchecked Sendable {
   public let configuration: StorageClientConfiguration
 
-  private let http: any HTTPClientType
+  private let session: Alamofire.Session
 
   public init(configuration: StorageClientConfiguration) {
     var configuration = configuration
@@ -39,62 +41,82 @@ public class StorageApi: @unchecked Sendable {
     }
 
     self.configuration = configuration
+    self.session = configuration.session
+  }
 
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    http = HTTPClient(
-      fetch: configuration.session.fetch,
-      interceptors: interceptors
-    )
+  private let urlQueryEncoder: any ParameterEncoding = URLEncoding.queryString
+  private var defaultEncoder: any ParameterEncoder {
+    JSONParameterEncoder(encoder: configuration.encoder)
   }
 
   @discardableResult
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
-    var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+  func execute<RequestBody: Encodable & Sendable>(
+    _ url: URL,
+    method: HTTPMethod = .get,
+    headers: HTTPHeaders = [:],
+    query: Parameters? = nil,
+    body: RequestBody? = NoopParameter(),
+    encoder: (any ParameterEncoder)? = nil
+  ) throws -> DataRequest {
+    var request = try makeRequest(url, method: method, headers: headers, query: query)
 
-    let response = try await http.send(request)
+    if RequestBody.self != NoopParameter.self {
+      request = try (encoder ?? defaultEncoder).encode(body, into: request)
+    }
 
-    guard (200..<300).contains(response.statusCode) else {
-      if let error = try? configuration.decoder.decode(
-        StorageError.self,
-        from: response.data
-      ) {
-        throw error
+    return session.request(request)
+      .validate { _, response, data in
+        self.validate(response: response, data: data ?? Data())
       }
-
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
-    }
-
-    return response
   }
-}
 
-extension Helpers.HTTPRequest {
-  init(
-    url: URL,
-    method: HTTPTypes.HTTPRequest.Method,
-    query: [URLQueryItem],
-    formData: MultipartFormData,
-    options: FileOptions,
-    headers: HTTPFields = [:]
-  ) throws {
-    var headers = headers
-    if headers[.contentType] == nil {
-      headers[.contentType] = formData.contentType
+  func upload(
+    _ url: URL,
+    method: HTTPMethod = .get,
+    headers: HTTPHeaders = [:],
+    query: Parameters? = nil,
+    multipartFormData: @escaping (MultipartFormData) -> Void,
+  ) throws -> UploadRequest {
+    let request = try makeRequest(url, method: method, headers: headers, query: query)
+
+    #if DEBUG
+      let formData = MultipartFormData(boundary: testingBoundary.value)
+    #else
+      let formData = MultipartFormData()
+    #endif
+
+    multipartFormData(formData)
+
+    return session.upload(multipartFormData: formData, with: request)
+      .validate { _, response, data in
+        self.validate(response: response, data: data ?? Data())
+      }
+  }
+
+  private func makeRequest(
+    _ url: URL,
+    method: HTTPMethod = .get,
+    headers: HTTPHeaders = [:],
+    query: Parameters? = nil
+  ) throws -> URLRequest {
+    // Merge configuration headers with request headers
+    var mergedHeaders = HTTPHeaders(configuration.headers)
+    for header in headers {
+      mergedHeaders[header.name] = header.value
     }
-    if headers[.cacheControl] == nil {
-      headers[.cacheControl] = "max-age=\(options.cacheControl)"
+
+    let request = try URLRequest(url: url, method: method, headers: mergedHeaders)
+    return try urlQueryEncoder.encode(request, with: query)
+  }
+
+  private func validate(response: HTTPURLResponse, data: Data) -> DataRequest.ValidationResult {
+    guard 200..<300 ~= response.statusCode else {
+      do {
+        return .failure(try self.configuration.decoder.decode(StorageError.self, from: data))
+      } catch {
+        return .failure(HTTPError(data: data, response: response))
+      }
     }
-    try self.init(
-      url: url,
-      method: method,
-      query: query,
-      headers: headers,
-      body: formData.encode()
-    )
+    return .success(())
   }
 }

@@ -23,10 +23,6 @@ public final class ObservationToken: @unchecked Sendable, Hashable {
     self.onCancel = onCancel
   }
 
-  @available(*, deprecated, renamed: "cancel")
-  public func remove() {
-    cancel()
-  }
 
   public func cancel() {
     _isCancelled.withValue { isCancelled in

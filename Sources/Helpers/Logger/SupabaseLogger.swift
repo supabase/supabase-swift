@@ -1,173 +1,104 @@
 import Foundation
+import Logging
 
-public enum SupabaseLogLevel: Int, Codable, CustomStringConvertible, Sendable {
-  case verbose
-  case debug
-  case warning
-  case error
+/// A logging interface that uses swift-log for standardized logging across the Swift ecosystem.
+///
+/// This replaces the previous SupabaseLogger implementation with a more standardized approach
+/// using the swift-log library, which provides better integration with Swift ecosystem tools.
+public typealias SupabaseLogger = Logger
 
-  public var description: String {
-    switch self {
-    case .verbose: "verbose"
-    case .debug: "debug"
-    case .warning: "warning"
-    case .error: "error"
-    }
-  }
-}
-
-@usableFromInline
-package enum SupabaseLoggerTaskLocal {
-  @TaskLocal
-  @usableFromInline
-  package static var additionalContext: JSONObject = [:]
-}
-
-public struct SupabaseLogMessage: Codable, CustomStringConvertible, Sendable {
-  public let system: String
-  public let level: SupabaseLogLevel
-  public let message: String
-  public let fileID: String
-  public let function: String
-  public let line: UInt
-  public let timestamp: TimeInterval
-  public var additionalContext: JSONObject
-
-  @usableFromInline
-  init(
-    system: String,
-    level: SupabaseLogLevel,
-    message: String,
-    fileID: String,
-    function: String,
-    line: UInt,
-    timestamp: TimeInterval,
-    additionalContext: JSONObject
-  ) {
-    self.system = system
-    self.level = level
-    self.message = message
-    self.fileID = fileID
-    self.function = function
-    self.line = line
-    self.timestamp = timestamp
-    self.additionalContext = additionalContext
-  }
-
-  public var description: String {
-    let date = Date(timeIntervalSince1970: timestamp).iso8601String
-    let file = fileID.split(separator: ".", maxSplits: 1).first.map(String.init) ?? fileID
-    var description = "\(date) [\(level)] [\(system)] [\(file).\(function):\(line)] \(message)"
-    if !additionalContext.isEmpty {
-      description += "\ncontext: \(additionalContext.description)"
-    }
-    return description
-  }
-}
-
-public protocol SupabaseLogger: Sendable {
-  func log(message: SupabaseLogMessage)
-}
-
-extension SupabaseLogger {
-  @inlinable
-  public func log(
-    _ level: SupabaseLogLevel,
-    message: @autoclosure () -> String,
-    fileID: StaticString = #fileID,
-    function: StaticString = #function,
-    line: UInt = #line,
-    additionalContext: JSONObject = [:]
-  ) {
-    let system = "\(fileID)".split(separator: "/").first ?? ""
-
-    log(
-      message: SupabaseLogMessage(
-        system: "\(system)",
-        level: level,
-        message: message(),
-        fileID: "\(fileID)",
-        function: "\(function)",
-        line: line,
-        timestamp: Date().timeIntervalSince1970,
-        additionalContext: additionalContext.merging(
-          SupabaseLoggerTaskLocal.additionalContext,
-          uniquingKeysWith: { _, new in new }
-        )
-      )
-    )
-  }
-
+/// Extension to provide convenient logging methods that maintain compatibility with existing code.
+extension Logger {
+  /// Log a verbose message.
+  ///
+  /// - Parameters:
+  ///   - message: The message to log.
+  ///   - fileID: The file ID where the log was called (defaults to #fileID).
+  ///   - function: The function where the log was called (defaults to #function).
+  ///   - line: The line number where the log was called (defaults to #line).
+  ///   - additionalContext: Additional context to include in the log.
   @inlinable
   public func verbose(
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
     function: StaticString = #function,
     line: UInt = #line,
-    additionalContext: JSONObject = [:]
+    additionalContext: [String: String] = [:]
   ) {
-    log(
-      .verbose,
-      message: message(),
-      fileID: fileID,
-      function: function,
-      line: line,
-      additionalContext: additionalContext
-    )
+    var logger = self
+    for (key, value) in additionalContext {
+      logger[metadataKey: key] = "\(value)"
+    }
+    logger.trace("\(message())", file: "\(fileID)", function: "\(function)", line: line)
   }
 
+  /// Log a debug message.
+  ///
+  /// - Parameters:
+  ///   - message: The message to log.
+  ///   - fileID: The file ID where the log was called (defaults to #fileID).
+  ///   - function: The function where the log was called (defaults to #function).
+  ///   - line: The line number where the log was called (defaults to #line).
+  ///   - additionalContext: Additional context to include in the log.
   @inlinable
   public func debug(
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
     function: StaticString = #function,
     line: UInt = #line,
-    additionalContext: JSONObject = [:]
+    additionalContext: [String: String] = [:]
   ) {
-    log(
-      .debug,
-      message: message(),
-      fileID: fileID,
-      function: function,
-      line: line,
-      additionalContext: additionalContext
-    )
+    var logger = self
+    for (key, value) in additionalContext {
+      logger[metadataKey: key] = "\(value)"
+    }
+    logger.debug("\(message())", file: "\(fileID)", function: "\(function)", line: line)
   }
 
+  /// Log a warning message.
+  ///
+  /// - Parameters:
+  ///   - message: The message to log.
+  ///   - fileID: The file ID where the log was called (defaults to #fileID).
+  ///   - function: The function where the log was called (defaults to #function).
+  ///   - line: The line number where the log was called (defaults to #line).
+  ///   - additionalContext: Additional context to include in the log.
   @inlinable
   public func warning(
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
     function: StaticString = #function,
     line: UInt = #line,
-    additionalContext: JSONObject = [:]
+    additionalContext: [String: String] = [:]
   ) {
-    log(
-      .warning,
-      message: message(),
-      fileID: fileID,
-      function: function,
-      line: line,
-      additionalContext: additionalContext
-    )
+    var logger = self
+    for (key, value) in additionalContext {
+      logger[metadataKey: key] = "\(value)"
+    }
+    logger.warning("\(message())", file: "\(fileID)", function: "\(function)", line: line)
   }
 
+  /// Log an error message.
+  ///
+  /// - Parameters:
+  ///   - message: The message to log.
+  ///   - fileID: The file ID where the log was called (defaults to #fileID).
+  ///   - function: The function where the log was called (defaults to #function).
+  ///   - line: The line number where the log was called (defaults to #line).
+  ///   - additionalContext: Additional context to include in the log.
   @inlinable
   public func error(
     _ message: @autoclosure () -> String,
     fileID: StaticString = #fileID,
     function: StaticString = #function,
     line: UInt = #line,
-    additionalContext: JSONObject = [:]
+    additionalContext: [String: String] = [:]
   ) {
-    log(
-      .error,
-      message: message(),
-      fileID: fileID,
-      function: function,
-      line: line,
-      additionalContext: additionalContext
-    )
+    var logger = self
+    for (key, value) in additionalContext {
+      logger[metadataKey: key] = "\(value)"
+    }
+    logger.error("\(message())", file: "\(fileID)", function: "\(function)", line: line)
   }
 }
 
@@ -175,7 +106,7 @@ extension SupabaseLogger {
   @inlinable
   @discardableResult
   package func trace<R: Sendable>(
-    using logger: (any SupabaseLogger)?,
+    using logger: SupabaseLogger?,
     _ operation: () async throws -> R,
     isolation _: isolated (any Actor)? = #isolation,
     fileID: StaticString = #fileID,
@@ -197,7 +128,7 @@ extension SupabaseLogger {
   @inlinable
   @discardableResult
   package func trace<R: Sendable>(
-    using logger: (any SupabaseLogger)?,
+    using logger: SupabaseLogger?,
     _ operation: () async throws -> R,
     fileID: StaticString = #fileID,
     function: StaticString = #function,

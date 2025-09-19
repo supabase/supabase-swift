@@ -5,12 +5,13 @@
 //  Created by Guilherme Souza on 06/03/25.
 //
 
+import Alamofire
 import Foundation
 
-let defaultHeaders: [String: String] = {
-  var headers = [
+let defaultHeaders: HTTPHeaders = {
+  var headers = HTTPHeaders([
     "X-Client-Info": "supabase-swift/\(version)"
-  ]
+  ])
 
   if let platform {
     headers["X-Supabase-Client-Platform"] = platform

@@ -1,10 +1,11 @@
 //
-//  RealtimeClientV2.swift
+//  RealtimeClient.swift
 //
 //
 //  Created by Guilherme Souza on 26/12/23.
 //
 
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 
@@ -19,17 +20,17 @@ typealias WebSocketTransport = @Sendable (_ url: URL, _ headers: [String: String
 protocol RealtimeClientProtocol: AnyObject, Sendable {
   var status: RealtimeClientStatus { get }
   var options: RealtimeClientOptions { get }
-  var http: any HTTPClientType { get }
+  var session: Alamofire.Session { get }
   var broadcastURL: URL { get }
 
   func connect() async
-  func push(_ message: RealtimeMessageV2)
+  func push(_ message: RealtimeMessage)
   func _getAccessToken() async -> String?
   func makeRef() -> String
   func _remove(_ channel: any RealtimeChannelProtocol)
 }
 
-public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
+public final class RealtimeClient: Sendable, RealtimeClientProtocol {
   struct MutableState {
     var accessToken: String?
     var ref = 0
@@ -42,7 +43,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     var messageTask: Task<Void, Never>?
 
     var connectionTask: Task<Void, Never>?
-    var channels: [String: RealtimeChannelV2] = [:]
+    var channels: [String: RealtimeChannel] = [:]
     var sendBuffer: [@Sendable () -> Void] = []
 
     var conn: (any WebSocket)?
@@ -52,7 +53,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let options: RealtimeClientOptions
   let wsTransport: WebSocketTransport
   let mutableState = LockIsolated(MutableState())
-  let http: any HTTPClientType
+  let session: Alamofire.Session
   let apikey: String
 
   var conn: (any WebSocket)? {
@@ -60,7 +61,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   /// All managed channels indexed by their topics.
-  public var channels: [String: RealtimeChannelV2] {
+  public var channels: [String: RealtimeChannel] {
     mutableState.channels
   }
 
@@ -118,12 +119,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   public convenience init(url: URL, options: RealtimeClientOptions) {
-    var interceptors: [any HTTPClientInterceptor] = []
-
-    if let logger = options.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
     self.init(
       url: url,
       options: options,
@@ -135,10 +130,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           configuration: configuration
         )
       },
-      http: HTTPClient(
-        fetch: options.fetch ?? { try await URLSession.shared.data(for: $0) },
-        interceptors: interceptors
-      )
+      session: options.session ?? .default
     )
   }
 
@@ -146,23 +138,23 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     url: URL,
     options: RealtimeClientOptions,
     wsTransport: @escaping WebSocketTransport,
-    http: any HTTPClientType
+    session: Alamofire.Session
   ) {
     var options = options
-    if options.headers[.xClientInfo] == nil {
-      options.headers[.xClientInfo] = "realtime-swift/\(version)"
+    if options.headers["X-Client-Info"] == nil {
+      options.headers["X-Client-Info"] = "realtime-swift/\(version)"
     }
 
     self.url = url
     self.options = options
     self.wsTransport = wsTransport
-    self.http = http
+    self.session = session.newSession(adapters: [DefaultHeadersRequestAdapter(headers: options.headers)])
 
     precondition(options.apikey != nil, "API key is required to connect to Realtime")
     apikey = options.apikey!
 
     mutableState.withValue { [options] in
-      if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
+      if let accessToken = options.headers["Authorization"]?.split(separator: " ").last {
         $0.accessToken = String(accessToken)
       }
     }
@@ -275,11 +267,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///   - options: Configuration options for the channel.
   /// - Returns: Channel instance.
   ///
-  /// - Note: This method doesn't subscribe to the channel, call ``RealtimeChannelV2/subscribe()`` on the returned channel instance.
+  /// - Note: This method doesn't subscribe to the channel, call ``RealtimeChannel/subscribe()`` on the returned channel instance.
   public func channel(
     _ topic: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
-  ) -> RealtimeChannelV2 {
+  ) -> RealtimeChannel {
     mutableState.withValue {
       let realtimeTopic = "realtime:\(topic)"
 
@@ -294,7 +286,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       )
       options(&config)
 
-      let channel = RealtimeChannelV2(
+      let channel = RealtimeChannel(
         topic: realtimeTopic,
         config: config,
         socket: self,
@@ -313,7 +305,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     message:
       "Client handles channels automatically, this method will be removed on the next major release."
   )
-  public func addChannel(_ channel: RealtimeChannelV2) {
+  public func addChannel(_ channel: RealtimeChannel) {
     mutableState.withValue {
       $0.channels[channel.topic] = channel
     }
@@ -322,7 +314,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// Unsubscribe and removes channel.
   ///
   /// If there is no channel left, client is disconnected.
-  public func removeChannel(_ channel: RealtimeChannelV2) async {
+  public func removeChannel(_ channel: RealtimeChannel) async {
     if channel.status == .subscribed {
       await channel.unsubscribe()
     }
@@ -379,7 +371,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             break
           case .text(let text):
             let data = Data(text.utf8)
-            let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
+            let message = try JSONDecoder().decode(RealtimeMessage.self, from: data)
             await onMessage(message)
 
           case let .close(code, reason):
@@ -429,7 +421,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
     if let pendingHeartbeatRef {
       push(
-        RealtimeMessageV2(
+        RealtimeMessage(
           joinRef: nil,
           ref: pendingHeartbeatRef,
           topic: "phoenix",
@@ -498,7 +490,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  private func onMessage(_ message: RealtimeMessageV2) async {
+  private func onMessage(_ message: RealtimeMessage) async {
     if message.topic == "phoenix", message.event == "phx_reply" {
       heartbeatSubject.yield(message.status == .ok ? .ok : .error)
     }
@@ -523,7 +515,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// Push out a message if the socket is connected.
   ///
   /// If the socket is not connected, the message gets enqueued within a local buffer, and sent out when a connection is next established.
-  public func push(_ message: RealtimeMessageV2) {
+  public func push(_ message: RealtimeMessage) {
     let callback = { @Sendable [weak self] in
       do {
         // Check cancellation before sending, because this push may have been cancelled before a connection was established.

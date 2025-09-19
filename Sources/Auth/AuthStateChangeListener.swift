@@ -17,7 +17,11 @@ public protocol AuthStateChangeListenerRegistration: Sendable {
   func remove()
 }
 
-extension ObservationToken: AuthStateChangeListenerRegistration {}
+extension ObservationToken: AuthStateChangeListenerRegistration {
+  public func remove() {
+    cancel()
+  }
+}
 
 public typealias AuthStateChangeListener = @Sendable (
   _ event: AuthChangeEvent,

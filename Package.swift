@@ -1,4 +1,4 @@
-// swift-tools-version:5.10
+// swift-tools-version:6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import Foundation
@@ -7,11 +7,11 @@ import PackageDescription
 let package = Package(
   name: "Supabase",
   platforms: [
-    .iOS(.v13),
-    .macCatalyst(.v13),
-    .macOS(.v10_15),
-    .watchOS(.v6),
-    .tvOS(.v13),
+    .iOS(.v16),
+    .macCatalyst(.v16),
+    .macOS(.v13),
+    .watchOS(.v9),
+    .tvOS(.v16),
   ],
   products: [
     .library(name: "Auth", targets: ["Auth"]),
@@ -24,8 +24,9 @@ let package = Package(
       targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]),
   ],
   dependencies: [
+    .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.9.0"),
     .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0"..<"4.0.0"),
-    .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
+    .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
@@ -37,9 +38,10 @@ let package = Package(
     .target(
       name: "Helpers",
       dependencies: [
+        .product(name: "Alamofire", package: "Alamofire"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Clocks", package: "swift-clocks"),
+        .product(name: "Logging", package: "swift-log"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
       ]
     ),
@@ -55,6 +57,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Crypto", package: "swift-crypto"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),

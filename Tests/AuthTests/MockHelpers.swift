@@ -1,3 +1,4 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 import TestHelpers
@@ -11,32 +12,6 @@ func json(named name: String) -> Data {
 
 extension Decodable {
   init(fromMockNamed name: String) {
-    self = try! AuthClient.Configuration.jsonDecoder.decode(Self.self, from: json(named: name))
-  }
-}
-
-extension Dependencies {
-  static var mock = Dependencies(
-    configuration: AuthClient.Configuration(
-      url: URL(string: "https://project-id.supabase.com")!,
-      localStorage: InMemoryLocalStorage(),
-      logger: nil
-    ),
-    http: HTTPClientMock(),
-    api: APIClient(clientID: AuthClientID()),
-    codeVerifierStorage: CodeVerifierStorage.mock,
-    sessionStorage: SessionStorage.live(clientID: AuthClientID()),
-    sessionManager: SessionManager.live(clientID: AuthClientID())
-  )
-}
-
-extension CodeVerifierStorage {
-  static var mock: CodeVerifierStorage {
-    let code = LockIsolated<String?>(nil)
-
-    return Self(
-      get: { code.value },
-      set: { code.setValue($0) }
-    )
+    self = try! JSONDecoder.auth.decode(Self.self, from: json(named: name))
   }
 }

@@ -64,13 +64,17 @@ public struct FileOptions: Sendable {
   /// Optionally add extra headers.
   public var headers: [String: String]?
 
+  /// Progress tracking callback for upload/download operations.
+  public var progressHandler: (@Sendable (Progress) -> Void)?
+
   public init(
     cacheControl: String = "3600",
     contentType: String? = nil,
     upsert: Bool = false,
     duplex: String? = nil,
     metadata: [String: AnyJSON]? = nil,
-    headers: [String: String]? = nil
+    headers: [String: String]? = nil,
+    progressHandler: (@Sendable (Progress) -> Void)? = nil
   ) {
     self.cacheControl = cacheControl
     self.contentType = contentType
@@ -78,6 +82,7 @@ public struct FileOptions: Sendable {
     self.duplex = duplex
     self.metadata = metadata
     self.headers = headers
+    self.progressHandler = progressHandler
   }
 }
 

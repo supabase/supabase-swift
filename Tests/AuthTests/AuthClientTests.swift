@@ -7,10 +7,12 @@
 
 import ConcurrencyExtras
 import CustomDump
+import Foundation
 import InlineSnapshotTesting
 import Mocker
+import SnapshotTestingCustomDump
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Auth
 
@@ -18,49 +20,38 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class AuthClientTests: XCTestCase {
-  var sessionManager: SessionManager!
-
-  var storage: InMemoryLocalStorage!
-
-  var http: HTTPClientMock!
-  var sut: AuthClient!
-
-  #if !os(Windows) && !os(Linux) && !os(Android)
-    override func invokeTest() {
-      withMainSerialExecutor {
-        super.invokeTest()
-      }
-    }
-  #endif
-
-  override func setUp() {
-    super.setUp()
-    storage = InMemoryLocalStorage()
-
-    //    isRecording = true
-  }
-
-  override func tearDown() {
-    super.tearDown()
-
+@Suite final class AuthClientTests {
+  deinit {
     Mocker.removeAll()
-
-    let completion = { [weak sut] in
-      XCTAssertNil(sut, "sut should not leak")
-    }
-
-    defer { completion() }
-
-    sut = nil
-    sessionManager = nil
-    storage = nil
   }
 
+  @Test("Auth client initializes with correct configuration")
+  func testAuthClientInitialization() async {
+    let client = await makeSUT()
+    let config = await client.configuration
+
+    assertInlineSnapshot(of: config.headers, as: .customDump) {
+      """
+      [
+        "X-Client-Info": "auth-swift/0.0.0",
+        "X-Supabase-Api-Version": "2024-01-01",
+        "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+      ]
+      """
+    }
+
+    let client2 = await makeSUT()
+    let clientID1 = await client.clientID
+    let clientID2 = await client2.clientID
+
+    #expect(clientID1 < clientID2, "Should increase client IDs")
+  }
+
+  @Test("Auth state changes are properly emitted")
   func testOnAuthStateChanges() async throws {
     let session = Session.validSession
-    let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    let sut = await makeSUT()
+    await sut.sessionStorage.store(session)
 
     let events = LockIsolated([AuthChangeEvent]())
 
@@ -75,21 +66,23 @@ final class AuthClientTests: XCTestCase {
     handle.remove()
   }
 
+  @Test("Auth state changes stream works correctly")
   func testAuthStateChanges() async throws {
     let session = Session.validSession
-    let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    let sut = await makeSUT()
+    await sut.sessionStorage.store(session)
 
     let stateChange = await sut.authStateChanges.first { _ in true }
     expectNoDifference(stateChange?.event, .initialSession)
     expectNoDifference(stateChange?.session, session)
   }
 
+  @Test("Sign out works correctly and emits proper events")
   func testSignOut() async throws {
     Mock(
       url: clientURL.appendingPathComponent("logout"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [
         .post: Data()
       ]
@@ -107,9 +100,9 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await assertAuthStateChanges(
       sut: sut,
@@ -129,12 +122,13 @@ final class AuthClientTests: XCTestCase {
     }
   }
 
+  @Test("Sign out with others scope should not remove local session")
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
     Mock(
       url: clientURL.appendingPathComponent("logout").appendingQueryItems([
         URLQueryItem(name: "scope", value: "others")
       ]),
-      statusCode: 200,
+      statusCode: 204,
       data: [
         .post: Data()
       ]
@@ -152,16 +146,17 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.signOut(scope: .others)
 
-    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
-    XCTAssertFalse(sessionRemoved)
+    let sessionRemoved = await sut.sessionStorage.get() == nil
+    #expect(!sessionRemoved)
   }
 
+  @Test("Sign out should remove session if user is not found")
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
     Mock(
       url: clientURL.appendingPathComponent("logout").appendingQueryItems([
@@ -185,10 +180,10 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    sut = makeSUT()
+    let sut = await makeSUT()
 
     let validSession = Session.validSession
-    Dependencies[sut.clientID].sessionStorage.store(validSession)
+    await sut.sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -204,10 +199,11 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [.validSession, nil])
 
-    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
-    XCTAssertTrue(sessionRemoved)
+    let sessionRemoved = await sut.sessionStorage.get() == nil
+    #expect(sessionRemoved)
   }
 
+  @Test("Sign out should remove session if JWT is invalid")
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
     Mock(
       url: clientURL.appendingPathComponent("logout").appendingQueryItems([
@@ -231,10 +227,10 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    sut = makeSUT()
+    let sut = await makeSUT()
 
     let validSession = Session.validSession
-    Dependencies[sut.clientID].sessionStorage.store(validSession)
+    await sut.sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -250,10 +246,11 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
-    XCTAssertTrue(sessionRemoved)
+    let sessionRemoved = await sut.sessionStorage.get() == nil
+    #expect(sessionRemoved)
   }
 
+  @Test("Sign out should remove session if 403 is returned")
   func testSignOutShouldRemoveSessionIf403Returned() async throws {
     Mock(
       url: clientURL.appendingPathComponent("logout").appendingQueryItems([
@@ -277,10 +274,10 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    sut = makeSUT()
+    let sut = await makeSUT()
 
     let validSession = Session.validSession
-    Dependencies[sut.clientID].sessionStorage.store(validSession)
+    await sut.sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -296,10 +293,11 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
-    XCTAssertTrue(sessionRemoved)
+    let sessionRemoved = await sut.sessionStorage.get() == nil
+    #expect(sessionRemoved)
   }
 
+  @Test("Sign in anonymously works correctly")
   func testSignInAnonymously() async throws {
     let session = Session(fromMockNamed: "anonymous-sign-in-response")
 
@@ -325,7 +323,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await assertAuthStateChanges(
       sut: sut,
@@ -334,10 +332,13 @@ final class AuthClientTests: XCTestCase {
       expectedSessions: [nil, session]
     )
 
-    expectNoDifference(sut.currentSession, session)
-    expectNoDifference(sut.currentUser, session.user)
+    let currentSession = await sut.currentSession
+    let currentUser = await sut.currentUser
+    expectNoDifference(currentSession, session)
+    expectNoDifference(currentUser, session.user)
   }
 
+  @Test("Sign in with OAuth works correctly")
   func testSignInWithOAuth() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token").appendingQueryItems([
@@ -363,7 +364,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -383,10 +384,11 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(events, [.initialSession, .signedIn])
   }
 
+  @Test("Get link identity URL works correctly")
   func testGetLinkIdentityURL() async throws {
     let url =
       "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     Mock(
       url: clientURL.appendingPathComponent("user/identities/authorize"),
@@ -414,7 +416,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.getLinkIdentityURL(provider: .github)
 
@@ -429,6 +431,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Link identity works correctly")
   func testLinkIdentity() async throws {
     let url =
       "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
@@ -459,13 +462,16 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let receivedURL = LockIsolated<URL?>(nil)
-    Dependencies[sut.clientID].urlOpener.open = { url in
-      receivedURL.setValue(url)
+
+    await sut.overrideForTesting {
+      $0.urlOpener.open = { url in
+        receivedURL.setValue(url)
+      }
     }
 
     try await sut.linkIdentity(provider: .github)
@@ -473,6 +479,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(receivedURL.value?.absoluteString, url)
   }
 
+  @Test("Link identity with ID token works correctly")
   func testLinkIdentityWithIdToken() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -496,9 +503,9 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let updatedSession = try await assertAuthStateChanges(
       sut: sut,
@@ -518,9 +525,11 @@ final class AuthClientTests: XCTestCase {
       expectedEvents: [.initialSession, .userUpdated]
     )
 
-    expectNoDifference(sut.currentSession, updatedSession)
+    let currentSession = await sut.currentSession
+    expectNoDifference(currentSession, updatedSession)
   }
 
+  @Test("Admin list users works correctly")
   func testAdminListUsers() async throws {
     Mock(
       url: clientURL.appendingPathComponent("admin/users"),
@@ -546,7 +555,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let response = try await sut.admin.listUsers()
     expectNoDifference(response.total, 669)
@@ -554,6 +563,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(response.lastPage, 14)
   }
 
+  @Test("Admin list users with no next page works correctly")
   func testAdminListUsers_noNextPage() async throws {
     Mock(
       url: clientURL.appendingPathComponent("admin/users"),
@@ -578,18 +588,19 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let response = try await sut.admin.listUsers()
     expectNoDifference(response.total, 669)
-    XCTAssertNil(response.nextPage)
+    #expect(response.nextPage == nil)
     expectNoDifference(response.lastPage, 14)
   }
 
+  @Test("Session from URL with error works correctly")
   func testSessionFromURL_withError() async throws {
-    sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].codeVerifierStorage.set("code-verifier")
+    await sut.setCodeVerifier("code-verifier")
 
     let url = URL(
       string:
@@ -598,19 +609,21 @@ final class AuthClientTests: XCTestCase {
 
     do {
       try await sut.session(from: url)
-      XCTFail("Expect failure")
+      Issue.record("Expect failure")
     } catch {
-      expectNoDifference(
-        error as? AuthError,
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
         AuthError.pkceGrantCodeExchange(
           message: "Identity is already linked to another user",
           error: "server_error",
           code: "422"
         )
-      )
+        """
+      }
     }
   }
 
+  @Test("Sign up with email and password works correctly")
   func testSignUpWithEmailAndPassword() async throws {
     Mock(
       url: clientURL.appendingPathComponent("signup"),
@@ -633,7 +646,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signUp(
       email: "example@mail.com",
@@ -644,6 +657,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Sign up with phone and password works correctly")
   func testSignUpWithPhoneAndPassword() async throws {
     Mock(
       url: clientURL.appendingPathComponent("signup"),
@@ -666,7 +680,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signUp(
       phone: "+1 202-918-2132",
@@ -676,6 +690,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Sign in with email and password works correctly")
   func testSignInWithEmailAndPassword() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -698,7 +713,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signIn(
       email: "example@mail.com",
@@ -707,6 +722,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Sign in with phone and password works correctly")
   func testSignInWithPhoneAndPassword() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -729,7 +745,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signIn(
       phone: "+1 202-918-2132",
@@ -738,6 +754,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Sign in with ID token works correctly")
   func testSignInWithIdToken() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -760,7 +777,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signInWithIdToken(
       credentials: OpenIDConnectCredentials(
@@ -775,11 +792,12 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Sign in with OTP using email works correctly")
   func testSignInWithOTPUsingEmail() async throws {
     Mock(
       url: clientURL.appendingPathComponent("otp"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -797,7 +815,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signInWithOTP(
       email: "example@mail.com",
@@ -808,11 +826,12 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Sign in with OTP using phone works correctly")
   func testSignInWithOTPUsingPhone() async throws {
     Mock(
       url: clientURL.appendingPathComponent("otp"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -830,7 +849,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signInWithOTP(
       phone: "+1 202-918-2132",
@@ -840,9 +859,10 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Get OAuth sign in URL works correctly")
   func testGetOAuthSignInURL() async throws {
-    let sut = makeSUT(flowType: .implicit)
-    let url = try sut.getOAuthSignInURL(
+    let sut = await makeSUT(flowType: .implicit)
+    let url = try await sut.getOAuthSignInURL(
       provider: .github,
       scopes: "read,write",
       redirectTo: URL(string: "https://dummy-url.com/redirect")!,
@@ -857,6 +877,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Refresh session works correctly")
   func testRefreshSession() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -879,11 +900,12 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
     try await sut.refreshSession(refreshToken: "refresh-token")
   }
 
   #if !os(Linux) && !os(Windows) && !os(Android)
+    @Test("Session from URL works correctly")
     func testSessionFromURL() async throws {
       Mock(
         url: clientURL.appendingPathComponent("user"),
@@ -894,7 +916,7 @@ final class AuthClientTests: XCTestCase {
       .snapshotRequest {
         #"""
         curl \
-        	--header "Authorization: bearer accesstoken" \
+        	--header "Authorization: Bearer accesstoken" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -903,11 +925,13 @@ final class AuthClientTests: XCTestCase {
       }
       .register()
 
-      let sut = makeSUT(flowType: .implicit)
+      let sut = await makeSUT(flowType: .implicit)
 
       let currentDate = Date()
 
-      Dependencies[sut.clientID].date = { currentDate }
+      await sut.overrideForTesting {
+        $0.date = { currentDate }
+      }
 
       let url = URL(
         string:
@@ -927,6 +951,7 @@ final class AuthClientTests: XCTestCase {
     }
   #endif
 
+  @Test("Session with URL implicit flow works correctly")
   func testSessionWithURL_implicitFlow() async throws {
     Mock(
       url: clientURL.appendingPathComponent("user"),
@@ -938,7 +963,7 @@ final class AuthClientTests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
-      	--header "Authorization: bearer accesstoken" \
+      	--header "Authorization: Bearer accesstoken" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -947,7 +972,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT(flowType: .implicit)
+    let sut = await makeSUT(flowType: .implicit)
 
     let url = URL(
       string:
@@ -956,8 +981,9 @@ final class AuthClientTests: XCTestCase {
     try await sut.session(from: url)
   }
 
+  @Test("Session with URL implicit flow handles invalid URL correctly")
   func testSessionWithURL_implicitFlow_invalidURL() async throws {
-    let sut = makeSUT(flowType: .implicit)
+    let sut = await makeSUT(flowType: .implicit)
 
     let url = URL(
       string:
@@ -966,13 +992,17 @@ final class AuthClientTests: XCTestCase {
 
     do {
       try await sut.session(from: url)
+      Issue.record("Expected an error to be thrown, but none was thrown")
     } catch let AuthError.implicitGrantRedirect(message) {
       expectNoDifference(message, "Not a valid implicit grant flow URL: \(url)")
+    } catch {
+      Issue.record("Unexpected error type: \(error)")
     }
   }
 
+  @Test("Session with URL implicit flow handles errors correctly")
   func testSessionWithURL_implicitFlow_error() async throws {
-    let sut = makeSUT(flowType: .implicit)
+    let sut = await makeSUT(flowType: .implicit)
 
     let url = URL(
       string:
@@ -981,11 +1011,15 @@ final class AuthClientTests: XCTestCase {
 
     do {
       try await sut.session(from: url)
+      Issue.record("Expected an error to be thrown, but none was thrown")
     } catch let AuthError.implicitGrantRedirect(message) {
       expectNoDifference(message, "Invalid code")
+    } catch {
+      Issue.record("Unexpected error type: \(error)")
     }
   }
 
+  @Test("Session with URL implicit flow recovery type works correctly")
   func testSessionWithURL_implicitFlow_recoveryType() async throws {
     Mock(
       url: clientURL.appendingPathComponent("user"),
@@ -997,7 +1031,7 @@ final class AuthClientTests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
-      	--header "Authorization: bearer accesstoken" \
+      	--header "Authorization: Bearer accesstoken" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -1006,7 +1040,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT(flowType: .implicit)
+    let sut = await makeSUT(flowType: .implicit)
 
     let url = URL(
       string:
@@ -1025,8 +1059,9 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(events, [.initialSession, .signedIn, .passwordRecovery])
   }
 
+  @Test("Session with URL PKCE flow handles errors correctly")
   func testSessionWithURL_pkceFlow_error() async throws {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let url = URL(
       string:
@@ -1039,11 +1074,14 @@ final class AuthClientTests: XCTestCase {
       expectNoDifference(message, "Invalid code")
       expectNoDifference(error, "invalid_grant")
       expectNoDifference(code, "500")
+    } catch {
+      Issue.record("Unexpected error type: \(error)")
     }
   }
 
+  @Test("Session with URL PKCE flow handles errors without description correctly")
   func testSessionWithURL_pkceFlow_error_noErrorDescription() async throws {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let url = URL(
       string:
@@ -1056,11 +1094,14 @@ final class AuthClientTests: XCTestCase {
       expectNoDifference(message, "Error in URL with unspecified error_description.")
       expectNoDifference(error, "invalid_grant")
       expectNoDifference(code, "500")
+    } catch {
+      Issue.record("Unexpected error type: \(error)")
     }
   }
 
+  @Test("Session from URL with missing component handles correctly")
   func testSessionFromURLWithMissingComponent() async {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let url = URL(
       string:
@@ -1083,6 +1124,7 @@ final class AuthClientTests: XCTestCase {
     }
   }
 
+  @Test("Set session with future expiration date works correctly")
   func testSetSessionWithAFutureExpirationDate() async throws {
     Mock(
       url: clientURL.appendingPathComponent("user"),
@@ -1101,8 +1143,8 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    let sut = await makeSUT()
+    await sut.sessionStorage.store(.validSession)
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
@@ -1110,6 +1152,7 @@ final class AuthClientTests: XCTestCase {
     try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
   }
 
+  @Test("Set session with expired token works correctly")
   func testSetSessionWithAExpiredToken() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -1132,7 +1175,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNjQ4NjQwMDIxLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.CGr5zNE5Yltlbn_3Ms2cjSLs_AW9RKM3lxh7cTQrg0w"
@@ -1140,6 +1183,7 @@ final class AuthClientTests: XCTestCase {
     try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
   }
 
+  @Test("Verify OTP using email works correctly")
   func testVerifyOTPUsingEmail() async throws {
     Mock(
       url: clientURL.appendingPathComponent("verify"),
@@ -1162,7 +1206,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.verifyOTP(
       email: "example@mail.com",
@@ -1173,6 +1217,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Verify OTP using phone works correctly")
   func testVerifyOTPUsingPhone() async throws {
     Mock(
       url: clientURL.appendingPathComponent("verify"),
@@ -1195,7 +1240,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.verifyOTP(
       phone: "+1 202-918-2132",
@@ -1205,6 +1250,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Verify OTP using token hash works correctly")
   func testVerifyOTPUsingTokenHash() async throws {
     Mock(
       url: clientURL.appendingPathComponent("verify"),
@@ -1227,7 +1273,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.verifyOTP(
       tokenHash: "abc-def",
@@ -1235,6 +1281,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Update user works correctly")
   func testUpdateUser() async throws {
     Mock(
       url: clientURL.appendingPathComponent("user"),
@@ -1245,7 +1292,6 @@ final class AuthClientTests: XCTestCase {
       #"""
       curl \
       	--request PUT \
-      	--header "Authorization: Bearer accesstoken" \
       	--header "Content-Length: 258" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
@@ -1257,9 +1303,9 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.update(
       user: UserAttributes(
@@ -1267,17 +1313,17 @@ final class AuthClientTests: XCTestCase {
         phone: "+1 202-918-2132",
         password: "another.pass",
         nonce: "abcdef",
-        emailChangeToken: "123456",
         data: ["custom_key": .string("custom_value")]
       )
     )
   }
 
+  @Test("Reset password for email works correctly")
   func testResetPasswordForEmail() async throws {
     Mock(
       url: clientURL.appendingPathComponent("recover"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -1295,7 +1341,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
     try await sut.resetPasswordForEmail(
       "example@mail.com",
       redirectTo: URL(string: "https://supabase.com"),
@@ -1303,11 +1349,12 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Resend email works correctly")
   func testResendEmail() async throws {
     Mock(
       url: clientURL.appendingPathComponent("resend"),
       ignoreQuery: true,
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()]
     )
     .snapshotRequest {
@@ -1325,7 +1372,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.resend(
       email: "example@mail.com",
@@ -1335,6 +1382,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Resend phone works correctly")
   func testResendPhone() async throws {
     Mock(
       url: clientURL.appendingPathComponent("resend"),
@@ -1357,7 +1405,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let response = try await sut.resend(
       phone: "+1 202-918-2132",
@@ -1368,6 +1416,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(response.messageId, "12345")
   }
 
+  @Test("Delete user works correctly")
   func testDeleteUser() async throws {
     let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
 
@@ -1391,14 +1440,15 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
     try await sut.admin.deleteUser(id: id)
   }
 
+  @Test("Reauthenticate works correctly")
   func testReauthenticate() async throws {
     Mock(
       url: clientURL.appendingPathComponent("reauthenticate"),
-      statusCode: 200,
+      statusCode: 204,
       data: [.get: Data()]
     )
     .snapshotRequest {
@@ -1413,13 +1463,14 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.reauthenticate()
   }
 
+  @Test("Unlink identity works correctly")
   func testUnlinkIdentity() async throws {
     let identityId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     Mock(
@@ -1440,9 +1491,9 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.unlinkIdentity(
       UserIdentity(
@@ -1458,6 +1509,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Sign in with SSO using domain works correctly")
   func testSignInWithSSOUsingDomain() async throws {
     Mock(
       url: clientURL.appendingPathComponent("sso"),
@@ -1480,7 +1532,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let response = try await sut.signInWithSSO(
       domain: "supabase.com",
@@ -1491,6 +1543,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(response.url, URL(string: "https://supabase.com")!)
   }
 
+  @Test("Sign in with SSO using provider ID works correctly")
   func testSignInWithSSOUsingProviderId() async throws {
     Mock(
       url: clientURL.appendingPathComponent("sso"),
@@ -1513,7 +1566,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let response = try await sut.signInWithSSO(
       providerId: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
@@ -1524,6 +1577,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(response.url, URL(string: "https://supabase.com")!)
   }
 
+  @Test("MFA enroll legacy works correctly")
   func testMFAEnrollLegacy() async throws {
     Mock(
       url: clientURL.appendingPathComponent("factors"),
@@ -1555,12 +1609,12 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.enroll(
-      params: MFAEnrollParams(
+      params: MFATotpEnrollParams(
         issuer: "supabase.com",
         friendlyName: "test"
       )
@@ -1570,6 +1624,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(response.type, "totp")
   }
 
+  @Test("MFA enroll TOTP works correctly")
   func testMFAEnrollTotp() async throws {
     Mock(
       url: clientURL.appendingPathComponent("factors"),
@@ -1601,9 +1656,9 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.enroll(
       params: .totp(
@@ -1616,6 +1671,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(response.type, "totp")
   }
 
+  @Test("MFA enroll phone works correctly")
   func testMFAEnrollPhone() async throws {
     Mock(
       url: clientURL.appendingPathComponent("factors"),
@@ -1647,9 +1703,9 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.enroll(
       params: .phone(
@@ -1662,6 +1718,7 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(response.type, "phone")
   }
 
+  @Test("MFA challenge works correctly")
   func testMFAChallenge() async throws {
     let factorId = "123"
 
@@ -1693,9 +1750,9 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.challenge(params: .init(factorId: factorId))
 
@@ -1709,6 +1766,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("MFA challenge with phone type works correctly")
   func testMFAChallengeWithPhoneType() async throws {
     let factorId = "123"
 
@@ -1743,9 +1801,9 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.challenge(
       params: .init(
@@ -1764,6 +1822,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("MFA verify works correctly")
   func testMFAVerify() async throws {
     let factorId = "123"
 
@@ -1788,9 +1847,9 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.mfa.verify(
       params: .init(
@@ -1801,6 +1860,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("MFA unenroll works correctly")
   func testMFAUnenroll() async throws {
     Mock(
       url: clientURL.appendingPathComponent("factors/123"),
@@ -1820,15 +1880,16 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let factorId = try await sut.mfa.unenroll(params: .init(factorId: "123")).factorId
 
     expectNoDifference(factorId, "123")
   }
 
+  @Test("MFA challenge and verify works correctly")
   func testMFAChallengeAndVerify() async throws {
     let factorId = "123"
     let code = "456"
@@ -1884,9 +1945,9 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.mfa.challengeAndVerify(
       params: MFAChallengeAndVerifyParams(
@@ -1896,8 +1957,9 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("MFA list factors works correctly")
   func testMFAListFactors() async throws {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     var session = Session.validSession
     session.user.factors = [
@@ -1935,13 +1997,14 @@ final class AuthClientTests: XCTestCase {
       ),
     ]
 
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    await sut.sessionStorage.store(session)
 
     let factors = try await sut.mfa.listFactors()
     expectNoDifference(factors.totp.map(\.id), ["1"])
     expectNoDifference(factors.phone.map(\.id), ["3"])
   }
 
+  @Test("Get authenticator assurance level when AAL and verified factor should return AAL2")
   func testGetAuthenticatorAssuranceLevel_whenAALAndVerifiedFactor_shouldReturnAAL2() async throws {
     var session = Session.validSession
 
@@ -1960,9 +2023,9 @@ final class AuthClientTests: XCTestCase {
       )
     ]
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    await sut.sessionStorage.store(session)
 
     let aal = try await sut.mfa.getAuthenticatorAssuranceLevel()
 
@@ -1985,9 +2048,10 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  @Test("Get user by ID works correctly")
   func testgetUserById() async throws {
     let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     Mock(
       url: clientURL.appendingPathComponent("admin/users/\(id)"),
@@ -2010,9 +2074,10 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(user.id, id)
   }
 
+  @Test("Update user by ID works correctly")
   func testUpdateUserById() async throws {
     let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     Mock(
       url: clientURL.appendingPathComponent("admin/users/\(id)"),
@@ -2046,8 +2111,9 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(user.id, id)
   }
 
+  @Test("Create user works correctly")
   func testCreateUser() async throws {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     Mock(
       url: clientURL.appendingPathComponent("admin/users"),
@@ -2080,7 +2146,7 @@ final class AuthClientTests: XCTestCase {
   }
 
   //  func testGenerateLink_signUp() async throws {
-  //    let sut = makeSUT()
+  //    let sut = await makeSUT()
   //
   //    let user = User(fromMockNamed: "user")
   //    let encoder = JSONEncoder.supabase()
@@ -2120,8 +2186,9 @@ final class AuthClientTests: XCTestCase {
   //    )
   //  }
 
+  @Test("Invite user by email works correctly")
   func testInviteUserByEmail() async throws {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     Mock(
       url: clientURL.appendingPathComponent("admin/invite"),
@@ -2151,37 +2218,34 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
-  private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
+  private func makeSUT(flowType: AuthFlowType = .pkce) async -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-    let session = URLSession(configuration: sessionConfiguration)
 
-    let encoder = AuthClient.Configuration.jsonEncoder
+    let encoder = JSONEncoder.supabase()
     encoder.outputFormatting = [.sortedKeys]
 
     let configuration = AuthClient.Configuration(
-      url: clientURL,
       headers: [
         "apikey":
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
       ],
       flowType: flowType,
-      localStorage: storage,
+      localStorage: InMemoryLocalStorage(),
       logger: nil,
-      encoder: encoder,
-      fetch: { request in
-        try await session.data(for: request)
-      }
+      session: .init(configuration: sessionConfiguration)
     )
 
-    let sut = AuthClient(configuration: configuration)
+    let sut = AuthClient(url: clientURL, configuration: configuration)
 
-    Dependencies[sut.clientID].pkce.generateCodeVerifier = {
-      "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
-    }
+    await sut.overrideForTesting {
+      $0.pkce.generateCodeVerifier = {
+        "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
+      }
 
-    Dependencies[sut.clientID].pkce.generateCodeChallenge = { _ in
-      "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
+      $0.pkce.generateCodeChallenge = { _ in
+        "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
+      }
     }
 
     return sut
@@ -2215,63 +2279,15 @@ final class AuthClientTests: XCTestCase {
     let events = authStateChanges.map(\.event)
     let sessions = authStateChanges.map(\.session)
 
-    expectNoDifference(events, expectedEvents, fileID: fileID, filePath: filePath, line: line, column: column)
+    expectNoDifference(
+      events, expectedEvents, fileID: fileID, filePath: filePath, line: line, column: column)
 
     if let expectedSessions = expectedSessions {
-      expectNoDifference(sessions, expectedSessions, fileID: fileID, filePath: filePath, line: line, column: column)
+      expectNoDifference(
+        sessions, expectedSessions, fileID: fileID, filePath: filePath, line: line, column: column)
     }
 
     return result
-  }
-}
-
-extension HTTPResponse {
-  static func stub(
-    _ body: String = "",
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: body.data(using: .utf8)!,
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
-  }
-
-  static func stub(
-    fromFileName fileName: String,
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: json(named: fileName),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
-  }
-
-  static func stub(
-    _ value: some Encodable,
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: try! AuthClient.Configuration.jsonEncoder.encode(value),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
   }
 }
 

@@ -3,7 +3,7 @@ import Foundation
 
 struct AuthStateChangeEventEmitter {
   var emitter = EventEmitter<(AuthChangeEvent, Session?)?>(initialEvent: nil, emitsLastEventWhenAttaching: false)
-  var logger: (any SupabaseLogger)?
+  var logger: SupabaseLogger?
 
   func attach(_ listener: @escaping AuthStateChangeListener) -> ObservationToken {
     emitter.attach { event in

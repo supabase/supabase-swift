@@ -7,12 +7,26 @@ Supabase client for Swift. Mirrors the design of [supabase-js](https://github.co
 
 * Documentation: [https://supabase.com/docs/reference/swift/introduction](https://supabase.com/docs/reference/swift/introduction)
 
+## 🚀 v3.0.0 Release
+
+Supabase Swift v3.0.0 is a major release with significant improvements:
+
+- **Modernized API**: Cleaner, more consistent APIs across all modules
+- **Enhanced Error Handling**: Unified error system with better debugging information
+- **Improved Performance**: Optimized networking with Alamofire integration
+- **Better Type Safety**: Enhanced compile-time checks and type inference
+- **Streamlined Authentication**: Simplified auth flows with better MFA support
+- **Real-time Improvements**: Modernized WebSocket handling and subscription management
+
+> [!IMPORTANT]
+> v3.0.0 contains breaking changes. See the [Migration Guide](./V3_MIGRATION_GUIDE.md) for upgrade instructions.
+
 ## Usage
 
 ### Requirements
-- iOS 13.0+ / macOS 10.15+ / tvOS 13+ / watchOS 6+ / visionOS 1+
-- Xcode 15.3+
-- Swift 5.10+
+- iOS 16.0+ / macOS 13.0+ / tvOS 16.0+ / watchOS 9.0+ / visionOS 1+
+- Xcode 16.0+
+- Swift 6.0+
 
 > [!IMPORTANT]
 > Check the [Support Policy](#support-policy) to learn when dropping Xcode, Swift, and platform versions will not be considered a **breaking change**.
@@ -27,7 +41,7 @@ let package = Package(
         ...
         .package(
             url: "https://github.com/supabase/supabase-swift.git",
-            from: "2.0.0"
+            from: "3.0.0"
         ),
     ],
     targets: [
@@ -73,6 +87,7 @@ let client = SupabaseClient(
     )
 )
 ```
+
 
 ## Support Policy
 

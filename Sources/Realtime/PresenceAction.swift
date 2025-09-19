@@ -12,7 +12,7 @@ public struct PresenceV2: Hashable, Sendable {
   public let ref: String
 
   /// The object the other client is tracking. Can be done via the
-  /// ``RealtimeChannelV2/track(state:)`` method.
+  /// ``RealtimeChannel/track(state:)`` method.
   public let state: JSONObject
 }
 
@@ -138,5 +138,5 @@ extension PresenceAction {
 struct PresenceActionImpl: PresenceAction {
   var joins: [String: PresenceV2]
   var leaves: [String: PresenceV2]
-  var rawMessage: RealtimeMessageV2
+  var rawMessage: RealtimeMessage
 }

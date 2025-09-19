@@ -264,7 +264,7 @@ final class PresenceActionTests: XCTestCase {
   struct MockPresenceAction: PresenceAction {
     let joins: [String: PresenceV2]
     let leaves: [String: PresenceV2]
-    let rawMessage: RealtimeMessageV2
+    let rawMessage: RealtimeMessage
   }
   
   func testDecodeJoinsWithIgnoreOtherTypes() throws {
@@ -290,7 +290,7 @@ final class PresenceActionTests: XCTestCase {
       "key3": PresenceV2(ref: "ref3", state: invalidState)
     ]
     
-    let rawMessage = RealtimeMessageV2(
+    let rawMessage = RealtimeMessage(
       joinRef: nil, ref: nil, topic: "test", event: "test", payload: [:]
     )
     
@@ -320,7 +320,7 @@ final class PresenceActionTests: XCTestCase {
       "key2": PresenceV2(ref: "ref2", state: invalidState)
     ]
     
-    let rawMessage = RealtimeMessageV2(
+    let rawMessage = RealtimeMessage(
       joinRef: nil, ref: nil, topic: "test", event: "test", payload: [:]
     )
     
@@ -353,7 +353,7 @@ final class PresenceActionTests: XCTestCase {
       "key3": PresenceV2(ref: "ref3", state: invalidState)
     ]
     
-    let rawMessage = RealtimeMessageV2(
+    let rawMessage = RealtimeMessage(
       joinRef: nil, ref: nil, topic: "test", event: "test", payload: [:]
     )
     
@@ -383,7 +383,7 @@ final class PresenceActionTests: XCTestCase {
       "key2": PresenceV2(ref: "ref2", state: invalidState)
     ]
     
-    let rawMessage = RealtimeMessageV2(
+    let rawMessage = RealtimeMessage(
       joinRef: nil, ref: nil, topic: "test", event: "test", payload: [:]
     )
     
@@ -407,7 +407,7 @@ final class PresenceActionTests: XCTestCase {
       "key1": PresenceV2(ref: "ref1", state: state)
     ]
     
-    let rawMessage = RealtimeMessageV2(
+    let rawMessage = RealtimeMessage(
       joinRef: nil, ref: nil, topic: "test", event: "test", payload: [:]
     )
     
@@ -427,7 +427,7 @@ final class PresenceActionTests: XCTestCase {
   }
   
   func testDecodeEmptyJoinsAndLeaves() throws {
-    let rawMessage = RealtimeMessageV2(
+    let rawMessage = RealtimeMessage(
       joinRef: nil, ref: nil, topic: "test", event: "test", payload: [:]
     )
     
@@ -449,7 +449,7 @@ final class PresenceActionTests: XCTestCase {
     let leaves: [String: PresenceV2] = [
       "user2": PresenceV2(ref: "ref2", state: ["name": .string("User 2")])
     ]
-    let rawMessage = RealtimeMessageV2(
+    let rawMessage = RealtimeMessage(
       joinRef: "join_ref", ref: "ref", topic: "topic", event: "event", payload: ["key": .string("value")]
     )
     
@@ -464,7 +464,7 @@ final class PresenceActionTests: XCTestCase {
   }
   
   func testPresenceActionImplConformsToProtocol() {
-    let rawMessage = RealtimeMessageV2(
+    let rawMessage = RealtimeMessage(
       joinRef: nil, ref: nil, topic: "test", event: "test", payload: [:]
     )
     
@@ -573,7 +573,7 @@ final class PresenceActionTests: XCTestCase {
       "invalid": PresenceV2(ref: "ref3", state: invalidState)
     ]
     
-    let rawMessage = RealtimeMessageV2(
+    let rawMessage = RealtimeMessage(
       joinRef: nil, ref: nil, topic: "test", event: "test", payload: [:]
     )
     

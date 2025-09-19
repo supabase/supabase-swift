@@ -1,5 +1,5 @@
 //
-//  PushV2.swift
+//  Push.swift
 //
 //
 //  Created by Guilherme Souza on 02/01/24.
@@ -15,13 +15,13 @@ public enum PushStatus: String, Sendable {
 }
 
 @MainActor
-final class PushV2 {
+final class Push {
   private weak var channel: (any RealtimeChannelProtocol)?
-  let message: RealtimeMessageV2
+  let message: RealtimeMessage
 
   private var receivedContinuation: CheckedContinuation<PushStatus, Never>?
 
-  init(channel: (any RealtimeChannelProtocol)?, message: RealtimeMessageV2) {
+  init(channel: (any RealtimeChannelProtocol)?, message: RealtimeMessage) {
     self.channel = channel
     self.message = message
   }

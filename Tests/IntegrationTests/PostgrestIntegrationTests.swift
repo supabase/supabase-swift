@@ -125,7 +125,7 @@ final class IntegrationTests: XCTestCase {
     try await client.from("users").insert(users).execute()
 
     let fetchedUsers: [User] = try await client.from("users").select()
-      .ilike("email", value: "johndoe+test%").execute().value
+      .ilike("email", pattern: "johndoe+test%").execute().value
     XCTAssertEqual(
       fetchedUsers[...],
       users[1 ... 2]

@@ -1,35 +1,33 @@
+import Alamofire
 import ConcurrencyExtras
+import Foundation
 import SnapshotTesting
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Auth
 
-final class StoredSessionTests: XCTestCase {
+@Suite struct StoredSessionTests {
   let clientID = AuthClientID()
 
-  func testStoredSession() throws {
+  @Test("Stored session can be retrieved and stored")
+  func testStoredSession() async throws {
     #if os(Android)
-    throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
+      throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
     #endif
 
-    Dependencies[clientID] = Dependencies(
+    let authClient = AuthClient(
+      url: URL(string: "http://localhost")!,
       configuration: AuthClient.Configuration(
-        url: URL(string: "http://localhost")!,
         storageKey: "supabase.auth.token",
         localStorage: try! DiskTestStorage(),
         logger: nil
-      ),
-      http: HTTPClientMock(),
-      api: .init(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID)
+      )
     )
 
-    let sut = Dependencies[clientID].sessionStorage
+    let sut = await authClient.sessionStorage
 
-    XCTAssertNotNil(sut.get())
+    #expect(sut.get() != nil)
 
     let session = Session(
       accessToken: "accesstoken",
@@ -83,7 +81,7 @@ final class StoredSessionTests: XCTestCase {
     )
 
     sut.store(session)
-    XCTAssertNotNil(sut.get())
+    #expect(sut.get() != nil)
   }
 
   private final class DiskTestStorage: AuthLocalStorage {

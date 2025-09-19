@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 04/11/23.
 //
 
+import Alamofire
 import Foundation
 import Storage
 
@@ -12,7 +13,7 @@ extension SupabaseStorageClient {
   static func test(
     supabaseURL: String,
     apiKey: String,
-    session: StorageHTTPSession = .init()
+    session: Alamofire.Session = .default
   ) -> SupabaseStorageClient {
     SupabaseStorageClient(
       configuration: StorageClientConfiguration(

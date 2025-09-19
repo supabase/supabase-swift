@@ -5,28 +5,28 @@
 //  Created by Guilherme Souza on 13/05/24.
 //
 
+import Alamofire
 import Foundation
-import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-/// Options for initializing ``RealtimeClientV2``.
+/// Options for initializing ``RealtimeClient``.
 public struct RealtimeClientOptions: Sendable {
-  package var headers: HTTPFields
+  package var headers: HTTPHeaders
   var heartbeatInterval: TimeInterval
   var reconnectDelay: TimeInterval
-  var timeoutInterval: TimeInterval
+  public var timeoutInterval: TimeInterval
   var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
   var maxRetryAttempts: Int
 
   /// Sets the log level for Realtime
   var logLevel: LogLevel?
-  var fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))?
+  public var session: Alamofire.Session?
   package var accessToken: (@Sendable () async throws -> String?)?
-  package var logger: (any SupabaseLogger)?
+  package var logger: SupabaseLogger?
 
   public static let defaultHeartbeatInterval: TimeInterval = 25
   public static let defaultReconnectDelay: TimeInterval = 7
@@ -44,11 +44,11 @@ public struct RealtimeClientOptions: Sendable {
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     logLevel: LogLevel? = nil,
-    fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
+    session: Alamofire.Session? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
-    logger: (any SupabaseLogger)? = nil
+    logger: SupabaseLogger? = nil
   ) {
-    self.headers = HTTPFields(headers)
+    self.headers = HTTPHeaders(headers)
     self.heartbeatInterval = heartbeatInterval
     self.reconnectDelay = reconnectDelay
     self.timeoutInterval = timeoutInterval
@@ -56,13 +56,13 @@ public struct RealtimeClientOptions: Sendable {
     self.connectOnSubscribe = connectOnSubscribe
     self.maxRetryAttempts = maxRetryAttempts
     self.logLevel = logLevel
-    self.fetch = fetch
+    self.session = session
     self.accessToken = accessToken
     self.logger = logger
   }
 
   var apikey: String? {
-    headers[.apiKey]
+    headers["apikey"]
   }
 }
 
@@ -102,11 +102,23 @@ public enum HeartbeatStatus: Sendable {
   case disconnected
 }
 
-extension HTTPField.Name {
-  static let apiKey = Self("apiKey")!
-}
-
 /// Log level for Realtime.
 public enum LogLevel: String, Sendable {
   case info, warn, error
+}
+
+/// Channel event constants.
+public enum ChannelEvent {
+  public static let system = "system"
+  public static let postgresChanges = "postgres_changes"
+  public static let broadcast = "broadcast"
+  public static let close = "close"
+  public static let error = "error"
+  public static let presenceDiff = "presence_diff"
+  public static let presenceState = "presence_state"
+  public static let reply = "reply"
+  public static let join = "phx_join"
+  public static let leave = "phx_leave"
+  public static let accessToken = "access_token"
+  public static let presence = "presence"
 }

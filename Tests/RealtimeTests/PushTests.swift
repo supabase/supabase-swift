@@ -1,5 +1,5 @@
 //
-//  PushV2Tests.swift
+//  PushTests.swift
 //  Supabase
 //
 //  Created by Guilherme Souza on 29/07/25.
@@ -10,7 +10,7 @@ import XCTest
 
 @testable import Realtime
 
-final class PushV2Tests: XCTestCase {
+final class PushTests: XCTestCase {
 
   func testPushStatusValues() {
     XCTAssertEqual(PushStatus.ok.rawValue, "ok")
@@ -26,8 +26,8 @@ final class PushV2Tests: XCTestCase {
   }
 
   @MainActor
-  func testPushV2InitializationWithNilChannel() {
-    let sampleMessage = RealtimeMessageV2(
+  func testPushInitializationWithNilChannel() {
+    let sampleMessage = RealtimeMessage(
       joinRef: "ref1",
       ref: "ref2",
       topic: "test:channel",
@@ -35,7 +35,7 @@ final class PushV2Tests: XCTestCase {
       payload: ["data": "test"]
     )
 
-    let push = PushV2(channel: nil, message: sampleMessage)
+    let push = Push(channel: nil, message: sampleMessage)
 
     XCTAssertEqual(push.message.topic, "test:channel")
     XCTAssertEqual(push.message.event, "broadcast")
@@ -43,7 +43,7 @@ final class PushV2Tests: XCTestCase {
 
   @MainActor
   func testSendWithNilChannelReturnsError() async {
-    let sampleMessage = RealtimeMessageV2(
+    let sampleMessage = RealtimeMessage(
       joinRef: "ref1",
       ref: "ref2",
       topic: "test:channel",
@@ -51,7 +51,7 @@ final class PushV2Tests: XCTestCase {
       payload: ["data": "test"]
     )
 
-    let push = PushV2(channel: nil, message: sampleMessage)
+    let push = Push(channel: nil, message: sampleMessage)
 
     let status = await push.send()
 
@@ -73,7 +73,7 @@ final class PushV2Tests: XCTestCase {
       logger: nil
     )
 
-    let sampleMessage = RealtimeMessageV2(
+    let sampleMessage = RealtimeMessage(
       joinRef: "ref1",
       ref: "ref2",
       topic: "test:channel",
@@ -81,7 +81,7 @@ final class PushV2Tests: XCTestCase {
       payload: ["data": "test"]
     )
 
-    let push = PushV2(channel: mockChannel, message: sampleMessage)
+    let push = Push(channel: mockChannel, message: sampleMessage)
     let status = await push.send()
 
     XCTAssertEqual(status, PushStatus.ok)
@@ -105,7 +105,7 @@ final class PushV2Tests: XCTestCase {
       logger: nil
     )
 
-    let sampleMessage = RealtimeMessageV2(
+    let sampleMessage = RealtimeMessage(
       joinRef: "ref1",
       ref: "ref2",
       topic: "test:channel",
@@ -113,7 +113,7 @@ final class PushV2Tests: XCTestCase {
       payload: ["data": "test"]
     )
 
-    let push = PushV2(channel: mockChannel, message: sampleMessage)
+    let push = Push(channel: mockChannel, message: sampleMessage)
 
     let sendTask = Task {
       await push.send()
@@ -179,7 +179,7 @@ final class PushV2Tests: XCTestCase {
       logger: nil
     )
 
-    let sampleMessage = RealtimeMessageV2(
+    let sampleMessage = RealtimeMessage(
       joinRef: "ref1",
       ref: "ref2",
       topic: "test:channel",
@@ -187,7 +187,7 @@ final class PushV2Tests: XCTestCase {
       payload: ["data": "test"]
     )
 
-    let push = PushV2(channel: mockChannel, message: sampleMessage)
+    let push = Push(channel: mockChannel, message: sampleMessage)
 
     let sendTask = Task {
       await push.send()
@@ -206,7 +206,7 @@ final class PushV2Tests: XCTestCase {
 
   @MainActor
   func testDidReceiveStatusWithoutWaitingDoesNothing() {
-    let sampleMessage = RealtimeMessageV2(
+    let sampleMessage = RealtimeMessage(
       joinRef: "ref1",
       ref: "ref2",
       topic: "test:channel",
@@ -214,7 +214,7 @@ final class PushV2Tests: XCTestCase {
       payload: ["data": "test"]
     )
 
-    let push = PushV2(channel: nil, message: sampleMessage)
+    let push = Push(channel: nil, message: sampleMessage)
 
     // This should not crash or cause issues
     push.didReceive(status: PushStatus.ok)
@@ -237,7 +237,7 @@ final class PushV2Tests: XCTestCase {
       logger: nil
     )
 
-    let sampleMessage = RealtimeMessageV2(
+    let sampleMessage = RealtimeMessage(
       joinRef: "ref1",
       ref: "ref2",
       topic: "test:channel",
@@ -245,7 +245,7 @@ final class PushV2Tests: XCTestCase {
       payload: ["data": "test"]
     )
 
-    let push = PushV2(channel: mockChannel, message: sampleMessage)
+    let push = Push(channel: mockChannel, message: sampleMessage)
 
     let sendTask = Task {
       await push.send()
@@ -273,13 +273,13 @@ private final class MockRealtimeChannel: RealtimeChannelProtocol {
   let topic: String
   var config: RealtimeChannelConfig
   let socket: any RealtimeClientProtocol
-  let logger: (any SupabaseLogger)?
+  let logger: SupabaseLogger?
 
   init(
     topic: String,
     config: RealtimeChannelConfig,
     socket: any RealtimeClientProtocol,
-    logger: (any SupabaseLogger)?
+    logger: SupabaseLogger?
   ) {
     self.topic = topic
     self.config = config
@@ -288,11 +288,16 @@ private final class MockRealtimeChannel: RealtimeChannelProtocol {
   }
 }
 
+// TODO: Update for Alamofire - temporarily commented out
+// These mocks need to be updated to work with Alamofire instead of HTTPClientType
+
+import Alamofire
+
 private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Sendable {
-  private let _pushedMessages = LockIsolated<[RealtimeMessageV2]>([])
+  private let _pushedMessages = LockIsolated<[RealtimeMessage]>([])
   private let _status = LockIsolated<RealtimeClientStatus>(.connected)
   let options: RealtimeClientOptions
-  let http: any HTTPClientType = MockHTTPClient()
+  let session: Alamofire.Session = .default
   let broadcastURL = URL(string: "https://test.supabase.co/api/broadcast")!
 
   var status: RealtimeClientStatus {
@@ -305,7 +310,7 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
     )
   }
 
-  var pushedMessages: [RealtimeMessageV2] {
+  var pushedMessages: [RealtimeMessage] {
     _pushedMessages.value
   }
 
@@ -313,7 +318,7 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
     _status.setValue(.connected)
   }
 
-  func push(_ message: RealtimeMessageV2) {
+  func push(_ message: RealtimeMessage) {
     _pushedMessages.withValue { messages in
       messages.append(message)
     }
@@ -329,11 +334,5 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
 
   func _remove(_ channel: any RealtimeChannelProtocol) {
     // No-op for mock
-  }
-}
-
-private struct MockHTTPClient: HTTPClientType {
-  func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-    return HTTPResponse(data: Data(), response: HTTPURLResponse())
   }
 }
