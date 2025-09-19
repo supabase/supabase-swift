@@ -98,7 +98,7 @@ final class SupabaseClientTests: XCTestCase {
     // Just verify the realtime options are set correctly
     XCTAssertEqual(realtimeOptions.logger?.label, logger.label)
 
-    let authConfig = auth.configuration
+    let authConfig = await auth.configuration
     XCTAssertFalse(authConfig.autoRefreshToken)
     XCTAssertEqual(authConfig.storageKey, "sb-project-ref-auth-token")
 
