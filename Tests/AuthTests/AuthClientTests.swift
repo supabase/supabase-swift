@@ -19,9 +19,9 @@ import Testing
   import FoundationNetworking
 #endif
 
-@Suite struct AuthClientTests {
+@Suite final class AuthClientTests {
   let storage: InMemoryLocalStorage
-  let sut: AuthClient
+  var sut: AuthClient
 
   init() {
     self.storage = InMemoryLocalStorage()
@@ -339,8 +339,10 @@ import Testing
       expectedSessions: [nil, session]
     )
 
-    expectNoDifference(sut.currentSession, session)
-    expectNoDifference(sut.currentUser, session.user)
+    let currentSession = await sut.currentSession
+    let currentUser = await sut.currentUser
+    expectNoDifference(currentSession, session)
+    expectNoDifference(currentUser, session.user)
   }
 
   @Test("Sign in with OAuth works correctly")
@@ -527,7 +529,8 @@ import Testing
       expectedEvents: [.initialSession, .userUpdated]
     )
 
-    expectNoDifference(sut.currentSession, updatedSession)
+    let currentSession = await sut.currentSession
+    expectNoDifference(currentSession, updatedSession)
   }
 
   @Test("Admin list users works correctly")
@@ -610,7 +613,7 @@ import Testing
 
     do {
       try await sut.session(from: url)
-      XCTFail("Expect failure")
+      #expect(Bool(false), "Expect failure")
     } catch {
       assertInlineSnapshot(of: error, as: .customDump) {
         """
@@ -2211,11 +2214,10 @@ import Testing
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
 
-    let encoder = AuthClient.Configuration.jsonEncoder
+    let encoder = JSONEncoder.supabase()
     encoder.outputFormatting = [.sortedKeys]
 
     let configuration = AuthClient.Configuration(
-      url: clientURL,
       headers: [
         "apikey":
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
@@ -2223,11 +2225,10 @@ import Testing
       flowType: flowType,
       localStorage: storage,
       logger: nil,
-      encoder: encoder,
       session: .init(configuration: sessionConfiguration)
     )
 
-    let sut = AuthClient(configuration: configuration)
+    let sut = AuthClient(url: clientURL, configuration: configuration)
 
     await sut.clientID.pkce.generateCodeVerifier = {
       "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"

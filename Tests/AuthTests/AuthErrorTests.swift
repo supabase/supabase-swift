@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 29/08/24.
 //
 
+import Foundation
 import Testing
 
 @testable import Auth
