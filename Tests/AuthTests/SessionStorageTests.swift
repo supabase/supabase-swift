@@ -1,50 +1,36 @@
 import ConcurrencyExtras
 import Mocker
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Auth
 
-final class SessionStorageTests: XCTestCase {
-  fileprivate var sessionStorage: SessionStorage!
-  fileprivate var storage: InMemoryLocalStorage!
-  fileprivate var sut: AuthClient!
+@Suite struct SessionStorageTests {
+  let storage: InMemoryLocalStorage
+  let sut: AuthClient
+  let sessionStorage: SessionStorage
 
-  #if !os(Windows) && !os(Linux) && !os(Android)
-    override func invokeTest() {
-      withMainSerialExecutor {
-        super.invokeTest()
-      }
-    }
-  #endif
-
-  override func setUp() {
-    super.setUp()
-    storage = InMemoryLocalStorage()
-    sut = makeSUT()
-    sessionStorage = SessionStorage.live(clientID: sut.clientID)
-  }
-
-  override func tearDown() {
-    super.tearDown()
-    sut = nil
-    storage = nil
-    sessionStorage = nil
+  init() {
+    self.storage = InMemoryLocalStorage()
+    self.sut = makeSUT()
+    self.sessionStorage = SessionStorage.live(client: sut)
   }
 
   // MARK: - Core SessionStorage Tests
 
-  func testSessionStorageInitialization() {
+  @Test("Session storage initializes correctly")
+  func testSessionStorageInitialization() async {
     // Given: A client ID
-    let clientID = sut.clientID
+    let clientID = await sut.clientID
 
     // When: Creating a session storage
-    let storage = SessionStorage.live(clientID: clientID)
+    let storage = SessionStorage.live(client: sut)
 
     // Then: Should be initialized
-    XCTAssertNotNil(storage)
+    #expect(storage != nil)
   }
 
+  @Test("Session storage can store and retrieve sessions")
   func testSessionStorageStoreAndGet() async throws {
     // Given: A session
     let session = Session.validSession
@@ -54,12 +40,13 @@ final class SessionStorageTests: XCTestCase {
 
     // Then: Should retrieve the same session
     let retrievedSession = sessionStorage.get()
-    XCTAssertNotNil(retrievedSession)
-    XCTAssertEqual(retrievedSession?.accessToken, session.accessToken)
-    XCTAssertEqual(retrievedSession?.refreshToken, session.refreshToken)
-    XCTAssertEqual(retrievedSession?.user.id, session.user.id)
+    #expect(retrievedSession != nil)
+    #expect(retrievedSession?.accessToken == session.accessToken)
+    #expect(retrievedSession?.refreshToken == session.refreshToken)
+    #expect(retrievedSession?.user.id == session.user.id)
   }
 
+  @Test("Session storage can delete sessions")
   func testSessionStorageDelete() async throws {
     // Given: A stored session
     let session = Session.validSession
@@ -71,9 +58,10 @@ final class SessionStorageTests: XCTestCase {
 
     // Then: Should return nil
     let retrievedSession = sessionStorage.get()
-    XCTAssertNil(retrievedSession)
+    #expect(retrievedSession == nil)
   }
 
+  @Test("Session storage can update existing sessions")
   func testSessionStorageUpdate() async throws {
     // Given: A stored session
     let originalSession = Session.validSession
@@ -86,11 +74,12 @@ final class SessionStorageTests: XCTestCase {
 
     // Then: Should retrieve the updated session
     let retrievedSession = sessionStorage.get()
-    XCTAssertNotNil(retrievedSession)
+    #expect(retrievedSession != nil)
     XCTAssertEqual(retrievedSession?.accessToken, "new_access_token")
     XCTAssertNotEqual(retrievedSession?.accessToken, originalSession.accessToken)
   }
 
+  @Test("Session storage handles expired sessions correctly")
   func testSessionStorageWithExpiredSession() async throws {
     // Given: An expired session
     var expiredSession = Session.validSession
@@ -101,11 +90,12 @@ final class SessionStorageTests: XCTestCase {
     let retrievedSession = sessionStorage.get()
 
     // Then: Should still return the session (storage doesn't validate expiration)
-    XCTAssertNotNil(retrievedSession)
+    #expect(retrievedSession != nil)
     XCTAssertEqual(retrievedSession?.accessToken, expiredSession.accessToken)
     XCTAssertTrue(retrievedSession?.isExpired == true)
   }
 
+  @Test("Session storage handles valid sessions correctly")
   func testSessionStorageWithValidSession() async throws {
     // Given: A valid session
     var validSession = Session.validSession
@@ -116,11 +106,12 @@ final class SessionStorageTests: XCTestCase {
     let retrievedSession = sessionStorage.get()
 
     // Then: Should return the valid session
-    XCTAssertNotNil(retrievedSession)
+    #expect(retrievedSession != nil)
     XCTAssertEqual(retrievedSession?.accessToken, validSession.accessToken)
     XCTAssertTrue(retrievedSession?.isExpired == false)
   }
 
+  @Test("Session storage handles nil sessions correctly")
   func testSessionStorageWithNilSession() async throws {
     // Given: No session stored
     sessionStorage.delete()
@@ -129,9 +120,10 @@ final class SessionStorageTests: XCTestCase {
     let retrievedSession = sessionStorage.get()
 
     // Then: Should return nil
-    XCTAssertNil(retrievedSession)
+    #expect(retrievedSession == nil)
   }
 
+  @Test("Session storage persists sessions correctly")
   func testSessionStoragePersistence() async throws {
     // Given: A session
     let session = Session.validSession
@@ -144,10 +136,11 @@ final class SessionStorageTests: XCTestCase {
 
     // Then: Should still retrieve the session (persistence through localStorage)
     let retrievedSession = newSessionStorage.get()
-    XCTAssertNotNil(retrievedSession)
-    XCTAssertEqual(retrievedSession?.accessToken, session.accessToken)
+    #expect(retrievedSession != nil)
+    #expect(retrievedSession?.accessToken == session.accessToken)
   }
 
+  @Test("Session storage handles concurrent access correctly")
   func testSessionStorageConcurrentAccess() async throws {
     // Given: A session storage
     let session = Session.validSession
@@ -164,10 +157,11 @@ final class SessionStorageTests: XCTestCase {
 
     // Then: Should still work correctly
     let retrievedSession = sessionStorage.get()
-    XCTAssertNotNil(retrievedSession)
-    XCTAssertEqual(retrievedSession?.accessToken, session.accessToken)
+    #expect(retrievedSession != nil)
+    #expect(retrievedSession?.accessToken == session.accessToken)
   }
 
+  @Test("Session storage isolates sessions by client ID")
   func testSessionStorageWithDifferentClientIDs() async throws {
     // Given: Two different auth clients with separate storage
     let storage1 = InMemoryLocalStorage()
@@ -202,6 +196,7 @@ final class SessionStorageTests: XCTestCase {
     XCTAssertNotEqual(retrieved1?.accessToken, retrieved2?.accessToken)
   }
 
+  @Test("Session storage can delete all sessions")
   func testSessionStorageDeleteAll() async throws {
     // Given: Multiple sessions stored
     let session1 = Session.validSession
@@ -216,9 +211,10 @@ final class SessionStorageTests: XCTestCase {
 
     // Then: Should return nil
     let retrievedSession = sessionStorage.get()
-    XCTAssertNil(retrievedSession)
+    #expect(retrievedSession == nil)
   }
 
+  @Test("Session storage handles large sessions correctly")
   func testSessionStorageWithLargeSession() async throws {
     // Given: A session with large user metadata
     var session = Session.validSession
@@ -236,11 +232,12 @@ final class SessionStorageTests: XCTestCase {
     let retrievedSession = sessionStorage.get()
 
     // Then: Should handle large sessions correctly
-    XCTAssertNotNil(retrievedSession)
-    XCTAssertEqual(retrievedSession?.accessToken, session.accessToken)
+    #expect(retrievedSession != nil)
+    #expect(retrievedSession?.accessToken == session.accessToken)
     XCTAssertEqual(retrievedSession?.user.userMetadata.count, largeMetadata.count)
   }
 
+  @Test("Session storage handles special characters correctly")
   func testSessionStorageWithSpecialCharacters() async throws {
     // Given: A session with special characters in tokens
     var session = Session.validSession
@@ -254,29 +251,31 @@ final class SessionStorageTests: XCTestCase {
     let retrievedSession = sessionStorage.get()
 
     // Then: Should handle special characters correctly
-    XCTAssertNotNil(retrievedSession)
-    XCTAssertEqual(retrievedSession?.accessToken, session.accessToken)
-    XCTAssertEqual(retrievedSession?.refreshToken, session.refreshToken)
+    #expect(retrievedSession != nil)
+    #expect(retrievedSession?.accessToken == session.accessToken)
+    #expect(retrievedSession?.refreshToken == session.refreshToken)
   }
 
   // MARK: - Integration Tests
 
+  @Test("Session storage integrates correctly with AuthClient")
   func testSessionStorageIntegrationWithAuthClient() async throws {
     // Given: An auth client
     let session = Session.validSession
 
     // When: Storing session through auth client dependencies
-    await sut.clientID.sessionStorage.store(session)
+    await sut.sessionStorage.store(session)
 
     // Then: Should be accessible through session storage
     let retrievedSession = sessionStorage.get()
-    XCTAssertNotNil(retrievedSession)
-    XCTAssertEqual(retrievedSession?.accessToken, session.accessToken)
+    #expect(retrievedSession != nil)
+    #expect(retrievedSession?.accessToken == session.accessToken)
   }
 
+  @Test("Session storage integrates correctly with SessionManager")
   func testSessionStorageIntegrationWithSessionManager() async throws {
     // Given: A session manager
-    let sessionManager = SessionManager.live(clientID: sut.clientID)
+    let sessionManager = SessionManager.live(client: sut)
     let session = Session.validSession
 
     // When: Updating session through session manager
@@ -284,10 +283,11 @@ final class SessionStorageTests: XCTestCase {
 
     // Then: Should be accessible through session storage
     let retrievedSession = sessionStorage.get()
-    XCTAssertNotNil(retrievedSession)
-    XCTAssertEqual(retrievedSession?.accessToken, session.accessToken)
+    #expect(retrievedSession != nil)
+    #expect(retrievedSession?.accessToken == session.accessToken)
   }
 
+  @Test("Session storage integrates correctly with sign out")
   func testSessionStorageIntegrationWithSignOut() async throws {
     // Given: A stored session
     let session = Session.validSession
@@ -307,7 +307,7 @@ final class SessionStorageTests: XCTestCase {
 
     // Then: Session should be removed from storage
     let retrievedSession = sessionStorage.get()
-    XCTAssertNil(retrievedSession)
+    #expect(retrievedSession == nil)
   }
 
   // MARK: - Helper Methods
