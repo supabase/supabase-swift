@@ -159,8 +159,8 @@ import Testing
 
     try await sut.signOut(scope: .others)
 
-    let sessionRemoved = await sut.clientID.sessionStorage.get() == nil
-    XCTAssertFalse(sessionRemoved)
+    let sessionRemoved = await sut.sessionStorage.get() == nil
+    #expect(!sessionRemoved)
   }
 
   @Test("Sign out should remove session if user is not found")
@@ -190,7 +190,7 @@ import Testing
     sut = makeSUT()
 
     let validSession = Session.validSession
-    await sut.clientID.sessionStorage.store(validSession)
+    await sut.sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -206,8 +206,8 @@ import Testing
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [.validSession, nil])
 
-    let sessionRemoved = await sut.clientID.sessionStorage.get() == nil
-    XCTAssertTrue(sessionRemoved)
+    let sessionRemoved = await sut.sessionStorage.get() == nil
+    #expect(sessionRemoved)
   }
 
   @Test("Sign out should remove session if JWT is invalid")
@@ -237,7 +237,7 @@ import Testing
     sut = makeSUT()
 
     let validSession = Session.validSession
-    await sut.clientID.sessionStorage.store(validSession)
+    await sut.sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -253,8 +253,8 @@ import Testing
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = await sut.clientID.sessionStorage.get() == nil
-    XCTAssertTrue(sessionRemoved)
+    let sessionRemoved = await sut.sessionStorage.get() == nil
+    #expect(sessionRemoved)
   }
 
   @Test("Sign out should remove session if 403 is returned")
@@ -284,7 +284,7 @@ import Testing
     sut = makeSUT()
 
     let validSession = Session.validSession
-    await sut.clientID.sessionStorage.store(validSession)
+    await sut.sessionStorage.store(validSession)
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -300,8 +300,8 @@ import Testing
     expectNoDifference(events, [.initialSession, .signedOut])
     expectNoDifference(sessions, [validSession, nil])
 
-    let sessionRemoved = await sut.clientID.sessionStorage.get() == nil
-    XCTAssertTrue(sessionRemoved)
+    let sessionRemoved = await sut.sessionStorage.get() == nil
+    #expect(sessionRemoved)
   }
 
   @Test("Sign in anonymously works correctly")
@@ -593,7 +593,7 @@ import Testing
 
     let response = try await sut.admin.listUsers()
     expectNoDifference(response.total, 669)
-    XCTAssertNil(response.nextPage)
+    #expect(response.nextPage == nil)
     expectNoDifference(response.lastPage, 14)
   }
 
@@ -624,6 +624,7 @@ import Testing
     }
   }
 
+  @Test("Sign up with email and password works correctly")
   func testSignUpWithEmailAndPassword() async throws {
     Mock(
       url: clientURL.appendingPathComponent("signup"),
@@ -657,6 +658,7 @@ import Testing
     )
   }
 
+  @Test("Sign up with phone and password works correctly")
   func testSignUpWithPhoneAndPassword() async throws {
     Mock(
       url: clientURL.appendingPathComponent("signup"),
@@ -689,6 +691,7 @@ import Testing
     )
   }
 
+  @Test("Sign in with email and password works correctly")
   func testSignInWithEmailAndPassword() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -720,6 +723,7 @@ import Testing
     )
   }
 
+  @Test("Sign in with phone and password works correctly")
   func testSignInWithPhoneAndPassword() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -751,6 +755,7 @@ import Testing
     )
   }
 
+  @Test("Sign in with ID token works correctly")
   func testSignInWithIdToken() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -788,6 +793,7 @@ import Testing
     )
   }
 
+  @Test("Sign in with OTP using email works correctly")
   func testSignInWithOTPUsingEmail() async throws {
     Mock(
       url: clientURL.appendingPathComponent("otp"),
@@ -821,6 +827,7 @@ import Testing
     )
   }
 
+  @Test("Sign in with OTP using phone works correctly")
   func testSignInWithOTPUsingPhone() async throws {
     Mock(
       url: clientURL.appendingPathComponent("otp"),
@@ -853,6 +860,7 @@ import Testing
     )
   }
 
+  @Test("Get OAuth sign in URL works correctly")
   func testGetOAuthSignInURL() async throws {
     let sut = makeSUT(flowType: .implicit)
     let url = try sut.getOAuthSignInURL(
@@ -870,6 +878,7 @@ import Testing
     )
   }
 
+  @Test("Refresh session works correctly")
   func testRefreshSession() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -897,7 +906,8 @@ import Testing
   }
 
   #if !os(Linux) && !os(Windows) && !os(Android)
-    func testSessionFromURL() async throws {
+  @Test("Session from URL works correctly")
+  func testSessionFromURL() async throws {
       Mock(
         url: clientURL.appendingPathComponent("user"),
         ignoreQuery: true,
@@ -940,6 +950,7 @@ import Testing
     }
   #endif
 
+  @Test("Session with URL implicit flow works correctly")
   func testSessionWithURL_implicitFlow() async throws {
     Mock(
       url: clientURL.appendingPathComponent("user"),
@@ -969,6 +980,7 @@ import Testing
     try await sut.session(from: url)
   }
 
+  @Test("Session with URL implicit flow handles invalid URL correctly")
   func testSessionWithURL_implicitFlow_invalidURL() async throws {
     let sut = makeSUT(flowType: .implicit)
 
@@ -984,6 +996,7 @@ import Testing
     }
   }
 
+  @Test("Session with URL implicit flow handles errors correctly")
   func testSessionWithURL_implicitFlow_error() async throws {
     let sut = makeSUT(flowType: .implicit)
 
@@ -999,6 +1012,7 @@ import Testing
     }
   }
 
+  @Test("Session with URL implicit flow recovery type works correctly")
   func testSessionWithURL_implicitFlow_recoveryType() async throws {
     Mock(
       url: clientURL.appendingPathComponent("user"),
@@ -1038,6 +1052,7 @@ import Testing
     expectNoDifference(events, [.initialSession, .signedIn, .passwordRecovery])
   }
 
+  @Test("Session with URL PKCE flow handles errors correctly")
   func testSessionWithURL_pkceFlow_error() async throws {
     let sut = makeSUT()
 
@@ -1055,6 +1070,7 @@ import Testing
     }
   }
 
+  @Test("Session with URL PKCE flow handles errors without description correctly")
   func testSessionWithURL_pkceFlow_error_noErrorDescription() async throws {
     let sut = makeSUT()
 
@@ -1072,6 +1088,7 @@ import Testing
     }
   }
 
+  @Test("Session from URL with missing component handles correctly")
   func testSessionFromURLWithMissingComponent() async {
     let sut = makeSUT()
 
@@ -1096,6 +1113,7 @@ import Testing
     }
   }
 
+  @Test("Set session with future expiration date works correctly")
   func testSetSessionWithAFutureExpirationDate() async throws {
     Mock(
       url: clientURL.appendingPathComponent("user"),
@@ -1123,6 +1141,7 @@ import Testing
     try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
   }
 
+  @Test("Set session with expired token works correctly")
   func testSetSessionWithAExpiredToken() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -1153,6 +1172,7 @@ import Testing
     try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
   }
 
+  @Test("Verify OTP using email works correctly")
   func testVerifyOTPUsingEmail() async throws {
     Mock(
       url: clientURL.appendingPathComponent("verify"),
@@ -1186,6 +1206,7 @@ import Testing
     )
   }
 
+  @Test("Verify OTP using phone works correctly")
   func testVerifyOTPUsingPhone() async throws {
     Mock(
       url: clientURL.appendingPathComponent("verify"),
@@ -1218,6 +1239,7 @@ import Testing
     )
   }
 
+  @Test("Verify OTP using token hash works correctly")
   func testVerifyOTPUsingTokenHash() async throws {
     Mock(
       url: clientURL.appendingPathComponent("verify"),
@@ -1248,6 +1270,7 @@ import Testing
     )
   }
 
+  @Test("Update user works correctly")
   func testUpdateUser() async throws {
     Mock(
       url: clientURL.appendingPathComponent("user"),
@@ -1284,6 +1307,7 @@ import Testing
     )
   }
 
+  @Test("Reset password for email works correctly")
   func testResetPasswordForEmail() async throws {
     Mock(
       url: clientURL.appendingPathComponent("recover"),
@@ -1314,6 +1338,7 @@ import Testing
     )
   }
 
+  @Test("Resend email works correctly")
   func testResendEmail() async throws {
     Mock(
       url: clientURL.appendingPathComponent("resend"),
@@ -1346,6 +1371,7 @@ import Testing
     )
   }
 
+  @Test("Resend phone works correctly")
   func testResendPhone() async throws {
     Mock(
       url: clientURL.appendingPathComponent("resend"),
@@ -1379,6 +1405,7 @@ import Testing
     expectNoDifference(response.messageId, "12345")
   }
 
+  @Test("Delete user works correctly")
   func testDeleteUser() async throws {
     let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
 
@@ -1406,6 +1433,7 @@ import Testing
     try await sut.admin.deleteUser(id: id)
   }
 
+  @Test("Reauthenticate works correctly")
   func testReauthenticate() async throws {
     Mock(
       url: clientURL.appendingPathComponent("reauthenticate"),
@@ -1431,6 +1459,7 @@ import Testing
     try await sut.reauthenticate()
   }
 
+  @Test("Unlink identity works correctly")
   func testUnlinkIdentity() async throws {
     let identityId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     Mock(
@@ -1469,6 +1498,7 @@ import Testing
     )
   }
 
+  @Test("Sign in with SSO using domain works correctly")
   func testSignInWithSSOUsingDomain() async throws {
     Mock(
       url: clientURL.appendingPathComponent("sso"),
@@ -1502,6 +1532,7 @@ import Testing
     expectNoDifference(response.url, URL(string: "https://supabase.com")!)
   }
 
+  @Test("Sign in with SSO using provider ID works correctly")
   func testSignInWithSSOUsingProviderId() async throws {
     Mock(
       url: clientURL.appendingPathComponent("sso"),
@@ -1535,6 +1566,7 @@ import Testing
     expectNoDifference(response.url, URL(string: "https://supabase.com")!)
   }
 
+  @Test("MFA enroll legacy works correctly")
   func testMFAEnrollLegacy() async throws {
     Mock(
       url: clientURL.appendingPathComponent("factors"),
@@ -1581,6 +1613,7 @@ import Testing
     expectNoDifference(response.type, "totp")
   }
 
+  @Test("MFA enroll TOTP works correctly")
   func testMFAEnrollTotp() async throws {
     Mock(
       url: clientURL.appendingPathComponent("factors"),
@@ -1627,6 +1660,7 @@ import Testing
     expectNoDifference(response.type, "totp")
   }
 
+  @Test("MFA enroll phone works correctly")
   func testMFAEnrollPhone() async throws {
     Mock(
       url: clientURL.appendingPathComponent("factors"),
@@ -1673,6 +1707,7 @@ import Testing
     expectNoDifference(response.type, "phone")
   }
 
+  @Test("MFA challenge works correctly")
   func testMFAChallenge() async throws {
     let factorId = "123"
 
@@ -1720,6 +1755,7 @@ import Testing
     )
   }
 
+  @Test("MFA challenge with phone type works correctly")
   func testMFAChallengeWithPhoneType() async throws {
     let factorId = "123"
 
@@ -1775,6 +1811,7 @@ import Testing
     )
   }
 
+  @Test("MFA verify works correctly")
   func testMFAVerify() async throws {
     let factorId = "123"
 
@@ -1812,6 +1849,7 @@ import Testing
     )
   }
 
+  @Test("MFA unenroll works correctly")
   func testMFAUnenroll() async throws {
     Mock(
       url: clientURL.appendingPathComponent("factors/123"),
@@ -1840,6 +1878,7 @@ import Testing
     expectNoDifference(factorId, "123")
   }
 
+  @Test("MFA challenge and verify works correctly")
   func testMFAChallengeAndVerify() async throws {
     let factorId = "123"
     let code = "456"
@@ -1907,6 +1946,7 @@ import Testing
     )
   }
 
+  @Test("MFA list factors works correctly")
   func testMFAListFactors() async throws {
     let sut = makeSUT()
 
@@ -1946,13 +1986,14 @@ import Testing
       ),
     ]
 
-    await sut.clientID.sessionStorage.store(session)
+    await sut.sessionStorage.store(session)
 
     let factors = try await sut.mfa.listFactors()
     expectNoDifference(factors.totp.map(\.id), ["1"])
     expectNoDifference(factors.phone.map(\.id), ["3"])
   }
 
+  @Test("Get authenticator assurance level when AAL and verified factor should return AAL2")
   func testGetAuthenticatorAssuranceLevel_whenAALAndVerifiedFactor_shouldReturnAAL2() async throws {
     var session = Session.validSession
 
@@ -1973,7 +2014,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(session)
+    await sut.sessionStorage.store(session)
 
     let aal = try await sut.mfa.getAuthenticatorAssuranceLevel()
 
@@ -1996,6 +2037,7 @@ import Testing
     )
   }
 
+  @Test("Get user by ID works correctly")
   func testgetUserById() async throws {
     let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
     let sut = makeSUT()
@@ -2021,6 +2063,7 @@ import Testing
     expectNoDifference(user.id, id)
   }
 
+  @Test("Update user by ID works correctly")
   func testUpdateUserById() async throws {
     let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
     let sut = makeSUT()
@@ -2057,6 +2100,7 @@ import Testing
     expectNoDifference(user.id, id)
   }
 
+  @Test("Create user works correctly")
   func testCreateUser() async throws {
     let sut = makeSUT()
 
@@ -2131,6 +2175,7 @@ import Testing
   //    )
   //  }
 
+  @Test("Invite user by email works correctly")
   func testInviteUserByEmail() async throws {
     let sut = makeSUT()
 
