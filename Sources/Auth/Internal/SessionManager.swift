@@ -71,7 +71,7 @@ private actor LiveSessionManager {
           query: ["grant_type": "refresh_token"],
           body: UserCredentials(refreshToken: refreshToken)
         )
-        .serializingDecodable(Session.self, decoder: client.configuration.decoder)
+        .serializingDecodable(Session.self, decoder: JSONDecoder.auth)
         .value
 
         await update(session)

@@ -1,47 +1,39 @@
+import Alamofire
 import ConcurrencyExtras
+import Foundation
 import Mocker
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Auth
 
-final class EventEmitterTests: XCTestCase {
-  fileprivate var eventEmitter: AuthStateChangeEventEmitter!
-  fileprivate var storage: InMemoryLocalStorage!
-  fileprivate var sut: AuthClient!
+@Suite struct EventEmitterTests {
+  private let eventEmitter: AuthStateChangeEventEmitter
+  private let storage: InMemoryLocalStorage
+  private let sut: AuthClient
 
-  #if !os(Windows) && !os(Linux) && !os(Android)
-    override func invokeTest() {
-      withMainSerialExecutor {
-        super.invokeTest()
-      }
-    }
-  #endif
+  init() async {
+    let storage = InMemoryLocalStorage()
+    let eventEmitter = AuthStateChangeEventEmitter()
+    let sut = await Self.makeSUT(storage: storage)
 
-  override func setUp() {
-    super.setUp()
-    storage = InMemoryLocalStorage()
-    sut = makeSUT()
-    eventEmitter = AuthStateChangeEventEmitter()
-  }
-
-  override func tearDown() {
-    super.tearDown()
-    sut = nil
-    storage = nil
-    eventEmitter = nil
+    self.storage = storage
+    self.eventEmitter = eventEmitter
+    self.sut = sut
   }
 
   // MARK: - Core EventEmitter Tests
 
+  @Test("Event emitter initializes correctly")
   func testEventEmitterInitialization() {
     // Given: An event emitter
-    let emitter = AuthStateChangeEventEmitter()
+    let _ = AuthStateChangeEventEmitter()
 
     // Then: Should be initialized
-    XCTAssertNotNil(emitter)
+    // The emitter is successfully created
   }
 
+  @Test("Event emitter attaches listener correctly")
   func testEventEmitterAttachListener() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
@@ -60,13 +52,14 @@ final class EventEmitterTests: XCTestCase {
     // Note: We need to wait a bit for the async event processing
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
 
-    XCTAssertEqual(receivedEvents.value.count, 1)
-    XCTAssertEqual(receivedEvents.value.first, .signedIn)
+    #expect(receivedEvents.value.count == 1)
+    #expect(receivedEvents.value.first == .signedIn)
 
     // Cleanup
     token.cancel()
   }
 
+  @Test("Event emitter handles multiple listeners correctly")
   func testEventEmitterMultipleListeners() async throws {
     // Given: An event emitter and multiple listeners
     let emitter = AuthStateChangeEventEmitter()
@@ -90,16 +83,17 @@ final class EventEmitterTests: XCTestCase {
     // Then: Both listeners should receive all events
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
 
-    XCTAssertEqual(listener1Events.value.count, 2)
-    XCTAssertEqual(listener2Events.value.count, 2)
-    XCTAssertEqual(listener1Events.value, [.signedIn, .tokenRefreshed])
-    XCTAssertEqual(listener2Events.value, [.signedIn, .tokenRefreshed])
+    #expect(listener1Events.value.count == 2)
+    #expect(listener2Events.value.count == 2)
+    #expect(listener1Events.value == [.signedIn, .tokenRefreshed])
+    #expect(listener2Events.value == [.signedIn, .tokenRefreshed])
 
     // Cleanup
     token1.cancel()
     token2.cancel()
   }
 
+  @Test("Event emitter removes listener correctly")
   func testEventEmitterRemoveListener() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
@@ -116,7 +110,7 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive the event
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.value.count, 1)
+    #expect(receivedEvents.value.count == 1)
 
     // When: Removing the listener
     token.cancel()
@@ -126,13 +120,14 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should not receive the new event
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.value.count, 1)  // Should still be 1
+    #expect(receivedEvents.value.count == 1)  // Should still be 1
   }
 
+  @Test("Event emitter emits events with session correctly")
   func testEventEmitterEmitWithSession() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
-    let receivedSessions = LockIsolated<[Session?]>([])
+    let receivedSessions = LockIsolated<[Auth.Session?]>([])
 
     // When: Attaching a listener
     let token = emitter.attach { _, session in
@@ -145,17 +140,18 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive the session
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedSessions.value.count, 1)
-    XCTAssertEqual(receivedSessions.value.first??.accessToken, session.accessToken)
+    #expect(receivedSessions.value.count == 1)
+    #expect(receivedSessions.value.first??.accessToken == session.accessToken)
 
     // Cleanup
     token.cancel()
   }
 
+  @Test("Event emitter emits events without session correctly")
   func testEventEmitterEmitWithoutSession() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
-    let receivedSessions = LockIsolated<[Session?]>([])
+    let receivedSessions = LockIsolated<[Auth.Session?]>([])
 
     // When: Attaching a listener
     let token = emitter.attach { _, session in
@@ -167,13 +163,14 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive nil session
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedSessions.value.count, 1)
-    XCTAssertEqual(receivedSessions.value, [nil])
+    #expect(receivedSessions.value.count == 1)
+    #expect(receivedSessions.value == [nil])
 
     // Cleanup
     token.cancel()
   }
 
+  @Test("Event emitter emits events with token correctly")
   func testEventEmitterEmitWithToken() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
@@ -190,13 +187,14 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive the event
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.value.count, 1)
-    XCTAssertEqual(receivedEvents.value.first, .signedIn)
+    #expect(receivedEvents.value.count == 1)
+    #expect(receivedEvents.value.first == .signedIn)
 
     // Cleanup
     token.cancel()
   }
 
+  @Test("Event emitter handles all auth change events correctly")
   func testEventEmitterAllAuthChangeEvents() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
@@ -226,13 +224,14 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive all events
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.value.count, allEvents.count)
-    XCTAssertEqual(receivedEvents.value, allEvents)
+    #expect(receivedEvents.value.count == allEvents.count)
+    #expect(receivedEvents.value == allEvents)
 
     // Cleanup
     token.cancel()
   }
 
+  @Test("Event emitter handles concurrent emissions correctly")
   func testEventEmitterConcurrentEmissions() async throws {
     // Given: An event emitter and a listener
     let emitter = AuthStateChangeEventEmitter()
@@ -258,12 +257,13 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive all events
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.value.count, 10)
+    #expect(receivedEvents.value.count == 10)
 
     // Cleanup
     token.cancel()
   }
 
+  @Test("Event emitter manages memory correctly")
   func testEventEmitterMemoryManagement() async throws {
     // Given: An event emitter and a weak reference to a listener
     let emitter = AuthStateChangeEventEmitter()
@@ -280,14 +280,14 @@ final class EventEmitterTests: XCTestCase {
 
     // Then: Listener should receive the event
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-    XCTAssertEqual(receivedEvents.value.count, 1)
+    #expect(receivedEvents.value.count == 1)
 
     // When: Removing the token
     token.cancel()
 
     // Then: No memory leaks should occur
     // (This is more of a manual verification, but we can test that the token is properly removed)
-    XCTAssertNotNil(token)
+    // The token is successfully created and can be cancelled
 
     // Cleanup
     token.cancel()
@@ -295,25 +295,27 @@ final class EventEmitterTests: XCTestCase {
 
   // MARK: - Integration Tests
 
+  @Test("Event emitter integrates with auth client correctly")
   func testEventEmitterIntegrationWithAuthClient() async throws {
     // Given: An auth client with a session
     let session = Session.validSession
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    await sut.sessionStorage.store(session)
 
     // When: Getting auth state changes
-    let stateChanges = sut.authStateChanges
+    let stateChanges = await sut.authStateChanges
 
     // Then: Should emit initial session event
     let firstChange = await stateChanges.first { _ in true }
-    XCTAssertNotNil(firstChange)
-    XCTAssertEqual(firstChange?.event, .initialSession)
-    XCTAssertEqual(firstChange?.session?.accessToken, session.accessToken)
+    #expect(firstChange != nil)
+    #expect(firstChange?.event == .initialSession)
+    #expect(firstChange?.session?.accessToken == session.accessToken)
   }
 
+  @Test("Event emitter integrates with sign out correctly")
   func testEventEmitterIntegrationWithSignOut() async throws {
     // Given: An auth client with a session
     let session = Session.validSession
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    await sut.sessionStorage.store(session)
 
     // And: Mock sign out response
     Mock(
@@ -327,40 +329,38 @@ final class EventEmitterTests: XCTestCase {
     try await sut.signOut()
 
     // Then: Session should be removed
-    let currentSession = Dependencies[sut.clientID].sessionStorage.get()
-    XCTAssertNil(currentSession)
+    let currentSession = await sut.sessionStorage.get()
+    #expect(currentSession == nil)
   }
 
   // MARK: - Helper Methods
 
-  private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
+  private static func makeSUT(storage: InMemoryLocalStorage, flowType: AuthFlowType = .pkce) async
+    -> AuthClient
+  {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
 
-    let encoder = AuthClient.Configuration.jsonEncoder
-    encoder.outputFormatting = [.sortedKeys]
-
     let configuration = AuthClient.Configuration(
-      url: clientURL,
       headers: [
         "apikey":
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
       ],
       flowType: flowType,
       localStorage: storage,
-      logger: nil,
-      encoder: encoder,
-      session: .init(configuration: sessionConfiguration)
+      session: Alamofire.Session(configuration: sessionConfiguration)
     )
 
-    let sut = AuthClient(configuration: configuration)
+    let sut = AuthClient(url: clientURL, configuration: configuration)
 
-    Dependencies[sut.clientID].pkce.generateCodeVerifier = {
-      "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
-    }
+    await sut.overrideForTesting {
+      $0.pkce.generateCodeVerifier = {
+        "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
+      }
 
-    Dependencies[sut.clientID].pkce.generateCodeChallenge = { _ in
-      "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
+      $0.pkce.generateCodeChallenge = { _ in
+        "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
+      }
     }
 
     return sut
@@ -370,3 +370,12 @@ final class EventEmitterTests: XCTestCase {
 // MARK: - Test Constants
 
 // Using the existing clientURL from Mocks.swift
+
+extension AuthClient {
+
+  #if DEBUG
+    func overrideForTesting(block: @Sendable (isolated AuthClient) -> Void) {
+      block(self)
+    }
+  #endif
+}

@@ -17,8 +17,8 @@ extension SessionStorage {
   /// Key used to store session on ``AuthLocalStorage``.
   ///
   /// It uses value from ``AuthClient/Configuration/storageKey`` or default to `supabase.auth.token` if not provided.
-  static func key(_ clientID: AuthClientID) -> String {
-    Dependencies[clientID].configuration.storageKey ?? defaultStorageKey
+  static func key(_ client: AuthClient) -> String {
+    client.configuration.storageKey ?? defaultStorageKey
   }
 
   static func live(client: AuthClient) -> SessionStorage {
@@ -37,7 +37,7 @@ extension SessionStorage {
     ]
 
     var key: String {
-      SessionStorage.key(client.clientID)
+      SessionStorage.key(client)
     }
 
     return SessionStorage(
@@ -94,7 +94,7 @@ extension StorageMigration {
   static func sessionNewKey(client: AuthClient) -> StorageMigration {
     StorageMigration(name: "sessionNewKey") {
       let storage = client.configuration.localStorage
-      let newKey = SessionStorage.key(client.clientID)
+      let newKey = SessionStorage.key(client)
 
       if let storedData = try? storage.retrieve(key: "supabase.session") {
         // migrate to new key.
@@ -122,15 +122,15 @@ extension StorageMigration {
 
     return StorageMigration(name: "storeSessionDirectly") {
       let storage = client.configuration.localStorage
-      let key = SessionStorage.key(client.clientID)
+      let key = SessionStorage.key(client)
 
       if let data = try? storage.retrieve(key: key),
-        let storedSession = try? AuthClient.Configuration.jsonDecoder.decode(
+         let storedSession = try? JSONDecoder.auth.decode(
           StoredSession.self,
           from: data
         )
       {
-        let session = try AuthClient.Configuration.jsonEncoder.encode(storedSession.session)
+        let session = try JSONEncoder.auth.encode(storedSession.session)
         try storage.store(key: key, value: session)
       }
     }
@@ -139,11 +139,11 @@ extension StorageMigration {
   static func useDefaultEncoder(client: AuthClient) -> StorageMigration {
     StorageMigration(name: "useDefaultEncoder") {
       let storage = client.configuration.localStorage
-      let key = SessionStorage.key(client.clientID)
+      let key = SessionStorage.key(client)
 
       let storedData = try? storage.retrieve(key: key)
       let sessionUsingOldDecoder = storedData.flatMap {
-        try? AuthClient.Configuration.jsonDecoder.decode(Session.self, from: $0)
+        try? JSONDecoder.auth.decode(Session.self, from: $0)
       }
 
       if let sessionUsingOldDecoder {

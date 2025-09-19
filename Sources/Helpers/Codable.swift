@@ -21,7 +21,8 @@ extension JSONDecoder {
       }
 
       throw DecodingError.dataCorruptedError(
-        in: container, debugDescription: "Invalid date format: \(string)"
+        in: container,
+        debugDescription: "Invalid date format: \(string)"
       )
     }
     return decoder
@@ -38,7 +39,7 @@ extension JSONEncoder {
     }
 
     #if DEBUG
-    encoder.outputFormatting = [.sortedKeys]
+      encoder.outputFormatting = [.sortedKeys]
     #endif
 
     return encoder

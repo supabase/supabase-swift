@@ -6,7 +6,7 @@ struct NoopParameter: Encodable, Sendable {}
 extension AuthClient {
 
   private var defaultEncoder: any ParameterEncoder {
-    JSONParameterEncoder(encoder: configuration.encoder)
+    JSONParameterEncoder(encoder: .auth)
   }
 
   func execute<RequestBody: Encodable & Sendable>(
@@ -27,15 +27,15 @@ extension AuthClient {
     return alamofireSession.request(request)
       .validate { _, response, data in
         guard 200..<300 ~= response.statusCode else {
-          return .failure(self.handleError(response: response, data: data ?? Data()))  // swiftlint:disable:this redundant_discardable_result
+          return .failure(self.handleError(response: response, data: data ?? Data()))
         }
         return .success(())
       }
   }
 
-  func handleError(response: HTTPURLResponse, data: Data) -> AuthError {
+  nonisolated func handleError(response: HTTPURLResponse, data: Data) -> AuthError {
     guard
-      let error = try? configuration.decoder.decode(
+      let error = try? JSONDecoder.auth.decode(
         _RawAPIErrorResponse.self,
         from: data
       )
@@ -81,7 +81,7 @@ extension AuthClient {
     }
   }
 
-  private func parseResponseAPIVersion(_ response: HTTPURLResponse) -> Date? {
+  nonisolated private func parseResponseAPIVersion(_ response: HTTPURLResponse) -> Date? {
     guard let apiVersion = response.headers[apiVersionHeaderNameHeaderKey] else { return nil }
 
     let formatter = ISO8601DateFormatter()
