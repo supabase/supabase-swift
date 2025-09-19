@@ -529,7 +529,7 @@ public actor AuthClient {
         query: query,
         body: body
       )
-      .serializingDecodable(AuthResponse.self, decoder: self.configuration.decoder)
+      .serializingDecodable(AuthResponse.self, decoder: JSONDecoder.auth)
       .value
     }
 
@@ -625,7 +625,7 @@ public actor AuthClient {
         query: ["grant_type": grantType],
         body: credentials
       )
-      .serializingDecodable(Session.self, decoder: self.configuration.decoder)
+      .serializingDecodable(Session.self, decoder: JSONDecoder.auth)
       .value
     }
 
@@ -737,7 +737,7 @@ public actor AuthClient {
           codeChallengeMethod: codeChallengeMethod
         )
       )
-      .serializingDecodable(SSOResponse.self, decoder: self.configuration.decoder)
+      .serializingDecodable(SSOResponse.self, decoder: JSONDecoder.auth)
       .value
     }
   }
@@ -769,7 +769,7 @@ public actor AuthClient {
           codeChallengeMethod: codeChallengeMethod
         )
       )
-      .serializingDecodable(SSOResponse.self, decoder: self.configuration.decoder)
+      .serializingDecodable(SSOResponse.self, decoder: JSONDecoder.auth)
       .value
     }
   }
@@ -791,7 +791,7 @@ public actor AuthClient {
         query: ["grant_type": "pkce"],
         body: ["auth_code": authCode, "code_verifier": codeVerifier]
       )
-      .serializingDecodable(Session.self, decoder: self.configuration.decoder)
+      .serializingDecodable(Session.self, decoder: JSONDecoder.auth)
       .value
     }
 
@@ -1049,7 +1049,7 @@ public actor AuthClient {
       method: .get,
       headers: [.authorization(bearerToken: accessToken)]
     )
-    .serializingDecodable(User.self, decoder: configuration.decoder)
+    .serializingDecodable(User.self, decoder: JSONDecoder.auth)
     .value
 
     let session = Session(
@@ -1235,7 +1235,7 @@ public actor AuthClient {
         query: query,
         body: body
       )
-      .serializingDecodable(AuthResponse.self, decoder: self.configuration.decoder)
+      .serializingDecodable(AuthResponse.self, decoder: JSONDecoder.auth)
       .value
     }
 
@@ -1297,7 +1297,7 @@ public actor AuthClient {
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       )
-      .serializingDecodable(ResendMobileResponse.self, decoder: self.configuration.decoder)
+      .serializingDecodable(ResendMobileResponse.self, decoder: JSONDecoder.auth)
       .value
     }
   }
@@ -1331,7 +1331,7 @@ public actor AuthClient {
             .authorization(bearerToken: jwt)
           ]
         )
-        .serializingDecodable(User.self, decoder: self.configuration.decoder)
+        .serializingDecodable(User.self, decoder: JSONDecoder.auth)
         .value
 
       }
@@ -1342,7 +1342,7 @@ public actor AuthClient {
           .authorization(bearerToken: try await self.session.accessToken)
         ]
       )
-      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .serializingDecodable(User.self, decoder: JSONDecoder.auth)
       .value
     }
   }
@@ -1368,7 +1368,7 @@ public actor AuthClient {
         },
         body: user
       )
-      .serializingDecodable(User.self, decoder: self.configuration.decoder)
+      .serializingDecodable(User.self, decoder: JSONDecoder.auth)
       .value
 
       session.user = updatedUser
@@ -1400,7 +1400,7 @@ public actor AuthClient {
         query: ["grant_type": "id_token"],
         body: credentials
       )
-      .serializingDecodable(Session.self, decoder: self.configuration.decoder)
+      .serializingDecodable(Session.self, decoder: JSONDecoder.auth)
       .value
     }
 
@@ -1499,7 +1499,7 @@ public actor AuthClient {
           .authorization(bearerToken: try await self.session.accessToken)
         ]
       )
-      .serializingDecodable(Response.self, decoder: self.configuration.decoder)
+      .serializingDecodable(Response.self, decoder: JSONDecoder.auth)
       .value
 
       return OAuthResponse(provider: provider, url: response.url)

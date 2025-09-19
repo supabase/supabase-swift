@@ -86,7 +86,7 @@ public struct AuthMFA: Sendable {
         ],
         body: params
       )
-      .serializingDecodable(AuthMFAEnrollResponse.self, decoder: self.client.configuration.decoder)
+      .serializingDecodable(AuthMFAEnrollResponse.self, decoder: JSONDecoder.auth)
       .value
     }
   }
@@ -108,7 +108,7 @@ public struct AuthMFA: Sendable {
         body: params.channel == nil ? nil : ["channel": params.channel]
       )
       .serializingDecodable(
-        AuthMFAChallengeResponse.self, decoder: self.client.configuration.decoder
+        AuthMFAChallengeResponse.self, decoder: JSONDecoder.auth
       )
       .value
     }
@@ -130,12 +130,12 @@ public struct AuthMFA: Sendable {
         ],
         body: params
       )
-      .serializingDecodable(AuthMFAVerifyResponse.self, decoder: self.client.configuration.decoder)
+      .serializingDecodable(AuthMFAVerifyResponse.self, decoder: JSONDecoder.auth)
       .value
 
       await self.client.sessionManager.update(response)
 
-      self.client.eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
+      await self.client.eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
 
       return response
     }
@@ -158,7 +158,7 @@ public struct AuthMFA: Sendable {
         ]
       )
       .serializingDecodable(
-        AuthMFAUnenrollResponse.self, decoder: self.client.configuration.decoder
+        AuthMFAUnenrollResponse.self, decoder: JSONDecoder.auth
       )
       .value
     }

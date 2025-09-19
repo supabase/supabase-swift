@@ -40,7 +40,7 @@ extension AuthClient {
     /// Any additional headers to send to the Auth server.
     /// These headers will be included in all authentication requests.
     public var headers: [String: String]
-    
+
     /// The authentication flow type to use.
     /// - `.implicit`: Uses implicit flow (less secure, not recommended)
     /// - `.pkce`: Uses PKCE flow (recommended for mobile apps)
@@ -62,12 +62,6 @@ extension AuthClient {
     /// Custom SupabaseLogger implementation used to inspecting log messages from the Auth library.
     /// Useful for debugging authentication issues.
     public let logger: SupabaseLogger?
-    
-    /// The JSON encoder to use for encoding requests.
-    public let encoder: JSONEncoder
-    
-    /// The JSON decoder to use for decoding responses.
-    public let decoder: JSONDecoder
 
     /// The Alamofire session to use for network requests.
     /// Allows customization of network behavior, timeouts, and interceptors.
@@ -91,29 +85,26 @@ extension AuthClient {
     ///   - session: The Alamofire session to use for network requests.
     ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
     public init(
-      headers: [String: String] = [:],
-      flowType: AuthFlowType = Configuration.defaultFlowType,
+      headers: [String: String]? = nil,
+      flowType: AuthFlowType? = nil,
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
       logger: SupabaseLogger? = nil,
-      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       session: Alamofire.Session = .default,
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+      autoRefreshToken: Bool? = nil
     ) {
-      let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
+      let headers =
+        headers?.merging(Configuration.defaultHeaders) { l, _ in l } ?? Configuration.defaultHeaders
 
       self.headers = headers
-      self.flowType = flowType
+      self.flowType = flowType ?? AuthClient.Configuration.defaultFlowType
       self.redirectToURL = redirectToURL
       self.storageKey = storageKey
       self.localStorage = localStorage
       self.logger = logger
-      self.encoder = encoder
-      self.decoder = decoder
       self.session = session
-      self.autoRefreshToken = autoRefreshToken
+      self.autoRefreshToken = autoRefreshToken ?? AuthClient.Configuration.defaultAutoRefreshToken
     }
   }
 
@@ -127,22 +118,18 @@ extension AuthClient {
   ///   - storageKey: Optional key name used for storing tokens in local storage.
   ///   - localStorage: The storage mechanism for local data..
   ///   - logger: The logger to use.
-  ///   - encoder: The JSON encoder to use for encoding requests.
-  ///   - decoder: The JSON decoder to use for decoding responses.
   ///   - session: The Alamofire session to use for network requests.
   ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
   public init(
     url: URL,
-    headers: [String: String] = [:],
-    flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
+    headers: [String: String]? = nil,
+    flowType: AuthFlowType? = nil,
     redirectToURL: URL? = nil,
     storageKey: String? = nil,
     localStorage: any AuthLocalStorage,
     logger: SupabaseLogger? = nil,
-    encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     session: Alamofire.Session = .default,
-    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+    autoRefreshToken: Bool? = nil
   ) {
     self.init(
       url: url,
@@ -153,10 +140,8 @@ extension AuthClient {
         storageKey: storageKey,
         localStorage: localStorage,
         logger: logger,
-        encoder: encoder,
-        decoder: decoder,
         session: session,
-        autoRefreshToken: autoRefreshToken
+        autoRefreshToken: autoRefreshToken ?? AuthClient.Configuration.defaultAutoRefreshToken
       )
     )
   }

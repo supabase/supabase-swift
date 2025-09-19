@@ -15,6 +15,7 @@
 #### Infrastructure & Requirements
 - **BREAKING**: Minimum Swift version is now 6.0+ (was 5.10+)
 - **BREAKING**: Minimum Xcode version is now 16.0+ (was 15.3+)
+- **BREAKING**: SupabaseClient converted to actor for thread safety (requires await for property access)
 - **BREAKING**: Networking layer completely replaced with Alamofire
 - **BREAKING**: Release management switched to release-please
 
@@ -75,18 +76,22 @@
 - [x] Modernized CI/CD pipeline with Xcode 26.0
 
 #### Core Client
+- [x] **BREAKING**: SupabaseClient converted to actor for Swift 6.0 thread safety
 - [x] Simplified and modernized API surface (deprecated code removed)
-- [x] Improved configuration system with better defaults
-- [x] Enhanced dependency injection capabilities
+- [x] Improved configuration system with better defaults and comprehensive documentation
+- [x] Enhanced dependency injection capabilities with actor isolation
 - [x] Better debugging and logging options with global timeout configuration
+- [x] Comprehensive DocC documentation with detailed usage examples
 
 #### Authentication
 - [x] Cleaner error handling (deprecated errors removed)
 - [x] Simplified type system (GoTrue* aliases removed)
-- [x] Enhanced MFA support
+- [x] Enhanced MFA support with comprehensive async/await patterns
 - [x] Improved PKCE implementation with validation
-- [x] Better session management
+- [x] Better session management with actor-safe operations
 - [x] New identity linking capabilities
+- [x] Comprehensive DocC documentation with detailed examples
+- [x] Enhanced configuration options with better parameter documentation
 
 #### Database (PostgREST)
 - [x] Enhanced type safety for query operations

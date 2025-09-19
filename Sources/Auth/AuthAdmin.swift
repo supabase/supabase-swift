@@ -83,7 +83,7 @@ public struct AuthAdmin: Sendable {
       try await self.client.execute(
         self.client.url.appendingPathComponent("admin/users/\(uid)")
       )
-      .serializingDecodable(User.self, decoder: self.client.configuration.decoder)
+      .serializingDecodable(User.self, decoder: JSONDecoder.auth)
       .value
     }
   }
@@ -102,7 +102,7 @@ public struct AuthAdmin: Sendable {
         method: .put,
         body: attributes
       )
-      .serializingDecodable(User.self, decoder: self.client.configuration.decoder)
+      .serializingDecodable(User.self, decoder: JSONDecoder.auth)
       .value
     }
   }
@@ -121,7 +121,7 @@ public struct AuthAdmin: Sendable {
         method: .post,
         body: attributes
       )
-      .serializingDecodable(User.self, decoder: self.client.configuration.decoder)
+      .serializingDecodable(User.self, decoder: JSONDecoder.auth)
       .value
     }
   }
@@ -153,7 +153,7 @@ public struct AuthAdmin: Sendable {
           "data": data.map({ AnyJSON.object($0) }) ?? .null,
         ]
       )
-      .serializingDecodable(User.self, decoder: self.client.configuration.decoder)
+      .serializingDecodable(User.self, decoder: JSONDecoder.auth)
       .value
     }
   }
@@ -196,7 +196,7 @@ public struct AuthAdmin: Sendable {
           "per_page": params?.perPage?.description ?? "",
         ]
       )
-      .serializingDecodable(Response.self, decoder: self.client.configuration.decoder)
+      .serializingDecodable(Response.self, decoder: JSONDecoder.auth)
       .response
 
       let response = try httpResponse.result.get()
