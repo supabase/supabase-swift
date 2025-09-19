@@ -258,7 +258,8 @@ final class AuthClientIntegrationTests: XCTestCase {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
       _ = try await authClient.session
-      XCTAssertNotNil(authClient.currentSession)
+      let currentSession = await authClient.currentSession
+      XCTAssertNotNil(currentSession)
 
       try await authClient.signOut()
 
@@ -269,7 +270,8 @@ final class AuthClientIntegrationTests: XCTestCase {
       } catch {
         XCTFail("Expected \(AuthError.sessionMissing) error")
       }
-      XCTAssertNil(authClient.currentSession)
+      let nilSession = await authClient.currentSession
+      XCTAssertNil(nilSession)
     }
   }
 

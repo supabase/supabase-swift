@@ -54,6 +54,7 @@ import Testing
     #expect(clientID1 < clientID2, "Should increase client IDs")
   }
 
+  @Test("Auth state changes are properly emitted")
   func testOnAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
@@ -72,6 +73,7 @@ import Testing
     handle.remove()
   }
 
+  @Test("Auth state changes stream works correctly")
   func testAuthStateChanges() async throws {
     let session = Session.validSession
     let sut = makeSUT()
@@ -82,6 +84,7 @@ import Testing
     expectNoDifference(stateChange?.session, session)
   }
 
+  @Test("Sign out works correctly and emits proper events")
   func testSignOut() async throws {
     Mock(
       url: clientURL.appendingPathComponent("logout"),
@@ -106,7 +109,7 @@ import Testing
 
     sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await assertAuthStateChanges(
       sut: sut,
@@ -126,6 +129,7 @@ import Testing
     }
   }
 
+  @Test("Sign out with others scope should not remove local session")
   func testSignOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
     Mock(
       url: clientURL.appendingPathComponent("logout").appendingQueryItems([
@@ -151,7 +155,7 @@ import Testing
 
     sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.signOut(scope: .others)
 
@@ -159,6 +163,7 @@ import Testing
     XCTAssertFalse(sessionRemoved)
   }
 
+  @Test("Sign out should remove session if user is not found")
   func testSignOutShouldRemoveSessionIfUserIsNotFound() async throws {
     Mock(
       url: clientURL.appendingPathComponent("logout").appendingQueryItems([
@@ -205,6 +210,7 @@ import Testing
     XCTAssertTrue(sessionRemoved)
   }
 
+  @Test("Sign out should remove session if JWT is invalid")
   func testSignOutShouldRemoveSessionIfJWTIsInvalid() async throws {
     Mock(
       url: clientURL.appendingPathComponent("logout").appendingQueryItems([
@@ -251,6 +257,7 @@ import Testing
     XCTAssertTrue(sessionRemoved)
   }
 
+  @Test("Sign out should remove session if 403 is returned")
   func testSignOutShouldRemoveSessionIf403Returned() async throws {
     Mock(
       url: clientURL.appendingPathComponent("logout").appendingQueryItems([
@@ -297,6 +304,7 @@ import Testing
     XCTAssertTrue(sessionRemoved)
   }
 
+  @Test("Sign in anonymously works correctly")
   func testSignInAnonymously() async throws {
     let session = Session(fromMockNamed: "anonymous-sign-in-response")
 
@@ -335,6 +343,7 @@ import Testing
     expectNoDifference(sut.currentUser, session.user)
   }
 
+  @Test("Sign in with OAuth works correctly")
   func testSignInWithOAuth() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token").appendingQueryItems([
@@ -380,6 +389,7 @@ import Testing
     expectNoDifference(events, [.initialSession, .signedIn])
   }
 
+  @Test("Get link identity URL works correctly")
   func testGetLinkIdentityURL() async throws {
     let url =
       "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
@@ -411,7 +421,7 @@ import Testing
     }
     .register()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.getLinkIdentityURL(provider: .github)
 
@@ -426,6 +436,7 @@ import Testing
     )
   }
 
+  @Test("Link identity works correctly")
   func testLinkIdentity() async throws {
     let url =
       "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
@@ -458,7 +469,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let receivedURL = LockIsolated<URL?>(nil)
     await sut.clientID.urlOpener.open = { url in
@@ -470,6 +481,7 @@ import Testing
     expectNoDifference(receivedURL.value?.absoluteString, url)
   }
 
+  @Test("Link identity with ID token works correctly")
   func testLinkIdentityWithIdToken() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -495,7 +507,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let updatedSession = try await assertAuthStateChanges(
       sut: sut,
@@ -518,6 +530,7 @@ import Testing
     expectNoDifference(sut.currentSession, updatedSession)
   }
 
+  @Test("Admin list users works correctly")
   func testAdminListUsers() async throws {
     Mock(
       url: clientURL.appendingPathComponent("admin/users"),
@@ -551,6 +564,7 @@ import Testing
     expectNoDifference(response.lastPage, 14)
   }
 
+  @Test("Admin list users with no next page works correctly")
   func testAdminListUsers_noNextPage() async throws {
     Mock(
       url: clientURL.appendingPathComponent("admin/users"),
@@ -583,6 +597,7 @@ import Testing
     expectNoDifference(response.lastPage, 14)
   }
 
+  @Test("Session from URL with error works correctly")
   func testSessionFromURL_withError() async throws {
     sut = makeSUT()
 
@@ -1100,7 +1115,7 @@ import Testing
     .register()
 
     let sut = makeSUT()
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
@@ -1256,7 +1271,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.update(
       user: UserAttributes(
@@ -1411,7 +1426,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.reauthenticate()
   }
@@ -1438,7 +1453,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.unlinkIdentity(
       UserIdentity(
@@ -1553,7 +1568,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.enroll(
       params: MFATotpEnrollParams(
@@ -1599,7 +1614,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.enroll(
       params: .totp(
@@ -1645,7 +1660,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.enroll(
       params: .phone(
@@ -1691,7 +1706,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.challenge(params: .init(factorId: factorId))
 
@@ -1741,7 +1756,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.challenge(
       params: .init(
@@ -1786,7 +1801,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.mfa.verify(
       params: .init(
@@ -1818,7 +1833,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     let factorId = try await sut.mfa.unenroll(params: .init(factorId: "123")).factorId
 
@@ -1882,7 +1897,7 @@ import Testing
 
     let sut = makeSUT()
 
-    await sut.clientID.sessionStorage.store(.validSession)
+    await sut.sessionStorage.store(.validSession)
 
     try await sut.mfa.challengeAndVerify(
       params: MFAChallengeAndVerifyParams(
