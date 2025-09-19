@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 29/08/24.
 //
 
-import XCTest
+import Testing
 
 @testable import Auth
 
@@ -13,15 +13,16 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class AuthErrorTests: XCTestCase {
+@Suite struct AuthErrorTests {
+  @Test("Auth errors have correct properties")
   func testErrors() {
     let sessionMissing = AuthError.sessionMissing
-    XCTAssertEqual(sessionMissing.errorCode, .sessionNotFound)
-    XCTAssertEqual(sessionMissing.message, "Auth session missing.")
+    #expect(sessionMissing.errorCode == .sessionNotFound)
+    #expect(sessionMissing.message == "Auth session missing.")
 
     let weakPassword = AuthError.weakPassword(message: "Weak password", reasons: [])
-    XCTAssertEqual(weakPassword.errorCode, .weakPassword)
-    XCTAssertEqual(weakPassword.message, "Weak password")
+    #expect(weakPassword.errorCode == .weakPassword)
+    #expect(weakPassword.message == "Weak password")
 
     let api = AuthError.api(
       message: "API Error",
@@ -30,16 +31,16 @@ final class AuthErrorTests: XCTestCase {
       underlyingResponse: HTTPURLResponse(
         url: URL(string: "http://localhost")!, statusCode: 400, httpVersion: nil, headerFields: nil)!
     )
-    XCTAssertEqual(api.errorCode, .emailConflictIdentityNotDeletable)
-    XCTAssertEqual(api.message, "API Error")
+    #expect(api.errorCode == .emailConflictIdentityNotDeletable)
+    #expect(api.message == "API Error")
 
     let pkceGrantCodeExchange = AuthError.pkceGrantCodeExchange(
       message: "PKCE failure", error: nil, code: nil)
-    XCTAssertEqual(pkceGrantCodeExchange.errorCode, .unknown)
-    XCTAssertEqual(pkceGrantCodeExchange.message, "PKCE failure")
+    #expect(pkceGrantCodeExchange.errorCode == .unknown)
+    #expect(pkceGrantCodeExchange.message == "PKCE failure")
 
     let implicitGrantRedirect = AuthError.implicitGrantRedirect(message: "Implicit grant failure")
-    XCTAssertEqual(implicitGrantRedirect.errorCode, .unknown)
-    XCTAssertEqual(implicitGrantRedirect.message, "Implicit grant failure")
+    #expect(implicitGrantRedirect.errorCode == .unknown)
+    #expect(implicitGrantRedirect.message == "Implicit grant failure")
   }
 }

@@ -2,13 +2,14 @@ import Alamofire
 import ConcurrencyExtras
 import SnapshotTesting
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Auth
 
-final class StoredSessionTests: XCTestCase {
+@Suite struct StoredSessionTests {
   let clientID = AuthClientID()
 
+  @Test("Stored session can be retrieved and stored")
   func testStoredSession() async throws {
     #if os(Android)
       throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
@@ -27,7 +28,7 @@ final class StoredSessionTests: XCTestCase {
     
     let sut = await authClient.sessionStorage
 
-    XCTAssertNotNil(sut.get())
+    #expect(sut.get() != nil)
 
     let session = Session(
       accessToken: "accesstoken",
@@ -81,7 +82,7 @@ final class StoredSessionTests: XCTestCase {
     )
 
     sut.store(session)
-    XCTAssertNotNil(sut.get())
+    #expect(sut.get() != nil)
   }
 
   private final class DiskTestStorage: AuthLocalStorage {

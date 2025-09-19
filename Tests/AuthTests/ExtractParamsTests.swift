@@ -5,36 +5,40 @@
 //  Created by Guilherme Souza on 23/12/23.
 //
 
-import XCTest
+import Testing
 
 @testable import Auth
 
-final class ExtractParamsTests: XCTestCase {
+@Suite struct ExtractParamsTests {
+  @Test("Extract params from query string")
   func testExtractParamsInQuery() {
     let code = UUID().uuidString
     let url = URL(string: "io.supabase.flutterquickstart://login-callback/?code=\(code)")!
     let params = extractParams(from: url)
-    XCTAssertEqual(params, ["code": code])
+    #expect(params == ["code": code])
   }
 
+  @Test("Extract params from fragment")
   func testExtractParamsInFragment() {
     let code = UUID().uuidString
     let url = URL(string: "io.supabase.flutterquickstart://login-callback/#code=\(code)")!
     let params = extractParams(from: url)
-    XCTAssertEqual(params, ["code": code])
+    #expect(params == ["code": code])
   }
 
+  @Test("Extract params from both fragment and query")
   func testExtractParamsInBothFragmentAndQuery() {
     let code = UUID().uuidString
     let url = URL(
       string: "io.supabase.flutterquickstart://login-callback/?code=\(code)#message=abc")!
     let params = extractParams(from: url)
-    XCTAssertEqual(params, ["code": code, "message": "abc"])
+    #expect(params == ["code": code, "message": "abc"])
   }
 
+  @Test("Query params take precedence over fragment params")
   func testExtractParamsQueryTakesPrecedence() {
     let url = URL(string: "io.supabase.flutterquickstart://login-callback/?code=123#code=abc")!
     let params = extractParams(from: url)
-    XCTAssertEqual(params, ["code": "123"])
+    #expect(params == ["code": "123"])
   }
 }
