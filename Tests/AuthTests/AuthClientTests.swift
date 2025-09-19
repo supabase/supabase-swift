@@ -11,7 +11,7 @@ import InlineSnapshotTesting
 import Mocker
 import SnapshotTestingCustomDump
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Auth
 
@@ -19,48 +19,25 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class AuthClientTests: XCTestCase {
-  var sessionManager: SessionManager!
+@Suite struct AuthClientTests {
+  let storage: InMemoryLocalStorage
+  let sut: AuthClient
 
-  var storage: InMemoryLocalStorage!
-
-  var sut: AuthClient!
-
-  #if !os(Windows) && !os(Linux) && !os(Android)
-    override func invokeTest() {
-      withMainSerialExecutor {
-        super.invokeTest()
-      }
-    }
-  #endif
-
-  override func setUp() {
-    super.setUp()
-    storage = InMemoryLocalStorage()
-
-    //        isRecording = true
+  init() {
+    self.storage = InMemoryLocalStorage()
+    self.sut = makeSUT()
   }
 
-  override func tearDown() {
-    super.tearDown()
-
+  deinit {
     Mocker.removeAll()
-
-    let completion = { [weak sut] in
-      XCTAssertNil(sut, "sut should not leak")
-    }
-
-    defer { completion() }
-
-    sut = nil
-    sessionManager = nil
-    storage = nil
   }
 
-  func testAuthClientInitialization() {
+  @Test("Auth client initializes with correct configuration")
+  func testAuthClientInitialization() async {
     let client = makeSUT()
+    let config = await client.configuration
 
-    assertInlineSnapshot(of: client.configuration.headers, as: .customDump) {
+    assertInlineSnapshot(of: config.headers, as: .customDump) {
       """
       [
         "X-Client-Info": "auth-swift/0.0.0",
@@ -71,8 +48,10 @@ final class AuthClientTests: XCTestCase {
     }
 
     let client2 = makeSUT()
+    let clientID1 = await client.clientID
+    let clientID2 = await client2.clientID
 
-    XCTAssertLessThan(client.clientID, client2.clientID, "Should increase client IDs")
+    #expect(clientID1 < clientID2, "Should increase client IDs")
   }
 
   func testOnAuthStateChanges() async throws {
