@@ -23,8 +23,8 @@ final class AuthClientIntegrationTests: XCTestCase {
   static func makeClient(serviceRole: Bool = false) -> AuthClient {
     let key = serviceRole ? DotEnv.SUPABASE_SERVICE_ROLE_KEY : DotEnv.SUPABASE_ANON_KEY
     return AuthClient(
+      url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
       configuration: AuthClient.Configuration(
-        url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
         headers: [
           "apikey": key,
           "Authorization": "Bearer \(key)",

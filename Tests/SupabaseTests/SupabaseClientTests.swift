@@ -52,16 +52,23 @@ final class SupabaseClientTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(await client.supabaseURL.absoluteString, "https://project-ref.supabase.co")
-    XCTAssertEqual(await client.supabaseKey, "ANON_KEY")
-    XCTAssertEqual(await client.storageURL.absoluteString, "https://project-ref.supabase.co/storage/v1")
-    XCTAssertEqual(await client.databaseURL.absoluteString, "https://project-ref.supabase.co/rest/v1")
+    let supabaseURL = await client.supabaseURL
+    let supabaseKey = await client.supabaseKey
+    let storageURL = await client.storageURL
+    let databaseURL = await client.databaseURL
+    let functionsURL = await client.functionsURL
+    let headers = await client.headers
+
+    XCTAssertEqual(supabaseURL.absoluteString, "https://project-ref.supabase.co")
+    XCTAssertEqual(supabaseKey, "ANON_KEY")
+    XCTAssertEqual(storageURL.absoluteString, "https://project-ref.supabase.co/storage/v1")
+    XCTAssertEqual(databaseURL.absoluteString, "https://project-ref.supabase.co/rest/v1")
     XCTAssertEqual(
-      await client.functionsURL.absoluteString,
+      functionsURL.absoluteString,
       "https://project-ref.supabase.co/functions/v1"
     )
 
-    assertInlineSnapshot(of: await client.headers as [String: String], as: .customDump) {
+    assertInlineSnapshot(of: headers as [String: String], as: .customDump) {
       """
       [
         "Apikey": "ANON_KEY",
@@ -75,8 +82,9 @@ final class SupabaseClientTests: XCTestCase {
     }
 
     let functionsHeaders = await client.functions.headers.dictionary
-    expectNoDifference(await client.headers, functionsHeaders)
-    expectNoDifference(await client.headers, await client.storage.configuration.headers)
+    let storage = await client.storage
+    expectNoDifference(headers, functionsHeaders)
+    expectNoDifference(headers, storage.configuration.headers)
     // Note: client.rest no longer exists in the new architecture
 
 //    XCTAssertEqual(client.functions.region?.rawValue, "ap-northeast-1")
@@ -85,14 +93,15 @@ final class SupabaseClientTests: XCTestCase {
     XCTAssertEqual(realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")
 
     let realtimeOptions = await client.realtime.options
+    let auth = await client.auth
     // Note: client._headers is private, so we can't access it directly
     expectNoDifference(realtimeOptions.headers.sorted(), [
       "custom_realtime_header_key": "custom_realtime_header_value"
     ].sorted())
     XCTAssertEqual(realtimeOptions.logger?.label, logger.label)
 
-    XCTAssertFalse(await client.auth.configuration.autoRefreshToken)
-    XCTAssertEqual(await client.auth.configuration.storageKey, "sb-project-ref-auth-token")
+    XCTAssertFalse(auth.configuration.autoRefreshToken)
+    XCTAssertEqual(auth.configuration.storageKey, "sb-project-ref-auth-token")
 
     // Note: client.mutableState no longer exists in the new architecture
     // The auth event listening is now handled internally
@@ -126,7 +135,7 @@ final class SupabaseClientTests: XCTestCase {
 
     #if canImport(Darwin)
       // withExpectedIssue is unavailable on non-Darwin platform.
-      withExpectedIssue {
+      await withExpectedIssue {
         _ = await client.auth
       }
     #endif

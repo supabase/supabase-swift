@@ -9,7 +9,7 @@ import XCTest
 final class StoredSessionTests: XCTestCase {
   let clientID = AuthClientID()
 
-  func testStoredSession() throws {
+  func testStoredSession() async throws {
     #if os(Android)
       throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
     #endif
@@ -25,7 +25,7 @@ final class StoredSessionTests: XCTestCase {
       )
     )
     
-    let sut = authClient.sessionStorage
+    let sut = await authClient.sessionStorage
 
     XCTAssertNotNil(sut.get())
 
