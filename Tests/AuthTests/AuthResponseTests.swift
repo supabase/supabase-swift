@@ -5,7 +5,7 @@ import XCTest
 
 final class AuthResponseTests: XCTestCase {
   func testSession() throws {
-    let response = try JSONDecoder.auth.decode(
+    let response = try JSONDecoder.supabase().decode(
       AuthResponse.self,
       from: json(named: "session")
     )
@@ -14,7 +14,7 @@ final class AuthResponseTests: XCTestCase {
   }
 
   func testUser() throws {
-    let response = try JSONDecoder.auth.decode(
+    let response = try JSONDecoder.supabase().decode(
       AuthResponse.self,
       from: json(named: "user")
     )

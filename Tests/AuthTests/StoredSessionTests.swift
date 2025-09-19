@@ -14,21 +14,18 @@ final class StoredSessionTests: XCTestCase {
       throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
     #endif
 
-    Dependencies[clientID] = Dependencies(
+    Dependencies[clientID] = Dependencies()
+
+    let authClient = AuthClient(
+      url: URL(string: "http://localhost")!,
       configuration: AuthClient.Configuration(
-        url: URL(string: "http://localhost")!,
         storageKey: "supabase.auth.token",
         localStorage: try! DiskTestStorage(),
         logger: nil
-      ),
-      session: .default,
-      api: .init(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID)
+      )
     )
-
-    let sut = Dependencies[clientID].sessionStorage
+    
+    let sut = authClient.sessionStorage
 
     XCTAssertNotNil(sut.get())
 

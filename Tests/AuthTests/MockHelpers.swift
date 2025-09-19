@@ -12,6 +12,6 @@ func json(named name: String) -> Data {
 
 extension Decodable {
   init(fromMockNamed name: String) {
-    self = try! JSONDecoder.auth.decode(Self.self, from: json(named: name))
+    self = try! JSONDecoder.supabase().decode(Self.self, from: json(named: name))
   }
 }

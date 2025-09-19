@@ -36,11 +36,11 @@ final class AuthClientMultipleInstancesTests: XCTestCase {
     XCTAssertNotEqual(client1.clientID, client2.clientID)
 
     XCTAssertIdentical(
-      Dependencies[client1.clientID].configuration.localStorage as? InMemoryLocalStorage,
+      await client1.clientID.configuration.localStorage as? InMemoryLocalStorage,
       client1Storage
     )
     XCTAssertIdentical(
-      Dependencies[client2.clientID].configuration.localStorage as? InMemoryLocalStorage,
+      await client2.clientID.configuration.localStorage as? InMemoryLocalStorage,
       client2Storage
     )
   }

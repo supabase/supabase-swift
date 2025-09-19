@@ -266,7 +266,7 @@ final class SessionStorageTests: XCTestCase {
     let session = Session.validSession
 
     // When: Storing session through auth client dependencies
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    await sut.clientID.sessionStorage.store(session)
 
     // Then: Should be accessible through session storage
     let retrievedSession = sessionStorage.get()
@@ -340,11 +340,11 @@ final class SessionStorageTests: XCTestCase {
 
     let sut = AuthClient(configuration: configuration)
 
-    Dependencies[sut.clientID].pkce.generateCodeVerifier = {
+    await sut.clientID.pkce.generateCodeVerifier = {
       "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
     }
 
-    Dependencies[sut.clientID].pkce.generateCodeChallenge = { _ in
+    await sut.clientID.pkce.generateCodeChallenge = { _ in
       "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
     }
 

@@ -192,7 +192,7 @@
 //
 //  func testSetSessionWithAFutureExpirationDate() async throws {
 //    let sut = makeSUT()
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    let accessToken =
 //      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
@@ -215,7 +215,7 @@
 //
 //  func testSignOut() async throws {
 //    let sut = makeSUT()
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      try await sut.signOut()
@@ -224,7 +224,7 @@
 //
 //  func testSignOutWithLocalScope() async throws {
 //    let sut = makeSUT()
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      try await sut.signOut(scope: .local)
@@ -234,7 +234,7 @@
 //  func testSignOutWithOthersScope() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      try await sut.signOut(scope: .others)
@@ -282,7 +282,7 @@
 //  func testUpdateUser() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      try await sut.update(
@@ -346,7 +346,7 @@
 //  func testReauthenticate() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      try await sut.reauthenticate()
@@ -356,7 +356,7 @@
 //  func testUnlinkIdentity() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      try await sut.unlinkIdentity(
@@ -412,7 +412,7 @@
 //  func testGetLinkIdentityURL() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      _ = try await sut.getLinkIdentityURL(
@@ -427,7 +427,7 @@
 //  func testMFAEnrollLegacy() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      _ = try await sut.mfa.enroll(
@@ -438,7 +438,7 @@
 //  func testMFAEnrollTotp() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      _ = try await sut.mfa.enroll(params: .totp(issuer: "supabase.com", friendlyName: "test"))
@@ -448,7 +448,7 @@
 //  func testMFAEnrollPhone() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      _ = try await sut.mfa.enroll(params: .phone(friendlyName: "test", phone: "+1 202-918-2132"))
@@ -458,7 +458,7 @@
 //  func testMFAChallenge() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      _ = try await sut.mfa.challenge(params: .init(factorId: "123"))
@@ -468,7 +468,7 @@
 //  func testMFAChallengePhone() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      _ = try await sut.mfa.challenge(params: .init(factorId: "123", channel: .whatsapp))
@@ -478,7 +478,7 @@
 //  func testMFAVerify() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      _ = try await sut.mfa.verify(
@@ -489,7 +489,7 @@
 //  func testMFAUnenroll() async throws {
 //    let sut = makeSUT()
 //
-//    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+//    await sut.clientID.sessionStorage.store(.validSession)
 //
 //    await assert {
 //      _ = try await sut.mfa.unenroll(params: .init(factorId: "123"))

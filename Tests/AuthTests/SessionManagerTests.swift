@@ -61,21 +61,21 @@ final class SessionManagerTests: XCTestCase {
     await manager.update(session)
 
     // Then: Session should be stored
-    let storedSession = Dependencies[sut.clientID].sessionStorage.get()
+    let storedSession = await sut.clientID.sessionStorage.get()
     XCTAssertEqual(storedSession?.accessToken, session.accessToken)
 
     // When: Removing session
     await manager.remove()
 
     // Then: Session should be removed
-    let removedSession = Dependencies[sut.clientID].sessionStorage.get()
+    let removedSession = await sut.clientID.sessionStorage.get()
     XCTAssertNil(removedSession)
   }
 
   func testSessionManagerWithValidSession() async throws {
     // Given: A valid session in storage
     let session = Session.validSession
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    await sut.clientID.sessionStorage.store(session)
 
     // When: Getting session
     let manager = SessionManager.live(clientID: sut.clientID)
@@ -87,7 +87,7 @@ final class SessionManagerTests: XCTestCase {
 
   func testSessionManagerWithMissingSession() async throws {
     // Given: No session in storage
-    Dependencies[sut.clientID].sessionStorage.delete()
+    await sut.clientID.sessionStorage.delete()
 
     // When: Getting session
     let manager = SessionManager.live(clientID: sut.clientID)
@@ -109,7 +109,7 @@ final class SessionManagerTests: XCTestCase {
     // Given: An expired session
     var expiredSession = Session.validSession
     expiredSession.expiresAt = Date().timeIntervalSince1970 - 3600  // 1 hour ago
-    Dependencies[sut.clientID].sessionStorage.store(expiredSession)
+    await sut.clientID.sessionStorage.store(expiredSession)
 
     // And: A mock refresh response
     let refreshedSession = Session.validSession
@@ -230,7 +230,7 @@ final class SessionManagerTests: XCTestCase {
   func testSessionManagerIntegrationWithAuthClient() async throws {
     // Given: A valid session
     let session = Session.validSession
-    Dependencies[sut.clientID].sessionStorage.store(session)
+    await sut.clientID.sessionStorage.store(session)
 
     // When: Getting session through auth client
     let result = try await sut.session
@@ -243,7 +243,7 @@ final class SessionManagerTests: XCTestCase {
     // Given: An expired session
     var expiredSession = Session.validSession
     expiredSession.expiresAt = Date().timeIntervalSince1970 - 3600
-    Dependencies[sut.clientID].sessionStorage.store(expiredSession)
+    await sut.clientID.sessionStorage.store(expiredSession)
 
     // And: A mock refresh response
     let refreshedSession = Session.validSession
@@ -287,11 +287,11 @@ final class SessionManagerTests: XCTestCase {
 
     let sut = AuthClient(configuration: configuration)
 
-    Dependencies[sut.clientID].pkce.generateCodeVerifier = {
+    await sut.clientID.pkce.generateCodeVerifier = {
       "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
     }
 
-    Dependencies[sut.clientID].pkce.generateCodeChallenge = { _ in
+    await sut.clientID.pkce.generateCodeChallenge = { _ in
       "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
     }
 

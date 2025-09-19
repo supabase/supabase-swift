@@ -353,6 +353,7 @@ import Testing
 
     let sut = AuthClient(url: clientURL, configuration: configuration)
 
+    #if DEBUG
     await sut.overrideForTesting {
       $0.pkce.generateCodeVerifier = {
         "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
@@ -362,6 +363,7 @@ import Testing
         "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
       }
     }
+    #endif
 
     return sut
   }
