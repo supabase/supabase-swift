@@ -1,5 +1,6 @@
 import Alamofire
 import ConcurrencyExtras
+import Foundation
 import SnapshotTesting
 import TestHelpers
 import Testing
@@ -25,7 +26,7 @@ import Testing
         logger: nil
       )
     )
-    
+
     let sut = await authClient.sessionStorage
 
     #expect(sut.get() != nil)

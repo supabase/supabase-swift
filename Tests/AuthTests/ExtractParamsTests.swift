@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 23/12/23.
 //
 
+import Foundation
 import Testing
 
 @testable import Auth
@@ -30,7 +31,8 @@ import Testing
   func testExtractParamsInBothFragmentAndQuery() {
     let code = UUID().uuidString
     let url = URL(
-      string: "io.supabase.flutterquickstart://login-callback/?code=\(code)#message=abc")!
+      string: "io.supabase.flutterquickstart://login-callback/?code=\(code)#message=abc"
+    )!
     let params = extractParams(from: url)
     #expect(params == ["code": code, "message": "abc"])
   }

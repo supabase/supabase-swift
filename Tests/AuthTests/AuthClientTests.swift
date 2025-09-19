@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import CustomDump
+import Foundation
 import InlineSnapshotTesting
 import Mocker
 import SnapshotTestingCustomDump
@@ -23,9 +24,9 @@ import Testing
   let storage: InMemoryLocalStorage
   var sut: AuthClient
 
-  init() {
+  init() async {
     self.storage = InMemoryLocalStorage()
-    self.sut = makeSUT()
+    self.sut = await makeSUT()
   }
 
   deinit {
@@ -34,7 +35,7 @@ import Testing
 
   @Test("Auth client initializes with correct configuration")
   func testAuthClientInitialization() async {
-    let client = makeSUT()
+    let client = await makeSUT()
     let config = await client.configuration
 
     assertInlineSnapshot(of: config.headers, as: .customDump) {
@@ -47,7 +48,7 @@ import Testing
       """
     }
 
-    let client2 = makeSUT()
+    let client2 = await makeSUT()
     let clientID1 = await client.clientID
     let clientID2 = await client2.clientID
 
@@ -57,7 +58,7 @@ import Testing
   @Test("Auth state changes are properly emitted")
   func testOnAuthStateChanges() async throws {
     let session = Session.validSession
-    let sut = makeSUT()
+    let sut = await makeSUT()
     await sut.sessionStorage.store(session)
 
     let events = LockIsolated([AuthChangeEvent]())
@@ -76,7 +77,7 @@ import Testing
   @Test("Auth state changes stream works correctly")
   func testAuthStateChanges() async throws {
     let session = Session.validSession
-    let sut = makeSUT()
+    let sut = await makeSUT()
     await sut.sessionStorage.store(session)
 
     let stateChange = await sut.authStateChanges.first { _ in true }
@@ -107,7 +108,7 @@ import Testing
     }
     .register()
 
-    sut = makeSUT()
+    sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -153,7 +154,7 @@ import Testing
     }
     .register()
 
-    sut = makeSUT()
+    sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -187,7 +188,7 @@ import Testing
     }
     .register()
 
-    sut = makeSUT()
+    sut = await makeSUT()
 
     let validSession = Session.validSession
     await sut.sessionStorage.store(validSession)
@@ -234,7 +235,7 @@ import Testing
     }
     .register()
 
-    sut = makeSUT()
+    sut = await makeSUT()
 
     let validSession = Session.validSession
     await sut.sessionStorage.store(validSession)
@@ -281,7 +282,7 @@ import Testing
     }
     .register()
 
-    sut = makeSUT()
+    sut = await makeSUT()
 
     let validSession = Session.validSession
     await sut.sessionStorage.store(validSession)
@@ -330,7 +331,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await assertAuthStateChanges(
       sut: sut,
@@ -371,7 +372,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let eventsTask = Task {
       await sut.authStateChanges.prefix(2).collect()
@@ -395,7 +396,7 @@ import Testing
   func testGetLinkIdentityURL() async throws {
     let url =
       "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     Mock(
       url: clientURL.appendingPathComponent("user/identities/authorize"),
@@ -469,13 +470,16 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
     let receivedURL = LockIsolated<URL?>(nil)
-    await sut.clientID.urlOpener.open = { url in
-      receivedURL.setValue(url)
+
+    await sut.overrideForTesting {
+      $0.urlOpener.open = { url in
+        receivedURL.setValue(url)
+      }
     }
 
     try await sut.linkIdentity(provider: .github)
@@ -507,7 +511,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -559,7 +563,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let response = try await sut.admin.listUsers()
     expectNoDifference(response.total, 669)
@@ -592,7 +596,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let response = try await sut.admin.listUsers()
     expectNoDifference(response.total, 669)
@@ -602,7 +606,7 @@ import Testing
 
   @Test("Session from URL with error works correctly")
   func testSessionFromURL_withError() async throws {
-    sut = makeSUT()
+    sut = await makeSUT()
 
     await sut.setCodeVerifier("code-verifier")
 
@@ -613,7 +617,7 @@ import Testing
 
     do {
       try await sut.session(from: url)
-      #expect(Bool(false), "Expect failure")
+      Issue.record("Expect failure")
     } catch {
       assertInlineSnapshot(of: error, as: .customDump) {
         """
@@ -650,7 +654,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signUp(
       email: "example@mail.com",
@@ -684,7 +688,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signUp(
       phone: "+1 202-918-2132",
@@ -717,7 +721,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signIn(
       email: "example@mail.com",
@@ -749,7 +753,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signIn(
       phone: "+1 202-918-2132",
@@ -781,7 +785,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signInWithIdToken(
       credentials: OpenIDConnectCredentials(
@@ -819,7 +823,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signInWithOTP(
       email: "example@mail.com",
@@ -853,7 +857,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.signInWithOTP(
       phone: "+1 202-918-2132",
@@ -865,8 +869,8 @@ import Testing
 
   @Test("Get OAuth sign in URL works correctly")
   func testGetOAuthSignInURL() async throws {
-    let sut = makeSUT(flowType: .implicit)
-    let url = try sut.getOAuthSignInURL(
+    let sut = await makeSUT(flowType: .implicit)
+    let url = try await sut.getOAuthSignInURL(
       provider: .github,
       scopes: "read,write",
       redirectTo: URL(string: "https://dummy-url.com/redirect")!,
@@ -904,13 +908,13 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
     try await sut.refreshSession(refreshToken: "refresh-token")
   }
 
   #if !os(Linux) && !os(Windows) && !os(Android)
-  @Test("Session from URL works correctly")
-  func testSessionFromURL() async throws {
+    @Test("Session from URL works correctly")
+    func testSessionFromURL() async throws {
       Mock(
         url: clientURL.appendingPathComponent("user"),
         ignoreQuery: true,
@@ -929,11 +933,13 @@ import Testing
       }
       .register()
 
-      let sut = makeSUT(flowType: .implicit)
+      let sut = await makeSUT(flowType: .implicit)
 
       let currentDate = Date()
 
-      Dependencies[sut.clientID].date = { currentDate }
+      await sut.overrideForTesting {
+        $0.date = { currentDate }
+      }
 
       let url = URL(
         string:
@@ -974,7 +980,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT(flowType: .implicit)
+    let sut = await makeSUT(flowType: .implicit)
 
     let url = URL(
       string:
@@ -985,7 +991,7 @@ import Testing
 
   @Test("Session with URL implicit flow handles invalid URL correctly")
   func testSessionWithURL_implicitFlow_invalidURL() async throws {
-    let sut = makeSUT(flowType: .implicit)
+    let sut = await makeSUT(flowType: .implicit)
 
     let url = URL(
       string:
@@ -1001,7 +1007,7 @@ import Testing
 
   @Test("Session with URL implicit flow handles errors correctly")
   func testSessionWithURL_implicitFlow_error() async throws {
-    let sut = makeSUT(flowType: .implicit)
+    let sut = await makeSUT(flowType: .implicit)
 
     let url = URL(
       string:
@@ -1036,7 +1042,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT(flowType: .implicit)
+    let sut = await makeSUT(flowType: .implicit)
 
     let url = URL(
       string:
@@ -1057,7 +1063,7 @@ import Testing
 
   @Test("Session with URL PKCE flow handles errors correctly")
   func testSessionWithURL_pkceFlow_error() async throws {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let url = URL(
       string:
@@ -1075,7 +1081,7 @@ import Testing
 
   @Test("Session with URL PKCE flow handles errors without description correctly")
   func testSessionWithURL_pkceFlow_error_noErrorDescription() async throws {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let url = URL(
       string:
@@ -1093,7 +1099,7 @@ import Testing
 
   @Test("Session from URL with missing component handles correctly")
   func testSessionFromURLWithMissingComponent() async {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let url = URL(
       string:
@@ -1135,7 +1141,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
     await sut.sessionStorage.store(.validSession)
 
     let accessToken =
@@ -1167,7 +1173,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNjQ4NjQwMDIxLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.CGr5zNE5Yltlbn_3Ms2cjSLs_AW9RKM3lxh7cTQrg0w"
@@ -1198,7 +1204,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.verifyOTP(
       email: "example@mail.com",
@@ -1232,7 +1238,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.verifyOTP(
       phone: "+1 202-918-2132",
@@ -1265,7 +1271,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.verifyOTP(
       tokenHash: "abc-def",
@@ -1295,7 +1301,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -1333,7 +1339,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
     try await sut.resetPasswordForEmail(
       "example@mail.com",
       redirectTo: URL(string: "https://supabase.com"),
@@ -1364,7 +1370,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     try await sut.resend(
       email: "example@mail.com",
@@ -1397,7 +1403,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let response = try await sut.resend(
       phone: "+1 202-918-2132",
@@ -1432,7 +1438,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
     try await sut.admin.deleteUser(id: id)
   }
 
@@ -1455,7 +1461,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -1483,7 +1489,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -1524,7 +1530,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let response = try await sut.signInWithSSO(
       domain: "supabase.com",
@@ -1558,7 +1564,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     let response = try await sut.signInWithSSO(
       providerId: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
@@ -1601,7 +1607,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -1648,7 +1654,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -1695,7 +1701,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -1742,7 +1748,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -1793,7 +1799,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -1839,7 +1845,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -1872,7 +1878,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -1937,7 +1943,7 @@ import Testing
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(.validSession)
 
@@ -1951,7 +1957,7 @@ import Testing
 
   @Test("MFA list factors works correctly")
   func testMFAListFactors() async throws {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     var session = Session.validSession
     session.user.factors = [
@@ -2015,7 +2021,7 @@ import Testing
       )
     ]
 
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     await sut.sessionStorage.store(session)
 
@@ -2043,7 +2049,7 @@ import Testing
   @Test("Get user by ID works correctly")
   func testgetUserById() async throws {
     let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     Mock(
       url: clientURL.appendingPathComponent("admin/users/\(id)"),
@@ -2069,7 +2075,7 @@ import Testing
   @Test("Update user by ID works correctly")
   func testUpdateUserById() async throws {
     let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     Mock(
       url: clientURL.appendingPathComponent("admin/users/\(id)"),
@@ -2105,7 +2111,7 @@ import Testing
 
   @Test("Create user works correctly")
   func testCreateUser() async throws {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     Mock(
       url: clientURL.appendingPathComponent("admin/users"),
@@ -2138,7 +2144,7 @@ import Testing
   }
 
   //  func testGenerateLink_signUp() async throws {
-  //    let sut = makeSUT()
+  //    let sut = await makeSUT()
   //
   //    let user = User(fromMockNamed: "user")
   //    let encoder = JSONEncoder.supabase()
@@ -2180,7 +2186,7 @@ import Testing
 
   @Test("Invite user by email works correctly")
   func testInviteUserByEmail() async throws {
-    let sut = makeSUT()
+    let sut = await makeSUT()
 
     Mock(
       url: clientURL.appendingPathComponent("admin/invite"),
@@ -2210,7 +2216,7 @@ import Testing
     )
   }
 
-  private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
+  private func makeSUT(flowType: AuthFlowType = .pkce) async -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
 
@@ -2230,12 +2236,14 @@ import Testing
 
     let sut = AuthClient(url: clientURL, configuration: configuration)
 
-    await sut.clientID.pkce.generateCodeVerifier = {
-      "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
-    }
+    await sut.overrideForTesting {
+      $0.pkce.generateCodeVerifier = {
+        "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
+      }
 
-    await sut.clientID.pkce.generateCodeChallenge = { _ in
-      "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
+      $0.pkce.generateCodeChallenge = { _ in
+        "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
+      }
     }
 
     return sut
@@ -2269,10 +2277,12 @@ import Testing
     let events = authStateChanges.map(\.event)
     let sessions = authStateChanges.map(\.session)
 
-    expectNoDifference(events, expectedEvents, fileID: fileID, filePath: filePath, line: line, column: column)
+    expectNoDifference(
+      events, expectedEvents, fileID: fileID, filePath: filePath, line: line, column: column)
 
     if let expectedSessions = expectedSessions {
-      expectNoDifference(sessions, expectedSessions, fileID: fileID, filePath: filePath, line: line, column: column)
+      expectNoDifference(
+        sessions, expectedSessions, fileID: fileID, filePath: filePath, line: line, column: column)
     }
 
     return result

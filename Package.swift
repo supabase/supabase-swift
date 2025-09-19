@@ -95,22 +95,21 @@ let package = Package(
         "TestHelpers",
       ]
     ),
-    // Temporarily disabled to test AuthTests migration
-    // .testTarget(
-    //   name: "IntegrationTests",
-    //   dependencies: [
-    //     .product(name: "CustomDump", package: "swift-custom-dump"),
-    //     .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-    //     .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
-    //     "Helpers",
-    //     "Supabase",
-    //     "TestHelpers",
-    //   ],
-    //   resources: [
-    //     .process("Fixtures"),
-    //     .process("supabase"),
-    //   ]
-    // ),
+    .testTarget(
+      name: "IntegrationTests",
+      dependencies: [
+        .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        "Helpers",
+        "Supabase",
+        "TestHelpers",
+      ],
+      resources: [
+        .process("Fixtures"),
+        .process("supabase"),
+      ]
+    ),
     .target(
       name: "PostgREST",
       dependencies: [

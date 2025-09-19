@@ -7,8 +7,6 @@ struct Dependencies {
 
   var eventEmitter = AuthStateChangeEventEmitter()
   var date: @Sendable () -> Date = { Date() }
-
-  var urlOpener: URLOpener = .live
 }
 
 extension Dependencies {

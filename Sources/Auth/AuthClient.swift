@@ -153,13 +153,15 @@ public actor AuthClient {
   var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
   let alamofireSession: Alamofire.Session
 
-  #if DEBUG  // Make sure pkce is mutable for testing.
+  #if DEBUG  // Make sure there properties are mutable for testing.
     var pkce: PKCE = .live
+    var date: @Sendable () -> Date = Date.init
+    var urlOpener: URLOpener = .live
   #else
     let pkce: PKCE = .live
+    let date: @Sendable () -> Date = Date.init
+    let urlOpener: URLOpener = .live
   #endif
-
-  private var date: @Sendable () -> Date { Dependencies[clientID].date }
 
   private var _sessionStorage: SessionStorage?
   var sessionStorage: SessionStorage {
@@ -1459,7 +1461,11 @@ public actor AuthClient {
       scopes: scopes,
       redirectTo: redirectTo,
       queryParams: queryParams,
-      launchURL: { Dependencies[clientID].urlOpener.open($0) }
+      launchURL: { url in
+        Task {
+          await self.urlOpener.open(url)
+        }
+      }
     )
   }
 

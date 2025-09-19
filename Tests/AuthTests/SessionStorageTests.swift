@@ -1,4 +1,5 @@
 import ConcurrencyExtras
+import Foundation
 import Mocker
 import TestHelpers
 import Testing
@@ -10,9 +11,9 @@ import Testing
   let sut: AuthClient
   let sessionStorage: SessionStorage
 
-  init() {
+  init() async {
     self.storage = InMemoryLocalStorage()
-    self.sut = makeSUT()
+    self.sut = await Self.makeSUTWithStorage(self.storage)
     self.sessionStorage = SessionStorage.live(client: sut)
   }
 
@@ -167,8 +168,8 @@ import Testing
     let storage1 = InMemoryLocalStorage()
     let storage2 = InMemoryLocalStorage()
 
-    let sut1 = makeSUTWithStorage(storage1)
-    let sut2 = makeSUTWithStorage(storage2)
+    let sut1 = await Self.makeSUTWithStorage(storage1)
+    let sut2 = await Self.makeSUTWithStorage(storage2)
 
     // And: Two session storage instances
     let sessionStorage1 = SessionStorage.live(client: sut1)
@@ -312,13 +313,10 @@ import Testing
 
   // MARK: - Helper Methods
 
-  private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
-    return makeSUTWithStorage(storage, flowType: flowType)
-  }
-
-  private func makeSUTWithStorage(_ storage: InMemoryLocalStorage, flowType: AuthFlowType = .pkce)
-    -> AuthClient
-  {
+  private static func makeSUTWithStorage(
+    _ storage: InMemoryLocalStorage,
+    flowType: AuthFlowType = .pkce
+  ) async -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
 
@@ -338,12 +336,14 @@ import Testing
 
     let sut = AuthClient(url: clientURL, configuration: configuration)
 
-    await sut.clientID.pkce.generateCodeVerifier = {
-      "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
-    }
+    await sut.overrideForTesting {
+      $0.pkce.generateCodeVerifier = {
+        "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
+      }
 
-    await sut.clientID.pkce.generateCodeChallenge = { _ in
-      "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
+      $0.pkce.generateCodeChallenge = { _ in
+        "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
+      }
     }
 
     return sut

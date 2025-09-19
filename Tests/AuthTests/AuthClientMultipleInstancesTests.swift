@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 05/07/24.
 //
 
+import Foundation
 import TestHelpers
 import Testing
 

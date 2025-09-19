@@ -6,6 +6,8 @@
 //
 
 import ConcurrencyExtras
+import Foundation
+import InlineSnapshotTesting
 import Mocker
 import TestHelpers
 import Testing
@@ -13,14 +15,6 @@ import Testing
 @testable import Auth
 
 @Suite final class SessionManagerTests {
-  let storage: InMemoryLocalStorage
-  let sut: AuthClient
-
-  init() {
-    self.storage = InMemoryLocalStorage()
-    self.sut = makeSUT()
-  }
-
   deinit {
     Mocker.removeAll()
   }
@@ -29,6 +23,8 @@ import Testing
 
   @Test("Session manager initializes correctly")
   func testSessionManagerInitialization() async {
+    let sut = await makeSUT()
+
     // Given: A client ID
     let clientID = await sut.clientID
 
@@ -41,6 +37,8 @@ import Testing
 
   @Test("Session manager can update and remove sessions")
   func testSessionManagerUpdateAndRemove() async throws {
+    let sut = await makeSUT()
+
     // Given: A session manager
     let manager = SessionManager.live(client: sut)
     let session = Session.validSession
@@ -62,6 +60,8 @@ import Testing
 
   @Test("Session manager returns valid session from storage")
   func testSessionManagerWithValidSession() async throws {
+    let sut = await makeSUT()
+
     // Given: A valid session in storage
     let session = Session.validSession
     await sut.sessionStorage.store(session)
@@ -76,6 +76,8 @@ import Testing
 
   @Test("Session manager throws error when session is missing")
   func testSessionManagerWithMissingSession() async throws {
+    let sut = await makeSUT()
+
     // Given: No session in storage
     await sut.sessionStorage.delete()
 
@@ -83,13 +85,18 @@ import Testing
     let manager = SessionManager.live(client: sut)
 
     // Then: Should throw session missing error
-    #expect(throws: AuthError.sessionMissing) {
-      try await manager.session()
+    do {
+      _ = try await manager.session()
+      Issue.record("Expect failure")
+    } catch {
+      assertInlineSnapshot(of: error, as: .description)
     }
   }
 
   @Test("Session manager handles expired sessions correctly")
   func testSessionManagerWithExpiredSession() async throws {
+    let sut = await makeSUT()
+
     // Given: An expired session
     var expiredSession = Session.validSession
     expiredSession.expiresAt = Date().timeIntervalSince1970 - 3600  // 1 hour ago
@@ -116,6 +123,8 @@ import Testing
 
   @Test("Session manager can refresh expired sessions")
   func testSessionManagerRefreshSession() async throws {
+    let sut = await makeSUT()
+
     // Given: A mock refresh response
     let refreshedSession = Session.validSession
     let refreshResponse = try JSONEncoder.supabase().encode(refreshedSession)
@@ -137,6 +146,8 @@ import Testing
 
   @Test("Session manager handles refresh failures correctly")
   func testSessionManagerRefreshSessionFailure() async throws {
+    let sut = await makeSUT()
+
     // Given: A mock error response
     let errorResponse = """
       {
@@ -165,12 +176,15 @@ import Testing
       #expect(
         errorMessage.contains("Invalid refresh token")
           || errorMessage.contains("invalid_grant") || error is AuthError,
-        "Unexpected error: \(error)")
+        "Unexpected error: \(error)"
+      )
     }
   }
 
   @Test("Session manager can start and stop auto-refresh")
   func testSessionManagerAutoRefreshStartStop() async throws {
+    let sut = await makeSUT()
+
     // Given: A session manager
     let manager = SessionManager.live(client: sut)
 
@@ -189,6 +203,8 @@ import Testing
 
   @Test("Session manager handles concurrent refresh requests correctly")
   func testSessionManagerConcurrentRefresh() async throws {
+    let sut = await makeSUT()
+
     // Given: A mock refresh response with delay
     let refreshedSession = Session.validSession
     let refreshResponse = try JSONEncoder.supabase().encode(refreshedSession)
@@ -217,6 +233,8 @@ import Testing
 
   @Test("Session manager integrates correctly with AuthClient")
   func testSessionManagerIntegrationWithAuthClient() async throws {
+    let sut = await makeSUT()
+
     // Given: A valid session
     let session = Session.validSession
     await sut.sessionStorage.store(session)
@@ -230,6 +248,8 @@ import Testing
 
   @Test("Session manager handles expired sessions in AuthClient integration")
   func testSessionManagerIntegrationWithExpiredSession() async throws {
+    let sut = await makeSUT()
+
     // Given: An expired session
     var expiredSession = Session.validSession
     expiredSession.expiresAt = Date().timeIntervalSince1970 - 3600
@@ -255,7 +275,10 @@ import Testing
 
   // MARK: - Helper Methods
 
-  private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
+  private func makeSUT(
+    storage: any AuthLocalStorage = InMemoryLocalStorage(),
+    flowType: AuthFlowType = .pkce
+  ) async -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
 
@@ -275,12 +298,14 @@ import Testing
 
     let sut = AuthClient(url: clientURL, configuration: configuration)
 
-    await sut.clientID.pkce.generateCodeVerifier = {
-      "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
-    }
+    await sut.overrideForTesting {
+      $0.pkce.generateCodeVerifier = {
+        "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
+      }
 
-    await sut.clientID.pkce.generateCodeChallenge = { _ in
-      "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
+      $0.pkce.generateCodeChallenge = { _ in
+        "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
+      }
     }
 
     return sut
