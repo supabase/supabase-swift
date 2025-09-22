@@ -42,13 +42,13 @@ permissions:
 
 jobs:
   xcodebuild-latest:
-    name: xcodebuild (16.3)
+    name: xcodebuild (${{ matrix.xcode }})
     runs-on: macos-15
     strategy:
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS]
-        xcode: ["16.3"]
+        xcode: ["26.0", "16.4"]
         include:
           - { command: test, skip_release: 1 }
     steps:
