@@ -1,3 +1,9 @@
+## [2.33.0](https://github.com/supabase/supabase-swift/compare/v2.32.0...v2.33.0) (2025-09-22)
+
+### Features
+
+* **postgrest:** implement maxAffected method for row limit enforcement ([#795](https://github.com/supabase/supabase-swift/issues/795)) ([78fbd8a](https://github.com/supabase/supabase-swift/commit/78fbd8a0ad39e6beef1ee2a167aff799350d7275))
+
 ## [2.32.0](https://github.com/supabase/supabase-swift/compare/v2.31.2...v2.32.0) (2025-09-15)
 
 ### Features
