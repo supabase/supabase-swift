@@ -415,4 +415,160 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
     XCTAssertTrue(explain.contains("Aggregate"))
   }
+
+  func testMaxAffectedOnUpdate() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .patch: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request PATCH \
+      	--header "Accept: application/json" \
+      	--header "Content-Length: 20" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: return=representation,handling=strict,max-affected=1" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"username\":\"admin\"}" \
+      	"http://localhost:54321/rest/v1/users?id=eq.1"
+      """#
+    }
+    .register()
+
+    try await sut
+      .from("users")
+      .update(["username": "admin"])
+      .eq("id", value: 1)
+      .maxAffected(1)
+      .execute()
+  }
+
+  func testMaxAffectedTwice() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .patch: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request PATCH \
+      	--header "Accept: application/json" \
+      	--header "Content-Length: 20" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: return=representation,handling=strict,max-affected=5" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"username\":\"admin\"}" \
+      	"http://localhost:54321/rest/v1/users?id=eq.1"
+      """#
+    }
+    .register()
+
+    try await sut
+      .from("users")
+      .update(["username": "admin"])
+      .eq("id", value: 1)
+      .maxAffected(1)
+      .maxAffected(5)
+      .execute()
+  }
+
+  func testMaxAffectedOnDelete() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .delete: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request DELETE \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: return=representation,handling=strict,max-affected=5" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/users?id=in.(1,2,3,4,5)"
+      """#
+    }
+    .register()
+
+    try await sut
+      .from("users")
+      .delete()
+      .in("id", values: [1, 2, 3, 4, 5])
+      .maxAffected(5)
+      .execute()
+  }
+
+  func testMaxAffectedOnRpc() async throws {
+    Mock(
+      url: url.appendingPathComponent("rpc/delete_users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .post: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: handling=strict,max-affected=10" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/rpc/delete_users"
+      """#
+    }
+    .register()
+
+    try await sut
+      .rpc("delete_users")
+      .maxAffected(10)
+      .execute()
+  }
+
+  func testMaxAffectedOnSelect() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: handling=strict,max-affected=3" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/users?select=*"
+      """#
+    }
+    .register()
+
+    try await sut
+      .from("users")
+      .select()
+      .maxAffected(3)
+      .execute()
+  }
 }
