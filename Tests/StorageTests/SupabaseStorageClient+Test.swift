@@ -23,6 +23,7 @@ extension SupabaseStorageClient {
           "X-Client-Info": "storage-swift/x.y.z",
         ],
         session: session,
+        resumableSessionConfiguration: .default,
         logger: nil
       )
     )
