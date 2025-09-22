@@ -169,4 +169,19 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
 
     return self
   }
+
+  /// Set the maximum number of rows that can be affected by the query.
+  ///
+  /// Only available in PostgREST v13+ and only works with PATCH, DELETE methods and RPC calls.
+  /// Note: This method doesn't validate the HTTP method - ensure you only use it with compatible operations.
+  ///
+  /// - Parameters:
+  ///   - value: The maximum number of rows that can be affected
+  public func maxAffected(_ value: Int) -> PostgrestTransformBuilder {
+    mutableState.withValue {
+      $0.request.headers.appendOrUpdate(.prefer, value: "handling=strict")
+      $0.request.headers.appendOrUpdate(.prefer, value: "max-affected=\(value)")
+    }
+    return self
+  }
 }
