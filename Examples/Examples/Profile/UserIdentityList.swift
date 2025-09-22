@@ -55,7 +55,7 @@ struct UserIdentityList: View {
       }
     }
     .id(id)
-    #if swift(>=5.10)
+    #if swift(>=6.0)
       .toolbar {
         ToolbarItem(placement: .primaryAction) {
           Menu("Add") {
