@@ -67,11 +67,11 @@ jobs:
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
       - name: Install lcov
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.0'
         run: brew install lcov
       - name: Export code coverage
         id: coverage
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.0'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
       - uses: coverallsapp/github-action@v2.3.6
         if: steps.coverage.outcome == 'success'
