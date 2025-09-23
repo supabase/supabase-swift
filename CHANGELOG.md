@@ -1,23 +1,22 @@
+# Changelog
+
+## [2.33.1](https://github.com/supabase/supabase-swift/compare/v2.33.0...v2.33.1) (2025-09-23)
+
+### Bug Fixes
+
+* **postgrest:** drop Sendable requirements in generic types ([#798](https://github.com/supabase/supabase-swift/issues/798)) ([db3f4ab](https://github.com/supabase/supabase-swift/commit/db3f4ab9de5621fdd33956e7710db0df390ddf5a))
+
 ## [2.33.0](https://github.com/supabase/supabase-swift/compare/v2.32.0...v2.33.0) (2025-09-22)
 
 ### Features
 
 * **postgrest:** implement maxAffected method for row limit enforcement ([#795](https://github.com/supabase/supabase-swift/issues/795)) ([78fbd8a](https://github.com/supabase/supabase-swift/commit/78fbd8a0ad39e6beef1ee2a167aff799350d7275))
 
-## [2.33.1](https://github.com/supabase/supabase-swift/compare/v2.33.0...v2.33.1) (2025-09-23)
-
-
-### Bug Fixes
-
-* **postgrest:** drop Sendable requirements in generic types ([#798](https://github.com/supabase/supabase-swift/issues/798)) ([db3f4ab](https://github.com/supabase/supabase-swift/commit/db3f4ab9de5621fdd33956e7710db0df390ddf5a))
-
 ## [2.32.0](https://github.com/supabase/supabase-swift/compare/v2.31.2...v2.32.0) (2025-09-15)
 
 ### Features
 
 * **auth:** implement linkIdentity with OIDC ([#776](https://github.com/supabase/supabase-swift/issues/776)) ([661e321](https://github.com/supabase/supabase-swift/commit/661e3218d18235179efc30c33b456a8f485f9ff7))
-
-# Changelog
 
 ## [2.31.2](https://github.com/supabase/supabase-swift/compare/v2.31.1...v2.31.2) (2025-08-05)
 
