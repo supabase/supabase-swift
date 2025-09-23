@@ -1,13 +1,12 @@
 import Foundation
 import HTTPTypes
-import HTTPTypesFoundation
 import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-public protocol ResumableClient: Sendable {
+protocol ResumableClient: Sendable {
   static var tusVersion: String { get }
 
   func createUpload(
@@ -27,7 +26,7 @@ public protocol ResumableClient: Sendable {
 }
 
 extension ResumableClient {
-  public static var tusVersion: String { "1.0.0" }
+  static var tusVersion: String { "1.0.0" }
 }
 
 final class ResumableClientImpl: ResumableClient, @unchecked Sendable {
