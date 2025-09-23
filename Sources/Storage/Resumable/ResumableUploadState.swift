@@ -33,7 +33,7 @@ public struct ResumableUploadState: Sendable {
     return Float(status.totalBytesSent) / Float(status.contentLength)
   }
 
-  public init(
+  init(
     fingerprint: Fingerprint,
     cacheEntry: ResumableCacheEntry,
     status: UploadStatus,

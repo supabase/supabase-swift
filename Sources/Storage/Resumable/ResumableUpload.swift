@@ -61,7 +61,7 @@ public actor ResumableUpload {
     isPaused = true
   }
 
-  public func cancel() async {
+  public func cancel() {
     isCancelled = true
     stateContinuation.finish()
   }
