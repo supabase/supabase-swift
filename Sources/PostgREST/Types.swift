@@ -4,7 +4,7 @@ import Foundation
   import FoundationNetworking
 #endif
 
-public struct PostgrestResponse<T: Sendable>: Sendable {
+public struct PostgrestResponse<T> {
   public let data: Data
   public let response: HTTPURLResponse
   public let count: Int?

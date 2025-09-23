@@ -47,17 +47,19 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   ///   - values: The values to insert. Pass an object to insert a single row or an array to insert multiple rows.
   ///   - count: Count algorithm to use to count inserted rows.
   public func insert(
-    _ values: some Encodable & Sendable,
+    _ values: some Encodable,
     returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
+    let body = try configuration.encoder.encode(values)
+
     try mutableState.withValue {
       $0.request.method = .post
       var prefersHeaders: [String] = []
       if let returning {
         prefersHeaders.append("return=\(returning.rawValue)")
       }
-      $0.request.body = try configuration.encoder.encode(values)
+      $0.request.body = body
       if let count {
         prefersHeaders.append("count=\(count.rawValue)")
       }
@@ -68,14 +70,16 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
         $0.request.headers[.prefer] = prefersHeaders.joined(separator: ",")
       }
       if let body = $0.request.body,
-         let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
+        let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
       {
         let allKeys = jsonObject.flatMap(\.keys)
         let uniqueKeys = Set(allKeys).sorted()
-        $0.request.query.appendOrUpdate(URLQueryItem(
-          name: "columns",
-          value: uniqueKeys.joined(separator: ",")
-        ))
+        $0.request.query.appendOrUpdate(
+          URLQueryItem(
+            name: "columns",
+            value: uniqueKeys.joined(separator: ",")
+          )
+        )
       }
     }
 
@@ -94,12 +98,14 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   ///   - count: Count algorithm to use to count upserted rows.
   ///   - ignoreDuplicates: If `true`, duplicate rows are ignored. If `false`, duplicate rows are merged with existing rows.
   public func upsert(
-    _ values: some Encodable & Sendable,
+    _ values: some Encodable,
     onConflict: String? = nil,
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil,
     ignoreDuplicates: Bool = false
   ) throws -> PostgrestFilterBuilder {
+    let body = try configuration.encoder.encode(values)
+
     try mutableState.withValue {
       $0.request.method = .post
       var prefersHeaders = [
@@ -109,7 +115,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       if let onConflict {
         $0.request.query.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
       }
-      $0.request.body = try configuration.encoder.encode(values)
+      $0.request.body = body
       if let count {
         prefersHeaders.append("count=\(count.rawValue)")
       }
@@ -121,14 +127,16 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       }
 
       if let body = $0.request.body,
-         let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
+        let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
       {
         let allKeys = jsonObject.flatMap(\.keys)
         let uniqueKeys = Set(allKeys).sorted()
-        $0.request.query.appendOrUpdate(URLQueryItem(
-          name: "columns",
-          value: uniqueKeys.joined(separator: ",")
-        ))
+        $0.request.query.appendOrUpdate(
+          URLQueryItem(
+            name: "columns",
+            value: uniqueKeys.joined(separator: ",")
+          )
+        )
       }
     }
     return PostgrestFilterBuilder(self)
@@ -142,14 +150,15 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   ///   - values: The values to update with.
   ///   - count: Count algorithm to use to count rows in a table.
   public func update(
-    _ values: some Encodable & Sendable,
+    _ values: some Encodable,
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    try mutableState.withValue {
+    let body = try configuration.encoder.encode(values)
+    mutableState.withValue {
       $0.request.method = .patch
       var preferHeaders = ["return=\(returning.rawValue)"]
-      $0.request.body = try configuration.encoder.encode(values)
+      $0.request.body = body
       if let count {
         preferHeaders.append("count=\(count.rawValue)")
       }

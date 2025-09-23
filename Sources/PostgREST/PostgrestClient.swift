@@ -8,9 +8,10 @@ import HTTPTypes
 
 /// PostgREST client.
 public final class PostgrestClient: Sendable {
-  public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
-    Data, URLResponse
-  )
+  public typealias FetchHandler =
+    @Sendable (_ request: URLRequest) async throws -> (
+      Data, URLResponse
+    )
 
   /// The configuration struct for the PostgREST client.
   public struct Configuration: Sendable {
@@ -144,7 +145,8 @@ public final class PostgrestClient: Sendable {
 
       guard let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
         throw PostgrestError(
-          message: "Params should be a key-value type when using `GET` or `HEAD` options.")
+          message: "Params should be a key-value type when using `GET` or `HEAD` options."
+        )
       }
 
       for (key, value) in json {

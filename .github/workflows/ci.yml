@@ -41,14 +41,14 @@ permissions:
   contents: read
 
 jobs:
-  xcodebuild-latest:
-    name: xcodebuild (16.3)
+  macos:
+    name: xcodebuild (macOS latest)
     runs-on: macos-15
     strategy:
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS]
-        xcode: ["16.3"]
+        xcode: ["26.0", "16.4"]
         include:
           - { command: test, skip_release: 1 }
     steps:
@@ -67,11 +67,11 @@ jobs:
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
       - name: Install lcov
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.0'
         run: brew install lcov
       - name: Export code coverage
         id: coverage
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.0'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
       - uses: coverallsapp/github-action@v2.3.6
         if: steps.coverage.outcome == 'success'
@@ -79,8 +79,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           file: lcov.info
 
-  xcodebuild-legacy:
-    name: xcodebuild (15.4)
+  macos-legacy:
+    name: xcodebuild (macOS legacy)
     runs-on: macos-14
     strategy:
       matrix:
@@ -113,6 +113,21 @@ jobs:
       - name: Release
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+
+  spm:
+    runs-on: macos-15
+    strategy:
+      matrix: 
+        config: [debug, release]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+      - run: swift build -c ${{ matrix.config }}
 
   linux:
     name: Linux
