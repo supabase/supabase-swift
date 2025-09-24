@@ -39,6 +39,14 @@ struct APIClient: Sendable {
     Dependencies[clientID].http
   }
 
+  /// Error codes that should clean up local session.
+  private let sessionCleanupErrorCodes: [ErrorCode] = [
+    .sessionNotFound,
+    .sessionExpired,
+    .refreshTokenNotFound,
+    .refreshTokenAlreadyUsed,
+  ]
+
   func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
     var request = request
     request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
@@ -106,7 +114,7 @@ struct APIClient: Sendable {
         message: error._getErrorMessage(),
         reasons: error.weakPassword?.reasons ?? []
       )
-    } else if [.sessionNotFound, .refreshTokenNotFound].contains(errorCode) {
+    } else if let errorCode, sessionCleanupErrorCodes.contains(errorCode) {
       // The `session_id` inside the JWT does not correspond to a row in the
       // `sessions` table. This usually means the user has signed out, has been
       // deleted, or their session has somehow been terminated.
