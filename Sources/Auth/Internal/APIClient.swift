@@ -27,6 +27,14 @@ struct APIClient: Sendable {
     Dependencies[clientID].configuration
   }
 
+  var sessionManager: SessionManager {
+    Dependencies[clientID].sessionManager
+  }
+
+  var eventEmitter: AuthStateChangeEventEmitter {
+    Dependencies[clientID].eventEmitter
+  }
+
   var http: any HTTPClientType {
     Dependencies[clientID].http
   }
@@ -42,7 +50,7 @@ struct APIClient: Sendable {
     let response = try await http.send(request)
 
     guard 200..<300 ~= response.statusCode else {
-      throw handleError(response: response)
+      throw await handleError(response: response)
     }
 
     return response
@@ -62,7 +70,7 @@ struct APIClient: Sendable {
     return try await execute(request)
   }
 
-  func handleError(response: Helpers.HTTPResponse) -> AuthError {
+  func handleError(response: Helpers.HTTPResponse) async -> AuthError {
     guard
       let error = try? response.decoded(
         as: _RawAPIErrorResponse.self,
@@ -99,6 +107,8 @@ struct APIClient: Sendable {
         reasons: error.weakPassword?.reasons ?? []
       )
     } else if errorCode == .sessionNotFound {
+      await sessionManager.remove()
+      eventEmitter.emit(.signedOut, session: nil)
       return .sessionMissing
     } else {
       return .api(
