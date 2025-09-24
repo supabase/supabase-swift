@@ -2192,10 +2192,12 @@ final class AuthClientTests: XCTestCase {
     let sut = makeSUT()
 
     Mock(
-      url: clientURL.appendingPathComponent("user"),
+      url: clientURL.appendingPathComponent("token").appendingQueryItems([
+        URLQueryItem(name: "grant_type", value: "refresh_token")
+      ]),
       statusCode: 403,
       data: [
-        .get: Data(
+        .post: Data(
           """
           {
             "error_code": "refresh_token_not_found",
@@ -2207,19 +2209,19 @@ final class AuthClientTests: XCTestCase {
     )
     .register()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
 
     try await assertAuthStateChanges(
       sut: sut,
       action: {
         do {
-          _ = try await sut.user()
+          _ = try await sut.session
           XCTFail("Expected failure")
         } catch {
           XCTAssertEqual(error as? AuthError, .sessionMissing)
         }
       },
-      expectedEvents: [.initialSession, .signedOut]
+      expectedEvents: [.signedOut]
     )
 
     XCTAssertNil(Dependencies[sut.clientID].sessionStorage.get())
