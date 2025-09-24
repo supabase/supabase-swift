@@ -106,7 +106,7 @@ struct APIClient: Sendable {
         message: error._getErrorMessage(),
         reasons: error.weakPassword?.reasons ?? []
       )
-    } else if errorCode == .sessionNotFound {
+    } else if [.sessionNotFound, .refreshTokenNotFound].contains(errorCode) {
       // The `session_id` inside the JWT does not correspond to a row in the
       // `sessions` table. This usually means the user has signed out, has been
       // deleted, or their session has somehow been terminated.

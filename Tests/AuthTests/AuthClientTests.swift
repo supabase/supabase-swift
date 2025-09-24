@@ -2188,6 +2188,43 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNil(Dependencies[sut.clientID].sessionStorage.get())
   }
 
+  func testRemoveSessionAndSignoutIfRefreshTokenNotFoundErrorReturned() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      statusCode: 403,
+      data: [
+        .get: Data(
+          """
+          {
+            "error_code": "refresh_token_not_found",
+            "message": "Invalid Refresh Token: Refresh Token Not Found"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: {
+        do {
+          _ = try await sut.user()
+          XCTFail("Expected failure")
+        } catch {
+          XCTAssertEqual(error as? AuthError, .sessionMissing)
+        }
+      },
+      expectedEvents: [.initialSession, .signedOut]
+    )
+
+    XCTAssertNil(Dependencies[sut.clientID].sessionStorage.get())
+  }
+
   private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
