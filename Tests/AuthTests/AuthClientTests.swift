@@ -2151,6 +2151,43 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  func testRemoveSessionAndSignoutIfSessionNotFoundErrorReturned() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      statusCode: 403,
+      data: [
+        .get: Data(
+          """
+          {
+            "error_code": "session_not_found",
+            "message": "Session not found"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: {
+        do {
+          _ = try await sut.user()
+          XCTFail("Expected failure")
+        } catch {
+          XCTAssertEqual(error as? AuthError, .sessionMissing)
+        }
+      },
+      expectedEvents: [.initialSession, .signedOut]
+    )
+
+    XCTAssertNil(Dependencies[sut.clientID].sessionStorage.get())
+  }
+
   private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
@@ -2198,6 +2235,7 @@ final class AuthClientTests: XCTestCase {
     action: () async throws -> T,
     expectedEvents: [AuthChangeEvent],
     expectedSessions: [Session?]? = nil,
+    timeout: TimeInterval = 2,
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
     line: UInt = #line,
@@ -2211,14 +2249,30 @@ final class AuthClientTests: XCTestCase {
 
     let result = try await action()
 
-    let authStateChanges = await eventsTask.value
+    let authStateChanges = try await withTimeout(interval: timeout) {
+      await eventsTask.value
+    }
     let events = authStateChanges.map(\.event)
     let sessions = authStateChanges.map(\.session)
 
-    expectNoDifference(events, expectedEvents, fileID: fileID, filePath: filePath, line: line, column: column)
+    expectNoDifference(
+      events,
+      expectedEvents,
+      fileID: fileID,
+      filePath: filePath,
+      line: line,
+      column: column
+    )
 
     if let expectedSessions = expectedSessions {
-      expectNoDifference(sessions, expectedSessions, fileID: fileID, filePath: filePath, line: line, column: column)
+      expectNoDifference(
+        sessions,
+        expectedSessions,
+        fileID: fileID,
+        filePath: filePath,
+        line: line,
+        column: column
+      )
     }
 
     return result
