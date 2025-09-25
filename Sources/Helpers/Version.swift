@@ -1,7 +1,7 @@
 import Foundation
 import XCTestDynamicOverlay
 
-private let _version = "2.33.1" // {x-release-please-version}
+private let _version = "2.33.2" // {x-release-please-version}
 
 #if DEBUG
   package let version = isTesting ? "0.0.0" : _version
