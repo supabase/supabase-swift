@@ -27,9 +27,25 @@ struct APIClient: Sendable {
     Dependencies[clientID].configuration
   }
 
+  var sessionManager: SessionManager {
+    Dependencies[clientID].sessionManager
+  }
+
+  var eventEmitter: AuthStateChangeEventEmitter {
+    Dependencies[clientID].eventEmitter
+  }
+
   var http: any HTTPClientType {
     Dependencies[clientID].http
   }
+
+  /// Error codes that should clean up local session.
+  private let sessionCleanupErrorCodes: [ErrorCode] = [
+    .sessionNotFound,
+    .sessionExpired,
+    .refreshTokenNotFound,
+    .refreshTokenAlreadyUsed,
+  ]
 
   func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
     var request = request
@@ -42,7 +58,7 @@ struct APIClient: Sendable {
     let response = try await http.send(request)
 
     guard 200..<300 ~= response.statusCode else {
-      throw handleError(response: response)
+      throw await handleError(response: response)
     }
 
     return response
@@ -62,7 +78,7 @@ struct APIClient: Sendable {
     return try await execute(request)
   }
 
-  func handleError(response: Helpers.HTTPResponse) -> AuthError {
+  func handleError(response: Helpers.HTTPResponse) async -> AuthError {
     guard
       let error = try? response.decoded(
         as: _RawAPIErrorResponse.self,
@@ -98,7 +114,12 @@ struct APIClient: Sendable {
         message: error._getErrorMessage(),
         reasons: error.weakPassword?.reasons ?? []
       )
-    } else if errorCode == .sessionNotFound {
+    } else if let errorCode, sessionCleanupErrorCodes.contains(errorCode) {
+      // The `session_id` inside the JWT does not correspond to a row in the
+      // `sessions` table. This usually means the user has signed out, has been
+      // deleted, or their session has somehow been terminated.
+      await sessionManager.remove()
+      eventEmitter.emit(.signedOut, session: nil)
       return .sessionMissing
     } else {
       return .api(
