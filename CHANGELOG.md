@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.33.2](https://github.com/supabase/supabase-swift/compare/v2.33.1...v2.33.2) (2025-09-25)
+
+
+### Bug Fixes
+
+* **auth:** remove session when it has been revoked ([#802](https://github.com/supabase/supabase-swift/issues/802)) ([c6aa8ef](https://github.com/supabase/supabase-swift/commit/c6aa8efef6dffc33749622168d64cbc1a422c8e2))
+
 ## [2.33.1](https://github.com/supabase/supabase-swift/compare/v2.33.0...v2.33.1) (2025-09-23)
 
 ### Bug Fixes
