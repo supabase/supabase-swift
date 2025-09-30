@@ -33,6 +33,20 @@ struct RealtimeJoinConfig: Codable, Hashable {
   }
 }
 
+/// Configuration for broadcast replay feature.
+/// Allows replaying broadcast messages from a specific timestamp.
+public struct ReplayOption: Codable, Hashable, Sendable {
+  /// Unix timestamp (in milliseconds) from which to start replaying messages
+  public var since: Int
+  /// Optional limit on the number of messages to replay
+  public var limit: Int?
+
+  public init(since: Int, limit: Int? = nil) {
+    self.since = since
+    self.limit = limit
+  }
+}
+
 public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
   /// Instructs server to acknowledge that broadcast message was received.
   public var acknowledgeBroadcasts: Bool = false
@@ -40,10 +54,23 @@ public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
   ///
   /// By default, broadcast messages are only sent to other clients.
   public var receiveOwnBroadcasts: Bool = false
+  /// Configures broadcast replay from a specific timestamp
+  public var replay: ReplayOption?
+
+  public init(
+    acknowledgeBroadcasts: Bool = false,
+    receiveOwnBroadcasts: Bool = false,
+    replay: ReplayOption? = nil
+  ) {
+    self.acknowledgeBroadcasts = acknowledgeBroadcasts
+    self.receiveOwnBroadcasts = receiveOwnBroadcasts
+    self.replay = replay
+  }
 
   enum CodingKeys: String, CodingKey {
     case acknowledgeBroadcasts = "ack"
     case receiveOwnBroadcasts = "self"
+    case replay
   }
 }
 
