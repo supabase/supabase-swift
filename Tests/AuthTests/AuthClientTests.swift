@@ -2315,6 +2315,7 @@ final class AuthClientTests: XCTestCase {
   ///   - action: The async action to perform that should trigger events
   ///   - expectedEvents: Array of expected AuthChangeEvent values
   ///   - expectedSessions: Array of expected Session values (optional)
+  @discardableResult
   private func assertAuthStateChanges<T>(
     sut: AuthClient,
     action: () async throws -> T,
