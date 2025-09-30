@@ -25,6 +25,8 @@ struct APIClient: Sendable {
   private let urlQueryEncoder: any ParameterEncoding = URLEncoding.queryString
   private var defaultEncoder: any ParameterEncoder {
     JSONParameterEncoder(encoder: configuration.encoder)
+  }
+
   /// Error codes that should clean up local session.
   private let sessionCleanupErrorCodes: [ErrorCode] = [
     .sessionNotFound,
@@ -32,7 +34,6 @@ struct APIClient: Sendable {
     .refreshTokenNotFound,
     .refreshTokenAlreadyUsed,
   ]
-  }
 
   func execute<RequestBody: Encodable & Sendable>(
     _ url: URL,
@@ -98,7 +99,11 @@ struct APIClient: Sendable {
       // The `session_id` inside the JWT does not correspond to a row in the
       // `sessions` table. This usually means the user has signed out, has been
       // deleted, or their session has somehow been terminated.
-      await sessionManager.remove()
+
+      // FIXME: ideally should not run on a new Task.
+      Task {
+        await sessionManager.remove()
+      }
       eventEmitter.emit(.signedOut, session: nil)
       return .sessionMissing
     } else {

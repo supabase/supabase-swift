@@ -171,8 +171,8 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   ///   - value: The maximum number of rows that can be affected
   public func maxAffected(_ value: Int) -> PostgrestTransformBuilder {
     mutableState.withValue {
-      $0.request.headers.appendOrUpdate(.prefer, value: "handling=strict")
-      $0.request.headers.appendOrUpdate(.prefer, value: "max-affected=\(value)")
+      $0.request.headers.appendOrUpdate("Prefer", value: "handling=strict")
+      $0.request.headers.appendOrUpdate("Prefer", value: "max-affected=\(value)")
     }
     return self
   }

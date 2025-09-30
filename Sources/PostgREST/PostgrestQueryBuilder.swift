@@ -59,7 +59,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       if let returning {
         prefersHeaders.append("return=\(returning.rawValue)")
       }
-      $0.request.httpBody = try configuration.encoder.encode(values)
+      $0.request.httpBody = body
       if let count {
         prefersHeaders.append("count=\(count.rawValue)")
       }
@@ -110,7 +110,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       if let onConflict {
         $0.query["on_conflict"] = onConflict
       }
-      $0.request.httpBody = try configuration.encoder.encode(values)
+      $0.request.httpBody = body
       if let count {
         prefersHeaders.append("count=\(count.rawValue)")
       }
@@ -148,7 +148,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     mutableState.withValue {
       $0.request.method = .patch
       var preferHeaders = ["return=\(returning.rawValue)"]
-      $0.request.httpBody = try configuration.encoder.encode(values)
+      $0.request.httpBody = body
       if let count {
         preferHeaders.append("count=\(count.rawValue)")
       }

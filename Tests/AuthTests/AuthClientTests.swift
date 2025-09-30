@@ -618,14 +618,15 @@ final class AuthClientTests: XCTestCase {
       try await sut.session(from: url)
       XCTFail("Expect failure")
     } catch {
-      expectNoDifference(
-        error as? AuthError,
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
         AuthError.pkceGrantCodeExchange(
           message: "Identity is already linked to another user",
           error: "server_error",
           code: "422"
         )
-      )
+        """
+      }
     }
   }
 
@@ -912,7 +913,7 @@ final class AuthClientTests: XCTestCase {
       .snapshotRequest {
         #"""
         curl \
-        	--header "Authorization: bearer accesstoken" \
+        	--header "Authorization: Bearer accesstoken" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -956,7 +957,7 @@ final class AuthClientTests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
-      	--header "Authorization: bearer accesstoken" \
+      	--header "Authorization: Bearer accesstoken" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -984,8 +985,12 @@ final class AuthClientTests: XCTestCase {
 
     do {
       try await sut.session(from: url)
-    } catch let AuthError.implicitGrantRedirect(message) {
-      expectNoDifference(message, "Not a valid implicit grant flow URL: \(url)")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AuthError.implicitGrantRedirect(message: "Not a valid implicit grant flow URL: https://dummy-url.com/callback#invalid_key=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer")
+        """
+      }
     }
   }
 
@@ -999,8 +1004,12 @@ final class AuthClientTests: XCTestCase {
 
     do {
       try await sut.session(from: url)
-    } catch let AuthError.implicitGrantRedirect(message) {
-      expectNoDifference(message, "Invalid code")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AuthError.implicitGrantRedirect(message: "Invalid code")
+        """
+      }
     }
   }
 
@@ -1015,7 +1024,7 @@ final class AuthClientTests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
-      	--header "Authorization: bearer accesstoken" \
+      	--header "Authorization: Bearer accesstoken" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -1053,10 +1062,16 @@ final class AuthClientTests: XCTestCase {
 
     do {
       try await sut.session(from: url)
-    } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
-      expectNoDifference(message, "Invalid code")
-      expectNoDifference(error, "invalid_grant")
-      expectNoDifference(code, "500")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AuthError.pkceGrantCodeExchange(
+          message: "Invalid code",
+          error: "invalid_grant",
+          code: "500"
+        )
+        """
+      }
     }
   }
 
@@ -1070,10 +1085,16 @@ final class AuthClientTests: XCTestCase {
 
     do {
       try await sut.session(from: url)
-    } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
-      expectNoDifference(message, "Error in URL with unspecified error_description.")
-      expectNoDifference(error, "invalid_grant")
-      expectNoDifference(code, "500")
+    } catch {
+      assertInlineSnapshot(of: error, as: .customDump) {
+        """
+        AuthError.pkceGrantCodeExchange(
+          message: "Error in URL with unspecified error_description.",
+          error: "invalid_grant",
+          code: "500"
+        )
+        """
+      }
     }
   }
 
@@ -2197,7 +2218,11 @@ final class AuthClientTests: XCTestCase {
           _ = try await sut.user()
           XCTFail("Expected failure")
         } catch {
-          XCTAssertEqual(error as? AuthError, .sessionMissing)
+          assertInlineSnapshot(of: error, as: .customDump) {
+            """
+            AuthError.sessionMissing
+            """
+          }
         }
       },
       expectedEvents: [.initialSession, .signedOut]
@@ -2236,7 +2261,13 @@ final class AuthClientTests: XCTestCase {
           _ = try await sut.session
           XCTFail("Expected failure")
         } catch {
-          XCTAssertEqual(error as? AuthError, .sessionMissing)
+          assertInlineSnapshot(of: error, as: .customDump) {
+            """
+            AFError.responseValidationFailed(
+              reason: .customValidationFailed(error: .sessionMissing)
+            )
+            """
+          }
         }
       },
       expectedEvents: [.signedOut]
@@ -2248,7 +2279,6 @@ final class AuthClientTests: XCTestCase {
   private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-    let session = URLSession(configuration: sessionConfiguration)
 
     let encoder = AuthClient.Configuration.jsonEncoder
     encoder.outputFormatting = [.sortedKeys]

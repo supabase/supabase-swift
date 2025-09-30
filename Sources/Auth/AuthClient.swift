@@ -1149,6 +1149,7 @@ public actor AuthClient {
       let updatedUser = try await self.api.execute(
         self.configuration.url.appendingPathComponent("user"),
         method: .put,
+        headers: [.authorization(bearerToken: session.accessToken)],
         query: (redirectTo ?? self.configuration.redirectToURL).map {
           ["redirect_to": $0.absoluteString]
         },
@@ -1178,14 +1179,14 @@ public actor AuthClient {
     credentials.linkIdentity = true
 
     let session = try await api.execute(
-      .init(
-        url: configuration.url.appendingPathComponent("token"),
-        method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "id_token")],
-        headers: [.authorization: "Bearer \(session.accessToken)"],
-        body: configuration.encoder.encode(credentials)
-      )
-    ).decoded(as: Session.self, decoder: configuration.decoder)
+      configuration.url.appendingPathComponent("token"),
+      method: .post,
+      headers: [.authorization(bearerToken: session.accessToken)],
+      query: ["grant_type": "id_token"],
+      body: credentials
+    )
+    .serializingDecodable(Session.self, decoder: configuration.decoder)
+    .value
 
     await sessionManager.update(session)
     eventEmitter.emit(.userUpdated, session: session)
