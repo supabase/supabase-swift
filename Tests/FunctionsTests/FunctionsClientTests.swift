@@ -164,6 +164,7 @@ final class FunctionsClientTests: XCTestCase {
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
+      ignoreQuery: true,
       statusCode: 200,
       data: [.post: Data()]
     )
@@ -174,7 +175,7 @@ final class FunctionsClientTests: XCTestCase {
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-region: ca-central-1" \
-      	"http://localhost:5432/functions/v1/hello-world"
+      	"http://localhost:5432/functions/v1/hello-world?forceFunctionRegion=ca-central-1"
       """#
     }
     .register()
@@ -185,6 +186,7 @@ final class FunctionsClientTests: XCTestCase {
   func testInvokeWithRegion() async throws {
     Mock(
       url: url.appendingPathComponent("hello-world"),
+      ignoreQuery: true,
       statusCode: 200,
       data: [.post: Data()]
     )
@@ -195,7 +197,7 @@ final class FunctionsClientTests: XCTestCase {
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-region: ca-central-1" \
-      	"http://localhost:5432/functions/v1/hello-world"
+      	"http://localhost:5432/functions/v1/hello-world?forceFunctionRegion=ca-central-1"
       """#
     }
     .register()

@@ -246,10 +246,11 @@ public final class FunctionsClient: Sendable {
   private func buildRequest(functionName: String, options: FunctionInvokeOptions)
     -> Helpers.HTTPRequest
   {
+    var query = options.query
     var request = HTTPRequest(
       url: url.appendingPathComponent(functionName),
       method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
-      query: options.query,
+      query: query,
       headers: mutableState.headers.merging(with: options.headers),
       body: options.body,
       timeoutInterval: FunctionsClient.requestIdleTimeout
@@ -257,6 +258,8 @@ public final class FunctionsClient: Sendable {
 
     if let region = options.region ?? region {
       request.headers[.xRegion] = region
+      query.appendOrUpdate(URLQueryItem(name: "forceFunctionRegion", value: region))
+      request.query = query
     }
 
     return request
