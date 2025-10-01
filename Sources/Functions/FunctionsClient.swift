@@ -120,7 +120,7 @@ public final class FunctionsClient: Sendable {
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
     decode: (Data, HTTPURLResponse) throws -> Response
-  ) async throws(FunctionsError) -> Response {
+  ) async throws -> Response {
     let data = try await rawInvoke(
       functionName: functionName,
       invokeOptions: options
@@ -135,11 +135,7 @@ public final class FunctionsClient: Sendable {
       headerFields: nil
     )!
 
-    do {
-      return try decode(data, mockResponse)
-    } catch {
-      throw mapToFunctionsError(error)
-    }
+    return try decode(data, mockResponse)
   }
 
   /// Invokes a function and decodes the response as a specific type.
@@ -153,7 +149,7 @@ public final class FunctionsClient: Sendable {
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
     decoder: JSONDecoder = JSONDecoder()
-  ) async throws(FunctionsError) -> T {
+  ) async throws -> T {
     try await self.invoke(functionName, options: options) { data, _ in
       try decoder.decode(T.self, from: data)
     }
@@ -167,7 +163,7 @@ public final class FunctionsClient: Sendable {
   public func invoke(
     _ functionName: String,
     options: FunctionInvokeOptions = .init()
-  ) async throws(FunctionsError) {
+  ) async throws {
     _ = try await rawInvoke(
       functionName: functionName,
       invokeOptions: options
@@ -177,14 +173,12 @@ public final class FunctionsClient: Sendable {
   private func rawInvoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) async throws(FunctionsError) -> Data {
+  ) async throws -> Data {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
-    return try await wrappingError(or: mapToFunctionsError) {
-      return try await self.session.request(request)
-        .validate(self.validate)
-        .serializingData()
-        .value
-    }
+    return try await self.session.request(request)
+      .validate(self.validate)
+      .serializingData()
+      .value
   }
 
   /// Invokes a function with streamed response.
@@ -212,7 +206,7 @@ public final class FunctionsClient: Sendable {
         case let .stream(.success(data)): return data
         case .complete(let completion):
           if let error = completion.error {
-            throw mapToFunctionsError(error)
+            throw error
           }
           return nil
         }

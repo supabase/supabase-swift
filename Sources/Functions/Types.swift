@@ -23,20 +23,6 @@ public enum FunctionsError: Error, LocalizedError {
   }
 }
 
-func mapToFunctionsError(_ error: any Error) -> FunctionsError {
-  if let error = error as? FunctionsError {
-    return error
-  }
-
-  if let error = error.asAFError,
-    let underlyingError = error.underlyingError as? FunctionsError
-  {
-    return underlyingError
-  }
-
-  return FunctionsError.unknown(error)
-}
-
 /// Options for invoking a function.
 public struct FunctionInvokeOptions: Sendable {
   /// Method to use in the function invocation.

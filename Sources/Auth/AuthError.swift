@@ -306,16 +306,3 @@ public enum AuthError: LocalizedError {
     }
   }
 }
-
-/// Maps an error to an ``AuthError``.
-func mapToAuthError(_ error: any Error) -> AuthError {
-  if let error = error as? AuthError {
-    return error
-  }
-  if let error = error.asAFError {
-    if let underlyingError = error.underlyingError as? AuthError {
-      return underlyingError
-    }
-  }
-  return AuthError.unknown(error)
-}
