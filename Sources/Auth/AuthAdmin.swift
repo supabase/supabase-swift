@@ -15,6 +15,14 @@ public struct AuthAdmin: Sendable {
   var api: APIClient { Dependencies[clientID].api }
   var encoder: JSONEncoder { Dependencies[clientID].encoder }
 
+  /// Contains all OAuth client administration methods.
+  /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+  ///
+  /// - Warning: This property requires `service_role` key. Be careful to never expose your `service_role` key in the browser.
+  public var oauth: AuthAdminOAuth {
+    AuthAdminOAuth(clientID: clientID)
+  }
+
   /// Get user by id.
   /// - Parameter uid: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.

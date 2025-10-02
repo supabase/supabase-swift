@@ -1027,3 +1027,106 @@ public struct ListUsersPaginatedResponse: Hashable, Sendable {
 //  public static let emailChangeCurrent = GenerateLinkType(rawValue: "email_change_current")
 //  public static let emailChangeNew = GenerateLinkType(rawValue: "email_change_new")
 //}
+
+// MARK: - OAuth Client Types
+
+/// OAuth client grant types supported by the OAuth 2.1 server.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public enum OAuthClientGrantType: String, Codable, Hashable, Sendable {
+  case authorizationCode = "authorization_code"
+  case refreshToken = "refresh_token"
+}
+
+/// OAuth client response types supported by the OAuth 2.1 server.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public enum OAuthClientResponseType: String, Codable, Hashable, Sendable {
+  case code
+}
+
+/// OAuth client type indicating whether the client can keep credentials confidential.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public enum OAuthClientType: String, Codable, Hashable, Sendable {
+  case `public`
+  case confidential
+}
+
+/// OAuth client registration type.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public enum OAuthClientRegistrationType: String, Codable, Hashable, Sendable {
+  case dynamic
+  case manual
+}
+
+/// OAuth client object returned from the OAuth 2.1 server.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthClient: Codable, Hashable, Sendable {
+  /// Unique identifier for the OAuth client
+  public let clientId: String
+  /// Human-readable name of the OAuth client
+  public let clientName: String
+  /// Client secret (only returned on registration and regeneration)
+  public let clientSecret: String?
+  /// Type of OAuth client
+  public let clientType: OAuthClientType
+  /// Token endpoint authentication method
+  public let tokenEndpointAuthMethod: String
+  /// Registration type of the client
+  public let registrationType: OAuthClientRegistrationType
+  /// URI of the OAuth client
+  public let clientUri: String?
+  /// Array of allowed redirect URIs
+  public let redirectUris: [String]
+  /// Array of allowed grant types
+  public let grantTypes: [OAuthClientGrantType]
+  /// Array of allowed response types
+  public let responseTypes: [OAuthClientResponseType]
+  /// Scope of the OAuth client
+  public let scope: String?
+  /// Timestamp when the client was created
+  public let createdAt: Date
+  /// Timestamp when the client was last updated
+  public let updatedAt: Date
+}
+
+/// Parameters for creating a new OAuth client.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct CreateOAuthClientParams: Encodable, Hashable, Sendable {
+  /// Human-readable name of the OAuth client
+  public let clientName: String
+  /// URI of the OAuth client
+  public let clientUri: String?
+  /// Array of allowed redirect URIs
+  public let redirectUris: [String]
+  /// Array of allowed grant types (optional, defaults to authorization_code and refresh_token)
+  public let grantTypes: [OAuthClientGrantType]?
+  /// Array of allowed response types (optional, defaults to code)
+  public let responseTypes: [OAuthClientResponseType]?
+  /// Scope of the OAuth client
+  public let scope: String?
+
+  public init(
+    clientName: String,
+    clientUri: String? = nil,
+    redirectUris: [String],
+    grantTypes: [OAuthClientGrantType]? = nil,
+    responseTypes: [OAuthClientResponseType]? = nil,
+    scope: String? = nil
+  ) {
+    self.clientName = clientName
+    self.clientUri = clientUri
+    self.redirectUris = redirectUris
+    self.grantTypes = grantTypes
+    self.responseTypes = responseTypes
+    self.scope = scope
+  }
+}
+
+/// Response type for listing OAuth clients.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
+  public let clients: [OAuthClient]
+  public let aud: String
+  public var nextPage: Int?
+  public var lastPage: Int
+  public var total: Int
+}
