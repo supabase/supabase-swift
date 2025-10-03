@@ -116,7 +116,7 @@ extension ErrorCode {
   public static let emailAddressNotAuthorized = ErrorCode("email_address_not_authorized")
 }
 
-public enum AuthError: LocalizedError, Equatable {
+public enum AuthError: LocalizedError {
   @available(
     *,
     deprecated,
@@ -261,6 +261,7 @@ public enum AuthError: LocalizedError, Equatable {
   /// Error thrown when an error happens during implicit grant flow.
   case implicitGrantRedirect(message: String)
 
+  /// The message of the error.
   public var message: String {
     switch self {
     case .sessionMissing: "Auth session missing."
@@ -277,6 +278,7 @@ public enum AuthError: LocalizedError, Equatable {
     }
   }
 
+  /// The error code of the error.
   public var errorCode: ErrorCode {
     switch self {
     case .sessionMissing: .sessionNotFound
@@ -288,12 +290,8 @@ public enum AuthError: LocalizedError, Equatable {
     }
   }
 
+  /// The description of the error.
   public var errorDescription: String? {
     message
-  }
-
-  public static func ~= (lhs: AuthError, rhs: any Error) -> Bool {
-    guard let rhs = rhs as? AuthError else { return false }
-    return lhs == rhs
   }
 }

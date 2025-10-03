@@ -1,3 +1,4 @@
+import Alamofire
 import Foundation
 
 #if canImport(FoundationNetworking)
@@ -88,15 +89,15 @@ public struct SupabaseClientOptions: Sendable {
     /// Optional headers for initializing the client, it will be passed down to all sub-clients.
     public let headers: [String: String]
 
-    /// A session to use for making requests, defaults to `URLSession.shared`.
-    public let session: URLSession
+    /// An Alamofire session to use for making requests, defaults to `Alamofire.Session.default`.
+    public let session: Alamofire.Session
 
     /// The logger  to use across all Supabase sub-packages.
     public let logger: (any SupabaseLogger)?
 
     public init(
       headers: [String: String] = [:],
-      session: URLSession = .shared,
+      session: Alamofire.Session = .default,
       logger: (any SupabaseLogger)? = nil
     ) {
       self.headers = headers

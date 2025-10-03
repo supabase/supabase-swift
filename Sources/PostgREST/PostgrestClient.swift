@@ -1,6 +1,6 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -8,17 +8,13 @@ import HTTPTypes
 
 /// PostgREST client.
 public final class PostgrestClient: Sendable {
-  public typealias FetchHandler =
-    @Sendable (_ request: URLRequest) async throws -> (
-      Data, URLResponse
-    )
 
   /// The configuration struct for the PostgREST client.
   public struct Configuration: Sendable {
     public var url: URL
     public var schema: String?
     public var headers: [String: String]
-    public var fetch: FetchHandler
+    public var session: Alamofire.Session
     public var encoder: JSONEncoder
     public var decoder: JSONDecoder
 
@@ -30,7 +26,7 @@ public final class PostgrestClient: Sendable {
     ///   - schema: Postgres schema to switch to.
     ///   - headers: Custom headers.
     ///   - logger: The logger to use.
-    ///   - fetch: Custom fetch.
+    ///   - session: Alamofire session to use for requests.
     ///   - encoder: The JSONEncoder to use for encoding.
     ///   - decoder: The JSONDecoder to use for decoding.
     public init(
@@ -38,7 +34,7 @@ public final class PostgrestClient: Sendable {
       schema: String? = nil,
       headers: [String: String] = [:],
       logger: (any SupabaseLogger)? = nil,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      session: Alamofire.Session = .default,
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
     ) {
@@ -46,7 +42,7 @@ public final class PostgrestClient: Sendable {
       self.schema = schema
       self.headers = headers
       self.logger = logger
-      self.fetch = fetch
+      self.session = session
       self.encoder = encoder
       self.decoder = decoder
     }
@@ -70,7 +66,7 @@ public final class PostgrestClient: Sendable {
   ///   - schema: Postgres schema to switch to.
   ///   - headers: Custom headers.
   ///   - logger: The logger to use.
-  ///   - fetch: Custom fetch.
+  ///   - session: Alamofire session to use for requests.
   ///   - encoder: The JSONEncoder to use for encoding.
   ///   - decoder: The JSONDecoder to use for decoding.
   public convenience init(
@@ -78,7 +74,7 @@ public final class PostgrestClient: Sendable {
     schema: String? = nil,
     headers: [String: String] = [:],
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    session: Alamofire.Session = .default,
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
@@ -88,7 +84,7 @@ public final class PostgrestClient: Sendable {
         schema: schema,
         headers: headers,
         logger: logger,
-        fetch: fetch,
+        session: session,
         encoder: encoder,
         decoder: decoder
       )
@@ -113,11 +109,12 @@ public final class PostgrestClient: Sendable {
   public func from(_ table: String) -> PostgrestQueryBuilder {
     PostgrestQueryBuilder(
       configuration: configuration,
-      request: .init(
+      request: try! .init(
         url: configuration.url.appendingPathComponent(table),
         method: .get,
-        headers: HTTPFields(configuration.headers)
-      )
+        headers: HTTPHeaders(configuration.headers)
+      ),
+      query: [:]
     )
   }
 
@@ -135,10 +132,11 @@ public final class PostgrestClient: Sendable {
     get: Bool = false,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    let method: HTTPTypes.HTTPRequest.Method
-    var url = configuration.url.appendingPathComponent("rpc/\(fn)")
+    let method: HTTPMethod
+    let url = configuration.url.appendingPathComponent("rpc/\(fn)")
     let bodyData = try configuration.encoder.encode(params)
     var body: Data?
+    var query: Parameters = [:]
 
     if head || get {
       method = head ? .head : .get
@@ -151,7 +149,7 @@ public final class PostgrestClient: Sendable {
 
       for (key, value) in json {
         let formattedValue = (value as? [Any]).map(cleanFilterArray) ?? String(describing: value)
-        url.appendQueryItems([URLQueryItem(name: key, value: formattedValue)])
+        query[key] = formattedValue
       }
 
     } else {
@@ -159,20 +157,21 @@ public final class PostgrestClient: Sendable {
       body = bodyData
     }
 
-    var request = HTTPRequest(
+    var request = try! URLRequest(
       url: url,
       method: method,
-      headers: HTTPFields(configuration.headers),
-      body: params is NoParams ? nil : body
+      headers: HTTPHeaders(configuration.headers)
     )
+    request.httpBody = params is NoParams ? nil : body
 
     if let count {
-      request.headers[.prefer] = "count=\(count.rawValue)"
+      request.headers["Prefer"] = "count=\(count.rawValue)"
     }
 
     return PostgrestFilterBuilder(
       configuration: configuration,
-      request: request
+      request: request,
+      query: query
     )
   }
 
@@ -207,7 +206,3 @@ public final class PostgrestClient: Sendable {
 }
 
 struct NoParams: Encodable {}
-
-extension HTTPField.Name {
-  static let prefer = Self("Prefer")!
-}

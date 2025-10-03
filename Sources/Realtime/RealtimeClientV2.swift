@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 
@@ -19,7 +20,7 @@ typealias WebSocketTransport = @Sendable (_ url: URL, _ headers: [String: String
 protocol RealtimeClientProtocol: AnyObject, Sendable {
   var status: RealtimeClientStatus { get }
   var options: RealtimeClientOptions { get }
-  var http: any HTTPClientType { get }
+  var session: Alamofire.Session { get }
   var broadcastURL: URL { get }
 
   func connect() async
@@ -52,7 +53,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let options: RealtimeClientOptions
   let wsTransport: WebSocketTransport
   let mutableState = LockIsolated(MutableState())
-  let http: any HTTPClientType
+  let session: Alamofire.Session
   let apikey: String
 
   var conn: (any WebSocket)? {
@@ -118,12 +119,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   public convenience init(url: URL, options: RealtimeClientOptions) {
-    var interceptors: [any HTTPClientInterceptor] = []
-
-    if let logger = options.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
     self.init(
       url: url,
       options: options,
@@ -135,10 +130,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           configuration: configuration
         )
       },
-      http: HTTPClient(
-        fetch: options.fetch ?? { try await URLSession.shared.data(for: $0) },
-        interceptors: interceptors
-      )
+      session: options.session ?? .default
     )
   }
 
@@ -146,23 +138,23 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     url: URL,
     options: RealtimeClientOptions,
     wsTransport: @escaping WebSocketTransport,
-    http: any HTTPClientType
+    session: Alamofire.Session
   ) {
     var options = options
-    if options.headers[.xClientInfo] == nil {
-      options.headers[.xClientInfo] = "realtime-swift/\(version)"
+    if options.headers["X-Client-Info"] == nil {
+      options.headers["X-Client-Info"] = "realtime-swift/\(version)"
     }
 
     self.url = url
     self.options = options
     self.wsTransport = wsTransport
-    self.http = http
+    self.session = session.newSession(adapters: [DefaultHeadersRequestAdapter(headers: options.headers)])
 
     precondition(options.apikey != nil, "API key is required to connect to Realtime")
     apikey = options.apikey!
 
     mutableState.withValue { [options] in
-      if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
+      if let accessToken = options.headers["Authorization"]?.split(separator: " ").last {
         $0.accessToken = String(accessToken)
       }
     }

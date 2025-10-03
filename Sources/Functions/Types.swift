@@ -1,5 +1,5 @@
+import Alamofire
 import Foundation
-import HTTPTypes
 
 /// An error type representing various errors that can occur while invoking functions.
 public enum FunctionsError: Error, LocalizedError {
@@ -24,7 +24,7 @@ public struct FunctionInvokeOptions: Sendable {
   /// Method to use in the function invocation.
   let method: Method?
   /// Headers to be included in the function invocation.
-  let headers: HTTPFields
+  let headers: HTTPHeaders
   /// Body data to be sent with the function invocation.
   let body: Data?
   /// The Region to invoke the function in.
@@ -48,23 +48,27 @@ public struct FunctionInvokeOptions: Sendable {
     region: String? = nil,
     body: some Encodable
   ) {
-    var defaultHeaders = HTTPFields()
+    var defaultHeaders = HTTPHeaders()
 
     switch body {
     case let string as String:
-      defaultHeaders[.contentType] = "text/plain"
+      defaultHeaders["Content-Type"] = "text/plain"
       self.body = string.data(using: .utf8)
     case let data as Data:
-      defaultHeaders[.contentType] = "application/octet-stream"
+      defaultHeaders["Content-Type"] = "application/octet-stream"
       self.body = data
     default:
       // default, assume this is JSON
-      defaultHeaders[.contentType] = "application/json"
+      defaultHeaders["Content-Type"] = "application/json"
       self.body = try? JSONEncoder().encode(body)
     }
 
+    headers.forEach {
+      defaultHeaders[$0.key] = $0.value
+    }
+
     self.method = method
-    self.headers = defaultHeaders.merging(with: HTTPFields(headers))
+    self.headers = defaultHeaders
     self.region = region
     self.query = query
   }
@@ -84,7 +88,7 @@ public struct FunctionInvokeOptions: Sendable {
     region: String? = nil
   ) {
     self.method = method
-    self.headers = HTTPFields(headers)
+    self.headers = HTTPHeaders(headers)
     self.region = region
     self.query = query
     body = nil
@@ -98,7 +102,7 @@ public struct FunctionInvokeOptions: Sendable {
     case delete = "DELETE"
   }
 
-  static func httpMethod(_ method: Method?) -> HTTPTypes.HTTPRequest.Method? {
+  static func httpMethod(_ method: Method?) -> HTTPMethod? {
     switch method {
     case .get:
       .get

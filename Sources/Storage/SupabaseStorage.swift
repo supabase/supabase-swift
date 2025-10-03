@@ -1,3 +1,4 @@
+import Alamofire
 import Foundation
 
 public struct StorageClientConfiguration: Sendable {
@@ -5,7 +6,7 @@ public struct StorageClientConfiguration: Sendable {
   public var headers: [String: String]
   public let encoder: JSONEncoder
   public let decoder: JSONDecoder
-  public let session: StorageHTTPSession
+  public let session: Alamofire.Session
   public let logger: (any SupabaseLogger)?
   public let useNewHostname: Bool
 
@@ -14,7 +15,7 @@ public struct StorageClientConfiguration: Sendable {
     headers: [String: String],
     encoder: JSONEncoder = .defaultStorageEncoder,
     decoder: JSONDecoder = .defaultStorageDecoder,
-    session: StorageHTTPSession = .init(),
+    session: Alamofire.Session = .default,
     logger: (any SupabaseLogger)? = nil,
     useNewHostname: Bool = false
   ) {

@@ -5,18 +5,19 @@
 //  Created by Guilherme Souza on 23/04/24.
 //
 
+import Alamofire
 import Foundation
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 
-  package let NSEC_PER_SEC: UInt64 = 1000000000
-  package let NSEC_PER_MSEC: UInt64 = 1000000
+  package let NSEC_PER_SEC: UInt64 = 1_000_000_000
+  package let NSEC_PER_MSEC: UInt64 = 1_000_000
 #endif
 
 extension Result {
   package var value: Success? {
-    if case let .success(value) = self {
+    if case .success(let value) = self {
       value
     } else {
       nil
@@ -24,7 +25,7 @@ extension Result {
   }
 
   package var error: Failure? {
-    if case let .failure(error) = self {
+    if case .failure(let error) = self {
       error
     } else {
       nil
@@ -33,6 +34,15 @@ extension Result {
 }
 
 extension URL {
+  // package var queryItems: [URLQueryItem] {
+  //   get {
+  //     URLComponents(url: self, resolvingAgainstBaseURL: false)?.percentEncodedQueryItems ?? []
+  //   }
+  //   set {
+  //     appendOrUpdateQueryItems(newValue)
+  //   }
+  // }
+
   package mutating func appendQueryItems(_ queryItems: [URLQueryItem]) {
     guard !queryItems.isEmpty else {
       return
@@ -42,14 +52,20 @@ extension URL {
       return
     }
 
-    let currentQueryItems = components.percentEncodedQueryItems ?? []
+    let encoding = URLEncoding.queryString
 
-    components.percentEncodedQueryItems = currentQueryItems + queryItems.map {
-      URLQueryItem(
-        name: escape($0.name),
-        value: $0.value.map(escape)
-      )
+    func query(_ parameters: [URLQueryItem]) -> String {
+      var components: [(String, String)] = []
+
+      for param in parameters.sorted(by: { $0.name < $1.name }) {
+        components += encoding.queryComponents(fromKey: param.name, value: param.value!)
+      }
+      return components.map { "\($0)=\($1)" }.joined(separator: "&")
     }
+
+    let percentEncodedQuery =
+      (components.percentEncodedQuery.map { $0 + "&" } ?? "") + query(queryItems)
+    components.percentEncodedQuery = percentEncodedQuery
 
     if let newURL = components.url {
       self = newURL
@@ -61,28 +77,4 @@ extension URL {
     url.appendQueryItems(queryItems)
     return url
   }
-}
-
-func escape(_ string: String) -> String {
-  string.addingPercentEncoding(withAllowedCharacters: .sbURLQueryAllowed) ?? string
-}
-
-extension CharacterSet {
-  /// Creates a CharacterSet from RFC 3986 allowed characters.
-  ///
-  /// RFC 3986 states that the following characters are "reserved" characters.
-  ///
-  /// - General Delimiters: ":", "#", "[", "]", "@", "?", "/"
-  /// - Sub-Delimiters: "!", "$", "&", "'", "(", ")", "*", "+", ",", ";", "="
-  ///
-  /// In RFC 3986 - Section 3.4, it states that the "?" and "/" characters should not be escaped to allow
-  /// query strings to include a URL. Therefore, all "reserved" characters with the exception of "?" and "/"
-  /// should be percent-escaped in the query string.
-  static let sbURLQueryAllowed: CharacterSet = {
-    let generalDelimitersToEncode = ":#[]@" // does not include "?" or "/" due to RFC 3986 - Section 3.4
-    let subDelimitersToEncode = "!$&'()*+,;="
-    let encodableDelimiters = CharacterSet(charactersIn: "\(generalDelimitersToEncode)\(subDelimitersToEncode)")
-
-    return CharacterSet.urlQueryAllowed.subtracting(encodableDelimiters)
-  }()
 }

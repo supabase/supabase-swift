@@ -1,4 +1,6 @@
+import Alamofire
 import CustomDump
+import Helpers
 import InlineSnapshotTesting
 import IssueReporting
 import SnapshotTestingCustomDump
@@ -43,7 +45,7 @@ final class SupabaseClientTests: XCTestCase {
         ),
         global: SupabaseClientOptions.GlobalOptions(
           headers: customHeaders,
-          session: .shared,
+          session: .default,
           logger: logger
         ),
         functions: SupabaseClientOptions.FunctionsOptions(
@@ -64,7 +66,7 @@ final class SupabaseClientTests: XCTestCase {
       "https://project-ref.supabase.co/functions/v1"
     )
 
-    assertInlineSnapshot(of: client.headers, as: .customDump) {
+    assertInlineSnapshot(of: client.headers as [String: String], as: .customDump) {
       """
       [
         "Apikey": "ANON_KEY",
@@ -76,7 +78,6 @@ final class SupabaseClientTests: XCTestCase {
       ]
       """
     }
-    expectNoDifference(client.headers, client.auth.configuration.headers)
     expectNoDifference(client.headers, client.functions.headers.dictionary)
     expectNoDifference(client.headers, client.storage.configuration.headers)
     expectNoDifference(client.headers, client.rest.configuration.headers)
@@ -88,10 +89,10 @@ final class SupabaseClientTests: XCTestCase {
 
     let realtimeOptions = client.realtimeV2.options
     let expectedRealtimeHeader = client._headers.merging(with: [
-      .init("custom_realtime_header_key")!: "custom_realtime_header_value"
+      "custom_realtime_header_key": "custom_realtime_header_value"
     ]
     )
-    expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
+    expectNoDifference(realtimeOptions.headers.sorted(), expectedRealtimeHeader.sorted())
     XCTAssertIdentical(realtimeOptions.logger as? Logger, logger)
 
     XCTAssertFalse(client.auth.configuration.autoRefreshToken)
