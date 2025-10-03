@@ -96,10 +96,10 @@ public enum AnyJSON: Sendable, Codable, Hashable {
       self = .string(string)
     } else if let bool = try? container.decode(Bool.self) {
       self = .bool(bool)
-    } else if let double = try? container.decode(Double.self) {
-      self = .double(double)
     } else if let int = try? container.decode(Int.self) {
       self = .integer(int)
+    } else if let double = try? container.decode(Double.self) {
+      self = .double(double)
     } else if container.decodeNil() {
       self = .null
     } else {

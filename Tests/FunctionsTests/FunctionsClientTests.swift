@@ -156,14 +156,12 @@ final class FunctionsClientTests: XCTestCase {
     } catch {
       assertInlineSnapshot(of: error, as: .customDump) {
         """
-        FunctionsError.unknown(
-          .keyNotFound(
-            .CodingKeys(stringValue: "status", intValue: nil),
-            DecodingError.Context(
-              codingPath: [],
-              debugDescription: #"No value associated with key CodingKeys(stringValue: "status", intValue: nil) ("status")."#,
-              underlyingError: nil
-            )
+        DecodingError.keyNotFound(
+          .CodingKeys(stringValue: "status", intValue: nil),
+          DecodingError.Context(
+            codingPath: [],
+            debugDescription: #"No value associated with key CodingKeys(stringValue: "status", intValue: nil) ("status")."#,
+            underlyingError: nil
           )
         )
         """
@@ -294,7 +292,7 @@ final class FunctionsClientTests: XCTestCase {
   func testInvoke_shouldThrow_error() async throws {
     Mock(
       url: url.appendingPathComponent("hello_world"),
-      statusCode: 200,
+      statusCode: 204,
       data: [.post: Data()],
       requestError: URLError(.badServerResponse)
     )
@@ -312,13 +310,10 @@ final class FunctionsClientTests: XCTestCase {
     do {
       try await sut.invoke("hello_world")
       XCTFail("Invoke should fail.")
-    } catch let FunctionsError.unknown(error) {
-      guard case let AFError.sessionTaskFailed(underlyingError as URLError) = error else {
-        XCTFail()
-        return
-      }
-
+    } catch let AFError.sessionTaskFailed(underlyingError as URLError) {
       XCTAssertEqual(underlyingError.code, .badServerResponse)
+    } catch {
+      XCTFail("Unexpected error \(error)")
     }
   }
 
@@ -345,7 +340,7 @@ final class FunctionsClientTests: XCTestCase {
     } catch {
       assertInlineSnapshot(of: error, as: .description) {
         """
-        httpError(code: 300, data: 0 bytes)
+        responseValidationFailed(reason: Alamofire.AFError.ResponseValidationFailureReason.customValidationFailed(error: Functions.FunctionsError.httpError(code: 300, data: 0 bytes)))
         """
       }
     }
@@ -377,7 +372,7 @@ final class FunctionsClientTests: XCTestCase {
     } catch {
       assertInlineSnapshot(of: error, as: .description) {
         """
-        relayError
+        responseValidationFailed(reason: Alamofire.AFError.ResponseValidationFailureReason.customValidationFailed(error: Functions.FunctionsError.relayError))
         """
       }
     }
@@ -441,7 +436,7 @@ final class FunctionsClientTests: XCTestCase {
     } catch {
       assertInlineSnapshot(of: error, as: .description) {
         """
-        httpError(code: 300, data: 0 bytes)
+        responseValidationFailed(reason: Alamofire.AFError.ResponseValidationFailureReason.customValidationFailed(error: Functions.FunctionsError.httpError(code: 300, data: 0 bytes)))
         """
       }
     }
@@ -476,7 +471,7 @@ final class FunctionsClientTests: XCTestCase {
     } catch {
       assertInlineSnapshot(of: error, as: .description) {
         """
-        relayError
+        responseValidationFailed(reason: Alamofire.AFError.ResponseValidationFailureReason.customValidationFailed(error: Functions.FunctionsError.relayError))
         """
       }
     }

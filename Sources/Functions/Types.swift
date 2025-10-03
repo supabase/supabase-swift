@@ -8,8 +8,6 @@ public enum FunctionsError: Error, LocalizedError {
   /// Error indicating a non-2xx status code returned by the Edge Function.
   case httpError(code: Int, data: Data)
 
-  case unknown(any Error)
-
   /// A localized description of the error.
   public var errorDescription: String? {
     switch self {
@@ -17,8 +15,6 @@ public enum FunctionsError: Error, LocalizedError {
       "Relay Error invoking the Edge Function"
     case let .httpError(code, _):
       "Edge Function returned a non-2xx status code: \(code)"
-    case let .unknown(error):
-      "Unkown error: \(error.localizedDescription)"
     }
   }
 }
