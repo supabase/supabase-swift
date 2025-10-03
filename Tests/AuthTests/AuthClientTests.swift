@@ -2220,7 +2220,9 @@ final class AuthClientTests: XCTestCase {
         } catch {
           assertInlineSnapshot(of: error, as: .customDump) {
             """
-            AuthError.sessionMissing
+            AFError.responseValidationFailed(
+              reason: .customValidationFailed(error: .sessionMissing)
+            )
             """
           }
         }

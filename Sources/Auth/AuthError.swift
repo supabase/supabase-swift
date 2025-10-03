@@ -261,8 +261,6 @@ public enum AuthError: LocalizedError {
   /// Error thrown when an error happens during implicit grant flow.
   case implicitGrantRedirect(message: String)
 
-  case unknown(any Error)
-
   /// The message of the error.
   public var message: String {
     switch self {
@@ -277,7 +275,6 @@ public enum AuthError: LocalizedError {
     case .malformedJWT: "A malformed JWT received."
     case .invalidRedirectScheme: "Invalid redirect scheme."
     case .missingURL: "Missing URL."
-    case .unknown(let error): "Unkown error: \(error.localizedDescription)"
     }
   }
 
@@ -289,20 +286,12 @@ public enum AuthError: LocalizedError {
     case let .api(_, errorCode, _, _): errorCode
     case .pkceGrantCodeExchange, .implicitGrantRedirect: .unknown
     // Deprecated cases
-    case .missingExpClaim, .malformedJWT, .invalidRedirectScheme, .missingURL, .unknown: .unknown
+    case .missingExpClaim, .malformedJWT, .invalidRedirectScheme, .missingURL: .unknown
     }
   }
 
   /// The description of the error.
   public var errorDescription: String? {
     message
-  }
-
-  /// The underlying error if the error is an ``AuthError/unknown(any Error)`` error.
-  public var underlyingError: (any Error)? {
-    switch self {
-    case .unknown(let error): error
-    default: nil
-    }
   }
 }
