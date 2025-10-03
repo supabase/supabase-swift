@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.34.0](https://github.com/supabase/supabase-swift/compare/v2.33.2...v2.34.0) (2025-10-03)
+
+
+### Features
+
+* add support for broadcast replay configuration ([#805](https://github.com/supabase/supabase-swift/issues/805)) ([8083464](https://github.com/supabase/supabase-swift/commit/8083464ad605bb99ea18df688f827ea5f417c040))
+
 ## [2.33.2](https://github.com/supabase/supabase-swift/compare/v2.33.1...v2.33.2) (2025-09-25)
 
 
