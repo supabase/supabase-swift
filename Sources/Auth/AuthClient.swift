@@ -914,20 +914,22 @@ public actor AuthClient {
       eventEmitter.emit(.signedOut, session: nil)
     }
 
-    do {
-      _ = try await self.api.execute(
-        self.configuration.url.appendingPathComponent("logout"),
-        method: .post,
-        headers: [.authorization(bearerToken: accessToken)],
-        query: ["scope": scope.rawValue]
-      )
-      .serializingData()
-      .value
-    } catch let AuthError.api(_, _, _, response)
-      where [404, 403, 401].contains(response.statusCode)
-    {
+    let response = try await self.api.execute(
+      self.configuration.url.appendingPathComponent("logout"),
+      method: .post,
+      headers: [.authorization(bearerToken: accessToken)],
+      query: ["scope": scope.rawValue]
+    )
+    .serializingData()
+    .response
+
+    if let response = response.response, [404, 403, 401].contains(response.statusCode) {
       // ignore 404s since user might not exist anymore
       // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.
+    } else if let error = response.error {
+      throw error
+    } else {
+      // success, no-op
     }
   }
 
