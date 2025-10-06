@@ -30,6 +30,34 @@ struct AuthClientLoggerDecorator: SupabaseLogger {
   }
 }
 
+/// JWKS cache TTL (Time To Live) - 10 minutes
+private let JWKS_TTL: TimeInterval = 10 * 60
+
+/// Cached JWKS value with timestamp
+private struct CachedJWKS {
+  let jwks: JWKS
+  let cachedAt: Date
+}
+
+/// Global JWKS cache shared across all clients with the same storage key.
+/// This is especially useful for shared-memory execution environments such as
+/// AWS Lambda or serverless functions. Regardless of how many clients are created,
+/// if they share the same storage key they will use the same JWKS cache,
+/// significantly speeding up getClaims() with asymmetric JWTs.
+private actor GlobalJWKSCache {
+  private var cache: [String: CachedJWKS] = [:]
+
+  func get(for key: String) -> CachedJWKS? {
+    cache[key]
+  }
+
+  func set(_ value: CachedJWKS, for key: String) {
+    cache[key] = value
+  }
+}
+
+private let globalJWKSCache = GlobalJWKSCache()
+
 public actor AuthClient {
   static var globalClientID = 0
   nonisolated let clientID: AuthClientID
@@ -52,9 +80,6 @@ public actor AuthClient {
   }
   nonisolated private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
   nonisolated private var pkce: PKCE { Dependencies[clientID].pkce }
-
-  /// Cache for JWKS (JSON Web Key Set)
-  private var jwksCache: JWKS?
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -1452,16 +1477,24 @@ public actor AuthClient {
     return url
   }
 
-  /// Fetches a JWK from the JWKS endpoint
+  /// Fetches a JWK from the JWKS endpoint with caching
   private func fetchJWK(kid: String, jwks: JWKS? = nil) async throws -> JWK {
     // Try fetching from the supplied jwks
     if let jwk = jwks?.keys.first(where: { $0.kid == kid }) {
       return jwk
     }
 
-    // Try fetching from cache
-    if let jwk = jwksCache?.keys.first(where: { $0.kid == kid }) {
-      return jwk
+    let now = date()
+    let storageKey = configuration.storageKey ?? defaultStorageKey
+
+    // Try fetching from global cache
+    if let cached = await globalJWKSCache.get(for: storageKey),
+       let jwk = cached.jwks.keys.first(where: { $0.kid == kid })
+    {
+      // Check if cache is still valid (not stale)
+      if cached.cachedAt.addingTimeInterval(JWKS_TTL) > now {
+        return jwk
+      }
     }
 
     // Fetch from well-known endpoint
@@ -1478,8 +1511,11 @@ public actor AuthClient {
       throw AuthError.jwtVerificationFailed(message: "JWKS is empty")
     }
 
-    // Cache the JWKS
-    jwksCache = fetchedJWKS
+    // Cache the JWKS globally
+    await globalJWKSCache.set(
+      CachedJWKS(jwks: fetchedJWKS, cachedAt: now),
+      for: storageKey
+    )
 
     // Find the signing key
     guard let jwk = fetchedJWKS.keys.first(where: { $0.kid == kid }) else {
@@ -1489,22 +1525,27 @@ public actor AuthClient {
     return jwk
   }
 
-  /// Verifies and extracts claims from a JWT.
+  /// Extracts the JWT claims present in the access token by first verifying the
+  /// JWT against the server's JSON Web Key Set endpoint `/.well-known/jwks.json`
+  /// which is often cached, resulting in significantly faster responses. Prefer
+  /// this method over ``user(jwt:)`` which always sends a request to the Auth
+  /// server for each JWT.
   ///
-  /// This method verifies the JWT signature and returns the claims if valid. For symmetric JWTs (HS256),
-  /// it validates against the server using the `getUser` method. For asymmetric JWTs (RS256, ES256),
-  /// it verifies the signature using the JWKS (JSON Web Key Set) from the well-known endpoint.
+  /// If the project is not using an asymmetric JWT signing key (like ECC or RSA)
+  /// it always sends a request to the Auth server (similar to ``user(jwt:)``) to
+  /// verify the JWT.
   ///
   /// - Parameters:
-  ///   - jwt: The JWT to verify. If nil, uses the access token from the current session.
-  ///   - jwks: Optional JWKS to use for verification. If nil, fetches from the server.
+  ///   - jwt: An optional specific JWT you wish to verify, not the one you can obtain from ``session``.
+  ///   - options: Various additional options that allow you to customize the behavior of this method.
   ///
   /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
   ///
   /// - Throws: `AuthError.jwtVerificationFailed` if verification fails, or `AuthError.sessionMissing` if no session exists.
-  ///
-  /// - Note: This is an experimental method and may change in future versions.
-  public func getClaims(jwt: String? = nil, jwks: JWKS? = nil) async throws -> JWTClaimsResponse {
+  public func getClaims(
+    jwt: String? = nil,
+    options: GetClaimsOptions = GetClaimsOptions()
+  ) async throws -> JWTClaimsResponse {
     let token: String
     if let jwt {
       token = jwt
@@ -1519,11 +1560,13 @@ public actor AuthClient {
       throw AuthError.jwtVerificationFailed(message: "Invalid JWT structure")
     }
 
-    // Validate expiration
-    if let exp = decodedJWT.payload["exp"] as? TimeInterval {
-      let now = Date().timeIntervalSince1970
-      if exp <= now {
-        throw AuthError.jwtVerificationFailed(message: "JWT has expired")
+    // Validate expiration unless allowExpired is true
+    if !options.allowExpired {
+      if let exp = decodedJWT.payload["exp"] as? TimeInterval {
+        let now = date().timeIntervalSince1970
+        if exp <= now {
+          throw AuthError.jwtVerificationFailed(message: "JWT has expired")
+        }
       }
     }
 
@@ -1535,8 +1578,14 @@ public actor AuthClient {
     if alg == "HS256" || alg == "RS256" || kid == nil {
       _ = try await user(jwt: token)
       // getUser succeeds, so claims can be trusted
-      let claims = try configuration.decoder.decode(JWTClaims.self, from: JSONSerialization.data(withJSONObject: decodedJWT.payload))
-      let header = try configuration.decoder.decode(JWTHeader.self, from: JSONSerialization.data(withJSONObject: decodedJWT.header))
+      let claims = try configuration.decoder.decode(
+        JWTClaims.self,
+        from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
+      )
+      let header = try configuration.decoder.decode(
+        JWTHeader.self,
+        from: JSONSerialization.data(withJSONObject: decodedJWT.header)
+      )
       return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
     }
 
@@ -1545,7 +1594,7 @@ public actor AuthClient {
       throw AuthError.jwtVerificationFailed(message: "Missing kid in JWT header")
     }
 
-    let signingKey = try await fetchJWK(kid: kid, jwks: jwks)
+    let signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
 
     let isValid = try JWTVerifier.verify(jwt: decodedJWT, jwk: signingKey)
 
@@ -1554,8 +1603,14 @@ public actor AuthClient {
     }
 
     // Decode claims and header
-    let claims = try configuration.decoder.decode(JWTClaims.self, from: JSONSerialization.data(withJSONObject: decodedJWT.payload))
-    let header = try configuration.decoder.decode(JWTHeader.self, from: JSONSerialization.data(withJSONObject: decodedJWT.header))
+    let claims = try configuration.decoder.decode(
+      JWTClaims.self,
+      from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
+    )
+    let header = try configuration.decoder.decode(
+      JWTHeader.self,
+      from: JSONSerialization.data(withJSONObject: decodedJWT.header)
+    )
 
     return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
   }

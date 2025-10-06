@@ -1326,3 +1326,17 @@ public struct JWTClaimsResponse: Sendable {
   public let header: JWTHeader
   public let signature: Data
 }
+
+/// Options for the getClaims method
+public struct GetClaimsOptions: Sendable {
+  /// If set to `true` the `exp` claim will not be validated against the current time.
+  public let allowExpired: Bool
+
+  /// If set, this JSON Web Key Set is going to have precedence over the cached value available on the server.
+  public let jwks: JWKS?
+
+  public init(allowExpired: Bool = false, jwks: JWKS? = nil) {
+    self.allowExpired = allowExpired
+    self.jwks = jwks
+  }
+}
