@@ -1478,7 +1478,8 @@ public actor AuthClient {
   }
 
   /// Fetches a JWK from the JWKS endpoint with caching
-  private func fetchJWK(kid: String, jwks: JWKS? = nil) async throws -> JWK {
+  /// Returns nil if the key is not found, allowing graceful fallback to server-side verification
+  private func fetchJWK(kid: String, jwks: JWKS? = nil) async throws -> JWK? {
     // Try fetching from the supplied jwks
     if let jwk = jwks?.keys.first(where: { $0.kid == kid }) {
       return jwk
@@ -1507,8 +1508,9 @@ public actor AuthClient {
 
     let fetchedJWKS = try response.decoded(as: JWKS.self, decoder: configuration.decoder)
 
+    // Return nil if JWKS is empty (will fallback to getUser)
     guard !fetchedJWKS.keys.isEmpty else {
-      throw AuthError.jwtVerificationFailed(message: "JWKS is empty")
+      return nil
     }
 
     // Cache the JWKS globally
@@ -1517,12 +1519,9 @@ public actor AuthClient {
       for: storageKey
     )
 
-    // Find the signing key
-    guard let jwk = fetchedJWKS.keys.first(where: { $0.kid == kid }) else {
-      throw AuthError.jwtVerificationFailed(message: "No matching signing key found in JWKS")
-    }
-
-    return jwk
+    // Find the signing key - return nil if not found (will fallback to getUser)
+    // This handles key rotation scenarios where the JWT is signed with a key not yet in the cache
+    return fetchedJWKS.keys.first(where: { $0.kid == kid })
   }
 
   /// Extracts the JWT claims present in the access token by first verifying the
@@ -1573,9 +1572,20 @@ public actor AuthClient {
     let alg = decodedJWT.header["alg"] as? String
     let kid = decodedJWT.header["kid"] as? String
 
-    // If symmetric algorithm (HS256), RS256 (not yet fully supported), or no kid, fallback to getUser()
-    // RS256 will be fully supported client-side once swift-crypto's RSA API is public
-    if alg == "HS256" || alg == "RS256" || kid == nil {
+    // Try to fetch the signing key for asymmetric JWTs
+    // Returns nil if: no alg, symmetric algorithm (HS256/HS512), no kid, or key not found in JWKS
+    let signingKey: JWK?
+    if let alg, !alg.hasPrefix("HS"), let kid {
+      // Only attempt to fetch JWK for asymmetric algorithms with a kid
+      // RS256 is currently not fully supported client-side (falls back to server-side)
+      signingKey = alg == "RS256" ? nil : try await fetchJWK(kid: kid, jwks: options.jwks)
+    } else {
+      signingKey = nil
+    }
+
+    // If no signing key available (symmetric algorithm, RS256, no kid, or key not found),
+    // fallback to server-side verification via getUser()
+    if signingKey == nil {
       _ = try await user(jwt: token)
       // getUser succeeds, so claims can be trusted
       let claims = try configuration.decoder.decode(
@@ -1590,13 +1600,7 @@ public actor AuthClient {
     }
 
     // Asymmetric JWT verification using CryptoKit (currently only ES256)
-    guard let kid else {
-      throw AuthError.jwtVerificationFailed(message: "Missing kid in JWT header")
-    }
-
-    let signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
-
-    let isValid = try JWTVerifier.verify(jwt: decodedJWT, jwk: signingKey)
+    let isValid = try JWTVerifier.verify(jwt: decodedJWT, jwk: signingKey!)
 
     guard isValid else {
       throw AuthError.jwtVerificationFailed(message: "Invalid JWT signature")
