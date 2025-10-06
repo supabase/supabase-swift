@@ -53,6 +53,9 @@ public actor AuthClient {
   nonisolated private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
   nonisolated private var pkce: PKCE { Dependencies[clientID].pkce }
 
+  /// Cache for JWKS (JSON Web Key Set)
+  private var jwksCache: JWKS?
+
   /// Returns the session, refreshing it if necessary.
   ///
   /// If no session can be found, a ``AuthError/sessionMissing`` error is thrown.
@@ -1447,6 +1450,114 @@ public actor AuthClient {
     }
 
     return url
+  }
+
+  /// Fetches a JWK from the JWKS endpoint
+  private func fetchJWK(kid: String, jwks: JWKS? = nil) async throws -> JWK {
+    // Try fetching from the supplied jwks
+    if let jwk = jwks?.keys.first(where: { $0.kid == kid }) {
+      return jwk
+    }
+
+    // Try fetching from cache
+    if let jwk = jwksCache?.keys.first(where: { $0.kid == kid }) {
+      return jwk
+    }
+
+    // Fetch from well-known endpoint
+    let response = try await api.execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent(".well-known/jwks.json"),
+        method: .get
+      )
+    )
+
+    let fetchedJWKS = try response.decoded(as: JWKS.self, decoder: configuration.decoder)
+
+    guard !fetchedJWKS.keys.isEmpty else {
+      throw AuthError.jwtVerificationFailed(message: "JWKS is empty")
+    }
+
+    // Cache the JWKS
+    jwksCache = fetchedJWKS
+
+    // Find the signing key
+    guard let jwk = fetchedJWKS.keys.first(where: { $0.kid == kid }) else {
+      throw AuthError.jwtVerificationFailed(message: "No matching signing key found in JWKS")
+    }
+
+    return jwk
+  }
+
+  /// Verifies and extracts claims from a JWT.
+  ///
+  /// This method verifies the JWT signature and returns the claims if valid. For symmetric JWTs (HS256),
+  /// it validates against the server using the `getUser` method. For asymmetric JWTs (RS256, ES256),
+  /// it verifies the signature using the JWKS (JSON Web Key Set) from the well-known endpoint.
+  ///
+  /// - Parameters:
+  ///   - jwt: The JWT to verify. If nil, uses the access token from the current session.
+  ///   - jwks: Optional JWKS to use for verification. If nil, fetches from the server.
+  ///
+  /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
+  ///
+  /// - Throws: `AuthError.jwtVerificationFailed` if verification fails, or `AuthError.sessionMissing` if no session exists.
+  ///
+  /// - Note: This is an experimental method and may change in future versions.
+  public func getClaims(jwt: String? = nil, jwks: JWKS? = nil) async throws -> JWTClaimsResponse {
+    let token: String
+    if let jwt {
+      token = jwt
+    } else {
+      guard let session = try? await session else {
+        throw AuthError.sessionMissing
+      }
+      token = session.accessToken
+    }
+
+    guard let decodedJWT = JWT.decode(token) else {
+      throw AuthError.jwtVerificationFailed(message: "Invalid JWT structure")
+    }
+
+    // Validate expiration
+    if let exp = decodedJWT.payload["exp"] as? TimeInterval {
+      let now = Date().timeIntervalSince1970
+      if exp <= now {
+        throw AuthError.jwtVerificationFailed(message: "JWT has expired")
+      }
+    }
+
+    let alg = decodedJWT.header["alg"] as? String
+    let kid = decodedJWT.header["kid"] as? String
+
+    // If symmetric algorithm (HS256), RS256 (not yet fully supported), or no kid, fallback to getUser()
+    // RS256 will be fully supported client-side once swift-crypto's RSA API is public
+    if alg == "HS256" || alg == "RS256" || kid == nil {
+      _ = try await user(jwt: token)
+      // getUser succeeds, so claims can be trusted
+      let claims = try configuration.decoder.decode(JWTClaims.self, from: JSONSerialization.data(withJSONObject: decodedJWT.payload))
+      let header = try configuration.decoder.decode(JWTHeader.self, from: JSONSerialization.data(withJSONObject: decodedJWT.header))
+      return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+    }
+
+    // Asymmetric JWT verification using CryptoKit (currently only ES256)
+    guard let kid else {
+      throw AuthError.jwtVerificationFailed(message: "Missing kid in JWT header")
+    }
+
+    let signingKey = try await fetchJWK(kid: kid, jwks: jwks)
+
+    let isValid = try JWTVerifier.verify(jwt: decodedJWT, jwk: signingKey)
+
+    guard isValid else {
+      throw AuthError.jwtVerificationFailed(message: "Invalid JWT signature")
+    }
+
+    // Decode claims and header
+    let claims = try configuration.decoder.decode(JWTClaims.self, from: JSONSerialization.data(withJSONObject: decodedJWT.payload))
+    let header = try configuration.decoder.decode(JWTHeader.self, from: JSONSerialization.data(withJSONObject: decodedJWT.header))
+
+    return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
   }
 }
 

@@ -114,6 +114,7 @@ extension ErrorCode {
   //#nosec G101 -- Not a secret value.
   public static let invalidCredentials = ErrorCode("invalid_credentials")
   public static let emailAddressNotAuthorized = ErrorCode("email_address_not_authorized")
+  public static let invalidJWT = ErrorCode("invalid_jwt")
 }
 
 public enum AuthError: LocalizedError, Equatable {
@@ -261,13 +262,17 @@ public enum AuthError: LocalizedError, Equatable {
   /// Error thrown when an error happens during implicit grant flow.
   case implicitGrantRedirect(message: String)
 
+  /// Error thrown when JWT verification fails.
+  case jwtVerificationFailed(message: String)
+
   public var message: String {
     switch self {
     case .sessionMissing: "Auth session missing."
     case let .weakPassword(message, _),
       let .api(message, _, _, _),
       let .pkceGrantCodeExchange(message, _, _),
-      let .implicitGrantRedirect(message):
+      let .implicitGrantRedirect(message),
+      let .jwtVerificationFailed(message):
       message
     // Deprecated cases
     case .missingExpClaim: "Missing expiration claim in the access token."
@@ -283,6 +288,7 @@ public enum AuthError: LocalizedError, Equatable {
     case .weakPassword: .weakPassword
     case let .api(_, errorCode, _, _): errorCode
     case .pkceGrantCodeExchange, .implicitGrantRedirect: .unknown
+    case .jwtVerificationFailed: .invalidJWT
     // Deprecated cases
     case .missingExpClaim, .malformedJWT, .invalidRedirectScheme, .missingURL: .unknown
     }
