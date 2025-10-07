@@ -7,6 +7,13 @@
 
 import Foundation
 
+package struct DecodedJWT {
+  package let header: [String: Any]
+  package let payload: [String: Any]
+  package let signature: Data
+  package let raw: (header: String, payload: String)
+}
+
 package enum JWT {
   package static func decodePayload(_ jwt: String) -> [String: Any]? {
     let parts = jwt.split(separator: ".")
@@ -15,7 +22,7 @@ package enum JWT {
     }
 
     let payload = String(parts[1])
-    guard let data = base64URLDecode(payload) else {
+    guard let data = Base64URL.decode(payload) else {
       return nil
     }
     let json = try? JSONSerialization.jsonObject(with: data, options: [])
@@ -25,16 +32,31 @@ package enum JWT {
     return decodedPayload
   }
 
-  private static func base64URLDecode(_ value: String) -> Data? {
-    var base64 = value.replacingOccurrences(of: "-", with: "+")
-      .replacingOccurrences(of: "_", with: "/")
-    let length = Double(base64.lengthOfBytes(using: .utf8))
-    let requiredLength = 4 * ceil(length / 4.0)
-    let paddingLength = requiredLength - length
-    if paddingLength > 0 {
-      let padding = "".padding(toLength: Int(paddingLength), withPad: "=", startingAt: 0)
-      base64 = base64 + padding
+  package static func decode(_ jwt: String) -> DecodedJWT? {
+    let parts = jwt.split(separator: ".")
+    guard parts.count == 3 else {
+      return nil
     }
-    return Data(base64Encoded: base64, options: .ignoreUnknownCharacters)
+
+    let headerString = String(parts[0])
+    let payloadString = String(parts[1])
+    let signatureString = String(parts[2])
+
+    guard
+      let headerData = Base64URL.decode(headerString),
+      let payloadData = Base64URL.decode(payloadString),
+      let signatureData = Base64URL.decode(signatureString),
+      let headerJSON = try? JSONSerialization.jsonObject(with: headerData, options: []) as? [String: Any],
+      let payloadJSON = try? JSONSerialization.jsonObject(with: payloadData, options: []) as? [String: Any]
+    else {
+      return nil
+    }
+
+    return DecodedJWT(
+      header: headerJSON,
+      payload: payloadJSON,
+      signature: signatureData,
+      raw: (header: headerString, payload: payloadString)
+    )
   }
 }

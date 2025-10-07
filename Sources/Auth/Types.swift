@@ -384,11 +384,11 @@ enum VerifyOTPParams: Encodable {
   func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     switch self {
-    case let .email(value):
+    case .email(let value):
       try container.encode(value)
-    case let .mobile(value):
+    case .mobile(let value):
       try container.encode(value)
-    case let .tokenHash(value):
+    case .tokenHash(let value):
       try container.encode(value)
     }
   }
@@ -448,20 +448,20 @@ public enum AuthResponse: Codable, Hashable, Sendable {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     switch self {
-    case let .session(value): try container.encode(value)
-    case let .user(value): try container.encode(value)
+    case .session(let value): try container.encode(value)
+    case .user(let value): try container.encode(value)
     }
   }
 
   public var user: User {
     switch self {
-    case let .session(session): session.user
-    case let .user(user): user
+    case .session(let session): session.user
+    case .user(let user): user
     }
   }
 
   public var session: Session? {
-    if case let .session(session) = self { return session }
+    if case .session(let session) = self { return session }
     return nil
   }
 }
@@ -1129,4 +1129,235 @@ public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
   public var nextPage: Int?
   public var lastPage: Int
   public var total: Int
+}
+
+// MARK: - JWT Claims
+
+/// JSON Web Key (JWK) representation
+public struct JWK: Codable, Hashable, Sendable {
+  /// Key type (e.g., "RSA", "EC", "oct")
+  public let kty: String
+  /// Key operations (e.g., ["sign", "verify"])
+  public let keyOps: [String]?
+  /// Algorithm (e.g., "RS256", "ES256", "HS256")
+  public let alg: String?
+  /// Key ID
+  public let kid: String?
+
+  // RSA-specific fields
+  /// RSA modulus (base64url-encoded)
+  public let n: String?
+  /// RSA exponent (base64url-encoded)
+  public let e: String?
+
+  // EC-specific fields
+  /// EC curve name (e.g., "P-256")
+  public let crv: String?
+  /// EC x coordinate (base64url-encoded)
+  public let x: String?
+  /// EC y coordinate (base64url-encoded)
+  public let y: String?
+
+  // Symmetric key field
+  /// Symmetric key value (base64url-encoded)
+  public let k: String?
+
+  enum CodingKeys: String, CodingKey {
+    case kty
+    case keyOps = "key_ops"
+    case alg
+    case kid
+    case n
+    case e
+    case crv
+    case x
+    case y
+    case k
+  }
+}
+
+/// JSON Web Key Set (JWKS)
+public struct JWKS: Codable, Hashable, Sendable {
+  public let keys: [JWK]
+}
+
+/// JWT Header
+public struct JWTHeader: Codable, Hashable, Sendable {
+  /// Algorithm (e.g., "RS256", "ES256", "HS256")
+  public let alg: String
+  /// Key ID
+  public let kid: String?
+  /// Type (typically "JWT")
+  public let typ: String?
+}
+
+/// JWT Claims
+public struct JWTClaims: Codable, Hashable, Sendable {
+  /// Issuer
+  public let iss: String?
+  /// Subject
+  public let sub: String?
+  /// Audience
+  public let aud: AudienceClaim?
+  /// Expiration time
+  public let exp: TimeInterval?
+  /// Issued at
+  public let iat: TimeInterval?
+  /// Not before
+  public let nbf: TimeInterval?
+  /// JWT ID
+  public let jti: String?
+  /// Role
+  public let role: String?
+  /// Authenticator Assurance Level
+  public let aal: String?
+  /// Session ID
+  public let sessionId: String?
+  /// Email
+  public let email: String?
+  /// Phone
+  public let phone: String?
+  /// App metadata
+  public let appMetadata: [String: AnyJSON]?
+  /// User metadata
+  public let userMetadata: [String: AnyJSON]?
+  /// Additional claims
+  public var additionalClaims: [String: AnyJSON] = [:]
+
+  enum CodingKeys: String, CodingKey {
+    case iss
+    case sub
+    case aud
+    case exp
+    case iat
+    case nbf
+    case jti
+    case role
+    case aal
+    case sessionId = "session_id"
+    case email
+    case phone
+    case appMetadata = "app_metadata"
+    case userMetadata = "user_metadata"
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    iss = try container.decodeIfPresent(String.self, forKey: .iss)
+    sub = try container.decodeIfPresent(String.self, forKey: .sub)
+    aud = try container.decodeIfPresent(AudienceClaim.self, forKey: .aud)
+    exp = try container.decodeIfPresent(TimeInterval.self, forKey: .exp)
+    iat = try container.decodeIfPresent(TimeInterval.self, forKey: .iat)
+    nbf = try container.decodeIfPresent(TimeInterval.self, forKey: .nbf)
+    jti = try container.decodeIfPresent(String.self, forKey: .jti)
+    role = try container.decodeIfPresent(String.self, forKey: .role)
+    aal = try container.decodeIfPresent(String.self, forKey: .aal)
+    sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)
+    email = try container.decodeIfPresent(String.self, forKey: .email)
+    phone = try container.decodeIfPresent(String.self, forKey: .phone)
+    appMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .appMetadata)
+    userMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .userMetadata)
+
+    // Decode additional claims
+    let allKeys = try decoder.container(keyedBy: AnyCodingKey.self)
+    var additional: [String: AnyJSON] = [:]
+    for key in allKeys.allKeys where CodingKeys(stringValue: key.stringValue) == nil {
+      if let value = try? allKeys.decode(AnyJSON.self, forKey: key) {
+        additional[key.stringValue] = value
+      }
+    }
+    additionalClaims = additional
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(self.iss, forKey: .iss)
+    try container.encodeIfPresent(self.sub, forKey: .sub)
+    try container.encodeIfPresent(self.aud, forKey: .aud)
+    try container.encodeIfPresent(self.exp, forKey: .exp)
+    try container.encodeIfPresent(self.iat, forKey: .iat)
+    try container.encodeIfPresent(self.nbf, forKey: .nbf)
+    try container.encodeIfPresent(self.jti, forKey: .jti)
+    try container.encodeIfPresent(self.role, forKey: .role)
+    try container.encodeIfPresent(self.aal, forKey: .aal)
+    try container.encodeIfPresent(self.sessionId, forKey: .sessionId)
+    try container.encodeIfPresent(self.email, forKey: .email)
+    try container.encodeIfPresent(self.phone, forKey: .phone)
+    try container.encodeIfPresent(self.appMetadata, forKey: .appMetadata)
+    try container.encodeIfPresent(self.userMetadata, forKey: .userMetadata)
+
+    var additionalClaimsContainer = encoder.container(keyedBy: AnyCodingKey.self)
+    for (key, value) in additionalClaims {
+      try additionalClaimsContainer.encode(value, forKey: AnyCodingKey(stringValue: key)!)
+    }
+  }
+}
+
+/// Audience claim can be either a string or an array of strings
+public enum AudienceClaim: Codable, Hashable, Sendable {
+  case string(String)
+  case array([String])
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    if let string = try? container.decode(String.self) {
+      self = .string(string)
+    } else if let array = try? container.decode([String].self) {
+      self = .array(array)
+    } else {
+      throw DecodingError.typeMismatch(
+        AudienceClaim.self,
+        DecodingError.Context(
+          codingPath: decoder.codingPath,
+          debugDescription: "Expected String or [String] for audience claim"
+        )
+      )
+    }
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    switch self {
+    case .string(let value):
+      try container.encode(value)
+    case .array(let value):
+      try container.encode(value)
+    }
+  }
+}
+
+private struct AnyCodingKey: CodingKey {
+  var stringValue: String
+  var intValue: Int?
+
+  init?(stringValue: String) {
+    self.stringValue = stringValue
+    intValue = nil
+  }
+
+  init?(intValue: Int) {
+    stringValue = "\(intValue)"
+    self.intValue = intValue
+  }
+}
+
+/// Response from getClaims method
+public struct JWTClaimsResponse: Sendable {
+  public let claims: JWTClaims
+  public let header: JWTHeader
+  public let signature: Data
+}
+
+/// Options for the getClaims method
+public struct GetClaimsOptions: Sendable {
+  /// If set to `true` the `exp` claim will not be validated against the current time.
+  public let allowExpired: Bool
+
+  /// If set, this JSON Web Key Set is going to have precedence over the cached value available on the server.
+  public let jwks: JWKS?
+
+  public init(allowExpired: Bool = false, jwks: JWKS? = nil) {
+    self.allowExpired = allowExpired
+    self.jwks = jwks
+  }
 }
