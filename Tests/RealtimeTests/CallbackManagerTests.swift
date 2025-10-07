@@ -11,6 +11,7 @@ import XCTest
 
 @testable import Realtime
 
+@MainActor
 final class CallbackManagerTests: XCTestCase {
   func testIntegration() {
     let callbackManager = CallbackManager()
@@ -252,7 +253,8 @@ final class CallbackManagerTests: XCTestCase {
 }
 
 extension XCTestCase {
-  func XCTAssertNoLeak(_ object: AnyObject, file: StaticString = #file, line: UInt = #line) {
+  @MainActor
+  func XCTAssertNoLeak(_ object: AnyObject, file: StaticString = #filePath, line: UInt = #line) {
     addTeardownBlock { [weak object] in
       XCTAssertNil(object, file: file, line: line)
     }

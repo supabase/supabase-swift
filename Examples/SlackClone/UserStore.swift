@@ -92,8 +92,6 @@ final class UserStore {
       case let .delete(action):
         guard let id = action.oldRecord["id"]?.stringValue else { return }
         users[UUID(uuidString: id)!] = nil
-      default:
-        break
       }
     } catch {
       dump(error)
