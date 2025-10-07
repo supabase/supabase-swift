@@ -90,6 +90,9 @@ let package = Package(
         "Functions",
         "Mocker",
         "TestHelpers",
+      ],
+      exclude: [
+        "__Snapshots__"
       ]
     ),
     .testTarget(
@@ -123,6 +126,9 @@ let package = Package(
         "Mocker",
         "PostgREST",
         "TestHelpers",
+      ],
+      exclude: [
+        "__Snapshots__"
       ]
     ),
     .target(
@@ -159,6 +165,9 @@ let package = Package(
         "Mocker",
         "TestHelpers",
         "Storage",
+      ],
+      exclude: [
+        "__Snapshots__"
       ],
       resources: [
         .copy("sadcat.jpg"),
