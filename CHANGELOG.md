@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.34.0](https://github.com/supabase/supabase-swift/compare/v2.33.2...v2.34.0) (2025-10-07)
+
+
+### Features
+
+* add support for broadcast replay configuration ([#805](https://github.com/supabase/supabase-swift/issues/805)) ([8083464](https://github.com/supabase/supabase-swift/commit/8083464ad605bb99ea18df688f827ea5f417c040))
+* **auth:** add OAuth 2.1 client admin endpoints ([#809](https://github.com/supabase/supabase-swift/issues/809)) ([a2320ec](https://github.com/supabase/supabase-swift/commit/a2320ec64ad8a0bb10de2fcab51822a1c5e91618))
+* **auth:** introduce getClaims method to verify and extract JWT claims ([#812](https://github.com/supabase/supabase-swift/issues/812)) ([fda262b](https://github.com/supabase/supabase-swift/commit/fda262bdb0959e4f7bdb232bdec986f0fbd0f7d5))
+* **functions:** add region as forceFunctionRegion query parameter ([#806](https://github.com/supabase/supabase-swift/issues/806)) ([45ec3d6](https://github.com/supabase/supabase-swift/commit/45ec3d6647c0bac26552d48fb22bffaa67fa8f0d))
+
 ## [2.33.2](https://github.com/supabase/supabase-swift/compare/v2.33.1...v2.33.2) (2025-09-25)
 
 
