@@ -2227,6 +2227,345 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNil(Dependencies[sut.clientID].sessionStorage.get())
   }
 
+  // MARK: - getClaims Tests
+
+  func testGetClaims_withHS256JWT_shouldFallbackAndReturnClaims() async throws {
+    // HS256 JWT (symmetric algorithm) - will use server-side verification
+    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
+
+    let user = User(fromMockNamed: "user")
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      ignoreQuery: true,
+      contentType: .json,
+      statusCode: 200,
+      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+    ).register()
+
+    let sut = makeSUT()
+
+    let result = try await sut.getClaims(jwt: jwt)
+
+    XCTAssertEqual(result.claims.sub, "1234567890")
+    XCTAssertEqual(result.claims.iss, "http://localhost:54321/auth/v1")
+    if case let .string(aud) = result.claims.aud {
+      XCTAssertEqual(aud, "authenticated")
+    } else {
+      XCTFail("Expected string audience")
+    }
+    XCTAssertEqual(result.claims.role, "authenticated")
+    XCTAssertEqual(result.header.alg, "HS256")
+    XCTAssertNil(result.header.kid)
+  }
+
+  func testGetClaims_withoutJWT_shouldUseSessionAccessToken() async throws {
+    // HS256 JWT from session
+    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
+
+    var session = Session.validSession
+    session.accessToken = jwt
+
+    let user = User(fromMockNamed: "user")
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      ignoreQuery: true,
+      contentType: .json,
+      statusCode: 200,
+      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+    ).register()
+
+    let sut = makeSUT()
+    Dependencies[sut.clientID].sessionStorage.store(session)
+
+    let result = try await sut.getClaims()
+
+    XCTAssertEqual(result.claims.sub, "1234567890")
+    XCTAssertEqual(result.claims.role, "authenticated")
+  }
+
+  func testGetClaims_withProvidedJWKS_shouldStillFallbackForES256() async throws {
+    // ES256 is not yet supported client-side, so it will fallback to server even with JWKS
+    let jwt = "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
+
+    // JWK is Codable, no custom init needed
+    let jwkDict: [String: Any] = [
+      "kty": "EC",
+      "kid": "test-kid",
+      "alg": "ES256",
+      "crv": "P-256",
+      "x": "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
+      "y": "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM"
+    ]
+
+    let jwkData = try JSONSerialization.data(withJSONObject: jwkDict)
+    let jwk = try AuthClient.Configuration.jsonDecoder.decode(JWK.self, from: jwkData)
+    let jwks = JWKS(keys: [jwk])
+
+    let user = User(fromMockNamed: "user")
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      ignoreQuery: true,
+      contentType: .json,
+      statusCode: 200,
+      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+    ).register()
+
+    let sut = makeSUT()
+
+    let result = try await sut.getClaims(jwt: jwt, options: GetClaimsOptions(jwks: jwks))
+
+    XCTAssertEqual(result.claims.sub, "1234567890")
+    XCTAssertEqual(result.claims.role, "authenticated")
+  }
+
+  func testGetClaims_withES256JWT_shouldFallbackToServerVerification() async throws {
+    // ES256 JWT without kid - will fallback to server
+    let jwt = "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
+
+    let user = User(fromMockNamed: "user")
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      ignoreQuery: true,
+      contentType: .json,
+      statusCode: 200,
+      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+    ).register()
+
+    let sut = makeSUT()
+
+    let result = try await sut.getClaims(jwt: jwt)
+
+    XCTAssertEqual(result.claims.sub, "1234567890")
+    XCTAssertEqual(result.claims.role, "authenticated")
+  }
+
+  func testGetClaims_withRS256JWT_whenJWKNotFound_shouldFallbackToServerVerification() async throws {
+    // RS256 JWT with kid but key not in JWKS - will try to fetch JWKS, not find it, then fallback to server
+    let jwt = "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
+
+    // Mock JWKS endpoint with different kid
+    let jwkDict: [String: Any] = [
+      "kty": "RSA",
+      "kid": "different-kid",
+      "alg": "RS256",
+      "n": "modulus",
+      "e": "AQAB"
+    ]
+    let jwkData = try JSONSerialization.data(withJSONObject: jwkDict)
+    let jwk = try AuthClient.Configuration.jsonDecoder.decode(JWK.self, from: jwkData)
+    let jwks = JWKS(keys: [jwk])
+
+    Mock(
+      url: clientURL.appendingPathComponent(".well-known/jwks.json"),
+      ignoreQuery: true,
+      contentType: .json,
+      statusCode: 200,
+      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(jwks)]
+    ).register()
+
+    let user = User(fromMockNamed: "user")
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      ignoreQuery: true,
+      contentType: .json,
+      statusCode: 200,
+      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+    ).register()
+
+    let sut = makeSUT()
+
+    let result = try await sut.getClaims(jwt: jwt)
+
+    XCTAssertEqual(result.claims.sub, "1234567890")
+    XCTAssertEqual(result.claims.role, "authenticated")
+  }
+
+  func testGetClaims_withNoKidInHeader_shouldFallbackToServerVerification() async throws {
+    // JWT without kid - cannot look up in JWKS
+    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ODc2NTQzMjEiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU0MzIxL2F1dGgvdjEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.YT0NvH-jYKCiN-wrAVcMmTIxZkQ3OtqTVFjJAqGcRuw"
+
+    let user = User(fromMockNamed: "user")
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      ignoreQuery: true,
+      contentType: .json,
+      statusCode: 200,
+      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+    ).register()
+
+    let sut = makeSUT()
+
+    let result = try await sut.getClaims(jwt: jwt)
+
+    XCTAssertEqual(result.claims.sub, "987654321")
+    XCTAssertEqual(result.claims.role, "authenticated")
+  }
+
+  func testGetClaims_withoutJWTAndNoSession_shouldThrowSessionMissing() async throws {
+    let sut = makeSUT()
+
+    do {
+      _ = try await sut.getClaims()
+      XCTFail("Expected sessionMissing error")
+    } catch let error as AuthError {
+      guard case .sessionMissing = error else {
+        XCTFail("Expected sessionMissing error, got \(error)")
+        return
+      }
+    } catch {
+      XCTFail("Expected AuthError, got \(error)")
+    }
+  }
+
+  func testGetClaims_withInvalidJWTStructure_shouldThrowJWTVerificationFailed() async throws {
+    let invalidJWT = "invalid.jwt.token"
+
+    let sut = makeSUT()
+
+    do {
+      _ = try await sut.getClaims(jwt: invalidJWT)
+      XCTFail("Expected jwtVerificationFailed error")
+    } catch let error as AuthError {
+      guard case .jwtVerificationFailed(let message) = error else {
+        XCTFail("Expected jwtVerificationFailed error, got \(error)")
+        return
+      }
+      XCTAssertEqual(message, "Invalid JWT structure")
+    } catch {
+      XCTFail("Expected AuthError, got \(error)")
+    }
+  }
+
+  func testGetClaims_withExpiredJWT_shouldThrowJWTVerificationFailed() async throws {
+    // JWT with exp in the past
+    let expiredJWT = "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.MEYCIQDmtLy0PF_lR7rJQHyKLmJKp1xFKECfVvGTBcXiVnz0jAIhAOoXZJ3kHSA2MqL1XhcUy8dWOZCr6zWCN_FXsP8qKfPR"
+
+    let sut = makeSUT()
+
+    do {
+      _ = try await sut.getClaims(jwt: expiredJWT)
+      XCTFail("Expected jwtVerificationFailed error")
+    } catch let error as AuthError {
+      guard case .jwtVerificationFailed(let message) = error else {
+        XCTFail("Expected jwtVerificationFailed error, got \(error)")
+        return
+      }
+      XCTAssertEqual(message, "JWT has expired")
+    } catch {
+      XCTFail("Expected AuthError, got \(error)")
+    }
+  }
+
+  func testGetClaims_withExpiredJWTAndAllowExpired_shouldReturnClaims() async throws {
+    // JWT with exp in the past but allowExpired option - falls back to server
+    let expiredJWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.aN0HLYHkp7nKZp4xWvBaDqSrCFBxk2tq0KZc4BXGqYs"
+
+    let user = User(fromMockNamed: "user")
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      ignoreQuery: true,
+      contentType: .json,
+      statusCode: 200,
+      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+    ).register()
+
+    let sut = makeSUT()
+
+    let result = try await sut.getClaims(jwt: expiredJWT, options: GetClaimsOptions(allowExpired: true))
+
+    XCTAssertEqual(result.claims.sub, "1234567890")
+    XCTAssertEqual(result.claims.exp, 1516239022)
+  }
+
+  func testGetClaims_whenServerRejectsJWT_shouldThrowError() async throws {
+    // HS256 JWT that will be verified server-side
+    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      ignoreQuery: true,
+      contentType: .json,
+      statusCode: 401,
+      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode([
+        "error": "invalid_token",
+        "error_description": "Invalid JWT"
+      ])]
+    ).register()
+
+    let sut = makeSUT()
+
+    do {
+      _ = try await sut.getClaims(jwt: jwt)
+      XCTFail("Expected error from server")
+    } catch {
+      // Expected to fail
+    }
+  }
+
+  func testGetClaims_withComplexClaims_shouldDecodeAllFields() async throws {
+    // JWT with multiple claim fields
+    // HS256 so it falls back to server verification
+    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjE1MTYyMzkwMjIsImp0aSI6InRlc3QtanRpIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJwaG9uZSI6IisxMjM0NTY3ODkwIn0.dBYm1Y-TfRjPsxw_gXqHB5zGHSH9hXS0OeFN_wL8HbA"
+
+    let user = User(fromMockNamed: "user")
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      ignoreQuery: true,
+      contentType: .json,
+      statusCode: 200,
+      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+    ).register()
+
+    let sut = makeSUT()
+
+    let result = try await sut.getClaims(jwt: jwt)
+
+    XCTAssertEqual(result.claims.sub, "1234567890")
+    XCTAssertEqual(result.claims.iss, "http://localhost:54321/auth/v1")
+    if case let .string(aud) = result.claims.aud {
+      XCTAssertEqual(aud, "authenticated")
+    } else {
+      XCTFail("Expected string audience")
+    }
+    XCTAssertEqual(result.claims.exp, 9999999999)
+    XCTAssertEqual(result.claims.iat, 1516239022)
+    XCTAssertEqual(result.claims.nbf, 1516239022)
+    XCTAssertEqual(result.claims.jti, "test-jti")
+    XCTAssertEqual(result.claims.role, "authenticated")
+    XCTAssertEqual(result.claims.email, "test@example.com")
+    XCTAssertEqual(result.claims.phone, "+1234567890")
+  }
+
+  func testGetClaims_withArrayAudience_shouldDecodeCorrectly() async throws {
+    // JWT with audience as array
+    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjpbImF1dGhlbnRpY2F0ZWQiLCJzZXJ2aWNlLXJvbGUiXSwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.Jz-lHQoR2VsQ_vX8wKyN7mPxT4aU9cF1bYsHqGdWlIk"
+
+    let user = User(fromMockNamed: "user")
+
+    Mock(
+      url: clientURL.appendingPathComponent("user"),
+      ignoreQuery: true,
+      contentType: .json,
+      statusCode: 200,
+      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+    ).register()
+
+    let sut = makeSUT()
+
+    let result = try await sut.getClaims(jwt: jwt)
+
+    XCTAssertEqual(result.claims.sub, "1234567890")
+    XCTAssertNotNil(result.claims.aud)
+  }
+
   private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]

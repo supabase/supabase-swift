@@ -1577,8 +1577,7 @@ public actor AuthClient {
     let signingKey: JWK?
     if let alg, !alg.hasPrefix("HS"), let kid {
       // Only attempt to fetch JWK for asymmetric algorithms with a kid
-      // RS256 is currently not fully supported client-side (falls back to server-side)
-      signingKey = alg == "RS256" ? nil : try await fetchJWK(kid: kid, jwks: options.jwks)
+      signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
     } else {
       signingKey = nil
     }
