@@ -1267,7 +1267,6 @@ final class AuthClientTests: XCTestCase {
         phone: "+1 202-918-2132",
         password: "another.pass",
         nonce: "abcdef",
-        emailChangeToken: "123456",
         data: ["custom_key": .string("custom_value")]
       )
     )
@@ -1522,52 +1521,6 @@ final class AuthClientTests: XCTestCase {
     )
 
     expectNoDifference(response.url, URL(string: "https://supabase.com")!)
-  }
-
-  func testMFAEnrollLegacy() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("factors"),
-      statusCode: 200,
-      data: [
-        .post: Data(
-          """
-          {
-            "id": "12345",
-            "type": "totp"
-          }
-          """.utf8
-        )
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "Authorization: Bearer accesstoken" \
-      	--header "Content-Length: 69" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
-      	--header "X-Supabase-Api-Version: 2024-01-01" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"factor_type\":\"totp\",\"friendly_name\":\"test\",\"issuer\":\"supabase.com\"}" \
-      	"http://localhost:54321/auth/v1/factors"
-      """#
-    }
-    .register()
-
-    let sut = makeSUT()
-
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
-
-    let response = try await sut.mfa.enroll(
-      params: MFAEnrollParams(
-        issuer: "supabase.com",
-        friendlyName: "test"
-      )
-    )
-
-    expectNoDifference(response.id, "12345")
-    expectNoDifference(response.type, "totp")
   }
 
   func testMFAEnrollTotp() async throws {
@@ -2608,6 +2561,7 @@ final class AuthClientTests: XCTestCase {
   ///   - action: The async action to perform that should trigger events
   ///   - expectedEvents: Array of expected AuthChangeEvent values
   ///   - expectedSessions: Array of expected Session values (optional)
+  @discardableResult
   private func assertAuthStateChanges<T>(
     sut: AuthClient,
     action: () async throws -> T,
