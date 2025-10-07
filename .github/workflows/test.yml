@@ -1,31 +1,31 @@
 on:
     workflow_dispatch:
     push:
-      branches:
-        - "main"
+        branches:
+            - "main"
     pull_request:
-      branches:
-        - main
+        branches:
+            - main
 
-  jobs:
+jobs:
     setup-docker:
-      runs-on: ${{ matrix.os }}
-      strategy:
-        fail-fast: false
-        matrix:
-          os: [macos-13, macos-15-intel, macos-15]
-      name: A job to perform a self-test on this Github Action
-      steps:
-        # To use this repository's private action,
-        # you must check out the repository
-        - name: Checkout
-          uses: actions/checkout@v5
-        - name: Setup Docker on macOS using Colima, Lima-VM, and Homebrew.
-          uses: douglascamata/setup-docker-macos-action@v1
-          id: docker
-        - name: Get the Docker client version
-          run: |
-            echo "Docker client version: ${{ steps.docker.outputs.docker-client-version }}"
-        - name: Get the Colima version
-          run: |
-            echo "Colima version: ${{ steps.docker.outputs.colima-version }}"
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [macos-13, macos-15-intel, macos-15]
+        name: A job to perform a self-test on this Github Action
+        steps:
+            # To use this repository's private action,
+            # you must check out the repository
+            - name: Checkout
+              uses: actions/checkout@v5
+            - name: Setup Docker on macOS using Colima, Lima-VM, and Homebrew.
+              uses: douglascamata/setup-docker-macos-action@v1
+              id: docker
+            - name: Get the Docker client version
+              run: |
+                  echo "Docker client version: ${{ steps.docker.outputs.docker-client-version }}"
+            - name: Get the Colima version
+              run: |
+                  echo "Colima version: ${{ steps.docker.outputs.colima-version }}"
