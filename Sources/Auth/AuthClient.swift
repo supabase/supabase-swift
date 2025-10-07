@@ -1490,7 +1490,7 @@ public actor AuthClient {
 
     // Try fetching from global cache
     if let cached = await globalJWKSCache.get(for: storageKey),
-       let jwk = cached.jwks.keys.first(where: { $0.kid == kid })
+      let jwk = cached.jwks.keys.first(where: { $0.kid == kid })
     {
       // Check if cache is still valid (not stale)
       if cached.cachedAt.addingTimeInterval(JWKS_TTL) > now {
@@ -1585,7 +1585,11 @@ public actor AuthClient {
 
     // If no signing key available (symmetric algorithm, RS256, no kid, or key not found),
     // fallback to server-side verification via getUser()
-    if signingKey == nil {
+    guard
+      let signingKey,
+      let alg = signingKey.alg,
+      let algorithm = JWTAlgorithm(rawValue: alg)
+    else {
       _ = try await user(jwt: token)
       // getUser succeeds, so claims can be trusted
       let claims = try configuration.decoder.decode(
@@ -1599,8 +1603,7 @@ public actor AuthClient {
       return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
     }
 
-    // Asymmetric JWT verification using CryptoKit (currently only ES256)
-    let isValid = try JWTVerifier.verify(jwt: decodedJWT, jwk: signingKey!)
+    let isValid = algorithm.verify(jwt: decodedJWT, jwk: signingKey)
 
     guard isValid else {
       throw AuthError.jwtVerificationFailed(message: "Invalid JWT signature")

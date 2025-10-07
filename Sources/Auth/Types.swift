@@ -384,11 +384,11 @@ enum VerifyOTPParams: Encodable {
   func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     switch self {
-    case let .email(value):
+    case .email(let value):
       try container.encode(value)
-    case let .mobile(value):
+    case .mobile(let value):
       try container.encode(value)
-    case let .tokenHash(value):
+    case .tokenHash(let value):
       try container.encode(value)
     }
   }
@@ -448,20 +448,20 @@ public enum AuthResponse: Codable, Hashable, Sendable {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     switch self {
-    case let .session(value): try container.encode(value)
-    case let .user(value): try container.encode(value)
+    case .session(let value): try container.encode(value)
+    case .user(let value): try container.encode(value)
     }
   }
 
   public var user: User {
     switch self {
-    case let .session(session): session.user
-    case let .user(user): user
+    case .session(let session): session.user
+    case .user(let user): user
     }
   }
 
   public var session: Session? {
-    if case let .session(session) = self { return session }
+    if case .session(let session) = self { return session }
     return nil
   }
 }
@@ -1297,9 +1297,9 @@ public enum AudienceClaim: Codable, Hashable, Sendable {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     switch self {
-    case let .string(value):
+    case .string(let value):
       try container.encode(value)
-    case let .array(value):
+    case .array(let value):
       try container.encode(value)
     }
   }
