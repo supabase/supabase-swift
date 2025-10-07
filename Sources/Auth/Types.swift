@@ -1261,14 +1261,35 @@ public struct JWTClaims: Codable, Hashable, Sendable {
     // Decode additional claims
     let allKeys = try decoder.container(keyedBy: AnyCodingKey.self)
     var additional: [String: AnyJSON] = [:]
-    for key in allKeys.allKeys {
-      if CodingKeys(stringValue: key.stringValue) == nil {
-        if let value = try? allKeys.decode(AnyJSON.self, forKey: key) {
-          additional[key.stringValue] = value
-        }
+    for key in allKeys.allKeys where CodingKeys(stringValue: key.stringValue) == nil {
+      if let value = try? allKeys.decode(AnyJSON.self, forKey: key) {
+        additional[key.stringValue] = value
       }
     }
     additionalClaims = additional
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(self.iss, forKey: .iss)
+    try container.encodeIfPresent(self.sub, forKey: .sub)
+    try container.encodeIfPresent(self.aud, forKey: .aud)
+    try container.encodeIfPresent(self.exp, forKey: .exp)
+    try container.encodeIfPresent(self.iat, forKey: .iat)
+    try container.encodeIfPresent(self.nbf, forKey: .nbf)
+    try container.encodeIfPresent(self.jti, forKey: .jti)
+    try container.encodeIfPresent(self.role, forKey: .role)
+    try container.encodeIfPresent(self.aal, forKey: .aal)
+    try container.encodeIfPresent(self.sessionId, forKey: .sessionId)
+    try container.encodeIfPresent(self.email, forKey: .email)
+    try container.encodeIfPresent(self.phone, forKey: .phone)
+    try container.encodeIfPresent(self.appMetadata, forKey: .appMetadata)
+    try container.encodeIfPresent(self.userMetadata, forKey: .userMetadata)
+
+    var additionalClaimsContainer = encoder.container(keyedBy: AnyCodingKey.self)
+    for (key, value) in additionalClaims {
+      try additionalClaimsContainer.encode(value, forKey: AnyCodingKey(stringValue: key)!)
+    }
   }
 }
 
