@@ -24,7 +24,12 @@ final class UserStore {
 
       let presences = channel.presenceChange()
 
-      await channel.subscribe()
+      do {
+        try await channel.subscribeWithError()
+      } catch {
+        print("Error subscribing to channel: \(error)")
+        return
+      }
 
       Task {
         let statusChange = channel.statusChange
