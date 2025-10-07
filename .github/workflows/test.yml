@@ -19,7 +19,7 @@ on:
         - name: Checkout
           uses: actions/checkout@v5
         - name: Setup Docker on macOS using Colima, Lima-VM, and Homebrew.
-          uses: ./ # Uses an action in the root directory
+          uses: douglascamata/setup-docker-macos-action@v1
           id: docker
         - name: Get the Docker client version
           run: |
