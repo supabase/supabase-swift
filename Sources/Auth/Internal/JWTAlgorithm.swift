@@ -17,13 +17,17 @@ enum JWTAlgorithm: String {
     let message = "\(jwt.raw.header).\(jwt.raw.payload)".data(using: .utf8)!
     switch self {
     case .rs256:
-      return SecKeyVerifySignature(
-        jwk.rsaPublishKey!,
-        .rsaSignatureMessagePKCS1v15SHA256,
-        message as CFData,
-        jwt.signature as CFData,
-        nil
-      )
+      #if canImport(Security)
+        return SecKeyVerifySignature(
+          jwk.rsaPublishKey!,
+          .rsaSignatureMessagePKCS1v15SHA256,
+          message as CFData,
+          jwt.signature as CFData,
+          nil
+        )
+      #else
+        return false
+      #endif
     }
   }
 }
