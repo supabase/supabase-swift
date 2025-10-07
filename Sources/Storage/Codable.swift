@@ -9,8 +9,7 @@ import ConcurrencyExtras
 import Foundation
 
 extension JSONEncoder {
-  @available(*, deprecated, message: "Access to storage encoder is going to be removed.")
-  public static let defaultStorageEncoder: JSONEncoder = {
+  static let defaultStorageEncoder: JSONEncoder = {
     let encoder = JSONEncoder()
     encoder.keyEncodingStrategy = .convertToSnakeCase
     return encoder
@@ -20,8 +19,7 @@ extension JSONEncoder {
 }
 
 extension JSONDecoder {
-  @available(*, deprecated, message: "Access to storage decoder is going to be removed.")
-  public static let defaultStorageDecoder: JSONDecoder = {
+  static let defaultStorageDecoder: JSONDecoder = {
     JSONDecoder.supabase()
   }()
 }

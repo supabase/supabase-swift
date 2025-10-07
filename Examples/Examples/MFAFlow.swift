@@ -92,7 +92,7 @@ struct MFAEnrollView: View {
     .task {
       do {
         error = nil
-        enrollResponse = try await supabase.auth.mfa.enroll(params: MFAEnrollParams())
+        enrollResponse = try await supabase.auth.mfa.enroll(params: .totp())
       } catch {
         self.error = error
       }

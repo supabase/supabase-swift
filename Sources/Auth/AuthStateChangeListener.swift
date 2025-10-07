@@ -8,7 +8,6 @@
 import ConcurrencyExtras
 import Foundation
 
-
 /// A listener that can be removed by calling ``AuthStateChangeListenerRegistration/remove()``.
 ///
 /// - Note: Listener is automatically removed on deinit.
@@ -17,7 +16,11 @@ public protocol AuthStateChangeListenerRegistration: Sendable {
   func remove()
 }
 
-extension ObservationToken: AuthStateChangeListenerRegistration {}
+extension ObservationToken: AuthStateChangeListenerRegistration {
+  public func remove() {
+    cancel()
+  }
+}
 
 public typealias AuthStateChangeListener = @Sendable (
   _ event: AuthChangeEvent,

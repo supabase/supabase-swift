@@ -81,7 +81,7 @@ struct TodoListView: View {
       do {
         error = nil
         todos = try await IdentifiedArrayOf(
-          uniqueElements: supabase.database.from("todos")
+          uniqueElements: supabase.from("todos")
             .select()
             .execute()
             .value as [Todo]
@@ -105,7 +105,7 @@ struct TodoListView: View {
         isComplete: updatedTodo.isComplete,
         ownerID: auth.currentUserID
       )
-      updatedTodo = try await supabase.database.from("todos")
+      updatedTodo = try await supabase.from("todos")
         .update(updateRequest, returning: .representation)
         .eq("id", value: updatedTodo.id)
         .single()
@@ -129,9 +129,9 @@ struct TodoListView: View {
 
       todos.remove(atOffsets: offset)
 
-      try await supabase.database.from("todos")
+      try await supabase.from("todos")
         .delete()
-        .in("id", value: todosToDelete.map(\.id))
+        .in("id", values: todosToDelete.map(\.id))
         .execute()
     } catch {
       self.error = error

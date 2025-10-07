@@ -575,7 +575,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     query: String,
     config: String? = nil
   ) -> PostgrestFilterBuilder {
-    plfts(column, query: query, config: config)
+    textSearch(column, query: query, config: config, type: .plain)
   }
 
   public func phraseToFullTextSearch(
@@ -583,7 +583,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     query: String,
     config: String? = nil
   ) -> PostgrestFilterBuilder {
-    phfts(column, query: query, config: config)
+    textSearch(column, query: query, config: config, type: .phrase)
   }
 
   public func webFullTextSearch(
@@ -591,6 +591,6 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     query: String,
     config: String? = nil
   ) -> PostgrestFilterBuilder {
-    wfts(column, query: query, config: config)
+    textSearch(column, query: query, config: config, type: .websearch)
   }
 }
