@@ -191,8 +191,274 @@ final class RealtimeChannelTests: XCTestCase {
     presenceSubscription.cancel()
     await channel.unsubscribe()
     socket.disconnect()
-    
+
     // Note: We don't assert the subscribe status here because the test doesn't wait for completion
     // The subscription is still in progress when we clean up
+  }
+
+  @MainActor
+  func testPostSendThrowsWhenAccessTokenIsMissing() async {
+    let httpClient = await HTTPClientMock()
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(headers: ["apikey": "test-key"]),
+      wsTransport: { _, _ in client },
+      http: httpClient
+    )
+
+    let channel = socket.channel("test-topic")
+
+    do {
+      try await channel.postSend(event: "test", message: ["data": "test"])
+      XCTFail("Expected postSend to throw an error when access token is missing")
+    } catch {
+      XCTAssertEqual(error.localizedDescription, "Access token is required for postSend()")
+    }
+  }
+
+  @MainActor
+  func testPostSendSucceedsOn202Status() async throws {
+    let httpClient = await HTTPClientMock()
+    await httpClient.when({ _ in true }) { _ in
+      HTTPResponse(
+        data: Data(),
+        response: HTTPURLResponse(
+          url: URL(string: "https://localhost:54321/api/broadcast")!,
+          statusCode: 202,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: httpClient
+    )
+
+    let channel = socket.channel("test-topic") { config in
+      config.isPrivate = true
+    }
+
+    try await channel.postSend(event: "test-event", message: ["data": "explicit"])
+
+    let requests = await httpClient.receivedRequests
+    XCTAssertEqual(requests.count, 1)
+
+    let request = requests[0]
+    XCTAssertEqual(request.url.absoluteString, "https://localhost:54321/realtime/v1/api/broadcast")
+    XCTAssertEqual(request.method, .post)
+    XCTAssertEqual(request.headers[.authorization], "Bearer test-token")
+    XCTAssertEqual(request.headers[.apiKey], "test-key")
+    XCTAssertEqual(request.headers[.contentType], "application/json")
+
+    let body = try JSONDecoder().decode(BroadcastPayload.self, from: request.body ?? Data())
+    XCTAssertEqual(body.messages.count, 1)
+    XCTAssertEqual(body.messages[0].topic, "realtime:test-topic")
+    XCTAssertEqual(body.messages[0].event, "test-event")
+    XCTAssertEqual(body.messages[0].private, true)
+  }
+
+  @MainActor
+  func testPostSendThrowsOnNon202Status() async {
+    let httpClient = await HTTPClientMock()
+    await httpClient.when({ _ in true }) { _ in
+      let errorBody = try JSONEncoder().encode(["error": "Server error"])
+      return HTTPResponse(
+        data: errorBody,
+        response: HTTPURLResponse(
+          url: URL(string: "https://localhost:54321/api/broadcast")!,
+          statusCode: 500,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: httpClient
+    )
+
+    let channel = socket.channel("test-topic")
+
+    do {
+      try await channel.postSend(event: "test", message: ["data": "test"])
+      XCTFail("Expected postSend to throw an error on non-202 status")
+    } catch {
+      XCTAssertEqual(error.localizedDescription, "Server error")
+    }
+  }
+
+  @MainActor
+  func testPostSendRespectsCustomTimeout() async throws {
+    let httpClient = await HTTPClientMock()
+    await httpClient.when({ _ in true }) { _ in
+      HTTPResponse(
+        data: Data(),
+        response: HTTPURLResponse(
+          url: URL(string: "https://localhost:54321/api/broadcast")!,
+          statusCode: 202,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        timeoutInterval: 5.0,
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: httpClient
+    )
+
+    let channel = socket.channel("test-topic")
+
+    // Test with custom timeout
+    try await channel.postSend(event: "test", message: ["data": "test"], timeout: 3.0)
+
+    let requests = await httpClient.receivedRequests
+    XCTAssertEqual(requests.count, 1)
+  }
+
+  @MainActor
+  func testPostSendUsesDefaultTimeoutWhenNotSpecified() async throws {
+    let httpClient = await HTTPClientMock()
+    await httpClient.when({ _ in true }) { _ in
+      HTTPResponse(
+        data: Data(),
+        response: HTTPURLResponse(
+          url: URL(string: "https://localhost:54321/api/broadcast")!,
+          statusCode: 202,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        timeoutInterval: 5.0,
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: httpClient
+    )
+
+    let channel = socket.channel("test-topic")
+
+    // Test without custom timeout
+    try await channel.postSend(event: "test", message: ["data": "test"])
+
+    let requests = await httpClient.receivedRequests
+    XCTAssertEqual(requests.count, 1)
+  }
+
+  @MainActor
+  func testPostSendFallsBackToStatusTextWhenErrorBodyHasNoErrorField() async {
+    let httpClient = await HTTPClientMock()
+    await httpClient.when({ _ in true }) { _ in
+      let errorBody = try JSONEncoder().encode(["message": "Invalid request"])
+      return HTTPResponse(
+        data: errorBody,
+        response: HTTPURLResponse(
+          url: URL(string: "https://localhost:54321/api/broadcast")!,
+          statusCode: 400,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: httpClient
+    )
+
+    let channel = socket.channel("test-topic")
+
+    do {
+      try await channel.postSend(event: "test", message: ["data": "test"])
+      XCTFail("Expected postSend to throw an error on 400 status")
+    } catch {
+      XCTAssertEqual(error.localizedDescription, "Invalid request")
+    }
+  }
+
+  @MainActor
+  func testPostSendFallsBackToStatusTextWhenJSONParsingFails() async {
+    let httpClient = await HTTPClientMock()
+    await httpClient.when({ _ in true }) { _ in
+      HTTPResponse(
+        data: Data("Invalid JSON".utf8),
+        response: HTTPURLResponse(
+          url: URL(string: "https://localhost:54321/api/broadcast")!,
+          statusCode: 503,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: httpClient
+    )
+
+    let channel = socket.channel("test-topic")
+
+    do {
+      try await channel.postSend(event: "test", message: ["data": "test"])
+      XCTFail("Expected postSend to throw an error on 503 status")
+    } catch {
+      // Should fall back to localized status text
+      XCTAssertTrue(error.localizedDescription.contains("503") || error.localizedDescription.contains("unavailable"))
+    }
+  }
+}
+
+// Helper struct for decoding broadcast payload in tests
+private struct BroadcastPayload: Decodable {
+  let messages: [Message]
+
+  struct Message: Decodable {
+    let topic: String
+    let event: String
+    let payload: [String: String]
+    let `private`: Bool
   }
 }
