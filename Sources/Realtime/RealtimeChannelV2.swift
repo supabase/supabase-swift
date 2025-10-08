@@ -135,7 +135,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
           )
 
           do {
-            try await _clock.sleep(for: delay)
+            try await _clock.sleep(for: .seconds(delay))
           } catch {
             // If sleep is cancelled, break out of retry loop
             logger?.debug("Subscription retry cancelled for channel '\(topic)'")

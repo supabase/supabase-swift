@@ -84,7 +84,7 @@ struct BucketDetailView: View {
   private func load() async {
     fileObjects = .inFlight
     fileObjects = await .result(
-      Result {
+      Result { @Sendable in
         try await supabase.storage.from(bucket.id).list()
       }
     )

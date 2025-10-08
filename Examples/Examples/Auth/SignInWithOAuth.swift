@@ -19,7 +19,7 @@ struct SignInWithOAuth: View {
     VStack {
       Picker("Provider", selection: $provider) {
         ForEach(providers) { provider in
-          Text("\(provider)").tag(provider)
+          Text("\(provider.rawValue)").tag(provider)
         }
       }
 

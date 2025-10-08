@@ -65,7 +65,7 @@ struct SignInWithApple: View {
 
   private func signInWithApple(using idToken: String, fullName: String?) async {
     actionState = .inFlight
-    let result = await Result {
+    let result = await Result { @Sendable in
       _ = try await supabase.auth.signInWithIdToken(
         credentials: .init(
           provider: .apple,
