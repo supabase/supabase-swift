@@ -260,12 +260,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// - Returns: `true` if the message was accepted (HTTP 202), otherwise throws an error.
   /// - Throws: An error if the access token is missing, payload is missing, or the request fails.
   @MainActor
-  public func postSend(
+  public func httpSend(
     event: String,
     message: some Codable,
     timeout: TimeInterval? = nil
   ) async throws {
-    try await postSend(event: event, message: JSONObject(message), timeout: timeout)
+    try await httpSend(event: event, message: JSONObject(message), timeout: timeout)
   }
 
   /// Sends a broadcast message explicitly via REST API.
@@ -280,13 +280,13 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// - Returns: `true` if the message was accepted (HTTP 202), otherwise throws an error.
   /// - Throws: An error if the access token is missing, payload is missing, or the request fails.
   @MainActor
-  public func postSend(
+  public func httpSend(
     event: String,
     message: JSONObject,
     timeout: TimeInterval? = nil
   ) async throws {
     guard let accessToken = await socket._getAccessToken() else {
-      throw RealtimeError("Access token is required for postSend()")
+      throw RealtimeError("Access token is required for httpSend()")
     }
 
     var headers: HTTPFields = [.contentType: "application/json"]
@@ -367,7 +367,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       logger?.warning(
         "Realtime broadcast() is automatically falling back to REST API. " +
         "This behavior will be deprecated in the future. " +
-        "Please use postSend() explicitly for REST delivery."
+        "Please use httpSend() explicitly for REST delivery."
       )
 
       var headers: HTTPFields = [.contentType: "application/json"]

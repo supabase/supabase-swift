@@ -197,7 +197,7 @@ final class RealtimeChannelTests: XCTestCase {
   }
 
   @MainActor
-  func testPostSendThrowsWhenAccessTokenIsMissing() async {
+  func testHttpSendThrowsWhenAccessTokenIsMissing() async {
     let httpClient = await HTTPClientMock()
     let (client, _) = FakeWebSocket.fakes()
 
@@ -211,15 +211,15 @@ final class RealtimeChannelTests: XCTestCase {
     let channel = socket.channel("test-topic")
 
     do {
-      try await channel.postSend(event: "test", message: ["data": "test"])
-      XCTFail("Expected postSend to throw an error when access token is missing")
+      try await channel.httpSend(event: "test", message: ["data": "test"])
+      XCTFail("Expected httpSend to throw an error when access token is missing")
     } catch {
-      XCTAssertEqual(error.localizedDescription, "Access token is required for postSend()")
+      XCTAssertEqual(error.localizedDescription, "Access token is required for httpSend()")
     }
   }
 
   @MainActor
-  func testPostSendSucceedsOn202Status() async throws {
+  func testHttpSendSucceedsOn202Status() async throws {
     let httpClient = await HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
@@ -248,7 +248,7 @@ final class RealtimeChannelTests: XCTestCase {
       config.isPrivate = true
     }
 
-    try await channel.postSend(event: "test-event", message: ["data": "explicit"])
+    try await channel.httpSend(event: "test-event", message: ["data": "explicit"])
 
     let requests = await httpClient.receivedRequests
     XCTAssertEqual(requests.count, 1)
@@ -268,7 +268,7 @@ final class RealtimeChannelTests: XCTestCase {
   }
 
   @MainActor
-  func testPostSendThrowsOnNon202Status() async {
+  func testHttpSendThrowsOnNon202Status() async {
     let httpClient = await HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       let errorBody = try JSONEncoder().encode(["error": "Server error"])
@@ -297,15 +297,15 @@ final class RealtimeChannelTests: XCTestCase {
     let channel = socket.channel("test-topic")
 
     do {
-      try await channel.postSend(event: "test", message: ["data": "test"])
-      XCTFail("Expected postSend to throw an error on non-202 status")
+      try await channel.httpSend(event: "test", message: ["data": "test"])
+      XCTFail("Expected httpSend to throw an error on non-202 status")
     } catch {
       XCTAssertEqual(error.localizedDescription, "Server error")
     }
   }
 
   @MainActor
-  func testPostSendRespectsCustomTimeout() async throws {
+  func testHttpSendRespectsCustomTimeout() async throws {
     let httpClient = await HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
@@ -334,14 +334,14 @@ final class RealtimeChannelTests: XCTestCase {
     let channel = socket.channel("test-topic")
 
     // Test with custom timeout
-    try await channel.postSend(event: "test", message: ["data": "test"], timeout: 3.0)
+    try await channel.httpSend(event: "test", message: ["data": "test"], timeout: 3.0)
 
     let requests = await httpClient.receivedRequests
     XCTAssertEqual(requests.count, 1)
   }
 
   @MainActor
-  func testPostSendUsesDefaultTimeoutWhenNotSpecified() async throws {
+  func testHttpSendUsesDefaultTimeoutWhenNotSpecified() async throws {
     let httpClient = await HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
@@ -370,14 +370,14 @@ final class RealtimeChannelTests: XCTestCase {
     let channel = socket.channel("test-topic")
 
     // Test without custom timeout
-    try await channel.postSend(event: "test", message: ["data": "test"])
+    try await channel.httpSend(event: "test", message: ["data": "test"])
 
     let requests = await httpClient.receivedRequests
     XCTAssertEqual(requests.count, 1)
   }
 
   @MainActor
-  func testPostSendFallsBackToStatusTextWhenErrorBodyHasNoErrorField() async {
+  func testHttpSendFallsBackToStatusTextWhenErrorBodyHasNoErrorField() async {
     let httpClient = await HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       let errorBody = try JSONEncoder().encode(["message": "Invalid request"])
@@ -406,15 +406,15 @@ final class RealtimeChannelTests: XCTestCase {
     let channel = socket.channel("test-topic")
 
     do {
-      try await channel.postSend(event: "test", message: ["data": "test"])
-      XCTFail("Expected postSend to throw an error on 400 status")
+      try await channel.httpSend(event: "test", message: ["data": "test"])
+      XCTFail("Expected httpSend to throw an error on 400 status")
     } catch {
       XCTAssertEqual(error.localizedDescription, "Invalid request")
     }
   }
 
   @MainActor
-  func testPostSendFallsBackToStatusTextWhenJSONParsingFails() async {
+  func testHttpSendFallsBackToStatusTextWhenJSONParsingFails() async {
     let httpClient = await HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
@@ -442,8 +442,8 @@ final class RealtimeChannelTests: XCTestCase {
     let channel = socket.channel("test-topic")
 
     do {
-      try await channel.postSend(event: "test", message: ["data": "test"])
-      XCTFail("Expected postSend to throw an error on 503 status")
+      try await channel.httpSend(event: "test", message: ["data": "test"])
+      XCTFail("Expected httpSend to throw an error on 503 status")
     } catch {
       // Should fall back to localized status text
       XCTAssertTrue(error.localizedDescription.contains("503") || error.localizedDescription.contains("unavailable"))
