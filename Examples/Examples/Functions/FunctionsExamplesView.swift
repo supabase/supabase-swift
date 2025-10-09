@@ -53,43 +53,6 @@ struct FunctionsExamplesView: View {
         }
       }
 
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Invoke a function with parameters
-            struct HelloWorldRequest: Encodable {
-              let name: String
-            }
-
-            struct HelloWorldResponse: Decodable {
-              let message: String
-            }
-
-            let request = HelloWorldRequest(name: "\(name)")
-
-            let response: HelloWorldResponse = try await supabase
-              .functions
-              .invoke(
-                "hello-world",
-                options: FunctionInvokeOptions(
-                  body: request
-                )
-              )
-
-            print(response.message)
-            """)
-
-        CodeExample(
-          code: """
-            // Invoke without parameters
-            let response = try await supabase
-              .functions
-              .invoke("hello-world")
-
-            print(response)
-            """)
-      }
-
       Section("About Edge Functions") {
         VStack(alignment: .leading, spacing: 12) {
           FeaturePoint(
@@ -123,6 +86,7 @@ struct FunctionsExamplesView: View {
       }
     }
     .navigationTitle("Edge Functions")
+    .gitHubSourceLink()
   }
 
   @MainActor

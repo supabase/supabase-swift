@@ -51,46 +51,9 @@ struct RelationshipsView: View {
           ErrorText(error)
         }
       }
-
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Define models with relationships
-            struct TodoWithProfile: Codable {
-              let id: UUID
-              let description: String
-              let isComplete: Bool
-              let profile: Profile?
-            }
-
-            struct Profile: Codable {
-              let id: UUID
-              let username: String?
-              let fullName: String?
-            }
-            """)
-
-        CodeExample(
-          code: """
-            // Query with relationships
-            let todos: [TodoWithProfile] = try await supabase
-              .from("todos")
-              .select(\"\"\"
-                id,
-                description,
-                is_complete,
-                profile:owner_id (
-                  id,
-                  username,
-                  full_name
-                )
-              \"\"\")
-              .execute()
-              .value
-            """)
-      }
     }
     .navigationTitle("Relationships")
+    .gitHubSourceLink()
   }
 
   @MainActor

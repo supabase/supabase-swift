@@ -61,6 +61,7 @@ struct SignInWithApple: View {
         ErrorText(error)
       }
     }
+    .gitHubSourceLink()
   }
 
   private func signInWithApple(using idToken: String, fullName: String?) async {

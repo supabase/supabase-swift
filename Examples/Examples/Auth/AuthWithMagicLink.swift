@@ -61,31 +61,6 @@ struct AuthWithMagicLink: View {
         }
       }
 
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Send magic link to email
-            try await supabase.auth.signInWithOTP(
-              email: "\(email.isEmpty ? "user@example.com" : email)",
-              redirectTo: URL(string: "your-app://auth-callback")
-            )
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Handle the magic link when user clicks it
-            // This is typically done in your app's URL handler
-            .onOpenURL { url in
-              Task {
-                try await supabase.auth.session(from: url)
-                // User is now signed in
-              }
-            }
-            """
-        )
-      }
-
       Section("About") {
         VStack(alignment: .leading, spacing: 8) {
           Text("Magic Link Authentication")
@@ -126,6 +101,7 @@ struct AuthWithMagicLink: View {
       }
     }
     .navigationTitle("Magic Link")
+    .gitHubSourceLink()
     .onOpenURL { url in
       Task { await onOpenURL(url) }
     }

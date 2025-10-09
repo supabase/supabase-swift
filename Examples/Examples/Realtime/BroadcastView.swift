@@ -40,32 +40,6 @@ struct BroadcastView: View {
             ErrorText(error)
           }
         }
-
-        Section("Code Example") {
-          CodeExample(
-            code: """
-              let channel = supabase.channel("broadcast-example")
-
-              // Subscribe to broadcast messages
-              let broadcast = channel.broadcast(
-                type: BroadcastMessage.self
-              )
-
-              await channel.subscribe()
-
-              // Send a message
-              await channel.broadcast(
-                event: "message",
-                message: BroadcastMessage(text: "Hello!")
-              )
-
-              // Receive messages
-              for await message in broadcast {
-                print(message.text)
-              }
-              """
-          )
-        }
       }
 
       HStack {
@@ -80,6 +54,7 @@ struct BroadcastView: View {
       .padding()
     }
     .navigationTitle("Broadcast")
+    .gitHubSourceLink()
     .task {
       subscribe()
     }

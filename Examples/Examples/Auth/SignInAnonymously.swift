@@ -51,31 +51,6 @@ struct SignInAnonymously: View {
         }
       }
 
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Create an anonymous session
-            try await supabase.auth.signInAnonymously()
-
-            // The user is now signed in with a temporary account
-            // Session data will be available in auth.session
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Convert anonymous user to permanent account
-            // User can link email/password later
-            try await supabase.auth.updateUser(
-              user: UserAttributes(
-                email: "user@example.com",
-                password: "secure-password"
-              )
-            )
-            """
-        )
-      }
-
       Section("About") {
         VStack(alignment: .leading, spacing: 8) {
           Text("Anonymous Authentication")
@@ -130,6 +105,7 @@ struct SignInAnonymously: View {
       }
     }
     .navigationTitle("Anonymous Sign In")
+    .gitHubSourceLink()
   }
 
   private func signInAnonymously() async {

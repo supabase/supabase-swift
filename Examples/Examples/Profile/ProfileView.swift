@@ -204,37 +204,6 @@ struct ProfileView: View {
           }
         }
 
-        Section("Code Examples") {
-          CodeExample(
-            code: """
-              // Get current user
-              let user = try await supabase.auth.user()
-
-              print("User ID:", user.id)
-              print("Email:", user.email ?? "N/A")
-              print("Phone:", user.phone ?? "N/A")
-              """
-          )
-
-          CodeExample(
-            code: """
-              // Reauthenticate user
-              // Forces a fresh token and validates the session
-              try await supabase.auth.reauthenticate()
-              """
-          )
-
-          CodeExample(
-            code: """
-              // Sign out (global - all sessions)
-              try await supabase.auth.signOut(scope: .global)
-
-              // Sign out (local - current session only)
-              try await supabase.auth.signOut(scope: .local)
-              """
-          )
-        }
-
         Section("About") {
           VStack(alignment: .leading, spacing: 8) {
             Text("Profile Management")
@@ -267,6 +236,7 @@ struct ProfileView: View {
         await loadUser()
       }
     }
+    .gitHubSourceLink()
     .task {
       await loadUser()
     }

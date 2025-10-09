@@ -69,38 +69,6 @@ struct ResetPasswordView: View {
         }
       }
 
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Send password reset email
-            try await supabase.auth.resetPasswordForEmail(
-              "\(email.isEmpty ? "user@example.com" : email)"
-            )
-
-            // User will receive an email with a reset link
-            """
-        )
-
-        CodeExample(
-          code: """
-            // After user clicks the reset link in email,
-            // handle the password recovery flow
-            .sheet(isPresented: $isPasswordRecoveryFlow) {
-              UpdatePasswordView()
-            }
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Update password after reset
-            try await supabase.auth.update(
-              user: UserAttributes(password: "new-secure-password")
-            )
-            """
-        )
-      }
-
       Section("About") {
         VStack(alignment: .leading, spacing: 8) {
           Text("Password Reset")
@@ -144,6 +112,7 @@ struct ResetPasswordView: View {
       }
     }
     .navigationTitle("Reset Password")
+    .gitHubSourceLink()
     #if !os(macOS)
       .navigationBarTitleDisplayMode(.inline)
     #endif

@@ -155,57 +155,6 @@ struct UpdateProfileView: View {
         }
       }
 
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Update email
-            try await supabase.auth.update(
-              user: UserAttributes(email: "\(email.isEmpty ? "newemail@example.com" : email)"),
-              redirectTo: URL(string: "your-app://auth-callback")
-            )
-            // User will receive confirmation email
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Update phone
-            try await supabase.auth.update(
-              user: UserAttributes(phone: "\(phone.isEmpty ? "+1234567890" : phone)")
-            )
-
-            // Verify the new phone with OTP
-            try await supabase.auth.verifyOTP(
-              phone: "\(phone.isEmpty ? "+1234567890" : phone)",
-              token: "123456",
-              type: .phoneChange
-            )
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Update password
-            try await supabase.auth.update(
-              user: UserAttributes(password: "new-secure-password")
-            )
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Update multiple attributes at once
-            try await supabase.auth.update(
-              user: UserAttributes(
-                email: "newemail@example.com",
-                password: "new-password"
-              ),
-              redirectTo: URL(string: "your-app://auth-callback")
-            )
-            """
-        )
-      }
-
       Section("About") {
         VStack(alignment: .leading, spacing: 8) {
           Text("Profile Updates")
@@ -267,6 +216,7 @@ struct UpdateProfileView: View {
       }
     }
     .navigationTitle("Update Profile")
+    .gitHubSourceLink()
     .onAppear {
       email = user.email ?? ""
       phone = user.phone ?? ""

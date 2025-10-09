@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct SignInWithPhone: View {
+  @Environment(\.openURL) private var openURL
   @State var phone = ""
   @State var code = ""
 
@@ -22,30 +23,6 @@ struct SignInWithPhone: View {
         verifySection
       } else {
         phoneSection
-      }
-
-      Section("Code Examples") {
-        if !isVerifyStep {
-          CodeExample(
-            code: """
-              // Send OTP code to phone number
-              try await supabase.auth.signInWithOTP(
-                phone: "\(phone.isEmpty ? "+1234567890" : phone)"
-              )
-              """
-          )
-        } else {
-          CodeExample(
-            code: """
-              // Verify OTP code
-              try await supabase.auth.verifyOTP(
-                phone: "\(phone.isEmpty ? "+1234567890" : phone)",
-                token: "\(code.isEmpty ? "123456" : code)",
-                type: .sms
-              )
-              """
-          )
-        }
       }
 
       Section("About") {
@@ -88,6 +65,7 @@ struct SignInWithPhone: View {
       }
     }
     .navigationTitle("Phone OTP")
+    .gitHubSourceLink()
   }
 
   var phoneSection: some View {

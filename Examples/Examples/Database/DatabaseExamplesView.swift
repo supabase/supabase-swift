@@ -63,6 +63,7 @@ struct DatabaseExamplesView: View {
       }
     }
     .navigationTitle("Database")
+    .gitHubSourceLink()
   }
 }
 

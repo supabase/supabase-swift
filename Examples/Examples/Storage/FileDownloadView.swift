@@ -141,53 +141,9 @@ struct FileDownloadView: View {
         }
       }
 
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Download a file
-            let data = try await supabase.storage
-              .from("my-bucket")
-              .download(path: "folder/image.jpg")
-
-            // Convert to image
-            if let image = UIImage(data: data) {
-              // Display image
-            }
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Download with transform options
-            let data = try await supabase.storage
-              .from("my-bucket")
-              .download(
-                path: "folder/image.jpg",
-                options: TransformOptions(
-                  width: 500,
-                  height: 500,
-                  resize: "cover",
-                  quality: 80
-                )
-              )
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Check if file exists
-            let exists = try await supabase.storage
-              .from("my-bucket")
-              .exists(path: "folder/file.txt")
-
-            if exists {
-              // Download the file
-            }
-            """
-        )
-      }
     }
     .navigationTitle("Download Files")
+    .gitHubSourceLink()
     .task {
       await loadBuckets()
     }

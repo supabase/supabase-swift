@@ -189,46 +189,6 @@ struct ImageTransformView: View {
         }
       }
 
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Download with transformations
-            let data = try await supabase.storage
-              .from("my-bucket")
-              .download(
-                path: "images/photo.jpg",
-                options: TransformOptions(
-                  width: \(width),
-                  height: \(height),
-                  resize: "\(resizeMode.rawValue)",
-                  quality: \(Int(quality))\(format != .original ? ",\n      format: \"\(format.rawValue)\"" : "")
-                )
-              )
-
-            let image = UIImage(data: data)
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Get public URL with transformations
-            let url = try supabase.storage
-              .from("my-bucket")
-              .getPublicURL(
-                path: "images/photo.jpg",
-                options: TransformOptions(
-                  width: 300,
-                  height: 300,
-                  resize: "cover",
-                  quality: 85
-                )
-              )
-
-            // Load image from URL
-            """
-        )
-      }
-
       Section("Resize Mode Details") {
         ForEach(ResizeMode.allCases, id: \.self) { mode in
           VStack(alignment: .leading, spacing: 4) {
@@ -242,6 +202,7 @@ struct ImageTransformView: View {
       }
     }
     .navigationTitle("Image Transforms")
+    .gitHubSourceLink()
     .task {
       await loadBuckets()
     }
