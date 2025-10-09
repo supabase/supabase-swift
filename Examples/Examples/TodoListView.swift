@@ -26,13 +26,13 @@ struct TodoListView: View {
       IfLet($createTodoRequest) { $createTodoRequest in
         AddTodoListView(request: $createTodoRequest) { result in
           withAnimation {
-//            createTodoRequest = nil
+            //            createTodoRequest = nil
 
             switch result {
-            case let .success(todo):
+            case .success(let todo):
               error = nil
               _ = todos.insert(todo, at: 0)
-            case let .failure(error):
+            case .failure(let error):
               self.error = error
             }
           }

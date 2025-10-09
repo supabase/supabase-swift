@@ -2,53 +2,167 @@
 //  ResetPasswordView.swift
 //  Examples
 //
-//  Created by Guilherme Souza on 30/09/24.
+//  Demonstrates password reset functionality via email
 //
 
 import SwiftUI
 import SwiftUINavigation
 
 struct ResetPasswordView: View {
+  @Environment(\.dismiss) private var dismiss
+
   @State private var email: String = ""
-  @State private var showAlert = false
-  @State private var alertMessage = ""
+  @State private var actionState: ActionState<Void, Error> = .idle
 
   var body: some View {
-    VStack(spacing: 20) {
-      Text("Reset Password")
-        .font(.largeTitle)
-        .fontWeight(.bold)
+    List {
+      Section {
+        Text("Enter your email address to receive a password reset link")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
 
-      TextField("Enter your email", text: $email)
-        .textFieldStyle(RoundedBorderTextFieldStyle())
-      #if !os(macOS)
-        .autocapitalization(.none)
-        .keyboardType(.emailAddress)
-      #endif
+      Section("Email Address") {
+        TextField("Enter your email", text: $email)
+          .textContentType(.emailAddress)
+          .autocorrectionDisabled()
+          #if !os(macOS)
+            .autocapitalization(.none)
+            .keyboardType(.emailAddress)
+          #endif
+      }
 
-      Button(action: resetPassword) {
-        Text("Send Reset Link")
-          .foregroundColor(.white)
-          .padding()
-          .background(Color.blue)
-          .cornerRadius(10)
+      Section {
+        Button("Send Reset Link") {
+          Task {
+            await resetPassword()
+          }
+        }
+        .disabled(email.isEmpty)
+      }
+
+      switch actionState {
+      case .idle:
+        EmptyView()
+      case .inFlight:
+        Section {
+          ProgressView("Sending reset link...")
+        }
+      case .result(.success):
+        Section("Success") {
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Password reset email sent successfully!")
+              .foregroundColor(.green)
+
+            Text("Check your inbox at \(email) for the reset link.")
+              .font(.caption)
+              .foregroundColor(.secondary)
+
+            Text("The link will expire in 1 hour.")
+              .font(.caption)
+              .foregroundColor(.orange)
+          }
+        }
+      case .result(.failure(let error)):
+        Section {
+          ErrorText(error)
+        }
+      }
+
+      Section("Code Examples") {
+        CodeExample(
+          code: """
+            // Send password reset email
+            try await supabase.auth.resetPasswordForEmail(
+              "\(email.isEmpty ? "user@example.com" : email)"
+            )
+
+            // User will receive an email with a reset link
+            """
+        )
+
+        CodeExample(
+          code: """
+            // After user clicks the reset link in email,
+            // handle the password recovery flow
+            .sheet(isPresented: $isPasswordRecoveryFlow) {
+              UpdatePasswordView()
+            }
+            """
+        )
+
+        CodeExample(
+          code: """
+            // Update password after reset
+            try await supabase.auth.update(
+              user: UserAttributes(password: "new-secure-password")
+            )
+            """
+        )
+      }
+
+      Section("About") {
+        VStack(alignment: .leading, spacing: 8) {
+          Text("Password Reset")
+            .font(.headline)
+
+          Text(
+            "If you've forgotten your password, enter your email address to receive a secure password reset link. The link will be valid for 1 hour."
+          )
+          .font(.caption)
+          .foregroundColor(.secondary)
+
+          Text("How it works:")
+            .font(.subheadline)
+            .padding(.top, 4)
+
+          VStack(alignment: .leading, spacing: 4) {
+            Text("1. Enter your email address")
+            Text("2. Click 'Send Reset Link'")
+            Text("3. Check your email inbox")
+            Text("4. Click the reset link in the email")
+            Text("5. Enter your new password")
+            Text("6. You're all set!")
+          }
+          .font(.caption)
+          .foregroundColor(.secondary)
+
+          Text("Security Notes:")
+            .font(.subheadline)
+            .padding(.top, 8)
+
+          VStack(alignment: .leading, spacing: 4) {
+            Label("Reset links expire after 1 hour", systemImage: "clock.fill")
+            Label("Only the most recent link is valid", systemImage: "link.circle.fill")
+            Label("Your old password remains valid until reset", systemImage: "lock.fill")
+            Label(
+              "You'll be signed out after password change", systemImage: "arrow.right.square.fill")
+          }
+          .font(.caption)
+          .foregroundColor(.secondary)
+        }
       }
     }
-    .padding()
-    .alert("Password reset", isPresented: $showAlert, actions: {}, message: {
-      Text(alertMessage)
-    })
+    .navigationTitle("Reset Password")
+    #if !os(macOS)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
   }
 
-  func resetPassword() {
-    Task {
-      do {
-        try await supabase.auth.resetPasswordForEmail(email)
-        alertMessage = "Password reset email sent successfully"
-      } catch {
-        alertMessage = "Error sending password reset email: \(error.localizedDescription)"
-      }
-      showAlert = true
+  func resetPassword() async {
+    actionState = .inFlight
+
+    do {
+      try await supabase.auth.resetPasswordForEmail(email)
+      actionState = .result(.success(()))
+    } catch {
+      actionState = .result(.failure(error))
     }
+  }
+}
+
+#Preview {
+  NavigationStack {
+    ResetPasswordView()
   }
 }
