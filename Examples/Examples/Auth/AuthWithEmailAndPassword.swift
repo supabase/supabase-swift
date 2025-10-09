@@ -2,7 +2,7 @@
 //  AuthWithEmailAndPassword.swift
 //  Examples
 //
-//  Created by Guilherme Souza on 15/12/23.
+//  Demonstrates email and password authentication with sign up and sign in
 //
 
 import SwiftUI
@@ -26,44 +26,60 @@ struct AuthWithEmailAndPassword: View {
   @State var isPresentingResetPassword: Bool = false
 
   var body: some View {
-    Form {
+    List {
       Section {
+        Text(
+          mode == .signIn
+            ? "Sign in with your email and password"
+            : "Create a new account with email and password"
+        )
+        .font(.caption)
+        .foregroundColor(.secondary)
+      }
+
+      Section("Credentials") {
         TextField("Email", text: $email)
           .textContentType(.emailAddress)
           .autocorrectionDisabled()
-        #if !os(macOS)
-          .keyboardType(.emailAddress)
-          .textInputAutocapitalization(.never)
-        #endif
+          #if !os(macOS)
+            .keyboardType(.emailAddress)
+            .textInputAutocapitalization(.never)
+          #endif
 
         SecureField("Password", text: $password)
           .textContentType(.password)
           .autocorrectionDisabled()
-        #if !os(macOS)
-          .textInputAutocapitalization(.never)
-        #endif
+          #if !os(macOS)
+            .textInputAutocapitalization(.never)
+          #endif
       }
 
       Section {
-        Button(mode == .signIn ? "Sign in" : "Sign up") {
+        Button(mode == .signIn ? "Sign In" : "Sign Up") {
           Task {
             await primaryActionButtonTapped()
           }
         }
+        .disabled(email.isEmpty || password.isEmpty)
       }
 
       switch actionState {
       case .idle:
         EmptyView()
       case .inFlight:
-        ProgressView()
-      case let .result(.failure(error)):
-        ErrorText(error)
-      case .result(.success(.needsEmailConfirmation)):
         Section {
-          Text("Check you inbox.")
+          ProgressView(mode == .signIn ? "Signing in..." : "Creating account...")
+        }
+      case .result(.failure(let error)):
+        Section {
+          ErrorText(error)
+        }
+      case .result(.success(.needsEmailConfirmation)):
+        Section("Email Confirmation Required") {
+          Text("Check your inbox for a confirmation email.")
+            .foregroundColor(.green)
 
-          Button("Resend confirmation") {
+          Button("Resend Confirmation") {
             Task {
               await resendConfirmationButtonTapped()
             }
@@ -73,7 +89,9 @@ struct AuthWithEmailAndPassword: View {
 
       Section {
         Button(
-          mode == .signIn ? "Don't have an account? Sign up." : "Already have an account? Sign in."
+          mode == .signIn
+            ? "Don't have an account? Sign up."
+            : "Already have an account? Sign in."
         ) {
           mode = mode == .signIn ? .signUp : .signIn
           actionState = .idle
@@ -87,7 +105,35 @@ struct AuthWithEmailAndPassword: View {
           }
         }
       }
+
+      Section("About") {
+        VStack(alignment: .leading, spacing: 8) {
+          Text("Email & Password Authentication")
+            .font(.headline)
+
+          Text(
+            "Email and password authentication is the most common method. Users can sign up with their email and a secure password, then sign in with those credentials."
+          )
+          .font(.caption)
+          .foregroundColor(.secondary)
+
+          Text("Features:")
+            .font(.subheadline)
+            .padding(.top, 4)
+
+          VStack(alignment: .leading, spacing: 4) {
+            Label("Email confirmation via link", systemImage: "checkmark.circle")
+            Label("Password requirements enforcement", systemImage: "checkmark.circle")
+            Label("Password reset functionality", systemImage: "checkmark.circle")
+            Label("Secure session management", systemImage: "checkmark.circle")
+          }
+          .font(.caption)
+          .foregroundColor(.secondary)
+        }
+      }
     }
+    .navigationTitle("Email & Password")
+    .gitHubSourceLink()
     .onOpenURL { url in
       Task {
         await onOpenURL(url)

@@ -14,12 +14,12 @@ struct AnyJSONView: View {
   var body: some View {
     switch value {
     case .null: Text("<nil>")
-    case let .bool(value): Text(value.description)
-    case let .double(value): Text(value.description)
-    case let .integer(value): Text(value.description)
-    case let .string(value): Text(value)
-    case let .array(value):
-      ForEach(0 ..< value.count, id: \.self) { index in
+    case .bool(let value): Text(value.description)
+    case .double(let value): Text(value.description)
+    case .integer(let value): Text(value.description)
+    case .string(let value): Text(value)
+    case .array(let value):
+      ForEach(0..<value.count, id: \.self) { index in
         if value[index].isPrimitive {
           LabeledContent("\(index)") {
             AnyJSONView(value: value[index])
@@ -33,7 +33,7 @@ struct AnyJSONView: View {
           }
         }
       }
-    case let .object(object):
+    case .object(let object):
       let elements = Array(object).sorted(by: { $0.key < $1.key })
       ForEach(elements, id: \.key) { element in
         if element.value.isPrimitive {
@@ -77,7 +77,7 @@ extension AnyJSONView {
         "app_metadata": [
           "provider": "email",
           "providers": [
-            "email",
+            "email"
           ],
         ],
         "aud": "authenticated",
@@ -102,7 +102,7 @@ extension AnyJSONView {
             "provider": "email",
             "updated_at": "2024-03-21T03:19:10.146262Z",
             "user_id": "06f83324-e553-4d39-a609-fd30682ee127",
-          ],
+          ]
         ],
         "last_sign_in_at": "2024-03-21T03:19:10.149557Z",
         "phone": "",

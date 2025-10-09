@@ -50,7 +50,7 @@ struct AuthView: View {
           .navigationTitle(options.title)
       }
       #if !os(macOS)
-      .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.inline)
       #endif
     }
   }
@@ -66,8 +66,9 @@ extension AuthView.Option: View {
     case .signInWithFacebook: SignInWithFacebook()
     case .signInWithOAuth: SignInWithOAuth()
     #if canImport(UIKit)
-      case .signInWithOAuthUsingUIKit: UIViewControllerWrapper(SignInWithOAuthViewController())
-        .edgesIgnoringSafeArea(.all)
+      case .signInWithOAuthUsingUIKit:
+        UIViewControllerWrapper(SignInWithOAuthViewController())
+          .edgesIgnoringSafeArea(.all)
     #endif
     case .googleSignInSDKFlow: GoogleSignInSDKFlow()
     case .signInAnonymously: SignInAnonymously()

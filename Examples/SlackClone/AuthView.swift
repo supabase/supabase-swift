@@ -38,10 +38,10 @@ struct AuthView: View {
     VStack {
       VStack {
         TextField("Email", text: $model.email)
-        #if os(iOS)
-          .textInputAutocapitalization(.never)
-          .keyboardType(.emailAddress)
-        #endif
+          #if os(iOS)
+            .textInputAutocapitalization(.never)
+            .keyboardType(.emailAddress)
+          #endif
           .textContentType(.emailAddress)
           .autocorrectionDisabled()
       }

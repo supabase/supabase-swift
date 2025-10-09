@@ -57,6 +57,7 @@ struct SignInWithFacebook: View {
         }
       }
     }
+    .gitHubSourceLink()
   }
 }
 
