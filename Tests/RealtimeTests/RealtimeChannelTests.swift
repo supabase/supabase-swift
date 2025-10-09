@@ -196,9 +196,8 @@ final class RealtimeChannelTests: XCTestCase {
     // The subscription is still in progress when we clean up
   }
 
-  @MainActor
   func testHttpSendThrowsWhenAccessTokenIsMissing() async {
-    let httpClient = await HTTPClientMock()
+    let httpClient = HTTPClientMock()
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClientV2(
@@ -218,9 +217,8 @@ final class RealtimeChannelTests: XCTestCase {
     }
   }
 
-  @MainActor
   func testHttpSendSucceedsOn202Status() async throws {
-    let httpClient = await HTTPClientMock()
+    let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
         data: Data(),
@@ -267,9 +265,8 @@ final class RealtimeChannelTests: XCTestCase {
     XCTAssertEqual(body.messages[0].private, true)
   }
 
-  @MainActor
   func testHttpSendThrowsOnNon202Status() async {
-    let httpClient = await HTTPClientMock()
+    let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       let errorBody = try JSONEncoder().encode(["error": "Server error"])
       return HTTPResponse(
@@ -304,9 +301,8 @@ final class RealtimeChannelTests: XCTestCase {
     }
   }
 
-  @MainActor
   func testHttpSendRespectsCustomTimeout() async throws {
-    let httpClient = await HTTPClientMock()
+    let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
         data: Data(),
@@ -340,9 +336,8 @@ final class RealtimeChannelTests: XCTestCase {
     XCTAssertEqual(requests.count, 1)
   }
 
-  @MainActor
   func testHttpSendUsesDefaultTimeoutWhenNotSpecified() async throws {
-    let httpClient = await HTTPClientMock()
+    let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
         data: Data(),
@@ -376,9 +371,8 @@ final class RealtimeChannelTests: XCTestCase {
     XCTAssertEqual(requests.count, 1)
   }
 
-  @MainActor
   func testHttpSendFallsBackToStatusTextWhenErrorBodyHasNoErrorField() async {
-    let httpClient = await HTTPClientMock()
+    let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       let errorBody = try JSONEncoder().encode(["message": "Invalid request"])
       return HTTPResponse(
@@ -413,9 +407,8 @@ final class RealtimeChannelTests: XCTestCase {
     }
   }
 
-  @MainActor
   func testHttpSendFallsBackToStatusTextWhenJSONParsingFails() async {
-    let httpClient = await HTTPClientMock()
+    let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
         data: Data("Invalid JSON".utf8),

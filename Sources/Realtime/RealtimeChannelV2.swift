@@ -93,7 +93,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   /// Subscribes to the channel.
   public func subscribeWithError() async throws {
-    logger?.debug("Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))")
+    logger?.debug(
+      "Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))"
+    )
 
     status = .subscribing
 
@@ -259,7 +261,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - timeout: Optional timeout interval. If not specified, uses the socket's default timeout.
   /// - Returns: `true` if the message was accepted (HTTP 202), otherwise throws an error.
   /// - Throws: An error if the access token is missing, payload is missing, or the request fails.
-  @MainActor
   public func httpSend(
     event: String,
     message: some Codable,
@@ -279,7 +280,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - timeout: Optional timeout interval. If not specified, uses the socket's default timeout.
   /// - Returns: `true` if the message was accepted (HTTP 202), otherwise throws an error.
   /// - Throws: An error if the access token is missing, payload is missing, or the request fails.
-  @MainActor
   public func httpSend(
     event: String,
     message: JSONObject,
@@ -306,7 +306,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       }
     }
 
-    let body = try JSONEncoder().encode(
+    let body = try await JSONEncoder().encode(
       BroadcastMessagePayload(
         messages: [
           BroadcastMessagePayload.Message(
@@ -365,9 +365,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   public func broadcast(event: String, message: JSONObject) async {
     if status != .subscribed {
       logger?.warning(
-        "Realtime broadcast() is automatically falling back to REST API. " +
-        "This behavior will be deprecated in the future. " +
-        "Please use httpSend() explicitly for REST delivery."
+        "Realtime broadcast() is automatically falling back to REST API. "
+          + "This behavior will be deprecated in the future. "
+          + "Please use httpSend() explicitly for REST delivery."
       )
 
       var headers: HTTPFields = [.contentType: "application/json"]
@@ -650,7 +650,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       table: table,
       filter: filter
     ) {
-      guard case let .insert(action) = $0 else { return }
+      guard case .insert(let action) = $0 else { return }
       callback(action)
     }
   }
@@ -669,7 +669,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       table: table,
       filter: filter
     ) {
-      guard case let .update(action) = $0 else { return }
+      guard case .update(let action) = $0 else { return }
       callback(action)
     }
   }
@@ -688,7 +688,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       table: table,
       filter: filter
     ) {
-      guard case let .delete(action) = $0 else { return }
+      guard case .delete(let action) = $0 else { return }
       callback(action)
     }
   }
