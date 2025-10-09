@@ -72,41 +72,9 @@ struct PostgresChangesView: View {
           ErrorText(error)
         }
       }
-
-      Section("Code Example") {
-        CodeExample(
-          code: """
-            let channel = supabase.channel("todos-channel")
-
-            // Listen to all changes
-            let insertions = channel.postgresChange(
-              InsertAction.self,
-              schema: "public",
-              table: "todos"
-            )
-
-            let updates = channel.postgresChange(
-              UpdateAction.self,
-              schema: "public",
-              table: "todos"
-            )
-
-            let deletes = channel.postgresChange(
-              DeleteAction.self,
-              schema: "public",
-              table: "todos"
-            )
-
-            await channel.subscribe()
-
-            // Handle events
-            for await insertion in insertions {
-              print("New todo:", insertion.record)
-            }
-            """)
-      }
     }
     .navigationTitle("Postgres Changes")
+    .gitHubSourceLink()
     .onDisappear {
       unsubscribe()
     }

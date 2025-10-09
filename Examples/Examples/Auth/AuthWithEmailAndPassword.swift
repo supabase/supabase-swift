@@ -106,44 +106,6 @@ struct AuthWithEmailAndPassword: View {
         }
       }
 
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Sign up with email and password
-            let response = try await supabase.auth.signUp(
-              email: "\(email.isEmpty ? "user@example.com" : email)",
-              password: "\(password.isEmpty ? "your-password" : "********")",
-              redirectTo: URL(string: "your-app://auth-callback")
-            )
-
-            // Check if email confirmation is required
-            if case .user = response {
-              print("Please check your email for confirmation")
-            }
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Sign in with email and password
-            try await supabase.auth.signIn(
-              email: "\(email.isEmpty ? "user@example.com" : email)",
-              password: "\(password.isEmpty ? "your-password" : "********")"
-            )
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Resend email confirmation
-            try await supabase.auth.resend(
-              email: "\(email.isEmpty ? "user@example.com" : email)",
-              type: .signup
-            )
-            """
-        )
-      }
-
       Section("About") {
         VStack(alignment: .leading, spacing: 8) {
           Text("Email & Password Authentication")
@@ -171,6 +133,7 @@ struct AuthWithEmailAndPassword: View {
       }
     }
     .navigationTitle("Email & Password")
+    .gitHubSourceLink()
     .onOpenURL { url in
       Task {
         await onOpenURL(url)

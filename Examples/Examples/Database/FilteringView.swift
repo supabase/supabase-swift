@@ -73,12 +73,9 @@ struct FilteringView: View {
           }
         }
       }
-
-      Section("Code") {
-        CodeExample(code: currentQueryCode)
-      }
     }
     .navigationTitle("Filtering & Ordering")
+    .gitHubSourceLink()
     .task(id: filterComplete) {
       await loadTodos()
     }

@@ -43,6 +43,7 @@ struct TodoRealtimeView: View {
       }
     }
     .navigationTitle("Live Todo List")
+    .gitHubSourceLink()
     .task {
       await loadInitialTodos()
       subscribeToChanges()

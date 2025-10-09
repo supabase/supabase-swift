@@ -69,33 +69,9 @@ struct AggregationsView: View {
           ErrorText(error)
         }
       }
-
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Get total count
-            let response = try await supabase
-              .from("todos")
-              .select("*", count: .exact)
-              .execute()
-
-            let total = response.count
-            """)
-
-        CodeExample(
-          code: """
-            // Count with filter
-            let response = try await supabase
-              .from("todos")
-              .select("*", count: .exact)
-              .eq("is_complete", value: true)
-              .execute()
-
-            let completed = response.count
-            """)
-      }
     }
     .navigationTitle("Aggregations")
+    .gitHubSourceLink()
     .task {
       await loadStatistics()
     }

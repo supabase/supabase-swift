@@ -65,41 +65,9 @@ struct RPCExamplesView: View {
           ErrorText(error)
         }
       }
-
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Simple RPC call
-            struct HelloWorldResponse: Codable {
-              let message: String
-              let timestamp: Date
-            }
-
-            let response: HelloWorldResponse = try await supabase
-              .rpc("hello_world", params: ["name": "\(name)"])
-              .single()
-              .execute()
-              .value
-            """)
-
-        CodeExample(
-          code: """
-            // RPC with complex return
-            struct UserStats: Codable {
-              let userId: UUID
-              let todoCount: Int
-              let messageCount: Int
-              let lastActivity: Date?
-            }
-
-            let stats: [UserStats] = try await supabase
-              .rpc("get_user_stats")
-              .execute()
-              .value
-            """)
-      }
     }
     .navigationTitle("RPC Functions")
+    .gitHubSourceLink()
   }
 
   @MainActor

@@ -143,58 +143,9 @@ struct FileUploadView: View {
         }
       }
 
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Upload from Data
-            let data = "Hello, Storage!".data(using: .utf8)!
-            let response = try await supabase.storage
-              .from("my-bucket")
-              .upload(
-                "folder/file.txt",
-                data: data,
-                options: FileOptions(
-                  cacheControl: "3600",
-                  upsert: true
-                )
-              )
-
-            print("Uploaded to:", response.path)
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Upload from file URL
-            let fileURL = URL(fileURLWithPath: "/path/to/file.jpg")
-            try await supabase.storage
-              .from("my-bucket")
-              .upload(
-                "images/photo.jpg",
-                fileURL: fileURL,
-                options: FileOptions(
-                  contentType: "image/jpeg",
-                  upsert: false
-                )
-              )
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Update existing file
-            try await supabase.storage
-              .from("my-bucket")
-              .update(
-                "folder/file.txt",
-                data: updatedData,
-                options: FileOptions(cacheControl: "7200")
-              )
-            """
-        )
-      }
     }
     .navigationTitle("Upload Files")
+    .gitHubSourceLink()
     .task {
       await loadBuckets()
     }

@@ -175,64 +175,6 @@ struct SignedURLsView: View {
         }
       }
 
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Create signed download URL
-            let url = try await supabase.storage
-              .from("private-bucket")
-              .createSignedURL(
-                path: "documents/file.pdf",
-                expiresIn: 3600  // 1 hour
-              )
-
-            // Share the URL with users
-            print(url)
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Create signed upload URL
-            let signedUpload = try await supabase.storage
-              .from("my-bucket")
-              .createSignedUploadURL(path: "uploads/file.jpg")
-
-            // Use the URL and token to upload
-            try await supabase.storage
-              .from("my-bucket")
-              .uploadToSignedURL(
-                "uploads/file.jpg",
-                token: signedUpload.token,
-                data: imageData
-              )
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Get public URL (for public buckets)
-            let url = try supabase.storage
-              .from("public-bucket")
-              .getPublicURL(path: "images/photo.jpg")
-
-            // URL is permanent and publicly accessible
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Create multiple signed URLs at once
-            let urls = try await supabase.storage
-              .from("private-bucket")
-              .createSignedURLs(
-                paths: ["file1.jpg", "file2.jpg", "file3.jpg"],
-                expiresIn: 7200
-              )
-            """
-        )
-      }
-
       Section("Use Cases") {
         VStack(alignment: .leading, spacing: 12) {
           UseCaseRow(
@@ -254,6 +196,7 @@ struct SignedURLsView: View {
       }
     }
     .navigationTitle("Signed URLs")
+    .gitHubSourceLink()
     .task {
       await loadBuckets()
     }

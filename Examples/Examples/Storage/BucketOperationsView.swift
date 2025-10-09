@@ -121,45 +121,9 @@ struct BucketOperationsView: View {
         }
       }
 
-      Section("Code Examples") {
-        CodeExample(
-          code: """
-            // Create a bucket
-            try await supabase.storage.createBucket(
-              "my-bucket",
-              options: BucketOptions(
-                public: true,
-                fileSizeLimit: "52428800"  // 50MB
-              )
-            )
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Update bucket settings
-            try await supabase.storage.updateBucket(
-              "my-bucket",
-              options: BucketOptions(
-                public: false,
-                fileSizeLimit: "10485760"  // 10MB
-              )
-            )
-            """
-        )
-
-        CodeExample(
-          code: """
-            // Empty a bucket (remove all files)
-            try await supabase.storage.emptyBucket("my-bucket")
-
-            // Delete a bucket
-            try await supabase.storage.deleteBucket("my-bucket")
-            """
-        )
-      }
     }
     .navigationTitle("Bucket Operations")
+    .gitHubSourceLink()
     .task {
       await loadBuckets()
     }

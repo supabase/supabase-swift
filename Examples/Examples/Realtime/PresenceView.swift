@@ -44,32 +44,9 @@ struct PresenceView: View {
           ErrorText(error)
         }
       }
-
-      Section("Code Example") {
-        CodeExample(
-          code: """
-            let channel = supabase.channel("presence-example")
-
-            // Track presence
-            let presence = channel.presenceStream()
-
-            await channel.subscribe()
-
-            // Track current user
-            await channel.track([
-              "user_id": userId,
-              "username": username
-            ])
-
-            // Listen to presence changes
-            for await state in presence {
-              print("Online users:", state.count)
-            }
-            """
-        )
-      }
     }
     .navigationTitle("Presence")
+    .gitHubSourceLink()
     .task {
       try? await subscribe()
     }

@@ -128,6 +128,7 @@
 		793D8EC52E983112006B6969 /* Profile */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Profile; sourceTree = "<group>"; };
 		793D8ECB2E983112006B6969 /* Realtime */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Realtime; sourceTree = "<group>"; };
 		793D8ED02E983112006B6969 /* Storage */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Storage; sourceTree = "<group>"; };
+		793D8F1E2E984184006B6969 /* Shared */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Shared; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -210,6 +211,7 @@
 				793D8EC52E983112006B6969 /* Profile */,
 				793D8ECB2E983112006B6969 /* Realtime */,
 				793D8ECC2E983112006B6969 /* RootView.swift */,
+				793D8F1E2E984184006B6969 /* Shared */,
 				793D8ED02E983112006B6969 /* Storage */,
 				793D8ED12E983112006B6969 /* Stringfy.swift */,
 				793D8ED22E983112006B6969 /* Supabase.plist */,
@@ -311,6 +313,7 @@
 				793D8EC52E983112006B6969 /* Profile */,
 				793D8ECB2E983112006B6969 /* Realtime */,
 				793D8ED02E983112006B6969 /* Storage */,
+				793D8F1E2E984184006B6969 /* Shared */,
 			);
 			name = Examples;
 			packageProductDependencies = (
