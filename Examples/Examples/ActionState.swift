@@ -16,7 +16,7 @@ enum ActionState<Success, Failure: Error> {
   case result(Result<Success, Failure>)
 
   var success: Success? {
-    if case let .result(.success(success)) = self { return success }
+    if case .result(.success(let success)) = self { return success }
     return nil
   }
 }
@@ -34,9 +34,9 @@ struct ActionStateView<Success: Sendable, SuccessContent: View>: View {
         Color.clear
       case .inFlight:
         ProgressView()
-      case let .result(.success(value)):
+      case .result(.success(let value)):
         content(value)
-      case let .result(.failure(error)):
+      case .result(.failure(let error)):
         VStack {
           ErrorText(error)
           Button("Retry") {

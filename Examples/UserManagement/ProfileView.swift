@@ -49,16 +49,16 @@ struct ProfileView: View {
         Section {
           TextField("Username", text: $username)
             .textContentType(.username)
-          #if os(iOS)
-            .textInputAutocapitalization(.never)
-          #endif
+            #if os(iOS)
+              .textInputAutocapitalization(.never)
+            #endif
           TextField("Full name", text: $fullName)
             .textContentType(.name)
           TextField("Website", text: $website)
             .textContentType(.URL)
-          #if os(iOS)
-            .textInputAutocapitalization(.never)
-          #endif
+            #if os(iOS)
+              .textInputAutocapitalization(.never)
+            #endif
         }
 
         Section {

@@ -18,10 +18,10 @@ struct SignInWithApple: View {
         request.requestedScopes = [.email, .fullName]
       } onCompletion: { result in
         switch result {
-        case let .failure(error):
+        case .failure(let error):
           debug("signInWithApple failed: \(error)")
 
-        case let .success(authorization):
+        case .success(let authorization):
           guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential
           else {
             debug(
@@ -57,7 +57,7 @@ struct SignInWithApple: View {
         EmptyView()
       case .inFlight:
         ProgressView()
-      case let .result(.failure(error)):
+      case .result(.failure(let error)):
         ErrorText(error)
       }
     }

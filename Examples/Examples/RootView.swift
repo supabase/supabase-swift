@@ -13,7 +13,9 @@ struct RootView: View {
 
   var body: some View {
     if auth.session == nil {
-      AuthView()
+      NavigationStack {
+        AuthExamplesView()
+      }
     } else {
       HomeView()
     }

@@ -11,47 +11,51 @@ import SwiftUI
 struct HomeView: View {
   @Environment(AuthController.self) var auth
 
-  @State private var mfaStatus: MFAStatus?
-
   var body: some View {
     @Bindable var auth = auth
 
     TabView {
-      ProfileView()
-        .tabItem {
-          Label("Profile", systemImage: "person.circle")
-        }
-
+      // Database Tab
       NavigationStack {
-        BucketList()
+        DatabaseExamplesView()
+      }
+      .tabItem {
+        Label("Database", systemImage: "cylinder.split.1x2")
+      }
+
+      // Realtime Tab
+      NavigationStack {
+        RealtimeExamplesView()
+      }
+      .tabItem {
+        Label("Realtime", systemImage: "bolt")
+      }
+
+      // Storage Tab
+      NavigationStack {
+        StorageExamplesView()
           .navigationDestination(for: Bucket.self, destination: BucketDetailView.init)
       }
       .tabItem {
         Label("Storage", systemImage: "externaldrive")
       }
+
+      // Functions Tab
+      NavigationStack {
+        FunctionsExamplesView()
+      }
+      .tabItem {
+        Label("Functions", systemImage: "function")
+      }
+
+      // Profile Tab
+      ProfileView()
+        .tabItem {
+          Label("Profile", systemImage: "person.circle")
+        }
     }
     .sheet(isPresented: $auth.isPasswordRecoveryFlow) {
       UpdatePasswordView()
-    }
-  }
-
-  private func verifyMFAStatus() async -> MFAStatus? {
-    do {
-      let aal = try await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-      switch (aal.currentLevel, aal.nextLevel) {
-      case ("aal1", "aal1"):
-        return .unenrolled
-      case ("aal1", "aal2"):
-        return .unverified
-      case ("aal2", "aal2"):
-        return .verified
-      case ("aal2", "aal1"):
-        return .disabled
-      default:
-        return nil
-      }
-    } catch {
-      return nil
     }
   }
 
