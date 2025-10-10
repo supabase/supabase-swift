@@ -326,23 +326,16 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       body: body
     )
 
-    let response: Helpers.HTTPResponse
-    do {
-      response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) { [self] in
-        await Result {
-          try await socket.http.send(request)
-        }
-      }.get()
-    } catch is TimeoutError {
-      throw RealtimeError("Request timeout")
-    } catch {
-      throw error
-    }
+    let response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) { [self] in
+      await Result {
+        try await socket.http.send(request)
+      }
+    }.get()
 
     guard response.statusCode == 202 else {
       // Try to parse error message from response body
       var errorMessage = HTTPURLResponse.localizedString(forStatusCode: response.statusCode)
-      if let errorBody = try? JSONDecoder().decode([String: String].self, from: response.data) {
+      if let errorBody = try? response.decoded(as: [String: String].self) {
         errorMessage = errorBody["error"] ?? errorBody["message"] ?? errorMessage
       }
       throw RealtimeError(errorMessage)
