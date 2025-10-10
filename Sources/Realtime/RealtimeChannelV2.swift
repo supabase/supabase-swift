@@ -295,17 +295,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
     headers[.authorization] = "Bearer \(accessToken)"
 
-    struct BroadcastMessagePayload: Encodable {
-      let messages: [Message]
-
-      struct Message: Encodable {
-        let topic: String
-        let event: String
-        let payload: JSONObject
-        let `private`: Bool
-      }
-    }
-
     let body = try await JSONEncoder().encode(
       BroadcastMessagePayload(
         messages: [
@@ -369,17 +358,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       }
       if let accessToken = await socket._getAccessToken() {
         headers[.authorization] = "Bearer \(accessToken)"
-      }
-
-      struct BroadcastMessagePayload: Encodable {
-        let messages: [Message]
-
-        struct Message: Encodable {
-          let topic: String
-          let event: String
-          let payload: JSONObject
-          let `private`: Bool
-        }
       }
 
       let task = Task { [headers] in
@@ -773,3 +751,4 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
   }
 }
+
