@@ -2211,6 +2211,12 @@ final class AuthClientTests: XCTestCase {
 
     Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
 
+    #if EmitLocalSessionAsInitialSession
+      let expectedEvents = [AuthChangeEvent.initialSession, .signedOut]
+    #else
+      let expectedEvents = [AuthChangeEvent.signedOut, .initialSession]
+    #endif
+
     try await assertAuthStateChanges(
       sut: sut,
       action: {
@@ -2221,7 +2227,7 @@ final class AuthClientTests: XCTestCase {
           XCTAssertEqual(error as? AuthError, .sessionMissing)
         }
       },
-      expectedEvents: [.initialSession, .signedOut]
+      expectedEvents: expectedEvents
     )
 
     XCTAssertNil(Dependencies[sut.clientID].sessionStorage.get())
@@ -2241,12 +2247,18 @@ final class AuthClientTests: XCTestCase {
 
     Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
 
+    #if EmitLocalSessionAsInitialSession
+      let expectedEvents = [AuthChangeEvent.initialSession, .tokenRefreshed]
+    #else
+      let expectedEvents = [AuthChangeEvent.tokenRefreshed, .initialSession]
+    #endif
+
     try await assertAuthStateChanges(
       sut: sut,
       action: {
         _ = try await sut.session
       },
-      expectedEvents: [.initialSession, .tokenRefreshed]
+      expectedEvents: expectedEvents
     )
   }
 
