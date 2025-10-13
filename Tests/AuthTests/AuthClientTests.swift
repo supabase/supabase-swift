@@ -2235,7 +2235,7 @@ final class AuthClientTests: XCTestCase {
         URLQueryItem(name: "grant_type", value: "refresh_token")
       ]),
       statusCode: 200,
-      data: [.post: MockData.session]
+      data: [.post: try AuthClient.Configuration.jsonEncoder.encode(Session.validSession)]
     )
     .register()
 

@@ -218,9 +218,8 @@ public actor AuthClient {
   /// - Parameter listener: Block that executes when a new event is emitted.
   /// - Returns: A handle that can be used to manually unsubscribe.
   ///
-  /// - Note: This method blocks execution until the ``AuthChangeEvent/initialSession`` event is
-  /// emitted. Although this operation is usually fast, in case of the current stored session being
-  /// invalid, a call to the endpoint is necessary for refreshing the session.
+  /// - Note: The session emitted in the  ``AuthChangeEvent/initialSession`` event may have been expired
+  /// since last launch, consider checking for ``Session/isExpired``. If this is the case, then expect a ``AuthChangeEvent/tokenRefreshed`` after.
   @discardableResult
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
@@ -1393,7 +1392,19 @@ public actor AuthClient {
   }
 
   private func emitInitialSession(forToken token: ObservationToken) {
+    guard let currentSession else {
+      eventEmitter.emit(.initialSession, session: nil, token: token)
+      return
+    }
+
     eventEmitter.emit(.initialSession, session: currentSession, token: token)
+
+    Task {
+      if currentSession.isExpired {
+        _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
+        // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
+      }
+    }
   }
 
   nonisolated private func prepareForPKCE() -> (
