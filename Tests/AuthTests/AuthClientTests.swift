@@ -86,6 +86,8 @@ final class AuthClientTests: XCTestCase {
   }
 
   func testSignOut() async throws {
+    let sut = makeSUT()
+
     Mock(
       url: clientURL.appendingPathComponent("logout"),
       ignoreQuery: true,
@@ -106,8 +108,6 @@ final class AuthClientTests: XCTestCase {
       """#
     }
     .register()
-
-    sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
@@ -2221,17 +2221,41 @@ final class AuthClientTests: XCTestCase {
           XCTAssertEqual(error as? AuthError, .sessionMissing)
         }
       },
-      expectedEvents: [.signedOut]
+      expectedEvents: [.initialSession, .signedOut]
     )
 
     XCTAssertNil(Dependencies[sut.clientID].sessionStorage.get())
+  }
+
+  func testRefreshToken() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: clientURL.appendingPathComponent("token").appendingQueryItems([
+        URLQueryItem(name: "grant_type", value: "refresh_token")
+      ]),
+      statusCode: 200,
+      data: [.post: MockData.session]
+    )
+    .register()
+
+    Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
+
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: {
+        _ = try await sut.session
+      },
+      expectedEvents: [.initialSession, .tokenRefreshed]
+    )
   }
 
   // MARK: - getClaims Tests
 
   func testGetClaims_withHS256JWT_shouldFallbackAndReturnClaims() async throws {
     // HS256 JWT (symmetric algorithm) - will use server-side verification
-    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
+    let jwt =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
     let user = User(fromMockNamed: "user")
 
@@ -2249,7 +2273,7 @@ final class AuthClientTests: XCTestCase {
 
     XCTAssertEqual(result.claims.sub, "1234567890")
     XCTAssertEqual(result.claims.iss, "http://localhost:54321/auth/v1")
-    if case let .string(aud) = result.claims.aud {
+    if case .string(let aud) = result.claims.aud {
       XCTAssertEqual(aud, "authenticated")
     } else {
       XCTFail("Expected string audience")
@@ -2261,7 +2285,8 @@ final class AuthClientTests: XCTestCase {
 
   func testGetClaims_withoutJWT_shouldUseSessionAccessToken() async throws {
     // HS256 JWT from session
-    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
+    let jwt =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
     var session = Session.validSession
     session.accessToken = jwt
@@ -2287,7 +2312,8 @@ final class AuthClientTests: XCTestCase {
 
   func testGetClaims_withProvidedJWKS_shouldStillFallbackForES256() async throws {
     // ES256 is not yet supported client-side, so it will fallback to server even with JWKS
-    let jwt = "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
+    let jwt =
+      "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
 
     // JWK is Codable, no custom init needed
     let jwkDict: [String: Any] = [
@@ -2296,7 +2322,7 @@ final class AuthClientTests: XCTestCase {
       "alg": "ES256",
       "crv": "P-256",
       "x": "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
-      "y": "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM"
+      "y": "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM",
     ]
 
     let jwkData = try JSONSerialization.data(withJSONObject: jwkDict)
@@ -2323,7 +2349,8 @@ final class AuthClientTests: XCTestCase {
 
   func testGetClaims_withES256JWT_shouldFallbackToServerVerification() async throws {
     // ES256 JWT without kid - will fallback to server
-    let jwt = "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
+    let jwt =
+      "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
 
     let user = User(fromMockNamed: "user")
 
@@ -2343,9 +2370,11 @@ final class AuthClientTests: XCTestCase {
     XCTAssertEqual(result.claims.role, "authenticated")
   }
 
-  func testGetClaims_withRS256JWT_whenJWKNotFound_shouldFallbackToServerVerification() async throws {
+  func testGetClaims_withRS256JWT_whenJWKNotFound_shouldFallbackToServerVerification() async throws
+  {
     // RS256 JWT with kid but key not in JWKS - will try to fetch JWKS, not find it, then fallback to server
-    let jwt = "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
+    let jwt =
+      "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
 
     // Mock JWKS endpoint with different kid
     let jwkDict: [String: Any] = [
@@ -2353,7 +2382,7 @@ final class AuthClientTests: XCTestCase {
       "kid": "different-kid",
       "alg": "RS256",
       "n": "modulus",
-      "e": "AQAB"
+      "e": "AQAB",
     ]
     let jwkData = try JSONSerialization.data(withJSONObject: jwkDict)
     let jwk = try AuthClient.Configuration.jsonDecoder.decode(JWK.self, from: jwkData)
@@ -2387,7 +2416,8 @@ final class AuthClientTests: XCTestCase {
 
   func testGetClaims_withNoKidInHeader_shouldFallbackToServerVerification() async throws {
     // JWT without kid - cannot look up in JWKS
-    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ODc2NTQzMjEiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU0MzIxL2F1dGgvdjEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.YT0NvH-jYKCiN-wrAVcMmTIxZkQ3OtqTVFjJAqGcRuw"
+    let jwt =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ODc2NTQzMjEiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU0MzIxL2F1dGgvdjEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.YT0NvH-jYKCiN-wrAVcMmTIxZkQ3OtqTVFjJAqGcRuw"
 
     let user = User(fromMockNamed: "user")
 
@@ -2444,7 +2474,8 @@ final class AuthClientTests: XCTestCase {
 
   func testGetClaims_withExpiredJWT_shouldThrowJWTVerificationFailed() async throws {
     // JWT with exp in the past
-    let expiredJWT = "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.MEYCIQDmtLy0PF_lR7rJQHyKLmJKp1xFKECfVvGTBcXiVnz0jAIhAOoXZJ3kHSA2MqL1XhcUy8dWOZCr6zWCN_FXsP8qKfPR"
+    let expiredJWT =
+      "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.MEYCIQDmtLy0PF_lR7rJQHyKLmJKp1xFKECfVvGTBcXiVnz0jAIhAOoXZJ3kHSA2MqL1XhcUy8dWOZCr6zWCN_FXsP8qKfPR"
 
     let sut = makeSUT()
 
@@ -2464,7 +2495,8 @@ final class AuthClientTests: XCTestCase {
 
   func testGetClaims_withExpiredJWTAndAllowExpired_shouldReturnClaims() async throws {
     // JWT with exp in the past but allowExpired option - falls back to server
-    let expiredJWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.aN0HLYHkp7nKZp4xWvBaDqSrCFBxk2tq0KZc4BXGqYs"
+    let expiredJWT =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.aN0HLYHkp7nKZp4xWvBaDqSrCFBxk2tq0KZc4BXGqYs"
 
     let user = User(fromMockNamed: "user")
 
@@ -2478,25 +2510,31 @@ final class AuthClientTests: XCTestCase {
 
     let sut = makeSUT()
 
-    let result = try await sut.getClaims(jwt: expiredJWT, options: GetClaimsOptions(allowExpired: true))
+    let result = try await sut.getClaims(
+      jwt: expiredJWT,
+      options: GetClaimsOptions(allowExpired: true)
+    )
 
     XCTAssertEqual(result.claims.sub, "1234567890")
-    XCTAssertEqual(result.claims.exp, 1516239022)
+    XCTAssertEqual(result.claims.exp, 1_516_239_022)
   }
 
   func testGetClaims_whenServerRejectsJWT_shouldThrowError() async throws {
     // HS256 JWT that will be verified server-side
-    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
+    let jwt =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
     Mock(
       url: clientURL.appendingPathComponent("user"),
       ignoreQuery: true,
       contentType: .json,
       statusCode: 401,
-      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode([
-        "error": "invalid_token",
-        "error_description": "Invalid JWT"
-      ])]
+      data: [
+        .get: try! AuthClient.Configuration.jsonEncoder.encode([
+          "error": "invalid_token",
+          "error_description": "Invalid JWT",
+        ])
+      ]
     ).register()
 
     let sut = makeSUT()
@@ -2512,7 +2550,8 @@ final class AuthClientTests: XCTestCase {
   func testGetClaims_withComplexClaims_shouldDecodeAllFields() async throws {
     // JWT with multiple claim fields
     // HS256 so it falls back to server verification
-    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjE1MTYyMzkwMjIsImp0aSI6InRlc3QtanRpIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJwaG9uZSI6IisxMjM0NTY3ODkwIn0.dBYm1Y-TfRjPsxw_gXqHB5zGHSH9hXS0OeFN_wL8HbA"
+    let jwt =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjE1MTYyMzkwMjIsImp0aSI6InRlc3QtanRpIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJwaG9uZSI6IisxMjM0NTY3ODkwIn0.dBYm1Y-TfRjPsxw_gXqHB5zGHSH9hXS0OeFN_wL8HbA"
 
     let user = User(fromMockNamed: "user")
 
@@ -2530,14 +2569,14 @@ final class AuthClientTests: XCTestCase {
 
     XCTAssertEqual(result.claims.sub, "1234567890")
     XCTAssertEqual(result.claims.iss, "http://localhost:54321/auth/v1")
-    if case let .string(aud) = result.claims.aud {
+    if case .string(let aud) = result.claims.aud {
       XCTAssertEqual(aud, "authenticated")
     } else {
       XCTFail("Expected string audience")
     }
-    XCTAssertEqual(result.claims.exp, 9999999999)
-    XCTAssertEqual(result.claims.iat, 1516239022)
-    XCTAssertEqual(result.claims.nbf, 1516239022)
+    XCTAssertEqual(result.claims.exp, 9_999_999_999)
+    XCTAssertEqual(result.claims.iat, 1_516_239_022)
+    XCTAssertEqual(result.claims.nbf, 1_516_239_022)
     XCTAssertEqual(result.claims.jti, "test-jti")
     XCTAssertEqual(result.claims.role, "authenticated")
     XCTAssertEqual(result.claims.email, "test@example.com")
@@ -2546,7 +2585,8 @@ final class AuthClientTests: XCTestCase {
 
   func testGetClaims_withArrayAudience_shouldDecodeCorrectly() async throws {
     // JWT with audience as array
-    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjpbImF1dGhlbnRpY2F0ZWQiLCJzZXJ2aWNlLXJvbGUiXSwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.Jz-lHQoR2VsQ_vX8wKyN7mPxT4aU9cF1bYsHqGdWlIk"
+    let jwt =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjpbImF1dGhlbnRpY2F0ZWQiLCJzZXJ2aWNlLXJvbGUiXSwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.Jz-lHQoR2VsQ_vX8wKyN7mPxT4aU9cF1bYsHqGdWlIk"
 
     let user = User(fromMockNamed: "user")
 
@@ -2619,22 +2659,33 @@ final class AuthClientTests: XCTestCase {
     line: UInt = #line,
     column: UInt = #column
   ) async throws -> T {
-    let eventsTask = Task {
-      await sut.authStateChanges.prefix(expectedEvents.count).collect()
+    let receivedEvents = LockIsolated([(event: AuthChangeEvent, session: Session?)]())
+    let finished = LockIsolated(false)
+
+    Task {
+      for await change in sut.authStateChanges {
+        if finished.value {
+          XCTFail("Received event '\(change.event)' after it finished.", file: filePath, line: line)
+        }
+        receivedEvents.withValue { $0.append(change) }
+      }
     }
 
     await Task.megaYield()
 
     let result = try await action()
 
-    let authStateChanges = try await withTimeout(interval: timeout) {
-      await eventsTask.value
+    try await withTimeout(interval: timeout) {
+      defer { finished.setValue(true) }
+      while receivedEvents.count < expectedEvents.count {
+        await Task.yield()
+      }
     }
-    let events = authStateChanges.map(\.event)
-    let sessions = authStateChanges.map(\.session)
+
+    await Task.megaYield()
 
     expectNoDifference(
-      events,
+      receivedEvents.value.map(\.event),
       expectedEvents,
       fileID: fileID,
       filePath: filePath,
@@ -2644,7 +2695,7 @@ final class AuthClientTests: XCTestCase {
 
     if let expectedSessions = expectedSessions {
       expectNoDifference(
-        sessions,
+        receivedEvents.value.map(\.session),
         expectedSessions,
         fileID: fileID,
         filePath: filePath,

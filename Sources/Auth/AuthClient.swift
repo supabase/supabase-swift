@@ -224,9 +224,9 @@ public actor AuthClient {
   @discardableResult
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
-  ) async -> some AuthStateChangeListenerRegistration {
+  ) -> some AuthStateChangeListenerRegistration {
     let token = eventEmitter.attach(listener)
-    await emitInitialSession(forToken: token)
+    emitInitialSession(forToken: token)
     return token
   }
 
@@ -1392,9 +1392,8 @@ public actor AuthClient {
     Task { await sessionManager.stopAutoRefresh() }
   }
 
-  private func emitInitialSession(forToken token: ObservationToken) async {
-    let session = try? await session
-    eventEmitter.emit(.initialSession, session: session, token: token)
+  private func emitInitialSession(forToken token: ObservationToken) {
+    eventEmitter.emit(.initialSession, session: currentSession, token: token)
   }
 
   nonisolated private func prepareForPKCE() -> (
