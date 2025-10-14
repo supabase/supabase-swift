@@ -74,6 +74,8 @@ let client = SupabaseClient(
 )
 ```
 
+Additional examples are available [here](https://github.com/supabase/supabase-swift/tree/main/Examples).
+
 ## Support Policy
 
 This document outlines the scope of support for Xcode, Swift, and the various platforms (iOS, macOS, tvOS, watchOS, and visionOS) in Supabase.
