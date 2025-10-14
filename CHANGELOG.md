@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.35.0](https://github.com/supabase/supabase-swift/compare/v2.34.0...v2.35.0) (2025-10-13)
+
+
+### Features
+
+* **realtime:** add explicit REST API broadcast method ([#818](https://github.com/supabase/supabase-swift/issues/818)) ([bc0d779](https://github.com/supabase/supabase-swift/commit/bc0d7790b3b836684db80196d4b65b4b259acc63))
+
 ## [2.34.0](https://github.com/supabase/supabase-swift/compare/v2.33.2...v2.34.0) (2025-10-07)
 
 
