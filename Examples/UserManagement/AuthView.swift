@@ -20,9 +20,9 @@ struct AuthView: View {
         TextField("Email", text: $email)
           .textContentType(.emailAddress)
           .autocorrectionDisabled()
-        #if os(iOS)
-          .textInputAutocapitalization(.never)
-        #endif
+          #if os(iOS)
+            .textInputAutocapitalization(.never)
+          #endif
       }
 
       Section {
@@ -39,7 +39,7 @@ struct AuthView: View {
         Section {
           switch result {
           case .success: Text("Check you inbox.")
-          case let .failure(error): Text(error.localizedDescription).foregroundStyle(.red)
+          case .failure(let error): Text(error.localizedDescription).foregroundStyle(.red)
           }
         }
       }

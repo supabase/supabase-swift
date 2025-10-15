@@ -23,7 +23,7 @@ struct BucketDetailView: View {
         Color.clear
       case .inFlight:
         ProgressView()
-      case let .result(.success(files)):
+      case .result(.success(let files)):
         List {
           Section("Actions") {
             Button("createSignedUploadURL") {
@@ -50,7 +50,7 @@ struct BucketDetailView: View {
             }
           }
         }
-      case let .result(.failure(error)):
+      case .result(.failure(let error)):
         VStack {
           ErrorText(error)
           Button("Retry") {

@@ -33,8 +33,8 @@ struct Messages {
 
   mutating func appendOrUpdate(_ message: Message) {
     if let sectionIndex = messageToSectionLookupTable[message.id],
-       let messageIndex = sections[sectionIndex].messages
-       .firstIndex(where: { $0.id == message.id })
+      let messageIndex = sections[sectionIndex].messages
+        .firstIndex(where: { $0.id == message.id })
     {
       sections[sectionIndex].messages[messageIndex] = message
     } else {

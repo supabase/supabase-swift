@@ -18,7 +18,7 @@ struct BucketList: View {
         Color.clear
       case .inFlight:
         ProgressView()
-      case let .result(.success(buckets)):
+      case .result(.success(let buckets)):
         List {
           ForEach(buckets, id: \.self) { bucket in
             NavigationLink(bucket.name, value: bucket)
@@ -29,7 +29,7 @@ struct BucketList: View {
             Text("No buckets found.")
           }
         }
-      case let .result(.failure(error)):
+      case .result(.failure(let error)):
         VStack {
           ErrorText(error)
           Button("Retry") {
