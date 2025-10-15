@@ -49,7 +49,10 @@ Then you're able to import the package and establish the connection with the dat
 
 ```swift
 /// Create a single supabase client for interacting with your database
-let client = SupabaseClient(supabaseURL: URL(string: "https://xyzcompany.supabase.co")!, supabaseKey: "public-anon-key")
+let client = SupabaseClient(
+    supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
+    supabaseKey: "public-anon-key"
+)
 ```
 
 ### Initialize with custom options
