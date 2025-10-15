@@ -315,7 +315,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       body: body
     )
 
-    let response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) { [self] in
+    let response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) {
+      [self] in
       await Result {
         try await socket.http.send(request)
       }
@@ -346,10 +347,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   @MainActor
   public func broadcast(event: String, message: JSONObject) async {
     if status != .subscribed {
-      logger?.warning(
-        "Realtime broadcast() is automatically falling back to REST API. "
-          + "This behavior will be deprecated in the future. "
-          + "Please use httpSend() explicitly for REST delivery."
+      reportIssue(
+        """
+        Realtime broadcast() is automatically falling back to REST API.
+        This behavior will be deprecated in the future.
+        Please use httpSend() explicitly for REST delivery.
+        """
       )
 
       var headers: HTTPFields = [.contentType: "application/json"]
@@ -751,4 +754,3 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
   }
 }
-

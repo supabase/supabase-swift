@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import IssueReporting
 
 #if canImport(AuthenticationServices)
   import AuthenticationServices
@@ -1410,7 +1411,7 @@ public actor AuthClient {
       let session = try? await session
       eventEmitter.emit(.initialSession, session: session, token: token)
 
-      logger?.warning(
+      reportIssue(
         """
         Initial session emitted after attempting to refresh the local stored session.
         This is incorrect behavior and will be fixed in the next major release since it’s a breaking change.
