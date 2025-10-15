@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.36.0](https://github.com/supabase/supabase-swift/compare/v2.35.0...v2.36.0) (2025-10-15)
+
+
+### Features
+
+* **examples:** comprehensive UX overhaul with inline code examples ([#819](https://github.com/supabase/supabase-swift/issues/819)) ([70e8c18](https://github.com/supabase/supabase-swift/commit/70e8c18c52dd1efeab82030e449d5fadbd2a3d7d))
+
+
+### Bug Fixes
+
+* **auth:** emit local stored session as the initial session ([#822](https://github.com/supabase/supabase-swift/issues/822)) ([c5721fe](https://github.com/supabase/supabase-swift/commit/c5721fe540df0789239eb8497fe26acdec3c62ca))
+* exclude __Snapshots__ directories from test targets ([#815](https://github.com/supabase/supabase-swift/issues/815)) ([f05a1bf](https://github.com/supabase/supabase-swift/commit/f05a1bf68f7b5091eb15c86e98af1b345681de06))
+
 ## [2.35.0](https://github.com/supabase/supabase-swift/compare/v2.34.0...v2.35.0) (2025-10-13)
 
 
