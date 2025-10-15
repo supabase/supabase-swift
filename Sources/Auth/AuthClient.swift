@@ -218,9 +218,8 @@ public actor AuthClient {
   /// - Parameter listener: Block that executes when a new event is emitted.
   /// - Returns: A handle that can be used to manually unsubscribe.
   ///
-  /// - Note: This method blocks execution until the ``AuthChangeEvent/initialSession`` event is
-  /// emitted. Although this operation is usually fast, in case of the current stored session being
-  /// invalid, a call to the endpoint is necessary for refreshing the session.
+  /// - Note: The session emitted in the  ``AuthChangeEvent/initialSession`` event may have been expired
+  /// since last launch, consider checking for ``Session/isExpired``. If this is the case, then expect a ``AuthChangeEvent/tokenRefreshed`` after.
   @discardableResult
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
@@ -1393,8 +1392,36 @@ public actor AuthClient {
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {
-    let session = try? await session
-    eventEmitter.emit(.initialSession, session: session, token: token)
+    #if EmitLocalSessionAsInitialSession
+      guard let currentSession else {
+        eventEmitter.emit(.initialSession, session: nil, token: token)
+        return
+      }
+
+      eventEmitter.emit(.initialSession, session: currentSession, token: token)
+
+      Task {
+        if currentSession.isExpired {
+          _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
+          // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
+        }
+      }
+    #else
+      let session = try? await session
+      eventEmitter.emit(.initialSession, session: session, token: token)
+
+      logger?.warning(
+        """
+        Initial session emitted after attempting to refresh the local stored session.
+        This is incorrect behavior and will be fixed in the next major release since it’s a breaking change.
+        For now, if you want to opt-in to the new behavior, add the trait `EmitLocalSessionAsInitialSession` to your Package.swift file when importing the Supabase dependency.
+        The new behavior ensures that the locally stored session is always emitted, regardless of its validity or expiration.
+        If you rely on the initial session to opt users in, you need to add an additional check for `session.isExpired` in the session.
+
+        Check https://github.com/supabase/supabase-swift/pull/822 for more information.
+        """
+      )
+    #endif
   }
 
   nonisolated private func prepareForPKCE() -> (
