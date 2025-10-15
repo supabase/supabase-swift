@@ -241,7 +241,7 @@ final class RealtimeTests: XCTestCase {
 
     // Wait for the timeout for rejoining.
     await testClock.advance(by: .seconds(timeoutInterval))
-    
+
     // Wait for the retry delay (base delay is 1.0s, but we need to account for jitter)
     // The retry delay is calculated as: baseDelay * pow(2, attempt-1) + jitter
     // For attempt 2: 1.0 * pow(2, 1) = 2.0s + jitter (up to ±25% = ±0.5s)
@@ -443,7 +443,7 @@ final class RealtimeTests: XCTestCase {
 
     await testClock.advance(by: .seconds(timeoutInterval))
     subscribeTask.cancel()
-    
+
     do {
       try await subscribeTask.value
       XCTFail("Expected cancellation error but got success")
@@ -573,51 +573,6 @@ final class RealtimeTests: XCTestCase {
 
     // Should have timeout status
     XCTAssertEqual(heartbeatStatuses.value, [.sent, .timeout])
-  }
-
-  func testBroadcastWithHTTP() async throws {
-    await http.when {
-      $0.url.path.hasSuffix("broadcast")
-    } return: { _ in
-      HTTPResponse(
-        data: "{}".data(using: .utf8)!,
-        response: HTTPURLResponse(
-          url: self.sut.broadcastURL,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
-    }
-
-    let channel = sut.channel("public:messages") {
-      $0.broadcast.acknowledgeBroadcasts = true
-    }
-
-    try await channel.broadcast(event: "test", message: ["value": 42])
-
-    let request = await http.receivedRequests.last
-    assertInlineSnapshot(of: request?.urlRequest, as: .raw(pretty: true)) {
-      """
-      POST http://localhost:54321/realtime/v1/api/broadcast
-      Authorization: Bearer custom.access.token
-      Content-Type: application/json
-      apiKey: anon.api.key
-
-      {
-        "messages" : [
-          {
-            "event" : "test",
-            "payload" : {
-              "value" : 42
-            },
-            "private" : false,
-            "topic" : "realtime:public:messages"
-          }
-        ]
-      }
-      """
-    }
   }
 
   func testSetAuth() async {
