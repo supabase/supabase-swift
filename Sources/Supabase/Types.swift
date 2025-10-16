@@ -89,13 +89,6 @@ public struct SupabaseClientOptions: Sendable {
     /// Optional headers for initializing the client, it will be passed down to all sub-clients.
     public let headers: [String: String]
 
-    /// A session to use for making requests, defaults to `URLSession.shared`.
-    @available(
-      *, deprecated,
-      message: "Use alamofireSession instead. This will be removed in a future version."
-    )
-    public let session: URLSession
-
     /// Alamofire session to use for making requests, defaults to `Alamofire.Session.default`.
     public let alamofireSession: Alamofire.Session
 
@@ -108,7 +101,6 @@ public struct SupabaseClientOptions: Sendable {
       logger: (any SupabaseLogger)? = nil
     ) {
       self.headers = headers
-      self.session = alamofireSession.session
       self.alamofireSession = alamofireSession
       self.logger = logger
     }

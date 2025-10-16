@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 14/12/23.
 //
 
+import Alamofire
 import Foundation
 
 #if canImport(FoundationNetworking)
@@ -67,7 +68,7 @@ extension AuthClient.Configuration {
     *,
     deprecated,
     message:
-      "Replace usages of this initializer with new init(url:headers:flowType:localStorage:logger:encoder:decoder:fetch)"
+      "Replace usages of this initializer with new init(url:headers:flowType:redirectToURL:storageKey:localStorage:logger:encoder:decoder:alamofireSession:autoRefreshToken:)"
   )
   public init(
     url: URL,
@@ -82,11 +83,65 @@ extension AuthClient.Configuration {
       url: url,
       headers: headers,
       flowType: flowType,
+      redirectToURL: nil,
+      storageKey: nil,
       localStorage: localStorage,
       logger: nil,
       encoder: encoder,
       decoder: decoder,
-      fetch: fetch
+      fetch: fetch,
+      alamofireSession: .default,
+      autoRefreshToken: Self.defaultAutoRefreshToken
+    )
+  }
+
+  /// Initializes a AuthClient Configuration with optional parameters.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server.
+  ///   - headers: Custom headers to be included in requests.
+  ///   - flowType: The authentication flow type.
+  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
+  ///   - storageKey: Optional key name used for storing tokens in local storage.
+  ///   - localStorage: The storage mechanism for local data.
+  ///   - logger: The logger to use.
+  ///   - encoder: The JSON encoder to use for encoding requests.
+  ///   - decoder: The JSON decoder to use for decoding responses.
+  ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+  @available(
+    *,
+    deprecated,
+    message:
+      "Use init(url:headers:flowType:redirectToURL:storageKey:localStorage:logger:encoder:decoder:alamofireSession:autoRefreshToken:) instead. This initializer will be removed in a future version."
+  )
+  @_disfavoredOverload
+  public init(
+    url: URL? = nil,
+    headers: [String: String] = [:],
+    flowType: AuthFlowType = Self.defaultFlowType,
+    redirectToURL: URL? = nil,
+    storageKey: String? = nil,
+    localStorage: any AuthLocalStorage,
+    logger: (any SupabaseLogger)? = nil,
+    encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
+    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
+    fetch: @escaping AuthClient.FetchHandler,
+    autoRefreshToken: Bool = Self.defaultAutoRefreshToken
+  ) {
+    self.init(
+      url: url,
+      headers: headers,
+      flowType: flowType,
+      redirectToURL: redirectToURL,
+      storageKey: storageKey,
+      localStorage: localStorage,
+      logger: logger,
+      encoder: encoder,
+      decoder: decoder,
+      fetch: fetch,
+      alamofireSession: .default,
+      autoRefreshToken: autoRefreshToken
     )
   }
 }
@@ -106,7 +161,7 @@ extension AuthClient {
     *,
     deprecated,
     message:
-      "Replace usages of this initializer with new init(url:headers:flowType:localStorage:logger:encoder:decoder:fetch)"
+      "Replace usages of this initializer with new init(url:headers:flowType:redirectToURL:storageKey:localStorage:logger:encoder:decoder:alamofireSession:autoRefreshToken:)"
   )
   public init(
     url: URL,
@@ -118,14 +173,66 @@ extension AuthClient {
     fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) }
   ) {
     self.init(
-      url: url,
-      headers: headers,
-      flowType: flowType,
-      localStorage: localStorage,
-      logger: nil,
-      encoder: encoder,
-      decoder: decoder,
-      fetch: fetch
+      configuration: Configuration(
+        url: url,
+        headers: headers,
+        flowType: flowType,
+        localStorage: localStorage,
+        encoder: encoder,
+        decoder: decoder,
+        fetch: fetch
+      )
+    )
+  }
+
+  /// Initializes a AuthClient with optional parameters.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server.
+  ///   - headers: Custom headers to be included in requests.
+  ///   - flowType: The authentication flow type.
+  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
+  ///   - storageKey: Optional key name used for storing tokens in local storage.
+  ///   - localStorage: The storage mechanism for local data.
+  ///   - logger: The logger to use.
+  ///   - encoder: The JSON encoder to use for encoding requests.
+  ///   - decoder: The JSON decoder to use for decoding responses.
+  ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+  @available(
+    *,
+    deprecated,
+    message:
+      "Use init(url:headers:flowType:redirectToURL:storageKey:localStorage:logger:encoder:decoder:alamofireSession:autoRefreshToken:) instead. This initializer will be removed in a future version."
+  )
+  @_disfavoredOverload
+  public init(
+    url: URL? = nil,
+    headers: [String: String] = [:],
+    flowType: AuthFlowType = Configuration.defaultFlowType,
+    redirectToURL: URL? = nil,
+    storageKey: String? = nil,
+    localStorage: any AuthLocalStorage,
+    logger: (any SupabaseLogger)? = nil,
+    encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
+    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
+    fetch: @escaping AuthClient.FetchHandler,
+    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+  ) {
+    self.init(
+      configuration: Configuration(
+        url: url,
+        headers: headers,
+        flowType: flowType,
+        redirectToURL: redirectToURL,
+        storageKey: storageKey,
+        localStorage: localStorage,
+        logger: logger,
+        encoder: encoder,
+        decoder: decoder,
+        fetch: fetch,
+        autoRefreshToken: autoRefreshToken
+      )
     )
   }
 }

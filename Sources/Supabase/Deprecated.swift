@@ -28,6 +28,15 @@ extension SupabaseClient {
 }
 
 extension SupabaseClientOptions.GlobalOptions {
+  /// A session to use for making requests, defaults to `URLSession.shared`.
+  @available(
+    *, deprecated,
+    message: "Use alamofireSession instead. This will be removed in a future version."
+  )
+  public var session: URLSession {
+    alamofireSession.session
+  }
+
   @available(
     *, deprecated,
     message:
@@ -41,7 +50,8 @@ extension SupabaseClientOptions.GlobalOptions {
     self.init(
       headers: headers,
       alamofireSession: Alamofire.Session(
-        session: session, delegate: SessionDelegate(),
+        session: session,
+        delegate: SessionDelegate(),
         rootQueue: DispatchQueue(label: "com.supabase.session")),
       logger: logger
     )

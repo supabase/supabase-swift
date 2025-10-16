@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 16/01/24.
 //
 
+import Alamofire
 import Foundation
 
 extension StorageClientConfiguration {
@@ -12,7 +13,7 @@ extension StorageClientConfiguration {
     *,
     deprecated,
     message:
-      "Replace usages of this initializer with new init(url:headers:encoder:decoder:session:logger)"
+      "Replace usages of this initializer with new init(url:headers:encoder:decoder:alamofireSession:logger:useNewHostname:)"
   )
   public init(
     url: URL,
@@ -27,7 +28,37 @@ extension StorageClientConfiguration {
       encoder: encoder,
       decoder: decoder,
       session: session,
-      logger: nil
+      alamofireSession: .default,
+      logger: nil,
+      useNewHostname: false
+    )
+  }
+
+  @available(
+    *,
+    deprecated,
+    message:
+      "Use init(url:headers:encoder:decoder:alamofireSession:logger:useNewHostname:) instead. This initializer will be removed in a future version."
+  )
+  @_disfavoredOverload
+  public init(
+    url: URL,
+    headers: [String: String],
+    encoder: JSONEncoder = .defaultStorageEncoder,
+    decoder: JSONDecoder = .defaultStorageDecoder,
+    session: StorageHTTPSession,
+    logger: (any SupabaseLogger)? = nil,
+    useNewHostname: Bool = false
+  ) {
+    self.init(
+      url: url,
+      headers: headers,
+      encoder: encoder,
+      decoder: decoder,
+      session: session,
+      alamofireSession: .default,
+      logger: logger,
+      useNewHostname: useNewHostname
     )
   }
 }
