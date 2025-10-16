@@ -295,7 +295,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
     headers[.authorization] = "Bearer \(accessToken)"
 
-    let body = try await JSONEncoder().encode(
+    let body = try await JSONEncoder.supabase().encode(
       BroadcastMessagePayload(
         messages: [
           BroadcastMessagePayload.Message(
@@ -315,7 +315,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       body: body
     )
 
-    let response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) { [self] in
+    let response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) {
+      [self] in
       await Result {
         try await socket.http.send(request)
       }
@@ -346,11 +347,17 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   @MainActor
   public func broadcast(event: String, message: JSONObject) async {
     if status != .subscribed {
-      logger?.warning(
-        "Realtime broadcast() is automatically falling back to REST API. "
-          + "This behavior will be deprecated in the future. "
-          + "Please use httpSend() explicitly for REST delivery."
-      )
+      // Properly expecting issues during tests isn't working as expected, I think because the reportIssue is usually triggered inside an unstructured Task
+      // because of this I'm disabling issue reporting during tests, so we can use it only for advising developers when running their applications.
+      if !isTesting {
+        reportIssue(
+          """
+          Realtime broadcast() is automatically falling back to REST API.
+          This behavior will be deprecated in the future.
+          Please use httpSend() explicitly for REST delivery.
+          """
+        )
+      }
 
       var headers: HTTPFields = [.contentType: "application/json"]
       if let apiKey = socket.options.apikey {
@@ -366,7 +373,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
             url: socket.broadcastURL,
             method: .post,
             headers: headers,
-            body: JSONEncoder().encode(
+            body: JSONEncoder.supabase().encode(
               BroadcastMessagePayload(
                 messages: [
                   BroadcastMessagePayload.Message(
@@ -751,4 +758,3 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
   }
 }
-

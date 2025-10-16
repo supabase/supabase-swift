@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
+import XCTestDynamicOverlay
 
 extension JSONDecoder {
   /// Default `JSONDecoder` for decoding types from Supabase.
@@ -21,7 +22,8 @@ extension JSONDecoder {
       }
 
       throw DecodingError.dataCorruptedError(
-        in: container, debugDescription: "Invalid date format: \(string)"
+        in: container,
+        debugDescription: "Invalid date format: \(string)"
       )
     }
     return decoder
@@ -36,6 +38,13 @@ extension JSONEncoder {
       let string = date.iso8601String
       try container.encode(string)
     }
+
+    #if DEBUG
+      if isTesting {
+        encoder.outputFormatting = [.sortedKeys]
+      }
+    #endif
+
     return encoder
   }
 }
