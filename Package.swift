@@ -24,6 +24,7 @@ let package = Package(
       targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]),
   ],
   dependencies: [
+    .package(url: "https://github.com/alamofire/alamofire.git", from: "5.0.0"),
     .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0"..<"5.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
@@ -41,6 +42,7 @@ let package = Package(
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "Alamofire", package: "Alamofire"),
       ]
     ),
     .testTarget(
