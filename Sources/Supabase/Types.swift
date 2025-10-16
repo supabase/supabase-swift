@@ -1,3 +1,4 @@
+import Alamofire
 import Foundation
 
 #if canImport(FoundationNetworking)
@@ -89,18 +90,26 @@ public struct SupabaseClientOptions: Sendable {
     public let headers: [String: String]
 
     /// A session to use for making requests, defaults to `URLSession.shared`.
+    @available(
+      *, deprecated,
+      message: "Use alamofireSession instead. This will be removed in a future version."
+    )
     public let session: URLSession
+
+    /// Alamofire session to use for making requests, defaults to `Alamofire.Session.default`.
+    public let alamofireSession: Alamofire.Session
 
     /// The logger  to use across all Supabase sub-packages.
     public let logger: (any SupabaseLogger)?
 
     public init(
       headers: [String: String] = [:],
-      session: URLSession = .shared,
+      alamofireSession: Alamofire.Session = .default,
       logger: (any SupabaseLogger)? = nil
     ) {
       self.headers = headers
-      self.session = session
+      self.session = alamofireSession.session
+      self.alamofireSession = alamofireSession
       self.logger = logger
     }
   }
@@ -122,7 +131,7 @@ public struct SupabaseClientOptions: Sendable {
   public struct StorageOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let useNewHostname: Bool
-    
+
     public init(useNewHostname: Bool = false) {
       self.useNewHostname = useNewHostname
     }

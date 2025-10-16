@@ -1,6 +1,8 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -11,9 +13,10 @@ let version = Helpers.version
 /// An actor representing a client for invoking functions.
 public final class FunctionsClient: Sendable {
   /// Fetch handler used to make requests.
-  public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
-    Data, URLResponse
-  )
+  public typealias FetchHandler =
+    @Sendable (_ request: URLRequest) async throws -> (
+      Data, URLResponse
+    )
 
   /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
   ///
@@ -53,15 +56,15 @@ public final class FunctionsClient: Sendable {
     headers: [String: String] = [:],
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+    alamofireSession: Alamofire.Session = .default
   ) {
     self.init(
       url: url,
       headers: headers,
       region: region,
       logger: logger,
-      fetch: fetch,
-      sessionConfiguration: .default
+      fetch: nil,
+      alamofireSession: alamofireSession
     )
   }
 
@@ -70,22 +73,27 @@ public final class FunctionsClient: Sendable {
     headers: [String: String] = [:],
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    sessionConfiguration: URLSessionConfiguration
+    fetch: FetchHandler?,
+    alamofireSession: Alamofire.Session
   ) {
     var interceptors: [any HTTPClientInterceptor] = []
     if let logger {
       interceptors.append(LoggerInterceptor(logger: logger))
     }
 
-    let http = HTTPClient(fetch: fetch, interceptors: interceptors)
+    let http: any HTTPClientType =
+      if let fetch {
+        HTTPClient(fetch: fetch, interceptors: interceptors)
+      } else {
+        AlamofireHTTPClient(session: alamofireSession)
+      }
 
     self.init(
       url: url,
       headers: headers,
       region: region,
       http: http,
-      sessionConfiguration: sessionConfiguration
+      sessionConfiguration: alamofireSession.session.configuration
     )
   }
 
@@ -94,7 +102,7 @@ public final class FunctionsClient: Sendable {
     headers: [String: String],
     region: String?,
     http: any HTTPClientType,
-    sessionConfiguration: URLSessionConfiguration = .default
+    sessionConfiguration: URLSessionConfiguration
   ) {
     self.url = url
     self.region = region
@@ -122,9 +130,11 @@ public final class FunctionsClient: Sendable {
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
+    alamofireSession: Alamofire.Session = .default
   ) {
-    self.init(url: url, headers: headers, region: region?.rawValue, logger: logger, fetch: fetch)
+    self.init(
+      url: url, headers: headers, region: region?.rawValue, logger: logger, fetch: nil,
+      alamofireSession: alamofireSession)
   }
 
   /// Updates the authorization header.

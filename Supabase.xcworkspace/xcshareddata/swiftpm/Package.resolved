@@ -1,6 +1,15 @@
 {
-  "originHash" : "68a31593121bf823182bc731b17208689dafb38f7cb085035de5e74a0ed41e89",
+  "originHash" : "7a227a9457a4d33a10498436bcd6edbbb8ef72312871f8a59a70176b1b27c9ab",
   "pins" : [
+    {
+      "identity" : "alamofire",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Alamofire/Alamofire",
+      "state" : {
+        "revision" : "513364f870f6bfc468f9d2ff0a95caccc10044c5",
+        "version" : "5.10.2"
+      }
+    },
     {
       "identity" : "appauth-ios",
       "kind" : "remoteSourceControl",
