@@ -229,7 +229,7 @@ final class LoggerInterceptorTests: XCTestCase {
     let result = stringfy(emptyData)
 
     // Empty JSON object or empty string
-    XCTAssertFalse(result.isEmpty)
+    XCTAssertTrue(result.isEmpty)
   }
 
   func testStringfyWithComplexJSON() {

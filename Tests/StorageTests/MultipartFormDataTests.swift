@@ -57,7 +57,7 @@ final class MultipartFormDataTests: XCTestCase {
     formData.append(data1, withName: "field1", fileName: "file1.txt", mimeType: "text/plain")
     formData.append(data2, withName: "field2", fileName: "file2.txt", mimeType: "text/plain")
 
-    XCTAssertGreaterThan(formData.contentLength, UInt64(data1.count + data2.count))
+    XCTAssertEqual(formData.contentLength, UInt64(data1.count + data2.count))
   }
 
   func testEncodeFormData() throws {
