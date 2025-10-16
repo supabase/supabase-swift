@@ -575,6 +575,41 @@ final class RealtimeTests: XCTestCase {
     XCTAssertEqual(heartbeatStatuses.value, [.sent, .timeout])
   }
 
+  func testBroadcastWithHTTP() async throws {
+    await http.when {
+      $0.url.path.hasSuffix("broadcast")
+    } return: { _ in
+      HTTPResponse(
+        data: "{}".data(using: .utf8)!,
+        response: HTTPURLResponse(
+          url: self.sut.broadcastURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+
+    let channel = sut.channel("public:messages") {
+      $0.broadcast.acknowledgeBroadcasts = true
+    }
+
+    try await channel.broadcast(event: "test", message: ["value": 42])
+
+    let request = await http.receivedRequests.last
+    assertInlineSnapshot(of: request?.urlRequest, as: .curl) {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer custom.access.token" \
+      	--header "Content-Type: application/json" \
+      	--header "apiKey: anon.api.key" \
+      	--data "{\"messages\":[{\"event\":\"test\",\"payload\":{\"value\":42},\"private\":false,\"topic\":\"realtime:public:messages\"}]}" \
+      	"http://localhost:54321/realtime/v1/api/broadcast"
+      """#
+    }
+  }
+
   func testSetAuth() async {
     let validToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
