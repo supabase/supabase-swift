@@ -1,22 +1,25 @@
+import Alamofire
 import Foundation
 import HTTPTypes
 
-extension HTTPClient {
-  init(configuration: AuthClient.Configuration) {
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
+func makeHTTPClient(configuration: AuthClient.Configuration) -> any HTTPClientType {
+  var interceptors: [any HTTPClientInterceptor] = []
+  if let logger = configuration.logger {
+    interceptors.append(LoggerInterceptor(logger: logger))
+  }
 
-    interceptors.append(
-      RetryRequestInterceptor(
-        retryableHTTPMethods: RetryRequestInterceptor.defaultRetryableHTTPMethods.union(
-          [.post]  // Add POST method so refresh token are also retried.
-        )
+  interceptors.append(
+    RetryRequestInterceptor(
+      retryableHTTPMethods: RetryRequestInterceptor.defaultRetryableHTTPMethods.union(
+        [.post]  // Add POST method so refresh token are also retried.
       )
     )
+  )
 
-    self.init(fetch: configuration.fetch, interceptors: interceptors)
+  if let fetch = configuration.fetch {
+    return HTTPClient(fetch: fetch, interceptors: interceptors)
+  } else {
+    return AlamofireHTTPClient(session: configuration.alamofireSession)
   }
 }
 

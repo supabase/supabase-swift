@@ -26,13 +26,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     request: Helpers.HTTPRequest
   ) {
     self.configuration = configuration
-
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    http = HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
+    http = configuration.http
 
     mutableState = LockIsolated(
       MutableState(

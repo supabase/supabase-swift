@@ -1,3 +1,4 @@
+import Alamofire
 import Foundation
 
 public struct StorageClientConfiguration: Sendable {
@@ -5,6 +6,11 @@ public struct StorageClientConfiguration: Sendable {
   public var headers: [String: String]
   public let encoder: JSONEncoder
   public let decoder: JSONDecoder
+  let http: any HTTPClientType
+  @available(
+    *, deprecated,
+    message: "Use alamofireSession instead. This will be removed in a future version."
+  )
   public let session: StorageHTTPSession
   public let logger: (any SupabaseLogger)?
   public let useNewHostname: Bool
@@ -14,17 +20,51 @@ public struct StorageClientConfiguration: Sendable {
     headers: [String: String],
     encoder: JSONEncoder = .defaultStorageEncoder,
     decoder: JSONDecoder = .defaultStorageDecoder,
-    session: StorageHTTPSession = .init(),
+    alamofireSession: Alamofire.Session = .default,
     logger: (any SupabaseLogger)? = nil,
     useNewHostname: Bool = false
+  ) {
+    self.init(
+      url: url,
+      headers: headers,
+      encoder: encoder,
+      decoder: decoder,
+      session: nil,
+      alamofireSession: alamofireSession,
+      logger: logger,
+      useNewHostname: useNewHostname
+    )
+  }
+
+  init(
+    url: URL,
+    headers: [String: String],
+    encoder: JSONEncoder,
+    decoder: JSONDecoder,
+    session: StorageHTTPSession?,
+    alamofireSession: Alamofire.Session,
+    logger: (any SupabaseLogger)?,
+    useNewHostname: Bool
   ) {
     self.url = url
     self.headers = headers
     self.encoder = encoder
     self.decoder = decoder
-    self.session = session
+    self.session = session ?? StorageHTTPSession()
     self.logger = logger
     self.useNewHostname = useNewHostname
+
+    var interceptors: [any HTTPClientInterceptor] = []
+    if let logger {
+      interceptors.append(LoggerInterceptor(logger: logger))
+    }
+
+    self.http =
+      if let session {
+        HTTPClient(fetch: session.fetch, interceptors: interceptors)
+      } else {
+        AlamofireHTTPClient(session: alamofireSession)
+      }
   }
 }
 

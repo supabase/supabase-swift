@@ -39,16 +39,7 @@ public class StorageApi: @unchecked Sendable {
     }
 
     self.configuration = configuration
-
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    http = HTTPClient(
-      fetch: configuration.session.fetch,
-      interceptors: interceptors
-    )
+    http = configuration.http
   }
 
   @discardableResult

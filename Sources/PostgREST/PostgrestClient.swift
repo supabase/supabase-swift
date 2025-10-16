@@ -1,3 +1,4 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -22,6 +23,7 @@ public final class PostgrestClient: Sendable {
     public var encoder: JSONEncoder
     public var decoder: JSONDecoder
 
+    let http: any HTTPClientType
     let logger: (any SupabaseLogger)?
 
     /// Creates a PostgREST client.
@@ -30,7 +32,7 @@ public final class PostgrestClient: Sendable {
     ///   - schema: Postgres schema to switch to.
     ///   - headers: Custom headers.
     ///   - logger: The logger to use.
-    ///   - fetch: Custom fetch.
+    ///   - alamofireSession: Alamofire session to use for making requests.
     ///   - encoder: The JSONEncoder to use for encoding.
     ///   - decoder: The JSONDecoder to use for decoding.
     public init(
@@ -38,17 +40,52 @@ public final class PostgrestClient: Sendable {
       schema: String? = nil,
       headers: [String: String] = [:],
       logger: (any SupabaseLogger)? = nil,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      alamofireSession: Alamofire.Session = .default,
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+    ) {
+      self.init(
+        url: url,
+        schema: schema,
+        headers: headers,
+        logger: logger,
+        fetch: { try await alamofireSession.session.data(for: $0) },
+        alamofireSession: alamofireSession,
+        encoder: encoder,
+        decoder: decoder
+      )
+    }
+
+    init(
+      url: URL,
+      schema: String?,
+      headers: [String: String],
+      logger: (any SupabaseLogger)?,
+      fetch: FetchHandler?,
+      alamofireSession: Alamofire.Session,
+      encoder: JSONEncoder,
+      decoder: JSONDecoder
     ) {
       self.url = url
       self.schema = schema
       self.headers = headers
       self.logger = logger
-      self.fetch = fetch
       self.encoder = encoder
       self.decoder = decoder
+
+      var interceptors: [any HTTPClientInterceptor] = []
+      if let logger {
+        interceptors.append(LoggerInterceptor(logger: logger))
+      }
+
+      self.http =
+        if let fetch {
+          HTTPClient(fetch: fetch, interceptors: interceptors)
+        } else {
+          AlamofireHTTPClient(session: alamofireSession)
+        }
+
+        self.fetch = fetch ?? { try await alamofireSession.session.data(for: $0) }
     }
   }
 
@@ -70,7 +107,7 @@ public final class PostgrestClient: Sendable {
   ///   - schema: Postgres schema to switch to.
   ///   - headers: Custom headers.
   ///   - logger: The logger to use.
-  ///   - fetch: Custom fetch.
+  ///   - alamofireSession: Alamofire session to use for making requests.
   ///   - encoder: The JSONEncoder to use for encoding.
   ///   - decoder: The JSONDecoder to use for decoding.
   public convenience init(
@@ -78,7 +115,7 @@ public final class PostgrestClient: Sendable {
     schema: String? = nil,
     headers: [String: String] = [:],
     logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    alamofireSession: Alamofire.Session = .default,
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
@@ -88,7 +125,7 @@ public final class PostgrestClient: Sendable {
         schema: schema,
         headers: headers,
         logger: logger,
-        fetch: fetch,
+        alamofireSession: alamofireSession,
         encoder: encoder,
         decoder: decoder
       )

@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 29/04/24.
 //
 
+import Alamofire
 import Foundation
 
 #if canImport(FoundationNetworking)
@@ -13,9 +14,10 @@ import Foundation
 
 extension AuthClient {
   /// FetchHandler is a type alias for asynchronous network request handling.
-  public typealias FetchHandler = @Sendable (
-    _ request: URLRequest
-  ) async throws -> (Data, URLResponse)
+  public typealias FetchHandler =
+    @Sendable (
+      _ request: URLRequest
+    ) async throws -> (Data, URLResponse)
 
   /// Configuration struct represents the client configuration.
   public struct Configuration: Sendable {
@@ -43,6 +45,9 @@ extension AuthClient {
     /// A custom fetch implementation.
     public let fetch: FetchHandler
 
+    /// Alamofire session to use for making requests.
+    public let alamofireSession: Alamofire.Session
+
     /// Set to `true` if you want to automatically refresh the token before expiring.
     public let autoRefreshToken: Bool
 
@@ -58,7 +63,7 @@ extension AuthClient {
     ///   - logger: The logger to use.
     ///   - encoder: The JSON encoder to use for encoding requests.
     ///   - decoder: The JSON decoder to use for decoding responses.
-    ///   - fetch: The asynchronous fetch handler for network requests.
+    ///   - alamofireSession: Alamofire session to use for making requests.
     ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
     public init(
       url: URL? = nil,
@@ -70,8 +75,38 @@ extension AuthClient {
       logger: (any SupabaseLogger)? = nil,
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      alamofireSession: Alamofire.Session = .default,
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+    ) {
+      self.init(
+        url: url,
+        headers: headers,
+        flowType: flowType,
+        redirectToURL: redirectToURL,
+        storageKey: storageKey,
+        localStorage: localStorage,
+        logger: logger,
+        encoder: encoder,
+        decoder: decoder,
+        fetch: { try await alamofireSession.session.data(for: $0) },
+        alamofireSession: alamofireSession,
+        autoRefreshToken: autoRefreshToken
+      )
+    }
+
+    init(
+      url: URL?,
+      headers: [String: String],
+      flowType: AuthFlowType,
+      redirectToURL: URL?,
+      storageKey: String?,
+      localStorage: any AuthLocalStorage,
+      logger: (any SupabaseLogger)?,
+      encoder: JSONEncoder,
+      decoder: JSONDecoder,
+      fetch: FetchHandler?,
+      alamofireSession: Alamofire.Session,
+      autoRefreshToken: Bool
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
 
@@ -84,7 +119,8 @@ extension AuthClient {
       self.logger = logger
       self.encoder = encoder
       self.decoder = decoder
-      self.fetch = fetch
+      self.fetch = fetch ?? { try await alamofireSession.session.data(for: $0) }
+      self.alamofireSession = alamofireSession
       self.autoRefreshToken = autoRefreshToken
     }
   }
@@ -101,7 +137,7 @@ extension AuthClient {
   ///   - logger: The logger to use.
   ///   - encoder: The JSON encoder to use for encoding requests.
   ///   - decoder: The JSON decoder to use for decoding responses.
-  ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - alamofireSession: Alamofire session to use for making requests.
   ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
   public init(
     url: URL? = nil,
@@ -113,7 +149,7 @@ extension AuthClient {
     logger: (any SupabaseLogger)? = nil,
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    alamofireSession: Alamofire.Session = .default,
     autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
   ) {
     self.init(
@@ -127,7 +163,7 @@ extension AuthClient {
         logger: logger,
         encoder: encoder,
         decoder: decoder,
-        fetch: fetch,
+        alamofireSession: alamofireSession,
         autoRefreshToken: autoRefreshToken
       )
     )

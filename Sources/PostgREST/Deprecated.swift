@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 16/01/24.
 //
 
+import Alamofire
 import Foundation
 
 #if canImport(FoundationNetworking)
@@ -24,7 +25,7 @@ extension PostgrestClient.Configuration {
     *,
     deprecated,
     message:
-      "Replace usages of this initializer with new init(url:schema:headers:logger:fetch:encoder:decoder:)"
+      "Replace usages of this initializer with new init(url:schema:headers:logger:alamofireSession:encoder:decoder:)"
   )
   public init(
     url: URL,
@@ -40,6 +41,44 @@ extension PostgrestClient.Configuration {
       headers: headers,
       logger: nil,
       fetch: fetch,
+      alamofireSession: .default,
+      encoder: encoder,
+      decoder: decoder
+    )
+  }
+
+  /// Initializes a new configuration for the PostgREST client.
+  /// - Parameters:
+  ///   - url: The URL of the PostgREST server.
+  ///   - schema: The schema to use.
+  ///   - headers: The headers to include in requests.
+  ///   - logger: The logger to use.
+  ///   - fetch: The fetch handler to use for requests.
+  ///   - encoder: The JSONEncoder to use for encoding.
+  ///   - decoder: The JSONDecoder to use for decoding.
+  @available(
+    *,
+    deprecated,
+    message:
+      "Use init(url:schema:headers:logger:alamofireSession:encoder:decoder:) instead. This initializer will be removed in a future version."
+  )
+  @_disfavoredOverload
+  public init(
+    url: URL,
+    schema: String? = nil,
+    headers: [String: String] = [:],
+    logger: (any SupabaseLogger)? = nil,
+    fetch: @escaping PostgrestClient.FetchHandler,
+    encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
+    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+  ) {
+    self.init(
+      url: url,
+      schema: schema,
+      headers: headers,
+      logger: logger,
+      fetch: fetch,
+      alamofireSession: .default,
       encoder: encoder,
       decoder: decoder
     )
@@ -52,14 +91,14 @@ extension PostgrestClient {
   ///   - url: The URL of the PostgREST server.
   ///   - schema: The schema to use.
   ///   - headers: The headers to include in requests.
-  ///   - session: The URLSession to use for requests.
+  ///   - fetch: The fetch handler to use for requests.
   ///   - encoder: The JSONEncoder to use for encoding.
   ///   - decoder: The JSONDecoder to use for decoding.
   @available(
     *,
     deprecated,
     message:
-      "Replace usages of this initializer with new init(url:schema:headers:logger:fetch:encoder:decoder:)"
+      "Replace usages of this initializer with new init(url:schema:headers:logger:alamofireSession:encoder:decoder:)"
   )
   public convenience init(
     url: URL,
@@ -70,13 +109,53 @@ extension PostgrestClient {
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
     self.init(
-      url: url,
-      schema: schema,
-      headers: headers,
-      logger: nil,
-      fetch: fetch,
-      encoder: encoder,
-      decoder: decoder
+      configuration: Configuration(
+        url: url,
+        schema: schema,
+        headers: headers,
+        logger: nil,
+        fetch: fetch,
+        encoder: encoder,
+        decoder: decoder
+      )
+    )
+  }
+
+  /// Creates a PostgREST client with the specified parameters.
+  /// - Parameters:
+  ///   - url: The URL of the PostgREST server.
+  ///   - schema: The schema to use.
+  ///   - headers: The headers to include in requests.
+  ///   - logger: The logger to use.
+  ///   - fetch: The fetch handler to use for requests.
+  ///   - encoder: The JSONEncoder to use for encoding.
+  ///   - decoder: The JSONDecoder to use for decoding.
+  @available(
+    *,
+    deprecated,
+    message:
+      "Use init(url:schema:headers:logger:alamofireSession:encoder:decoder:) instead. This initializer will be removed in a future version."
+  )
+  @_disfavoredOverload
+  public convenience init(
+    url: URL,
+    schema: String? = nil,
+    headers: [String: String] = [:],
+    logger: (any SupabaseLogger)? = nil,
+    fetch: @escaping FetchHandler,
+    encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
+    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+  ) {
+    self.init(
+      configuration: Configuration(
+        url: url,
+        schema: schema,
+        headers: headers,
+        logger: logger,
+        fetch: fetch,
+        encoder: encoder,
+        decoder: decoder
+      )
     )
   }
 }
