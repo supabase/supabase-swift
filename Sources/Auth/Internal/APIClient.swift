@@ -16,8 +16,8 @@ func makeHTTPClient(configuration: AuthClient.Configuration) -> any HTTPClientTy
     )
   )
 
-  if let fetch = configuration.fetch {
-    return HTTPClient(fetch: fetch, interceptors: interceptors)
+  if configuration.initWithFetch {
+    return HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
   } else {
     return AlamofireHTTPClient(session: configuration.alamofireSession)
   }

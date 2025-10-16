@@ -51,6 +51,8 @@ extension AuthClient {
     /// Set to `true` if you want to automatically refresh the token before expiring.
     public let autoRefreshToken: Bool
 
+    let initWithFetch: Bool
+
     /// Initializes a AuthClient Configuration with optional parameters.
     ///
     /// - Parameters:
@@ -122,6 +124,7 @@ extension AuthClient {
       self.fetch = fetch ?? { try await alamofireSession.session.data(for: $0) }
       self.alamofireSession = alamofireSession
       self.autoRefreshToken = autoRefreshToken
+      self.initWithFetch = fetch != nil
     }
   }
 
