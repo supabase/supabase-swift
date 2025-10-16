@@ -109,7 +109,7 @@ final class MessageStore {
       let updates = channel.postgresChange(UpdateAction.self, table: "messages")
       let deletions = channel.postgresChange(DeleteAction.self, table: "messages")
 
-      await channel.subscribe()
+      try await channel.subscribeWithError()
 
       Task {
         for await insertion in insertions {

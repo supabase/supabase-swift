@@ -30,7 +30,7 @@ struct AvatarImage: Transferable, Equatable {
 
   static var transferRepresentation: some TransferRepresentation {
     DataRepresentation(importedContentType: .image) { data in
-      guard let image = AvatarImage(data: data) else {
+      guard let image = await AvatarImage(data: data) else {
         throw TransferError.importFailed
       }
 
@@ -40,6 +40,7 @@ struct AvatarImage: Transferable, Equatable {
 }
 
 extension AvatarImage {
+  @MainActor
   init?(data: Data) {
     guard let uiImage = PlatformImage(data: data) else {
       return nil

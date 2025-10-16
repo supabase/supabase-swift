@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 05/03/24.
 //
 
-@preconcurrency import GoogleSignIn
+import GoogleSignIn
 import GoogleSignInSwift
 import Supabase
 import SwiftUI
