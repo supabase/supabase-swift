@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPClient
 import HTTPTypes
 import IssueReporting
 
@@ -89,7 +90,10 @@ public final class SupabaseClient: Sendable {
           headers: headers,
           region: options.functions.region,
           logger: options.global.logger,
-          fetch: fetchWithAuth
+          transport: AuthClientTransport(
+            getAccessToken: self._getAccessToken,
+            transport: URLSessionTransport()  // TODO: use global transport once all modules are migrated.
+          )
         )
       }
 
@@ -351,6 +355,7 @@ public final class SupabaseClient: Sendable {
     return request
   }
 
+  @Sendable
   private func _getAccessToken() async throws -> String? {
     if let accessToken = options.auth.accessToken {
       try await accessToken()
@@ -418,5 +423,22 @@ public final class SupabaseClient: Sendable {
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
       options: realtimeOptions
     )
+  }
+}
+
+struct AuthClientTransport: ClientTransport {
+
+  var getAccessToken: @Sendable () async throws -> String?
+  var transport: any ClientTransport
+
+  func send(_ request: HTTPTypes.HTTPRequest, body: HTTPBody?, baseURL: URL) async throws -> (
+    HTTPTypes.HTTPResponse, HTTPBody?
+  ) {
+    var request = request
+    if let accessToken = try await getAccessToken() {
+      request.headerFields[.authorization] = "Bearer \(accessToken)"
+    }
+
+    return try await transport.send(request, body: body, baseURL: baseURL)
   }
 }
