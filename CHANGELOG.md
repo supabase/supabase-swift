@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.36.1](https://github.com/supabase/supabase-swift/compare/v2.36.0...v2.36.1) (2025-10-17)
+
+
+### Bug Fixes
+
+* use IssueReporting ([#826](https://github.com/supabase/supabase-swift/issues/826)) ([4ebf243](https://github.com/supabase/supabase-swift/commit/4ebf2437296f75204c528218a5df23bff6f75ad4))
+
 ## [2.36.0](https://github.com/supabase/supabase-swift/compare/v2.35.0...v2.36.0) (2025-10-15)
 
 
