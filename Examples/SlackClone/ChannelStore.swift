@@ -27,7 +27,7 @@ final class ChannelStore {
       let insertions = channel.postgresChange(InsertAction.self, table: "channels")
       let deletions = channel.postgresChange(DeleteAction.self, table: "channels")
 
-      await channel.subscribe()
+      try await channel.subscribeWithError()
 
       Task {
         for await insertion in insertions {

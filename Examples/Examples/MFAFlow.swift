@@ -206,7 +206,7 @@ struct MFAEnrollView: View {
       isLoading = true
       defer { isLoading = false }
 
-      enrollResponse = try await supabase.auth.mfa.enroll(params: MFAEnrollParams())
+      enrollResponse = try await supabase.auth.mfa.enroll(params: .totp())
     } catch {
       self.error = error
     }

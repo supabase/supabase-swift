@@ -111,7 +111,7 @@ struct AuthWithMagicLink: View {
     actionState = .inFlight
 
     actionState = await .result(
-      Result {
+      Result { @Sendable in
         try await supabase.auth.signInWithOTP(
           email: email,
           redirectTo: Constants.redirectToURL
@@ -125,7 +125,7 @@ struct AuthWithMagicLink: View {
 
     actionState = .inFlight
     actionState = await .result(
-      Result {
+      Result { @Sendable in
         try await supabase.auth.session(from: url)
       }
     )

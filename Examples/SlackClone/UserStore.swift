@@ -24,7 +24,7 @@ final class UserStore {
 
       let presences = channel.presenceChange()
 
-      await channel.subscribe()
+      try await channel.subscribeWithError()
 
       Task {
         let statusChange = channel.statusChange
@@ -88,8 +88,6 @@ final class UserStore {
       case .delete(let action):
         guard let id = action.oldRecord["id"]?.stringValue else { return }
         users[UUID(uuidString: id)!] = nil
-      default:
-        break
       }
     } catch {
       dump(error)

@@ -103,7 +103,7 @@ struct PostgresChangesView: View {
           table: "todos"
         )
 
-        await channel.subscribe()
+        try await channel.subscribeWithError()
 
         self.channel = channel
         isSubscribed = true
@@ -142,7 +142,7 @@ struct PostgresChangesView: View {
 
         // Handle deletes
         Task {
-          for await delete in deletes {
+          for await _ in deletes {
             await MainActor.run {
               events.insert(
                 RealtimeEvent(

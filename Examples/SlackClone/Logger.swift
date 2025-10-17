@@ -16,13 +16,15 @@ extension Logger {
 
 struct SupaLogger: SupabaseLogger {
   func log(message: SupabaseLogMessage) {
-    let logger = Logger.supabase
+    Task { @MainActor in
+      let logger = Logger.supabase
 
-    switch message.level {
-    case .debug: logger.debug("\(message, privacy: .public)")
-    case .error: logger.error("\(message, privacy: .public)")
-    case .verbose: logger.info("\(message, privacy: .public)")
-    case .warning: logger.notice("\(message, privacy: .public)")
+      switch message.level {
+      case .debug: logger.debug("\(message, privacy: .public)")
+      case .error: logger.error("\(message, privacy: .public)")
+      case .verbose: logger.info("\(message, privacy: .public)")
+      case .warning: logger.notice("\(message, privacy: .public)")
+      }
     }
   }
 }
