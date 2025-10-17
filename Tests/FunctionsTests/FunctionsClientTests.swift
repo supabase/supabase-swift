@@ -334,7 +334,7 @@ final class FunctionsClientTests: XCTestCase {
       }
       .register()
   
-      let (_, stream) = try await sut.invokeWithStreamedResponse("stream")
+      let stream = try await sut.invoke("stream")
 
       for try await value in stream {
         XCTAssertEqual(String(decoding: value, as: UTF8.self), "hello world")
@@ -359,7 +359,7 @@ final class FunctionsClientTests: XCTestCase {
       .register()
 
       do {
-        let (_, stream) = try await sut.invokeWithStreamedResponse("stream")
+        let stream = try await sut.invoke("stream")
 
         for try await _ in stream {
           XCTFail("should throw error")
@@ -388,9 +388,9 @@ final class FunctionsClientTests: XCTestCase {
         """#
       }
       .register()
-  
+
       do {
-        let (_, stream) = try await sut.invokeWithStreamedResponse("stream")
+        let stream = try await sut.invoke("stream")
 
         for try await _ in stream {
           XCTFail("should throw error")
