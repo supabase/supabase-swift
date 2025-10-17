@@ -9,8 +9,15 @@ import HTTPTypes
 
 let version = Helpers.version
 
+extension URL {
+  fileprivate var _baseURL: URL {
+    guard let scheme, let host, let port else { return self }
+    return URL(string: "\(scheme)://\(host):\(port)")!
+  }
+}
+
 /// An actor representing a client for invoking functions.
-public actor FunctionsClient {
+public final class FunctionsClient {
   /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
   ///
   /// See more: https://supabase.com/docs/guides/functions/limits
@@ -22,6 +29,7 @@ public actor FunctionsClient {
   /// The Region to invoke the functions in.
   let region: FunctionRegion?
 
+  private let client: Client
   private let http: any HTTPClientType
 
   private(set) var headers = HTTPFields()
@@ -50,7 +58,9 @@ public actor FunctionsClient {
     self.region = region
 
     // TODO: apply interceptors to Client.
-    self.http = Client(serverURL: url, transport: transport)
+    let client = Client(serverURL: url._baseURL, transport: transport)
+    self.client = client
+    self.http = client
 
     self.headers = HTTPFields(headers)
     if self.headers[.xClientInfo] == nil {
@@ -151,8 +161,26 @@ public actor FunctionsClient {
   public func invokeWithStreamedResponse(
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()
-  ) -> (HTTPTypes.HTTPResponse, HTTPBody) {
-    fatalError("Implement.")
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody) {
+    let request = buildRequest(functionName: functionName, options: invokeOptions)
+    let (response, body) = try await client.send(
+      request.urlRequest.httpRequest!,
+      body: invokeOptions.body.map { HTTPBody($0) }
+    )
+
+    guard response.status == .ok else {
+      throw FunctionsError.httpError(
+        code: response.status.code,
+        data: body != nil ? try await Data(collecting: body!, upTo: .max) : Data()
+      )
+    }
+
+    let isRelayError = response.headerFields[.xRelayError] == "true"
+    if isRelayError {
+      throw FunctionsError.relayError
+    }
+
+    return (response, body ?? HTTPBody())
   }
 
   private func buildRequest(functionName: String, options: FunctionInvokeOptions)

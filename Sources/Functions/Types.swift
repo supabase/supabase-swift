@@ -89,7 +89,7 @@ public struct FunctionInvokeOptions: Sendable {
   }
 }
 
-public struct FunctionRegion: RawRepresentable, Sendable {
+public struct FunctionRegion: RawRepresentable, Sendable, Hashable {
   public var rawValue: String
 
   public init(rawValue: String) {
