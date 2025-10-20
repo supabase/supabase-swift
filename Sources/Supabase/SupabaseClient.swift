@@ -1,3 +1,4 @@
+import Alamofire
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -39,7 +40,7 @@ public final class SupabaseClient: Sendable {
           schema: options.db.schema,
           headers: headers,
           logger: options.global.logger,
-          fetch: fetchWithAuth,
+          alamofireSession: authenticatedAlamofireSession,
           encoder: options.db.encoder,
           decoder: options.db.decoder
         )
@@ -57,7 +58,7 @@ public final class SupabaseClient: Sendable {
           configuration: StorageClientConfiguration(
             url: storageURL,
             headers: headers,
-            session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+            alamofireSession: authenticatedAlamofireSession,
             logger: options.global.logger,
             useNewHostname: options.storage.useNewHostname
           )
@@ -89,7 +90,7 @@ public final class SupabaseClient: Sendable {
           headers: headers,
           region: options.functions.region,
           logger: options.global.logger,
-          fetch: fetchWithAuth
+          alamofireSession: authenticatedAlamofireSession
         )
       }
 
@@ -113,12 +114,23 @@ public final class SupabaseClient: Sendable {
     var realtime: RealtimeClientV2?
 
     var changedAccessToken: String?
+    var authenticatedAlamofireSession: Alamofire.Session?
   }
 
   let mutableState = LockIsolated(MutableState())
 
-  private var session: URLSession {
-    options.global.session
+  private var alamofireSession: Alamofire.Session {
+    options.global.alamofireSession
+  }
+
+  private var authenticatedAlamofireSession: Alamofire.Session {
+    mutableState.withValue {
+      if $0.authenticatedAlamofireSession == nil {
+        $0.authenticatedAlamofireSession = alamofireSession.authenticated(
+          getAccessToken: _getAccessToken)
+      }
+      return $0.authenticatedAlamofireSession!
+    }
   }
 
   #if !os(Linux) && !os(Android)
@@ -177,10 +189,7 @@ public final class SupabaseClient: Sendable {
       logger: options.global.logger,
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
-      fetch: {
-        // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: $0)
-      },
+      alamofireSession: options.global.alamofireSession,
       autoRefreshToken: options.auth.autoRefreshToken
     )
 
@@ -329,28 +338,6 @@ public final class SupabaseClient: Sendable {
   }
 
   @Sendable
-  private func fetchWithAuth(_ request: URLRequest) async throws -> (Data, URLResponse) {
-    try await session.data(for: adapt(request: request))
-  }
-
-  @Sendable
-  private func uploadWithAuth(
-    _ request: URLRequest,
-    from data: Data
-  ) async throws -> (Data, URLResponse) {
-    try await session.upload(for: adapt(request: request), from: data)
-  }
-
-  private func adapt(request: URLRequest) async -> URLRequest {
-    let token = try? await _getAccessToken()
-
-    var request = request
-    if let token {
-      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-    }
-    return request
-  }
-
   private func _getAccessToken() async throws -> String? {
     if let accessToken = options.auth.accessToken {
       try await accessToken()
@@ -370,7 +357,7 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
+  private func handleTokenChanged(event: AuthChangeEvent, session: Auth.Session?) async {
     let accessToken: String? = mutableState.withValue {
       if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
         $0.changedAccessToken != session?.accessToken
