@@ -49,10 +49,7 @@ extension SupabaseClientOptions.GlobalOptions {
   ) {
     self.init(
       headers: headers,
-      alamofireSession: Alamofire.Session(
-        session: session,
-        delegate: SessionDelegate(),
-        rootQueue: DispatchQueue(label: "com.supabase.session")),
+      alamofireSession: .default, // TODO: check how to derive Alamofire.Session from URLSession
       logger: logger
     )
   }

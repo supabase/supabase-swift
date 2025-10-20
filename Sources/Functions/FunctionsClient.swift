@@ -238,7 +238,7 @@ public final class FunctionsClient: Sendable {
     let session = URLSession(
       configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
 
-    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
+    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest!
 
     let task = session.dataTask(with: urlRequest)
     task.resume()

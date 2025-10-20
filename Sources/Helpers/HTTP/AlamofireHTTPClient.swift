@@ -1,14 +1,15 @@
 import Alamofire
 import ConcurrencyExtras
 import Foundation
+import HTTPTypesFoundation
 
 extension HTTPRequest: URLRequestConvertible {
-    package func asURLRequest() throws -> URLRequest {
-        guard let urlRequest = self.urlRequest else {
-            throw AFError.invalidURL(url: self.url.absoluteString)
-        }
-        return urlRequest
-    }
+//    package func asURLRequest() throws -> URLRequest {
+//        guard let urlRequest = self.urlRequest else {
+//            throw AFError.invalidURL(url: self.url.absoluteString)
+//        }
+//        return urlRequest
+//    }
 }
 
 package struct AlamofireHTTPClient: HTTPClientType {

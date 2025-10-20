@@ -30,7 +30,7 @@ package actor HTTPClient: HTTPClientType {
   package func send(_ request: HTTPRequest) async throws -> HTTPResponse {
     var next: @Sendable (HTTPRequest) async throws -> HTTPResponse = { _request in
       let urlRequest = _request.urlRequest
-      let (data, response) = try await self.fetch(urlRequest)
+      let (data, response) = try await self.fetch(urlRequest!)
       guard let httpURLResponse = response as? HTTPURLResponse else {
         throw URLError(.badServerResponse)
       }

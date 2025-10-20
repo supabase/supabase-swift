@@ -48,7 +48,7 @@ package struct HTTPRequest: Sendable {
     self.init(url: url, method: method, query: query, headers: headers, body: body, timeoutInterval: timeoutInterval)
   }
 
-  package var urlRequest: URLRequest {
+  package func asURLRequest() throws -> URLRequest {
     var urlRequest = URLRequest(url: query.isEmpty ? url : url.appendingQueryItems(query), timeoutInterval: timeoutInterval)
     urlRequest.httpMethod = method.rawValue
     urlRequest.allHTTPHeaderFields = .init(headers.map { ($0.name.rawName, $0.value) }) { $1 }

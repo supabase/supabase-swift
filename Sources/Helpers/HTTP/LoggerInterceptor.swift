@@ -20,7 +20,7 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
   ) async throws -> HTTPResponse {
     let id = UUID().uuidString
     return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(merging: ["requestID": .string(id)]) {
-      let urlRequest = request.urlRequest
+      let urlRequest = request.urlRequest!
 
       logger.verbose(
         """
