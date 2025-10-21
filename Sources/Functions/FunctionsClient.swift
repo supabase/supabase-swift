@@ -24,7 +24,7 @@ public final class FunctionsClient: Sendable {
   let url: URL
 
   /// The Region to invoke the functions in.
-  let region: String?
+  let region: FunctionRegion?
 
   struct MutableState {
     /// Headers to be included in the requests.
@@ -51,7 +51,7 @@ public final class FunctionsClient: Sendable {
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
-    region: String? = nil,
+    region: FunctionRegion? = nil,
     logger: (any SupabaseLogger)? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
   ) {
@@ -68,7 +68,7 @@ public final class FunctionsClient: Sendable {
   convenience init(
     url: URL,
     headers: [String: String] = [:],
-    region: String? = nil,
+    region: FunctionRegion? = nil,
     logger: (any SupabaseLogger)? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     sessionConfiguration: URLSessionConfiguration
@@ -92,7 +92,7 @@ public final class FunctionsClient: Sendable {
   init(
     url: URL,
     headers: [String: String],
-    region: String?,
+    region: FunctionRegion?,
     http: any HTTPClientType,
     sessionConfiguration: URLSessionConfiguration = .default
   ) {
@@ -107,24 +107,6 @@ public final class FunctionsClient: Sendable {
         $0.headers[.xClientInfo] = "functions-swift/\(version)"
       }
     }
-  }
-
-  /// Initializes a new instance of `FunctionsClient`.
-  ///
-  /// - Parameters:
-  ///   - url: The base URL for the functions.
-  ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
-  ///   - region: The Region to invoke the functions in.
-  ///   - logger: SupabaseLogger instance to use.
-  ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  public convenience init(
-    url: URL,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil,
-    logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
-  ) {
-    self.init(url: url, headers: headers, region: region?.rawValue, logger: logger, fetch: fetch)
   }
 
   /// Updates the authorization header.
@@ -257,8 +239,8 @@ public final class FunctionsClient: Sendable {
     )
 
     if let region = options.region ?? region {
-      request.headers[.xRegion] = region
-      query.appendOrUpdate(URLQueryItem(name: "forceFunctionRegion", value: region))
+      request.headers[.xRegion] = region.rawValue
+      query.appendOrUpdate(URLQueryItem(name: "forceFunctionRegion", value: region.rawValue))
       request.query = query
     }
 
