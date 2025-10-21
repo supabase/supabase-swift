@@ -26,7 +26,7 @@ package func withTimeout<R: Sendable>(
     group.addTask {
       let interval = deadline.timeIntervalSinceNow
       if interval > 0 {
-        try await _clock.sleep(for: interval)
+        try await _clock.sleep(for: .seconds(interval))
       }
       try Task.checkCancellation()
       throw TimeoutError()
