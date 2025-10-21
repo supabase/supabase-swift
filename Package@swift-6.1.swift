@@ -204,7 +204,7 @@ let package = Package(
       ]
     ),
   ],
-  swiftLanguageModes: [.v5]
+  swiftLanguageModes: [.v6]
 )
 
 for target in package.targets where !target.isTest {

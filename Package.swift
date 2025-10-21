@@ -1,4 +1,4 @@
-// swift-tools-version:5.10
+// swift-tools-version:6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import Foundation
@@ -204,7 +204,8 @@ let package = Package(
         "Mocker",
       ]
     ),
-  ]
+  ],
+  swiftLanguageModes: [.v6]
 )
 
 for target in package.targets where !target.isTest {

@@ -32,8 +32,8 @@ final class FunctionsClientTests: XCTestCase {
       "apikey": apiKey
     ],
     region: region.flatMap(FunctionRegion.init(rawValue:)),
-    fetch: { request in
-      try await self.session.data(for: request)
+    fetch: { [session] request in
+      try await session.data(for: request)
     },
     sessionConfiguration: sessionConfiguration
   )
