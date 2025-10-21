@@ -336,4 +336,8 @@ private struct MockHTTPClient: HTTPClientType {
   func send(_ request: HTTPRequest) async throws -> HTTPResponse {
     return HTTPResponse(data: Data(), response: HTTPURLResponse())
   }
+
+  func stream(_ request: HTTPRequest) -> AsyncThrowingStream<Data, any Error> {
+    .finished()
+  }
 }
