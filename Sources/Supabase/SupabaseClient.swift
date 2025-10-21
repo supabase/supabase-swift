@@ -68,8 +68,6 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  let _realtime: UncheckedSendable<RealtimeClient>
-
   /// Realtime client for Supabase
   public var realtimeV2: RealtimeClientV2 {
     mutableState.withValue {
@@ -185,14 +183,6 @@ public final class SupabaseClient: Sendable {
       emitLocalSessionAsInitialSession: options.auth.emitLocalSessionAsInitialSession
     )
 
-    _realtime = UncheckedSendable(
-      RealtimeClient(
-        supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
-        headers: _headers.dictionary,
-        params: _headers.dictionary
-      )
-    )
-
     if options.auth.accessToken == nil {
       listenForAuthEvents()
     }
@@ -245,7 +235,7 @@ public final class SupabaseClient: Sendable {
 
   /// Returns all Realtime channels.
   public var channels: [RealtimeChannelV2] {
-    Array(realtimeV2.subscriptions.values)
+    Array(realtimeV2.channels.values)
   }
 
   /// Creates a Realtime channel with Broadcast, Presence, and Postgres Changes.
@@ -388,7 +378,6 @@ public final class SupabaseClient: Sendable {
       return nil
     }
 
-    realtime.setAuth(accessToken)
     await realtimeV2.setAuth(accessToken)
   }
 
