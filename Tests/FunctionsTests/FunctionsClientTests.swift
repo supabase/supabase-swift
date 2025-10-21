@@ -49,10 +49,13 @@ final class FunctionsClientTests: XCTestCase {
       headers: ["apikey": apiKey],
       region: .saEast1
     )
-    XCTAssertEqual(client.region?.rawValue, "sa-east-1")
 
-    XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
-    XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
+    let region = await client.region
+    XCTAssertEqual(region?.rawValue, "sa-east-1")
+
+    let headers = await client.headers
+    XCTAssertEqual(headers[.init("apikey")!], apiKey)
+    XCTAssertNotNil(headers[.init("X-Client-Info")!])
   }
 
   func testInvoke() async throws {
@@ -333,12 +336,15 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 
-  func test_setAuth() {
-    sut.setAuth(token: "access.token")
-    XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
+  func test_setAuth() async {
+    await sut.setAuth(token: "access.token")
 
-    sut.setAuth(token: nil)
-    XCTAssertNil(sut.headers[.authorization])
+    var headers = await sut.headers
+    XCTAssertEqual(headers[.authorization], "Bearer access.token")
+
+    await sut.setAuth(token: nil)
+    headers = await sut.headers
+    XCTAssertNil(headers[.authorization])
   }
 
   func testInvokeWithStreamedResponse() async throws {
@@ -358,9 +364,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
-
-    for try await value in stream {
+    for try await value in await sut._invokeWithStreamedResponse("stream") {
       XCTAssertEqual(String(decoding: value, as: UTF8.self), "hello world")
     }
   }
@@ -382,10 +386,8 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
-
     do {
-      for try await _ in stream {
+      for try await _ in await sut._invokeWithStreamedResponse("stream") {
         XCTFail("should throw error")
       }
     } catch let FunctionsError.httpError(code, _) {
@@ -413,10 +415,8 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
-
     do {
-      for try await _ in stream {
+      for try await _ in await sut._invokeWithStreamedResponse("stream") {
         XCTFail("should throw error")
       }
     } catch FunctionsError.relayError {
