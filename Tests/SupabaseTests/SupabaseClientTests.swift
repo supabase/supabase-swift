@@ -77,11 +77,14 @@ final class SupabaseClientTests: XCTestCase {
       """
     }
     expectNoDifference(client.headers, client.auth.configuration.headers)
-    expectNoDifference(client.headers, client.functions.headers.dictionary)
+
+    let functionsHeaders = await client.functions.headers
+    expectNoDifference(client.headers, functionsHeaders.dictionary)
     expectNoDifference(client.headers, client.storage.configuration.headers)
     expectNoDifference(client.headers, client.rest.configuration.headers)
 
-    XCTAssertEqual(client.functions.region?.rawValue, "ap-northeast-1")
+    let functionsRegion = await client.functions.region
+    XCTAssertEqual(functionsRegion?.rawValue, "ap-northeast-1")
 
     let realtimeURL = client.realtimeV2.url
     XCTAssertEqual(realtimeURL.absoluteString, "https://project-ref.supabase.co/realtime/v1")
