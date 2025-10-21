@@ -240,7 +240,7 @@ public final class FunctionsClient: Sendable {
 
     if let region = options.region ?? region {
       request.headers[.xRegion] = region.rawValue
-      query.appendOrUpdate(URLQueryItem(name: "forceFunctionRegion", value: region))
+      query.appendOrUpdate(URLQueryItem(name: "forceFunctionRegion", value: region.rawValue))
       request.query = query
     }
 
