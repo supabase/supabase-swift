@@ -40,7 +40,6 @@ public actor FunctionsClient {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  @_disfavoredOverload
   public init(
     url: URL,
     headers: [String: String] = [:],
