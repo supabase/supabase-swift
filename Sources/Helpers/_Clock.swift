@@ -21,7 +21,7 @@ private let __clock: LockIsolated<any Clock<Duration>> = LockIsolated(Continuous
     }
   }
 #else
-  package var _clock: any _Clock {
+  package var _clock: any Clock<Duration> {
     __clock.value
   }
 #endif
