@@ -23,7 +23,7 @@ final class FunctionsClientTests: XCTestCase {
     return sessionConfiguration
   }()
 
-  var region: String?
+  var region: FunctionRegion?
 
   lazy var sut = FunctionsClient(
     url: url,
@@ -45,7 +45,7 @@ final class FunctionsClientTests: XCTestCase {
       headers: ["apikey": apiKey],
       region: .saEast1
     )
-    XCTAssertEqual(client.region, "sa-east-1")
+    XCTAssertEqual(client.region?.rawValue, "sa-east-1")
 
     XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
     XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
@@ -156,7 +156,7 @@ final class FunctionsClientTests: XCTestCase {
   }
 
   func testInvokeWithRegionDefinedInClient() async throws {
-    region = FunctionRegion.caCentral1.rawValue
+    region = FunctionRegion.caCentral1
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
