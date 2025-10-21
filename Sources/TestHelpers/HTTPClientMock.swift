@@ -9,7 +9,7 @@ import ConcurrencyExtras
 import Foundation
 import XCTestDynamicOverlay
 
-package actor HTTPClientMock: HTTPClientType {
+package final class HTTPClientMock: HTTPClientType {
   package struct MockNotFound: Error {}
 
   private var mocks = [@Sendable (HTTPRequest) async throws -> HTTPResponse?]()
@@ -60,5 +60,9 @@ package actor HTTPClientMock: HTTPClientType {
 
     XCTFail("Mock not found for: \(request)")
     throw MockNotFound()
+  }
+
+  package func stream(_ request: HTTPRequest) -> AsyncThrowingStream<Data, any Error> {
+    fatalError("Not supported")
   }
 }

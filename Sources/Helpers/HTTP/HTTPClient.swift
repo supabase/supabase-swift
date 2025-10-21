@@ -13,9 +13,10 @@ import Foundation
 
 package protocol HTTPClientType: Sendable {
   func send(_ request: HTTPRequest) async throws -> HTTPResponse
+  func stream(_ request: HTTPRequest) -> AsyncThrowingStream<Data, any Error>
 }
 
-package actor HTTPClient: HTTPClientType {
+package struct HTTPClient: HTTPClientType {
   let fetch: @Sendable (URLRequest) async throws -> (Data, URLResponse)
   let interceptors: [any HTTPClientInterceptor]
 
@@ -45,6 +46,10 @@ package actor HTTPClient: HTTPClientType {
     }
 
     return try await next(request)
+  }
+
+  package func stream(_ request: HTTPRequest) -> AsyncThrowingStream<Data, any Error> {
+    fatalError("Unsupported, please use AlamofireHTTPClient.")
   }
 }
 
