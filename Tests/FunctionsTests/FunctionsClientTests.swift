@@ -31,7 +31,7 @@ final class FunctionsClientTests: XCTestCase {
     headers: [
       "apikey": apiKey
     ],
-    region: region,
+    region: region.flatMap(FunctionRegion.init(rawValue:)),
     fetch: { request in
       try await self.session.data(for: request)
     },
@@ -49,7 +49,7 @@ final class FunctionsClientTests: XCTestCase {
       headers: ["apikey": apiKey],
       region: .saEast1
     )
-    XCTAssertEqual(client.region, "sa-east-1")
+    XCTAssertEqual(client.region?.rawValue, "sa-east-1")
 
     XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
     XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
@@ -203,6 +203,28 @@ final class FunctionsClientTests: XCTestCase {
     .register()
 
     try await sut.invoke("hello-world", options: .init(region: .caCentral1))
+  }
+
+  func testInvokeWithRegion_usingExpressibleByLiteral() async throws {
+    Mock(
+      url: url.appendingPathComponent("hello-world"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: Data()]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-region: ca-central-1" \
+      	"http://localhost:5432/functions/v1/hello-world?forceFunctionRegion=ca-central-1"
+      """#
+    }
+    .register()
+
+    try await sut.invoke("hello-world", options: .init(region: "ca-central-1"))
   }
 
   func testInvokeWithoutRegion() async throws {
