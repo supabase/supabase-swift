@@ -47,6 +47,7 @@ jobs:
     name: xcodebuild (macOS latest)
     runs-on: macos-15
     strategy:
+      fail-fast: false
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS]
