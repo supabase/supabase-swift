@@ -47,7 +47,7 @@ final class StorageBucketAPITests: XCTestCase {
     Mocker.removeAll()
   }
 
-  func testURLConstruction() {
+  func testURLConstruction() async {
     let urlTestCases = [
       (
         "https://blah.supabase.co/storage/v1",
@@ -77,7 +77,7 @@ final class StorageBucketAPITests: XCTestCase {
     ]
 
     for (input, expect, description) in urlTestCases {
-      XCTContext.runActivity(named: "should \(description) if useNewHostname is true") { _ in
+      await XCTContext.runActivity(named: "should \(description) if useNewHostname is true") { _ in
         let storage = SupabaseStorageClient(
           configuration: StorageClientConfiguration(
             url: URL(string: input)!,
@@ -88,7 +88,7 @@ final class StorageBucketAPITests: XCTestCase {
         XCTAssertEqual(storage.configuration.url.absoluteString, expect)
       }
 
-      XCTContext.runActivity(named: "should not modify host if useNewHostname is false") { _ in
+      await XCTContext.runActivity(named: "should not modify host if useNewHostname is false") { _ in
         let storage = SupabaseStorageClient(
           configuration: StorageClientConfiguration(
             url: URL(string: input)!,
