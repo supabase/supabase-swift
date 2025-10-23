@@ -12,8 +12,6 @@ import XCTest
 @testable import Realtime
 
 #if !os(Android) && !os(Linux) && !os(Windows)
-  @MainActor
-  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   final class _PushTests: XCTestCase {
     var ws: FakeWebSocket!
     var socket: RealtimeClientV2!
@@ -45,7 +43,7 @@ import XCTest
         socket: socket,
         logger: nil
       )
-      let push = PushV2(
+      let push = await PushV2(
         channel: channel,
         message: RealtimeMessageV2(
           joinRef: nil,
@@ -71,7 +69,7 @@ import XCTest
         socket: socket,
         logger: nil
       )
-      let push = PushV2(
+      let push = await PushV2(
         channel: channel,
         message: RealtimeMessageV2(
           joinRef: nil,
@@ -86,7 +84,7 @@ import XCTest
         await push.send()
       }
       await Task.megaYield()
-      push.didReceive(status: .ok)
+      await push.didReceive(status: .ok)
 
       let status = await task.value
       XCTAssertEqual(status, .ok)
