@@ -6,33 +6,33 @@ on:
       - main
       - release/*
     paths:
-      - 'Sources/**'
-      - 'Tests/**'
-      - 'Examples/**'
-      - '*.swift'
-      - 'Package.swift'
-      - 'Package.resolved'
-      - '.github/workflows/ci.yml'
-      - 'Makefile'
-      - '*.xcodeproj/**'
-      - '*.xcworkspace/**'
-      - '.swiftpm/**'
+      - "Sources/**"
+      - "Tests/**"
+      - "Examples/**"
+      - "*.swift"
+      - "Package.swift"
+      - "Package.resolved"
+      - ".github/workflows/ci.yml"
+      - "Makefile"
+      - "*.xcodeproj/**"
+      - "*.xcworkspace/**"
+      - ".swiftpm/**"
   pull_request:
     branches:
       - "*"
       - release/*
     paths:
-      - 'Sources/**'
-      - 'Tests/**'
-      - 'Examples/**'
-      - '*.swift'
-      - 'Package.swift'
-      - 'Package.resolved'
-      - '.github/workflows/ci.yml'
-      - 'Makefile'
-      - '*.xcodeproj/**'
-      - '*.xcworkspace/**'
-      - '.swiftpm/**'
+      - "Sources/**"
+      - "Tests/**"
+      - "Examples/**"
+      - "*.swift"
+      - "Package.swift"
+      - "Package.resolved"
+      - ".github/workflows/ci.yml"
+      - "Makefile"
+      - "*.xcodeproj/**"
+      - "*.xcworkspace/**"
+      - ".swiftpm/**"
   workflow_dispatch:
 
 concurrency:
@@ -119,7 +119,7 @@ jobs:
   spm:
     runs-on: macos-15
     strategy:
-      matrix: 
+      matrix:
         config: [debug, release]
     steps:
       - uses: actions/checkout@v5
@@ -140,21 +140,21 @@ jobs:
         run: rm -r Tests/IntegrationTests/*
       - name: "Build Swift Package"
         run: swift build
-      
-  # android:
-  #   name: Android
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v5
-  #     - name: "Remove IntegrationTests"
-  #       run: rm -r Tests/IntegrationTests/*
-  #     - name: "Test Swift Package"
-  #       uses: skiptools/swift-android-action@v2
-  #       with:
-  #         # need to copy over the Tests folder because it contains __Snapshots__
-  #         copy-files: Tests
-  #         # tests are not yet passing on Android
-  #         run-tests: false
+
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: "Remove IntegrationTests"
+        run: rm -r Tests/IntegrationTests/*
+      - name: "Test Swift Package"
+        uses: skiptools/swift-android-action@v2
+        with:
+          # need to copy over the Tests folder because it contains __Snapshots__
+          copy-files: Tests
+          # tests are not yet passing on Android
+          run-tests: false
 
   library-evolution:
     name: Library (evolution)
