@@ -40,7 +40,7 @@ body:
     attributes:
       label: Swift Version
       description: What version of Swift are you using?
-      placeholder: ex. 5.10
+      placeholder: ex. 6.0
     validations:
       required: true
 

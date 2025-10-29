@@ -46,7 +46,7 @@ final class RequestTests: XCTestCase {
   func snapshot(
     record: Bool = false,
     _ test: (FunctionsClient) async throws -> Void,
-    file: StaticString = #file,
+    file: StaticString = #filePath,
     testName: String = #function,
     line: UInt = #line
   ) async {

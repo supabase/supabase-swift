@@ -237,30 +237,28 @@ struct UserIdentityList: View {
     }
     .id(id)
     .navigationTitle("Linked Identities")
-    #if swift(>=5.10)
-      .toolbar {
-        ToolbarItem(placement: .primaryAction) {
-          if !providers.isEmpty {
-            Menu {
-              ForEach(providers) { provider in
-                Button {
-                  Task {
-                    await linkProvider(provider)
-                  }
-                } label: {
-                  Label(
-                    provider.rawValue.capitalized,
-                    systemImage: iconForProvider(provider.rawValue)
-                  )
+    .toolbar {
+      ToolbarItem(placement: .primaryAction) {
+        if !providers.isEmpty {
+          Menu {
+            ForEach(providers) { provider in
+              Button {
+                Task {
+                  await linkProvider(provider)
                 }
+              } label: {
+                Label(
+                  provider.rawValue.capitalized,
+                  systemImage: iconForProvider(provider.rawValue)
+                )
               }
-            } label: {
-              Label("Link Account", systemImage: "plus")
             }
+          } label: {
+            Label("Link Account", systemImage: "plus")
           }
         }
       }
-    #endif
+    }
   }
 
   private func iconForProvider(_ provider: String) -> String {

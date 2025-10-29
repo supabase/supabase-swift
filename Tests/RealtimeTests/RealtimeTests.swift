@@ -11,7 +11,6 @@ import XCTest
   import FoundationNetworking
 #endif
 
-@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class RealtimeTests: XCTestCase {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
@@ -50,7 +49,7 @@ final class RealtimeTests: XCTestCase {
           "custom.access.token"
         }
       ),
-      wsTransport: { _, _ in self.client },
+      wsTransport: { [client] _, _ in client! },
       http: http
     )
   }
@@ -578,11 +577,11 @@ final class RealtimeTests: XCTestCase {
   func testBroadcastWithHTTP() async throws {
     await http.when {
       $0.url.path.hasSuffix("broadcast")
-    } return: { _ in
+    } return: { [sut] _ in
       HTTPResponse(
         data: "{}".data(using: .utf8)!,
         response: HTTPURLResponse(
-          url: self.sut.broadcastURL,
+          url: sut!.broadcastURL,
           statusCode: 200,
           httpVersion: nil,
           headerFields: nil

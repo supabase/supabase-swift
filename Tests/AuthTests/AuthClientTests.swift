@@ -190,8 +190,8 @@ final class AuthClientTests: XCTestCase {
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
 
-    let eventsTask = Task {
-      await sut.authStateChanges.prefix(2).collect()
+    let eventsTask = Task { [sut] in
+      await sut!.authStateChanges.prefix(2).collect()
     }
 
     await Task.megaYield()
@@ -236,8 +236,8 @@ final class AuthClientTests: XCTestCase {
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
 
-    let eventsTask = Task {
-      await sut.authStateChanges.prefix(2).collect()
+    let eventsTask = Task { [sut] in
+      await sut!.authStateChanges.prefix(2).collect()
     }
 
     await Task.megaYield()
@@ -282,8 +282,8 @@ final class AuthClientTests: XCTestCase {
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
 
-    let eventsTask = Task {
-      await sut.authStateChanges.prefix(2).collect()
+    let eventsTask = Task { [sut] in
+      await sut!.authStateChanges.prefix(2).collect()
     }
 
     await Task.megaYield()
