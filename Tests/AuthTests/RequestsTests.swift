@@ -291,7 +291,6 @@ final class RequestsTests: XCTestCase {
           phone: "+1 202-918-2132",
           password: "another.pass",
           nonce: "abcdef",
-          emailChangeToken: "123456",
           data: ["custom_key": .string("custom_value")]
         )
       )
@@ -431,7 +430,7 @@ final class RequestsTests: XCTestCase {
 
     await assert {
       _ = try await sut.mfa.enroll(
-        params: MFAEnrollParams(issuer: "supabase.com", friendlyName: "test"))
+        params: .totp(issuer: "supabase.com", friendlyName: "test"))
     }
   }
 
