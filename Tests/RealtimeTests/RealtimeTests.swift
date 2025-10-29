@@ -49,7 +49,7 @@ final class RealtimeTests: XCTestCase {
           "custom.access.token"
         }
       ),
-      wsTransport: { [client] _, _ in client },
+      wsTransport: { [client] _, _ in client! },
       http: http
     )
   }
@@ -581,7 +581,7 @@ final class RealtimeTests: XCTestCase {
       HTTPResponse(
         data: "{}".data(using: .utf8)!,
         response: HTTPURLResponse(
-          url: sut.broadcastURL,
+          url: sut!.broadcastURL,
           statusCode: 200,
           httpVersion: nil,
           headerFields: nil
