@@ -171,7 +171,7 @@ Features:
 
 ## Prerequisites
 
-- Xcode 15.0 or later
+- Xcode 16.0 or later
 - iOS 17.0+ / macOS 14.0+ or later
 - [Supabase CLI](https://supabase.com/docs/guides/cli) installed
 

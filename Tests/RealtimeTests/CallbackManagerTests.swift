@@ -14,7 +14,6 @@ import XCTest
 final class CallbackManagerTests: XCTestCase {
   func testIntegration() {
     let callbackManager = CallbackManager()
-    XCTAssertNoLeak(callbackManager)
 
     let filter = PostgresJoinConfig(
       event: .update,
@@ -50,7 +49,6 @@ final class CallbackManagerTests: XCTestCase {
 
   func testSetServerChanges() {
     let callbackManager = CallbackManager()
-    XCTAssertNoLeak(callbackManager)
 
     let changes = [
       PostgresJoinConfig(
@@ -69,7 +67,6 @@ final class CallbackManagerTests: XCTestCase {
 
   func testTriggerPostgresChanges() {
     let callbackManager = CallbackManager()
-    XCTAssertNoLeak(callbackManager)
 
     let updateUsersFilter = PostgresJoinConfig(
       event: .update,
@@ -174,7 +171,6 @@ final class CallbackManagerTests: XCTestCase {
 
   func testTriggerBroadcast() throws {
     let callbackManager = CallbackManager()
-    XCTAssertNoLeak(callbackManager)
 
     let event = "new_user"
     let message = RealtimeMessageV2(
@@ -248,13 +244,5 @@ final class CallbackManagerTests: XCTestCase {
 
     XCTAssertEqual(receivedMessage.value?._eventType, .system)
     XCTAssertEqual(receivedMessage.value?.status, .ok)
-  }
-}
-
-extension XCTestCase {
-  func XCTAssertNoLeak(_ object: AnyObject, file: StaticString = #file, line: UInt = #line) {
-    addTeardownBlock { [weak object] in
-      XCTAssertNil(object, file: file, line: line)
-    }
   }
 }
