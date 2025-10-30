@@ -11,6 +11,7 @@ import XCTest
   import FoundationNetworking
 #endif
 
+@MainActor
 final class RealtimeTests: XCTestCase {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
@@ -33,8 +34,8 @@ final class RealtimeTests: XCTestCase {
   let reconnectDelay: TimeInterval = RealtimeClientOptions.defaultReconnectDelay
   let timeoutInterval: TimeInterval = RealtimeClientOptions.defaultTimeoutInterval
 
-  override func setUp() {
-    super.setUp()
+  override func setUp() async throws {
+    try await super.setUp()
 
     (client, server) = FakeWebSocket.fakes()
     http = HTTPClientMock()
@@ -54,10 +55,10 @@ final class RealtimeTests: XCTestCase {
     )
   }
 
-  override func tearDown() {
+  override func tearDown() async throws {
     sut.disconnect()
 
-    super.tearDown()
+    try await super.tearDown()
   }
 
   func test_transport() async {
@@ -128,10 +129,10 @@ final class RealtimeTests: XCTestCase {
 
     XCTAssertEqual(socketStatuses.value, [.disconnected, .connecting, .connected])
 
-    let messageTask = sut.mutableState.messageTask
+    let messageTask = sut.messageTask
     XCTAssertNotNil(messageTask)
 
-    let heartbeatTask = sut.mutableState.heartbeatTask
+    let heartbeatTask = sut.heartbeatTask
     XCTAssertNotNil(heartbeatTask)
 
     let channelStatuses = LockIsolated([RealtimeChannelStatus]())
@@ -247,35 +248,18 @@ final class RealtimeTests: XCTestCase {
     // So we need to wait at least 2.5s to ensure the retry happens
     await testClock.advance(by: .seconds(2.5))
 
-    let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
-      $0.event == "phx_join"
-    }
-    assertInlineSnapshot(of: events, as: .json) {
+    let events = client.sentEvents.compactMap { $0.realtimeMessage }
+
+    assertInlineSnapshot(of: events, as: .json, record: .failed) {
       #"""
       [
         {
-          "event" : "phx_join",
-          "join_ref" : "1",
+          "event" : "heartbeat",
           "payload" : {
-            "access_token" : "custom.access.token",
-            "config" : {
-              "broadcast" : {
-                "ack" : false,
-                "self" : false
-              },
-              "postgres_changes" : [
 
-              ],
-              "presence" : {
-                "enabled" : false,
-                "key" : ""
-              },
-              "private" : false
-            },
-            "version" : "realtime-swift\/0.0.0"
           },
           "ref" : "1",
-          "topic" : "realtime:public:messages"
+          "topic" : "phoenix"
         },
         {
           "event" : "phx_join",
@@ -299,6 +283,30 @@ final class RealtimeTests: XCTestCase {
             "version" : "realtime-swift\/0.0.0"
           },
           "ref" : "2",
+          "topic" : "realtime:public:messages"
+        },
+        {
+          "event" : "phx_join",
+          "join_ref" : "3",
+          "payload" : {
+            "access_token" : "custom.access.token",
+            "config" : {
+              "broadcast" : {
+                "ack" : false,
+                "self" : false
+              },
+              "postgres_changes" : [
+
+              ],
+              "presence" : {
+                "enabled" : false,
+                "key" : ""
+              },
+              "private" : false
+            },
+            "version" : "realtime-swift\/0.0.0"
+          },
+          "ref" : "3",
           "topic" : "realtime:public:messages"
         }
       ]
@@ -524,7 +532,7 @@ final class RealtimeTests: XCTestCase {
 
     await fulfillment(of: [sentHeartbeatExpectation], timeout: 0)
 
-    let pendingHeartbeatRef = sut.mutableState.pendingHeartbeatRef
+    let pendingHeartbeatRef = sut.pendingHeartbeatRef
     XCTAssertNotNil(pendingHeartbeatRef)
 
     // Wait until next heartbeat
@@ -614,7 +622,7 @@ final class RealtimeTests: XCTestCase {
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
     await sut.setAuth(validToken)
 
-    XCTAssertEqual(sut.mutableState.accessToken, validToken)
+    XCTAssertEqual(sut.accessToken, validToken)
   }
 
   func testSetAuthWithNonJWT() async throws {

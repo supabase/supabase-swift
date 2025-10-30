@@ -562,7 +562,7 @@ public final class RealtimeClientV2: RealtimeClientProtocol {
     return url
   }
 
-  var broadcastURL: URL {
+  nonisolated var broadcastURL: URL {
     url.appendingPathComponent("api/broadcast")
   }
 }

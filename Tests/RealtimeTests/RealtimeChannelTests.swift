@@ -12,6 +12,7 @@ import XCTestDynamicOverlay
 
 @testable import Realtime
 
+@MainActor
 final class RealtimeChannelTests: XCTestCase {
   let sut = RealtimeChannelV2(
     topic: "topic",
