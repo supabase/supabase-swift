@@ -13,13 +13,13 @@ import Foundation
 /// When this token gets deallocated it cancels the observation it was associated with. Store this token in another object to keep the observation alive.
 public final class ObservationToken: @unchecked Sendable, Hashable {
   private let _isCancelled = LockIsolated(false)
-  package var onCancel: @Sendable () -> Void
+  package var onCancel: () -> Void
 
   public var isCancelled: Bool {
     _isCancelled.withValue { $0 }
   }
 
-  package init(onCancel: @escaping @Sendable () -> Void = {}) {
+  package init(onCancel: @escaping () -> Void = {}) {
     self.onCancel = onCancel
   }
 

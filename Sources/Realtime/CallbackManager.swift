@@ -1,45 +1,28 @@
 import ConcurrencyExtras
 import Foundation
 
-final class CallbackManager: Sendable {
-  struct MutableState {
-    var id = 0
-    var serverChanges: [PostgresJoinConfig] = []
-    var callbacks: [RealtimeCallback] = []
-  }
-
-  private let mutableState = LockIsolated(MutableState())
-
-  var serverChanges: [PostgresJoinConfig] {
-    mutableState.serverChanges
-  }
-
-  var callbacks: [RealtimeCallback] {
-    mutableState.callbacks
-  }
-
-  deinit {
-    reset()
-  }
+@MainActor
+final class CallbackManager {
+  var id = 0
+  var serverChanges: [PostgresJoinConfig] = []
+  var callbacks: [RealtimeCallback] = []
 
   @discardableResult
   func addBroadcastCallback(
     event: String,
     callback: @escaping @Sendable (JSONObject) -> Void
   ) -> Int {
-    mutableState.withValue {
-      $0.id += 1
-      $0.callbacks.append(
-        .broadcast(
-          BroadcastCallback(
-            id: $0.id,
-            event: event,
-            callback: callback
-          )
+    self.id += 1
+    self.callbacks.append(
+      .broadcast(
+        BroadcastCallback(
+          id: self.id,
+          event: event,
+          callback: callback
         )
       )
-      return $0.id
-    }
+    )
+    return self.id
   }
 
   @discardableResult
@@ -47,59 +30,46 @@ final class CallbackManager: Sendable {
     filter: PostgresJoinConfig,
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> Int {
-    mutableState.withValue {
-      $0.id += 1
-      $0.callbacks.append(
+      self.id += 1
+      self.callbacks.append(
         .postgres(
           PostgresCallback(
-            id: $0.id,
+            id: self.id,
             filter: filter,
             callback: callback
           )
         )
       )
-      return $0.id
-    }
+      return self.id
   }
 
   @discardableResult
   func addPresenceCallback(callback: @escaping @Sendable (any PresenceAction) -> Void) -> Int {
-    mutableState.withValue {
-      $0.id += 1
-      $0.callbacks.append(.presence(PresenceCallback(id: $0.id, callback: callback)))
-      return $0.id
-    }
+      self.id += 1
+      self.callbacks.append(.presence(PresenceCallback(id: self.id, callback: callback)))
+      return self.id
   }
 
   @discardableResult
   func addSystemCallback(callback: @escaping @Sendable (RealtimeMessageV2) -> Void) -> Int {
-    mutableState.withValue {
-      $0.id += 1
-      $0.callbacks.append(.system(SystemCallback(id: $0.id, callback: callback)))
-      return $0.id
-    }
+      self.id += 1
+      self.callbacks.append(.system(SystemCallback(id: self.id, callback: callback)))
+      return self.id
   }
 
   func setServerChanges(changes: [PostgresJoinConfig]) {
-    mutableState.withValue {
-      $0.serverChanges = changes
-    }
+      self.serverChanges = changes
   }
 
   func removeCallback(id: Int) {
-    mutableState.withValue {
-      $0.callbacks.removeAll { $0.id == id }
-    }
+      self.callbacks.removeAll { $0.id == id }
   }
 
   func triggerPostgresChanges(ids: [Int], data: AnyAction) {
-    // Read mutableState at start to acquire lock once.
-    let mutableState = mutableState.value
-
-    let filters = mutableState.serverChanges.filter {
+    let filters = serverChanges.filter {
       ids.contains($0.id)
     }
-    let postgresCallbacks = mutableState.callbacks.compactMap {
+    let postgresCallbacks = callbacks.compactMap {
       if case let .postgres(callback) = $0 {
         return callback
       }
@@ -118,7 +88,7 @@ final class CallbackManager: Sendable {
   }
 
   func triggerBroadcast(event: String, json: JSONObject) {
-    let broadcastCallbacks = mutableState.callbacks.compactMap {
+    let broadcastCallbacks = callbacks.compactMap {
       if case let .broadcast(callback) = $0 {
         return callback
       }
@@ -133,7 +103,7 @@ final class CallbackManager: Sendable {
     leaves: [String: PresenceV2],
     rawMessage: RealtimeMessageV2
   ) {
-    let presenceCallbacks = mutableState.callbacks.compactMap {
+    let presenceCallbacks = callbacks.compactMap {
       if case let .presence(callback) = $0 {
         return callback
       }
@@ -151,7 +121,7 @@ final class CallbackManager: Sendable {
   }
 
   func triggerSystem(message: RealtimeMessageV2) {
-    let systemCallbacks = mutableState.callbacks.compactMap {
+    let systemCallbacks = callbacks.compactMap {
       if case .system(let callback) = $0 {
         return callback
       }
@@ -161,10 +131,6 @@ final class CallbackManager: Sendable {
     for systemCallback in systemCallbacks {
       systemCallback.callback(message)
     }
-  }
-
-  func reset() {
-    mutableState.setValue(MutableState())
   }
 }
 

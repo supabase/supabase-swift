@@ -11,6 +11,7 @@ import XCTest
 
 @testable import Realtime
 
+@MainActor
 final class CallbackManagerTests: XCTestCase {
   func testIntegration() {
     let callbackManager = CallbackManager()

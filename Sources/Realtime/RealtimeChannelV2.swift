@@ -88,10 +88,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     self.socket = socket
   }
 
-  deinit {
-    callbackManager.reset()
-  }
-
   /// Subscribes to the channel.
   public func subscribeWithError() async throws {
     logger?.debug(
