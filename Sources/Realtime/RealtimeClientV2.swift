@@ -13,9 +13,11 @@ import Foundation
 #endif
 
 /// Factory function for returning a new WebSocket connection.
-typealias WebSocketTransport = @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
+typealias WebSocketTransport =
+  @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
   any WebSocket
 
+@MainActor
 protocol RealtimeClientProtocol: AnyObject, Sendable {
   var status: RealtimeClientStatus { get }
   var options: RealtimeClientOptions { get }
@@ -29,40 +31,31 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
   func _remove(_ channel: any RealtimeChannelProtocol)
 }
 
-public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
-  struct MutableState {
-    var accessToken: String?
-    var ref = 0
-    var pendingHeartbeatRef: String?
+@MainActor
+public final class RealtimeClientV2: RealtimeClientProtocol {
+  var accessToken: String?
+  var ref = 0
+  var pendingHeartbeatRef: String?
 
-    /// Long-running task that keeps sending heartbeat messages.
-    var heartbeatTask: Task<Void, Never>?
+  /// Long-running task that keeps sending heartbeat messages.
+  var heartbeatTask: Task<Void, Never>?
 
-    /// Long-running task for listening for incoming messages from WebSocket.
-    var messageTask: Task<Void, Never>?
+  /// Long-running task for listening for incoming messages from WebSocket.
+  var messageTask: Task<Void, Never>?
 
-    var connectionTask: Task<Void, Never>?
-    var channels: [String: RealtimeChannelV2] = [:]
-    var sendBuffer: [@Sendable () -> Void] = []
+  var connectionTask: Task<Void, Never>?
+  var sendBuffer: [@MainActor () -> Void] = []
 
-    var conn: (any WebSocket)?
-  }
+  var conn: (any WebSocket)?
 
   let url: URL
   let options: RealtimeClientOptions
   let wsTransport: WebSocketTransport
-  let mutableState = LockIsolated(MutableState())
   let http: any HTTPClientType
   let apikey: String
 
-  var conn: (any WebSocket)? {
-    mutableState.conn
-  }
-
   /// All managed channels indexed by their topics.
-  public var channels: [String: RealtimeChannelV2] {
-    mutableState.channels
-  }
+  public private(set) var channels: [String: RealtimeChannelV2] = [:]
 
   private let statusSubject = AsyncValueSubject<RealtimeClientStatus>(.disconnected)
   private let heartbeatSubject = AsyncValueSubject<HeartbeatStatus?>(nil)
@@ -161,19 +154,15 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     precondition(options.apikey != nil, "API key is required to connect to Realtime")
     apikey = options.apikey!
 
-    mutableState.withValue { [options] in
-      if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
-        $0.accessToken = String(accessToken)
-      }
+    if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
+      self.accessToken = String(accessToken)
     }
   }
 
   deinit {
-    mutableState.withValue {
-      $0.heartbeatTask?.cancel()
-      $0.messageTask?.cancel()
-      $0.channels = [:]
-    }
+    heartbeatTask?.cancel()
+    messageTask?.cancel()
+    channels = [:]
   }
 
   /// Connects the socket.
@@ -185,7 +174,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   func connect(reconnect: Bool) async {
     if status == .disconnected {
-      let connectionTask = Task {
+      self.connectionTask = Task {
         if reconnect {
           try? await _clock.sleep(for: .seconds(options.reconnectDelay))
 
@@ -203,7 +192,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         status = .connecting
 
         do {
-          let conn = try await wsTransport(
+          self.conn = try await wsTransport(
             Self.realtimeWebSocketURL(
               baseURL: Self.realtimeBaseURL(url: url),
               apikey: options.apikey,
@@ -211,15 +200,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             ),
             options.headers.dictionary
           )
-          mutableState.withValue { $0.conn = conn }
           onConnected(reconnect: reconnect)
         } catch {
           onError(error)
         }
-      }
-
-      mutableState.withValue {
-        $0.connectionTask = connectionTask
       }
     }
 
@@ -280,43 +264,29 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     _ topic: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
   ) -> RealtimeChannelV2 {
-    mutableState.withValue {
-      let realtimeTopic = "realtime:\(topic)"
+    let realtimeTopic = "realtime:\(topic)"
 
-      if let channel = $0.channels[realtimeTopic] {
-        return channel
-      }
-
-      var config = RealtimeChannelConfig(
-        broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
-        presence: PresenceJoinConfig(key: ""),
-        isPrivate: false
-      )
-      options(&config)
-
-      let channel = RealtimeChannelV2(
-        topic: realtimeTopic,
-        config: config,
-        socket: self,
-        logger: self.options.logger
-      )
-
-      $0.channels[realtimeTopic] = channel
-
+    if let channel = self.channels[realtimeTopic] {
       return channel
     }
-  }
 
-  @available(
-    *,
-    deprecated,
-    message:
-      "Client handles channels automatically, this method will be removed on the next major release."
-  )
-  public func addChannel(_ channel: RealtimeChannelV2) {
-    mutableState.withValue {
-      $0.channels[channel.topic] = channel
-    }
+    var config = RealtimeChannelConfig(
+      broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
+      presence: PresenceJoinConfig(key: ""),
+      isPrivate: false
+    )
+    options(&config)
+
+    let channel = RealtimeChannelV2(
+      topic: realtimeTopic,
+      config: config,
+      socket: self,
+      logger: self.options.logger
+    )
+
+    self.channels[realtimeTopic] = channel
+
+    return channel
   }
 
   /// Unsubscribe and removes channel.
@@ -334,9 +304,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   func _remove(_ channel: any RealtimeChannelProtocol) {
-    mutableState.withValue {
-      $0.channels[channel.topic] = nil
-    }
+    self.channels[channel.topic] = nil
   }
 
   /// Unsubscribes and removes all channels.
@@ -354,7 +322,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     if let accessToken = try? await options.accessToken?() {
       return accessToken
     }
-    return mutableState.accessToken
+    return self.accessToken
   }
 
   private func rejoinChannels() {
@@ -366,7 +334,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   private func listenForMessages() {
-    let messageTask = Task { [weak self] in
+    self.messageTask = Task { [weak self] in
       guard let self, let conn = self.conn else { return }
 
       do {
@@ -382,7 +350,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
             await onMessage(message)
 
-          case let .close(code, reason):
+          case .close(let code, let reason):
             onClose(code: code, reason: reason)
           }
         }
@@ -390,13 +358,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         onError(error)
       }
     }
-    mutableState.withValue {
-      $0.messageTask = messageTask
-    }
   }
 
   private func startHeartbeating() {
-    let heartbeatTask = Task { [weak self, options] in
+    self.heartbeatTask = Task { [weak self, options] in
       while !Task.isCancelled {
         try? await _clock.sleep(for: .seconds(options.heartbeatInterval))
         if Task.isCancelled {
@@ -404,9 +369,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         }
         await self?.sendHeartbeat()
       }
-    }
-    mutableState.withValue {
-      $0.heartbeatTask = heartbeatTask
     }
   }
 
@@ -416,16 +378,16 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       return
     }
 
-    let pendingHeartbeatRef: String? = mutableState.withValue {
-      if $0.pendingHeartbeatRef != nil {
-        $0.pendingHeartbeatRef = nil
+    let pendingHeartbeatRef: String? = {
+      if self.pendingHeartbeatRef != nil {
+        self.pendingHeartbeatRef = nil
         return nil
       }
 
       let ref = makeRef()
-      $0.pendingHeartbeatRef = ref
+      self.pendingHeartbeatRef = ref
       return ref
-    }
+    }()
 
     if let pendingHeartbeatRef {
       push(
@@ -455,13 +417,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
     conn?.close(code: code, reason: reason)
 
-    mutableState.withValue {
-      $0.ref = 0
-      $0.messageTask?.cancel()
-      $0.heartbeatTask?.cancel()
-      $0.connectionTask?.cancel()
-      $0.conn = nil
-    }
+    ref = 0
+    messageTask?.cancel()
+    heartbeatTask?.cancel()
+    connectionTask?.cancel()
+    conn = nil
 
     status = .disconnected
   }
@@ -479,13 +439,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       tokenToSend = try? await options.accessToken?()
     }
 
-    guard tokenToSend != mutableState.accessToken else {
+    guard tokenToSend != accessToken else {
       return
     }
 
-    mutableState.withValue { [token] in
-      $0.accessToken = token
-    }
+    self.accessToken = token
 
     for channel in channels.values {
       if channel.status == .subscribed {
@@ -503,17 +461,17 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       heartbeatSubject.yield(message.status == .ok ? .ok : .error)
     }
 
-    let channel = mutableState.withValue {
-      if let ref = message.ref, ref == $0.pendingHeartbeatRef {
-        $0.pendingHeartbeatRef = nil
+    let channel = {
+      if let ref = message.ref, ref == self.pendingHeartbeatRef {
+        self.pendingHeartbeatRef = nil
         options.logger?.debug("heartbeat received")
       } else {
         options.logger?
           .debug("Received event \(message.event) for channel \(message.topic)")
       }
 
-      return $0.channels[message.topic]
-    }
+      return self.channels[message.topic]
+    }()
 
     if let channel {
       await channel.onMessage(message)
@@ -524,7 +482,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///
   /// If the socket is not connected, the message gets enqueued within a local buffer, and sent out when a connection is next established.
   public func push(_ message: RealtimeMessageV2) {
-    let callback = { @Sendable [weak self] in
+    let callback = { @MainActor [weak self] in
       do {
         // Check cancellation before sending, because this push may have been cancelled before a connection was established.
         try Task.checkCancellation()
@@ -546,24 +504,18 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     if status == .connected {
       callback()
     } else {
-      mutableState.withValue {
-        $0.sendBuffer.append(callback)
-      }
+      self.sendBuffer.append(callback)
     }
   }
 
   private func flushSendBuffer() {
-    mutableState.withValue {
-      $0.sendBuffer.forEach { $0() }
-      $0.sendBuffer = []
-    }
+    self.sendBuffer.forEach { $0() }
+    self.sendBuffer = []
   }
 
   func makeRef() -> String {
-    mutableState.withValue {
-      $0.ref += 1
-      return $0.ref.description
-    }
+    self.ref += 1
+    return self.ref.description
   }
 
   static func realtimeBaseURL(url: URL) -> URL {

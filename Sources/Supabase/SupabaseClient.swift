@@ -68,14 +68,16 @@ public final class SupabaseClient: Sendable {
     }
   }
 
+  @MainActor
+  private var _realtime: RealtimeClientV2?
+
   /// Realtime client for Supabase
+  @MainActor
   public var realtimeV2: RealtimeClientV2 {
-    mutableState.withValue {
-      if $0.realtime == nil {
-        $0.realtime = _initRealtimeClient()
-      }
-      return $0.realtime!
+    if _realtime == nil {
+      _realtime = _initRealtimeClient()
     }
+    return _realtime!
   }
 
   /// Supabase Functions allows you to deploy and invoke edge functions.
@@ -108,7 +110,6 @@ public final class SupabaseClient: Sendable {
     var storage: SupabaseStorageClient?
     var rest: PostgrestClient?
     var functions: FunctionsClient?
-    var realtime: RealtimeClientV2?
 
     var changedAccessToken: String?
   }
@@ -234,6 +235,7 @@ public final class SupabaseClient: Sendable {
   }
 
   /// Returns all Realtime channels.
+  @MainActor
   public var channels: [RealtimeChannelV2] {
     Array(realtimeV2.channels.values)
   }
@@ -242,6 +244,7 @@ public final class SupabaseClient: Sendable {
   /// - Parameters:
   ///   - name: The name of the Realtime channel.
   ///   - options: The options to pass to the Realtime channel.
+  @MainActor
   public func channel(
     _ name: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
@@ -381,6 +384,7 @@ public final class SupabaseClient: Sendable {
     await realtimeV2.setAuth(accessToken)
   }
 
+  @MainActor
   private func _initRealtimeClient() -> RealtimeClientV2 {
     var realtimeOptions = options.realtime
     realtimeOptions.headers.merge(with: _headers)
