@@ -1174,6 +1174,20 @@ public struct UpdateOAuthClientParams: Encodable, Hashable, Sendable {
   public let redirectUris: [String]?
   /// OAuth grant types the client is authorized to use
   public let grantTypes: [OAuthClientGrantType]?
+
+  public init(
+    clientName: String? = nil,
+    clientUri: String? = nil,
+    logoUri: String? = nil,
+    redirectUris: [String]? = nil,
+    grantTypes: [OAuthClientGrantType]? = nil
+  ) {
+    self.clientName = clientName
+    self.clientUri = clientUri
+    self.logoUri = logoUri
+    self.redirectUris = redirectUris
+    self.grantTypes = grantTypes
+  }
 }
 
 /// Response type for listing OAuth clients.
