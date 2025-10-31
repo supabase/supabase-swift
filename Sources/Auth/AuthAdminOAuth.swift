@@ -99,12 +99,12 @@ public struct AuthAdminOAuth: Sendable {
     .decoded(decoder: configuration.decoder)
   }
 
-  /// Updates as existing OAuth client registration. Only the provided fields will be updated.
+  /// Updates an existing OAuth client registration. Only the provided fields will be updated.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client.
-  /// - Parameter params: The fields for updated.
-  /// - Note: The funciton should only be called on a server. Never expose your `service_role` key in the client.
+  /// - Parameter params: The fields to update.
+  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
   public func updateClient(
     clientId: UUID,
     params: UpdateOAuthClientParams
