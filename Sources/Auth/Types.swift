@@ -1032,36 +1032,74 @@ public struct ListUsersPaginatedResponse: Hashable, Sendable {
 
 /// OAuth client grant types supported by the OAuth 2.1 server.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public enum OAuthClientGrantType: String, Codable, Hashable, Sendable {
-  case authorizationCode = "authorization_code"
-  case refreshToken = "refresh_token"
+public struct OAuthClientGrantType: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  public static let authorizationCode: OAuthClientGrantType = "authorization_code"
+  public static let refreshToken: OAuthClientGrantType = "refresh_token"
 }
 
 /// OAuth client response types supported by the OAuth 2.1 server.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public enum OAuthClientResponseType: String, Codable, Hashable, Sendable {
-  case code
+public struct OAuthClientResponseType: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  public static let code: OAuthClientResponseType = "code"
 }
 
 /// OAuth client type indicating whether the client can keep credentials confidential.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public enum OAuthClientType: String, Codable, Hashable, Sendable {
-  case `public`
-  case confidential
+public struct OAuthClientType: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+  public static let `public`: OAuthClientType = "public"
+  public static let confidential: OAuthClientType = "confidential"
 }
 
 /// OAuth client registration type.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public enum OAuthClientRegistrationType: String, Codable, Hashable, Sendable {
-  case dynamic
-  case manual
+public struct OAuthClientRegistrationType: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+  public static let dynamic: OAuthClientRegistrationType = "dynamic"
+  public static let manual: OAuthClientRegistrationType = "manual"
 }
 
 /// OAuth client object returned from the OAuth 2.1 server.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthClient: Codable, Hashable, Sendable {
   /// Unique identifier for the OAuth client
-  public let clientId: String
+  public let clientId: UUID
   /// Human-readable name of the OAuth client
   public let clientName: String
   /// Client secret (only returned on registration and regeneration)
@@ -1074,6 +1112,8 @@ public struct OAuthClient: Codable, Hashable, Sendable {
   public let registrationType: OAuthClientRegistrationType
   /// URI of the OAuth client
   public let clientUri: String?
+  /// URL of the client application's logo
+  public let logoUri: String?
   /// Array of allowed redirect URIs
   public let redirectUris: [String]
   /// Array of allowed grant types
@@ -1119,6 +1159,21 @@ public struct CreateOAuthClientParams: Encodable, Hashable, Sendable {
     self.responseTypes = responseTypes
     self.scope = scope
   }
+}
+
+/// Parameters for updating an existing OAuth client.
+/// Only relevant when the OAuth 2.1. server is enabled in Supabase Auth.
+public struct UpdateOAuthClientParams: Encodable, Hashable, Sendable {
+  /// Human-readable name of the client application
+  public let clientName: String?
+  /// URL of the client application's homepage
+  public let clientUri: String?
+  /// URL of the client application's logo
+  public let logoUri: String?
+  /// Array of redirect URIs used by the client
+  public let redirectUris: [String]?
+  /// OAuth grant types the client is authorized to use
+  public let grantTypes: [OAuthClientGrantType]?
 }
 
 /// Response type for listing OAuth clients.
