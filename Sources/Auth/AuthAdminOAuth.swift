@@ -109,7 +109,7 @@ public struct AuthAdminOAuth: Sendable {
     clientId: UUID,
     params: UpdateOAuthClientParams
   ) async throws -> OAuthClient {
-    return try await api.execute(
+    try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
         method: .put,

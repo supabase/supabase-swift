@@ -1162,7 +1162,7 @@ public struct CreateOAuthClientParams: Encodable, Hashable, Sendable {
 }
 
 /// Parameters for updating an existing OAuth client.
-/// Only relevant when the OAuth 2.1. server is enabled in Supabase Auth.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct UpdateOAuthClientParams: Encodable, Hashable, Sendable {
   /// Human-readable name of the client application
   public let clientName: String?
