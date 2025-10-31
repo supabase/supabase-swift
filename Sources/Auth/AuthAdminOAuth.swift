@@ -89,7 +89,7 @@ public struct AuthAdminOAuth: Sendable {
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client.
   /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
-  public func getClient(_ clientId: UUID) async throws -> OAuthClient {
+  public func getClient(clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
@@ -106,7 +106,7 @@ public struct AuthAdminOAuth: Sendable {
   /// - Parameter params: The fields for updated.
   /// - Note: The funciton should only be called on a server. Never expose your `service_role` key in the client.
   public func updateClient(
-    _ clientId: UUID,
+    clientId: UUID,
     params: UpdateOAuthClientParams
   ) async throws -> OAuthClient {
     return try await api.execute(
@@ -125,7 +125,7 @@ public struct AuthAdminOAuth: Sendable {
   /// - Parameter clientId: The unique identifier of the OAuth client to delete.
   /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
   @discardableResult
-  public func deleteClient(_ clientId: UUID) async throws -> OAuthClient {
+  public func deleteClient(clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
@@ -141,7 +141,7 @@ public struct AuthAdminOAuth: Sendable {
   /// - Parameter clientId: The unique identifier of the OAuth client.
   /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
   @discardableResult
-  public func regenerateClientSecret(_ clientId: UUID) async throws -> OAuthClient {
+  public func regenerateClientSecret(clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
         url: configuration.url
