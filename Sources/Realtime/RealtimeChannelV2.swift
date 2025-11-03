@@ -24,32 +24,27 @@ public struct RealtimeChannelConfig: Sendable {
   public var isPrivate: Bool
 }
 
-protocol RealtimeChannelProtocol: AnyObject, Sendable {
-  @MainActor var config: RealtimeChannelConfig { get }
+@MainActor
+protocol RealtimeChannelProtocol: AnyObject {
+  var config: RealtimeChannelConfig { get }
   var topic: String { get }
   var logger: (any SupabaseLogger)? { get }
 
   var socket: any RealtimeClientProtocol { get }
 }
 
+@MainActor
 public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
-  struct MutableState {
-    var clientChanges: [PostgresJoinConfig] = []
-    var joinRef: String?
-    var pushes: [String: PushV2] = [:]
-  }
-
-  @MainActor
-  private var mutableState = MutableState()
+  var clientChanges: [PostgresJoinConfig] = []
+  var joinRef: String?
+  var pushes: [String: PushV2] = [:]
 
   let topic: String
 
-  @MainActor var config: RealtimeChannelConfig
+  var config: RealtimeChannelConfig
 
   let logger: (any SupabaseLogger)?
   let socket: any RealtimeClientProtocol
-
-  @MainActor var joinRef: String? { mutableState.joinRef }
 
   let callbackManager = CallbackManager()
   private let statusSubject = AsyncValueSubject<RealtimeChannelStatus>(.unsubscribed)
@@ -85,10 +80,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     self.config = config
     self.logger = logger
     self.socket = socket
-  }
-
-  deinit {
-    callbackManager.reset()
   }
 
   /// Subscribes to the channel.
@@ -162,13 +153,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     throw RealtimeError.maxRetryAttemptsReached
   }
 
-  /// Subscribes to the channel.
-  @available(*, deprecated, message: "Use `subscribeWithError` instead")
-  @MainActor
-  public func subscribe() async {
-    try? await subscribeWithError()
-  }
-
   /// Calculates retry delay with exponential backoff and jitter
   private func calculateRetryDelay(for attempt: Int) -> TimeInterval {
     let baseDelay: TimeInterval = 1.0
@@ -186,7 +170,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Subscribes to the channel
-  @MainActor
   private func _subscribe() async {
     if socket.status != .connected {
       if socket.options.connectOnSubscribe != true {
@@ -205,7 +188,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     let joinConfig = RealtimeJoinConfig(
       broadcast: config.broadcast,
       presence: config.presence,
-      postgresChanges: mutableState.clientChanges,
+      postgresChanges: clientChanges,
       isPrivate: config.isPrivate
     )
 
@@ -216,7 +199,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
 
     let joinRef = socket.makeRef()
-    mutableState.joinRef = joinRef
+    self.joinRef = joinRef
 
     logger?.debug("Subscribing to channel with body: \(joinConfig)")
 
@@ -234,20 +217,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     logger?.debug("Unsubscribing from channel \(topic)")
 
     await push(ChannelEvent.leave)
-  }
-
-  @available(
-    *,
-    deprecated,
-    message:
-      "manually updating auth token per channel is not recommended, please use `setAuth` in RealtimeClient instead."
-  )
-  public func updateAuth(jwt: String?) async {
-    logger?.debug("Updating auth token for channel \(topic)")
-    await push(
-      ChannelEvent.accessToken,
-      payload: ["access_token": jwt.map { .string($0) } ?? .null]
-    )
   }
 
   /// Sends a broadcast message explicitly via REST API.
@@ -295,7 +264,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
     headers[.authorization] = "Bearer \(accessToken)"
 
-    let body = try await JSONEncoder.supabase().encode(
+    let body = try JSONEncoder.supabase().encode(
       BroadcastMessagePayload(
         messages: [
           BroadcastMessagePayload.Message(
@@ -317,7 +286,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     let response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) {
       [self] in
-      await Result {
+      await Result { @Sendable in
         try await socket.http.send(request)
       }
     }.get()
@@ -475,7 +444,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
           throw RealtimeError("Received a reply with unexpected payload: \(message)")
         }
 
-        await didReceiveReply(ref: ref, status: status)
+        didReceiveReply(ref: ref, status: status)
 
         if message.payload["response"]?.objectValue?.keys
           .contains(ChannelEvent.postgresChanges) == true
@@ -692,9 +661,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       filter: filter
     )
 
-    Task { @MainActor in
-      mutableState.clientChanges.append(config)
-    }
+    clientChanges.append(config)
 
     let id = callbackManager.addPostgresCallback(filter: config, callback: callback)
     return RealtimeSubscription { [weak callbackManager, logger] in
@@ -733,7 +700,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     self.onSystem { _ in callback() }
   }
 
-  @MainActor
   @discardableResult
   func push(_ event: String, ref: String? = nil, payload: JSONObject = [:]) async -> PushStatus {
     let message = RealtimeMessageV2(
@@ -746,15 +712,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     let push = PushV2(channel: self, message: message)
     if let ref = message.ref {
-      mutableState.pushes[ref] = push
+      pushes[ref] = push
     }
 
     return await push.send()
   }
 
-  @MainActor
   private func didReceiveReply(ref: String, status: String) {
-    let push = mutableState.pushes.removeValue(forKey: ref)
+    let push = pushes.removeValue(forKey: ref)
     push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
   }
 }

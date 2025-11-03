@@ -7,17 +7,18 @@
 
 import ConcurrencyExtras
 import TestHelpers
-import XCTest
+@preconcurrency import XCTest
 
 @testable import Realtime
 
 #if !os(Android) && !os(Linux) && !os(Windows)
+  @MainActor
   final class _PushTests: XCTestCase {
     var ws: FakeWebSocket!
     var socket: RealtimeClientV2!
 
-    override func setUp() {
-      super.setUp()
+    override func setUp() async throws {
+      try await super.setUp()
 
       let (client, server) = FakeWebSocket.fakes()
       ws = server
@@ -43,7 +44,7 @@ import XCTest
         socket: socket,
         logger: nil
       )
-      let push = await PushV2(
+      let push = PushV2(
         channel: channel,
         message: RealtimeMessageV2(
           joinRef: nil,
@@ -69,7 +70,7 @@ import XCTest
         socket: socket,
         logger: nil
       )
-      let push = await PushV2(
+      let push = PushV2(
         channel: channel,
         message: RealtimeMessageV2(
           joinRef: nil,
@@ -84,7 +85,7 @@ import XCTest
         await push.send()
       }
       await Task.megaYield()
-      await push.didReceive(status: .ok)
+      push.didReceive(status: .ok)
 
       let status = await task.value
       XCTAssertEqual(status, .ok)
