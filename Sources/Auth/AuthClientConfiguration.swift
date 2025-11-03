@@ -46,6 +46,16 @@ extension AuthClient {
     /// Set to `true` if you want to automatically refresh the token before expiring.
     public let autoRefreshToken: Bool
 
+    /// When `true`, emits the locally stored session immediately as the initial session,
+    /// regardless of its validity or expiration. When `false`, emits the initial session
+    /// after attempting to refresh the local stored session (legacy behavior).
+    ///
+    /// Default is `false` for backward compatibility. This will change to `true` in the next major release.
+    ///
+    /// - Note: If you rely on the initial session to opt users in, you need to add an additional
+    ///   check for `session.isExpired` when this is set to `true`.
+    public let emitLocalSessionAsInitialSession: Bool
+
     /// Initializes a AuthClient Configuration with optional parameters.
     ///
     /// - Parameters:
@@ -60,6 +70,7 @@ extension AuthClient {
     ///   - decoder: The JSON decoder to use for decoding responses.
     ///   - fetch: The asynchronous fetch handler for network requests.
     ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+    ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
     public init(
       url: URL? = nil,
       headers: [String: String] = [:],
@@ -71,7 +82,8 @@ extension AuthClient {
       encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+      emitLocalSessionAsInitialSession: Bool = false
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
 
@@ -86,6 +98,7 @@ extension AuthClient {
       self.decoder = decoder
       self.fetch = fetch
       self.autoRefreshToken = autoRefreshToken
+      self.emitLocalSessionAsInitialSession = emitLocalSessionAsInitialSession
     }
   }
 
@@ -103,6 +116,7 @@ extension AuthClient {
   ///   - decoder: The JSON decoder to use for decoding responses.
   ///   - fetch: The asynchronous fetch handler for network requests.
   ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+  ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
   public init(
     url: URL? = nil,
     headers: [String: String] = [:],
@@ -114,7 +128,8 @@ extension AuthClient {
     encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+    emitLocalSessionAsInitialSession: Bool = false
   ) {
     self.init(
       configuration: Configuration(
@@ -128,7 +143,8 @@ extension AuthClient {
         encoder: encoder,
         decoder: decoder,
         fetch: fetch,
-        autoRefreshToken: autoRefreshToken
+        autoRefreshToken: autoRefreshToken,
+        emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
       )
     )
   }
