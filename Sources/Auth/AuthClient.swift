@@ -1393,7 +1393,7 @@ public actor AuthClient {
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {
-    #if EmitLocalSessionAsInitialSession
+    if configuration.emitLocalSessionAsInitialSession {
       guard let currentSession else {
         eventEmitter.emit(.initialSession, session: nil, token: token)
         return
@@ -1407,7 +1407,7 @@ public actor AuthClient {
           // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
         }
       }
-    #else
+    } else {
       let session = try? await session
       eventEmitter.emit(.initialSession, session: session, token: token)
 
@@ -1417,8 +1417,8 @@ public actor AuthClient {
         reportIssue(
           """
           Initial session emitted after attempting to refresh the local stored session.
-          This is incorrect behavior and will be fixed in the next major release since it’s a breaking change.
-          For now, if you want to opt-in to the new behavior, add the trait `EmitLocalSessionAsInitialSession` to your Package.swift file when importing the Supabase dependency.
+          This is incorrect behavior and will be fixed in the next major release since it's a breaking change.
+          To opt-in to the new behavior now, set `emitLocalSessionAsInitialSession: true` in your AuthClient configuration.
           The new behavior ensures that the locally stored session is always emitted, regardless of its validity or expiration.
           If you rely on the initial session to opt users in, you need to add an additional check for `session.isExpired` in the session.
 
@@ -1426,7 +1426,7 @@ public actor AuthClient {
           """
         )
       }
-    #endif
+    }
   }
 
   nonisolated private func prepareForPKCE() -> (

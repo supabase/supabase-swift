@@ -2211,11 +2211,48 @@ final class AuthClientTests: XCTestCase {
 
     Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
 
-    #if EmitLocalSessionAsInitialSession
-      let expectedEvents = [AuthChangeEvent.initialSession, .signedOut]
-    #else
-      let expectedEvents = [AuthChangeEvent.signedOut, .initialSession]
-    #endif
+    let expectedEvents = [AuthChangeEvent.signedOut, .initialSession]
+
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: {
+        do {
+          _ = try await sut.session
+          XCTFail("Expected failure")
+        } catch {
+          XCTAssertEqual(error as? AuthError, .sessionMissing)
+        }
+      },
+      expectedEvents: expectedEvents
+    )
+
+    XCTAssertNil(Dependencies[sut.clientID].sessionStorage.get())
+  }
+
+  func testRemoveSessionAndSignoutIfRefreshTokenNotFoundErrorReturned_withEmitLocalSessionAsInitialSession() async throws {
+    let sut = makeSUT(emitLocalSessionAsInitialSession: true)
+
+    Mock(
+      url: clientURL.appendingPathComponent("token").appendingQueryItems([
+        URLQueryItem(name: "grant_type", value: "refresh_token")
+      ]),
+      statusCode: 403,
+      data: [
+        .post: Data(
+          """
+          {
+            "error_code": "refresh_token_not_found",
+            "message": "Invalid Refresh Token: Refresh Token Not Found"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
+
+    let expectedEvents = [AuthChangeEvent.initialSession, .signedOut]
 
     try await assertAuthStateChanges(
       sut: sut,
@@ -2247,11 +2284,32 @@ final class AuthClientTests: XCTestCase {
 
     Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
 
-    #if EmitLocalSessionAsInitialSession
-      let expectedEvents = [AuthChangeEvent.initialSession, .tokenRefreshed]
-    #else
-      let expectedEvents = [AuthChangeEvent.tokenRefreshed, .initialSession]
-    #endif
+    let expectedEvents = [AuthChangeEvent.tokenRefreshed, .initialSession]
+
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: {
+        _ = try await sut.session
+      },
+      expectedEvents: expectedEvents
+    )
+  }
+
+  func testRefreshToken_withEmitLocalSessionAsInitialSession() async throws {
+    let sut = makeSUT(emitLocalSessionAsInitialSession: true)
+
+    Mock(
+      url: clientURL.appendingPathComponent("token").appendingQueryItems([
+        URLQueryItem(name: "grant_type", value: "refresh_token")
+      ]),
+      statusCode: 200,
+      data: [.post: try AuthClient.Configuration.jsonEncoder.encode(Session.validSession)]
+    )
+    .register()
+
+    Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
+
+    let expectedEvents = [AuthChangeEvent.initialSession, .tokenRefreshed]
 
     try await assertAuthStateChanges(
       sut: sut,
@@ -2618,7 +2676,7 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNotNil(result.claims.aud)
   }
 
-  private func makeSUT(flowType: AuthFlowType = .pkce) -> AuthClient {
+  private func makeSUT(flowType: AuthFlowType = .pkce, emitLocalSessionAsInitialSession: Bool = false) -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
     let session = URLSession(configuration: sessionConfiguration)
@@ -2638,7 +2696,8 @@ final class AuthClientTests: XCTestCase {
       encoder: encoder,
       fetch: { request in
         try await session.data(for: request)
-      }
+      },
+      emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
     )
 
     let sut = AuthClient(configuration: configuration)
