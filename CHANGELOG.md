@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.37.0](https://github.com/supabase/supabase-swift/compare/v2.36.0...v2.37.0) (2025-11-03)
+
+
+### Features
+
+* **auth:** add method for updating OAuth client ([#840](https://github.com/supabase/supabase-swift/issues/840)) ([a83512b](https://github.com/supabase/supabase-swift/commit/a83512bd9069201eee4af3a5f79e874db6766e87))
+
+
+### Bug Fixes
+
+* use IssueReporting ([#826](https://github.com/supabase/supabase-swift/issues/826)) ([4ebf243](https://github.com/supabase/supabase-swift/commit/4ebf2437296f75204c528218a5df23bff6f75ad4))
+
 ## [2.36.0](https://github.com/supabase/supabase-swift/compare/v2.35.0...v2.36.0) (2025-10-15)
 
 
