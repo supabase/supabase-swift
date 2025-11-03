@@ -20,7 +20,7 @@ public struct AuthAdminOAuth: Sendable {
   /// Lists all OAuth clients with optional pagination.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
+  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
   public func listClients(
     params: PageParams? = nil
   ) async throws -> ListOAuthClientsPaginatedResponse {
@@ -71,7 +71,7 @@ public struct AuthAdminOAuth: Sendable {
   /// Creates a new OAuth client.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
+  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
   @discardableResult
   public func createClient(params: CreateOAuthClientParams) async throws -> OAuthClient {
     try await api.execute(
@@ -88,8 +88,8 @@ public struct AuthAdminOAuth: Sendable {
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client.
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
-  public func getClient(clientId: String) async throws -> OAuthClient {
+  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
+  public func getClient(clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
@@ -99,13 +99,33 @@ public struct AuthAdminOAuth: Sendable {
     .decoded(decoder: configuration.decoder)
   }
 
+  /// Updates an existing OAuth client registration. Only the provided fields will be updated.
+  /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+  ///
+  /// - Parameter clientId: The unique identifier of the OAuth client.
+  /// - Parameter params: The fields to update.
+  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
+  public func updateClient(
+    clientId: UUID,
+    params: UpdateOAuthClientParams
+  ) async throws -> OAuthClient {
+    try await api.execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
+        method: .put,
+        body: configuration.encoder.encode(params)
+      )
+    )
+    .decoded(decoder: configuration.decoder)
+  }
+
   /// Deletes an OAuth client.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client to delete.
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
+  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
   @discardableResult
-  public func deleteClient(clientId: String) async throws -> OAuthClient {
+  public func deleteClient(clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
@@ -119,9 +139,9 @@ public struct AuthAdminOAuth: Sendable {
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client.
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
+  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
   @discardableResult
-  public func regenerateClientSecret(clientId: String) async throws -> OAuthClient {
+  public func regenerateClientSecret(clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
         url: configuration.url
