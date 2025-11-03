@@ -35,13 +35,9 @@ protocol RealtimeChannelProtocol: AnyObject {
 
 @MainActor
 public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
-  struct MutableState {
-    var clientChanges: [PostgresJoinConfig] = []
-    var joinRef: String?
-    var pushes: [String: PushV2] = [:]
-  }
-
-  private var mutableState = MutableState()
+  var clientChanges: [PostgresJoinConfig] = []
+  var joinRef: String?
+  var pushes: [String: PushV2] = [:]
 
   let topic: String
 
@@ -49,8 +45,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   let logger: (any SupabaseLogger)?
   let socket: any RealtimeClientProtocol
-
-  var joinRef: String? { mutableState.joinRef }
 
   let callbackManager = CallbackManager()
   private let statusSubject = AsyncValueSubject<RealtimeChannelStatus>(.unsubscribed)
@@ -194,7 +188,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     let joinConfig = RealtimeJoinConfig(
       broadcast: config.broadcast,
       presence: config.presence,
-      postgresChanges: mutableState.clientChanges,
+      postgresChanges: clientChanges,
       isPrivate: config.isPrivate
     )
 
@@ -205,7 +199,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
 
     let joinRef = socket.makeRef()
-    mutableState.joinRef = joinRef
+    self.joinRef = joinRef
 
     logger?.debug("Subscribing to channel with body: \(joinConfig)")
 
@@ -667,7 +661,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       filter: filter
     )
 
-    mutableState.clientChanges.append(config)
+    clientChanges.append(config)
 
     let id = callbackManager.addPostgresCallback(filter: config, callback: callback)
     return RealtimeSubscription { [weak callbackManager, logger] in
@@ -718,14 +712,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     let push = PushV2(channel: self, message: message)
     if let ref = message.ref {
-      mutableState.pushes[ref] = push
+      pushes[ref] = push
     }
 
     return await push.send()
   }
 
   private func didReceiveReply(ref: String, status: String) {
-    let push = mutableState.pushes.removeValue(forKey: ref)
+    let push = pushes.removeValue(forKey: ref)
     push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
   }
 }
