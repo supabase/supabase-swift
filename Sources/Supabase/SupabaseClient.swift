@@ -181,7 +181,8 @@ public final class SupabaseClient: Sendable {
         // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
         try await options.global.session.data(for: $0)
       },
-      autoRefreshToken: options.auth.autoRefreshToken
+      autoRefreshToken: options.auth.autoRefreshToken,
+      emitLocalSessionAsInitialSession: options.auth.emitLocalSessionAsInitialSession
     )
 
     _realtime = UncheckedSendable(
