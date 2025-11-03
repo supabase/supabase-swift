@@ -3,7 +3,7 @@ import ConcurrencyExtras
 import CustomDump
 import InlineSnapshotTesting
 import TestHelpers
-import XCTest
+@preconcurrency import XCTest
 
 @testable import Realtime
 

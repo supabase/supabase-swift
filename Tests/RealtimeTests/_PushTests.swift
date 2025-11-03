@@ -7,7 +7,7 @@
 
 import ConcurrencyExtras
 import TestHelpers
-import XCTest
+@preconcurrency import XCTest
 
 @testable import Realtime
 
