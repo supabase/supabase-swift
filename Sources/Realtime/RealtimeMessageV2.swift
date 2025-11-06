@@ -22,12 +22,6 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
       .flatMap(PushStatus.init(rawValue:))
   }
 
-  @available(
-    *, deprecated,
-    message: "Access to event type will be removed, please inspect raw event value instead."
-  )
-  public var eventType: EventType? { _eventType }
-
   var _eventType: EventType? {
     switch event {
     case ChannelEvent.system: .system
@@ -58,12 +52,6 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
     case error
     case presenceDiff
     case presenceState
-    @available(
-      *, deprecated,
-      message:
-        "tokenExpired gets returned as system, check payload for verifying if is a token expiration."
-    )
-    case tokenExpired
     case reply
   }
 

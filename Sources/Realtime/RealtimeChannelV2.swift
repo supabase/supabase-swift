@@ -420,10 +420,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       }
 
       switch eventType {
-      case .tokenExpired:
-        // deprecated type
-        break
-
       case .system:
         if message.status == .ok {
           logger?.debug("Subscribed to channel \(message.topic)")
