@@ -32,33 +32,30 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
 
 public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   struct MutableState {
-    var accessToken: String?
     var ref = 0
-    var pendingHeartbeatRef: String?
-
-    /// Long-running task that keeps sending heartbeat messages.
-    var heartbeatTask: Task<Void, Never>?
-
-    /// Long-running task for listening for incoming messages from WebSocket.
-    var messageTask: Task<Void, Never>?
-
-    var connectionTask: Task<Void, Never>?
-    var reconnectTask: Task<Void, Never>?
     var channels: [String: RealtimeChannelV2] = [:]
     var sendBuffer: [@Sendable () -> Void] = []
-
-    var conn: (any WebSocket)?
+    var messageTask: Task<Void, Never>?
   }
 
   let url: URL
   let options: RealtimeClientOptions
-  let wsTransport: WebSocketTransport
-  let mutableState = LockIsolated(MutableState())
   let http: any HTTPClientType
   let apikey: String
 
+  // MARK: - New Actor-Based Components
+
+  private let connectionMgr: ConnectionStateMachine
+  private let authMgr: AuthTokenManager
+  private let messageRouter: MessageRouter
+  private let heartbeatMonitor: HeartbeatMonitor
+
+  private let mutableState = LockIsolated(MutableState())
+
   var conn: (any WebSocket)? {
-    mutableState.conn
+    get async {
+      await connectionMgr.connection
+    }
   }
 
   /// All managed channels indexed by their topics.
@@ -154,29 +151,122 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
     self.url = url
     self.options = options
-    self.wsTransport = wsTransport
     self.http = http
 
     precondition(options.apikey != nil, "API key is required to connect to Realtime")
     apikey = options.apikey!
 
-    mutableState.withValue { [options] in
-      if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
-        $0.accessToken = String(accessToken)
+    // Extract initial access token from headers
+    let initialToken = options.headers[.authorization]?.split(separator: " ").last.map(String.init)
+
+    // Initialize new actor-based components
+    self.connectionMgr = ConnectionStateMachine(
+      transport: wsTransport,
+      url: Self.realtimeWebSocketURL(
+        baseURL: Self.realtimeBaseURL(url: url),
+        apikey: options.apikey,
+        logLevel: options.logLevel
+      ),
+      headers: options.headers.dictionary,
+      reconnectDelay: options.reconnectDelay,
+      logger: options.logger
+    )
+
+    self.authMgr = AuthTokenManager(
+      initialToken: initialToken,
+      tokenProvider: options.accessToken
+    )
+
+    // Initialize MessageRouter and HeartbeatMonitor with non-capturing closures
+    self.messageRouter = MessageRouter(logger: options.logger)
+
+    // Create ref generator that doesn't capture self
+    let refGen = { [weak mutableState] in
+      guard let mutableState else { return "0" }
+      return mutableState.withValue {
+        $0.ref += 1
+        return $0.ref.description
       }
+    }
+
+    // Create heartbeat and timeout handlers that don't capture self yet
+    // We'll use a placeholder that will be set up after init
+    var sendHeartbeatHandler: (@Sendable (String) async -> Void)? = nil
+    var timeoutHandler: (@Sendable () async -> Void)? = nil
+
+    self.heartbeatMonitor = HeartbeatMonitor(
+      interval: options.heartbeatInterval,
+      refGenerator: refGen,
+      sendHeartbeat: { ref in
+        await sendHeartbeatHandler?(ref)
+      },
+      onTimeout: {
+        await timeoutHandler?()
+      },
+      logger: options.logger
+    )
+
+    // Now that self is fully initialized, set up the handlers
+    sendHeartbeatHandler = { [weak self] ref in
+      await self?.sendHeartbeatMessage(ref: ref)
+    }
+    timeoutHandler = { [weak self] in
+      await self?.handleHeartbeatTimeout()
     }
   }
 
   deinit {
+    // Stop heartbeat monitor
+    Task {
+      await heartbeatMonitor.stop()
+    }
+
+    // Disconnect
+    Task {
+      await connectionMgr.disconnect(reason: "Client deinitialized")
+    }
+
+    // Reset message router
+    Task {
+      await messageRouter.reset()
+    }
+
+    // Clean up local state
     mutableState.withValue {
-      $0.heartbeatTask?.cancel()
       $0.messageTask?.cancel()
-      $0.connectionTask?.cancel()
-      $0.reconnectTask?.cancel()
       $0.channels = [:]
-      $0.conn = nil
     }
   }
+
+  // MARK: - Heartbeat Helper Methods
+
+  /// Sends a heartbeat message with the given ref.
+  private func sendHeartbeatMessage(ref: String) async {
+    let message = RealtimeMessageV2(
+      joinRef: nil,
+      ref: ref,
+      topic: "phoenix",
+      event: "heartbeat",
+      payload: [:]
+    )
+
+    push(message)
+    options.logger?.debug("Heartbeat sent with ref: \(ref)")
+  }
+
+  /// Called when a heartbeat times out (no response received).
+  private func handleHeartbeatTimeout() async {
+    options.logger?.warning("Heartbeat timeout - triggering reconnection")
+    await connectionMgr.handleError(
+      NSError(
+        domain: "RealtimeClient",
+        code: -1,
+        userInfo: [NSLocalizedDescriptionKey: "Heartbeat timeout"]
+      )
+    )
+  }
+
+  // MARK: - Connection Management
 
   /// Connects the socket.
   ///
@@ -186,117 +276,32 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   func connect(reconnect: Bool) async {
-    // Check and create connection task atomically to prevent race conditions
-    let shouldConnect = mutableState.withValue { state -> Bool in
-      // If already connecting or connected, don't create a new connection task
-      if status == .connecting || status == .connected {
-        return false
-      }
+    options.logger?.debug(reconnect ? "Reconnecting..." : "Connecting...")
 
-      // If there's already a connection task running, don't create another
-      if state.connectionTask != nil {
-        return false
-      }
+    do {
+      // Delegate to ConnectionStateMachine
+      _ = try await connectionMgr.connect()
 
-      return true
-    }
+      // Connection successful - start services
+      options.logger?.debug("Connected to realtime WebSocket")
 
-    guard shouldConnect else {
-      // Wait for existing connection to complete
-      _ = await statusChange.first { @Sendable in $0 == .connected }
-      return
-    }
+      // Start message listener and heartbeat
+      listenForMessages()
+      await heartbeatMonitor.start()
 
-    let connectionTask = Task {
+      // Update status
+      status = .connected
+
+      // Rejoin channels if reconnecting
       if reconnect {
-        try? await _clock.sleep(for: options.reconnectDelay)
-
-        if Task.isCancelled {
-          options.logger?.debug("Reconnect cancelled, returning")
-          return
-        }
+        rejoinChannels()
       }
 
-      if status == .connected {
-        options.logger?.debug("WebsSocket already connected")
-        return
-      }
-
-      status = .connecting
-
-      do {
-        let conn = try await wsTransport(
-          Self.realtimeWebSocketURL(
-            baseURL: Self.realtimeBaseURL(url: url),
-            apikey: options.apikey,
-            logLevel: options.logLevel
-          ),
-          options.headers.dictionary
-        )
-        mutableState.withValue { $0.conn = conn }
-        onConnected(reconnect: reconnect)
-      } catch {
-        onError(error)
-      }
-    }
-
-    mutableState.withValue {
-      $0.connectionTask = connectionTask
-    }
-
-    _ = await statusChange.first { @Sendable in $0 == .connected }
-  }
-
-  private func onConnected(reconnect: Bool) {
-    options.logger?.debug("Connected to realtime WebSocket")
-
-    // Start listeners before setting status to prevent race conditions
-    listenForMessages()
-    startHeartbeating()
-
-    // Now set status to connected
-    status = .connected
-
-    if reconnect {
-      rejoinChannels()
-    }
-
-    flushSendBuffer()
-  }
-
-  private func onDisconnected() {
-    options.logger?
-      .debug(
-        "WebSocket disconnected. Trying again in \(options.reconnectDelay)"
-      )
-    reconnect()
-  }
-
-  private func onError(_ error: (any Error)?) {
-    options.logger?
-      .debug(
-        "WebSocket error \(error?.localizedDescription ?? "<none>"). Trying again in \(options.reconnectDelay)"
-      )
-    reconnect()
-  }
-
-  private func onClose(code: Int?, reason: String?) {
-    options.logger?.debug(
-      "WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason ?? "<none>")"
-    )
-
-    reconnect()
-  }
-
-  private func reconnect(disconnectReason: String? = nil) {
-    // Cancel any existing reconnect task and create a new one
-    mutableState.withValue { state in
-      state.reconnectTask?.cancel()
-
-      state.reconnectTask = Task {
-        disconnect(reason: disconnectReason)
-        await connect(reconnect: true)
-      }
+      // Flush any pending messages
+      flushSendBuffer()
+    } catch {
+      options.logger?.error("Connection failed: \(error)")
+      status = .disconnected
     }
   }
 
@@ -349,6 +354,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     mutableState.withValue {
       $0.channels[channel.topic] = channel
     }
+
+    // Register channel with message router
+    Task {
+      await messageRouter.registerChannel(topic: channel.topic) { [weak channel] message in
+        await channel?.onMessage(message)
+      }
+    }
   }
 
   /// Unsubscribe and removes channel.
@@ -358,6 +370,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     if channel.status == .subscribed {
       await channel.unsubscribe()
     }
+
+    // Unregister from message router
+    await messageRouter.unregisterChannel(topic: channel.topic)
 
     // Atomically remove channel and check if we should disconnect
     let shouldDisconnect = mutableState.withValue { state -> Bool in
@@ -372,6 +387,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   func _remove(_ channel: any RealtimeChannelProtocol) {
+    // Unregister from message router
+    Task {
+      await messageRouter.unregisterChannel(topic: channel.topic)
+    }
+
     mutableState.withValue {
       $0.channels[channel.topic] = nil
     }
@@ -389,10 +409,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   func _getAccessToken() async -> String? {
-    if let accessToken = try? await options.accessToken?() {
-      return accessToken
-    }
-    return mutableState.accessToken
+    return await authMgr.getCurrentToken()
   }
 
   private func rejoinChannels() {
@@ -404,23 +421,26 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   private func listenForMessages() {
-    // Capture conn inside the lock before creating the task
-    let conn = mutableState.withValue { state -> (any WebSocket)? in
+    // Cancel existing message task
+    mutableState.withValue { state in
       state.messageTask?.cancel()
-      return state.conn
     }
 
-    guard let conn else { return }
-
     let messageTask = Task {
+      // Get connection from ConnectionStateMachine
+      guard let conn = await connectionMgr.connection else {
+        options.logger?.warning("No connection available for message listening")
+        return
+      }
+
       do {
         for await event in conn.events {
           if Task.isCancelled { return }
 
           switch event {
           case .binary:
-            self.options.logger?.error("Unsupported binary event received.")
-            break
+            options.logger?.error("Unsupported binary event received.")
+
           case .text(let text):
             let data = Data(text.utf8)
             let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
@@ -431,11 +451,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             }
 
           case .close(let code, let reason):
-            onClose(code: code, reason: reason)
+            options.logger?.debug("WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason)")
+            await connectionMgr.handleClose(code: code, reason: reason)
           }
         }
       } catch {
-        onError(error)
+        options.logger?.debug("WebSocket error: \(error.localizedDescription)")
+        await connectionMgr.handleError(error)
       }
     }
 
@@ -444,67 +466,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  private func startHeartbeating() {
-    mutableState.withValue { state in
-      state.heartbeatTask?.cancel()
-
-      state.heartbeatTask = Task { [options] in
-        while !Task.isCancelled {
-          try? await _clock.sleep(for: options.heartbeatInterval)
-          if Task.isCancelled {
-            break
-          }
-          await self.sendHeartbeat()
-        }
-      }
-    }
-  }
-
-  private func sendHeartbeat() async {
-    if status != .connected {
-      heartbeatSubject.yield(.disconnected)
-      return
-    }
-
-    // Check if previous heartbeat is still pending (not acknowledged)
-    let shouldSendHeartbeat = mutableState.withValue { state -> Bool in
-      if state.pendingHeartbeatRef != nil {
-        // Previous heartbeat was not acknowledged - this is a timeout
-        return false
-      }
-
-      // No pending heartbeat, we can send a new one
-      let ref = makeRef()
-      state.pendingHeartbeatRef = ref
-      return true
-    }
-
-    if shouldSendHeartbeat {
-      // Get the ref we just set
-      let heartbeatRef = mutableState.withValue { $0.pendingHeartbeatRef }!
-
-      push(
-        RealtimeMessageV2(
-          joinRef: nil,
-          ref: heartbeatRef,
-          topic: "phoenix",
-          event: "heartbeat",
-          payload: [:]
-        )
-      )
-      heartbeatSubject.yield(.sent)
-      await setAuth()
-    } else {
-      // Timeout: previous heartbeat was never acknowledged
-      options.logger?.debug("Heartbeat timeout - previous heartbeat not acknowledged")
-      heartbeatSubject.yield(.timeout)
-
-      // Clear the pending ref before reconnecting
-      mutableState.withValue { $0.pendingHeartbeatRef = nil }
-
-      reconnect(disconnectReason: "heartbeat timeout")
-    }
-  }
 
   /// Disconnects client.
   /// - Parameters:
@@ -513,21 +474,23 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   public func disconnect(code: Int? = nil, reason: String? = nil) {
     options.logger?.debug("Closing WebSocket connection")
 
-    conn?.close(code: code, reason: reason)
+    // Stop heartbeat monitor
+    Task {
+      await heartbeatMonitor.stop()
+    }
 
+    // Disconnect via ConnectionStateMachine
+    let reasonStr = reason ?? "Client disconnect"
+    Task {
+      await connectionMgr.disconnect(reason: reasonStr)
+    }
+
+    // Clean up local state
     mutableState.withValue {
       $0.ref = 0
       $0.messageTask?.cancel()
       $0.messageTask = nil
-      $0.heartbeatTask?.cancel()
-      $0.heartbeatTask = nil
-      $0.connectionTask?.cancel()
-      $0.connectionTask = nil
-      $0.reconnectTask?.cancel()
-      $0.reconnectTask = nil
-      $0.pendingHeartbeatRef = nil
       $0.sendBuffer = []
-      $0.conn = nil
     }
 
     status = .disconnected
@@ -540,20 +503,22 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// On callback used, it will set the value of the token internal to the client.
   /// - Parameter token: A JWT string to override the token set on the client.
   public func setAuth(_ token: String? = nil) async {
-    var tokenToSend = token
-
-    if tokenToSend == nil {
-      tokenToSend = try? await options.accessToken?()
+    // Get the token to use (either provided or from provider)
+    let tokenToSend: String?
+    if let token = token {
+      tokenToSend = token
+    } else {
+      tokenToSend = await authMgr.refreshToken()
     }
 
-    guard tokenToSend != mutableState.accessToken else {
+    // Update token in AuthTokenManager and check if it changed
+    let changed = await authMgr.updateToken(tokenToSend)
+
+    guard changed else {
       return
     }
 
-    mutableState.withValue { [tokenToSend] in
-      $0.accessToken = tokenToSend
-    }
-
+    // Push updated token to all subscribed channels
     for channel in channels.values {
       if channel.status == .subscribed {
         options.logger?.debug("Updating auth token for channel \(channel.topic)")
@@ -566,25 +531,23 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   private func onMessage(_ message: RealtimeMessageV2) async {
+    // Handle heartbeat responses
     if message.topic == "phoenix", message.event == "phx_reply" {
       heartbeatSubject.yield(message.status == .ok ? .ok : .error)
-    }
 
-    let channel = mutableState.withValue {
-      if let ref = message.ref, ref == $0.pendingHeartbeatRef {
-        $0.pendingHeartbeatRef = nil
-        options.logger?.debug("heartbeat received")
-      } else {
-        options.logger?
-          .debug("Received event \(message.event) for channel \(message.topic)")
+      // Acknowledge heartbeat if this is a response to one
+      if let ref = message.ref {
+        await heartbeatMonitor.onHeartbeatResponse(ref: ref)
+        options.logger?.debug("Heartbeat acknowledged: \(ref)")
       }
-
-      return $0.channels[message.topic]
+      return
     }
 
-    if let channel {
-      await channel.onMessage(message)
-    }
+    // Log received message
+    options.logger?.debug("Received event \(message.event) for channel \(message.topic)")
+
+    // Route message via MessageRouter
+    await messageRouter.route(message)
   }
 
   /// Push out a message if the socket is connected.
@@ -592,21 +555,27 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// If the socket is not connected, the message gets enqueued within a local buffer, and sent out when a connection is next established.
   public func push(_ message: RealtimeMessageV2) {
     let callback = { @Sendable [weak self] in
-      do {
-        // Check cancellation before sending, because this push may have been cancelled before a connection was established.
-        try Task.checkCancellation()
-        let data = try JSONEncoder().encode(message)
-        self?.conn?.send(String(decoding: data, as: UTF8.self))
-      } catch {
-        self?.options.logger?.error(
-          """
-          Failed to send message:
-          \(message)
+      _ = Task {
+        do {
+          // Check cancellation before sending
+          try Task.checkCancellation()
+          let data = try JSONEncoder().encode(message)
 
-          Error:
-          \(error)
-          """
-        )
+          // Get connection and send
+          if let conn = await self?.conn {
+            conn.send(String(decoding: data, as: UTF8.self))
+          }
+        } catch {
+          self?.options.logger?.error(
+            """
+            Failed to send message:
+            \(message)
+
+            Error:
+            \(error)
+            """
+          )
+        }
       }
     }
 
