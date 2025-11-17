@@ -58,14 +58,17 @@ final class HeartbeatMonitorTests: XCTestCase {
 
     await monitor.start()
 
-    // Wait for a few heartbeats
-    try await Task.sleep(nanoseconds: 250_000_000) // 0.25 seconds
+    // Wait for a few heartbeats - be generous with timing for CI
+    try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
 
     await monitor.stop()
 
-    // Should have sent multiple heartbeats (at least 2 in 0.25s with 0.05s interval)
-    // Note: Due to Task scheduling delays, we can't guarantee exact timing
+    // Should have sent multiple heartbeats (at least 2 in 0.3s with 0.05s interval)
+    // Note: Due to Task scheduling delays in CI, we use conservative expectations
+    // With 0.05s interval, we expect 0.3s / 0.05s = 6 heartbeats ideally,
+    // but require only 2 to account for scheduling delays
     XCTAssertGreaterThanOrEqual(sentHeartbeats.count, 2, "Should send multiple heartbeats")
+
     // Verify refs increment correctly
     for (index, ref) in sentHeartbeats.enumerated() {
       XCTAssertEqual(ref, "\(index + 1)", "Refs should increment")
