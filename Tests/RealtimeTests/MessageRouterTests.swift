@@ -5,6 +5,7 @@
 //  Created on 17/01/25.
 //
 
+import ConcurrencyExtras
 import Foundation
 import XCTest
 
@@ -41,15 +42,15 @@ final class MessageRouterTests: XCTestCase {
   // MARK: - Tests
 
   func testRouteToRegisteredChannel() async {
-    var channelAMessages: [RealtimeMessageV2] = []
-    var channelBMessages: [RealtimeMessageV2] = []
+    let channelAMessages = LockIsolated([RealtimeMessageV2]())
+    let channelBMessages = LockIsolated([RealtimeMessageV2]())
 
     await router.registerChannel(topic: "channel-a") { message in
-      channelAMessages.append(message)
+      channelAMessages.withValue { $0.append(message) }
     }
 
     await router.registerChannel(topic: "channel-b") { message in
-      channelBMessages.append(message)
+      channelBMessages.withValue { $0.append(message) }
     }
 
     let messageA = makeMessage(topic: "channel-a", event: "test")
@@ -58,11 +59,11 @@ final class MessageRouterTests: XCTestCase {
     await router.route(messageA)
     await router.route(messageB)
 
-    XCTAssertEqual(channelAMessages.count, 1)
-    XCTAssertEqual(channelAMessages.first?.topic, "channel-a")
+    XCTAssertEqual(channelAMessages.value.count, 1)
+    XCTAssertEqual(channelAMessages.value.first?.topic, "channel-a")
 
-    XCTAssertEqual(channelBMessages.count, 1)
-    XCTAssertEqual(channelBMessages.first?.topic, "channel-b")
+    XCTAssertEqual(channelBMessages.value.count, 1)
+    XCTAssertEqual(channelBMessages.value.first?.topic, "channel-b")
   }
 
   func testRouteToUnregisteredChannelDoesNotCrash() async {
@@ -73,10 +74,10 @@ final class MessageRouterTests: XCTestCase {
   }
 
   func testSystemHandlerReceivesAllMessages() async {
-    var systemMessages: [RealtimeMessageV2] = []
+    let systemMessages = LockIsolated([RealtimeMessageV2]())
 
     await router.registerSystemHandler { message in
-      systemMessages.append(message)
+      systemMessages.withValue { $0.append(message) }
     }
 
     let message1 = makeMessage(topic: "channel-a", event: "event1")
@@ -87,42 +88,42 @@ final class MessageRouterTests: XCTestCase {
     await router.route(message2)
     await router.route(message3)
 
-    XCTAssertEqual(systemMessages.count, 3)
-    XCTAssertEqual(systemMessages[0].topic, "channel-a")
-    XCTAssertEqual(systemMessages[1].topic, "channel-b")
-    XCTAssertEqual(systemMessages[2].topic, "channel-c")
+    XCTAssertEqual(systemMessages.value.count, 3)
+    XCTAssertEqual(systemMessages.value[0].topic, "channel-a")
+    XCTAssertEqual(systemMessages.value[1].topic, "channel-b")
+    XCTAssertEqual(systemMessages.value[2].topic, "channel-c")
   }
 
   func testBothSystemAndChannelHandlersReceiveMessage() async {
-    var systemMessages: [RealtimeMessageV2] = []
-    var channelMessages: [RealtimeMessageV2] = []
+    let systemMessages = LockIsolated([RealtimeMessageV2]())
+    let channelMessages = LockIsolated([RealtimeMessageV2]())
 
     await router.registerSystemHandler { message in
-      systemMessages.append(message)
+      systemMessages.withValue { $0.append(message) }
     }
 
     await router.registerChannel(topic: "test-channel") { message in
-      channelMessages.append(message)
+      channelMessages.withValue { $0.append(message) }
     }
 
     let message = makeMessage(topic: "test-channel", event: "test")
     await router.route(message)
 
-    XCTAssertEqual(systemMessages.count, 1)
-    XCTAssertEqual(channelMessages.count, 1)
+    XCTAssertEqual(systemMessages.value.count, 1)
+    XCTAssertEqual(channelMessages.value.count, 1)
   }
 
   func testUnregisterChannelStopsRoutingToIt() async {
-    var channelMessages: [RealtimeMessageV2] = []
+    let channelMessages = LockIsolated([RealtimeMessageV2]())
 
     await router.registerChannel(topic: "test-channel") { message in
-      channelMessages.append(message)
+      channelMessages.withValue { $0.append(message) }
     }
 
     let message1 = makeMessage(topic: "test-channel", event: "test1")
     await router.route(message1)
 
-    XCTAssertEqual(channelMessages.count, 1)
+    XCTAssertEqual(channelMessages.value.count, 1)
 
     // Unregister
     await router.unregisterChannel(topic: "test-channel")
@@ -131,47 +132,47 @@ final class MessageRouterTests: XCTestCase {
     await router.route(message2)
 
     // Should still be 1 (not routed after unregister)
-    XCTAssertEqual(channelMessages.count, 1)
+    XCTAssertEqual(channelMessages.value.count, 1)
   }
 
   func testReregisterChannelReplacesHandler() async {
-    var handler1Messages: [RealtimeMessageV2] = []
-    var handler2Messages: [RealtimeMessageV2] = []
+    let handler1Messages = LockIsolated([RealtimeMessageV2]())
+    let handler2Messages = LockIsolated([RealtimeMessageV2]())
 
     await router.registerChannel(topic: "test-channel") { message in
-      handler1Messages.append(message)
+      handler1Messages.withValue { $0.append(message) }
     }
 
     let message1 = makeMessage(topic: "test-channel", event: "test1")
     await router.route(message1)
 
-    XCTAssertEqual(handler1Messages.count, 1)
-    XCTAssertEqual(handler2Messages.count, 0)
+    XCTAssertEqual(handler1Messages.value.count, 1)
+    XCTAssertEqual(handler2Messages.value.count, 0)
 
     // Re-register with new handler
     await router.registerChannel(topic: "test-channel") { message in
-      handler2Messages.append(message)
+      handler2Messages.withValue { $0.append(message) }
     }
 
     let message2 = makeMessage(topic: "test-channel", event: "test2")
     await router.route(message2)
 
     // First handler should not receive second message
-    XCTAssertEqual(handler1Messages.count, 1)
+    XCTAssertEqual(handler1Messages.value.count, 1)
     // Second handler should receive it
-    XCTAssertEqual(handler2Messages.count, 1)
+    XCTAssertEqual(handler2Messages.value.count, 1)
   }
 
   func testResetRemovesAllHandlers() async {
-    var channelMessages: [RealtimeMessageV2] = []
-    var systemMessages: [RealtimeMessageV2] = []
+    let channelMessages = LockIsolated([RealtimeMessageV2]())
+    let systemMessages = LockIsolated([RealtimeMessageV2]())
 
     await router.registerChannel(topic: "channel-a") { message in
-      channelMessages.append(message)
+      channelMessages.withValue { $0.append(message) }
     }
 
     await router.registerSystemHandler { message in
-      systemMessages.append(message)
+      systemMessages.withValue { $0.append(message) }
     }
 
     let message1 = makeMessage(topic: "channel-a", event: "test1")
@@ -187,8 +188,8 @@ final class MessageRouterTests: XCTestCase {
     await router.route(message2)
 
     // No more messages after reset
-    XCTAssertEqual(channelMessages.count, 1)
-    XCTAssertEqual(systemMessages.count, 1)
+    XCTAssertEqual(channelMessages.value.count, 1)
+    XCTAssertEqual(systemMessages.value.count, 1)
   }
 
   func testChannelCountReflectsRegistrations() async {
@@ -213,32 +214,29 @@ final class MessageRouterTests: XCTestCase {
   }
 
   func testMultipleSystemHandlers() async {
-    var system1Messages: [RealtimeMessageV2] = []
-    var system2Messages: [RealtimeMessageV2] = []
+    let system1Messages = LockIsolated([RealtimeMessageV2]())
+    let system2Messages = LockIsolated([RealtimeMessageV2]())
 
     await router.registerSystemHandler { message in
-      system1Messages.append(message)
+      system1Messages.withValue { $0.append(message) }
     }
 
     await router.registerSystemHandler { message in
-      system2Messages.append(message)
+      system2Messages.withValue { $0.append(message) }
     }
 
     let message = makeMessage(topic: "test", event: "test")
     await router.route(message)
 
-    XCTAssertEqual(system1Messages.count, 1)
-    XCTAssertEqual(system2Messages.count, 1)
+    XCTAssertEqual(system1Messages.value.count, 1)
+    XCTAssertEqual(system2Messages.value.count, 1)
   }
 
   func testConcurrentRouting() async {
-    var receivedCount = 0
-    let lock = NSLock()
+    let receivedCount = LockIsolated(0)
 
     await router.registerChannel(topic: "test-channel") { _ in
-      lock.lock()
-      receivedCount += 1
-      lock.unlock()
+      receivedCount.withValue { $0 += 1 }
     }
 
     // Route messages concurrently
@@ -253,6 +251,6 @@ final class MessageRouterTests: XCTestCase {
       await group.waitForAll()
     }
 
-    XCTAssertEqual(receivedCount, 100, "Should receive all messages")
+    XCTAssertEqual(receivedCount.value, 100, "Should receive all messages")
   }
 }

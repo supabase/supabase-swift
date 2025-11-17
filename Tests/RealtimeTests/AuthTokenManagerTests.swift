@@ -5,6 +5,7 @@
 //  Created on 17/01/25.
 //
 
+import ConcurrencyExtras
 import Foundation
 import XCTest
 
@@ -37,12 +38,12 @@ final class AuthTokenManagerTests: XCTestCase {
   }
 
   func testGetCurrentTokenCallsProviderWhenNoToken() async {
-    var providerCallCount = 0
+    let providerCallCount = LockIsolated(0)
 
     manager = AuthTokenManager(
       initialToken: nil,
       tokenProvider: {
-        providerCallCount += 1
+        providerCallCount.withValue { $0 += 1 }
         return "provider-token"
       }
     )
@@ -50,22 +51,22 @@ final class AuthTokenManagerTests: XCTestCase {
     let token = await manager.getCurrentToken()
 
     XCTAssertEqual(token, "provider-token")
-    XCTAssertEqual(providerCallCount, 1)
+    XCTAssertEqual(providerCallCount.value, 1)
 
     // Second call should use cached token, not call provider again
     let token2 = await manager.getCurrentToken()
 
     XCTAssertEqual(token2, "provider-token")
-    XCTAssertEqual(providerCallCount, 1, "Should not call provider again")
+    XCTAssertEqual(providerCallCount.value, 1, "Should not call provider again")
   }
 
   func testGetCurrentTokenReturnsInitialTokenWithoutCallingProvider() async {
-    var providerCallCount = 0
+    let providerCallCount = LockIsolated(0)
 
     manager = AuthTokenManager(
       initialToken: "initial-token",
       tokenProvider: {
-        providerCallCount += 1
+        providerCallCount.withValue { $0 += 1 }
         return "provider-token"
       }
     )
@@ -73,7 +74,7 @@ final class AuthTokenManagerTests: XCTestCase {
     let token = await manager.getCurrentToken()
 
     XCTAssertEqual(token, "initial-token")
-    XCTAssertEqual(providerCallCount, 0, "Should not call provider when token exists")
+    XCTAssertEqual(providerCallCount.value, 0, "Should not call provider when token exists")
   }
 
   func testUpdateTokenReturnsTrueWhenChanged() async {
@@ -107,26 +108,28 @@ final class AuthTokenManagerTests: XCTestCase {
   }
 
   func testRefreshTokenCallsProvider() async {
-    var providerCallCount = 0
+    let providerCallCount = LockIsolated(0)
 
     manager = AuthTokenManager(
       initialToken: "initial-token",
       tokenProvider: {
-        providerCallCount += 1
-        return "refreshed-token-\(providerCallCount)"
+        providerCallCount.withValue {
+          $0 += 1
+          return "refreshed-token-\($0)"
+        }
       }
     )
 
     let token1 = await manager.refreshToken()
 
     XCTAssertEqual(token1, "refreshed-token-1")
-    XCTAssertEqual(providerCallCount, 1)
+    XCTAssertEqual(providerCallCount.value, 1)
 
     // Refresh again
     let token2 = await manager.refreshToken()
 
     XCTAssertEqual(token2, "refreshed-token-2")
-    XCTAssertEqual(providerCallCount, 2)
+    XCTAssertEqual(providerCallCount.value, 2)
   }
 
   func testRefreshTokenWithoutProviderReturnsCurrentToken() async {
