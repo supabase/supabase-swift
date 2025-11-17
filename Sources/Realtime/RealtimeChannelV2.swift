@@ -42,9 +42,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   @MainActor
   private var mutableState = MutableState()
 
-  let topic: String
+  public let topic: String
 
-  @MainActor var config: RealtimeChannelConfig
+  @MainActor public private(set) var config: RealtimeChannelConfig
 
   let logger: (any SupabaseLogger)?
   let socket: any RealtimeClientProtocol
