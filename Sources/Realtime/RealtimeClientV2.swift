@@ -340,6 +340,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
       $0.channels[realtimeTopic] = channel
 
+      // Register channel with message router
+      Task {
+        await messageRouter.registerChannel(topic: channel.topic) { [weak channel] message in
+          await channel?.onMessage(message)
+        }
+      }
+
       return channel
     }
   }
@@ -355,12 +362,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.channels[channel.topic] = channel
     }
 
-    // Register channel with message router
-    Task {
-      await messageRouter.registerChannel(topic: channel.topic) { [weak channel] message in
-        await channel?.onMessage(message)
-      }
-    }
+
   }
 
   /// Unsubscribe and removes channel.
