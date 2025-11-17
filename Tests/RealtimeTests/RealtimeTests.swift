@@ -754,8 +754,8 @@ final class RealtimeTests: XCTestCase {
 
     await Task.megaYield()
 
-    // Verify that the message task was cancelled
-    XCTAssertTrue(sut.mutableState.messageTask?.isCancelled ?? false)
+    // Verify that the message task was cancelled and cleaned up
+    XCTAssertNil(sut.mutableState.messageTask, "Message task should be nil after disconnect")
   }
 
   func testMultipleReconnectionsHandleTaskLifecycleCorrectly() async {

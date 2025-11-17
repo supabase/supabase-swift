@@ -517,9 +517,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     mutableState.withValue {
       $0.ref = 0
       $0.messageTask?.cancel()
+      $0.messageTask = nil
       $0.heartbeatTask?.cancel()
+      $0.heartbeatTask = nil
       $0.connectionTask?.cancel()
+      $0.connectionTask = nil
       $0.reconnectTask?.cancel()
+      $0.reconnectTask = nil
       $0.pendingHeartbeatRef = nil
       $0.sendBuffer = []
       $0.conn = nil
