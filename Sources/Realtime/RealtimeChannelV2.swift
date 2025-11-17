@@ -196,6 +196,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         return
       }
       await socket.connect()
+
+      // Verify connection succeeded after await
+      if socket.status != .connected {
+        logger?.debug("Socket failed to connect, cannot subscribe to channel \(topic)")
+        return
+      }
     }
 
     logger?.debug("Subscribing to channel \(topic)")
