@@ -138,6 +138,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
           do {
             try await _clock.sleep(for: delay)
+
+            // Check if socket is still connected after delay
+            if socket.status != .connected {
+              logger?.debug(
+                "Socket disconnected during retry delay for channel '\(topic)', aborting subscription"
+              )
+              throw CancellationError()
+            }
           } catch {
             // If sleep is cancelled, break out of retry loop
             logger?.debug("Subscription retry cancelled for channel '\(topic)'")
@@ -240,6 +248,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     logger?.debug("Unsubscribing from channel \(topic)")
 
     await push(ChannelEvent.leave)
+
+    // Wait for server confirmation of unsubscription
+    _ = await statusChange.first { @Sendable in $0 == .unsubscribed }
   }
 
   @available(

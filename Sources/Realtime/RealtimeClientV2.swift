@@ -519,6 +519,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.messageTask?.cancel()
       $0.heartbeatTask?.cancel()
       $0.connectionTask?.cancel()
+      $0.reconnectTask?.cancel()
       $0.pendingHeartbeatRef = nil
       $0.sendBuffer = []
       $0.conn = nil
@@ -544,8 +545,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       return
     }
 
-    mutableState.withValue { [token] in
-      $0.accessToken = token
+    mutableState.withValue { [tokenToSend] in
+      $0.accessToken = tokenToSend
     }
 
     for channel in channels.values {
@@ -553,7 +554,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         options.logger?.debug("Updating auth token for channel \(channel.topic)")
         await channel.push(
           ChannelEvent.accessToken,
-          payload: ["access_token": token.map { .string($0) } ?? .null]
+          payload: ["access_token": tokenToSend.map { .string($0) } ?? .null]
         )
       }
     }
