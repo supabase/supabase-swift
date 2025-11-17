@@ -622,6 +622,193 @@ final class RealtimeTests: XCTestCase {
     let token = "sb-token"
     await sut.setAuth(token)
   }
+
+  // MARK: - Task Lifecycle Tests
+
+  func testListenForMessagesCancelsExistingTask() async {
+    server.onEvent = { @Sendable [server] event in
+      guard let msg = event.realtimeMessage else { return }
+
+      if msg.event == "heartbeat" {
+        server?.send(
+          RealtimeMessageV2(
+            joinRef: msg.joinRef,
+            ref: msg.ref,
+            topic: "phoenix",
+            event: "phx_reply",
+            payload: ["response": [:]]
+          )
+        )
+      }
+    }
+
+    await sut.connect()
+
+    // Get the first message task
+    let firstMessageTask = sut.mutableState.messageTask
+    XCTAssertNotNil(firstMessageTask)
+    XCTAssertFalse(firstMessageTask?.isCancelled ?? true)
+
+    // Trigger reconnection which will call listenForMessages again
+    sut.disconnect()
+    await sut.connect()
+
+    // Verify the old task was cancelled
+    XCTAssertTrue(firstMessageTask?.isCancelled ?? false)
+
+    // Verify a new task was created
+    let secondMessageTask = sut.mutableState.messageTask
+    XCTAssertNotNil(secondMessageTask)
+    XCTAssertFalse(secondMessageTask?.isCancelled ?? true)
+  }
+
+  func testStartHeartbeatingCancelsExistingTask() async {
+    server.onEvent = { @Sendable [server] event in
+      guard let msg = event.realtimeMessage else { return }
+
+      if msg.event == "heartbeat" {
+        server?.send(
+          RealtimeMessageV2(
+            joinRef: msg.joinRef,
+            ref: msg.ref,
+            topic: "phoenix",
+            event: "phx_reply",
+            payload: ["response": [:]]
+          )
+        )
+      }
+    }
+
+    await sut.connect()
+
+    // Get the first heartbeat task
+    let firstHeartbeatTask = sut.mutableState.heartbeatTask
+    XCTAssertNotNil(firstHeartbeatTask)
+    XCTAssertFalse(firstHeartbeatTask?.isCancelled ?? true)
+
+    // Trigger reconnection which will call startHeartbeating again
+    sut.disconnect()
+    await sut.connect()
+
+    // Verify the old task was cancelled
+    XCTAssertTrue(firstHeartbeatTask?.isCancelled ?? false)
+
+    // Verify a new task was created
+    let secondHeartbeatTask = sut.mutableState.heartbeatTask
+    XCTAssertNotNil(secondHeartbeatTask)
+    XCTAssertFalse(secondHeartbeatTask?.isCancelled ?? true)
+  }
+
+  func testMessageProcessingRespectsCancellation() async {
+    let messagesProcessed = LockIsolated(0)
+
+    server.onEvent = { @Sendable [server] event in
+      guard let msg = event.realtimeMessage else { return }
+
+      if msg.event == "heartbeat" {
+        server?.send(
+          RealtimeMessageV2(
+            joinRef: msg.joinRef,
+            ref: msg.ref,
+            topic: "phoenix",
+            event: "phx_reply",
+            payload: ["response": [:]]
+          )
+        )
+      }
+    }
+
+    await sut.connect()
+
+    // Send multiple messages
+    for i in 1...3 {
+      server.send(
+        RealtimeMessageV2(
+          joinRef: nil,
+          ref: "\(i)",
+          topic: "test-topic",
+          event: "test-event",
+          payload: ["index": .double(Double(i))]
+        )
+      )
+      messagesProcessed.withValue { $0 += 1 }
+    }
+
+    await Task.megaYield()
+
+    // Disconnect to cancel message processing
+    sut.disconnect()
+
+    // Try to send more messages after disconnect (these should not be processed)
+    for i in 4...6 {
+      server.send(
+        RealtimeMessageV2(
+          joinRef: nil,
+          ref: "\(i)",
+          topic: "test-topic",
+          event: "test-event",
+          payload: ["index": .double(Double(i))]
+        )
+      )
+    }
+
+    await Task.megaYield()
+
+    // Verify that the message task was cancelled
+    XCTAssertTrue(sut.mutableState.messageTask?.isCancelled ?? false)
+  }
+
+  func testMultipleReconnectionsHandleTaskLifecycleCorrectly() async {
+    server.onEvent = { @Sendable [server] event in
+      guard let msg = event.realtimeMessage else { return }
+
+      if msg.event == "heartbeat" {
+        server?.send(
+          RealtimeMessageV2(
+            joinRef: msg.joinRef,
+            ref: msg.ref,
+            topic: "phoenix",
+            event: "phx_reply",
+            payload: ["response": [:]]
+          )
+        )
+      }
+    }
+
+    var previousMessageTasks: [Task<Void, Never>?] = []
+    var previousHeartbeatTasks: [Task<Void, Never>?] = []
+
+    // Test multiple connect/disconnect cycles
+    for _ in 1...3 {
+      await sut.connect()
+
+      let messageTask = sut.mutableState.messageTask
+      let heartbeatTask = sut.mutableState.heartbeatTask
+
+      XCTAssertNotNil(messageTask)
+      XCTAssertNotNil(heartbeatTask)
+      XCTAssertFalse(messageTask?.isCancelled ?? true)
+      XCTAssertFalse(heartbeatTask?.isCancelled ?? true)
+
+      previousMessageTasks.append(messageTask)
+      previousHeartbeatTasks.append(heartbeatTask)
+
+      sut.disconnect()
+
+      // Verify tasks were cancelled after disconnect
+      XCTAssertTrue(messageTask?.isCancelled ?? false)
+      XCTAssertTrue(heartbeatTask?.isCancelled ?? false)
+    }
+
+    // Verify all previous tasks were properly cancelled
+    for task in previousMessageTasks {
+      XCTAssertTrue(task?.isCancelled ?? false)
+    }
+
+    for task in previousHeartbeatTasks {
+      XCTAssertTrue(task?.isCancelled ?? false)
+    }
+  }
 }
 
 extension RealtimeMessageV2 {

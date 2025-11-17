@@ -13,7 +13,8 @@ import Foundation
 #endif
 
 /// Factory function for returning a new WebSocket connection.
-typealias WebSocketTransport = @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
+typealias WebSocketTransport =
+  @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
   any WebSocket
 
 protocol RealtimeClientProtocol: AnyObject, Sendable {
@@ -84,10 +85,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///
   /// You can also use ``onHeartbeat(_:)`` for a closure based method.
   public var heartbeat: AsyncStream<HeartbeatStatus> {
-    AsyncStream(
-      heartbeatSubject.values.compactMap { $0 }
-        as AsyncCompactMapSequence<AsyncStream<HeartbeatStatus?>, HeartbeatStatus>
-    )
+    AsyncStream(heartbeatSubject.values.compactMap { $0 })
   }
 
   /// Listen for connection status changes.
@@ -366,47 +364,51 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   private func listenForMessages() {
-    let messageTask = Task { [weak self] in
-      guard let self, let conn = self.conn else { return }
-
-      do {
-        for await event in conn.events {
-          if Task.isCancelled { return }
-
-          switch event {
-          case .binary:
-            self.options.logger?.error("Unsupported binary event received.")
-            break
-          case .text(let text):
-            let data = Data(text.utf8)
-            let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
-            await onMessage(message)
-
-          case let .close(code, reason):
-            onClose(code: code, reason: reason)
-          }
-        }
-      } catch {
-        onError(error)
-      }
-    }
     mutableState.withValue {
-      $0.messageTask = messageTask
+      $0.messageTask?.cancel()
+      $0.messageTask = Task { [weak self] in
+        guard let self, let conn = self.conn else { return }
+
+        do {
+          for await event in conn.events {
+            if Task.isCancelled { return }
+
+            switch event {
+            case .binary:
+              self.options.logger?.error("Unsupported binary event received.")
+              break
+            case .text(let text):
+              let data = Data(text.utf8)
+              let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
+              await onMessage(message)
+
+              if Task.isCancelled {
+                return
+              }
+
+            case .close(let code, let reason):
+              onClose(code: code, reason: reason)
+            }
+          }
+        } catch {
+          onError(error)
+        }
+      }
     }
   }
 
   private func startHeartbeating() {
-    let heartbeatTask = Task { [weak self, options] in
-      while !Task.isCancelled {
-        try? await _clock.sleep(for: options.heartbeatInterval)
-        if Task.isCancelled {
-          break
-        }
-        await self?.sendHeartbeat()
-      }
-    }
     mutableState.withValue {
-      $0.heartbeatTask = heartbeatTask
+      $0.heartbeatTask?.cancel()
+      $0.heartbeatTask = Task { [weak self, options] in
+        while !Task.isCancelled {
+          try? await _clock.sleep(for: options.heartbeatInterval)
+          if Task.isCancelled {
+            break
+          }
+          await self?.sendHeartbeat()
+        }
+      }
     }
   }
 
