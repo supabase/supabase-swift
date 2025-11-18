@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 09/09/24.
 //
 
+import ConcurrencyExtras
 import InlineSnapshotTesting
 import TestHelpers
 import XCTest
@@ -194,6 +195,58 @@ final class RealtimeChannelTests: XCTestCase {
 
     // Note: We don't assert the subscribe status here because the test doesn't wait for completion
     // The subscription is still in progress when we clean up
+  }
+
+  func testConcurrentSubscribeRunsSingleOperation() async throws {
+    let socket = ConcurrentSubscribeRealtimeClient()
+    let channel = RealtimeChannelV2(
+      topic: "test-topic",
+      config: RealtimeChannelConfig(
+        broadcast: BroadcastJoinConfig(),
+        presence: PresenceJoinConfig(),
+        isPrivate: false
+      ),
+      socket: socket,
+      logger: nil
+    )
+
+    async let firstSubscribe = channel.subscribeWithError()
+    async let secondSubscribe = channel.subscribeWithError()
+
+    try await waitForJoin(
+      on: socket,
+      expectedCount: 1
+    )
+    XCTAssertEqual(socket.joinPushCount, 1)
+
+    await channel.onMessage(
+      RealtimeMessageV2(
+        joinRef: nil,
+        ref: nil,
+        topic: channel.topic,
+        event: ChannelEvent.system,
+        payload: ["status": "ok"]
+      )
+    )
+
+    try await firstSubscribe
+    try await secondSubscribe
+
+    XCTAssertEqual(socket.joinPushCount, 1)
+  }
+
+  private func waitForJoin(
+    on socket: ConcurrentSubscribeRealtimeClient,
+    expectedCount: Int
+  ) async throws {
+    for _ in 0..<50 {
+      if socket.joinPushCount == expectedCount {
+        return
+      }
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+
+    XCTFail("Timed out waiting for join push")
   }
 
   func testHttpSendThrowsWhenAccessTokenIsMissing() async {
@@ -439,7 +492,9 @@ final class RealtimeChannelTests: XCTestCase {
       XCTFail("Expected httpSend to throw an error on 503 status")
     } catch {
       // Should fall back to localized status text
-      XCTAssertTrue(error.localizedDescription.contains("503") || error.localizedDescription.contains("unavailable"))
+      XCTAssertTrue(
+        error.localizedDescription.contains("503")
+          || error.localizedDescription.contains("unavailable"))
     }
   }
 }
@@ -454,4 +509,51 @@ private struct BroadcastPayload: Decodable {
     let payload: [String: String]
     let `private`: Bool
   }
+}
+
+private final class ConcurrentSubscribeRealtimeClient: RealtimeClientProtocol, @unchecked Sendable {
+  private let _pushedMessages = LockIsolated<[RealtimeMessageV2]>([])
+  private let _status = LockIsolated<RealtimeClientStatus>(.connected)
+
+  let options: RealtimeClientOptions
+  let http: any HTTPClientType
+  let broadcastURL = URL(string: "https://localhost:54321/realtime/v1/api/broadcast")!
+
+  init() {
+    self.options = RealtimeClientOptions(
+      headers: ["apikey": "test-key"],
+      timeoutInterval: 5.0
+    )
+    self.http = HTTPClientMock()
+  }
+
+  var status: RealtimeClientStatus {
+    _status.value
+  }
+
+  var pushedMessages: [RealtimeMessageV2] {
+    _pushedMessages.value
+  }
+
+  var joinPushCount: Int {
+    pushedMessages.filter { $0.event == ChannelEvent.join }.count
+  }
+
+  func connect() async {
+    _status.setValue(.connected)
+  }
+
+  func push(_ message: RealtimeMessageV2) {
+    _pushedMessages.withValue { $0.append(message) }
+  }
+
+  func _getAccessToken() async -> String? {
+    nil
+  }
+
+  func makeRef() -> String {
+    UUID().uuidString
+  }
+
+  func _remove(_: any RealtimeChannelProtocol) {}
 }
