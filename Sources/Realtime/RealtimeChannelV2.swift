@@ -37,6 +37,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     var clientChanges: [PostgresJoinConfig] = []
     var joinRef: String?
     var pushes: [String: PushV2] = [:]
+    var subscribeTask: Task<Void, any Error>?
   }
 
   @MainActor
@@ -92,7 +93,22 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Subscribes to the channel.
+  @MainActor
   public func subscribeWithError() async throws {
+    if let subscribeTask = mutableState.subscribeTask {
+      try await subscribeTask.value
+      return
+    }
+
+    mutableState.subscribeTask = Task {
+      defer { self.mutableState.subscribeTask = nil }
+      try await self.performSubscribeWithRetry()
+    }
+
+    return try await mutableState.subscribeTask!.value
+  }
+
+  private func performSubscribeWithRetry() async throws {
     logger?.debug(
       "Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))"
     )

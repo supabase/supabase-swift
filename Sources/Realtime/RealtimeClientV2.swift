@@ -315,6 +315,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       let realtimeTopic = "realtime:\(topic)"
 
       if let channel = $0.channels[realtimeTopic] {
+        self.options.logger?.debug("Reusing existing channel for topic: \(realtimeTopic)")
         return channel
       }
 
