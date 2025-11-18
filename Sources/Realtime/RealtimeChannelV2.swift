@@ -35,9 +35,7 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   struct MutableState {
     var clientChanges: [PostgresJoinConfig] = []
-    var joinRef: String?
     var pushes: [String: PushV2] = [:]
-    var subscribeTask: Task<Void, any Error>?
   }
 
   @MainActor
@@ -49,8 +47,11 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   let logger: (any SupabaseLogger)?
   let socket: any RealtimeClientProtocol
+  let subscriptionStateMachine: SubscriptionStateMachine
 
-  @MainActor var joinRef: String? { mutableState.joinRef }
+  var joinRef: String? {
+    get async { await subscriptionStateMachine.joinRef }
+  }
 
   let callbackManager = CallbackManager()
   private let statusSubject = AsyncValueSubject<RealtimeChannelStatus>(.unsubscribed)
@@ -86,6 +87,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     self.config = config
     self.logger = logger
     self.socket = socket
+    self.subscriptionStateMachine = SubscriptionStateMachine(
+      topic: topic,
+      maxRetryAttempts: socket.options.maxRetryAttempts,
+      timeoutInterval: socket.options.timeoutInterval,
+      logger: logger
+    )
   }
 
   deinit {
@@ -95,95 +102,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// Subscribes to the channel.
   @MainActor
   public func subscribeWithError() async throws {
-    if let subscribeTask = mutableState.subscribeTask {
-      try await subscribeTask.value
-      return
-    }
-
-    mutableState.subscribeTask = Task {
-      defer { self.mutableState.subscribeTask = nil }
-      try await self.performSubscribeWithRetry()
-    }
-
-    return try await mutableState.subscribeTask!.value
-  }
-
-  private func performSubscribeWithRetry() async throws {
-    logger?.debug(
-      "Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))"
-    )
-
     status = .subscribing
 
-    defer {
-      // If the subscription fails, we need to set the status to unsubscribed
-      // to avoid the channel being stuck in a subscribing state.
-      if status != .subscribed {
-        status = .unsubscribed
-      }
+    _ = try await subscriptionStateMachine.subscribe { [weak self] in
+      guard let self else { throw CancellationError() }
+      return try await self._performSubscription()
     }
-
-    var attempts = 0
-
-    while attempts < socket.options.maxRetryAttempts {
-      attempts += 1
-
-      do {
-        logger?.debug(
-          "Attempting to subscribe to channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
-        )
-
-        try await withTimeout(interval: socket.options.timeoutInterval) { [self] in
-          await _subscribe()
-        }
-
-        logger?.debug("Successfully subscribed to channel '\(topic)'")
-        return
-
-      } catch is TimeoutError {
-        logger?.debug(
-          "Subscribe timed out for channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
-        )
-
-        if attempts < socket.options.maxRetryAttempts {
-          // Add exponential backoff with jitter
-          let delay = calculateRetryDelay(for: attempts)
-          logger?.debug(
-            "Retrying subscription to channel '\(topic)' in \(String(format: "%.2f", delay)) seconds..."
-          )
-
-          do {
-            try await _clock.sleep(for: delay)
-
-            // Check if socket is still connected after delay
-            if socket.status != .connected {
-              logger?.debug(
-                "Socket disconnected during retry delay for channel '\(topic)', aborting subscription"
-              )
-              throw CancellationError()
-            }
-          } catch {
-            // If sleep is cancelled, break out of retry loop
-            logger?.debug("Subscription retry cancelled for channel '\(topic)'")
-            throw CancellationError()
-          }
-        } else {
-          logger?.error(
-            "Failed to subscribe to channel '\(topic)' after \(socket.options.maxRetryAttempts) attempts due to timeout"
-          )
-        }
-      } catch is CancellationError {
-        logger?.debug("Subscription retry cancelled for channel '\(topic)'")
-        throw CancellationError()
-      } catch {
-        preconditionFailure(
-          "The only possible error here is TimeoutError or CancellationError, this should never happen."
-        )
-      }
-    }
-
-    logger?.error("Subscription to channel '\(topic)' failed after \(attempts) attempts")
-    throw RealtimeError.maxRetryAttemptsReached
   }
 
   /// Subscribes to the channel.
@@ -193,38 +117,24 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     try? await subscribeWithError()
   }
 
-  /// Calculates retry delay with exponential backoff and jitter
-  private func calculateRetryDelay(for attempt: Int) -> TimeInterval {
-    let baseDelay: TimeInterval = 1.0
-    let maxDelay: TimeInterval = 30.0
-    let backoffMultiplier: Double = 2.0
-
-    let exponentialDelay = baseDelay * pow(backoffMultiplier, Double(attempt - 1))
-    let cappedDelay = min(exponentialDelay, maxDelay)
-
-    // Add jitter (±25% random variation) to prevent thundering herd
-    let jitterRange = cappedDelay * 0.25
-    let jitter = Double.random(in: -jitterRange...jitterRange)
-
-    return max(0.1, cappedDelay + jitter)
-  }
-
   /// Subscribes to the channel
   @MainActor
-  private func _subscribe() async {
+  private func _performSubscription() async throws -> String {
     if socket.status != .connected {
       if socket.options.connectOnSubscribe != true {
         reportIssue(
           "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
         )
-        return
+        throw RealtimeError(
+          "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
+        )
       }
       await socket.connect()
 
       // Verify connection succeeded after await
       if socket.status != .connected {
         logger?.debug("Socket failed to connect, cannot subscribe to channel \(topic)")
-        return
+        throw RealtimeError("Socket failed to connect, cannot subscribe to channel \(topic)")
       }
     }
 
@@ -246,7 +156,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
 
     let joinRef = socket.makeRef()
-    mutableState.joinRef = joinRef
 
     logger?.debug("Subscribing to channel with body: \(joinConfig)")
 
@@ -257,16 +166,27 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
 
     _ = await statusChange.first { @Sendable in $0 == .subscribed }
+
+    return joinRef
   }
 
-  public func unsubscribe() async {
-    status = .unsubscribing
+  @MainActor
+  private func _performUnsubscription() async {
     logger?.debug("Unsubscribing from channel \(topic)")
 
     await push(ChannelEvent.leave)
 
     // Wait for server confirmation of unsubscription
     _ = await statusChange.first { @Sendable in $0 == .unsubscribed }
+  }
+
+  public func unsubscribe() async {
+    status = .unsubscribing
+
+    await subscriptionStateMachine.unsubscribe { [weak self] in
+      guard let self else { return }
+      await self._performUnsubscription()
+    }
   }
 
   @available(
@@ -770,7 +690,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   @discardableResult
   func push(_ event: String, ref: String? = nil, payload: JSONObject = [:]) async -> PushStatus {
     let message = RealtimeMessageV2(
-      joinRef: joinRef,
+      joinRef: await joinRef,
       ref: ref ?? socket.makeRef(),
       topic: self.topic,
       event: event,

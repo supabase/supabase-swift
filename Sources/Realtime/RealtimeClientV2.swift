@@ -50,7 +50,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   private let messageRouter: MessageRouter
   private let heartbeatMonitor: HeartbeatMonitor
 
-  private let mutableState = LockIsolated(MutableState())
+  let mutableState = LockIsolated(MutableState())
 
   var conn: (any WebSocket)? {
     get async {
