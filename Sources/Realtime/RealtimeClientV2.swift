@@ -34,7 +34,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   struct MutableState {
     var ref = 0
     var channels: [String: RealtimeChannelV2] = [:]
-    var sendBuffer: [@Sendable () async -> Void] = []
+    var sendBuffer: [@Sendable (_ client: RealtimeClientV2) async -> Void] = []
     var messageTask: Task<Void, Never>?
     var heartbeatMonitor: HeartbeatMonitor?
   }
@@ -527,18 +527,18 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///
   /// If the socket is not connected, the message gets enqueued within a local buffer, and sent out when a connection is next established.
   public func push(_ message: RealtimeMessageV2) {
-    let callback = { @Sendable [weak self] in
+    let callback = { @Sendable (_ client: RealtimeClientV2) in
       do {
         // Check cancellation before sending
         try Task.checkCancellation()
         let data = try JSONEncoder().encode(message)
 
         // Get connection and send
-        if let conn = await self?.conn {
+        if let conn = await client.conn {
           conn.send(String(decoding: data, as: UTF8.self))
         }
       } catch {
-        self?.options.logger?.error(
+        client.options.logger?.error(
           """
           Failed to send message:
           \(message)
@@ -552,7 +552,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
     if status == .connected {
       Task {
-        await callback()
+        await callback(self)
       }
     } else {
       mutableState.withValue {
@@ -569,7 +569,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
 
     for task in tasks {
-      await task()
+      await task(self)
     }
   }
 
