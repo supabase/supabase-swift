@@ -34,7 +34,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   struct MutableState {
     var ref = 0
     var channels: [String: RealtimeChannelV2] = [:]
-    var sendBuffer: [@Sendable () -> Void] = []
+    var sendBuffer: [@Sendable () async -> Void] = []
     var messageTask: Task<Void, Never>?
     var heartbeatMonitor: HeartbeatMonitor?
   }
@@ -270,7 +270,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       }
 
       // Flush any pending messages
-      flushSendBuffer()
+      await flushSendBuffer()
     } catch {
       options.logger?.error("Connection failed: \(error)")
       status = .disconnected
@@ -528,32 +528,32 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// If the socket is not connected, the message gets enqueued within a local buffer, and sent out when a connection is next established.
   public func push(_ message: RealtimeMessageV2) {
     let callback = { @Sendable [weak self] in
-      _ = Task {
-        do {
-          // Check cancellation before sending
-          try Task.checkCancellation()
-          let data = try JSONEncoder().encode(message)
+      do {
+        // Check cancellation before sending
+        try Task.checkCancellation()
+        let data = try JSONEncoder().encode(message)
 
-          // Get connection and send
-          if let conn = await self?.conn {
-            conn.send(String(decoding: data, as: UTF8.self))
-          }
-        } catch {
-          self?.options.logger?.error(
-            """
-            Failed to send message:
-            \(message)
-
-            Error:
-            \(error)
-            """
-          )
+        // Get connection and send
+        if let conn = await self?.conn {
+          conn.send(String(decoding: data, as: UTF8.self))
         }
+      } catch {
+        self?.options.logger?.error(
+          """
+          Failed to send message:
+          \(message)
+
+          Error:
+          \(error)
+          """
+        )
       }
     }
 
     if status == .connected {
-      callback()
+      Task {
+        await callback()
+      }
     } else {
       mutableState.withValue {
         $0.sendBuffer.append(callback)
@@ -561,10 +561,15 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  private func flushSendBuffer() {
-    mutableState.withValue {
-      $0.sendBuffer.forEach { $0() }
+  private func flushSendBuffer() async {
+    let tasks = mutableState.withValue {
+      let tasks = $0.sendBuffer
       $0.sendBuffer = []
+      return tasks
+    }
+
+    for task in tasks {
+      await task()
     }
   }
 
