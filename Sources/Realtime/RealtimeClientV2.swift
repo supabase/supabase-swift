@@ -36,6 +36,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     var channels: [String: RealtimeChannelV2] = [:]
     var sendBuffer: [@Sendable () -> Void] = []
     var messageTask: Task<Void, Never>?
+    var heartbeatMonitor: HeartbeatMonitor?
   }
 
   let url: URL
@@ -48,7 +49,27 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   private let connectionMgr: ConnectionStateMachine
   private let authMgr: AuthTokenManager
   private let messageRouter: MessageRouter
-  private let heartbeatMonitor: HeartbeatMonitor
+
+  private var heartbeatMonitor: HeartbeatMonitor {
+    mutableState.withValue {
+      if $0.heartbeatMonitor == nil {
+        $0.heartbeatMonitor = HeartbeatMonitor(
+          interval: options.heartbeatInterval,
+          refGenerator: { [weak self] in
+            self?.makeRef() ?? UUID().uuidString
+          },
+          sendHeartbeat: { [weak self] ref in
+            await self?.sendHeartbeatMessage(ref: ref)
+          },
+          onTimeout: { [weak self] in
+            await self?.handleHeartbeatTimeout()
+          },
+          logger: options.logger
+        )
+      }
+      return $0.heartbeatMonitor!
+    }
+  }
 
   let mutableState = LockIsolated(MutableState())
 
@@ -179,58 +200,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
     // Initialize MessageRouter and HeartbeatMonitor with non-capturing closures
     self.messageRouter = MessageRouter(logger: options.logger)
-
-    // Create ref generator that doesn't capture self
-    let refGen = { [weak mutableState] in
-      guard let mutableState else { return "0" }
-      return mutableState.withValue {
-        $0.ref += 1
-        return $0.ref.description
-      }
-    }
-
-    // Create heartbeat and timeout handlers that don't capture self yet
-    // We'll use a placeholder that will be set up after init
-    var sendHeartbeatHandler: (@Sendable (String) async -> Void)? = nil
-    var timeoutHandler: (@Sendable () async -> Void)? = nil
-
-    self.heartbeatMonitor = HeartbeatMonitor(
-      interval: options.heartbeatInterval,
-      refGenerator: refGen,
-      sendHeartbeat: { ref in
-        await sendHeartbeatHandler?(ref)
-      },
-      onTimeout: {
-        await timeoutHandler?()
-      },
-      logger: options.logger
-    )
-
-    // Now that self is fully initialized, set up the handlers
-    sendHeartbeatHandler = { [weak self] ref in
-      await self?.sendHeartbeatMessage(ref: ref)
-    }
-    timeoutHandler = { [weak self] in
-      await self?.handleHeartbeatTimeout()
-    }
   }
 
   deinit {
-    // Stop heartbeat monitor
-    Task {
-      await heartbeatMonitor.stop()
-    }
-
-    // Disconnect
-    Task {
-      await connectionMgr.disconnect(reason: "Client deinitialized")
-    }
-
-    // Reset message router
-    Task {
-      await messageRouter.reset()
-    }
-
     // Clean up local state
     mutableState.withValue {
       $0.messageTask?.cancel()
@@ -362,7 +334,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.channels[channel.topic] = channel
     }
 
-
   }
 
   /// Unsubscribe and removes channel.
@@ -453,7 +424,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             }
 
           case .close(let code, let reason):
-            options.logger?.debug("WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason)")
+            options.logger?.debug(
+              "WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason)"
+            )
             await connectionMgr.handleClose(code: code, reason: reason)
           }
         }
@@ -468,7 +441,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-
   /// Disconnects client.
   /// - Parameters:
   ///   - code: A numeric status code to send on disconnect.
@@ -479,11 +451,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     // Stop heartbeat monitor
     Task {
       await heartbeatMonitor.stop()
-    }
 
-    // Disconnect via ConnectionStateMachine
-    let reasonStr = reason ?? "Client disconnect"
-    Task {
+      // Disconnect via ConnectionStateMachine
+      let reasonStr = reason ?? "Client disconnect"
+
       await connectionMgr.disconnect(reason: reasonStr)
     }
 
