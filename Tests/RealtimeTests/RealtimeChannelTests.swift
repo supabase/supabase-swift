@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 09/09/24.
 //
 
+import Foundation
 import InlineSnapshotTesting
 import TestHelpers
 import XCTest
@@ -170,12 +171,11 @@ final class RealtimeChannelTests: XCTestCase {
     }
 
     // Wait for the join message to be sent
-    await Task.megaYield()
-
-    // Check the sent events to verify presence enabled is set correctly
-    let joinEvents = server.receivedEvents.compactMap { $0.realtimeMessage }.filter {
-      $0.event == "phx_join"
-    }
+    let joinEvents = await waitForEvents(
+      in: server,
+      event: "phx_join",
+      timeout: 1.0
+    )
 
     // Should have at least one join event
     XCTAssertGreaterThan(joinEvents.count, 0)
@@ -442,10 +442,12 @@ final class RealtimeChannelTests: XCTestCase {
       try await channel.httpSend(event: "test", message: ["data": "test"])
       XCTFail("Expected httpSend to throw an error on 503 status")
     } catch {
-      // Should fall back to localized status text
+      // Should fall back to localized status text (case-insensitive)
+      let description = error.localizedDescription.lowercased()
       XCTAssertTrue(
-        error.localizedDescription.contains("503")
-          || error.localizedDescription.contains("unavailable"))
+        description.contains("503") || description.contains("unavailable"),
+        "Expected status text fallback, got '\(error.localizedDescription)'"
+      )
     }
   }
 }
@@ -459,5 +461,31 @@ private struct BroadcastPayload: Decodable {
     let event: String
     let payload: [String: String]
     let `private`: Bool
+  }
+}
+
+extension RealtimeChannelTests {
+  @MainActor
+  private func waitForEvents(
+    in socket: FakeWebSocket,
+    event: String,
+    timeout: TimeInterval,
+    pollInterval: UInt64 = 10_000_000
+  ) async -> [RealtimeMessageV2] {
+    let deadline = Date().addingTimeInterval(timeout)
+
+    while Date() < deadline {
+      let events = socket.receivedEvents.compactMap { $0.realtimeMessage }.filter {
+        $0.event == event
+      }
+
+      if !events.isEmpty {
+        return events
+      }
+
+      try? await Task.sleep(nanoseconds: pollInterval)
+    }
+
+    return []
   }
 }
