@@ -43,8 +43,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     /// Long-running task for listening for incoming messages from WebSocket.
     var messageTask: Task<Void, Never>?
 
-    var connectionTask: Task<Void, Never>?
-    var reconnectTask: Task<Void, Never>?
     var channels: [String: RealtimeChannelV2] = [:]
     var sendBuffer: [@Sendable (RealtimeClientV2) -> Void] = []
   }
@@ -184,8 +182,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     mutableState.withValue {
       $0.heartbeatTask?.cancel()
       $0.messageTask?.cancel()
-      $0.connectionTask?.cancel()
-      $0.reconnectTask?.cancel()
       $0.channels = [:]
     }
   }
@@ -231,14 +227,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   private func reconnect(disconnectReason: String? = nil) {
-    // Cancel any existing reconnect task and create a new one
-    mutableState.withValue { state in
-      state.reconnectTask?.cancel()
-
-      state.reconnectTask = Task {
-        disconnect(reason: disconnectReason)
-        await connect(reconnect: true)
-      }
+    Task {
+      disconnect(reason: disconnectReason)
+      await connect(reconnect: true)
     }
   }
 
@@ -461,10 +452,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.messageTask = nil
       $0.heartbeatTask?.cancel()
       $0.heartbeatTask = nil
-      $0.connectionTask?.cancel()
-      $0.connectionTask = nil
-      $0.reconnectTask?.cancel()
-      $0.reconnectTask = nil
       $0.pendingHeartbeatRef = nil
       $0.sendBuffer = []
     }
