@@ -835,9 +835,7 @@ import XCTest
         XCTAssertTrue(task?.isCancelled ?? false)
       }
     }
-  }
 
-  extension RealtimeTests {
     func waitUntil(
       timeout: TimeInterval = 1.0,
       pollInterval: UInt64 = 10_000_000,
