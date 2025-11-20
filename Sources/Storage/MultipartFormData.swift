@@ -419,8 +419,17 @@ class MultipartFormData {
       var buffer = [UInt8](repeating: 0, count: streamBufferSize)
       let bytesRead = inputStream.read(&buffer, maxLength: streamBufferSize)
 
-      if let error = inputStream.streamError {
-        throw MultipartFormDataError.inputStreamReadFailed(error: error)
+      if bytesRead < 0 {
+        if let error = inputStream.streamError {
+          throw MultipartFormDataError.inputStreamReadFailed(error: error)
+        } else {
+          throw MultipartFormDataError.inputStreamReadFailed(
+            error: MultipartFormDataError.UnexpectedInputStreamLength(
+              bytesExpected: bodyPart.bodyContentLength,
+              bytesRead: UInt64(encoded.count)
+            )
+          )
+        }
       }
 
       if bytesRead > 0 {
@@ -474,9 +483,17 @@ class MultipartFormData {
       let bufferSize = min(streamBufferSize, Int(bytesLeftToRead))
       var buffer = [UInt8](repeating: 0, count: bufferSize)
       let bytesRead = inputStream.read(&buffer, maxLength: bufferSize)
-
-      if let streamError = inputStream.streamError {
-        throw MultipartFormDataError.inputStreamReadFailed(error: streamError)
+      if bytesRead < 0 {
+        if let streamError = inputStream.streamError {
+          throw MultipartFormDataError.inputStreamReadFailed(error: streamError)
+        } else {
+          throw MultipartFormDataError.inputStreamReadFailed(
+            error: MultipartFormDataError.UnexpectedInputStreamLength(
+              bytesExpected: bodyPart.bodyContentLength,
+              bytesRead: bodyPart.bodyContentLength - bytesLeftToRead
+            )
+          )
+        }
       }
 
       if bytesRead > 0 {
@@ -514,8 +531,17 @@ class MultipartFormData {
     while bytesToWrite > 0, outputStream.hasSpaceAvailable {
       let bytesWritten = outputStream.write(buffer, maxLength: bytesToWrite)
 
-      if let error = outputStream.streamError {
-        throw MultipartFormDataError.outputStreamWriteFailed(error: error)
+      if bytesWritten < 0 {
+        if let error = outputStream.streamError {
+          throw MultipartFormDataError.outputStreamWriteFailed(error: error)
+        } else {
+          throw MultipartFormDataError.outputStreamWriteFailed(
+            error: MultipartFormDataError.UnexpectedInputStreamLength(
+              bytesExpected: UInt64(buffer.count),
+              bytesRead: UInt64(buffer.count - bytesToWrite)
+            )
+          )
+        }
       }
 
       bytesToWrite -= bytesWritten
@@ -650,10 +676,10 @@ enum MultipartFormDataError: Error {
 
   var underlyingError: (any Error)? {
     switch self {
-    case let .bodyPartFileNotReachableWithError(_, error),
-      let .bodyPartFileSizeQueryFailedWithError(_, error),
-      let .inputStreamReadFailed(error),
-      let .outputStreamWriteFailed(error):
+    case .bodyPartFileNotReachableWithError(_, let error),
+      .bodyPartFileSizeQueryFailedWithError(_, let error),
+      .inputStreamReadFailed(let error),
+      .outputStreamWriteFailed(let error):
       error
 
     case .bodyPartURLInvalid,
@@ -671,17 +697,17 @@ enum MultipartFormDataError: Error {
 
   var url: URL? {
     switch self {
-    case let .bodyPartURLInvalid(url),
-      let .bodyPartFilenameInvalid(url),
-      let .bodyPartFileNotReachable(url),
-      let .bodyPartFileNotReachableWithError(url, _),
-      let .bodyPartFileIsDirectory(url),
-      let .bodyPartFileSizeNotAvailable(url),
-      let .bodyPartFileSizeQueryFailedWithError(url, _),
-      let .bodyPartInputStreamCreationFailed(url),
-      let .outputStreamFileAlreadyExists(url),
-      let .outputStreamURLInvalid(url),
-      let .outputStreamCreationFailed(url):
+    case .bodyPartURLInvalid(let url),
+      .bodyPartFilenameInvalid(let url),
+      .bodyPartFileNotReachable(let url),
+      .bodyPartFileNotReachableWithError(let url, _),
+      .bodyPartFileIsDirectory(let url),
+      .bodyPartFileSizeNotAvailable(let url),
+      .bodyPartFileSizeQueryFailedWithError(let url, _),
+      .bodyPartInputStreamCreationFailed(let url),
+      .outputStreamFileAlreadyExists(let url),
+      .outputStreamURLInvalid(let url),
+      .outputStreamCreationFailed(let url):
       url
 
     case .inputStreamReadFailed, .outputStreamWriteFailed:

@@ -6,33 +6,33 @@ on:
       - main
       - release/*
     paths:
-      - 'Sources/**'
-      - 'Tests/**'
-      - 'Examples/**'
-      - '*.swift'
-      - 'Package.swift'
-      - 'Package.resolved'
-      - '.github/workflows/ci.yml'
-      - 'Makefile'
-      - '*.xcodeproj/**'
-      - '*.xcworkspace/**'
-      - '.swiftpm/**'
+      - "Sources/**"
+      - "Tests/**"
+      - "Examples/**"
+      - "*.swift"
+      - "Package.swift"
+      - "Package.resolved"
+      - ".github/workflows/ci.yml"
+      - "Makefile"
+      - "*.xcodeproj/**"
+      - "*.xcworkspace/**"
+      - ".swiftpm/**"
   pull_request:
     branches:
       - "*"
       - release/*
     paths:
-      - 'Sources/**'
-      - 'Tests/**'
-      - 'Examples/**'
-      - '*.swift'
-      - 'Package.swift'
-      - 'Package.resolved'
-      - '.github/workflows/ci.yml'
-      - 'Makefile'
-      - '*.xcodeproj/**'
-      - '*.xcworkspace/**'
-      - '.swiftpm/**'
+      - "Sources/**"
+      - "Tests/**"
+      - "Examples/**"
+      - "*.swift"
+      - "Package.swift"
+      - "Package.resolved"
+      - ".github/workflows/ci.yml"
+      - "Makefile"
+      - "*.xcodeproj/**"
+      - "*.xcworkspace/**"
+      - ".swiftpm/**"
   workflow_dispatch:
 
 concurrency:
@@ -55,6 +55,14 @@ jobs:
           - { command: test, skip_release: 1 }
     steps:
       - uses: actions/checkout@v5
+      - name: Cache derived data
+        uses: actions/cache@v4
+        with:
+          path: ~/.derivedData
+          key: |
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
+          restore-keys: |
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: List available devices
@@ -119,7 +127,7 @@ jobs:
   spm:
     runs-on: macos-15
     strategy:
-      matrix: 
+      matrix:
         config: [debug, release]
     steps:
       - uses: actions/checkout@v5
@@ -136,11 +144,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: "Remove IntegrationTests"
-        run: rm -r Tests/IntegrationTests/*
+      - name: "Cache Swift Package"
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
       - name: "Build Swift Package"
         run: swift build
-      
+      - name: "Test Swift Package"
+        run: swift test --skip IntegrationTests
+
   # android:
   #   name: Android
   #   runs-on: ubuntu-latest
@@ -164,6 +179,14 @@ jobs:
         xcode: ["16.3"]
     steps:
       - uses: actions/checkout@v5
+      - name: Cache derived data
+        uses: actions/cache@v4
+        with:
+          path: ~/.derivedData
+          key: |
+            deriveddata-library-evolution-${{ matrix.xcode }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
+          restore-keys: |
+            deriveddata-library-evolution-${{ matrix.xcode }}-
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: Build for library evolution
@@ -200,5 +223,13 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
+      - name: Cache Swift build
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: |
+            docs-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            docs-${{ runner.os }}-
       - name: Test docs
         run: make test-docs

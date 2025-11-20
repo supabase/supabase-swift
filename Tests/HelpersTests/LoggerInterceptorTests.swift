@@ -5,9 +5,15 @@
 //  Created by Coverage Tests
 //
 
-import XCTest
-@testable import Helpers
+import Foundation
 import HTTPTypes
+import XCTest
+
+@testable import Helpers
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 
 final class LoggerInterceptorTests: XCTestCase {
 
@@ -69,7 +75,7 @@ final class LoggerInterceptorTests: XCTestCase {
     }
 
     // Verify request was logged
-    XCTAssertEqual(logger.verboseLogs.count, 2) // Request and response
+    XCTAssertEqual(logger.verboseLogs.count, 2)  // Request and response
     XCTAssertTrue(logger.verboseLogs[0].contains("Request:"))
     XCTAssertTrue(logger.verboseLogs[0].contains("/users"))
   }

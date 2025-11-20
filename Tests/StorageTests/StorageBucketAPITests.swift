@@ -77,7 +77,7 @@ final class StorageBucketAPITests: XCTestCase {
     ]
 
     for (input, expect, description) in urlTestCases {
-      XCTContext.runActivity(named: "should \(description) if useNewHostname is true") { _ in
+      runActivity(named: "should \(description) if useNewHostname is true") {
         let storage = SupabaseStorageClient(
           configuration: StorageClientConfiguration(
             url: URL(string: input)!,
@@ -88,7 +88,7 @@ final class StorageBucketAPITests: XCTestCase {
         XCTAssertEqual(storage.configuration.url.absoluteString, expect)
       }
 
-      XCTContext.runActivity(named: "should not modify host if useNewHostname is false") { _ in
+      runActivity(named: "should not modify host if useNewHostname is false") {
         let storage = SupabaseStorageClient(
           configuration: StorageClientConfiguration(
             url: URL(string: input)!,
@@ -99,6 +99,16 @@ final class StorageBucketAPITests: XCTestCase {
         XCTAssertEqual(storage.configuration.url.absoluteString, input)
       }
     }
+  }
+
+  private func runActivity(named name: String, body: () -> Void) {
+    #if os(Linux)
+      body()
+    #else
+      XCTContext.runActivity(named: name) { _ in
+        body()
+      }
+    #endif
   }
 
   func testGetBucket() async throws {
