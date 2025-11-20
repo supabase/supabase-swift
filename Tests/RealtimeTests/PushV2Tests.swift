@@ -6,9 +6,14 @@
 //
 
 import ConcurrencyExtras
+import Foundation
 import XCTest
 
 @testable import Realtime
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 
 final class PushV2Tests: XCTestCase {
 
@@ -334,6 +339,12 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
 
 private struct MockHTTPClient: HTTPClientType {
   func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-    return HTTPResponse(data: Data(), response: HTTPURLResponse())
+    let urlResponse = HTTPURLResponse(
+      url: URL(string: "https://example.com")!,
+      statusCode: 200,
+      httpVersion: nil,
+      headerFields: nil
+    )!
+    return HTTPResponse(data: Data(), response: urlResponse)
   }
 }
