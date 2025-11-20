@@ -43,7 +43,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     /// Long-running task for listening for incoming messages from WebSocket.
     var messageTask: Task<Void, Never>?
 
-    var connectionTask: Task<Void, Never>?
     var channels: [String: RealtimeChannelV2] = [:]
     var sendBuffer: [@Sendable (RealtimeClientV2) -> Void] = []
   }
@@ -438,7 +437,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.ref = 0
       $0.messageTask?.cancel()
       $0.heartbeatTask?.cancel()
-      $0.connectionTask?.cancel()
     }
 
     status = .disconnected
