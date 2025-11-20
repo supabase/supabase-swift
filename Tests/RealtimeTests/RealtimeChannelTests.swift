@@ -12,6 +12,10 @@ import XCTestDynamicOverlay
 
 @testable import Realtime
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class RealtimeChannelTests: XCTestCase {
   let sut = RealtimeChannelV2(
     topic: "topic",
@@ -439,7 +443,9 @@ final class RealtimeChannelTests: XCTestCase {
       XCTFail("Expected httpSend to throw an error on 503 status")
     } catch {
       // Should fall back to localized status text
-      XCTAssertTrue(error.localizedDescription.contains("503") || error.localizedDescription.contains("unavailable"))
+      XCTAssertTrue(
+        error.localizedDescription.contains("503")
+          || error.localizedDescription.contains("unavailable"))
     }
   }
 }
