@@ -13,15 +13,6 @@ actor ConnectionManager {
     case connecting(Task<Void, any Error>)
     case connected(any WebSocket)
     case reconnecting(Task<Void, any Error>, reason: String)
-
-    var isConnecting: Bool {
-      switch self {
-      case .connecting:
-        return true
-      default:
-        return false
-      }
-    }
   }
 
   private let (stateStream, stateContinuation) = AsyncStream<State>.makeStream()
@@ -42,14 +33,6 @@ actor ConnectionManager {
   }
 
   var stateChanges: AsyncStream<State> { stateStream }
-
-  /// Check if currently connected.
-  var isConnected: Bool {
-    if case .connected = state {
-      return true
-    }
-    return false
-  }
 
   init(
     transport: @escaping WebSocketTransport,

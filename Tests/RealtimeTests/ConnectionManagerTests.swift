@@ -17,9 +17,6 @@ final class ConnectionManagerTests: XCTestCase {
     var errorDescription: String? { "sample error" }
   }
 
-  let url = URL(string: "ws://localhost")!
-  let headers = ["apikey": "key"]
-
   var sut: ConnectionManager!
   var ws: FakeWebSocket!
   var transportCallCount = 0
@@ -62,7 +59,7 @@ final class ConnectionManagerTests: XCTestCase {
   }
 
   func testConnectTransitionsThroughConnectingAndConnectedStates() async throws {
-    sut = makeSUT(url: url, headers: headers)
+    sut = makeSUT(headers: ["apikey": "key"])
 
     let connectingExpectation = expectation(description: "connecting state observed")
     let connectedExpectation = expectation(description: "connected state observed")
@@ -81,15 +78,15 @@ final class ConnectionManagerTests: XCTestCase {
       }
     }
 
-    let initiallyConnected = await sut.isConnected
+    let initiallyConnected = await sut.connection != nil
     XCTAssertFalse(initiallyConnected)
     try await sut.connect()
 
-    let isConnected = await sut.isConnected
+    let isConnected = await sut.connection != nil
     XCTAssertTrue(isConnected)
     XCTAssertEqual(transportCallCount, 1)
-    XCTAssertEqual(lastConnectURL, url)
-    XCTAssertEqual(lastConnectHeaders, headers)
+    XCTAssertEqual(lastConnectURL?.absoluteString, "ws://localhost")
+    XCTAssertEqual(lastConnectHeaders, ["apikey": "key"])
 
     await fulfillment(of: [connectingExpectation, connectedExpectation], timeout: 1)
     stateObserver.cancel()
@@ -103,7 +100,7 @@ final class ConnectionManagerTests: XCTestCase {
 
     try await sut.connect()
 
-    let stillConnected = await sut.isConnected
+    let stillConnected = await sut.connection != nil
     XCTAssertTrue(stillConnected)
     XCTAssertEqual(transportCallCount, 1, "Second connect should reuse existing connection")
   }
@@ -137,7 +134,7 @@ final class ConnectionManagerTests: XCTestCase {
     try await secondConnect.value
 
     XCTAssertTrue(secondConnectFinished.value)
-    let isConnected = await sut.isConnected
+    let isConnected = await sut.connection != nil
     XCTAssertTrue(isConnected)
     XCTAssertEqual(transportCallCount, 1)
   }
@@ -148,7 +145,7 @@ final class ConnectionManagerTests: XCTestCase {
 
     await sut.disconnect(reason: "test reason")
 
-    let isConnected = await sut.isConnected
+    let isConnected = await sut.connection != nil
     XCTAssertFalse(isConnected)
     guard case .close(let closeCode, let closeReason)? = ws.sentEvents.last else {
       return XCTFail("Expected close event to be sent")
@@ -181,7 +178,7 @@ final class ConnectionManagerTests: XCTestCase {
 
     await Task.yield()
     XCTAssertTrue(wasCancelled.value, "Cancellation handler should run when disconnecting")
-    let isConnected = await sut.isConnected
+    let isConnected = await sut.connection != nil
     XCTAssertFalse(isConnected)
 
     connectTask.cancel()
@@ -218,7 +215,7 @@ final class ConnectionManagerTests: XCTestCase {
 
     await fulfillment(of: [reconnectingExpectation, secondConnectionExpectation], timeout: 2)
     XCTAssertEqual(connectionCount.value, 2, "Reconnection should trigger a second transport call")
-    let isConnected = await sut.isConnected
+    let isConnected = await sut.connection != nil
     XCTAssertTrue(isConnected)
 
     stateObserver.cancel()
@@ -230,7 +227,7 @@ final class ConnectionManagerTests: XCTestCase {
 
     await sut.handleClose(code: 4001, reason: "server closing")
 
-    let isConnected = await sut.isConnected
+    let isConnected = await sut.connection != nil
     XCTAssertFalse(isConnected)
     guard case .close(let closeCode, let closeReason)? = ws.sentEvents.last else {
       return XCTFail("Expected close event to be sent")
