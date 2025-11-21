@@ -91,130 +91,122 @@ import XCTest
       await client.connect()
     }
 
-//    func testBehavior() async throws {
-//      let channel = sut.channel("public:messages")
-//      var subscriptions: Set<ObservationToken> = []
-//
-//      channel.onPostgresChange(InsertAction.self, table: "messages") { _ in
-//      }
-//      .store(in: &subscriptions)
-//
-//      channel.onPostgresChange(UpdateAction.self, table: "messages") { _ in
-//      }
-//      .store(in: &subscriptions)
-//
-//      channel.onPostgresChange(DeleteAction.self, table: "messages") { _ in
-//      }
-//      .store(in: &subscriptions)
-//
-//      let socketStatuses = LockIsolated([RealtimeClientStatus]())
-//
-//      sut.onStatusChange { status in
-//        socketStatuses.withValue { $0.append(status) }
-//      }
-//      .store(in: &subscriptions)
-//
-//      // Set up server to respond to heartbeats
-//      server.onEvent = { @Sendable [server] event in
-//        guard let msg = event.realtimeMessage else { return }
-//
-//        if msg.event == "heartbeat" {
-//          server?.send(
-//            RealtimeMessageV2(
-//              joinRef: msg.joinRef,
-//              ref: msg.ref,
-//              topic: "phoenix",
-//              event: "phx_reply",
-//              payload: ["response": [:]]
-//            )
-//          )
-//        }
-//      }
-//
-//      await waitUntil {
-//        socketStatuses.value.count >= 3
-//      }
-//
-//      XCTAssertEqual(
-//        Array(socketStatuses.value.prefix(3)),
-//        [.disconnected, .connecting, .connected]
-//      )
-//
-//      let messageTask = sut.mutableState.messageTask
-//      XCTAssertNotNil(messageTask)
-//
-//      let heartbeatTask = sut.mutableState.heartbeatTask
-//      XCTAssertNotNil(heartbeatTask)
-//
-//      let channelStatuses = LockIsolated([RealtimeChannelStatus]())
-//      channel.onStatusChange { status in
-//        channelStatuses.withValue {
-//          $0.append(status)
-//        }
-//      }
-//      .store(in: &subscriptions)
-//
-//      let subscribeTask = Task {
-//        try await channel.subscribeWithError()
-//      }
-//      await Task.yield()
-//      server.send(.messagesSubscribed)
-//
-//      // Wait until it subscribes to assert WS events
-//      do {
-//        try await subscribeTask.value
-//      } catch {
-//        XCTFail("Expected .subscribed but got error: \(error)")
-//      }
-//      XCTAssertEqual(channelStatuses.value, [.unsubscribed, .subscribing, .subscribed])
-//
-//      assertInlineSnapshot(of: client.sentEvents.map(\.json), as: .json) {
-//        #"""
-//        [
-//          {
-//            "text" : {
-//              "event" : "phx_join",
-//              "join_ref" : "1",
-//              "payload" : {
-//                "access_token" : "custom.access.token",
-//                "config" : {
-//                  "broadcast" : {
-//                    "ack" : false,
-//                    "self" : false
-//                  },
-//                  "postgres_changes" : [
-//                    {
-//                      "event" : "INSERT",
-//                      "schema" : "public",
-//                      "table" : "messages"
-//                    },
-//                    {
-//                      "event" : "UPDATE",
-//                      "schema" : "public",
-//                      "table" : "messages"
-//                    },
-//                    {
-//                      "event" : "DELETE",
-//                      "schema" : "public",
-//                      "table" : "messages"
-//                    }
-//                  ],
-//                  "presence" : {
-//                    "enabled" : false,
-//                    "key" : ""
-//                  },
-//                  "private" : false
-//                },
-//                "version" : "realtime-swift\/0.0.0"
-//              },
-//              "ref" : "1",
-//              "topic" : "realtime:public:messages"
-//            }
-//          }
-//        ]
-//        """#
-//      }
-//    }
+    func testBehavior() async throws {
+      let channel = sut.channel("public:messages")
+      var subscriptions: Set<ObservationToken> = []
+
+      channel.onPostgresChange(InsertAction.self, table: "messages") { _ in
+      }
+      .store(in: &subscriptions)
+
+      channel.onPostgresChange(UpdateAction.self, table: "messages") { _ in
+      }
+      .store(in: &subscriptions)
+
+      channel.onPostgresChange(DeleteAction.self, table: "messages") { _ in
+      }
+      .store(in: &subscriptions)
+
+      let socketStatuses = LockIsolated([RealtimeClientStatus]())
+
+      sut.onStatusChange { status in
+        socketStatuses.withValue { $0.append(status) }
+      }
+      .store(in: &subscriptions)
+
+      // Set up server to respond to heartbeats
+      server.onEvent = { @Sendable [server] event in
+        guard let msg = event.realtimeMessage else { return }
+
+        if msg.event == "heartbeat" {
+          server?.send(
+            RealtimeMessageV2(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: "phoenix",
+              event: "phx_reply",
+              payload: ["response": [:]]
+            )
+          )
+        } else if msg.event == "phx_join" {
+          server?.send(.messagesSubscribed)
+        }
+      }
+
+      let channelStatuses = LockIsolated([RealtimeChannelStatus]())
+      channel.onStatusChange { status in
+        channelStatuses.withValue {
+          $0.append(status)
+        }
+      }
+      .store(in: &subscriptions)
+
+      // Wait until it subscribes to assert WS events
+      do {
+        try await channel.subscribeWithError()
+      } catch {
+        XCTFail("Expected .subscribed but got error: \(error)")
+      }
+      XCTAssertEqual(channelStatuses.value, [.unsubscribed, .subscribing, .subscribed])
+
+      XCTAssertEqual(
+        Array(socketStatuses.value.prefix(3)),
+        [.disconnected, .connecting, .connected]
+      )
+
+      let messageTask = sut.mutableState.messageTask
+      XCTAssertNotNil(messageTask)
+
+      let heartbeatTask = sut.mutableState.heartbeatTask
+      XCTAssertNotNil(heartbeatTask)
+
+      assertInlineSnapshot(of: client.sentEvents.map(\.json), as: .json) {
+        #"""
+        [
+          {
+            "text" : {
+              "event" : "phx_join",
+              "join_ref" : "1",
+              "payload" : {
+                "access_token" : "custom.access.token",
+                "config" : {
+                  "broadcast" : {
+                    "ack" : false,
+                    "self" : false
+                  },
+                  "postgres_changes" : [
+                    {
+                      "event" : "INSERT",
+                      "schema" : "public",
+                      "table" : "messages"
+                    },
+                    {
+                      "event" : "UPDATE",
+                      "schema" : "public",
+                      "table" : "messages"
+                    },
+                    {
+                      "event" : "DELETE",
+                      "schema" : "public",
+                      "table" : "messages"
+                    }
+                  ],
+                  "presence" : {
+                    "enabled" : false,
+                    "key" : ""
+                  },
+                  "private" : false
+                },
+                "version" : "realtime-swift\/0.0.0"
+              },
+              "ref" : "1",
+              "topic" : "realtime:public:messages"
+            }
+          }
+        ]
+        """#
+      }
+    }
 
     func testSubscribeTimeout() async throws {
       let channel = sut.channel("public:messages")
