@@ -2,8 +2,8 @@ import Foundation
 
 public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Sendable {
   public enum Operator: String, CaseIterable, Sendable {
-    case eq, neq, gt, gte, lt, lte, like, ilike, `is`, `in`, cs, cd, sl, sr, nxl, nxr, adj, ov, fts,
-      plfts, phfts, wfts
+    case eq, neq, gt, gte, lt, lte, like, ilike, match, imatch, `is`, isdistinct, `in`, cs, cd, sl,
+      sr, nxl, nxr, adj, ov, fts, plfts, phfts, wfts
   }
 
   // MARK: - Filters
@@ -228,6 +228,38 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     return self
   }
 
+  /// Match only rows where `column` matches the regex `pattern` case-sensitively.
+  ///
+  /// - Parameters:
+  ///   - column: The column to filter on
+  ///   - pattern: The regex pattern to match with
+  public func match(
+    _ column: String,
+    pattern: any PostgrestFilterValue
+  ) -> PostgrestFilterBuilder {
+    let queryValue = pattern.rawValue
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "match.\(queryValue)"))
+    }
+    return self
+  }
+
+  /// Match only rows where `column` matches the regex `pattern` case-insensitively.
+  ///
+  /// - Parameters:
+  ///   - column: The column to filter on
+  ///   - pattern: The regex pattern to match with
+  public func imatch(
+    _ column: String,
+    pattern: any PostgrestFilterValue
+  ) -> PostgrestFilterBuilder {
+    let queryValue = pattern.rawValue
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "imatch.\(queryValue)"))
+    }
+    return self
+  }
+
   /// Match only rows where `column` IS `value`.
   ///
   /// For non-boolean columns, this is only relevant for checking if the value of `column` is NULL by setting `value` to `null`.
@@ -243,6 +275,24 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     let queryValue = value.rawValue
     mutableState.withValue {
       $0.request.query.append(URLQueryItem(name: column, value: "is.\(queryValue)"))
+    }
+    return self
+  }
+
+  /// Match only rows where `column` IS DISTINCT FROM `value`.
+  ///
+  /// Unlike `.neq()`, this treats NULL as a comparable value. NULL IS DISTINCT FROM NULL is false, while NULL != NULL is true.
+  ///
+  /// - Parameters:
+  ///   - column: The column to filter on
+  ///   - value: The value to filter with
+  public func isDistinct(
+    _ column: String,
+    value: any PostgrestFilterValue
+  ) -> PostgrestFilterBuilder {
+    let queryValue = value.rawValue
+    mutableState.withValue {
+      $0.request.query.append(URLQueryItem(name: column, value: "isdistinct.\(queryValue)"))
     }
     return self
   }
@@ -575,7 +625,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     query: String,
     config: String? = nil
   ) -> PostgrestFilterBuilder {
-    plfts(column, query: query, config: config)
+    textSearch(column, query: query, config: config, type: .plain)
   }
 
   public func phraseToFullTextSearch(
@@ -583,7 +633,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     query: String,
     config: String? = nil
   ) -> PostgrestFilterBuilder {
-    phfts(column, query: query, config: config)
+    textSearch(column, query: query, config: config, type: .phrase)
   }
 
   public func webFullTextSearch(
@@ -591,6 +641,6 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     query: String,
     config: String? = nil
   ) -> PostgrestFilterBuilder {
-    wfts(column, query: query, config: config)
+    textSearch(column, query: query, config: config, type: .websearch)
   }
 }
