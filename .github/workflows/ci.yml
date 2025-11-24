@@ -83,7 +83,7 @@ jobs:
         id: coverage
         if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.0'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
-      - uses: coverallsapp/github-action@v2.3.6
+      - uses: coverallsapp/github-action@v2.3.7
         if: steps.coverage.outcome == 'success'
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
