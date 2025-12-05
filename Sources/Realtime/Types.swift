@@ -28,12 +28,23 @@ public struct RealtimeClientOptions: Sendable {
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: (any SupabaseLogger)?
 
+  /// Serializer version to use. Defaults to "1.0.0".
+  /// - "1.0.0": JSON-only serializer (default, backward compatible)
+  /// - "2.0.0": Binary serializer with support for binary payloads and metadata
+  var serializerVersion: String
+
+  /// Allowed metadata keys for user broadcast push messages (V2 serializer only).
+  /// Only these keys will be included in the metadata section of binary messages.
+  var allowedMetadataKeys: [String]
+
   public static let defaultHeartbeatInterval: TimeInterval = 25
   public static let defaultReconnectDelay: TimeInterval = 7
   public static let defaultTimeoutInterval: TimeInterval = 10
   public static let defaultDisconnectOnSessionLoss = true
   public static let defaultConnectOnSubscribe: Bool = true
   public static let defaultMaxRetryAttempts: Int = 5
+  public static let defaultSerializerVersion = "1.0.0"
+  public static let defaultAllowedMetadataKeys: [String] = []
 
   public init(
     headers: [String: String] = [:],
@@ -46,7 +57,9 @@ public struct RealtimeClientOptions: Sendable {
     logLevel: LogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
-    logger: (any SupabaseLogger)? = nil
+    logger: (any SupabaseLogger)? = nil,
+    serializerVersion: String = Self.defaultSerializerVersion,
+    allowedMetadataKeys: [String] = Self.defaultAllowedMetadataKeys
   ) {
     self.headers = HTTPFields(headers)
     self.heartbeatInterval = heartbeatInterval
@@ -59,6 +72,8 @@ public struct RealtimeClientOptions: Sendable {
     self.fetch = fetch
     self.accessToken = accessToken
     self.logger = logger
+    self.serializerVersion = serializerVersion
+    self.allowedMetadataKeys = allowedMetadataKeys
   }
 
   var apikey: String? {
