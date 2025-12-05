@@ -11,18 +11,18 @@ import XCTest
 @testable import Realtime
 
 final class RealtimeSerializerTests: XCTestCase {
-  // MARK: - Binary Encoder Tests
+  // MARK: - Binary Encoder Tests (V3)
 
   func testEncodePushWithBinaryPayload() throws {
     let encoder = RealtimeBinaryEncoder()
 
     let binaryData = Data([0x01, 0x04])
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessageV3(
       joinRef: "10",
       ref: "1",
       topic: "t",
       event: "e",
-      payload: ["payload": RealtimeBinaryPayload.binary(binaryData)]
+      binaryPayload: binaryData
     )
 
     let encoded = try encoder.encode(message)
@@ -45,7 +45,7 @@ final class RealtimeSerializerTests: XCTestCase {
   func testEncodeUserBroadcastPushWithJSONNoMetadata() throws {
     let encoder = RealtimeBinaryEncoder()
 
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessageV3(
       joinRef: "10",
       ref: "1",
       topic: "top",
@@ -72,7 +72,7 @@ final class RealtimeSerializerTests: XCTestCase {
   func testEncodeUserBroadcastPushWithAllowedMetadata() throws {
     let encoder = RealtimeBinaryEncoder(allowedMetadataKeys: ["extra"])
 
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessageV3(
       joinRef: "10",
       ref: "1",
       topic: "top",
@@ -98,7 +98,7 @@ final class RealtimeSerializerTests: XCTestCase {
     let encoder = RealtimeBinaryEncoder()
 
     let binaryData = Data([0x01, 0x04])
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessageV3(
       joinRef: "10",
       ref: "1",
       topic: "top",
@@ -120,7 +120,7 @@ final class RealtimeSerializerTests: XCTestCase {
     let encoder = RealtimeBinaryEncoder()
     let longJoinRef = String(repeating: "a", count: 256)
 
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessageV3(
       joinRef: longJoinRef,
       ref: "1",
       topic: "top",
@@ -140,7 +140,7 @@ final class RealtimeSerializerTests: XCTestCase {
     let encoder = RealtimeBinaryEncoder()
     let longTopic = String(repeating: "a", count: 256)
 
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessageV3(
       joinRef: "10",
       ref: "1",
       topic: longTopic,
@@ -291,11 +291,18 @@ final class RealtimeSerializerTests: XCTestCase {
     let message = try decoder.decode(data)
 
     XCTAssertEqual(message.event, "broadcast")
-    XCTAssertEqual(message.payload["type"]?.stringValue, "broadcast")
-    XCTAssertEqual(message.payload["event"]?.stringValue, "user-event")
+
+    // For V3 messages, check the payload structure
+    guard case .json(let jsonPayload) = message.payload else {
+      XCTFail("Expected JSON payload")
+      return
+    }
+
+    XCTAssertEqual(jsonPayload["type"]?.stringValue, "broadcast")
+    XCTAssertEqual(jsonPayload["event"]?.stringValue, "user-event")
 
     // Check binary payload
-    let binaryPayload = RealtimeBinaryPayload.data(from: message.payload["payload"]!)
+    let binaryPayload = RealtimeBinaryPayload.data(from: jsonPayload["payload"]!)
     XCTAssertNotNil(binaryPayload)
     XCTAssertEqual(binaryPayload, Data([0x01, 0x04]))
   }
@@ -317,10 +324,15 @@ final class RealtimeSerializerTests: XCTestCase {
 
     let message = try decoder.decode(data)
 
-    XCTAssertEqual(message.payload["event"]?.stringValue, "user-event")
-    XCTAssertEqual(message.payload["meta"]?.objectValue?["replayed"]?.boolValue, true)
+    guard case .json(let jsonPayload) = message.payload else {
+      XCTFail("Expected JSON payload")
+      return
+    }
 
-    let binaryPayload = RealtimeBinaryPayload.data(from: message.payload["payload"]!)
+    XCTAssertEqual(jsonPayload["event"]?.stringValue, "user-event")
+    XCTAssertEqual(jsonPayload["meta"]?.objectValue?["replayed"]?.boolValue, true)
+
+    let binaryPayload = RealtimeBinaryPayload.data(from: jsonPayload["payload"]!)
     XCTAssertNotNil(binaryPayload)
     XCTAssertEqual(binaryPayload, Data([0x01, 0x04]))
   }
@@ -348,10 +360,9 @@ final class RealtimeSerializerTests: XCTestCase {
 
   func testRoundTripUserBroadcastWithBinary() throws {
     let encoder = RealtimeBinaryEncoder()
-    let decoder = RealtimeBinaryDecoder()
 
     let originalData = Data([0x01, 0x02, 0x03, 0x04])
-    let originalMessage = RealtimeMessageV2(
+    let originalMessage = RealtimeMessageV3(
       joinRef: "10",
       ref: "1",
       topic: "test-topic",
@@ -369,5 +380,89 @@ final class RealtimeSerializerTests: XCTestCase {
     // But we can verify the encoding structure is correct
     XCTAssertTrue(encoded.count > 0)
     XCTAssertEqual(encoded[0], 3)  // userBroadcastPush
+  }
+
+  // MARK: - V2 / V3 Conversion Tests
+
+  func testV2ToV3ConversionWithJSON() {
+    let v2Message = RealtimeMessageV2(
+      joinRef: "10",
+      ref: "1",
+      topic: "test",
+      event: "broadcast",
+      payload: ["key": "value"]
+    )
+
+    let v3Message = RealtimeMessageV3.fromV2(v2Message)
+
+    XCTAssertEqual(v3Message.joinRef, "10")
+    XCTAssertEqual(v3Message.ref, "1")
+    XCTAssertEqual(v3Message.topic, "test")
+    XCTAssertEqual(v3Message.event, "broadcast")
+    XCTAssertEqual(v3Message.payload["key"]?.stringValue, "value")
+  }
+
+  func testV2ToV3ConversionWithBinary() {
+    let binaryData = Data([0x01, 0x02, 0x03])
+    let v2Message = RealtimeMessageV2(
+      joinRef: "10",
+      ref: "1",
+      topic: "test",
+      event: "msg",
+      payload: ["payload": RealtimeBinaryPayload.binary(binaryData)]
+    )
+
+    let v3Message = RealtimeMessageV3.fromV2(v2Message)
+
+    XCTAssertEqual(v3Message.joinRef, "10")
+    XCTAssertEqual(v3Message.ref, "1")
+    XCTAssertEqual(v3Message.topic, "test")
+    XCTAssertEqual(v3Message.event, "msg")
+
+    guard case .binary(let extractedData) = v3Message.payload else {
+      XCTFail("Expected binary payload")
+      return
+    }
+    XCTAssertEqual(extractedData, binaryData)
+  }
+
+  func testV3ToV2ConversionWithJSON() {
+    let v3Message = RealtimeMessageV3(
+      joinRef: "10",
+      ref: "1",
+      topic: "test",
+      event: "broadcast",
+      payload: ["key": "value"]
+    )
+
+    let v2Message = v3Message.toV2()
+
+    XCTAssertEqual(v2Message.joinRef, "10")
+    XCTAssertEqual(v2Message.ref, "1")
+    XCTAssertEqual(v2Message.topic, "test")
+    XCTAssertEqual(v2Message.event, "broadcast")
+    XCTAssertEqual(v2Message.payload["key"]?.stringValue, "value")
+  }
+
+  func testV3ToV2ConversionWithBinary() {
+    let binaryData = Data([0x01, 0x02, 0x03])
+    let v3Message = RealtimeMessageV3(
+      joinRef: "10",
+      ref: "1",
+      topic: "test",
+      event: "msg",
+      binaryPayload: binaryData
+    )
+
+    let v2Message = v3Message.toV2()
+
+    XCTAssertEqual(v2Message.joinRef, "10")
+    XCTAssertEqual(v2Message.ref, "1")
+    XCTAssertEqual(v2Message.topic, "test")
+    XCTAssertEqual(v2Message.event, "msg")
+
+    // Binary data should be wrapped in the special marker format
+    let extractedData = RealtimeBinaryPayload.data(from: v2Message.payload["payload"]!)
+    XCTAssertEqual(extractedData, binaryData)
   }
 }

@@ -324,6 +324,10 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
     }
   }
 
+  func pushV3(_ message: RealtimeMessageV3) {
+    push(message.toV2())
+  }
+
   func _getAccessToken() async -> String? {
     return nil
   }

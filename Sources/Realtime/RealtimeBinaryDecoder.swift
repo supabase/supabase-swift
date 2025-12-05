@@ -30,10 +30,18 @@ final class RealtimeBinaryDecoder: Sendable {
     case json = 1
   }
 
-  /// Decodes binary data into a Realtime message.
+  /// Decodes binary data into a V3 Realtime message.
   /// - Parameter data: Binary data to decode
-  /// - Returns: Decoded message
-  func decode(_ data: Data) throws -> RealtimeMessageV2 {
+  /// - Returns: Decoded V3 message
+  func decode(_ data: Data) throws -> RealtimeMessageV3 {
+    let v2Message = try decodeToV2(data)
+    return RealtimeMessageV3.fromV2(v2Message)
+  }
+
+  /// Decodes binary data into a V2 Realtime message (for backward compatibility).
+  /// - Parameter data: Binary data to decode
+  /// - Returns: Decoded V2 message
+  func decodeToV2(_ data: Data) throws -> RealtimeMessageV2 {
     guard !data.isEmpty else {
       throw RealtimeError("Empty binary data")
     }

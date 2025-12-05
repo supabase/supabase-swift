@@ -37,29 +37,38 @@ final class RealtimeBinaryEncoder: Sendable {
     self.allowedMetadataKeys = allowedMetadataKeys
   }
 
-  /// Encodes a Realtime message to binary format.
+  /// Encodes a V3 Realtime message to binary format.
   /// - Parameter message: The message to encode
   /// - Returns: Binary data representation
-  func encode(_ message: RealtimeMessageV2) throws -> Data {
+  func encode(_ message: RealtimeMessageV3) throws -> Data {
     // Check if this is a user broadcast push
     if message.event == "broadcast",
-      let event = message.payload["event"]?.stringValue
+      case .json(let jsonPayload) = message.payload,
+      let event = jsonPayload["event"]?.stringValue
     {
-      return try encodeUserBroadcastPush(message: message, userEvent: event)
+      return try encodeUserBroadcastPush(
+        message: message, userEvent: event, jsonPayload: jsonPayload)
     }
 
-    // Check if this has a binary payload at top level
-    if let binaryPayload = getBinaryPayload(from: message.payload) {
+    // Check if this has a binary payload
+    if case .binary(let binaryPayload) = message.payload {
       return try encodePush(message: message, binaryPayload: binaryPayload)
     }
 
-    // Fall back to JSON encoding
+    // Fall back to JSON encoding for standard JSON messages
     return try encodeAsJSON(message)
+  }
+
+  /// Encodes a V2 Realtime message to binary format (for backward compatibility).
+  /// - Parameter message: The message to encode
+  /// - Returns: Binary data representation
+  func encodeV2(_ message: RealtimeMessageV2) throws -> Data {
+    try encode(RealtimeMessageV3.fromV2(message))
   }
 
   // MARK: - Private Encoding Methods
 
-  private func encodePush(message: RealtimeMessageV2, binaryPayload: Data) throws -> Data {
+  private func encodePush(message: RealtimeMessageV3, binaryPayload: Data) throws -> Data {
     let joinRef = message.joinRef ?? ""
     let ref = message.ref ?? ""
     let topic = message.topic
@@ -91,21 +100,22 @@ final class RealtimeBinaryEncoder: Sendable {
   }
 
   private func encodeUserBroadcastPush(
-    message: RealtimeMessageV2,
-    userEvent: String
+    message: RealtimeMessageV3,
+    userEvent: String,
+    jsonPayload: JSONObject
   ) throws -> Data {
     let joinRef = message.joinRef ?? ""
     let ref = message.ref ?? ""
     let topic = message.topic
 
     // Extract the payload
-    let payload = message.payload["payload"] ?? .null
+    let payload = jsonPayload["payload"] ?? .null
 
     // Encode payload
     let encodedPayload: Data
     let encoding: PayloadEncoding
 
-    if let binaryData = getBinaryPayload(from: ["payload": payload]) {
+    if let binaryData = RealtimeBinaryPayload.data(from: payload) {
       encodedPayload = binaryData
       encoding = .binary
     } else {
@@ -116,7 +126,7 @@ final class RealtimeBinaryEncoder: Sendable {
     // Extract metadata based on allowed keys
     let metadata: JSONObject
     if !allowedMetadataKeys.isEmpty {
-      metadata = message.payload.filter { key, _ in
+      metadata = jsonPayload.filter { key, _ in
         allowedMetadataKeys.contains(key) && key != "event" && key != "payload" && key != "type"
       }
     } else {
@@ -165,24 +175,8 @@ final class RealtimeBinaryEncoder: Sendable {
     return combined
   }
 
-  private func encodeAsJSON(_ message: RealtimeMessageV2) throws -> Data {
+  private func encodeAsJSON(_ message: RealtimeMessageV3) throws -> Data {
     try JSONEncoder().encode(message)
-  }
-
-  // MARK: - Helper Methods
-
-  private func getBinaryPayload(from payload: JSONObject) -> Data? {
-    // Check if there's a "payload" key with base64-encoded binary data marker
-    guard let payloadValue = payload["payload"],
-      case .object(let obj) = payloadValue,
-      let isBinary = obj["__binary__"]?.boolValue,
-      isBinary,
-      let base64String = obj["data"]?.stringValue,
-      let data = Data(base64Encoded: base64String)
-    else {
-      return nil
-    }
-    return data
   }
 
   private func validateFieldLength(_ field: String, name: String) throws {

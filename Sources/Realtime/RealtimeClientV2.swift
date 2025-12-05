@@ -25,6 +25,7 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
 
   func connect() async
   func push(_ message: RealtimeMessageV2)
+  func pushV3(_ message: RealtimeMessageV3)
   func _getAccessToken() async -> String?
   func makeRef() -> String
   func _remove(_ channel: any RealtimeChannelProtocol)
@@ -389,7 +390,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             case .binary(let data):
               // Binary events are supported in V2 serializer
               if let decoder = self.binaryDecoder {
-                let message = try decoder.decode(data)
+                let messageV3 = try decoder.decode(data)
+                let message = messageV3.toV2()
                 await onMessage(message)
               } else {
                 self.options.logger?.error(
@@ -541,10 +543,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  /// Push out a message if the socket is connected.
+  /// Push out a V3 message if the socket is connected.
   ///
   /// If the socket is not connected, the message gets enqueued within a local buffer, and sent out when a connection is next established.
-  public func push(_ message: RealtimeMessageV2) {
+  public func pushV3(_ message: RealtimeMessageV3) {
     let callback = { @Sendable [weak self] in
       do {
         // Check cancellation before sending, because this push may have been cancelled before a connection was established.
@@ -580,6 +582,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         $0.sendBuffer.append(callback)
       }
     }
+  }
+
+  /// Push out a V2 message if the socket is connected.
+  ///
+  /// If the socket is not connected, the message gets enqueued within a local buffer, and sent out when a connection is next established.
+  public func push(_ message: RealtimeMessageV2) {
+    pushV3(RealtimeMessageV3.fromV2(message))
   }
 
   private func flushSendBuffer() {
