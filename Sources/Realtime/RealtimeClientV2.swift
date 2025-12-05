@@ -55,6 +55,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let mutableState = LockIsolated(MutableState())
   let http: any HTTPClientType
   let apikey: String
+  let binaryEncoder: RealtimeBinaryEncoder?
+  let binaryDecoder: RealtimeBinaryDecoder?
 
   var conn: (any WebSocket)? {
     mutableState.conn
@@ -156,6 +158,15 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     self.wsTransport = wsTransport
     self.http = http
 
+    // Initialize serializer based on version
+    if options.serializerVersion == "2.0.0" {
+      binaryEncoder = RealtimeBinaryEncoder(allowedMetadataKeys: options.allowedMetadataKeys)
+      binaryDecoder = RealtimeBinaryDecoder()
+    } else {
+      binaryEncoder = nil
+      binaryDecoder = nil
+    }
+
     precondition(options.apikey != nil, "API key is required to connect to Realtime")
     apikey = options.apikey!
 
@@ -205,7 +216,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             Self.realtimeWebSocketURL(
               baseURL: Self.realtimeBaseURL(url: url),
               apikey: options.apikey,
-              logLevel: options.logLevel
+              logLevel: options.logLevel,
+              serializerVersion: options.serializerVersion
             ),
             options.headers.dictionary
           )
@@ -374,10 +386,17 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             if Task.isCancelled { return }
 
             switch event {
-            case .binary:
-              self.options.logger?.error("Unsupported binary event received.")
-              break
+            case .binary(let data):
+              // Binary events are supported in V2 serializer
+              if let decoder = self.binaryDecoder {
+                let message = try decoder.decode(data)
+                await onMessage(message)
+              } else {
+                self.options.logger?.error(
+                  "Binary event received but V2 serializer is not enabled.")
+              }
             case .text(let text):
+              // Text events are always JSON
               let data = Data(text.utf8)
               let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
               await onMessage(message)
@@ -530,8 +549,17 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       do {
         // Check cancellation before sending, because this push may have been cancelled before a connection was established.
         try Task.checkCancellation()
-        let data = try JSONEncoder().encode(message)
-        self?.conn?.send(String(decoding: data, as: UTF8.self))
+
+        // Use binary encoder if V2 serializer is enabled
+        if let encoder = self?.binaryEncoder {
+          let encoded = try encoder.encode(message)
+          // Binary encoder always returns Data
+          self?.conn?.send(encoded)
+        } else {
+          // Fall back to JSON encoding for V1
+          let data = try JSONEncoder().encode(message)
+          self?.conn?.send(String(decoding: data, as: UTF8.self))
+        }
       } catch {
         self?.options.logger?.error(
           """
@@ -586,7 +614,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     return url
   }
 
-  static func realtimeWebSocketURL(baseURL: URL, apikey: String?, logLevel: LogLevel?) -> URL {
+  static func realtimeWebSocketURL(
+    baseURL: URL,
+    apikey: String?,
+    logLevel: LogLevel?,
+    serializerVersion: String = "1.0.0"
+  ) -> URL {
     guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
     else {
       return baseURL
@@ -596,7 +629,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     if let apikey {
       components.queryItems!.append(URLQueryItem(name: "apikey", value: apikey))
     }
-    components.queryItems!.append(URLQueryItem(name: "vsn", value: "1.0.0"))
+    components.queryItems!.append(URLQueryItem(name: "vsn", value: serializerVersion))
 
     if let logLevel {
       components.queryItems!.append(URLQueryItem(name: "log_level", value: logLevel.rawValue))
