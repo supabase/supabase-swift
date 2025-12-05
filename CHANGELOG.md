@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.38.0](https://github.com/supabase/supabase-swift/compare/v2.37.0...v2.38.0) (2025-12-05)
+
+
+### Features
+
+* **postgrest:** add missing operators match, imatch, and isDistinct ([#857](https://github.com/supabase/supabase-swift/issues/857)) ([af786cb](https://github.com/supabase/supabase-swift/commit/af786cb012b472dd502974c29c6817f11923901b))
+* **realtime:** improve task lifecycle management and expose public APIs ([#851](https://github.com/supabase/supabase-swift/issues/851)) ([bab4ec0](https://github.com/supabase/supabase-swift/commit/bab4ec0939f719425019a623d2075110cf986059))
+
 ## [2.37.0](https://github.com/supabase/supabase-swift/compare/v2.36.0...v2.37.0) (2025-11-03)
 
 
