@@ -76,9 +76,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   /// The current connection status.
-  public private(set) var status: RealtimeClientStatus {
-    get { statusSubject.value }
-    set { statusSubject.yield(newValue) }
+  public var status: RealtimeClientStatus {
+    statusSubject.value
   }
 
   /// Listen for heartbeat status.
@@ -176,6 +175,21 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       reconnectDelay: options.reconnectDelay,
       logger: options.logger
     )
+
+    Task {
+      for await state in await connectionManager.stateChanges {
+        switch state {
+        case .connected:
+          statusSubject.yield(.connected)
+        case .disconnected:
+          statusSubject.yield(.disconnected)
+        case .connecting:
+          statusSubject.yield(.connecting)
+        case .reconnecting:
+          break
+        }
+      }
+    }
   }
 
   deinit {
@@ -197,15 +211,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     options.logger?.debug(reconnect ? "Reconnecting..." : "Connecting...")
 
     do {
-      status = .connecting
       try await connectionManager.connect()
 
       options.logger?.debug("Connected to realtime WebSocket")
 
       listenForMessages()
       startHeartbeating()
-
-      status = .connected
 
       if reconnect {
         rejoinChannels()
@@ -214,22 +225,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       flushSendBuffer()
     } catch {
       options.logger?.error("Connection failed: \(error)")
-      status = .disconnected
-    }
-  }
-
-  private func onDisconnected() {
-    options.logger?
-      .debug(
-        "WebSocket disconnected. Trying again in \(options.reconnectDelay)"
-      )
-    reconnect()
-  }
-
-  private func reconnect(disconnectReason: String? = nil) {
-    Task {
-      disconnect(reason: disconnectReason)
-      await connect(reconnect: true)
     }
   }
 
@@ -431,7 +426,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       // Clear the pending ref before reconnecting
       mutableState.withValue { $0.pendingHeartbeatRef = nil }
 
-      reconnect(disconnectReason: "heartbeat timeout")
+      await connectionManager.handleError(RealtimeError("heartbeat timeout"))
     }
   }
 
@@ -455,8 +450,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.pendingHeartbeatRef = nil
       $0.sendBuffer = []
     }
-
-    status = .disconnected
   }
 
   /// Sets the JWT access token used for channel subscription authorization and Realtime RLS.
@@ -526,13 +519,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           await client.conn?.send(String(decoding: data, as: UTF8.self))
         } catch {
           client.options.logger?.error(
-          """
-          Failed to send message:
-          \(message)
-          
-          Error:
-          \(error)
-          """
+            """
+            Failed to send message:
+            \(message)
+
+            Error:
+            \(error)
+            """
           )
         }
       }
