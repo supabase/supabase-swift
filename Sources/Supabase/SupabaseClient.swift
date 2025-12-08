@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import IssueReporting
+import Shared
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -88,8 +89,11 @@ public final class SupabaseClient: Sendable {
           url: functionsURL,
           headers: headers,
           region: options.functions.region,
-          logger: options.global.logger,
-          fetch: fetchWithAuth
+          http: Shared.HTTPClient(
+            host: functionsURL,
+            session: session,
+            tokenProvider: { try await self._getAccessToken() }
+          )
         )
       }
 

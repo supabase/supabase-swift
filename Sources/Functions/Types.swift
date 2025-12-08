@@ -1,5 +1,5 @@
 import Foundation
-import HTTPTypes
+import Shared
 
 /// An error type representing various errors that can occur while invoking functions.
 public enum FunctionsError: Error, LocalizedError {
@@ -13,7 +13,7 @@ public enum FunctionsError: Error, LocalizedError {
     switch self {
     case .relayError:
       "Relay Error invoking the Edge Function"
-    case let .httpError(code, _):
+    case .httpError(let code, _):
       "Edge Function returned a non-2xx status code: \(code)"
     }
   }
@@ -24,11 +24,11 @@ public struct FunctionInvokeOptions: Sendable {
   /// Method to use in the function invocation.
   let method: Method?
   /// Headers to be included in the function invocation.
-  let headers: HTTPFields
+  let headers: [String: String]
   /// Body data to be sent with the function invocation.
   let body: Data?
   /// The Region to invoke the function in.
-  let region: String?
+  let region: FunctionRegion?
   /// The query to be included in the function invocation.
   let query: [URLQueryItem]
 
@@ -40,54 +40,18 @@ public struct FunctionInvokeOptions: Sendable {
   ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
   ///   - region: The Region to invoke the function in.
   ///   - body: The body data to be sent with the function invocation. (Default: nil)
-  @_disfavoredOverload
   public init(
     method: Method? = nil,
     query: [URLQueryItem] = [],
     headers: [String: String] = [:],
-    region: String? = nil,
-    body: some Encodable
-  ) {
-    var defaultHeaders = HTTPFields()
-
-    switch body {
-    case let string as String:
-      defaultHeaders[.contentType] = "text/plain"
-      self.body = string.data(using: .utf8)
-    case let data as Data:
-      defaultHeaders[.contentType] = "application/octet-stream"
-      self.body = data
-    default:
-      // default, assume this is JSON
-      defaultHeaders[.contentType] = "application/json"
-      self.body = try? JSONEncoder().encode(body)
-    }
-
-    self.method = method
-    self.headers = defaultHeaders.merging(with: HTTPFields(headers))
-    self.region = region
-    self.query = query
-  }
-
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - query: The query to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  @_disfavoredOverload
-  public init(
-    method: Method? = nil,
-    query: [URLQueryItem] = [],
-    headers: [String: String] = [:],
-    region: String? = nil
+    region: FunctionRegion? = nil,
+    body: Data? = nil
   ) {
     self.method = method
-    self.headers = HTTPFields(headers)
+    self.headers = headers
     self.region = region
     self.query = query
-    body = nil
+    self.body = body
   }
 
   public enum Method: String, Sendable {
@@ -96,76 +60,49 @@ public struct FunctionInvokeOptions: Sendable {
     case put = "PUT"
     case patch = "PATCH"
     case delete = "DELETE"
-  }
 
-  static func httpMethod(_ method: Method?) -> HTTPTypes.HTTPRequest.Method? {
-    switch method {
-    case .get:
-      .get
-    case .post:
-      .post
-    case .put:
-      .put
-    case .patch:
-      .patch
-    case .delete:
-      .delete
-    case nil:
-      nil
+    var sharedMethod: Shared.HTTPMethod {
+      switch self {
+      case .get:
+        return .get
+      case .post:
+        return .post
+      case .put:
+        return .put
+      case .patch:
+        return .patch
+      case .delete:
+        return .delete
+      }
     }
   }
 }
 
-public enum FunctionRegion: String, Sendable {
-  case apNortheast1 = "ap-northeast-1"
-  case apNortheast2 = "ap-northeast-2"
-  case apSouth1 = "ap-south-1"
-  case apSoutheast1 = "ap-southeast-1"
-  case apSoutheast2 = "ap-southeast-2"
-  case caCentral1 = "ca-central-1"
-  case euCentral1 = "eu-central-1"
-  case euWest1 = "eu-west-1"
-  case euWest2 = "eu-west-2"
-  case euWest3 = "eu-west-3"
-  case saEast1 = "sa-east-1"
-  case usEast1 = "us-east-1"
-  case usWest1 = "us-west-1"
-  case usWest2 = "us-west-2"
-}
+public struct FunctionRegion: RawRepresentable, Sendable {
+  public let rawValue: String
 
-extension FunctionInvokeOptions {
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation. (Default: nil)
-  public init(
-    method: Method? = nil,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil,
-    body: some Encodable
-  ) {
-    self.init(
-      method: method,
-      headers: headers,
-      region: region?.rawValue,
-      body: body
-    )
+  public init(rawValue: String) {
+    self.rawValue = rawValue
   }
 
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  public init(
-    method: Method? = nil,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil
-  ) {
-    self.init(method: method, headers: headers, region: region?.rawValue)
+  public static let apNortheast1: FunctionRegion = "ap-northeast-1"
+  public static let apNortheast2: FunctionRegion = "ap-northeast-2"
+  public static let apSouth1: FunctionRegion = "ap-south-1"
+  public static let apSoutheast1: FunctionRegion = "ap-southeast-1"
+  public static let apSoutheast2: FunctionRegion = "ap-southeast-2"
+  public static let caCentral1: FunctionRegion = "ca-central-1"
+  public static let euCentral1: FunctionRegion = "eu-central-1"
+  public static let euWest1: FunctionRegion = "eu-west-1"
+  public static let euWest2: FunctionRegion = "eu-west-2"
+  public static let euWest3: FunctionRegion = "eu-west-3"
+  public static let saEast1: FunctionRegion = "sa-east-1"
+  public static let usEast1: FunctionRegion = "us-east-1"
+  public static let usWest1: FunctionRegion = "us-west-1"
+  public static let usWest2: FunctionRegion = "us-west-2"
+}
+
+extension FunctionRegion: ExpressibleByStringLiteral {
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
   }
 }

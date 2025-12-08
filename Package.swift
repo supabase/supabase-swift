@@ -77,7 +77,8 @@ let package = Package(
     .target(
       name: "Functions",
       dependencies: [
-        "Helpers"
+        "Helpers",
+        "Shared",
       ]
     ),
     .testTarget(
@@ -184,6 +185,7 @@ let package = Package(
         "PostgREST",
         "Realtime",
         "Storage",
+        "Shared",
       ]
     ),
     .testTarget(
@@ -202,6 +204,13 @@ let package = Package(
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Auth",
         "Mocker",
+      ]
+    ),
+    .target(name: "Shared"),
+    .testTarget(
+      name: "SharedTests",
+      dependencies: [
+        "Shared"
       ]
     ),
   ]
