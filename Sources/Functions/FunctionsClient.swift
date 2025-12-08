@@ -8,14 +8,8 @@ import Shared
 
 let version = Helpers.version
 
-/// An actor representing a client for invoking functions.
+/// A client for invoking functions.
 public final class FunctionsClient: Sendable {
-  /// Fetch handler used to make requests.
-  public typealias FetchHandler =
-    @Sendable (_ request: URLRequest) async throws -> (
-      Data, URLResponse
-    )
-
   /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
   ///
   /// See more: https://supabase.com/docs/guides/functions/limits
@@ -39,6 +33,10 @@ public final class FunctionsClient: Sendable {
     mutableState.headers
   }
 
+  /// Initializes a new instance of `FunctionsClient`.
+  ///
+  /// Default initializer used by `SupabaseClient` to initialize the `functions`
+  /// client passing a `HTTPClient` instance which is already configured with the `tokenProvider`.
   package init(
     url: URL,
     headers: [String: String],
@@ -64,7 +62,6 @@ public final class FunctionsClient: Sendable {
   ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
-  ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
@@ -77,6 +74,9 @@ public final class FunctionsClient: Sendable {
   /// Updates the authorization header.
   ///
   /// - Parameter token: The new JWT token sent in the authorization header.
+  ///
+  /// **Note:** When using `FunctionsClient` through `SupabaseClient`, the authorization header
+  /// is automatically set by the `SupabaseClient`.
   public func setAuth(token: String?) {
     mutableState.withValue {
       if let token {
