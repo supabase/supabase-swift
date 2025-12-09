@@ -46,6 +46,8 @@ final class FakeWebSocket: WebSocket {
       s.sentEvents.append(.close(code: code, reason: reason ?? ""))
 
       s.isClosed = true
+      s.closeCode = code
+      s.closeReason = reason
       if s.other?.isClosed == false {
         s.other?._trigger(.close(code: code ?? 1005, reason: reason ?? ""))
       }
