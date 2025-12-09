@@ -48,7 +48,7 @@ struct PresenceView: View {
     .navigationTitle("Presence")
     .gitHubSourceLink()
     .task {
-      try? await subscribe()
+      await subscribe()
     }
     .onDisappear {
       Task {
@@ -59,23 +59,25 @@ struct PresenceView: View {
     }
   }
 
-  func subscribe() async throws {
-    let channel = supabase.channel("presence-example")
+  func subscribe() async {
+    do {
+      let channel = supabase.channel("presence-example")
 
-    let presence = channel.presenceChange()
+      let presence = channel.presenceChange()
 
-    try await channel.subscribeWithError()
-    self.channel = channel
+      try await channel.subscribeWithError()
+      self.channel = channel
 
-    // Track current user
-    let userId = auth.currentUserID
-    try await channel.track([
-      "user_id": userId.uuidString,
-      "username": "User \(userId.uuidString.prefix(8))",
-    ])
+      // Track current user
+      let userId = auth.currentUserID
+      try await channel.track(
+        PresenceUser(
+          id: userId.uuidString,
+          username: "User \(userId.uuidString.prefix(8))"
+        )
+      )
 
-    // Listen to presence changes
-    Task {
+      // Listen to presence changes
       for await state in presence {
         // Convert presence state to array of users
         var users: [PresenceUser] = []
@@ -85,11 +87,13 @@ struct PresenceView: View {
         }
         onlineUsers = users
       }
+    } catch {
+      print("Error: \(error)")
     }
   }
 }
 
-struct PresenceUser: Identifiable, Decodable {
+struct PresenceUser: Identifiable, Codable {
   let id: String
   let username: String
 }

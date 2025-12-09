@@ -56,7 +56,7 @@ struct BroadcastView: View {
     .navigationTitle("Broadcast")
     .gitHubSourceLink()
     .task {
-      subscribe()
+      await subscribe()
     }
     .onDisappear {
       Task {
@@ -67,24 +67,24 @@ struct BroadcastView: View {
     }
   }
 
-  func subscribe() {
-    let channel = supabase.channel("broadcast-example")
+  func subscribe() async {
+    let channel = supabase.channel("broadcast-example") {
+      $0.broadcast.receiveOwnBroadcasts = true
+    }
 
-    Task {
-      do {
-        let broadcast = channel.broadcastStream(event: "message")
+    do {
+      let broadcast = channel.broadcastStream(event: "message")
 
-        try await channel.subscribeWithError()
-        self.channel = channel
+      try await channel.subscribeWithError()
+      self.channel = channel
 
-        for await message in broadcast {
-          if let payload = try message["payload"]?.decode(as: BroadcastMessage.self) {
-            messages.append(payload)
-          }
+      for await message in broadcast {
+        if let payload = try message["payload"]?.decode(as: BroadcastMessage.self) {
+          messages.append(payload)
         }
-      } catch {
-        print(error)
       }
+    } catch {
+      print(error)
     }
   }
 
