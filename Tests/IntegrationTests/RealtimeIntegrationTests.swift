@@ -5,18 +5,18 @@
 //  Created by AI Assistant on 09/01/25.
 //
 
-import Clocks
-import ConcurrencyExtras
-import CustomDump
-import Foundation
-import OSLog
-import Supabase
-import TestHelpers
-import XCTest
-
-@testable import Realtime
-
 #if !os(Android) && !os(Linux)
+  import Clocks
+  import ConcurrencyExtras
+  import CustomDump
+  import Foundation
+  import OSLog
+  import Supabase
+  import TestHelpers
+  import XCTest
+
+  @testable import Realtime
+
   @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   final class RealtimeIntegrationTests: XCTestCase {
     let testClock = TestClock<Duration>()
