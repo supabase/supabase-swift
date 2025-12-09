@@ -46,7 +46,7 @@ struct TodoRealtimeView: View {
     .gitHubSourceLink()
     .task {
       await loadInitialTodos()
-      subscribeToChanges()
+      await subscribeToChanges()
     }
     .onDisappear {
       Task {
@@ -73,57 +73,65 @@ struct TodoRealtimeView: View {
     }
   }
 
-  func subscribeToChanges() {
+  func subscribeToChanges() async {
     let channel = supabase.channel("live-todos")
 
-    Task {
-      let insertions = channel.postgresChange(
-        InsertAction.self,
-        schema: "public",
-        table: "todos"
-      )
+    let insertions = channel.postgresChange(
+      InsertAction.self,
+      schema: "public",
+      table: "todos"
+    )
 
-      let updates = channel.postgresChange(
-        UpdateAction.self,
-        schema: "public",
-        table: "todos"
-      )
+    let updates = channel.postgresChange(
+      UpdateAction.self,
+      schema: "public",
+      table: "todos"
+    )
 
-      let deletes = channel.postgresChange(
-        DeleteAction.self,
-        schema: "public",
-        table: "todos"
-      )
+    let deletes = channel.postgresChange(
+      DeleteAction.self,
+      schema: "public",
+      table: "todos"
+    )
 
+    do {
       try await channel.subscribeWithError()
-      self.channel = channel
+    } catch {
+      print("Error: \(error)")
+      return
+    }
+    self.channel = channel
 
-      // Handle insertions
-      Task {
-        for await insertion in insertions {
-          try todos.insert(insertion.decodeRecord(decoder: JSONDecoder()), at: 0)
-        }
+    // Handle insertions
+    async let insertionObservation: () = { @MainActor in
+      for await insertion in insertions {
+        try todos.insert(insertion.decodeRecord(decoder: PostgrestClient.Configuration.jsonDecoder), at: 0)
       }
+    }()
 
-      // Handle updates
-      Task {
-        for await update in updates {
-          let record = try update.decodeRecord(decoder: JSONDecoder()) as Todo
-          todos[id: record.id] = record
-        }
+    // Handle updates
+    async let updatesObservation: () = { @MainActor in
+      for await update in updates {
+        let record = try update.decodeRecord(decoder: PostgrestClient.Configuration.jsonDecoder) as Todo
+        todos[id: record.id] = record
       }
+    }()
 
-      // Handle deletes
-      Task {
-        for await delete in deletes {
-          await MainActor.run {
-            guard
-              let id = delete.oldRecord["id"].flatMap(\.stringValue).flatMap(UUID.init(uuidString:))
-            else { return }
-            todos.remove(id: id)
-          }
-        }
+    // Handle deletes
+    async let deletesObservation: () = { @MainActor in
+      for await delete in deletes {
+        guard
+          let id = delete.oldRecord["id"].flatMap(\.stringValue).flatMap(UUID.init(uuidString:))
+        else { return }
+        todos.remove(id: id)
       }
+    }()
+
+    do {
+      _ = try await (insertionObservation, updatesObservation, deletesObservation)
+    } catch {
+      print(error)
     }
   }
+
 }

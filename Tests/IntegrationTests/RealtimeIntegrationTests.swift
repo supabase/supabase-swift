@@ -556,52 +556,52 @@ import XCTest
     //        XCTAssertNotNil(error)
     //      }
     //    }
-//
-//    func testBroadcastWithoutSubscription() async throws {
-//      let channel1 = client.realtimeV2.channel("broadcast-no-sub")
-//      let channel2 = client2.realtimeV2.channel("broadcast-no-sub")
-//
-//      struct Message: Codable {
-//        let data: String
-//        let timestamp: Int
-//      }
-//
-//      let receivedMessagesTask = Task {
-//        await channel2.broadcastStream(event: "test").prefix(1).collect()
-//      }
-//
-//      // Subscribe the second client to receive broadcasts
-//      try await channel2.subscribeWithError()
-//
-//      // httpSend requires Authorization, sign in with a test user before broadcasting.
-//      try await client.auth.signUp(
-//        email: "test-\(UUID().uuidString)@example.com",
-//        password: "The.pass123"
-//      )
-//
-//      // Give time for token propagate from auth to realtime.
-//      await Task.megaYield()
-//
-//      // Send broadcast via HTTP from first client (without subscription)
-//      // This should fall back to HTTP and be received by the second client
-//      try await channel1.httpSend(
-//        event: "test",
-//        message: Message(data: "test-data", timestamp: 12345)
-//      )
-//
-//      // Verify the second client received the broadcast
-//      let receivedMessages = try await withTimeout(interval: 5) {
-//        await receivedMessagesTask.value
-//      }
-//
-//      XCTAssertEqual(receivedMessages.count, 1)
-//      let receivedPayload = receivedMessages[0]["payload"]?.objectValue
-//      XCTAssertEqual(receivedPayload?["data"]?.stringValue, "test-data")
-//      XCTAssertEqual(receivedPayload?["timestamp"]?.intValue, 12345)
-//
-//      await channel1.unsubscribe()
-//      await channel2.unsubscribe()
-//    }
+    //
+    //    func testBroadcastWithoutSubscription() async throws {
+    //      let channel1 = client.realtimeV2.channel("broadcast-no-sub")
+    //      let channel2 = client2.realtimeV2.channel("broadcast-no-sub")
+    //
+    //      struct Message: Codable {
+    //        let data: String
+    //        let timestamp: Int
+    //      }
+    //
+    //      let receivedMessagesTask = Task {
+    //        await channel2.broadcastStream(event: "test").prefix(1).collect()
+    //      }
+    //
+    //      // Subscribe the second client to receive broadcasts
+    //      try await channel2.subscribeWithError()
+    //
+    //      // httpSend requires Authorization, sign in with a test user before broadcasting.
+    //      try await client.auth.signUp(
+    //        email: "test-\(UUID().uuidString)@example.com",
+    //        password: "The.pass123"
+    //      )
+    //
+    //      // Give time for token propagate from auth to realtime.
+    //      await Task.megaYield()
+    //
+    //      // Send broadcast via HTTP from first client (without subscription)
+    //      // This should fall back to HTTP and be received by the second client
+    //      try await channel1.httpSend(
+    //        event: "test",
+    //        message: Message(data: "test-data", timestamp: 12345)
+    //      )
+    //
+    //      // Verify the second client received the broadcast
+    //      let receivedMessages = try await withTimeout(interval: 5) {
+    //        await receivedMessagesTask.value
+    //      }
+    //
+    //      XCTAssertEqual(receivedMessages.count, 1)
+    //      let receivedPayload = receivedMessages[0]["payload"]?.objectValue
+    //      XCTAssertEqual(receivedPayload?["data"]?.stringValue, "test-data")
+    //      XCTAssertEqual(receivedPayload?["timestamp"]?.intValue, 12345)
+    //
+    //      await channel1.unsubscribe()
+    //      await channel2.unsubscribe()
+    //    }
 
     // MARK: - Real Application Simulation
 
