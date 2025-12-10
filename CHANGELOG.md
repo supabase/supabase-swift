@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.38.1](https://github.com/supabase/supabase-swift/compare/v2.38.0...v2.38.1) (2025-12-10)
+
+
+### Bug Fixes
+
+* **realtime:** resolve race conditions and connection bugs ([#866](https://github.com/supabase/supabase-swift/issues/866)) ([1266707](https://github.com/supabase/supabase-swift/commit/1266707c2a0926851e499935b6fd89324272c0ff))
+
 ## [2.38.0](https://github.com/supabase/supabase-swift/compare/v2.37.0...v2.38.0) (2025-12-05)
 
 
