@@ -76,4 +76,80 @@ final class RealtimeMessageV2Tests: XCTestCase {
       joinRef: nil, ref: nil, topic: "topic", event: "unknown_event", payload: payloadWithNoStatus)
     XCTAssertNil(unknownEventMessage._eventType)
   }
+
+  func testMessageWithNilRefs() throws {
+    let message = RealtimeMessageV2(
+      joinRef: nil,
+      ref: nil,
+      topic: "phoenix",
+      event: "heartbeat",
+      payload: [:]
+    )
+    // Verify JSON encoding works
+    let encoded = try JSONEncoder().encode(message)
+    let decoded = try JSONDecoder().decode(RealtimeMessageV2.self, from: encoded)
+    XCTAssertNil(decoded.joinRef)
+    XCTAssertNil(decoded.ref)
+    XCTAssertEqual(decoded.topic, "phoenix")
+    XCTAssertEqual(decoded.event, "heartbeat")
+  }
+
+  func testHeartbeatMessageWithNilJoinRef() throws {
+    let message = RealtimeMessageV2(
+      joinRef: nil,  // Heartbeats don't have joinRef
+      ref: "123",
+      topic: "phoenix",
+      event: "heartbeat",
+      payload: [:]
+    )
+    let encoded = try JSONEncoder().encode(message)
+    let decoded = try JSONDecoder().decode(RealtimeMessageV2.self, from: encoded)
+    XCTAssertNil(decoded.joinRef)
+    XCTAssertEqual(decoded.ref, "123")
+  }
+
+  func testMessageJSONEncodingWithNilRefs() throws {
+    let message = RealtimeMessageV2(
+      joinRef: nil,
+      ref: nil,
+      topic: "test",
+      event: "custom",
+      payload: ["key": "value"]
+    )
+    let encoded = try JSONEncoder().encode(message)
+    let jsonString = String(data: encoded, encoding: .utf8)!
+    // Verify nil values are encoded as null in JSON
+    XCTAssertTrue(jsonString.contains("\"join_ref\":null") || !jsonString.contains("join_ref"))
+    XCTAssertTrue(jsonString.contains("\"ref\":null") || !jsonString.contains("ref"))
+  }
+
+  func testMessageWithBothRefAndJoinRef() throws {
+    let message = RealtimeMessageV2(
+      joinRef: "join-456",
+      ref: "ref-789",
+      topic: "room:lobby",
+      event: "join",
+      payload: ["user_id": "123"]
+    )
+    let encoded = try JSONEncoder().encode(message)
+    let decoded = try JSONDecoder().decode(RealtimeMessageV2.self, from: encoded)
+    XCTAssertEqual(decoded.joinRef, "join-456")
+    XCTAssertEqual(decoded.ref, "ref-789")
+    XCTAssertEqual(decoded.topic, "room:lobby")
+  }
+
+  func testMessageWithRefButNilJoinRef() throws {
+    let message = RealtimeMessageV2(
+      joinRef: nil,
+      ref: "ref-999",
+      topic: "room:lobby",
+      event: "leave",
+      payload: [:]
+    )
+    let encoded = try JSONEncoder().encode(message)
+    let decoded = try JSONDecoder().decode(RealtimeMessageV2.self, from: encoded)
+    XCTAssertNil(decoded.joinRef)
+    XCTAssertEqual(decoded.ref, "ref-999")
+    XCTAssertEqual(decoded.topic, "room:lobby")
+  }
 }
