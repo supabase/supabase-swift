@@ -1,7 +1,13 @@
 import Foundation
 
+/// A message sent over the Realtime WebSocket connection.
+///
+/// Both `joinRef` and `ref` are optional because certain messages like heartbeats
+/// don't require a join reference as they don't refer to a specific channel.
 public struct RealtimeMessageV2: Hashable, Codable, Sendable {
+  /// Optional join reference. Nil for messages like heartbeats that don't belong to a specific channel.
   public let joinRef: String?
+  /// Optional message reference. Can be nil for certain message types.
   public let ref: String?
   public let topic: String
   public let event: String
