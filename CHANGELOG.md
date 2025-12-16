@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.39.0](https://github.com/supabase/supabase-swift/compare/v2.38.1...v2.39.0) (2025-12-16)
+
+
+### Features
+
+* **auth:** add X (OAuth 2.0) provider ([#872](https://github.com/supabase/supabase-swift/issues/872)) ([61573b7](https://github.com/supabase/supabase-swift/commit/61573b79c62d91b763b3d45ba45203d92e6444b9))
+
 ## [2.38.1](https://github.com/supabase/supabase-swift/compare/v2.38.0...v2.38.1) (2025-12-10)
 
 
