@@ -306,7 +306,10 @@ public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {
   case slackOIDC = "slack_oidc"
   case spotify
   case twitch
+  /// Uses OAuth 1.0a
   case twitter
+  /// Uses OAuth 2.0
+  case x
   case workos
   case zoom
   case fly
