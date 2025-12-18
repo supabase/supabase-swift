@@ -85,9 +85,9 @@ public final class SupabaseClient: Sendable {
         $0.functions = FunctionsClient(
           url: functionsURL,
           headers: headers,
-          region: options.functions.region,
-          logger: options.global.logger,
-          fetch: fetchWithAuth
+          region: options.functions.region.map(FunctionRegion.init(rawValue:)),
+          session: options.global.session,
+          logger: options.global.logger
         )
       }
 

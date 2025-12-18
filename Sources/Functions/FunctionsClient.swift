@@ -1,6 +1,9 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPClient
 import HTTPTypes
+import Helpers
+import IssueReporting
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -8,14 +11,8 @@ import HTTPTypes
 
 let version = Helpers.version
 
-/// An actor representing a client for invoking functions.
+/// A client for invoking Supabase Edge Functions.
 public final class FunctionsClient: Sendable {
-  /// Fetch handler used to make requests.
-  public typealias FetchHandler =
-    @Sendable (_ request: URLRequest) async throws -> (
-      Data, URLResponse
-    )
-
   /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
   ///
   /// See more: https://supabase.com/docs/guides/functions/limits
@@ -25,16 +22,15 @@ public final class FunctionsClient: Sendable {
   let url: URL
 
   /// The Region to invoke the functions in.
-  let region: String?
+  let region: FunctionRegion?
 
   struct MutableState {
     /// Headers to be included in the requests.
     var headers = HTTPFields()
   }
 
-  private let http: any HTTPClientType
+  private let client: Client
   private let mutableState = LockIsolated(MutableState())
-  private let sessionConfiguration: URLSessionConfiguration
 
   var headers: HTTPFields {
     mutableState.headers
@@ -44,63 +40,31 @@ public final class FunctionsClient: Sendable {
   ///
   /// - Parameters:
   ///   - url: The base URL for the functions.
-  ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
-  ///   - region: The Region to invoke the functions in.
-  ///   - logger: SupabaseLogger instance to use.
-  ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  @_disfavoredOverload
-  public convenience init(
+  ///   - headers: Default headers to include with every request.
+  ///   - region: The default Region to invoke the functions in.
+  ///   - session: The URLSession to use for requests.
+  ///   - logger: A logger instance to use for request/response logging.
+  public init(
     url: URL,
     headers: [String: String] = [:],
-    region: String? = nil,
-    logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
-  ) {
-    self.init(
-      url: url,
-      headers: headers,
-      region: region,
-      logger: logger,
-      fetch: fetch,
-      sessionConfiguration: .default
-    )
-  }
-
-  convenience init(
-    url: URL,
-    headers: [String: String] = [:],
-    region: String? = nil,
-    logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    sessionConfiguration: URLSessionConfiguration
-  ) {
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    let http = HTTPClient(fetch: fetch, interceptors: interceptors)
-
-    self.init(
-      url: url,
-      headers: headers,
-      region: region,
-      http: http,
-      sessionConfiguration: sessionConfiguration
-    )
-  }
-
-  init(
-    url: URL,
-    headers: [String: String],
-    region: String?,
-    http: any HTTPClientType,
-    sessionConfiguration: URLSessionConfiguration = .default
+    region: FunctionRegion? = nil,
+    session: URLSession = .shared,
+    logger: (any SupabaseLogger)? = nil
   ) {
     self.url = url
     self.region = region
-    self.http = http
-    self.sessionConfiguration = sessionConfiguration
+
+    let configuration = session.configuration
+    configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
+    let configuredSession = URLSession(configuration: configuration)
+    let transport = URLSessionTransport(configuration: .init(session: configuredSession))
+
+    var middlewares: [any ClientMiddleware] = []
+    if let logger {
+      middlewares.append(SupabaseLoggerMiddleware(logger: logger))
+    }
+
+    client = Client(serverURL: url, transport: transport, middlewares: middlewares)
 
     mutableState.withValue {
       $0.headers = HTTPFields(headers)
@@ -108,24 +72,6 @@ public final class FunctionsClient: Sendable {
         $0.headers[.xClientInfo] = "functions-swift/\(version)"
       }
     }
-  }
-
-  /// Initializes a new instance of `FunctionsClient`.
-  ///
-  /// - Parameters:
-  ///   - url: The base URL for the functions.
-  ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
-  ///   - region: The Region to invoke the functions in.
-  ///   - logger: SupabaseLogger instance to use.
-  ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  public convenience init(
-    url: URL,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil,
-    logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) }
-  ) {
-    self.init(url: url, headers: headers, region: region?.rawValue, logger: logger, fetch: fetch)
   }
 
   /// Updates the authorization header.
@@ -141,172 +87,196 @@ public final class FunctionsClient: Sendable {
     }
   }
 
-  /// Invokes a function and decodes the response.
-  ///
-  /// - Parameters:
-  ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
-  ///   - decode: A closure to decode the response data and HTTPURLResponse into a `Response`
-  /// object.
-  /// - Returns: The decoded `Response` object.
-  public func invoke<Response>(
-    _ functionName: String,
-    options: FunctionInvokeOptions = .init(),
-    decode: (Data, HTTPURLResponse) throws -> Response
-  ) async throws -> Response {
-    let response = try await rawInvoke(
-      functionName: functionName, invokeOptions: options
-    )
-    return try decode(response.data, response.underlyingResponse)
-  }
+  /// Options for invoking a function.
+  public struct InvokeOptions {
+    /// The method to use in the function invocation.
+    public var method: HTTPTypes.HTTPRequest.Method = .post
+    /// The headers to include in the function invocation.
+    public var headers: HTTPFields = [:]
+    /// The query to include in the function invocation.
+    public var query: [URLQueryItem] = []
+    /// The region to invoke the function in.
+    public var region: FunctionRegion? = nil
 
-  /// Invokes a function and decodes the response as a specific type.
-  ///
-  /// - Parameters:
-  ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
-  ///   - decoder: The JSON decoder to use for decoding the response. (Default: `JSONDecoder()`)
-  /// - Returns: The decoded object of type `T`.
-  public func invoke<T: Decodable>(
-    _ functionName: String,
-    options: FunctionInvokeOptions = .init(),
-    decoder: JSONDecoder = JSONDecoder()
-  ) async throws -> T {
-    try await invoke(functionName, options: options) { data, _ in
-      try decoder.decode(T.self, from: data)
+    var _body: HTTPBody? = nil
+    var _multipartFormData: MultipartFormData? = nil
+
+    /// Appends a `HTTPBody` body to the request.
+    ///
+    /// - Parameter raw: The `HTTPBody` to append to the request.
+    public mutating func body(_ raw: HTTPBody) {
+      assert(_multipartFormData == nil, "body and multipartFormData cannot be used together")
+      self._body = raw
+    }
+
+    /// Appends an `Encodable` body to the request.
+    ///
+    /// - Parameters:
+    ///   - body: The `Encodable` to append to the request.
+    ///   - encoder: The `JSONEncoder` to use to encode the body.
+    public mutating func body(
+      encodable body: some Encodable,
+      encoder: JSONEncoder = JSONEncoder()
+    ) throws {
+      self.body(try HTTPBody(encoder.encode(body)))
+
+      if headers[.contentType] == nil {
+        headers[.contentType] = "application/json"
+      }
+    }
+
+    /// Appends a `MultipartFormData` body to the request.
+    ///
+    /// - Parameter multipartFormData: The `MultipartFormData` to append to the request.
+    public mutating func body(multipartFormData: MultipartFormData) {
+      assert(self._body == nil, "body and multipartFormData cannot be used together")
+      self._multipartFormData = multipartFormData
+    }
+
+    /// Appends a `String` body to the request.
+    ///
+    /// - Parameter string: The `String` to append to the request.
+    public mutating func body(string: String) {
+      self.body(HTTPBody(string))
+
+      if headers[.contentType] == nil {
+        headers[.contentType] = "text/plain"
+      }
+    }
+
+    /// Appends a `Data` body to the request.
+    ///
+    /// - Parameter data: The `Data` to append to the request.
+    public mutating func body(data: Data) {
+      self.body(HTTPBody(data))
+
+      if headers[.contentType] == nil {
+        headers[.contentType] = "application/octet-stream"
+      }
     }
   }
 
-  /// Invokes a function without expecting a response.
+  /// Invokes an Edge Function.
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  ///   - options: A closure that allows you to configure the invoke options.
+  /// - Throws: An error if the function invocation fails.
+  /// - Returns: A tuple containing the response and the response body.
+  @discardableResult
   public func invoke(
     _ functionName: String,
-    options: FunctionInvokeOptions = .init()
-  ) async throws {
-    try await invoke(functionName, options: options) { _, _ in () }
-  }
+    options optionsBuilder: (inout InvokeOptions) -> Void
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    var options = InvokeOptions()
+    optionsBuilder(&options)
 
-  private func rawInvoke(
-    functionName: String,
-    invokeOptions: FunctionInvokeOptions
-  ) async throws -> Helpers.HTTPResponse {
-    let request = buildRequest(functionName: functionName, options: invokeOptions)
-    let response = try await http.send(request)
+    let request = try buildRequest(
+      functionName: functionName, method: options.method, headers: options.headers,
+      query: options.query,
+      region: options.region)
 
-    guard 200..<300 ~= response.statusCode else {
-      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
+    let (response, responseBody) = try await {
+      if let multipartFormData = options._multipartFormData {
+        if options._body != nil {
+          reportIssue("multipartFormData and body cannot be used together")
+        }
+        return try await client.send(multipartFormData: multipartFormData, with: request)
+      } else {
+        return try await client.send(request, body: options._body)
+      }
+    }()
+
+    guard response.status.kind == .successful else {
+      throw FunctionsError.httpError(
+        code: response.status.code,
+        data: try await Data(collecting: responseBody ?? HTTPBody(), upTo: .max)
+      )
     }
 
-    let isRelayError = response.headers[.xRelayError] == "true"
-    if isRelayError {
+    if response.headerFields[HTTPField.Name("x-relay-error")!] == "true" {
       throw FunctionsError.relayError
     }
 
-    return response
+    return (response, responseBody)
   }
 
-  /// Invokes a function with streamed response.
-  ///
-  /// Function MUST return a `text/event-stream` content type for this method to work.
+  /// Invokes an Edge Function and decodes the response body into a `Decodable` type.
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - invokeOptions: Options for invoking the function.
-  /// - Returns: A stream of Data.
-  ///
-  /// - Warning: Experimental method.
-  /// - Note: This method doesn't use the same underlying `URLSession` as the remaining methods in the library.
-  public func _invokeWithStreamedResponse(
+  ///   - type: The type to decode the response body into.
+  ///   - decoder: The `JSONDecoder` to use to decode the response body (default: `JSONDecoder()`)
+  ///   - options: A closure that allows you to configure the invoke options.
+  /// - Throws: An error if the function invocation fails.
+  /// - Returns: The decoded response body.
+  public func invokeDecodable<T: Decodable>(
     _ functionName: String,
-    options invokeOptions: FunctionInvokeOptions = .init()
-  ) -> AsyncThrowingStream<Data, any Error> {
-    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-    let delegate = StreamResponseDelegate(continuation: continuation)
-
-    let session = URLSession(
-      configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
-
-    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
-
-    let task = session.dataTask(with: urlRequest)
-    task.resume()
-
-    continuation.onTermination = { _ in
-      task.cancel()
-
-      // Hold a strong reference to delegate until continuation terminates.
-      _ = delegate
-    }
-
-    return stream
+    as type: T.Type = T.self,
+    decoder: JSONDecoder = JSONDecoder(),
+    options optionsBuilder: (inout InvokeOptions) -> Void
+  ) async throws -> T {
+    let (_, responseBody) = try await invoke(functionName, options: optionsBuilder)
+    return try decoder.decode(
+      type,
+      from: try await Data(collecting: responseBody ?? HTTPBody(), upTo: .max)
+    )
   }
 
-  private func buildRequest(functionName: String, options: FunctionInvokeOptions)
-    -> Helpers.HTTPRequest
-  {
-    var query = options.query
-    var request = HTTPRequest(
-      url: url.appendingPathComponent(functionName),
-      method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
-      query: query,
-      headers: mutableState.headers.merging(with: options.headers),
-      body: options.body,
-      timeoutInterval: FunctionsClient.requestIdleTimeout
-    )
-
-    if let region = options.region ?? region {
-      request.headers[.xRegion] = region
-      query.appendOrUpdate(URLQueryItem(name: "forceFunctionRegion", value: region))
-      request.query = query
+  private func buildRequest(
+    functionName: String,
+    method: HTTPTypes.HTTPRequest.Method,
+    headers: HTTPFields,
+    query: [URLQueryItem],
+    region: FunctionRegion?
+  ) throws -> HTTPTypes.HTTPRequest {
+    var headerFields = HTTPTypes.HTTPFields()
+    let mergedHeaders = mutableState.headers.merging(with: headers)
+    for field in mergedHeaders {
+      headerFields[HTTPField.Name(field.name.rawName)!] = field.value
     }
+
+    var queryItems = query
+    if let region = (region ?? self.region)?.rawValue {
+      headerFields[HTTPField.Name("x-region")!] = region
+      queryItems.appendOrUpdate(URLQueryItem(name: "forceFunctionRegion", value: region))
+    }
+
+    var path = "/\(functionName)"
+    if !queryItems.isEmpty {
+      var components = URLComponents()
+      components.path = path
+      components.queryItems = queryItems
+      path = components.string ?? path
+    }
+
+    let request = HTTPTypes.HTTPRequest(
+      method: method,
+      scheme: nil,
+      authority: nil,
+      path: path,
+      headerFields: headerFields
+    )
 
     return request
   }
 }
 
-final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
-  let continuation: AsyncThrowingStream<Data, any Error>.Continuation
+private struct SupabaseLoggerMiddleware: ClientMiddleware {
+  let logger: any SupabaseLogger
 
-  init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
-    self.continuation = continuation
-  }
-
-  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
-    continuation.yield(data)
-  }
-
-  func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    continuation.finish(throwing: error)
-  }
-
-  func urlSession(
-    _: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse,
-    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
-  ) {
-    defer {
-      completionHandler(.allow)
-    }
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      continuation.finish(throwing: URLError(.badServerResponse))
-      return
-    }
-
-    guard 200..<300 ~= httpResponse.statusCode else {
-      let error = FunctionsError.httpError(
-        code: httpResponse.statusCode,
-        data: Data()
+  func intercept(
+    _ request: HTTPTypes.HTTPRequest,
+    body: HTTPBody?,
+    baseURL: URL,
+    next:
+      @Sendable (HTTPTypes.HTTPRequest, HTTPBody?, URL) async throws -> (
+        HTTPTypes.HTTPResponse, HTTPBody?
       )
-      continuation.finish(throwing: error)
-      return
-    }
-
-    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
-    if isRelayError {
-      continuation.finish(throwing: FunctionsError.relayError)
-    }
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    logger.verbose("⬆️ \(request.method.rawValue) \(request.path ?? "<nil>")")
+    let (response, responseBody) = try await next(request, body, baseURL)
+    logger.verbose("⬇️ \(response.status.code) \(response.status.reasonPhrase)")
+    return (response, responseBody)
   }
 }

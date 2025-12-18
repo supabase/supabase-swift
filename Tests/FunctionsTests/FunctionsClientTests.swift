@@ -1,9 +1,10 @@
 import ConcurrencyExtras
+import Foundation
+import HTTPClient
 import HTTPTypes
-import InlineSnapshotTesting
+import Helpers
 import Mocker
-import TestHelpers
-import XCTest
+import Testing
 
 @testable import Functions
 
@@ -11,392 +12,416 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class FunctionsClientTests: XCTestCase {
-  let url = URL(string: "http://localhost:5432/functions/v1")!
-  let apiKey =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+@Suite(.serialized)
+struct FunctionsClientTests {
+  private let baseURL = URL(string: "https://example.supabase.co/functions/v1")!
 
-  let sessionConfiguration: URLSessionConfiguration = {
-    let sessionConfiguration = URLSessionConfiguration.default
-    sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-    return sessionConfiguration
-  }()
-
-  var region: String?
-
-  lazy var sut = FunctionsClient(
-    url: url,
-    headers: [
-      "apikey": apiKey
-    ],
-    region: region,
-    fetch: {
-      [session = UncheckedSendable(URLSession(configuration: sessionConfiguration))] request in
-      try await session.value.data(for: request)
-    },
-    sessionConfiguration: sessionConfiguration
-  )
-
-  override func setUp() {
-    super.setUp()
-    //    isRecording = true
+  private func makeClient(
+    headers: [String: String] = [:],
+    region: FunctionRegion? = nil,
+    logger: (any SupabaseLogger)? = nil
+  ) -> FunctionsClient {
+    FunctionsClient(
+      url: baseURL,
+      headers: headers,
+      region: region,
+      session: .init(configuration: .mocking()),
+      logger: logger
+    )
   }
 
-  func testInit() async {
-    let client = FunctionsClient(
+  private func makeURL(functionName: String) -> URL {
+    baseURL.appendingPathComponent(functionName)
+  }
+
+  private func requestBody(_ request: URLRequest) -> Data? {
+    request.httpBody ?? request.httpBodyStream.map(readAllBytes(from:))
+  }
+
+  private func readAllBytes(from stream: InputStream) -> Data {
+    stream.open()
+    defer { stream.close() }
+
+    var data = Data()
+    var buffer = [UInt8](repeating: 0, count: 16 * 1024)
+    while stream.hasBytesAvailable {
+      let read = stream.read(&buffer, maxLength: buffer.count)
+      if read > 0 {
+        data.append(buffer, count: read)
+      } else {
+        break
+      }
+    }
+    return data
+  }
+
+  @Test
+  func requestIdleTimeout_is150Seconds() {
+    #expect(FunctionsClient.requestIdleTimeout == 150)
+  }
+
+  @Test
+  func init_setsDefaultXClientInfoHeaderIfMissing() async throws {
+    defer { Mocker.removeAll() }
+
+    let functionName = "hello-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
+
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+
+    var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedRequest.withValue { $0 = request }
+    })
+    mock.register()
+
+    let client = makeClient(headers: ["X-Foo": "bar"])
+    _ = try await client.invoke(functionName) { _ in }
+
+    let request = capturedRequest.value
+
+    #expect(request?.value(forHTTPHeaderField: "X-Foo") == "bar")
+
+    let xClientInfo = request?.value(forHTTPHeaderField: "X-Client-Info")
+    #expect(xClientInfo?.hasPrefix("functions-swift/") == true)
+  }
+
+  @Test
+  func init_doesNotOverrideProvidedXClientInfoHeader() async throws {
+    defer { Mocker.removeAll() }
+
+    let functionName = "hello-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
+
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+
+    var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedRequest.withValue { $0 = request }
+    })
+    mock.register()
+
+    let client = makeClient(headers: ["X-Client-Info": "my-client/1.0"])
+    _ = try await client.invoke(functionName) { _ in }
+
+    let request = capturedRequest.value
+
+    #expect(request?.value(forHTTPHeaderField: "X-Client-Info") == "my-client/1.0")
+  }
+
+  @Test
+  func setAuth_setsAndClearsAuthorizationHeader() async throws {
+    defer { Mocker.removeAll() }
+
+    let functionName = "hello-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
+
+    let captured = LockIsolated<[URLRequest]>([])
+
+    var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      captured.withValue { $0.append(request) }
+    })
+    mock.register()
+
+    let client = makeClient()
+    client.setAuth(token: "jwt-token")
+    _ = try await client.invoke(functionName) { _ in }
+
+    client.setAuth(token: nil)
+    _ = try await client.invoke(functionName) { _ in }
+
+    let requests = captured.value
+
+    #expect(requests.count == 2)
+    #expect(requests.first?.value(forHTTPHeaderField: "Authorization") == "Bearer jwt-token")
+    #expect(requests.last?.value(forHTTPHeaderField: "Authorization") == nil)
+  }
+
+  @Test
+  func invoke_buildsCorrectURLMethodHeadersQuery() async throws {
+    defer { Mocker.removeAll() }
+
+    let functionName = "hello-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
+
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+
+    var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.get: Data("ok".utf8)])
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedRequest.withValue { $0 = request }
+    })
+    mock.register()
+
+    let client = makeClient(headers: ["X-Default": "1", "X-Shared": "init"])
+
+    _ = try await client.invoke(functionName) { options in
+      options.method = .get
+      options.headers[HTTPField.Name("X-Shared")!] = "invoke"
+      options.headers[HTTPField.Name("X-Invoke")!] = "2"
+      options.query = [
+        .init(name: "foo", value: "bar"),
+        .init(name: "baz", value: "qux"),
+      ]
+    }
+
+    let request = capturedRequest.value
+
+    #expect(request?.httpMethod == "GET")
+    #expect(request?.value(forHTTPHeaderField: "X-Default") == "1")
+    #expect(request?.value(forHTTPHeaderField: "X-Shared") == "invoke")
+    #expect(request?.value(forHTTPHeaderField: "X-Invoke") == "2")
+
+    let requestURL = try #require(request?.url)
+    let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
+    #expect(components.path.hasSuffix("/functions/v1/\(functionName)"))
+    let query = Dictionary(
+      uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+    #expect(query["foo"] == "bar")
+    #expect(query["baz"] == "qux")
+  }
+
+  @Test
+  func invoke_withRegion_addsHeaderAndForceFunctionRegionQueryItem_andUpdatesExisting() async throws
+  {
+    defer { Mocker.removeAll() }
+
+    let functionName = "hello-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
+
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+
+    var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedRequest.withValue { $0 = request }
+    })
+    mock.register()
+
+    let client = makeClient()
+    _ = try await client.invoke(functionName) { options in
+      options.region = .usEast1
+      options.query = [
+        .init(name: "forceFunctionRegion", value: "should-be-overwritten"),
+        .init(name: "foo", value: "bar"),
+      ]
+    }
+
+    let request = capturedRequest.value
+
+    #expect(request?.value(forHTTPHeaderField: "x-region") == "us-east-1")
+
+    let requestURL = try #require(request?.url)
+    let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
+    let query = Dictionary(
+      uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+    #expect(query["foo"] == "bar")
+    #expect(query["forceFunctionRegion"] == "us-east-1")
+  }
+
+  @Test
+  func invoke_usesDefaultClientRegionWhenOptionsRegionIsNil() async throws {
+    defer { Mocker.removeAll() }
+
+    let functionName = "hello-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
+
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+
+    var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedRequest.withValue { $0 = request }
+    })
+    mock.register()
+
+    let client = makeClient(region: .euWest1)
+    _ = try await client.invoke(functionName) { _ in }
+
+    let request = capturedRequest.value
+
+    #expect(request?.value(forHTTPHeaderField: "x-region") == "eu-west-1")
+
+    let requestURL = try #require(request?.url)
+    let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
+    let query = Dictionary(
+      uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+    #expect(query["forceFunctionRegion"] == "eu-west-1")
+  }
+
+  @Test
+  func invoke_withStringBody_setsContentType_andSendsBody() async throws {
+    defer { Mocker.removeAll() }
+
+    let functionName = "hello-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
+
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+
+    var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedRequest.withValue { $0 = request }
+    })
+    mock.register()
+
+    let client = makeClient()
+    _ = try await client.invoke(functionName) { options in
+      options.body(string: "hello")
+    }
+
+    let request = capturedRequest.value
+
+    #expect(request?.value(forHTTPHeaderField: "Content-Type") == "text/plain")
+
+    let body = try #require(request.flatMap(requestBody(_:)))
+    #expect(String(decoding: body, as: UTF8.self) == "hello")
+  }
+
+  @Test
+  func invoke_non2xx_throwsHttpErrorWithResponseBody() async throws {
+    defer { Mocker.removeAll() }
+
+    let functionName = "hello-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
+
+    Mock(url: url, ignoreQuery: true, statusCode: 418, data: [.post: Data("nope".utf8)]).register()
+
+    let client = makeClient()
+
+    do {
+      _ = try await client.invoke(functionName) { _ in }
+      Issue.record("Expected FunctionsError.httpError")
+    } catch let error as FunctionsError {
+      switch error {
+      case .httpError(let code, let data):
+        #expect(code == 418)
+        #expect(String(decoding: data, as: UTF8.self) == "nope")
+      case .relayError:
+        Issue.record("Expected httpError, got relayError")
+      }
+    }
+  }
+
+  @Test
+  func invoke_successfulResponseWithRelayErrorHeader_throwsRelayError() async throws {
+    defer { Mocker.removeAll() }
+
+    let functionName = "hello-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
+
+    Mock(
       url: url,
-      headers: ["apikey": apiKey],
-      region: .saEast1
-    )
-    XCTAssertEqual(client.region, "sa-east-1")
-
-    XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
-    XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
-  }
-
-  func testInvoke() async throws {
-    Mock(
-      url: self.url.appendingPathComponent("hello_world"),
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "Content-Length: 19" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "X-Custom-Key: value" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"name\":\"Supabase\"}" \
-      	"http://localhost:5432/functions/v1/hello_world"
-      """#
-    }
-    .register()
-
-    try await sut.invoke(
-      "hello_world",
-      options: .init(headers: ["X-Custom-Key": "value"], body: ["name": "Supabase"])
-    )
-  }
-
-  func testInvokeReturningDecodable() async throws {
-    Mock(
-      url: url.appendingPathComponent("hello"),
-      statusCode: 200,
-      data: [
-        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/hello"
-      """#
-    }
-    .register()
-
-    struct Payload: Decodable {
-      var message: String
-      var status: String
-    }
-
-    let response = try await sut.invoke("hello") as Payload
-    XCTAssertEqual(response.message, "Hello, world!")
-    XCTAssertEqual(response.status, "ok")
-  }
-
-  func testInvokeWithCustomMethod() async throws {
-    Mock(
-      url: url.appendingPathComponent("hello-world"),
-      statusCode: 200,
-      data: [.delete: Data()]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request DELETE \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/hello-world"
-      """#
-    }
-    .register()
-
-    try await sut.invoke("hello-world", options: .init(method: .delete))
-  }
-
-  func testInvokeWithQuery() async throws {
-    Mock(
-      url: url.appendingPathComponent("hello-world"),
       ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .post: Data()
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/hello-world?key=value"
-      """#
-    }
-    .register()
-
-    try await sut.invoke(
-      "hello-world",
-      options: .init(
-        query: [URLQueryItem(name: "key", value: "value")]
-      )
-    )
-  }
-
-  func testInvokeWithRegionDefinedInClient() async throws {
-    region = FunctionRegion.caCentral1.rawValue
-
-    Mock(
-      url: url.appendingPathComponent("hello-world"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--header "x-region: ca-central-1" \
-      	"http://localhost:5432/functions/v1/hello-world?forceFunctionRegion=ca-central-1"
-      """#
-    }
-    .register()
-
-    try await sut.invoke("hello-world")
-  }
-
-  func testInvokeWithRegion() async throws {
-    Mock(
-      url: url.appendingPathComponent("hello-world"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--header "x-region: ca-central-1" \
-      	"http://localhost:5432/functions/v1/hello-world?forceFunctionRegion=ca-central-1"
-      """#
-    }
-    .register()
-
-    try await sut.invoke("hello-world", options: .init(region: .caCentral1))
-  }
-
-  func testInvokeWithoutRegion() async throws {
-    region = nil
-
-    Mock(
-      url: url.appendingPathComponent("hello-world"),
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/hello-world"
-      """#
-    }
-    .register()
-
-    try await sut.invoke("hello-world")
-  }
-
-  func testInvoke_shouldThrow_URLError_badServerResponse() async {
-    Mock(
-      url: url.appendingPathComponent("hello_world"),
       statusCode: 200,
       data: [.post: Data()],
-      requestError: URLError(.badServerResponse)
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/hello_world"
-      """#
-    }
-    .register()
+      additionalHeaders: ["x-relay-error": "true"]
+    ).register()
+
+    let client = makeClient()
 
     do {
-      try await sut.invoke("hello_world")
-      XCTFail("Invoke should fail.")
-    } catch let urlError as URLError {
-      XCTAssertEqual(urlError.code, .badServerResponse)
-    } catch {
-      XCTFail("Unexpected error thrown \(error)")
-    }
-  }
-
-  func testInvoke_shouldThrow_FunctionsError_httpError() async {
-    Mock(
-      url: url.appendingPathComponent("hello_world"),
-      statusCode: 300,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/hello_world"
-      """#
-    }
-    .register()
-
-    do {
-      try await sut.invoke("hello_world")
-      XCTFail("Invoke should fail.")
-    } catch let FunctionsError.httpError(code, _) {
-      XCTAssertEqual(code, 300)
-    } catch {
-      XCTFail("Unexpected error thrown \(error)")
-    }
-  }
-
-  func testInvoke_shouldThrow_FunctionsError_relayError() async {
-    Mock(
-      url: url.appendingPathComponent("hello_world"),
-      statusCode: 200,
-      data: [.post: Data()],
-      additionalHeaders: [
-        "x-relay-error": "true"
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/hello_world"
-      """#
-    }
-    .register()
-
-    do {
-      try await sut.invoke("hello_world")
-      XCTFail("Invoke should fail.")
-    } catch FunctionsError.relayError {
-    } catch {
-      XCTFail("Unexpected error thrown \(error)")
-    }
-  }
-
-  func test_setAuth() {
-    sut.setAuth(token: "access.token")
-    XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
-
-    sut.setAuth(token: nil)
-    XCTAssertNil(sut.headers[.authorization])
-  }
-
-  func testInvokeWithStreamedResponse() async throws {
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 200,
-      data: [.post: Data("hello world".utf8)]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/stream"
-      """#
-    }
-    .register()
-
-    let stream = sut._invokeWithStreamedResponse("stream")
-
-    for try await value in stream {
-      XCTAssertEqual(String(decoding: value, as: UTF8.self), "hello world")
-    }
-  }
-
-  func testInvokeWithStreamedResponseHTTPError() async throws {
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 300,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/stream"
-      """#
-    }
-    .register()
-
-    let stream = sut._invokeWithStreamedResponse("stream")
-
-    do {
-      for try await _ in stream {
-        XCTFail("should throw error")
+      _ = try await client.invoke(functionName) { _ in }
+      Issue.record("Expected FunctionsError.relayError")
+    } catch let error as FunctionsError {
+      switch error {
+      case .relayError:
+        break
+      case .httpError:
+        Issue.record("Expected relayError, got httpError")
       }
-    } catch let FunctionsError.httpError(code, _) {
-      XCTAssertEqual(code, 300)
     }
   }
 
-  func testInvokeWithStreamedResponseRelayError() async throws {
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 200,
-      data: [.post: Data()],
-      additionalHeaders: [
-        "x-relay-error": "true"
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/stream"
-      """#
-    }
-    .register()
+  @Test
+  func invokeDecodable_decodesJSONResponse() async throws {
+    defer { Mocker.removeAll() }
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let functionName = "hello-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
 
-    do {
-      for try await _ in stream {
-        XCTFail("should throw error")
-      }
-    } catch FunctionsError.relayError {
+    Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.get: Data(#"{"name":"Ada"}"#.utf8)])
+      .register()
+
+    struct Person: Decodable, Equatable { let name: String }
+
+    let client = makeClient()
+    let person = try await client.invokeDecodable(functionName, as: Person.self) { options in
+      options.method = .get
     }
+
+    #expect(person == Person(name: "Ada"))
+  }
+
+  @Test
+  func invoke_withMultipartFormData_usesMultipartBranchAndSetsContentType() async throws {
+    defer { Mocker.removeAll() }
+
+    let functionName = "upload-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
+
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+
+    var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedRequest.withValue { $0 = request }
+    })
+    mock.register()
+
+    let client = makeClient()
+    _ = try await client.invoke(functionName) { options in
+      let form = MultipartFormData(boundary: "test-boundary")
+      form.append(Data("hello".utf8), withName: "file", fileName: "a.txt", mimeType: "text/plain")
+      options.body(multipartFormData: form)
+    }
+
+    let request = capturedRequest.value
+
+    let contentType = request?.value(forHTTPHeaderField: "Content-Type")
+    #expect(contentType?.contains("multipart/form-data") == true)
+    #expect(contentType?.contains("boundary=test-boundary") == true)
+  }
+
+  @Test
+  func loggerMiddleware_emitsVerboseLogs() async throws {
+    defer { Mocker.removeAll() }
+
+    let functionName = "hello-\(UUID().uuidString)"
+    let url = makeURL(functionName: functionName)
+
+    Mock(url: url, ignoreQuery: true, statusCode: 204, data: [.get: Data()]).register()
+
+    let logger = CapturingLogger()
+    let client = makeClient(logger: logger)
+
+    _ = try await client.invoke(functionName) { options in
+      options.method = .get
+    }
+
+    let messages = logger.messages
+    #expect(messages.contains(where: { $0.contains("⬆️") }))
+    #expect(messages.contains(where: { $0.contains("⬇️") }))
+  }
+}
+
+extension URLSessionConfiguration {
+  fileprivate static func mocking() -> URLSessionConfiguration {
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [MockingURLProtocol.self]
+    return config
+  }
+}
+
+private final class CapturingLogger: SupabaseLogger, @unchecked Sendable {
+  private let lock = NSLock()
+  private var _messages: [String] = []
+
+  var messages: [String] {
+    lock.lock()
+    defer { lock.unlock() }
+    return _messages
+  }
+
+  func log(message: SupabaseLogMessage) {
+    lock.lock()
+    _messages.append(message.message)
+    lock.unlock()
   }
 }
