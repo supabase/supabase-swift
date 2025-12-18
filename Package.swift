@@ -154,7 +154,8 @@ let package = Package(
     .target(
       name: "Storage",
       dependencies: [
-        "Helpers"
+        "Helpers",
+        .product(name: "HTTPClient", package: "swift-http-client"),
       ]
     ),
     .testTarget(

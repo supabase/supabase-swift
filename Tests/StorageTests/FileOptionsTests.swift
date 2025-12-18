@@ -1,18 +1,20 @@
-import XCTest
+import Storage
+import Testing
 
-@testable import Storage
-
-final class FileOptionsTests: XCTestCase {
-  func testDefaultInitialization() {
+@Suite
+struct FileOptionsTests {
+  @Test
+  func defaultInitialization() {
     let options = FileOptions()
 
-    XCTAssertEqual(options.cacheControl, "3600")
-    XCTAssertNil(options.contentType)
-    XCTAssertFalse(options.upsert)
-    XCTAssertNil(options.metadata)
+    #expect(options.cacheControl == "3600")
+    #expect(options.contentType == nil)
+    #expect(options.upsert == false)
+    #expect(options.metadata == nil)
   }
 
-  func testCustomInitialization() {
+  @Test
+  func customInitialization() {
     let metadata: [String: AnyJSON] = ["key": .string("value")]
     let options = FileOptions(
       cacheControl: "7200",
@@ -21,9 +23,9 @@ final class FileOptionsTests: XCTestCase {
       metadata: metadata
     )
 
-    XCTAssertEqual(options.cacheControl, "7200")
-    XCTAssertEqual(options.contentType, "image/jpeg")
-    XCTAssertTrue(options.upsert)
-    XCTAssertEqual(options.metadata?["key"], .string("value"))
+    #expect(options.cacheControl == "7200")
+    #expect(options.contentType == "image/jpeg")
+    #expect(options.upsert == true)
+    #expect(options.metadata?["key"] == .string("value"))
   }
 }

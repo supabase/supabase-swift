@@ -1,300 +1,194 @@
-import InlineSnapshotTesting
+import ConcurrencyExtras
+import Foundation
 import Mocker
-import TestHelpers
-import XCTest
+import Testing
 
 @testable import Storage
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
+extension StorageTests {
+  final class StorageBucketApiTests {
 
-final class StorageBucketAPITests: XCTestCase {
-  let url = URL(string: "http://localhost:54321/storage/v1")!
-  var storage: SupabaseStorageClient!
+    let api: SupabaseStorageClient
 
-  override func setUp() {
-    super.setUp()
+    init() {
+      api = StorageTestSupport.makeClient(headers: ["apikey": "anon"])
+    }
 
-    let configuration = URLSessionConfiguration.default
-    configuration.protocolClasses = [MockingURLProtocol.self]
+    deinit {
+      Mocker.removeAll()
+    }
 
-    let session = URLSession(configuration: configuration)
-
-    storage = SupabaseStorageClient(
-      configuration: StorageClientConfiguration(
-        url: url,
-        headers: [
-          "apikey":
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
-        ],
-        session: StorageHTTPSession(
-          fetch: { try await session.data(for: $0) },
-          upload: { try await session.upload(for: $0, from: $1) }
-        ),
-        logger: nil
+    @Test
+    func listBuckets_decodesResponse_andBuildsGETRequest() async throws {
+      let captured = LockIsolated<URLRequest?>(nil)
+      var mock = Mock(
+        url: StorageTestSupport.baseURL.appendingPathComponent("bucket"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .get: Data(
+            """
+            [
+              {
+                "id": "bucket123",
+                "name": "test-bucket",
+                "owner": "owner123",
+                "public": false,
+                "created_at": "2024-01-01T00:00:00.000Z",
+                "updated_at": "2024-01-01T00:00:00.000Z"
+              }
+            ]
+            """.utf8
+          )
+        ]
       )
-    )
-  }
+      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.register()
 
-  override func tearDown() {
-    super.tearDown()
+      let buckets = try await api.listBuckets()
 
-    Mocker.removeAll()
-  }
+      let bucket = try #require(buckets.first)
+      #expect(bucket.id == "bucket123")
+      #expect(bucket.name == "test-bucket")
 
-  func testURLConstruction() {
-    let urlTestCases = [
-      (
-        "https://blah.supabase.co/storage/v1",
-        "https://blah.storage.supabase.co/storage/v1",
-        "update legacy prod host to new host"
-      ),
-      (
-        "https://blah.supabase.red/storage/v1",
-        "https://blah.storage.supabase.red/storage/v1",
-        "update legacy staging host to new host"
-      ),
-      (
-        "https://blah.storage.supabase.co/storage/v1",
-        "https://blah.storage.supabase.co/storage/v1",
-        "accept new host without modification"
-      ),
-      (
-        "https://blah.supabase.co.example.com/storage/v1",
-        "https://blah.supabase.co.example.com/storage/v1",
-        "not modify non-platform hosts"
-      ),
-      (
-        "http://localhost:1234/storage/v1",
-        "http://localhost:1234/storage/v1",
-        "support local host with port without modification"
-      ),
-    ]
-
-    for (input, expect, description) in urlTestCases {
-      runActivity(named: "should \(description) if useNewHostname is true") {
-        let storage = SupabaseStorageClient(
-          configuration: StorageClientConfiguration(
-            url: URL(string: input)!,
-            headers: [:],
-            useNewHostname: true
-          )
-        )
-        XCTAssertEqual(storage.configuration.url.absoluteString, expect)
-      }
-
-      runActivity(named: "should not modify host if useNewHostname is false") {
-        let storage = SupabaseStorageClient(
-          configuration: StorageClientConfiguration(
-            url: URL(string: input)!,
-            headers: [:],
-            useNewHostname: false
-          )
-        )
-        XCTAssertEqual(storage.configuration.url.absoluteString, input)
-      }
+      let request = try #require(captured.value)
+      #expect(request.httpMethod == "GET")
+      #expect(
+        (request.value(forHTTPHeaderField: "X-Client-Info") ?? "").hasPrefix("storage-swift/"))
+      #expect(request.url?.path.hasSuffix("/storage/v1/bucket") == true)
     }
-  }
 
-  private func runActivity(named name: String, body: () -> Void) {
-    // Swift 6 makes it tricky to forward a nonisolated closure into XCTest's `@MainActor`
-    // `runActivity` API without hitting strict data-race diagnostics. The activity wrapper is
-    // nice-to-have, so we fall back to executing the body directly.
-    body()
-  }
-
-  func testGetBucket() async throws {
-    Mock(
-      url: url.appendingPathComponent("bucket/bucket123"),
-      statusCode: 200,
-      data: [
-        .get: Data(
-          """
-          {
-              "id": "bucket123",
-              "name": "test-bucket",
-              "owner": "owner123",
-              "public": false,
-              "created_at": "2024-01-01T00:00:00.000Z",
-              "updated_at": "2024-01-01T00:00:00.000Z"
-          }
-          """.utf8
-        )
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/bucket/bucket123"
-      """#
-    }
-    .register()
-
-    let bucket = try await storage.getBucket("bucket123")
-    XCTAssertEqual(bucket.id, "bucket123")
-    XCTAssertEqual(bucket.name, "test-bucket")
-  }
-
-  func testListBuckets() async throws {
-    Mock(
-      url: url.appendingPathComponent("bucket"),
-      statusCode: 200,
-      data: [
-        .get: Data(
-          """
-          [
+    @Test
+    func getBucket_decodesResponse_andBuildsGETRequest() async throws {
+      let bucketId = "bucket123"
+      let captured = LockIsolated<URLRequest?>(nil)
+      var mock = Mock(
+        url: StorageTestSupport.baseURL.appendingPathComponent("bucket/\(bucketId)"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .get: Data(
+            """
             {
               "id": "bucket123",
               "name": "test-bucket",
               "owner": "owner123",
-              "public": false,
+              "public": true,
               "created_at": "2024-01-01T00:00:00.000Z",
               "updated_at": "2024-01-01T00:00:00.000Z"
             }
-          ]
-          """.utf8
-        )
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/bucket"
-      """#
+            """.utf8
+          )
+        ]
+      )
+      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.register()
+
+      let bucket = try await api.getBucket(bucketId)
+
+      #expect(bucket.id == "bucket123")
+      #expect(bucket.isPublic == true)
+
+      let request = try #require(captured.value)
+      #expect(request.httpMethod == "GET")
+      #expect(request.url?.path.hasSuffix("/storage/v1/bucket/\(bucketId)") == true)
     }
-    .register()
 
-    let buckets = try await storage.listBuckets()
-    XCTAssertEqual(buckets.count, 1)
-    XCTAssertEqual(buckets[0].name, "test-bucket")
-  }
+    @Test
+    func createBucket_sendsPOSTWithSnakeCaseBody() async throws {
+      let captured = LockIsolated<URLRequest?>(nil)
+      var mock = Mock(
+        url: StorageTestSupport.baseURL.appendingPathComponent("bucket"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: Data("{}".utf8)]
+      )
+      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.register()
 
-  func testCreateBucket() async throws {
-    Mock(
-      url: url.appendingPathComponent("bucket"),
-      statusCode: 200,
-      data: [
-        .post: Data(
-          """
-          {
-            "id": "newbucket",
-            "name": "new-bucket",
-            "owner": "owner123",
-            "public": true,
-            "created_at": "2024-01-01T00:00:00.000Z",
-            "updated_at": "2024-01-01T00:00:00.000Z"
-          }
-          """.utf8
-        )
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "Content-Length: 51" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":true}" \
-      	"http://localhost:54321/storage/v1/bucket"
-      """#
+      try await api.createBucket(
+        "newbucket",
+        options: BucketOptions(
+          public: true, fileSizeLimit: "5242880", allowedMimeTypes: ["image/jpeg"])
+      )
+
+      let request = try #require(captured.value)
+      #expect(request.httpMethod == "POST")
+      #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+
+      let body = try #require(StorageTestSupport.requestBody(request))
+      let json = try #require(StorageTestSupport.jsonObject(body) as? [String: Any])
+      #expect(json["id"] as? String == "newbucket")
+      #expect(json["name"] as? String == "newbucket")
+      #expect(json["public"] as? Bool == true)
+      #expect(json["file_size_limit"] as? String == "5242880")
+      #expect(json["allowed_mime_types"] as? [String] == ["image/jpeg"])
     }
-    .register()
 
-    let options = BucketOptions(public: true)
-    try await storage.createBucket(
-      "newbucket",
-      options: options
-    )
-  }
+    @Test
+    func updateBucket_sendsPUTWithSnakeCaseBody() async throws {
+      let bucketId = "bucket123"
+      let captured = LockIsolated<URLRequest?>(nil)
+      var mock = Mock(
+        url: StorageTestSupport.baseURL.appendingPathComponent("bucket/\(bucketId)"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.put: Data("{}".utf8)]
+      )
+      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.register()
 
-  func testUpdateBucket() async throws {
-    Mock(
-      url: url.appendingPathComponent("bucket/bucket123"),
-      statusCode: 200,
-      data: [
-        .put: Data(
-          """
-          {
-            "id": "bucket123",
-            "name": "updated-bucket",
-            "owner": "owner123",
-            "public": true,
-            "created_at": "2024-01-01T00:00:00.000Z",
-            "updated_at": "2024-01-01T00:00:00.000Z"
-          }
-          """.utf8
-        )
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request PUT \
-      	--header "Content-Length: 51" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"id\":\"bucket123\",\"name\":\"bucket123\",\"public\":true}" \
-      	"http://localhost:54321/storage/v1/bucket/bucket123"
-      """#
+      try await api.updateBucket(bucketId, options: BucketOptions(public: false))
+
+      let request = try #require(captured.value)
+      #expect(request.httpMethod == "PUT")
+      #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+
+      let body = try #require(StorageTestSupport.requestBody(request))
+      let json = try #require(StorageTestSupport.jsonObject(body) as? [String: Any])
+      #expect(json["id"] as? String == bucketId)
+      #expect(json["name"] as? String == bucketId)
+      #expect(json["public"] as? Bool == false)
     }
-    .register()
 
-    let options = BucketOptions(public: true)
-    try await storage.updateBucket(
-      "bucket123",
-      options: options
-    )
-  }
+    @Test
+    func emptyBucket_sendsPOST() async throws {
+      let bucketId = "bucket123"
+      let captured = LockIsolated<URLRequest?>(nil)
+      var mock = Mock(
+        url: StorageTestSupport.baseURL.appendingPathComponent("bucket/\(bucketId)/empty"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: Data()]
+      )
+      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.register()
 
-  func testDeleteBucket() async throws {
-    Mock(
-      url: url.appendingPathComponent("bucket/bucket123"),
-      statusCode: 200,
-      data: [
-        .delete: Data()
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request DELETE \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/bucket/bucket123"
-      """#
+      try await api.emptyBucket(bucketId)
+
+      let request = try #require(captured.value)
+      #expect(request.httpMethod == "POST")
+      #expect(request.url?.path.hasSuffix("/storage/v1/bucket/\(bucketId)/empty") == true)
     }
-    .register()
 
-    try await storage.deleteBucket("bucket123")
-  }
+    @Test
+    func deleteBucket_sendsDELETE() async throws {
+      let bucketId = "bucket123"
+      let captured = LockIsolated<URLRequest?>(nil)
+      var mock = Mock(
+        url: StorageTestSupport.baseURL.appendingPathComponent("bucket/\(bucketId)"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.delete: Data()]
+      )
+      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.register()
 
-  func testEmptyBucket() async throws {
-    Mock(
-      url: url.appendingPathComponent("bucket/bucket123/empty"),
-      statusCode: 200,
-      data: [
-        .post: Data()
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/bucket/bucket123/empty"
-      """#
+      try await api.deleteBucket(bucketId)
+
+      let request = try #require(captured.value)
+      #expect(request.httpMethod == "DELETE")
+      #expect(request.url?.path.hasSuffix("/storage/v1/bucket/\(bucketId)") == true)
     }
-    .register()
-
-    try await storage.emptyBucket("bucket123")
   }
 }

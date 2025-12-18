@@ -1,4 +1,5 @@
 import Foundation
+import HTTPClient
 import HTTPTypes
 
 #if canImport(FoundationNetworking)
@@ -102,15 +103,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let cleanPath = _removeEmptyFolders(path)
     let _path = _getFinalPath(cleanPath)
 
-    let response = try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/\(_path)"),
-        method: method,
-        query: [],
-        formData: formData,
-        options: options,
-        headers: headers
-      )
+    if headers[.cacheControl] == nil {
+      headers[.cacheControl] = "max-age=\(options.cacheControl)"
+    }
+
+    let response = try await executeMultipart(
+      url: configuration.url.appendingPathComponent("object/\(_path)"),
+      method: method,
+      headers: headers,
+      multipartFormData: formData
     )
     .decoded(as: UploadResponse.self, decoder: configuration.decoder)
 
@@ -208,17 +209,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: DestinationOptions? = nil
   ) async throws {
     try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/move"),
-        method: .post,
-        body: configuration.encoder.encode(
-          [
-            "bucketId": bucketId,
-            "sourceKey": source,
-            "destinationKey": destination,
-            "destinationBucket": options?.destinationBucket,
-          ]
-        )
+      url: configuration.url.appendingPathComponent("object/move"),
+      method: .post,
+      body: configuration.encoder.encode(
+        [
+          "bucketId": bucketId,
+          "sourceKey": source,
+          "destinationKey": destination,
+          "destinationBucket": options?.destinationBucket,
+        ]
       )
     )
   }
@@ -239,21 +238,18 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     }
 
     return try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/copy"),
-        method: .post,
-        body: configuration.encoder.encode(
-          [
-            "bucketId": bucketId,
-            "sourceKey": source,
-            "destinationKey": destination,
-            "destinationBucket": options?.destinationBucket,
-          ]
-        )
+      url: configuration.url.appendingPathComponent("object/copy"),
+      method: .post,
+      body: configuration.encoder.encode(
+        [
+          "bucketId": bucketId,
+          "sourceKey": source,
+          "destinationKey": destination,
+          "destinationBucket": options?.destinationBucket,
+        ]
       )
     )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
-    .Key
+    .decoded(as: UploadResponse.self, decoder: configuration.decoder).Key
   }
 
   /// Creates a signed URL. Use a signed URL to share a file for a fixed amount of time.
@@ -276,13 +272,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let encoder = JSONEncoder.unconfigured()
 
     let response = try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/sign/\(bucketId)/\(path)"),
-        method: .post,
-        body: encoder.encode(
-          Body(expiresIn: expiresIn, transform: transform)
-        )
-      )
+      url: configuration.url.appendingPathComponent("object/sign/\(bucketId)/\(path)"),
+      method: .post,
+      body: encoder.encode(Body(expiresIn: expiresIn, transform: transform))
     )
     .decoded(as: SignedURLResponse.self, decoder: configuration.decoder)
 
@@ -327,13 +319,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let encoder = JSONEncoder.unconfigured()
 
     let response = try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/sign/\(bucketId)"),
-        method: .post,
-        body: encoder.encode(
-          Params(expiresIn: expiresIn, paths: paths)
-        )
-      )
+      url: configuration.url.appendingPathComponent("object/sign/\(bucketId)"),
+      method: .post,
+      body: encoder.encode(Params(expiresIn: expiresIn, paths: paths))
     )
     .decoded(as: [SignedURLResponse].self, decoder: configuration.decoder)
 
@@ -385,13 +373,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   @discardableResult
   public func remove(paths: [String]) async throws -> [FileObject] {
     try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/\(bucketId)"),
-        method: .delete,
-        body: configuration.encoder.encode(["prefixes": paths])
-      )
-    )
-    .decoded(decoder: configuration.decoder)
+      url: configuration.url.appendingPathComponent("object/\(bucketId)"),
+      method: .delete,
+      body: configuration.encoder.encode(["prefixes": paths])
+    ).decoded(decoder: configuration.decoder)
   }
 
   /// Lists all the files within a bucket.
@@ -408,13 +393,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options.prefix = path ?? ""
 
     return try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/list/\(bucketId)"),
-        method: .post,
-        body: encoder.encode(options)
-      )
-    )
-    .decoded(decoder: configuration.decoder)
+      url: configuration.url.appendingPathComponent("object/list/\(bucketId)"),
+      method: .post,
+      body: encoder.encode(options)
+    ).decoded(decoder: configuration.decoder)
   }
 
   /// Downloads a file from a private bucket. For public buckets, make a request to the URL returned
@@ -432,14 +414,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let _path = _getFinalPath(path)
 
     return try await execute(
-      HTTPRequest(
-        url: configuration.url
-          .appendingPathComponent("\(renderPath)/\(_path)"),
-        method: .get,
-        query: queryItems
-      )
-    )
-    .data
+      url: configuration.url.appendingPathComponent("\(renderPath)/\(_path)"),
+      method: .get,
+      query: queryItems
+    ).data
   }
 
   /// Retrieves the details of an existing file.
@@ -447,22 +425,17 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let _path = _getFinalPath(path)
 
     return try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/info/\(_path)"),
-        method: .get
-      )
-    )
-    .decoded(decoder: configuration.decoder)
+      url: configuration.url.appendingPathComponent("object/info/\(_path)"),
+      method: .get
+    ).decoded(decoder: configuration.decoder)
   }
 
   /// Checks the existence of file.
   public func exists(path: String) async throws -> Bool {
     do {
       try await execute(
-        HTTPRequest(
-          url: configuration.url.appendingPathComponent("object/\(bucketId)/\(path)"),
-          method: .head
-        )
+        url: configuration.url.appendingPathComponent("object/\(bucketId)/\(path)"),
+        method: .head
       )
       return true
     } catch {
@@ -470,8 +443,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
       if let error = error as? StorageError {
         statusCode = error.statusCode.flatMap(Int.init)
-      } else if let error = error as? HTTPError {
-        statusCode = error.response.statusCode
+      } else if let error = error as? StorageHTTPError {
+        statusCode = error.response.status.code
       }
 
       if let statusCode, [400, 404].contains(statusCode) {
@@ -554,13 +527,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     }
 
     let response = try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
-        method: .post,
-        headers: headers
-      )
-    )
-    .decoded(as: Response.self, decoder: configuration.decoder)
+      url: configuration.url.appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
+      method: .post,
+      headers: headers
+    ).decoded(as: Response.self, decoder: configuration.decoder)
 
     let signedURL = try makeSignedURL(response.url, download: nil)
 
@@ -650,19 +620,20 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let Key: String
     }
 
-    let fullPath = try await execute(
-      HTTPRequest(
-        url: configuration.url
-          .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
-        method: .put,
-        query: [URLQueryItem(name: "token", value: token)],
-        formData: formData,
-        options: options,
-        headers: headers
-      )
+    let fullPath = try await executeMultipart(
+      url: configuration.url.appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
+      method: HTTPTypes.HTTPRequest.Method.put,
+      query: [URLQueryItem(name: "token", value: token)],
+      headers: {
+        var headers = headers
+        if headers[.cacheControl] == nil {
+          headers[.cacheControl] = "max-age=\(options.cacheControl)"
+        }
+        return headers
+      }(),
+      multipartFormData: formData
     )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
-    .Key
+    .decoded(as: UploadResponse.self, decoder: configuration.decoder).Key
 
     return SignedURLUploadResponse(path: path, fullPath: fullPath)
   }

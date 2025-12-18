@@ -57,7 +57,10 @@ public final class SupabaseClient: Sendable {
           configuration: StorageClientConfiguration(
             url: storageURL,
             headers: headers,
-            session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+            session: options.global.session,
+            accessToken: { [weak self] in
+              try await self?._getAccessToken()
+            },
             logger: options.global.logger,
             useNewHostname: options.storage.useNewHostname
           )

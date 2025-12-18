@@ -1,11 +1,14 @@
 import Foundation
+import HTTPClient
 
 public struct StorageClientConfiguration: Sendable {
   public var url: URL
   public var headers: [String: String]
   public let encoder: JSONEncoder
   public let decoder: JSONDecoder
-  public let session: StorageHTTPSession
+  public let session: URLSession
+  /// Optional access token provider used to set the `Authorization` header for each request.
+  public let accessToken: (@Sendable () async throws -> String?)?
   public let logger: (any SupabaseLogger)?
   public let useNewHostname: Bool
 
@@ -22,9 +25,10 @@ public struct StorageClientConfiguration: Sendable {
   public init(
     url: URL,
     headers: [String: String],
+    session: URLSession = .shared,
+    accessToken: (@Sendable () async throws -> String?)? = nil,
     encoder: JSONEncoder = Self.defaultEncoder,
     decoder: JSONDecoder = Self.defaultDecoder,
-    session: StorageHTTPSession = .init(),
     logger: (any SupabaseLogger)? = nil,
     useNewHostname: Bool = false
   ) {
@@ -33,6 +37,7 @@ public struct StorageClientConfiguration: Sendable {
     self.encoder = encoder
     self.decoder = decoder
     self.session = session
+    self.accessToken = accessToken
     self.logger = logger
     self.useNewHostname = useNewHostname
   }
