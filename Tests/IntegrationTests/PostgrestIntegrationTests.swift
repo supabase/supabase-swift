@@ -46,10 +46,7 @@ final class IntegrationTests: XCTestCase {
   override func setUp() async throws {
     try await super.setUp()
 
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
+    try DotEnv.requireEnabled()
 
     // Run fresh test by deleting all data. Delete without a where clause isn't supported, so have
     // to do this `neq` trick to delete all data.
@@ -125,7 +122,7 @@ final class IntegrationTests: XCTestCase {
     try await client.from("users").insert(users).execute()
 
     let fetchedUsers: [User] = try await client.from("users").select()
-      .ilike("email", value: "johndoe+test%").execute().value
+      .ilike("email", pattern: "johndoe+test%").execute().value
     XCTAssertEqual(
       fetchedUsers[...],
       users[1 ... 2]

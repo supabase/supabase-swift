@@ -40,7 +40,7 @@ final class BuildURLRequestTests: XCTestCase {
   }
 
   func testBuildRequest() async throws {
-    let runningTestCase = ActorIsolated(TestCase?.none)
+    let runningTestCase = LockIsolated<TestCase?>(nil)
 
     let encoder = PostgrestClient.Configuration.jsonEncoder
     encoder.outputFormatting = .sortedKeys
@@ -51,7 +51,7 @@ final class BuildURLRequestTests: XCTestCase {
       headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
       logger: nil,
       fetch: { request in
-        guard let runningTestCase = await runningTestCase.value else {
+        guard let runningTestCase = runningTestCase.withValue({ $0 }) else {
           XCTFail("execute called without a runningTestCase set.")
           return (Data(), URLResponse.empty())
         }
@@ -242,7 +242,7 @@ final class BuildURLRequestTests: XCTestCase {
     ]
 
     for testCase in testCases {
-      await runningTestCase.withValue { $0 = testCase }
+      runningTestCase.withValue { $0 = testCase }
       let builder = try await testCase.build(client)
       _ = try? await builder.execute()
     }

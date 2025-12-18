@@ -10,6 +10,11 @@ import PostgREST
 import XCTest
 
 final class PostgrestBasicTests: XCTestCase {
+  override func setUpWithError() throws {
+    try super.setUpWithError()
+    try DotEnv.requireEnabled()
+  }
+
   let client = PostgrestClient(
     configuration: PostgrestClient.Configuration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,

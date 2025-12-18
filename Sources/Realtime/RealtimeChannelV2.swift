@@ -170,13 +170,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     throw RealtimeError.maxRetryAttemptsReached
   }
 
-  /// Subscribes to the channel.
-  @available(*, deprecated, message: "Use `subscribeWithError` instead")
-  @MainActor
-  public func subscribe() async {
-    try? await subscribeWithError()
-  }
-
   /// Calculates retry delay with exponential backoff and jitter
   private func calculateRetryDelay(for attempt: Int) -> TimeInterval {
     let baseDelay: TimeInterval = 1.0
@@ -435,7 +428,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   public func track(state: JSONObject) async {
     if status != .subscribed {
       reportIssue(
-        "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
+        "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribeWithError()`?"
       )
     }
 

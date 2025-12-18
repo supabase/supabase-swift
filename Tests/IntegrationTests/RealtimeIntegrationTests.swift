@@ -27,10 +27,7 @@
     override func setUp() async throws {
       try await super.setUp()
 
-      //      try XCTSkipUnless(
-      //        ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      //        "INTEGRATION_TESTS not defined. Set this environment variable to run integration tests."
-      //      )
+      try DotEnv.requireEnabled()
 
       _clock = testClock
 
@@ -67,11 +64,15 @@
 
     override func tearDown() async throws {
       // Clean up channels and disconnect
-      await client.realtimeV2.removeAllChannels()
-      client.realtimeV2.disconnect()
+      if let client {
+        await client.realtimeV2.removeAllChannels()
+        client.realtimeV2.disconnect()
+      }
 
-      await client2.realtimeV2.removeAllChannels()
-      client2.realtimeV2.disconnect()
+      if let client2 {
+        await client2.realtimeV2.removeAllChannels()
+        client2.realtimeV2.disconnect()
+      }
 
       try await super.tearDown()
     }

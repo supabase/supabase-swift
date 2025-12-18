@@ -14,6 +14,11 @@ import XCTest
 #endif
 
 final class StorageFileIntegrationTests: XCTestCase {
+  override func setUpWithError() throws {
+    try super.setUpWithError()
+    try DotEnv.requireEnabled()
+  }
+
   let storage = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
@@ -31,12 +36,19 @@ final class StorageFileIntegrationTests: XCTestCase {
   override func setUp() async throws {
     try await super.setUp()
 
+    try DotEnv.requireEnabled()
+
     bucketName = try await newBucket()
     file = try Data(contentsOf: uploadFileURL("sadcat.jpg"))
     uploadPath = "testpath/file-\(UUID().uuidString).jpg"
   }
 
   override func tearDown() async throws {
+    guard !bucketName.isEmpty else {
+      try await super.tearDown()
+      return
+    }
+
     try? await storage.emptyBucket(bucketName)
     try? await storage.deleteBucket(bucketName)
 

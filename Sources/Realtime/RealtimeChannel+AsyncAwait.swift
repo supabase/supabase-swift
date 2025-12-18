@@ -183,12 +183,6 @@ extension RealtimeChannelV2 {
 
     return stream
   }
-
-  /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
-  @available(*, deprecated, renamed: "broadcastStream(event:)")
-  public func broadcast(event: String) -> AsyncStream<JSONObject> {
-    broadcastStream(event: event)
-  }
 }
 
 // Helper to work around type ambiguity in macOS 13

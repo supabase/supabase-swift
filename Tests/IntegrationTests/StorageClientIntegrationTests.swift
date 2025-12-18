@@ -10,6 +10,11 @@ import Storage
 import XCTest
 
 final class StorageClientIntegrationTests: XCTestCase {
+  override func setUpWithError() throws {
+    try super.setUpWithError()
+    try DotEnv.requireEnabled()
+  }
+
   let storage = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,

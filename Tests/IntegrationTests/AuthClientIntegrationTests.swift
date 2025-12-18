@@ -20,6 +20,11 @@ import XCTest
 final class AuthClientIntegrationTests: XCTestCase {
   let authClient = makeClient()
 
+  override func setUpWithError() throws {
+    try super.setUpWithError()
+    try DotEnv.requireEnabled()
+  }
+
   static func makeClient(serviceRole: Bool = false) -> AuthClient {
     let key = serviceRole ? DotEnv.SUPABASE_SERVICE_ROLE_KEY : DotEnv.SUPABASE_ANON_KEY
     return AuthClient(
@@ -413,6 +418,6 @@ final class AuthClientIntegrationTests: XCTestCase {
 
     expectNoDifference(events, receivedEvents.value)
 
-    token.remove()
+    token.cancel()
   }
 }

@@ -9,11 +9,21 @@ public struct StorageClientConfiguration: Sendable {
   public let logger: (any SupabaseLogger)?
   public let useNewHostname: Bool
 
+  public static var defaultEncoder: JSONEncoder {
+    let encoder = JSONEncoder.supabase()
+    encoder.keyEncodingStrategy = .convertToSnakeCase
+    return encoder
+  }
+
+  public static var defaultDecoder: JSONDecoder {
+    JSONDecoder.supabase()
+  }
+
   public init(
     url: URL,
     headers: [String: String],
-    encoder: JSONEncoder = .defaultStorageEncoder,
-    decoder: JSONDecoder = .defaultStorageDecoder,
+    encoder: JSONEncoder = Self.defaultEncoder,
+    decoder: JSONDecoder = Self.defaultDecoder,
     session: StorageHTTPSession = .init(),
     logger: (any SupabaseLogger)? = nil,
     useNewHostname: Bool = false

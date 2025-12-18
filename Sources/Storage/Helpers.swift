@@ -72,7 +72,12 @@ import Foundation
 #endif
 
 func encodeMetadata(_ metadata: JSONObject) -> Data {
-  let encoder = AnyJSON.encoder
+  // NOTE:
+  // `AnyJSON.encoder` is a shared instance and tests may mutate its configuration (e.g. enable
+  // `.prettyPrinted`), which would make multipart bodies unstable and break snapshots.
+  // Use a fresh encoder instead to keep metadata encoding deterministic and compact.
+  let encoder = JSONEncoder.supabase()
+  encoder.outputFormatting = [.sortedKeys]
   return (try? encoder.encode(metadata)) ?? "{}".data(using: .utf8)!
 }
 

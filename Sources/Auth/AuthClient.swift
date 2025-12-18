@@ -254,7 +254,7 @@ public actor AuthClient {
       }
 
       continuation.onTermination = { _ in
-        handle.remove()
+        handle.cancel()
       }
     }
 
@@ -367,9 +367,10 @@ public actor AuthClient {
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "password")],
         body: configuration.encoder.encode(
-          UserCredentials(
+          PasswordGrantRequest(
             email: email,
             password: password,
+            phone: nil,
             gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
           )
         )
@@ -394,7 +395,8 @@ public actor AuthClient {
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "password")],
         body: configuration.encoder.encode(
-          UserCredentials(
+          PasswordGrantRequest(
+            email: nil,
             password: password,
             phone: phone,
             gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
