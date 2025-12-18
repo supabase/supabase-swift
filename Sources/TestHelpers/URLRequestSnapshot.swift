@@ -51,7 +51,7 @@
       }
 
       // Body
-      if let httpBodyData = request.data,
+      if let httpBodyData = request.bodyData,
         let httpBody = String(data: httpBodyData, encoding: .utf8)
       {
         var escapedBody = httpBody.replacingOccurrences(of: "\\\"", with: "\\\\\"")
@@ -84,13 +84,13 @@
   }
 
   extension URLRequest {
-    fileprivate var data: Data? {
+    package var bodyData: Data? {
       httpBody ?? httpBodyStream.map { Data(reading: $0, withBufferSize: 1024) }
     }
   }
 
   extension Data {
-    fileprivate init(reading stream: InputStream, withBufferSize bufferSize: UInt = 1024) {
+    package init(reading stream: InputStream, withBufferSize bufferSize: UInt = 1024) {
       self.init()
 
       stream.open()
