@@ -35,7 +35,7 @@ enum FileUpload {
     }
 
     switch self {
-    case let .data(data):
+    case .data(let data):
       formData.append(
         data,
         withName: "",
@@ -43,7 +43,7 @@ enum FileUpload {
         mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
       )
 
-    case let .url(url):
+    case .url(let url):
       formData.append(url, withName: "")
     }
   }
@@ -422,14 +422,21 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - path: The file path to be downloaded, including the path and file name. For example `folder/image.png`.
   ///   - options: Transform the asset before serving it to the client.
+  ///   - additionalQueryItems: Additional query items to be added to the request.
+  /// - Returns: The data of the downloaded file.
   @discardableResult
   public func download(
     path: String,
-    options: TransformOptions? = nil
+    options: TransformOptions? = nil,
+    query additionalQueryItems: [URLQueryItem]? = nil
   ) async throws -> Data {
-    let queryItems = options?.queryItems ?? []
+    var queryItems = options?.queryItems ?? []
     let renderPath = options != nil ? "render/image/authenticated" : "object"
     let _path = _getFinalPath(path)
+
+    if let additionalQueryItems {
+      queryItems.append(contentsOf: additionalQueryItems)
+    }
 
     return try await execute(
       HTTPRequest(
