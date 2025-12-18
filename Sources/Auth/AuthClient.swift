@@ -150,10 +150,8 @@ public actor AuthClient {
 
       #if canImport(UIKit)
         #if canImport(WatchKit)
-          if #available(watchOS 7.0, *) {
-            didBecomeActiveNotification = WKExtension.applicationDidBecomeActiveNotification
-            willResignActiveNotification = WKExtension.applicationWillResignActiveNotification
-          }
+          didBecomeActiveNotification = WKExtension.applicationDidBecomeActiveNotification
+          willResignActiveNotification = WKExtension.applicationWillResignActiveNotification
         #else
           didBecomeActiveNotification = UIApplication.didBecomeActiveNotification
           willResignActiveNotification = UIApplication.willResignActiveNotification
@@ -706,7 +704,6 @@ public actor AuthClient {
     /// - Note: This method support the PKCE flow.
     /// - Warning: Do not call `start()` on the `ASWebAuthenticationSession` object inside the
     /// `configure` closure, as the method implementation calls it already.
-    @available(watchOS 6.2, tvOS 16.0, *)
     @discardableResult
     public func signInWithOAuth(
       provider: Provider,
