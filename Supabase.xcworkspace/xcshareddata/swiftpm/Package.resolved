@@ -1,5 +1,5 @@
 {
-  "originHash" : "68a31593121bf823182bc731b17208689dafb38f7cb085035de5e74a0ed41e89",
+  "originHash" : "fe8b1b49ce22df6bc6eb627313964782509fea8f18464342b8c10c0c1ebba777",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -164,6 +164,15 @@
       }
     },
     {
+      "identity" : "swift-http-client",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/grdsdev/swift-http-client",
+      "state" : {
+        "revision" : "e539b00c10eb299e05af44b341b30ea5c31c7679",
+        "version" : "0.3.0"
+      }
+    },
+    {
       "identity" : "swift-http-types",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-http-types.git",
@@ -179,6 +188,15 @@
       "state" : {
         "revision" : "322d9ffeeba85c9f7c4984b39422ec7cc3c56597",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log",
+      "state" : {
+        "revision" : "bc386b95f2a16ccd0150a8235e7c69eab2b866ca",
+        "version" : "1.8.0"
       }
     },
     {
