@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Mocker
+import TestHelpers
 import Testing
 
 @testable import Storage
@@ -32,7 +33,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.get: Data("[]".utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       _ = try await api.execute(
@@ -61,7 +62,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.get: Data("[]".utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       _ = try await api.execute(
@@ -104,7 +105,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.post: Data("{}".utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       _ = try await api.executeStream(
@@ -139,7 +140,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.get: Data("[]".utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       _ = try await api.execute(
@@ -230,7 +231,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.get: Data()]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       _ = try await api.execute(
@@ -240,7 +241,7 @@ extension StorageTests {
       )
 
       let request = try #require(captured.value)
-      let query = try StorageTestSupport.queryDictionary(request)
+      let query = try HTTPTestSupport.queryDictionary(request)
       #expect(query["a"] == "1")
       #expect(query["b"] == "2")
       #expect(query["dup"] == "new")
@@ -272,7 +273,7 @@ extension StorageTests {
           )
         ]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let api = StorageTestSupport.makeClient(headers: ["apikey": "anon"])
@@ -311,7 +312,7 @@ extension StorageTests {
           )
         ]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let api = StorageTestSupport.makeClient(headers: ["apikey": "anon"])
@@ -334,7 +335,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.post: Data("{}".utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let api = StorageTestSupport.makeClient(headers: ["apikey": "anon"])
@@ -348,8 +349,8 @@ extension StorageTests {
       #expect(request.httpMethod == "POST")
       #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
 
-      let body = try #require(StorageTestSupport.requestBody(request))
-      let json = try #require(StorageTestSupport.jsonObject(body) as? [String: Any])
+      let body = try #require(HTTPTestSupport.requestBody(request))
+      let json = try #require(HTTPTestSupport.jsonObject(body) as? [String: Any])
       #expect(json["id"] as? String == "newbucket")
       #expect(json["name"] as? String == "newbucket")
       #expect(json["public"] as? Bool == true)
@@ -367,7 +368,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.put: Data("{}".utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let api = StorageTestSupport.makeClient(headers: ["apikey": "anon"])
@@ -376,8 +377,8 @@ extension StorageTests {
       let request = try #require(captured.value)
       #expect(request.httpMethod == "PUT")
 
-      let body = try #require(StorageTestSupport.requestBody(request))
-      let json = try #require(StorageTestSupport.jsonObject(body) as? [String: Any])
+      let body = try #require(HTTPTestSupport.requestBody(request))
+      let json = try #require(HTTPTestSupport.jsonObject(body) as? [String: Any])
       #expect(json["id"] as? String == bucketId)
       #expect(json["name"] as? String == bucketId)
       #expect(json["public"] as? Bool == false)
@@ -393,7 +394,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.post: Data()]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let api = StorageTestSupport.makeClient(headers: ["apikey": "anon"])
@@ -414,7 +415,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.delete: Data()]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let api = StorageTestSupport.makeClient(headers: ["apikey": "anon"])
@@ -455,15 +456,15 @@ extension StorageTests {
           )
         ]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let files = try await api.list(path: "folder")
       #expect(files.count == 1)
 
       let request = try #require(captured.value)
-      let body = try #require(StorageTestSupport.requestBody(request))
-      let json = try #require(StorageTestSupport.jsonObject(body) as? [String: Any])
+      let body = try #require(HTTPTestSupport.requestBody(request))
+      let json = try #require(HTTPTestSupport.jsonObject(body) as? [String: Any])
       #expect(json["prefix"] as? String == "folder")
     }
 
@@ -479,14 +480,14 @@ extension StorageTests {
         statusCode: 200,
         data: [.post: Data()]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       try await api.move(from: "old/path.txt", to: "new/path.txt")
 
       let request = try #require(captured.value)
-      let body = try #require(StorageTestSupport.requestBody(request))
-      let json = try #require(StorageTestSupport.jsonObject(body) as? [String: Any])
+      let body = try #require(HTTPTestSupport.requestBody(request))
+      let json = try #require(HTTPTestSupport.jsonObject(body) as? [String: Any])
       #expect(json["bucketId"] as? String == bucketId)
       #expect(json["sourceKey"] as? String == "old/path.txt")
       #expect(json["destinationKey"] as? String == "new/path.txt")
@@ -568,14 +569,14 @@ extension StorageTests {
         statusCode: 200,
         data: [.delete: Data("[]".utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       _ = try await api.remove(paths: ["a.txt", "b.txt"])
 
       let request = try #require(captured.value)
-      let body = try #require(StorageTestSupport.requestBody(request))
-      let json = try #require(StorageTestSupport.jsonObject(body) as? [String: Any])
+      let body = try #require(HTTPTestSupport.requestBody(request))
+      let json = try #require(HTTPTestSupport.jsonObject(body) as? [String: Any])
       #expect(json["prefixes"] as? [String] == ["a.txt", "b.txt"])
     }
 
@@ -592,7 +593,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.get: Data([0x01, 0x02])]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let data = try await api.download(
@@ -600,7 +601,7 @@ extension StorageTests {
       #expect(data == Data([0x01, 0x02]))
 
       let request = try #require(captured.value)
-      let query = try StorageTestSupport.queryDictionary(request)
+      let query = try HTTPTestSupport.queryDictionary(request)
       #expect(query["width"] == "10")
       #expect(query["height"] == "20")
       #expect(query["quality"] == "75")
@@ -658,7 +659,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.post: Data(#"{"url":"/object/upload/sign/bucket/file.txt?token=tok"}"#.utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let result = try await api.createSignedUploadURL(
@@ -686,7 +687,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.put: Data(#"{"Key":"bucket/file.txt"}"#.utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let response = try await api.uploadToSignedURL(
@@ -694,7 +695,7 @@ extension StorageTests {
       #expect(response.fullPath == "bucket/file.txt")
 
       let request = try #require(captured.value)
-      let query = try StorageTestSupport.queryDictionary(request)
+      let query = try HTTPTestSupport.queryDictionary(request)
       #expect(query["token"] == "tok")
     }
 
@@ -715,7 +716,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.post: Data(#"{"Id":"id","Key":"bucket/folder/file1.txt"}"#.utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let result = try await api.upload(

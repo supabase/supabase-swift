@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import Mocker
+import TestHelpers
 import Testing
 
 @testable import Storage
@@ -42,7 +43,7 @@ extension StorageTests {
           )
         ]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let buckets = try await api.listBuckets()
@@ -81,7 +82,7 @@ extension StorageTests {
           )
         ]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       let bucket = try await api.getBucket(bucketId)
@@ -103,7 +104,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.post: Data("{}".utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       try await api.createBucket(
@@ -116,8 +117,8 @@ extension StorageTests {
       #expect(request.httpMethod == "POST")
       #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
 
-      let body = try #require(StorageTestSupport.requestBody(request))
-      let json = try #require(StorageTestSupport.jsonObject(body) as? [String: Any])
+      let body = try #require(HTTPTestSupport.requestBody(request))
+      let json = try #require(HTTPTestSupport.jsonObject(body) as? [String: Any])
       #expect(json["id"] as? String == "newbucket")
       #expect(json["name"] as? String == "newbucket")
       #expect(json["public"] as? Bool == true)
@@ -135,7 +136,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.put: Data("{}".utf8)]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       try await api.updateBucket(bucketId, options: BucketOptions(public: false))
@@ -144,8 +145,8 @@ extension StorageTests {
       #expect(request.httpMethod == "PUT")
       #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
 
-      let body = try #require(StorageTestSupport.requestBody(request))
-      let json = try #require(StorageTestSupport.jsonObject(body) as? [String: Any])
+      let body = try #require(HTTPTestSupport.requestBody(request))
+      let json = try #require(HTTPTestSupport.jsonObject(body) as? [String: Any])
       #expect(json["id"] as? String == bucketId)
       #expect(json["name"] as? String == bucketId)
       #expect(json["public"] as? Bool == false)
@@ -161,7 +162,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.post: Data()]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       try await api.emptyBucket(bucketId)
@@ -181,7 +182,7 @@ extension StorageTests {
         statusCode: 200,
         data: [.delete: Data()]
       )
-      mock.onRequestHandler = StorageTestSupport.captureRequest(into: captured)
+      mock.onRequestHandler = HTTPTestSupport.captureRequest(into: captured)
       mock.register()
 
       try await api.deleteBucket(bucketId)

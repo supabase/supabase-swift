@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import Mocker
+import TestHelpers
 import Testing
 
 @testable import Storage
@@ -62,61 +63,5 @@ enum StorageTestSupport {
         useNewHostname: false
       )
     )
-  }
-
-  static func captureRequest(into box: LockIsolated<URLRequest?>) -> OnRequestHandler {
-    OnRequestHandler(requestCallback: { request in
-      box.withValue { $0 = request }
-    })
-  }
-
-  static func captureRequests(into box: LockIsolated<[URLRequest]>) -> OnRequestHandler {
-    OnRequestHandler(requestCallback: { request in
-      box.withValue { $0.append(request) }
-    })
-  }
-
-  static func requestBody(_ request: URLRequest) -> Data? {
-    request.httpBody ?? request.httpBodyStream.map(readAllBytes(from:))
-  }
-
-  static func readAllBytes(from stream: InputStream) -> Data {
-    stream.open()
-    defer { stream.close() }
-
-    var data = Data()
-    var buffer = [UInt8](repeating: 0, count: 16 * 1024)
-    while stream.hasBytesAvailable {
-      let read = stream.read(&buffer, maxLength: buffer.count)
-      if read > 0 {
-        data.append(buffer, count: read)
-      } else {
-        break
-      }
-    }
-    return data
-  }
-
-  static func urlComponents(_ request: URLRequest) throws -> URLComponents {
-    let url = try #require(request.url)
-    return try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
-  }
-
-  static func queryDictionary(_ request: URLRequest) throws -> [String: String] {
-    let components = try urlComponents(request)
-    return Dictionary(
-      uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
-  }
-
-  static func jsonObject(_ data: Data) throws -> Any {
-    try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
-  }
-}
-
-extension URLSessionConfiguration {
-  fileprivate static func mocking() -> URLSessionConfiguration {
-    let config = URLSessionConfiguration.ephemeral
-    config.protocolClasses = [MockingURLProtocol.self]
-    return config
   }
 }
