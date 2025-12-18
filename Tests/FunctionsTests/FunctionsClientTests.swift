@@ -4,6 +4,7 @@ import HTTPClient
 import HTTPTypes
 import Helpers
 import Mocker
+import TestHelpers
 import Testing
 
 @testable import Functions
@@ -34,27 +35,6 @@ struct FunctionsClientTests {
     baseURL.appendingPathComponent(functionName)
   }
 
-  private func requestBody(_ request: URLRequest) -> Data? {
-    request.httpBody ?? request.httpBodyStream.map(readAllBytes(from:))
-  }
-
-  private func readAllBytes(from stream: InputStream) -> Data {
-    stream.open()
-    defer { stream.close() }
-
-    var data = Data()
-    var buffer = [UInt8](repeating: 0, count: 16 * 1024)
-    while stream.hasBytesAvailable {
-      let read = stream.read(&buffer, maxLength: buffer.count)
-      if read > 0 {
-        data.append(buffer, count: read)
-      } else {
-        break
-      }
-    }
-    return data
-  }
-
   @Test
   func requestIdleTimeout_is150Seconds() {
     #expect(FunctionsClient.requestIdleTimeout == 150)
@@ -70,9 +50,7 @@ struct FunctionsClientTests {
     let capturedRequest = LockIsolated<URLRequest?>(nil)
 
     var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      capturedRequest.withValue { $0 = request }
-    })
+    mock.onRequestHandler = HTTPTestSupport.captureRequest(into: capturedRequest)
     mock.register()
 
     let client = makeClient(headers: ["X-Foo": "bar"])
@@ -96,9 +74,7 @@ struct FunctionsClientTests {
     let capturedRequest = LockIsolated<URLRequest?>(nil)
 
     var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      capturedRequest.withValue { $0 = request }
-    })
+    mock.onRequestHandler = HTTPTestSupport.captureRequest(into: capturedRequest)
     mock.register()
 
     let client = makeClient(headers: ["X-Client-Info": "my-client/1.0"])
@@ -119,9 +95,7 @@ struct FunctionsClientTests {
     let captured = LockIsolated<[URLRequest]>([])
 
     var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      captured.withValue { $0.append(request) }
-    })
+    mock.onRequestHandler = HTTPTestSupport.captureRequests(into: captured)
     mock.register()
 
     let client = makeClient()
@@ -148,9 +122,7 @@ struct FunctionsClientTests {
     let capturedRequest = LockIsolated<URLRequest?>(nil)
 
     var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.get: Data("ok".utf8)])
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      capturedRequest.withValue { $0 = request }
-    })
+    mock.onRequestHandler = HTTPTestSupport.captureRequest(into: capturedRequest)
     mock.register()
 
     let client = makeClient(headers: ["X-Default": "1", "X-Shared": "init"])
@@ -192,9 +164,7 @@ struct FunctionsClientTests {
     let capturedRequest = LockIsolated<URLRequest?>(nil)
 
     var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      capturedRequest.withValue { $0 = request }
-    })
+    mock.onRequestHandler = HTTPTestSupport.captureRequest(into: capturedRequest)
     mock.register()
 
     let client = makeClient()
@@ -228,9 +198,7 @@ struct FunctionsClientTests {
     let capturedRequest = LockIsolated<URLRequest?>(nil)
 
     var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      capturedRequest.withValue { $0 = request }
-    })
+    mock.onRequestHandler = HTTPTestSupport.captureRequest(into: capturedRequest)
     mock.register()
 
     let client = makeClient(region: .euWest1)
@@ -257,9 +225,7 @@ struct FunctionsClientTests {
     let capturedRequest = LockIsolated<URLRequest?>(nil)
 
     var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      capturedRequest.withValue { $0 = request }
-    })
+    mock.onRequestHandler = HTTPTestSupport.captureRequest(into: capturedRequest)
     mock.register()
 
     let client = makeClient()
@@ -271,7 +237,7 @@ struct FunctionsClientTests {
 
     #expect(request?.value(forHTTPHeaderField: "Content-Type") == "text/plain")
 
-    let body = try #require(request.flatMap(requestBody(_:)))
+    let body = try #require(request?.bodyData)
     #expect(String(decoding: body, as: UTF8.self) == "hello")
   }
 
@@ -360,9 +326,7 @@ struct FunctionsClientTests {
     let capturedRequest = LockIsolated<URLRequest?>(nil)
 
     var mock = Mock(url: url, ignoreQuery: true, statusCode: 200, data: [.post: Data()])
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      capturedRequest.withValue { $0 = request }
-    })
+    mock.onRequestHandler = HTTPTestSupport.captureRequest(into: capturedRequest)
     mock.register()
 
     let client = makeClient()
@@ -398,14 +362,6 @@ struct FunctionsClientTests {
     let messages = logger.messages
     #expect(messages.contains(where: { $0.contains("⬆️") }))
     #expect(messages.contains(where: { $0.contains("⬇️") }))
-  }
-}
-
-extension URLSessionConfiguration {
-  fileprivate static func mocking() -> URLSessionConfiguration {
-    let config = URLSessionConfiguration.ephemeral
-    config.protocolClasses = [MockingURLProtocol.self]
-    return config
   }
 }
 
