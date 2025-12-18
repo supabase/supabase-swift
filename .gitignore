@@ -48,6 +48,10 @@ playground.xcworkspace
 
 .build/
 
+# SnapshotTesting output (reference snapshots live under Tests/**/__Snapshots__)
+/AuthTests/
+/FunctionsTests/
+
 # CocoaPods
 #
 # We recommend against adding the Pods directory to your .gitignore. However

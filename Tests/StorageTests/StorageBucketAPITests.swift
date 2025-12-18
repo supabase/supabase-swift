@@ -98,13 +98,10 @@ final class StorageBucketAPITests: XCTestCase {
   }
 
   private func runActivity(named name: String, body: () -> Void) {
-    #if os(Linux)
-      body()
-    #else
-      XCTContext.runActivity(named: name) { _ in
-        body()
-      }
-    #endif
+    // Swift 6 makes it tricky to forward a nonisolated closure into XCTest's `@MainActor`
+    // `runActivity` API without hitting strict data-race diagnostics. The activity wrapper is
+    // nice-to-have, so we fall back to executing the body directly.
+    body()
   }
 
   func testGetBucket() async throws {

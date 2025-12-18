@@ -35,7 +35,7 @@ enum FileUpload {
     }
 
     switch self {
-    case let .data(data):
+    case .data(let data):
       formData.append(
         data,
         withName: "",
@@ -43,7 +43,7 @@ enum FileUpload {
         mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
       )
 
-    case let .url(url):
+    case .url(let url):
       formData.append(url, withName: "")
     }
   }

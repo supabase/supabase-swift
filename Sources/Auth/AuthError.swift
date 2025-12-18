@@ -145,11 +145,11 @@ public enum AuthError: LocalizedError, Equatable {
   public var message: String {
     switch self {
     case .sessionMissing: "Auth session missing."
-    case let .weakPassword(message, _),
-      let .api(message, _, _, _),
-      let .pkceGrantCodeExchange(message, _, _),
-      let .implicitGrantRedirect(message),
-      let .jwtVerificationFailed(message):
+    case .weakPassword(let message, _),
+      .api(let message, _, _, _),
+      .pkceGrantCodeExchange(let message, _, _),
+      .implicitGrantRedirect(let message),
+      .jwtVerificationFailed(let message):
       message
     }
   }
@@ -158,7 +158,7 @@ public enum AuthError: LocalizedError, Equatable {
     switch self {
     case .sessionMissing: .sessionNotFound
     case .weakPassword: .weakPassword
-    case let .api(_, errorCode, _, _): errorCode
+    case .api(_, let errorCode, _, _): errorCode
     case .pkceGrantCodeExchange, .implicitGrantRedirect: .unknown
     case .jwtVerificationFailed: .invalidJWT
     }

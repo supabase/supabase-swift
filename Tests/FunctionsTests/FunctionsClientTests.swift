@@ -22,8 +22,6 @@ final class FunctionsClientTests: XCTestCase {
     return sessionConfiguration
   }()
 
-  lazy var session = URLSession(configuration: sessionConfiguration)
-
   var region: String?
 
   lazy var sut = FunctionsClient(
@@ -32,8 +30,9 @@ final class FunctionsClientTests: XCTestCase {
       "apikey": apiKey
     ],
     region: region,
-    fetch: { request in
-      try await self.session.data(for: request)
+    fetch: {
+      [session = UncheckedSendable(URLSession(configuration: sessionConfiguration))] request in
+      try await session.value.data(for: request)
     },
     sessionConfiguration: sessionConfiguration
   )

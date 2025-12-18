@@ -186,6 +186,7 @@ final class AuthClientTests: XCTestCase {
     .register()
 
     sut = makeSUT()
+    let sut = self.sut!
 
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
@@ -232,6 +233,7 @@ final class AuthClientTests: XCTestCase {
     .register()
 
     sut = makeSUT()
+    let sut = self.sut!
 
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
@@ -278,6 +280,7 @@ final class AuthClientTests: XCTestCase {
     .register()
 
     sut = makeSUT()
+    let sut = self.sut!
 
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
@@ -2228,7 +2231,10 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNil(Dependencies[sut.clientID].sessionStorage.get())
   }
 
-  func testRemoveSessionAndSignoutIfRefreshTokenNotFoundErrorReturned_withEmitLocalSessionAsInitialSession() async throws {
+  func
+    testRemoveSessionAndSignoutIfRefreshTokenNotFoundErrorReturned_withEmitLocalSessionAsInitialSession()
+    async throws
+  {
     let sut = makeSUT(emitLocalSessionAsInitialSession: true)
 
     Mock(
@@ -2675,7 +2681,9 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNotNil(result.claims.aud)
   }
 
-  private func makeSUT(flowType: AuthFlowType = .pkce, emitLocalSessionAsInitialSession: Bool = false) -> AuthClient {
+  private func makeSUT(
+    flowType: AuthFlowType = .pkce, emitLocalSessionAsInitialSession: Bool = false
+  ) -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
     let session = URLSession(configuration: sessionConfiguration)

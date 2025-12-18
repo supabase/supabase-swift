@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 21/01/25.
 //
 
+import ConcurrencyExtras
 import InlineSnapshotTesting
 import Mocker
 import PostgREST
@@ -24,8 +25,6 @@ class PostgrestQueryTests: XCTestCase {
     return configuration
   }()
 
-  lazy var session = URLSession(configuration: sessionConfiguration)
-
   lazy var sut = PostgrestClient(
     url: url,
     headers: [
@@ -33,8 +32,8 @@ class PostgrestQueryTests: XCTestCase {
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
     ],
     logger: nil,
-    fetch: {
-      try await self.session.data(for: $0)
+    fetch: { [session = UncheckedSendable(URLSession(configuration: sessionConfiguration))] in
+      try await session.value.data(for: $0)
     },
     encoder: {
       let encoder = PostgrestClient.Configuration.jsonEncoder

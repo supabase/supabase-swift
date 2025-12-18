@@ -58,6 +58,7 @@ final class SupabaseStorageTests: XCTestCase {
   }
 
   func testCreateSignedURLs() async throws {
+    let baseURL = supabaseURL
     sessionMock.fetch = { _ in
       (
         """
@@ -71,7 +72,7 @@ final class SupabaseStorageTests: XCTestCase {
         ]
         """.data(using: .utf8)!,
         HTTPURLResponse(
-          url: self.supabaseURL,
+          url: baseURL,
           statusCode: 200,
           httpVersion: nil,
           headerFields: nil
@@ -96,6 +97,7 @@ final class SupabaseStorageTests: XCTestCase {
     func testUploadData() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
+      let baseURL = supabaseURL
       sessionMock.fetch = { request in
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
@@ -133,7 +135,7 @@ final class SupabaseStorageTests: XCTestCase {
           }
           """.data(using: .utf8)!,
           HTTPURLResponse(
-            url: self.supabaseURL,
+            url: baseURL,
             statusCode: 200,
             httpVersion: nil,
             headerFields: nil
@@ -157,6 +159,7 @@ final class SupabaseStorageTests: XCTestCase {
     func testUploadFileURL() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
+      let baseURL = supabaseURL
       sessionMock.fetch = { request in
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
@@ -179,7 +182,7 @@ final class SupabaseStorageTests: XCTestCase {
           }
           """.data(using: .utf8)!,
           HTTPURLResponse(
-            url: self.supabaseURL,
+            url: baseURL,
             statusCode: 200,
             httpVersion: nil,
             headerFields: nil
@@ -209,7 +212,7 @@ final class SupabaseStorageTests: XCTestCase {
   }
 
   private func uploadFileURL(_ fileName: String) -> URL {
-    URL(fileURLWithPath: #file)
+    URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()
       .appendingPathComponent(fileName)
   }

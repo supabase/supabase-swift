@@ -20,7 +20,8 @@ extension CodeVerifierStorage {
           }
           return String(decoding: data, as: UTF8.self)
         } catch {
-          configuration.logger?.error("Failure loading code verifier: \(error.localizedDescription)")
+          configuration.logger?.error(
+            "Failure loading code verifier: \(error.localizedDescription)")
           return nil
         }
       },
@@ -34,7 +35,8 @@ extension CodeVerifierStorage {
             configuration.logger?.error("Code verifier is not a valid UTF8 string.")
           }
         } catch {
-          configuration.logger?.error("Failure storing code verifier: \(error.localizedDescription)")
+          configuration.logger?.error(
+            "Failure storing code verifier: \(error.localizedDescription)")
         }
       }
     )

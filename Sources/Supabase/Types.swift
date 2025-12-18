@@ -131,7 +131,7 @@ public struct SupabaseClientOptions: Sendable {
   public struct StorageOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let useNewHostname: Bool
-    
+
     public init(useNewHostname: Bool = false) {
       self.useNewHostname = useNewHostname
     }

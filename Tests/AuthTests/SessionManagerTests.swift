@@ -92,9 +92,10 @@ final class SessionManagerTests: XCTestCase {
     )
 
     // Fire N tasks and call sut.session()
+    let sut = sut
     let tasks = (0..<10).map { _ in
-      Task { [weak self] in
-        try await self?.sut.session()
+      Task {
+        try await sut.session()
       }
     }
 
@@ -104,7 +105,7 @@ final class SessionManagerTests: XCTestCase {
     refreshSessionContinuation.finish()
 
     // Await for all tasks to complete.
-    var result: [Result<Session?, Error>] = []
+    var result: [Result<Session, Error>] = []
     for task in tasks {
       let value = await task.result
       result.append(value)
@@ -113,7 +114,7 @@ final class SessionManagerTests: XCTestCase {
     // Verify that refresher and storage was called only once.
     expectNoDifference(refreshSessionCallCount.value, 1)
     expectNoDifference(
-      try result.map { try $0.get()?.accessToken },
+      try result.map { try $0.get().accessToken },
       (0..<10).map { _ in validSession.accessToken }
     )
   }

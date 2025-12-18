@@ -27,7 +27,7 @@ final class BuildURLRequestTests: XCTestCase {
     init(
       name: String,
       record: Bool = false,
-      file: StaticString = #file,
+      file: StaticString = #filePath,
       line: UInt = #line,
       build: @escaping @Sendable (PostgrestClient) async throws -> PostgrestBuilder
     ) {

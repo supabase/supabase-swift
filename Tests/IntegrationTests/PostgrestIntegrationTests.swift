@@ -38,7 +38,7 @@ final class IntegrationTests: XCTestCase {
   let client = PostgrestClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
     headers: [
-      "Apikey": DotEnv.SUPABASE_ANON_KEY,
+      "Apikey": DotEnv.SUPABASE_ANON_KEY
     ],
     logger: nil
   )
@@ -125,7 +125,7 @@ final class IntegrationTests: XCTestCase {
       .ilike("email", pattern: "johndoe+test%").execute().value
     XCTAssertEqual(
       fetchedUsers[...],
-      users[1 ... 2]
+      users[1...2]
     )
   }
 }

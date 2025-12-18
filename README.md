@@ -11,8 +11,8 @@ Supabase SDK for Swift. Mirrors the design of [supabase-js](https://github.com/s
 
 ### Requirements
 - iOS 13.0+ / macOS 10.15+ / tvOS 13+ / watchOS 6+ / visionOS 1+
-- Xcode 15.3+
-- Swift 5.10+
+- Xcode 16.0+
+- Swift 6.0+
 
 > [!IMPORTANT]
 > Check the [Support Policy](#support-policy) to learn when dropping Xcode, Swift, and platform versions will not be considered a **breaking change**.

@@ -508,7 +508,7 @@ final class RequestsTests: XCTestCase {
     record: Bool = false,
     flowType: AuthFlowType = .implicit,
     fetch: AuthClient.FetchHandler? = nil,
-    file: StaticString = #file,
+    file: StaticString = #filePath,
     testName: String = #function,
     line: UInt = #line
   ) -> AuthClient {

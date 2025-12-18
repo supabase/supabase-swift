@@ -126,7 +126,7 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     let response = try await http.send(request)
 
-    guard 200 ..< 300 ~= response.statusCode else {
+    guard 200..<300 ~= response.statusCode else {
       if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
         throw error
       }
@@ -135,7 +135,8 @@ public class PostgrestBuilder: @unchecked Sendable {
     }
 
     let value = try decode(response.data)
-    return PostgrestResponse(data: response.data, response: response.underlyingResponse, value: value)
+    return PostgrestResponse(
+      data: response.data, response: response.underlyingResponse, value: value)
   }
 }
 

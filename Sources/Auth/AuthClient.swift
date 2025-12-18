@@ -60,7 +60,7 @@ private actor GlobalJWKSCache {
 private let globalJWKSCache = GlobalJWKSCache()
 
 public actor AuthClient {
-  static var globalClientID = 0
+  private static let globalClientID = LockIsolated(0)
   nonisolated let clientID: AuthClientID
 
   nonisolated private var api: APIClient { Dependencies[clientID].api }
@@ -122,8 +122,10 @@ public actor AuthClient {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    AuthClient.globalClientID += 1
-    clientID = AuthClient.globalClientID
+    clientID = Self.globalClientID.withValue { id in
+      id += 1
+      return id
+    }
 
     Dependencies[clientID] = Dependencies(
       configuration: configuration,

@@ -10,13 +10,13 @@ import Foundation
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 
-  package let NSEC_PER_SEC: UInt64 = 1000000000
-  package let NSEC_PER_MSEC: UInt64 = 1000000
+  package let NSEC_PER_SEC: UInt64 = 1_000_000_000
+  package let NSEC_PER_MSEC: UInt64 = 1_000_000
 #endif
 
 extension Result {
   package var value: Success? {
-    if case let .success(value) = self {
+    if case .success(let value) = self {
       value
     } else {
       nil
@@ -24,7 +24,7 @@ extension Result {
   }
 
   package var error: Failure? {
-    if case let .failure(error) = self {
+    if case .failure(let error) = self {
       error
     } else {
       nil
@@ -44,12 +44,14 @@ extension URL {
 
     let currentQueryItems = components.percentEncodedQueryItems ?? []
 
-    components.percentEncodedQueryItems = currentQueryItems + queryItems.map {
-      URLQueryItem(
-        name: escape($0.name),
-        value: $0.value.map(escape)
-      )
-    }
+    components.percentEncodedQueryItems =
+      currentQueryItems
+      + queryItems.map {
+        URLQueryItem(
+          name: escape($0.name),
+          value: $0.value.map(escape)
+        )
+      }
 
     if let newURL = components.url {
       self = newURL
@@ -79,9 +81,10 @@ extension CharacterSet {
   /// query strings to include a URL. Therefore, all "reserved" characters with the exception of "?" and "/"
   /// should be percent-escaped in the query string.
   static let sbURLQueryAllowed: CharacterSet = {
-    let generalDelimitersToEncode = ":#[]@" // does not include "?" or "/" due to RFC 3986 - Section 3.4
+    let generalDelimitersToEncode = ":#[]@"  // does not include "?" or "/" due to RFC 3986 - Section 3.4
     let subDelimitersToEncode = "!$&'()*+,;="
-    let encodableDelimiters = CharacterSet(charactersIn: "\(generalDelimitersToEncode)\(subDelimitersToEncode)")
+    let encodableDelimiters = CharacterSet(
+      charactersIn: "\(generalDelimitersToEncode)\(subDelimitersToEncode)")
 
     return CharacterSet.urlQueryAllowed.subtracting(encodableDelimiters)
   }()

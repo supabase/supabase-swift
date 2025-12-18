@@ -42,12 +42,12 @@ extension Array: PostgrestFilterValue where Element: PostgrestFilterValue {
 extension AnyJSON: PostgrestFilterValue {
   public var rawValue: String {
     switch self {
-    case let .array(array): array.rawValue
-    case let .object(object): object.rawValue
-    case let .string(string): string.rawValue
-    case let .double(double): double.rawValue
-    case let .integer(integer): integer.rawValue
-    case let .bool(bool): bool.rawValue
+    case .array(let array): array.rawValue
+    case .object(let object): object.rawValue
+    case .string(let string): string.rawValue
+    case .double(let double): double.rawValue
+    case .integer(let integer): integer.rawValue
+    case .bool(let bool): bool.rawValue
     case .null: "NULL"
     }
   }

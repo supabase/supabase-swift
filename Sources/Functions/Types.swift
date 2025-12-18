@@ -13,7 +13,7 @@ public enum FunctionsError: Error, LocalizedError {
     switch self {
     case .relayError:
       "Relay Error invoking the Edge Function"
-    case let .httpError(code, _):
+    case .httpError(let code, _):
       "Edge Function returned a non-2xx status code: \(code)"
     }
   }
