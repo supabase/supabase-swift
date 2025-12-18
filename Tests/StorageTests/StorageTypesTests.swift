@@ -22,12 +22,12 @@ struct StorageTypesTests {
       """.utf8
     )
 
-    let decoded = try JSONDecoder.defaultStorageDecoder.decode(FileObject.self, from: data)
+    let decoded = try StorageClientConfiguration.defaultDecoder.decode(FileObject.self, from: data)
     #expect(decoded.name == "a.txt")
     #expect(decoded.bucketId == "bucket")
     #expect(decoded.owner == "owner")
     #expect(decoded.id?.uuidString == "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")
-    #expect(decoded.metadata?["k"] == .string("v"))
+    #expect(decoded.metadata?["k"] == AnyJSON.string("v"))
   }
 
   @Test
@@ -45,7 +45,7 @@ struct StorageTypesTests {
       """.utf8
     )
 
-    let decoded = try JSONDecoder.defaultStorageDecoder.decode(Bucket.self, from: data)
+    let decoded = try StorageClientConfiguration.defaultDecoder.decode(Bucket.self, from: data)
     #expect(decoded.isPublic == true)
   }
 
@@ -71,11 +71,11 @@ struct StorageTypesTests {
       """.utf8
     )
 
-    let decoded = try JSONDecoder.defaultStorageDecoder.decode(FileObjectV2.self, from: data)
+    let decoded = try StorageClientConfiguration.defaultDecoder.decode(FileObjectV2.self, from: data)
     #expect(decoded.bucketId == "bucket")
     #expect(decoded.cacheControl == "max-age=3600")
     #expect(decoded.contentType == "text/plain")
-    #expect(decoded.metadata?["k"] == .string("v"))
+    #expect(decoded.metadata?["k"] == AnyJSON.string("v"))
   }
 
   @Test

@@ -27,10 +27,10 @@ enum StorageTestSupport {
       configuration: StorageClientConfiguration(
         url: url,
         headers: headers,
-        encoder: .defaultStorageEncoder,
-        decoder: .defaultStorageDecoder,
         session: makeSession(),
         accessToken: accessToken,
+        encoder: StorageClientConfiguration.defaultEncoder,
+        decoder: StorageClientConfiguration.defaultDecoder,
         logger: nil,
         useNewHostname: useNewHostname
       )
@@ -55,10 +55,10 @@ enum StorageTestSupport {
       configuration: StorageClientConfiguration(
         url: url,
         headers: headers,
-        encoder: .defaultStorageEncoder,
-        decoder: .defaultStorageDecoder,
         session: makeSession(),
         accessToken: accessToken,
+        encoder: StorageClientConfiguration.defaultEncoder,
+        decoder: StorageClientConfiguration.defaultDecoder,
         logger: nil,
         useNewHostname: false
       )
