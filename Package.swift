@@ -93,9 +93,6 @@ let package = Package(
         "Functions",
         "Mocker",
         "TestHelpers",
-      ],
-      exclude: [
-        "__Snapshots__"
       ]
     ),
     .testTarget(
