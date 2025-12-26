@@ -33,7 +33,7 @@ CREATE TABLE messages (
   channel_id INTEGER REFERENCES channels(id),
   data JSONB,
   message TEXT,
-  username TEXT
+  username TEXT REFERENCES users(username)
 );
 
 -- Key-value storage table for Realtime tests
