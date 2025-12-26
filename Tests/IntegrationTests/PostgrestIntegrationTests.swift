@@ -55,7 +55,7 @@ final class IntegrationTests: XCTestCase {
     // to do this `neq` trick to delete all data. For users, only delete rows with email (test data),
     // leaving seed data with username intact.
     try await client.from("todos").delete().neq("id", value: UUID().uuidString).execute()
-    try await client.from("users").delete().not("email", operator: .is, value: "null").execute()
+    try await client.from("users").delete().not("email", operator: .is, value: AnyJSON.null).execute()
   }
 
   func testIntegration() async throws {

@@ -72,6 +72,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- RPC function to get username and status (for PostgrestFilterTests)
+CREATE OR REPLACE FUNCTION get_username_and_status(name_param TEXT)
+RETURNS TABLE(username TEXT, status user_status) AS $$
+BEGIN
+  RETURN QUERY SELECT u.username, u.status FROM users u WHERE u.username = name_param;
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC function to get array element (for PostgrestTransformsTests)
+CREATE OR REPLACE FUNCTION get_array_element(arr TEXT[], index INT)
+RETURNS TEXT AS $$
+BEGIN
+  RETURN arr[index];
+END;
+$$ LANGUAGE plpgsql;
+
 -- Enable Row Level Security
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE todos ENABLE ROW LEVEL SECURITY;
