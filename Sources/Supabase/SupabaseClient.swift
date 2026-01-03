@@ -390,6 +390,7 @@ public final class SupabaseClient: Sendable {
 
     realtime.setAuth(accessToken)
     await realtimeV2.setAuth(accessToken)
+    mutableState.functions?.setAuth(token: accessToken)
   }
 
   private func _initRealtimeClient() -> RealtimeClientV2 {
