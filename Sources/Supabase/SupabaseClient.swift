@@ -388,9 +388,11 @@ public final class SupabaseClient: Sendable {
       return nil
     }
 
-    realtime.setAuth(accessToken)
-    await realtimeV2.setAuth(accessToken)
-    functions.setAuth(token: accessToken)
+    if let accessToken {
+      functions.setAuth(token: accessToken)
+      realtime.setAuth(accessToken)
+      await realtimeV2.setAuth(accessToken)
+    }
   }
 
   private func _initRealtimeClient() -> RealtimeClientV2 {
