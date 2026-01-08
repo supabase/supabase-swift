@@ -59,8 +59,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// The bucket id to operate on.
   let bucketId: String
 
-  init(bucketId: String, configuration: StorageClientConfiguration) {
+  public let resumable: ResumableUploadApi
+
+  init(bucketId: String, configuration: StorageClientConfiguration, clientStore: ResumableClientStore) {
     self.bucketId = bucketId
+    self.resumable = .init(bucketId: bucketId, configuration: configuration, clientStore: clientStore)
     super.init(configuration: configuration)
   }
 
