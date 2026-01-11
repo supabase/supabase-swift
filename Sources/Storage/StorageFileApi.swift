@@ -126,6 +126,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
   ///   - data: The Data to be stored in the bucket.
   ///   - options: The options for the uploaded file.
+  /// - Returns: A ``FileUploadResponse`` containing the file's `id`, `path`, and `fullPath`.
+  /// - Throws: ``StorageError`` if the upload fails (e.g., bucket not found, file already exists when upsert is false).
   @discardableResult
   public func upload(
     _ path: String,
@@ -145,6 +147,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
   ///   - fileURL: The file URL to be stored in the bucket.
   ///   - options: The options for the uploaded file.
+  /// - Returns: A ``FileUploadResponse`` containing the file's `id`, `path`, and `fullPath`.
+  /// - Throws: ``StorageError`` if the upload fails (e.g., bucket not found, file already exists when upsert is false).
   @discardableResult
   public func upload(
     _ path: String,
@@ -164,6 +168,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - path: The relative file path. Should be of the format `folder/subfolder`. The bucket already exist before attempting to upload.
   ///   - data: The Data to be stored in the bucket.
   ///   - options: The options for the updated file.
+  /// - Returns: A ``FileUploadResponse`` containing the file's `id`, `path`, and `fullPath`.
+  /// - Throws: ``StorageError`` if the update fails (e.g., bucket not found, file not found).
   @discardableResult
   public func update(
     _ path: String,
@@ -183,6 +189,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - path: The relative file path. Should be of the format `folder/subfolder`. The bucket already exist before attempting to upload.
   ///   - fileURL: The file URL to be stored in the bucket.
   ///   - options: The options for the updated file.
+  /// - Returns: A ``FileUploadResponse`` containing the file's `id`, `path`, and `fullPath`.
+  /// - Throws: ``StorageError`` if the update fails (e.g., bucket not found, file not found).
   @discardableResult
   public func update(
     _ path: String,
