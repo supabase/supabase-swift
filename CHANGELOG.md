@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.40.0](https://github.com/supabase/supabase-swift/compare/v2.39.0...v2.40.0) (2026-01-13)
+
+
+### Features
+
+* **storage:** add support for additional query items in download method ([#871](https://github.com/supabase/supabase-swift/issues/871)) ([4b201af](https://github.com/supabase/supabase-swift/commit/4b201af8a993fbe0d74cdf5d6c81222efd5c519c))
+
+
+### Bug Fixes
+
+* **ci:** add GitHub App token generation to release workflow ([#879](https://github.com/supabase/supabase-swift/issues/879)) ([19d38f9](https://github.com/supabase/supabase-swift/commit/19d38f9273210ed85f4bed0008db2ebfc322baed))
+* **functions:** sync auth headers on auth state change ([#878](https://github.com/supabase/supabase-swift/issues/878)) ([a219239](https://github.com/supabase/supabase-swift/commit/a219239515cd347800c070849311acc823f0394e))
+
 ## [2.39.0](https://github.com/supabase/supabase-swift/compare/v2.38.1...v2.39.0) (2025-12-16)
 
 
