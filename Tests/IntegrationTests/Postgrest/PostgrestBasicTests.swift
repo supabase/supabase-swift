@@ -21,7 +21,7 @@ final class PostgrestBasicTests: XCTestCase {
   )
 
   func testBasicSelectTable() async throws {
-    let response = try await client.from("users").select().execute().value as AnyJSON
+    let response = try await client.from("users").select("age_range,catchphrase,data,status,username").execute().value as AnyJSON
     assertInlineSnapshot(of: response, as: .json) {
       """
       [

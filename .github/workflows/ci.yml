@@ -156,6 +156,37 @@ jobs:
       - name: "Test Swift Package"
         run: swift test --skip IntegrationTests
 
+  integration-tests:
+    name: Integration Tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: "Cache Swift Package"
+        uses: actions/cache@v5
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-integration-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-integration-
+      - name: "Setup Supabase CLI"
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: "Start Supabase"
+        working-directory: Tests/IntegrationTests
+        run: supabase start
+      - name: "Reset Database"
+        working-directory: Tests/IntegrationTests
+        run: supabase db reset
+      - name: "Run Integration Tests"
+        env:
+          INTEGRATION_TESTS: 1
+        run: swift test --filter IntegrationTests
+      - name: "Stop Supabase"
+        working-directory: Tests/IntegrationTests
+        if: always()
+        run: supabase stop
+
   # android:
   #   name: Android
   #   runs-on: ubuntu-latest
