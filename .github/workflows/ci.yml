@@ -53,6 +53,10 @@ jobs:
         xcode: ["26.2", "16.4"]
         include:
           - { command: test, skip_release: 1 }
+        exclude:
+          # Exclude older Xcode MACOS builds to reduce job count
+          - { xcode: "16.4", platform: MACOS, command: test }
+          - { xcode: "16.4", platform: MACOS, command: "" }
     steps:
       - uses: actions/checkout@v6
       - name: Cache derived data
