@@ -2,7 +2,7 @@ name: Manage Stale Issues and PRs
 
 on:
   schedule:
-    - cron: '0 0 * * 0'  # Weekly on Sundays at midnight
+    - cron: "0 0 * * 0" # Weekly on Sundays at midnight
   workflow_dispatch:
 
 permissions:
@@ -11,12 +11,12 @@ permissions:
 
 jobs:
   stale:
-    uses: supabase/actions/.github/workflows/stale.yml@feat/reusable-workflows
+    uses: supabase/actions/.github/workflows/stale.yml@659b3cd74a64ee2f1ca0a527922f134707e54671
     with:
       days_before_issue_stale: 180
       days_before_issue_close: 30
       days_before_pr_stale: 90
       days_before_pr_close: 14
-      exempt_issue_labels: 'priority,security,planned,good first issue'
-      exempt_pr_labels: 'priority,security'
+      exempt_issue_labels: "priority,security,planned,good first issue"
+      exempt_pr_labels: "priority,security"
       operations_per_run: 100
