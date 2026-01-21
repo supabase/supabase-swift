@@ -290,7 +290,7 @@ jobs:
       - name: Check for breaking API changes
         run: |
           # Set baseline to the base branch of the PR
-          export BASELINE_TREEISH=origin/${{ github.base_ref }}
+          export BASELINE_TREEISH=${{ github.base_ref }}
           export BASELINE_REPO_URL="${{ github.event.repository.clone_url }}"
 
           echo "Checking for breaking API changes against $BASELINE_TREEISH"
