@@ -1,0 +1,104 @@
+name: Update Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Sources/**"
+      - "Package.swift"
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to analyze for documentation updates'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  update-docs:
+    name: Update Supabase docs
+    runs-on: ubuntu-latest
+    # Only run if the push was from a merged PR
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'Merge pull request'))
+    steps:
+      - name: Extract PR number
+        id: pr
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ inputs.pr_number }}" >> $GITHUB_OUTPUT
+          else
+            # Extract PR number from merge commit message
+            PR_NUMBER=$(echo "${{ github.event.head_commit.message }}" | grep -oP 'Merge pull request #\K\d+' || echo "")
+            if [ -z "$PR_NUMBER" ]; then
+              # Try alternative format: (#123)
+              PR_NUMBER=$(echo "${{ github.event.head_commit.message }}" | grep -oP '\(#\K\d+(?=\))' || echo "")
+            fi
+            echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if PR number was found
+        if: steps.pr.outputs.number == ''
+        run: |
+          echo "Could not extract PR number from commit message"
+          exit 1
+
+      - name: Checkout supabase-swift
+        uses: actions/checkout@v6
+        with:
+          path: supabase-swift
+          fetch-depth: 0
+
+      - name: Checkout supabase/supabase
+        uses: actions/checkout@v6
+        with:
+          repository: supabase/supabase
+          path: supabase
+          token: ${{ secrets.SUPABASE_DOCS_PAT }}
+
+      - name: Update documentation with Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.SUPABASE_DOCS_PAT }}
+          working_directory: supabase
+          prompt: |
+            Review the merged PR #${{ steps.pr.outputs.number }} in the supabase/supabase-swift repository and identify any changes that require documentation updates in this repository (supabase/supabase).
+
+            For the merged PR:
+
+            1. Analyze the PR diff from supabase/supabase-swift#${{ steps.pr.outputs.number }} to understand what changed
+            2. Determine which documentation files need updates in this repository. Check files in:
+               - apps/docs/spec/
+               - apps/docs/content/guides/
+            3. Create a branch with format: docs/update-from-swift-pr-${{ steps.pr.outputs.number }}
+            4. Update the relevant documentation files by merging the new changes while preserving all existing content and structure
+            5. Create a PR with the documentation changes
+
+            Consider these types of changes for documentation updates:
+            - API changes (new methods, endpoints, parameters)
+            - Feature additions or modifications
+            - Breaking changes (MUST be documented)
+            - Behavioral changes that affect users
+
+            For each documentation update:
+            - Maintain exact formatting and structure of existing files
+            - Follow existing documentation patterns and conventions
+            - Add new content without removing existing content
+            - For YAML specs: add new endpoints/methods while preserving existing ones
+            - For markdown docs: add or update sections while keeping everything else intact
+
+            Create a PR with a clear description that:
+            - References the source PR: supabase/supabase-swift#${{ steps.pr.outputs.number }}
+            - Lists all updated files with reasons for changes
+            - Includes any relevant code examples or migration notes
+
+            If no documentation updates are needed, explain why and exit gracefully.
+
+            Repository context:
+            - Source PR: https://github.com/supabase/supabase-swift/pull/${{ steps.pr.outputs.number }}
+            - Target repository: supabase/supabase
+            - Documentation paths: apps/docs/spec/, apps/docs/content/guides/
