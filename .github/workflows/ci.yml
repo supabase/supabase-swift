@@ -48,11 +48,15 @@ jobs:
     runs-on: macos-15
     strategy:
       matrix:
-        command: [test, ""]
-        platform: [IOS, MACOS]
-        xcode: ["26.2", "16.4"]
         include:
-          - { command: test, skip_release: 1 }
+          # Latest Xcode - full platform coverage
+          - { xcode: "26.2", platform: IOS, command: test, skip_release: 1 }
+          - { xcode: "26.2", platform: IOS, command: "" }
+          - { xcode: "26.2", platform: MACOS, command: test, skip_release: 1 }
+          - { xcode: "26.2", platform: MACOS, command: "" }
+          # Older Xcode - iOS only (most common platform)
+          - { xcode: "16.4", platform: IOS, command: test, skip_release: 1 }
+          - { xcode: "16.4", platform: IOS, command: "" }
     steps:
       - uses: actions/checkout@v6
       - name: Cache derived data
@@ -194,6 +198,7 @@ jobs:
 
   examples:
     name: Examples
+    needs: [macos, spm]
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
@@ -220,6 +225,7 @@ jobs:
 
   docs:
     name: Test docs
+    needs: [macos]
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
