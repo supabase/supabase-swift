@@ -1,0 +1,12 @@
+name: Block WIP/Draft Merges
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  block-merge:
+    uses: supabase/actions/.github/workflows/block-merge.yml@659b3cd74a64ee2f1ca0a527922f134707e54671
+    with:
+      block_labels: "do-not-merge"
+      block_keywords: "wip,do not merge"

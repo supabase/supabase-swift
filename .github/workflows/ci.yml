@@ -50,9 +50,14 @@ jobs:
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS]
-        xcode: ["26.0", "16.4"]
+        xcode: ["26.2", "16.4"]
         include:
           - { command: test, skip_release: 1 }
+        exclude:
+          # Exclude older Xcode MACOS builds to reduce job count
+          # Latest Xcode gets full platform coverage, older only tests iOS (most common)
+          - { xcode: "16.4", platform: MACOS, command: test }
+          - { xcode: "16.4", platform: MACOS, command: "" }
     steps:
       - uses: actions/checkout@v6
       - name: Cache derived data
@@ -60,9 +65,10 @@ jobs:
         with:
           path: ~/.derivedData
           key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: List available devices
@@ -77,11 +83,11 @@ jobs:
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
       - name: Install lcov
-        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.0'
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.2'
         run: brew install lcov
       - name: Export code coverage
         id: coverage
-        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.0'
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.2'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
       - uses: coverallsapp/github-action@v2.3.7
         if: steps.coverage.outcome == 'success'
@@ -111,9 +117,10 @@ jobs:
           path: |
             ~/.derivedData
           key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds
@@ -125,6 +132,7 @@ jobs:
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
   spm:
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     strategy:
       matrix:
@@ -184,9 +192,10 @@ jobs:
         with:
           path: ~/.derivedData
           key: |
-            deriveddata-library-evolution-${{ matrix.xcode }}-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift') }}
+            deriveddata-library-evolution-${{ matrix.xcode }}-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
             deriveddata-library-evolution-${{ matrix.xcode }}-
+            deriveddata-library-evolution-
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: Build for library evolution
@@ -194,6 +203,7 @@ jobs:
 
   examples:
     name: Examples
+    needs: [macos]
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
@@ -202,11 +212,12 @@ jobs:
         with:
           path: ~/.derivedData
           key: |
-            deriveddata-examples-${{ hashFiles('**/Sources/**/*.swift', '**/Tests/**/*.swift', '**/Examples/**/*.swift') }}
+            deriveddata-examples-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
             deriveddata-examples-
-      - name: Select Xcode 26.0
-        run: sudo xcode-select -s /Applications/Xcode_26.0.app
+            deriveddata-xcodebuild-IOS-26.2--
+      - name: Select Xcode 26.2
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds
@@ -220,6 +231,7 @@ jobs:
 
   docs:
     name: Test docs
+    needs: [macos]
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
@@ -233,3 +245,100 @@ jobs:
             docs-${{ runner.os }}-
       - name: Test docs
         run: make test-docs
+
+  format-check:
+    name: Format check (changed files only)
+    runs-on: macos-15
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Get changed Swift files
+        id: changed-files
+        run: |
+          # Get list of changed Swift files in this PR
+          git fetch origin ${{ github.base_ref }}
+          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMR origin/${{ github.base_ref }}...HEAD | grep '\.swift$' || true)
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No Swift files changed"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changed Swift files:"
+            echo "$CHANGED_FILES"
+            echo "$CHANGED_FILES" > changed_files.txt
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+      - name: Check formatting
+        if: steps.changed-files.outputs.has_changes == 'true'
+        run: |
+          # Format only the changed files
+          while IFS= read -r file; do
+            if [ -f "$file" ]; then
+              swift format --in-place "$file"
+            fi
+          done < changed_files.txt
+
+          # Check if formatting made any changes
+          if ! git diff --exit-code; then
+            echo "❌ Some files are not formatted correctly."
+            echo "📝 Please run 'make format' locally on the changed files and commit the changes."
+            echo ""
+            echo "Files that need formatting:"
+            git diff --name-only
+            exit 1
+          else
+            echo "✅ All changed Swift files are properly formatted"
+          fi
+
+  api-stability:
+    name: API stability check
+    runs-on: macos-15
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check for breaking API changes
+        run: |
+          # Set baseline to the base branch of the PR
+          export BASELINE_TREEISH=${{ github.base_ref }}
+          export BASELINE_REPO_URL="${{ github.event.repository.clone_url }}"
+
+          echo "Checking for breaking API changes against $BASELINE_TREEISH"
+
+          # Run the breaking changes check
+          if bash scripts/check-for-breaking-api-changes.sh; then
+            echo "✅ No breaking API changes detected"
+          else
+            echo "⚠️ Breaking API changes detected"
+            echo "If this is intentional, make sure your commit message includes 'BREAKING CHANGE:' or uses '!' (e.g., 'feat!:')"
+            exit 1
+          fi
+
+  ci-success:
+    name: CI Success
+    if: always()
+    needs: [macos, macos-legacy, spm, linux, library-evolution, examples, docs, format-check, api-stability]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs
+        run: |
+          # Check if any required job failed
+          RESULTS='${{ toJSON(needs) }}'
+          echo "Job results:"
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+
+          # Fail if any job failed (but allow skipped jobs)
+          if echo "$RESULTS" | jq -e 'to_entries[] | select(.value.result == "failure")' > /dev/null; then
+            echo ""
+            echo "❌ One or more CI jobs failed"
+            exit 1
+          elif echo "$RESULTS" | jq -e 'to_entries[] | select(.value.result == "cancelled")' > /dev/null; then
+            echo ""
+            echo "⚠️ One or more CI jobs were cancelled"
+            exit 1
+          else
+            echo ""
+            echo "✅ All CI jobs passed successfully"
+          fi
