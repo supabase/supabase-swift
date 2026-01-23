@@ -1,5 +1,9 @@
 import Foundation
 
+/// Query builder for SELECT, INSERT, UPDATE, DELETE, and UPSERT operations.
+///
+/// - Note: Thread Safety: Inherits thread-safe mutable state management from `PostgrestBuilder`.
+/// - Important: Do not modify the same builder instance from multiple concurrent tasks.
 public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Perform a SELECT query on the table or view.
   /// - Parameters:

@@ -11,16 +11,28 @@ import Foundation
 /// A token for cancelling observations.
 ///
 /// When this token gets deallocated it cancels the observation it was associated with. Store this token in another object to keep the observation alive.
+///
+/// - Note: Thread Safety: This class is `@unchecked Sendable` because all mutable state
+///   is protected by a single `LockIsolated<MutableState>`.
 public final class ObservationToken: @unchecked Sendable, Hashable {
-  private let _isCancelled = LockIsolated(false)
-  package var onCancel: @Sendable () -> Void
+  private struct MutableState {
+    var isCancelled = false
+    var onCancel: @Sendable () -> Void = {}
+  }
+
+  private let mutableState: LockIsolated<MutableState>
 
   public var isCancelled: Bool {
-    _isCancelled.withValue { $0 }
+    mutableState.isCancelled
   }
 
   package init(onCancel: @escaping @Sendable () -> Void = {}) {
-    self.onCancel = onCancel
+    mutableState = LockIsolated(MutableState(onCancel: onCancel))
+  }
+
+  /// Sets the cancellation handler. Thread-safe.
+  package func setOnCancel(_ handler: @escaping @Sendable () -> Void) {
+    mutableState.withValue { $0.onCancel = handler }
   }
 
   @available(*, deprecated, renamed: "cancel")
@@ -29,10 +41,10 @@ public final class ObservationToken: @unchecked Sendable, Hashable {
   }
 
   public func cancel() {
-    _isCancelled.withValue { isCancelled in
-      guard !isCancelled else { return }
-      defer { isCancelled = true }
-      onCancel()
+    mutableState.withValue { state in
+      guard !state.isCancelled else { return }
+      defer { state.isCancelled = true }
+      state.onCancel()
     }
   }
 
@@ -93,7 +105,7 @@ package final class EventEmitter<Event: Sendable>: Sendable {
     let token = ObservationToken()
     let key = ObjectIdentifier(token)
 
-    token.onCancel = { [weak self] in
+    token.setOnCancel { [weak self] in
       self?.mutableState.withValue {
         $0.listeners.removeAll { $0.key == key }
       }

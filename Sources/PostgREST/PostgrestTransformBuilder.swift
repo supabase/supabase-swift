@@ -1,5 +1,9 @@
 import Foundation
 
+/// Transform builder for applying ORDER BY, LIMIT, and other transformations.
+///
+/// - Note: Thread Safety: Inherits thread-safe mutable state management from `PostgrestBuilder`.
+/// - Important: Do not modify the same builder instance from multiple concurrent tasks.
 public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Perform a SELECT on the query result.
   ///

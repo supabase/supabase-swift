@@ -12,10 +12,8 @@ import XCTest
 
 final class ObservationTokenTests: XCTestCase {
   func testRemove() {
-    let handle = ObservationToken()
-
     let onRemoveCallCount = LockIsolated(0)
-    handle.onCancel = {
+    let handle = ObservationToken {
       onRemoveCallCount.withValue {
         $0 += 1
       }
@@ -28,15 +26,14 @@ final class ObservationTokenTests: XCTestCase {
   }
 
   func testDeinit() {
-    var handle: ObservationToken? = ObservationToken()
-
     let onRemoveCallCount = LockIsolated(0)
-    handle?.onCancel = {
+    var handle: ObservationToken? = ObservationToken {
       onRemoveCallCount.withValue {
         $0 += 1
       }
     }
 
+    _ = handle  // Silence unused variable warning
     handle = nil
 
     XCTAssertEqual(onRemoveCallCount.value, 1)
