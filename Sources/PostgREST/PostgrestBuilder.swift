@@ -7,6 +7,12 @@ import HTTPTypes
 #endif
 
 /// The builder class for creating and executing requests to a PostgREST server.
+///
+/// - Note: Thread Safety: This class is `@unchecked Sendable` because all mutable state
+///   is protected by `LockIsolated`. Access to `mutableState` is always through `withValue`.
+///
+/// - Important: While this class is `Sendable`, individual builder instances should not be
+///   modified concurrently from multiple tasks. Create separate builder chains for concurrent operations.
 public class PostgrestBuilder: @unchecked Sendable {
   /// The configuration for the PostgREST client.
   let configuration: PostgrestClient.Configuration
@@ -126,7 +132,7 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     let response = try await http.send(request)
 
-    guard 200 ..< 300 ~= response.statusCode else {
+    guard 200..<300 ~= response.statusCode else {
       if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
         throw error
       }
@@ -135,7 +141,8 @@ public class PostgrestBuilder: @unchecked Sendable {
     }
 
     let value = try decode(response.data)
-    return PostgrestResponse(data: response.data, response: response.underlyingResponse, value: value)
+    return PostgrestResponse(
+      data: response.data, response: response.underlyingResponse, value: value)
   }
 }
 

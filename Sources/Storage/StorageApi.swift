@@ -5,6 +5,10 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
+/// Base class for Storage API operations.
+///
+/// - Note: Thread Safety: This class is `@unchecked Sendable` because all stored properties
+///   are immutable (`let`) and themselves `Sendable`. No mutable state exists after initialization.
 public class StorageApi: @unchecked Sendable {
   public let configuration: StorageClientConfiguration
 

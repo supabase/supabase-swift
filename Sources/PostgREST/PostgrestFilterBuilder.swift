@@ -1,5 +1,9 @@
 import Foundation
 
+/// Filter builder for applying WHERE clauses to queries.
+///
+/// - Note: Thread Safety: Inherits thread-safe mutable state management from `PostgrestBuilder`.
+/// - Important: Do not modify the same builder instance from multiple concurrent tasks.
 public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Sendable {
   public enum Operator: String, CaseIterable, Sendable {
     case eq, neq, gt, gte, lt, lte, like, ilike, match, imatch, `is`, isdistinct, `in`, cs, cd, sl,

@@ -54,7 +54,10 @@ enum FileUpload {
   let testingBoundary = LockIsolated<String?>(nil)
 #endif
 
-/// Supabase Storage File API
+/// Supabase Storage File API for file operations within a bucket.
+///
+/// - Note: Thread Safety: Inherits immutable design from `StorageApi`. The additional `bucketId`
+///   property is also immutable (`let`).
 public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// The bucket id to operate on.
   let bucketId: String

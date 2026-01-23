@@ -28,6 +28,10 @@ public struct StorageClientConfiguration: Sendable {
   }
 }
 
+/// Supabase Storage client for managing buckets and files.
+///
+/// - Note: Thread Safety: Inherits immutable design from `StorageApi`. All state is set at
+///   initialization and never mutated.
 public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
   /// Perform file operation in a bucket.
   /// - Parameter id: The bucket id to operate on.

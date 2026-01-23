@@ -60,7 +60,16 @@ private actor GlobalJWKSCache {
 private let globalJWKSCache = GlobalJWKSCache()
 
 public actor AuthClient {
-  static var globalClientID = 0
+  private static let _globalClientID = LockIsolated(0)
+
+  /// Thread-safe auto-incrementing client ID generator.
+  private static func nextClientID() -> AuthClientID {
+    _globalClientID.withValue { value in
+      value += 1
+      return value
+    }
+  }
+
   nonisolated let clientID: AuthClientID
 
   nonisolated private var api: APIClient { Dependencies[clientID].api }
@@ -122,8 +131,7 @@ public actor AuthClient {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    AuthClient.globalClientID += 1
-    clientID = AuthClient.globalClientID
+    clientID = AuthClient.nextClientID()
 
     Dependencies[clientID] = Dependencies(
       configuration: configuration,

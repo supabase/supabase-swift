@@ -4,7 +4,9 @@ import Foundation
   import FoundationNetworking
 #endif
 
-/// Storage Bucket API
+/// Storage Bucket API for bucket management operations.
+///
+/// - Note: Thread Safety: Inherits immutable design from `StorageApi`. No additional mutable state.
 public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// Retrieves the details of all Storage buckets within an existing project.
   public func listBuckets() async throws -> [Bucket] {
