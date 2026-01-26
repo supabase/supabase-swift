@@ -37,7 +37,7 @@ final class PostgrestTransformsTests: XCTestCase {
   func testOrder() async throws {
     let res =
       try await client.from("users")
-      .select()
+      .select("age_range,catchphrase,data,status,username")
       .order("username", ascending: false)
       .execute().value as AnyJSON
 
@@ -110,7 +110,7 @@ final class PostgrestTransformsTests: XCTestCase {
   func testLimit() async throws {
     let res =
       try await client.from("users")
-      .select()
+      .select("age_range,catchphrase,data,status,username")
       .limit(1)
       .execute().value as AnyJSON
 
@@ -132,7 +132,7 @@ final class PostgrestTransformsTests: XCTestCase {
   func testRange() async throws {
     let res =
       try await client.from("users")
-      .select()
+      .select("age_range,catchphrase,data,status,username")
       .range(from: 1, to: 3)
       .execute().value as AnyJSON
 
@@ -168,7 +168,7 @@ final class PostgrestTransformsTests: XCTestCase {
   func testSingle() async throws {
     let res =
       try await client.from("users")
-      .select()
+      .select("age_range,catchphrase,data,status,username")
       .limit(1)
       .single()
       .execute().value as AnyJSON
@@ -190,7 +190,7 @@ final class PostgrestTransformsTests: XCTestCase {
     let res =
       try await client.from("users")
       .insert(["username": "foo"])
-      .select()
+      .select("age_range,catchphrase,data,status,username")
       .single()
       .execute().value as AnyJSON
 
@@ -276,7 +276,7 @@ final class PostgrestTransformsTests: XCTestCase {
   }
 
   func testCsv() async throws {
-    let res = try await client.from("users").select().csv().execute().string()
+    let res = try await client.from("users").select("username,data,age_range,status,catchphrase").csv().execute().string()
     assertInlineSnapshot(of: res, as: .json) {
       #"""
       "username,data,age_range,status,catchphrase\nsupabot,,\"[1,2)\",ONLINE,\"'cat' 'fat'\"\nkiwicopple,,\"[25,35)\",OFFLINE,\"'bat' 'cat'\"\nawailas,,\"[25,35)\",ONLINE,\"'bat' 'rat'\"\ndragarcia,,\"[20,30)\",ONLINE,\"'fat' 'rat'\""

@@ -597,7 +597,7 @@ final class PostgrestFilterTests: XCTestCase {
   func testMultipleFilters() async throws {
     let res =
       try await client.from("users")
-      .select()
+      .select("age_range,catchphrase,data,status,username")
       .eq("username", value: "supabot")
       .is("data", value: nil)
       .overlaps("age_range", value: "[1,2)")

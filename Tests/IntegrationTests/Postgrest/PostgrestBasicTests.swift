@@ -187,7 +187,7 @@ final class PostgrestBasicTests: XCTestCase {
       .upsert(
         AnyJSON.object(
           [
-            "id": 3,
+            "id": 1000,
             "message": "foo",
             "username": "supabot",
             "channel_id": 2,
