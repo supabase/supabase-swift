@@ -14,11 +14,20 @@ final class StorageClientIntegrationTests: XCTestCase {
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
       headers: [
-        "Authorization": "Bearer \(DotEnv.SUPABASE_SERVICE_ROLE_KEY)",
+        "Authorization": "Bearer \(DotEnv.SUPABASE_SERVICE_ROLE_KEY)"
       ],
       logger: nil
     )
   )
+
+  override func setUp() async throws {
+    try await super.setUp()
+
+    try XCTSkipUnless(
+      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
+      "INTEGRATION_TESTS not defined."
+    )
+  }
 
   func testBucket_CRUD() async throws {
     let bucketName = "test-bucket"
@@ -36,7 +45,8 @@ final class StorageClientIntegrationTests: XCTestCase {
     buckets = try await storage.listBuckets()
     XCTAssertTrue(buckets.contains { $0.id == bucket.id })
 
-    try await storage.updateBucket(bucketName, options: BucketOptions(allowedMimeTypes: ["image/jpeg"]))
+    try await storage.updateBucket(
+      bucketName, options: BucketOptions(allowedMimeTypes: ["image/jpeg"]))
 
     bucket = try await storage.getBucket(bucketName)
     XCTAssertEqual(bucket.allowedMimeTypes, ["image/jpeg"])

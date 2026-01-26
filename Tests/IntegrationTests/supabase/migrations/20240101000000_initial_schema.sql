@@ -81,8 +81,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- RPC function to get array element (for PostgrestTransformsTests)
-CREATE OR REPLACE FUNCTION get_array_element(arr TEXT[], index INT)
-RETURNS TEXT AS $$
+CREATE OR REPLACE FUNCTION get_array_element(arr INT[], index INT)
+RETURNS INT AS $$
 BEGIN
   RETURN arr[index];
 END;

@@ -20,6 +20,15 @@ import XCTest
 final class AuthClientIntegrationTests: XCTestCase {
   let authClient = makeClient()
 
+  override func setUp() async throws {
+    try await super.setUp()
+
+    try XCTSkipUnless(
+      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
+      "INTEGRATION_TESTS not defined."
+    )
+  }
+
   static func makeClient(serviceRole: Bool = false) -> AuthClient {
     let key = serviceRole ? DotEnv.SUPABASE_SERVICE_ROLE_KEY : DotEnv.SUPABASE_ANON_KEY
     return AuthClient(
@@ -276,39 +285,39 @@ final class AuthClientIntegrationTests: XCTestCase {
     }
   }
 
-//  func testGenerateLink_signUp() async throws {
-//    let client = Self.makeClient(serviceRole: true)
-//    let email = mockEmail()
-//    let password = mockPassword()
-//
-//    let link = try await client.admin.generateLink(
-//      params: .signUp(
-//        email: email,
-//        password: password,
-//        data: ["full_name": "John Doe"]
-//      )
-//    )
-//
-//    expectNoDifference(link.properties.actionLink.path, "/auth/v1/verify")
-//    expectNoDifference(link.properties.verificationType, .signup)
-//    expectNoDifference(link.user.email, email)
-//  }
-//
-//  func testGenerateLink_magicLink() async throws {
-//    let client = Self.makeClient(serviceRole: true)
-//    let email = mockEmail()
-//    let password = mockPassword()
-//
-//    // first create a user
-//    try await client.admin.createUser(
-//      attributes: AdminUserAttributes(email: email, password: password)
-//    )
-//
-//    // generate a magic link for the created user
-//    let link = try await client.admin.generateLink(params: .magicLink(email: email))
-//
-//    expectNoDifference(link.properties.verificationType, .magiclink)
-//  }
+  //  func testGenerateLink_signUp() async throws {
+  //    let client = Self.makeClient(serviceRole: true)
+  //    let email = mockEmail()
+  //    let password = mockPassword()
+  //
+  //    let link = try await client.admin.generateLink(
+  //      params: .signUp(
+  //        email: email,
+  //        password: password,
+  //        data: ["full_name": "John Doe"]
+  //      )
+  //    )
+  //
+  //    expectNoDifference(link.properties.actionLink.path, "/auth/v1/verify")
+  //    expectNoDifference(link.properties.verificationType, .signup)
+  //    expectNoDifference(link.user.email, email)
+  //  }
+  //
+  //  func testGenerateLink_magicLink() async throws {
+  //    let client = Self.makeClient(serviceRole: true)
+  //    let email = mockEmail()
+  //    let password = mockPassword()
+  //
+  //    // first create a user
+  //    try await client.admin.createUser(
+  //      attributes: AdminUserAttributes(email: email, password: password)
+  //    )
+  //
+  //    // generate a magic link for the created user
+  //    let link = try await client.admin.generateLink(params: .magicLink(email: email))
+  //
+  //    expectNoDifference(link.properties.verificationType, .magiclink)
+  //  }
 
   // func testGenerateLink_recovery() async throws {
   //   let client = Self.makeClient(serviceRole: true)
@@ -322,14 +331,14 @@ final class AuthClientIntegrationTests: XCTestCase {
   //   expectNoDifference(link.properties.verificationType, .recovery)
   // }
 
-//  func testGenerateLink_invite() async throws {
-//    let client = Self.makeClient(serviceRole: true)
-//    let email = mockEmail()
-//
-//    let link = try await client.admin.generateLink(params: .invite(email: email))
-//
-//    expectNoDifference(link.properties.verificationType, .invite)
-//  }
+  //  func testGenerateLink_invite() async throws {
+  //    let client = Self.makeClient(serviceRole: true)
+  //    let email = mockEmail()
+  //
+  //    let link = try await client.admin.generateLink(params: .invite(email: email))
+  //
+  //    expectNoDifference(link.properties.verificationType, .invite)
+  //  }
 
   @discardableResult
   private func signUpIfNeededOrSignIn(
