@@ -38,7 +38,7 @@ final class IntegrationTests: XCTestCase {
   let client = PostgrestClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
     headers: [
-      "Apikey": DotEnv.SUPABASE_ANON_KEY,
+      "Apikey": DotEnv.SUPABASE_ANON_KEY
     ],
     logger: nil
   )
@@ -51,10 +51,12 @@ final class IntegrationTests: XCTestCase {
       "INTEGRATION_TESTS not defined."
     )
 
-    // Run fresh test by deleting all data. Delete without a where clause isn't supported, so have
-    // to do this `neq` trick to delete all data.
+    // Run fresh test by deleting test data. Delete without a where clause isn't supported, so have
+    // to do this `neq` trick to delete all data. For users, only delete rows with email (test data),
+    // leaving seed data with username intact.
     try await client.from("todos").delete().neq("id", value: UUID().uuidString).execute()
-    try await client.from("users").delete().neq("id", value: UUID().uuidString).execute()
+    try await client.from("users").delete().not("email", operator: .is, value: AnyJSON.null)
+      .execute()
   }
 
   func testIntegration() async throws {
@@ -128,7 +130,7 @@ final class IntegrationTests: XCTestCase {
       .ilike("email", value: "johndoe+test%").execute().value
     XCTAssertEqual(
       fetchedUsers[...],
-      users[1 ... 2]
+      users[1...2]
     )
   }
 }
