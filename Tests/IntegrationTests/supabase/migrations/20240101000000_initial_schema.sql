@@ -9,7 +9,7 @@ CREATE TABLE users (
   age_range int4range,
   catchphrase TEXT,
   data JSONB,
-  status user_status
+  status user_status DEFAULT 'ONLINE'
 );
 
 -- Todos table
