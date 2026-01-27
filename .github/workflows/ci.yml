@@ -184,7 +184,7 @@ jobs:
       - name: "Setup Supabase CLI"
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: ${{ vars.SUPABASE_CLI_VERSION || '2.0.0' }}
       - name: "Start Supabase"
         working-directory: Tests/IntegrationTests
         run: supabase start
