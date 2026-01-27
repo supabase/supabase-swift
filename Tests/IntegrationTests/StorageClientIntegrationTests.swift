@@ -27,6 +27,21 @@ final class StorageClientIntegrationTests: XCTestCase {
       ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
       "INTEGRATION_TESTS not defined."
     )
+
+    // Clean up test-bucket if it exists from a previous failed run
+    // to make tests idempotent
+    let testBucketName = "test-bucket"
+    do {
+      // First empty the bucket (required before deletion)
+      let files = try await storage.from(testBucketName).list()
+      if !files.isEmpty {
+        let filePaths = files.map { $0.name }
+        try await storage.from(testBucketName).remove(paths: filePaths)
+      }
+      try await storage.deleteBucket(testBucketName)
+    } catch {
+      // Ignore errors - bucket may not exist, which is expected
+    }
   }
 
   func testBucket_CRUD() async throws {
