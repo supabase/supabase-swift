@@ -70,7 +70,7 @@ RETURNS VOID AS $$
 BEGIN
   DELETE FROM auth.users WHERE id = auth.uid();
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp;
 
 -- RPC function to get username and status (for PostgrestFilterTests)
 CREATE OR REPLACE FUNCTION get_username_and_status(name_param TEXT)
