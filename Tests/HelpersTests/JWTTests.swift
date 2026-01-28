@@ -1,5 +1,5 @@
-import XCTest
 import Helpers
+import XCTest
 
 final class JWTTests: XCTestCase {
   func testDecodeJWT() throws {

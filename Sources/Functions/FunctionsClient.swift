@@ -11,9 +11,10 @@ let version = Helpers.version
 /// An actor representing a client for invoking functions.
 public final class FunctionsClient: Sendable {
   /// Fetch handler used to make requests.
-  public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
-    Data, URLResponse
-  )
+  public typealias FetchHandler =
+    @Sendable (_ request: URLRequest) async throws -> (
+      Data, URLResponse
+    )
 
   /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
   ///

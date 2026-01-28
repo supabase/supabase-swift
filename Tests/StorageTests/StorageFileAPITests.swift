@@ -3,11 +3,11 @@ import Mocker
 import TestHelpers
 import XCTest
 
+@testable import Storage
+
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
-
-@testable import Storage
 
 final class StorageFileAPITests: XCTestCase {
   let url = URL(string: "http://localhost:54321/storage/v1")!
@@ -18,7 +18,12 @@ final class StorageFileAPITests: XCTestCase {
 
     testingBoundary.setValue("alamofire.boundary.e56f43407f772505")
 
-    JSONEncoder.defaultStorageEncoder.outputFormatting = [.sortedKeys]
+    let encoder: JSONEncoder = {
+      let encoder = JSONEncoder()
+      encoder.keyEncodingStrategy = .convertToSnakeCase
+      encoder.outputFormatting = [.sortedKeys]
+      return encoder
+    }()
     JSONEncoder.unconfiguredEncoder.outputFormatting = [.sortedKeys]
 
     let configuration = URLSessionConfiguration.default
@@ -33,6 +38,7 @@ final class StorageFileAPITests: XCTestCase {
           "apikey":
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
         ],
+        encoder: encoder,
         session: StorageHTTPSession(
           fetch: { try await session.data(for: $0) },
           upload: { try await session.upload(for: $0, from: $1) }

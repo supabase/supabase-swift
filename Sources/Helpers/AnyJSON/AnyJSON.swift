@@ -26,12 +26,12 @@ public enum AnyJSON: Sendable, Codable, Hashable {
   public var value: Any {
     switch self {
     case .null: NSNull()
-    case let .string(string): string
-    case let .integer(val): val
-    case let .double(val): val
-    case let .object(dictionary): dictionary.mapValues(\.value)
-    case let .array(array): array.map(\.value)
-    case let .bool(bool): bool
+    case .string(let string): string
+    case .integer(let val): val
+    case .double(let val): val
+    case .object(let dictionary): dictionary.mapValues(\.value)
+    case .array(let array): array.map(\.value)
+    case .bool(let bool): bool
     }
   }
 
@@ -44,42 +44,42 @@ public enum AnyJSON: Sendable, Codable, Hashable {
   }
 
   public var boolValue: Bool? {
-    if case let .bool(val) = self {
+    if case .bool(let val) = self {
       return val
     }
     return nil
   }
 
   public var objectValue: JSONObject? {
-    if case let .object(dictionary) = self {
+    if case .object(let dictionary) = self {
       return dictionary
     }
     return nil
   }
 
   public var arrayValue: JSONArray? {
-    if case let .array(array) = self {
+    if case .array(let array) = self {
       return array
     }
     return nil
   }
 
   public var stringValue: String? {
-    if case let .string(string) = self {
+    if case .string(let string) = self {
       return string
     }
     return nil
   }
 
   public var intValue: Int? {
-    if case let .integer(val) = self {
+    if case .integer(let val) = self {
       return val
     }
     return nil
   }
 
   public var doubleValue: Double? {
-    if case let .double(val) = self {
+    if case .double(let val) = self {
       return val
     }
     return nil
@@ -113,12 +113,12 @@ public enum AnyJSON: Sendable, Codable, Hashable {
     var container = encoder.singleValueContainer()
     switch self {
     case .null: try container.encodeNil()
-    case let .array(val): try container.encode(val)
-    case let .object(val): try container.encode(val)
-    case let .string(val): try container.encode(val)
-    case let .integer(val): try container.encode(val)
-    case let .double(val): try container.encode(val)
-    case let .bool(val): try container.encode(val)
+    case .array(let val): try container.encode(val)
+    case .object(let val): try container.encode(val)
+    case .string(let val): try container.encode(val)
+    case .integer(let val): try container.encode(val)
+    case .double(let val): try container.encode(val)
+    case .bool(let val): try container.encode(val)
     }
   }
 }
