@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.41.0](https://github.com/supabase/supabase-swift/compare/v2.40.0...v2.41.0) (2026-01-28)
+
+
+### Features
+
+* **ci:** enhance CI with format check, API stability, and success summary ([#887](https://github.com/supabase/supabase-swift/issues/887)) ([a15b888](https://github.com/supabase/supabase-swift/commit/a15b88809ca210693687bc7eefd937290b71d292))
+
+
+### Bug Fixes
+
+* improve Swift concurrency thread safety and documentation ([#891](https://github.com/supabase/supabase-swift/issues/891)) ([eb73450](https://github.com/supabase/supabase-swift/commit/eb73450d01ba61c9f3d2d51631d48a42d716cfe3))
+
 ## [2.40.0](https://github.com/supabase/supabase-swift/compare/v2.39.0...v2.40.0) (2026-01-13)
 
 
