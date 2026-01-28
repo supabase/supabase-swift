@@ -11,9 +11,9 @@ import XCTest
 
 final class PostgrestErrorTests: XCTestCase {
 
-    func testLocalizedErrorConformance() {
-        let error = PostgrestError(message: "test error message")
-        XCTAssertEqual(error.errorDescription, "test error message")
-    }
+  func testLocalizedErrorConformance() {
+    let error = PostgrestError(message: "test error message")
+    XCTAssertEqual(error.errorDescription, "test error message")
+  }
 
-} 
+}

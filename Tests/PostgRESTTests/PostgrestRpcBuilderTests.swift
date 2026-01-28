@@ -135,7 +135,7 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
         "sum",
         params: [
           "numbers": [1, 2, 3],
-          "key": "value"
+          "key": "value",
         ] as JSONObject,
         get: true
       )

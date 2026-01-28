@@ -94,7 +94,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
       """#
     }
     .register()
-    
+
     try await sut.from("users")
       .select()
       .execute(options: FetchOptions(head: true))

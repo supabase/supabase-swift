@@ -338,18 +338,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  @available(
-    *,
-    deprecated,
-    message:
-      "Client handles channels automatically, this method will be removed on the next major release."
-  )
-  public func addChannel(_ channel: RealtimeChannelV2) {
-    mutableState.withValue {
-      $0.channels[channel.topic] = channel
-    }
-  }
-
   /// Unsubscribe and removes channel.
   ///
   /// If there is no channel left, client is disconnected.
