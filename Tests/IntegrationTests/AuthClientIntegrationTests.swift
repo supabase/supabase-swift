@@ -425,6 +425,6 @@ final class AuthClientIntegrationTests: XCTestCase {
 
     expectNoDifference(events, receivedEvents.value)
 
-    token.remove()
+    token.cancel()
   }
 }
