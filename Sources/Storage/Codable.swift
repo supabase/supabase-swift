@@ -9,7 +9,10 @@ import ConcurrencyExtras
 import Foundation
 
 extension JSONEncoder {
-  static let unconfiguredEncoder: JSONEncoder = .init()
+  /// Returns a `JSONEncoder` with default configuration.
+  public static func unconfiguredEncoder() -> JSONEncoder {
+    JSONEncoder()
+  }
 
   /// Default `JSONEncoder` for encoding types to Supabase Storage.
   public static func storage() -> JSONEncoder {

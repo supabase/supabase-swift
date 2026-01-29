@@ -276,7 +276,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let transform: TransformOptions?
     }
 
-    let encoder = JSONEncoder.unconfiguredEncoder
+    let encoder = JSONEncoder.unconfiguredEncoder()
 
     let response = try await execute(
       HTTPRequest(
@@ -327,7 +327,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let paths: [String]
     }
 
-    let encoder = JSONEncoder.unconfiguredEncoder
+    let encoder = JSONEncoder.unconfiguredEncoder()
 
     let response = try await execute(
       HTTPRequest(
@@ -405,7 +405,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     path: String? = nil,
     options: SearchOptions? = nil
   ) async throws -> [FileObject] {
-    let encoder = JSONEncoder.unconfiguredEncoder
+    let encoder = JSONEncoder.unconfiguredEncoder()
 
     var options = options ?? defaultSearchOptions
     options.prefix = path ?? ""

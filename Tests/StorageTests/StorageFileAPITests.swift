@@ -24,7 +24,6 @@ final class StorageFileAPITests: XCTestCase {
       encoder.outputFormatting = [.sortedKeys]
       return encoder
     }()
-    JSONEncoder.unconfiguredEncoder.outputFormatting = [.sortedKeys]
 
     let configuration = URLSessionConfiguration.default
     configuration.protocolClasses = [MockingURLProtocol.self]
