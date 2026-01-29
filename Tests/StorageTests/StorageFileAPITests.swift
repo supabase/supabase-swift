@@ -17,6 +17,7 @@ final class StorageFileAPITests: XCTestCase {
     super.setUp()
 
     testingBoundary.setValue("alamofire.boundary.e56f43407f772505")
+    Storage._unconfiguredEncoderOutputFormatting = [.sortedKeys]
 
     let encoder: JSONEncoder = {
       let encoder = JSONEncoder()

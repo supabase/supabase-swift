@@ -8,10 +8,21 @@
 import ConcurrencyExtras
 import Foundation
 
+/// Test hook for configuring encoder output formatting. Only available in DEBUG builds.
+#if DEBUG
+  nonisolated(unsafe) public var _unconfiguredEncoderOutputFormatting:
+    JSONEncoder.OutputFormatting =
+      []
+#endif
+
 extension JSONEncoder {
   /// Returns a `JSONEncoder` with default configuration.
   public static func unconfiguredEncoder() -> JSONEncoder {
-    JSONEncoder()
+    let encoder = JSONEncoder()
+    #if DEBUG
+      encoder.outputFormatting = _unconfiguredEncoderOutputFormatting
+    #endif
+    return encoder
   }
 
   /// Default `JSONEncoder` for encoding types to Supabase Storage.
