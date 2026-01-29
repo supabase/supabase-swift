@@ -85,7 +85,7 @@ private actor LiveSessionManager {
                 URLQueryItem(name: "grant_type", value: "refresh_token")
               ],
               body: configuration.encoder.encode(
-                UserCredentials(refreshToken: refreshToken)
+                ["refresh_token": refreshToken]
               )
             )
           )

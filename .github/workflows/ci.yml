@@ -111,6 +111,10 @@ jobs:
       - uses: actions/checkout@v6
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+      - name: Remove Examples from workspace (incompatible with Xcode 15.4)
+        run: |
+          # Examples.xcodeproj uses Xcode 16 project format features that are incompatible with Xcode 15.4
+          printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<Workspace' '   version = "1.0">' '   <FileRef' '      location = "group:">' '   </FileRef>' '</Workspace>' > Supabase.xcworkspace/contents.xcworkspacedata
       - name: List available devices
         run: xcrun simctl list devices available
       - name: Cache derived data

@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 21/01/25.
 //
 
-import Mocker
 import Foundation
 import InlineSnapshotTesting
+import Mocker
 
 extension Mock {
   package func snapshotRequest(
@@ -23,8 +23,8 @@ extension Mock {
     column: UInt = #column
   ) -> Self {
     #if os(Linux) || os(Android)
-    // non-Darwin curl snapshots have a different Content-Length than expected
-    return self
+      // non-Darwin curl snapshots have a different Content-Length than expected
+      return self
     #endif
     var copy = self
     copy.onRequestHandler = OnRequestHandler {

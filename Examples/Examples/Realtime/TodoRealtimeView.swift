@@ -105,14 +105,16 @@ struct TodoRealtimeView: View {
     // Handle insertions
     async let insertionObservation: () = { @MainActor in
       for await insertion in insertions {
-        try todos.insert(insertion.decodeRecord(decoder: PostgrestClient.Configuration.jsonDecoder), at: 0)
+        try todos.insert(
+          insertion.decodeRecord(decoder: PostgrestClient.Configuration.jsonDecoder), at: 0)
       }
     }()
 
     // Handle updates
     async let updatesObservation: () = { @MainActor in
       for await update in updates {
-        let record = try update.decodeRecord(decoder: PostgrestClient.Configuration.jsonDecoder) as Todo
+        let record =
+          try update.decodeRecord(decoder: PostgrestClient.Configuration.jsonDecoder) as Todo
         todos[id: record.id] = record
       }
     }()

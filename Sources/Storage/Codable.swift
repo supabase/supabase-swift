@@ -9,19 +9,22 @@ import ConcurrencyExtras
 import Foundation
 
 extension JSONEncoder {
-  @available(*, deprecated, message: "Access to storage encoder is going to be removed.")
-  public static let defaultStorageEncoder: JSONEncoder = {
-    let encoder = JSONEncoder()
+  /// Returns a `JSONEncoder` with default configuration.
+  static func unconfiguredEncoder() -> JSONEncoder {
+    JSONEncoder.supabase()
+  }
+
+  /// Default `JSONEncoder` for encoding types to Supabase Storage.
+  public static func storage() -> JSONEncoder {
+    let encoder = JSONEncoder.supabase()
     encoder.keyEncodingStrategy = .convertToSnakeCase
     return encoder
-  }()
-
-  static let unconfiguredEncoder: JSONEncoder = .init()
+  }
 }
 
 extension JSONDecoder {
-  @available(*, deprecated, message: "Access to storage decoder is going to be removed.")
-  public static let defaultStorageDecoder: JSONDecoder = {
+  /// Default `JSONDecoder` for decoding types from Supabase Storage.
+  public static func storage() -> JSONDecoder {
     JSONDecoder.supabase()
-  }()
+  }
 }

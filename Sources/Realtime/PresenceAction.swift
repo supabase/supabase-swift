@@ -41,10 +41,11 @@ extension PresenceV2: Codable {
 
     let json = try container.decode(JSONObject.self)
 
-    let codingPath = container.codingPath + [
-      _StringCodingKey("metas"),
-      _StringCodingKey(intValue: 0)!,
-    ]
+    let codingPath =
+      container.codingPath + [
+        _StringCodingKey("metas"),
+        _StringCodingKey(intValue: 0)!,
+      ]
 
     guard var meta = json["metas"]?.arrayValue?.first?.objectValue else {
       throw DecodingError.typeMismatch(
