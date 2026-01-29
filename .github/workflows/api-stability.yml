@@ -1,0 +1,159 @@
+name: API Stability
+
+on:
+  pull_request:
+    branches:
+      - "*"
+      - release/*
+    paths:
+      - "Sources/**"
+      - "Package.swift"
+      - ".github/workflows/api-stability.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  api-stability:
+    name: API stability check
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check for breaking API changes
+        id: api-check
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Set baseline to the base branch of the PR
+          export BASELINE_TREEISH=${{ github.base_ref }}
+          export BASELINE_REPO_URL="${{ github.event.repository.clone_url }}"
+
+          echo "Checking for breaking API changes against $BASELINE_TREEISH"
+
+          # Run the breaking changes check and capture output
+          set +e
+          API_OUTPUT=$(bash scripts/check-for-breaking-api-changes.sh 2>&1)
+          API_EXIT_CODE=$?
+          set -e
+
+          echo "$API_OUTPUT"
+
+          if [ $API_EXIT_CODE -eq 0 ]; then
+            echo "✅ No breaking API changes detected"
+            echo "has_breaking_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Breaking API changes detected"
+            echo ""
+
+            # Check if breaking change is acknowledged in PR title or commit messages
+            BREAKING_ACKNOWLEDGED=false
+
+            # Check PR title for '!' (e.g., 'feat!:', 'fix!:')
+            if echo "$PR_TITLE" | grep -qE '^[a-z]+(\([^)]+\))?!:'; then
+              echo "✅ Breaking change acknowledged in PR title with '!'"
+              BREAKING_ACKNOWLEDGED=true
+            fi
+
+            # Check PR title for 'BREAKING CHANGE:'
+            if echo "$PR_TITLE" | grep -qi 'BREAKING CHANGE:'; then
+              echo "✅ Breaking change acknowledged in PR title with 'BREAKING CHANGE:'"
+              BREAKING_ACKNOWLEDGED=true
+            fi
+
+            # Check commit messages for '!' or 'BREAKING CHANGE:'
+            git fetch origin ${{ github.base_ref }}
+            COMMIT_SUBJECTS=$(git log --format=%s origin/${{ github.base_ref }}..HEAD)
+            COMMIT_BODIES=$(git log --format=%b origin/${{ github.base_ref }}..HEAD)
+
+            if echo "$COMMIT_SUBJECTS" | grep -qE '^[a-z]+(\([^)]+\))?!:'; then
+              echo "✅ Breaking change acknowledged in commit message with '!'"
+              BREAKING_ACKNOWLEDGED=true
+            fi
+
+            if echo "$COMMIT_SUBJECTS" | grep -qi 'BREAKING CHANGE:'; then
+              echo "✅ Breaking change acknowledged in commit subject with 'BREAKING CHANGE:'"
+              BREAKING_ACKNOWLEDGED=true
+            fi
+
+            if echo "$COMMIT_BODIES" | grep -qi 'BREAKING CHANGE:'; then
+              echo "✅ Breaking change acknowledged in commit body with 'BREAKING CHANGE:'"
+              BREAKING_ACKNOWLEDGED=true
+            fi
+
+            if [ "$BREAKING_ACKNOWLEDGED" = true ]; then
+              echo ""
+              echo "✅ Breaking API changes are properly acknowledged"
+              echo "has_breaking_changes=false" >> $GITHUB_OUTPUT
+            else
+              echo ""
+              echo "⚠️ Breaking API changes detected but not acknowledged"
+              echo "has_breaking_changes=true" >> $GITHUB_OUTPUT
+
+              # Save the API output for the comment (escape for multiline)
+              {
+                echo 'api_output<<EOF'
+                echo "$API_OUTPUT"
+                echo 'EOF'
+              } >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Find existing comment
+        if: steps.api-check.outputs.has_breaking_changes == 'true'
+        uses: peter-evans/find-comment@v3
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: '<!-- api-stability-check -->'
+
+      - name: Post or update PR comment
+        if: steps.api-check.outputs.has_breaking_changes == 'true'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          edit-mode: replace
+          body: |
+            <!-- api-stability-check -->
+            ## ⚠️ Potential Breaking API Changes Detected
+
+            This PR appears to contain breaking API changes. Please review the changes below:
+
+            <details>
+            <summary>API Check Output</summary>
+
+            ```
+            ${{ steps.api-check.outputs.api_output }}
+            ```
+
+            </details>
+
+            **If this is intentional**, please update your PR title or commit message to include:
+            - `!` after the type (e.g., `feat!: remove deprecated method`)
+            - Or include `BREAKING CHANGE:` in the commit body
+
+            **If this is a false positive**, you can safely ignore this warning.
+
+      - name: Find stale comment
+        if: steps.api-check.outputs.has_breaking_changes == 'false'
+        uses: peter-evans/find-comment@v3
+        id: find-old-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: '<!-- api-stability-check -->'
+
+      - name: Remove stale comment
+        if: steps.api-check.outputs.has_breaking_changes == 'false' && steps.find-old-comment.outputs.comment-id != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.deleteComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: ${{ steps.find-old-comment.outputs.comment-id }}
+            })
