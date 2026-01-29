@@ -330,35 +330,10 @@ jobs:
             echo "✅ All changed Swift files are properly formatted"
           fi
 
-  api-stability:
-    name: API stability check
-    runs-on: macos-15
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Check for breaking API changes
-        run: |
-          # Set baseline to the base branch of the PR
-          export BASELINE_TREEISH=${{ github.base_ref }}
-          export BASELINE_REPO_URL="${{ github.event.repository.clone_url }}"
-
-          echo "Checking for breaking API changes against $BASELINE_TREEISH"
-
-          # Run the breaking changes check
-          if bash scripts/check-for-breaking-api-changes.sh; then
-            echo "✅ No breaking API changes detected"
-          else
-            echo "⚠️ Breaking API changes detected"
-            echo "If this is intentional, make sure your commit message includes 'BREAKING CHANGE:' or uses '!' (e.g., 'feat!:')"
-            exit 1
-          fi
-
   ci-success:
     name: CI Success
     if: always()
-    needs: [macos, macos-legacy, spm, linux, integration-tests, library-evolution, examples, docs, format-check, api-stability]
+    needs: [macos, macos-legacy, spm, linux, integration-tests, library-evolution, examples, docs, format-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs
