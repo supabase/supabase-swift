@@ -102,7 +102,7 @@ jobs:
           fi
 
       - name: Find existing comment
-        if: steps.api-check.outputs.has_breaking_changes == 'true'
+        if: steps.api-check.outputs.has_breaking_changes == 'true' && github.event.pull_request.head.repo.full_name == github.repository
         uses: peter-evans/find-comment@v3
         id: find-comment
         with:
@@ -111,7 +111,7 @@ jobs:
           body-includes: '<!-- api-stability-check -->'
 
       - name: Post or update PR comment
-        if: steps.api-check.outputs.has_breaking_changes == 'true'
+        if: steps.api-check.outputs.has_breaking_changes == 'true' && github.event.pull_request.head.repo.full_name == github.repository
         uses: peter-evans/create-or-update-comment@v4
         with:
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
@@ -139,7 +139,7 @@ jobs:
             **If this is a false positive**, you can safely ignore this warning.
 
       - name: Find stale comment
-        if: steps.api-check.outputs.has_breaking_changes == 'false'
+        if: steps.api-check.outputs.has_breaking_changes == 'false' && github.event.pull_request.head.repo.full_name == github.repository
         uses: peter-evans/find-comment@v3
         id: find-old-comment
         with:
@@ -148,7 +148,7 @@ jobs:
           body-includes: '<!-- api-stability-check -->'
 
       - name: Remove stale comment
-        if: steps.api-check.outputs.has_breaking_changes == 'false' && steps.find-old-comment.outputs.comment-id != ''
+        if: steps.api-check.outputs.has_breaking_changes == 'false' && steps.find-old-comment.outputs.comment-id != '' && github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@v7
         with:
           script: |
