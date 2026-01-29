@@ -17,14 +17,6 @@ final class StorageFileAPITests: XCTestCase {
     super.setUp()
 
     testingBoundary.setValue("alamofire.boundary.e56f43407f772505")
-    Storage._unconfiguredEncoderOutputFormatting = [.sortedKeys]
-
-    let encoder: JSONEncoder = {
-      let encoder = JSONEncoder()
-      encoder.keyEncodingStrategy = .convertToSnakeCase
-      encoder.outputFormatting = [.sortedKeys]
-      return encoder
-    }()
 
     let configuration = URLSessionConfiguration.default
     configuration.protocolClasses = [MockingURLProtocol.self]
@@ -38,7 +30,6 @@ final class StorageFileAPITests: XCTestCase {
           "apikey":
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
         ],
-        encoder: encoder,
         session: StorageHTTPSession(
           fetch: { try await session.data(for: $0) },
           upload: { try await session.upload(for: $0, from: $1) }
