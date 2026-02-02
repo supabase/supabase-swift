@@ -2,6 +2,10 @@ import ConcurrencyExtras
 import Foundation
 import TestHelpers
 
+#if canImport(LocalAuthentication)
+  import LocalAuthentication
+#endif
+
 @testable import Auth
 
 func json(named name: String) -> Data {
@@ -15,21 +19,6 @@ extension Decodable {
   }
 }
 
-extension Dependencies {
-  static var mock = Dependencies(
-    configuration: AuthClient.Configuration(
-      url: URL(string: "https://project-id.supabase.com")!,
-      localStorage: InMemoryLocalStorage(),
-      logger: nil
-    ),
-    http: HTTPClientMock(),
-    api: APIClient(clientID: AuthClientID()),
-    codeVerifierStorage: CodeVerifierStorage.mock,
-    sessionStorage: SessionStorage.live(clientID: AuthClientID()),
-    sessionManager: SessionManager.live(clientID: AuthClientID())
-  )
-}
-
 extension CodeVerifierStorage {
   static var mock: CodeVerifierStorage {
     let code = LockIsolated<String?>(nil)
@@ -40,3 +29,87 @@ extension CodeVerifierStorage {
     )
   }
 }
+
+#if canImport(LocalAuthentication)
+  extension BiometricStorage {
+    static var mock: BiometricStorage {
+      let isEnabled = LockIsolated(false)
+      let policy = LockIsolated<BiometricPolicy?>(.default)
+      let evaluationPolicy = LockIsolated<BiometricEvaluationPolicy?>(
+        .deviceOwnerAuthenticationWithBiometrics)
+      let promptTitle = LockIsolated<String?>(nil)
+
+      return BiometricStorage(
+        getIsEnabled: { isEnabled.value },
+        getPolicy: { policy.value },
+        getEvaluationPolicy: { evaluationPolicy.value },
+        getPromptTitle: { promptTitle.value },
+        enable: { evalPolicy, biometricPolicy, title in
+          isEnabled.setValue(true)
+          policy.setValue(biometricPolicy)
+          evaluationPolicy.setValue(evalPolicy)
+          promptTitle.setValue(title)
+        },
+        disable: {
+          isEnabled.setValue(false)
+          policy.setValue(nil)
+          evaluationPolicy.setValue(nil)
+          promptTitle.setValue(nil)
+        }
+      )
+    }
+  }
+
+  extension BiometricSession {
+    static var mock: BiometricSession {
+      let lastAuthTime = LockIsolated<Date?>(nil)
+
+      return BiometricSession(
+        recordAuthentication: {
+          lastAuthTime.setValue(Date())
+        },
+        reset: {
+          lastAuthTime.setValue(nil)
+        },
+        lastAuthenticationTime: {
+          lastAuthTime.value
+        },
+        isAuthenticationRequired: { _ in
+          false
+        }
+      )
+    }
+  }
+
+  extension Dependencies {
+    static var mock = Dependencies(
+      configuration: AuthClient.Configuration(
+        url: URL(string: "https://project-id.supabase.com")!,
+        localStorage: InMemoryLocalStorage(),
+        logger: nil
+      ),
+      http: HTTPClientMock(),
+      api: APIClient(clientID: AuthClientID()),
+      codeVerifierStorage: CodeVerifierStorage.mock,
+      sessionStorage: SessionStorage.live(clientID: AuthClientID()),
+      sessionManager: SessionManager.live(clientID: AuthClientID()),
+      biometricStorage: BiometricStorage.mock,
+      biometricSession: BiometricSession.mock
+    )
+  }
+#else
+  extension Dependencies {
+    static var mock = Dependencies(
+      configuration: AuthClient.Configuration(
+        url: URL(string: "https://project-id.supabase.com")!,
+        localStorage: InMemoryLocalStorage(),
+        logger: nil
+      ),
+      http: HTTPClientMock(),
+      api: APIClient(clientID: AuthClientID()),
+      codeVerifierStorage: CodeVerifierStorage.mock,
+      sessionStorage: SessionStorage.live(clientID: AuthClientID()),
+      sessionManager: SessionManager.live(clientID: AuthClientID())
+    )
+  }
+#endif
