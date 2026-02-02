@@ -30,6 +30,30 @@ extension CodeVerifierStorage {
   }
 }
 
+extension SessionStorage {
+  static var mock: SessionStorage {
+    let session = LockIsolated<Session?>(nil)
+    return SessionStorage(
+      get: { session.value },
+      store: { session.setValue($0) },
+      delete: { session.setValue(nil) }
+    )
+  }
+}
+
+extension SessionManager {
+  static var mock: SessionManager {
+    SessionManager(
+      session: { throw AuthError.sessionMissing },
+      refreshSession: { _ in throw AuthError.sessionMissing },
+      update: { _ in },
+      remove: {},
+      startAutoRefresh: {},
+      stopAutoRefresh: {}
+    )
+  }
+}
+
 #if canImport(LocalAuthentication)
   extension BiometricStorage {
     static var mock: BiometricStorage {
@@ -82,34 +106,38 @@ extension CodeVerifierStorage {
   }
 
   extension Dependencies {
-    static var mock = Dependencies(
-      configuration: AuthClient.Configuration(
-        url: URL(string: "https://project-id.supabase.com")!,
-        localStorage: InMemoryLocalStorage(),
-        logger: nil
-      ),
-      http: HTTPClientMock(),
-      api: APIClient(clientID: AuthClientID()),
-      codeVerifierStorage: CodeVerifierStorage.mock,
-      sessionStorage: SessionStorage.live(clientID: AuthClientID()),
-      sessionManager: SessionManager.live(clientID: AuthClientID()),
-      biometricStorage: BiometricStorage.mock,
-      biometricSession: BiometricSession.mock
-    )
+    static func makeMock() -> Dependencies {
+      Dependencies(
+        configuration: AuthClient.Configuration(
+          url: URL(string: "https://project-id.supabase.com")!,
+          localStorage: InMemoryLocalStorage(),
+          logger: nil
+        ),
+        http: HTTPClientMock(),
+        api: APIClient(clientID: AuthClientID()),
+        codeVerifierStorage: CodeVerifierStorage.mock,
+        sessionStorage: SessionStorage.mock,
+        sessionManager: SessionManager.mock,
+        biometricStorage: BiometricStorage.mock,
+        biometricSession: BiometricSession.mock
+      )
+    }
   }
 #else
   extension Dependencies {
-    static var mock = Dependencies(
-      configuration: AuthClient.Configuration(
-        url: URL(string: "https://project-id.supabase.com")!,
-        localStorage: InMemoryLocalStorage(),
-        logger: nil
-      ),
-      http: HTTPClientMock(),
-      api: APIClient(clientID: AuthClientID()),
-      codeVerifierStorage: CodeVerifierStorage.mock,
-      sessionStorage: SessionStorage.live(clientID: AuthClientID()),
-      sessionManager: SessionManager.live(clientID: AuthClientID())
-    )
+    static func makeMock() -> Dependencies {
+      Dependencies(
+        configuration: AuthClient.Configuration(
+          url: URL(string: "https://project-id.supabase.com")!,
+          localStorage: InMemoryLocalStorage(),
+          logger: nil
+        ),
+        http: HTTPClientMock(),
+        api: APIClient(clientID: AuthClientID()),
+        codeVerifierStorage: CodeVerifierStorage.mock,
+        sessionStorage: SessionStorage.mock,
+        sessionManager: SessionManager.mock
+      )
+    }
   }
 #endif

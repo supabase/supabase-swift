@@ -60,20 +60,34 @@
       }
 
       // Use LockIsolated for thread-safe caching
-      let cachedSettings = LockIsolated<Settings?>(loadSettings())
+      // Use a flag to track if settings have been loaded (lazy loading to avoid
+      // accessing Dependencies before they're fully set up)
+      let settingsLoaded = LockIsolated(false)
+      let cachedSettings = LockIsolated<Settings?>(nil)
+
+      func ensureSettingsLoaded() {
+        if !settingsLoaded.value {
+          settingsLoaded.setValue(true)
+          cachedSettings.setValue(loadSettings())
+        }
+      }
 
       return BiometricStorage(
         getIsEnabled: {
-          cachedSettings.value?.isEnabled ?? false
+          ensureSettingsLoaded()
+          return cachedSettings.value?.isEnabled ?? false
         },
         getPolicy: {
-          cachedSettings.value?.policy
+          ensureSettingsLoaded()
+          return cachedSettings.value?.policy
         },
         getEvaluationPolicy: {
-          cachedSettings.value?.evaluationPolicy
+          ensureSettingsLoaded()
+          return cachedSettings.value?.evaluationPolicy
         },
         getPromptTitle: {
-          cachedSettings.value?.promptTitle
+          ensureSettingsLoaded()
+          return cachedSettings.value?.promptTitle
         },
         enable: { evaluationPolicy, policy, promptTitle in
           let settings = Settings(
