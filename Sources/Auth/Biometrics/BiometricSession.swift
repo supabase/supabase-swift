@@ -8,14 +8,6 @@
   import ConcurrencyExtras
   import Foundation
 
-  #if canImport(UIKit)
-    import UIKit
-  #endif
-
-  #if canImport(AppKit)
-    import AppKit
-  #endif
-
   /// Tracks biometric authentication state for session-based policies.
   struct BiometricSession: Sendable {
     var recordAuthentication: @Sendable () -> Void
@@ -30,33 +22,16 @@
       let isInBackground = LockIsolated(false)
 
       // Subscribe to app lifecycle notifications
-      #if canImport(UIKit) && !os(watchOS)
+      #if canImport(ObjectiveC)
         Task { @MainActor in
-          NotificationCenter.default.addObserver(
-            forName: UIApplication.didEnterBackgroundNotification,
-            object: nil,
-            queue: .main
-          ) { _ in
-            isInBackground.setValue(true)
-          }
-
-          NotificationCenter.default.addObserver(
-            forName: UIApplication.willEnterForegroundNotification,
-            object: nil,
-            queue: .main
-          ) { _ in
-            // Keep isInBackground true until authentication completes
-          }
-        }
-      #elseif canImport(AppKit)
-        Task { @MainActor in
-          NotificationCenter.default.addObserver(
-            forName: NSApplication.didResignActiveNotification,
-            object: nil,
-            queue: .main
-          ) { _ in
-            isInBackground.setValue(true)
-          }
+          AppLifecycle.observeBackgroundTransitions(
+            onEnterBackground: {
+              isInBackground.setValue(true)
+            },
+            onEnterForeground: {
+              // Keep isInBackground true until authentication completes
+            }
+          )
         }
       #endif
 

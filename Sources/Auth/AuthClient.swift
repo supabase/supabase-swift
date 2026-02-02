@@ -167,58 +167,43 @@ public actor AuthClient {
   #if canImport(ObjectiveC) && canImport(Combine)
     @MainActor
     private func observeAppLifecycleChanges() {
-      var didBecomeActiveNotification: NSNotification.Name?
-      var willResignActiveNotification: NSNotification.Name?
-
-      #if canImport(UIKit)
-        #if canImport(WatchKit)
-          if #available(watchOS 7.0, *) {
-            didBecomeActiveNotification = WKExtension.applicationDidBecomeActiveNotification
-            willResignActiveNotification = WKExtension.applicationWillResignActiveNotification
-          }
-        #else
-          didBecomeActiveNotification = UIApplication.didBecomeActiveNotification
-          willResignActiveNotification = UIApplication.willResignActiveNotification
-        #endif
-      #elseif canImport(AppKit)
-        didBecomeActiveNotification = NSApplication.didBecomeActiveNotification
-        willResignActiveNotification = NSApplication.willResignActiveNotification
-      #endif
-
-      if let didBecomeActiveNotification, let willResignActiveNotification {
-        var cancellables = Set<AnyCancellable>()
-
-        NotificationCenter.default
-          .publisher(for: didBecomeActiveNotification)
-          .sink(
-            receiveCompletion: { _ in
-              // hold ref to cancellable until it completes
-              _ = cancellables
-            },
-            receiveValue: { [weak self] _ in
-              Task {
-                await self?.handleDidBecomeActive()
-              }
-            }
-          )
-          .store(in: &cancellables)
-
-        NotificationCenter.default
-          .publisher(for: willResignActiveNotification)
-          .sink(
-            receiveCompletion: { _ in
-              // hold ref to cancellable until it completes
-              _ = cancellables
-            },
-            receiveValue: { [weak self] _ in
-              Task {
-                await self?.handleWillResignActive()
-              }
-            }
-          )
-          .store(in: &cancellables)
+      guard let didBecomeActive = AppLifecycle.didBecomeActiveNotification,
+        let willResignActive = AppLifecycle.willResignActiveNotification
+      else {
+        return
       }
 
+      var cancellables = Set<AnyCancellable>()
+
+      NotificationCenter.default
+        .publisher(for: didBecomeActive)
+        .sink(
+          receiveCompletion: { _ in
+            // hold ref to cancellable until it completes
+            _ = cancellables
+          },
+          receiveValue: { [weak self] _ in
+            Task {
+              await self?.handleDidBecomeActive()
+            }
+          }
+        )
+        .store(in: &cancellables)
+
+      NotificationCenter.default
+        .publisher(for: willResignActive)
+        .sink(
+          receiveCompletion: { _ in
+            // hold ref to cancellable until it completes
+            _ = cancellables
+          },
+          receiveValue: { [weak self] _ in
+            Task {
+              await self?.handleWillResignActive()
+            }
+          }
+        )
+        .store(in: &cancellables)
     }
 
     private func handleDidBecomeActive() {
