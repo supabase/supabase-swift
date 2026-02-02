@@ -9,6 +9,8 @@ public enum AuthChangeEvent: String, Sendable {
   case userUpdated = "USER_UPDATED"
   case userDeleted = "USER_DELETED"
   case mfaChallengeVerified = "MFA_CHALLENGE_VERIFIED"
+  case biometricsEnabled = "BIOMETRICS_ENABLED"
+  case biometricsDisabled = "BIOMETRICS_DISABLED"
 }
 
 @available(
