@@ -2,11 +2,11 @@ import ConcurrencyExtras
 import Foundation
 import TestHelpers
 
+@testable import Auth
+
 #if canImport(LocalAuthentication)
   import LocalAuthentication
 #endif
-
-@testable import Auth
 
 func json(named name: String) -> Data {
   let url = Bundle.module.url(forResource: name, withExtension: "json")
