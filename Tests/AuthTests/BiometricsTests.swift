@@ -23,258 +23,6 @@
       localStorage = InMemoryLocalStorage()
     }
 
-    // MARK: - BiometricStorage Tests
-
-    func testBiometricStorage_initiallyDisabled() {
-      let storage = BiometricStorage.mock
-
-      XCTAssertFalse(storage.isEnabled)
-      XCTAssertNil(storage.promptTitle)
-    }
-
-    func testBiometricStorage_enableWithDefaultPolicy() {
-      let storage = BiometricStorage.mock
-
-      storage.enable(.deviceOwnerAuthenticationWithBiometrics, .default, "Test Title")
-
-      XCTAssertTrue(storage.isEnabled)
-      XCTAssertEqual(storage.policy, .default)
-      XCTAssertEqual(storage.evaluationPolicy, .deviceOwnerAuthenticationWithBiometrics)
-      XCTAssertEqual(storage.promptTitle, "Test Title")
-    }
-
-    func testBiometricStorage_enableWithAlwaysPolicy() {
-      let storage = BiometricStorage.mock
-
-      storage.enable(.deviceOwnerAuthentication, .always, "Always Auth")
-
-      XCTAssertTrue(storage.isEnabled)
-      XCTAssertEqual(storage.policy, .always)
-      XCTAssertEqual(storage.evaluationPolicy, .deviceOwnerAuthentication)
-    }
-
-    func testBiometricStorage_enableWithSessionPolicy() {
-      let storage = BiometricStorage.mock
-
-      storage.enable(
-        .deviceOwnerAuthenticationWithBiometrics,
-        .session(timeoutInSeconds: 300),
-        "Session Auth"
-      )
-
-      XCTAssertTrue(storage.isEnabled)
-      XCTAssertEqual(storage.policy, .session(timeoutInSeconds: 300))
-    }
-
-    func testBiometricStorage_enableWithAppLifecyclePolicy() {
-      let storage = BiometricStorage.mock
-
-      storage.enable(.deviceOwnerAuthenticationWithBiometrics, .appLifecycle, "App Lifecycle Auth")
-
-      XCTAssertTrue(storage.isEnabled)
-      XCTAssertEqual(storage.policy, .appLifecycle)
-    }
-
-    func testBiometricStorage_disable() {
-      let storage = BiometricStorage.mock
-
-      storage.enable(.deviceOwnerAuthenticationWithBiometrics, .default, "Test")
-      XCTAssertTrue(storage.isEnabled)
-
-      storage.disable()
-
-      XCTAssertFalse(storage.isEnabled)
-      XCTAssertNil(storage.policy)
-      XCTAssertNil(storage.evaluationPolicy)
-      XCTAssertNil(storage.promptTitle)
-    }
-
-    // MARK: - BiometricSession Tests
-
-    func testBiometricSession_initiallyNoAuthTime() {
-      let session = BiometricSession.mock
-
-      XCTAssertNil(session.lastAuthenticationTime())
-    }
-
-    func testBiometricSession_recordAuthentication() {
-      let lastAuthTime = LockIsolated<Date?>(nil)
-
-      let session = BiometricSession(
-        recordAuthentication: { lastAuthTime.setValue(Date()) },
-        reset: { lastAuthTime.setValue(nil) },
-        lastAuthenticationTime: { lastAuthTime.value },
-        isAuthenticationRequired: { _ in lastAuthTime.value == nil }
-      )
-
-      XCTAssertNil(session.lastAuthenticationTime())
-
-      session.recordAuthentication()
-
-      XCTAssertNotNil(session.lastAuthenticationTime())
-    }
-
-    func testBiometricSession_reset() {
-      let lastAuthTime = LockIsolated<Date?>(Date())
-
-      let session = BiometricSession(
-        recordAuthentication: { lastAuthTime.setValue(Date()) },
-        reset: { lastAuthTime.setValue(nil) },
-        lastAuthenticationTime: { lastAuthTime.value },
-        isAuthenticationRequired: { _ in lastAuthTime.value == nil }
-      )
-
-      XCTAssertNotNil(session.lastAuthenticationTime())
-
-      session.reset()
-
-      XCTAssertNil(session.lastAuthenticationTime())
-    }
-
-    func testBiometricSession_defaultPolicy_requiresAuthOnFirstAccess() {
-      let lastAuthTime = LockIsolated<Date?>(nil)
-
-      let session = BiometricSession(
-        recordAuthentication: { lastAuthTime.setValue(Date()) },
-        reset: { lastAuthTime.setValue(nil) },
-        lastAuthenticationTime: { lastAuthTime.value },
-        isAuthenticationRequired: { policy in
-          switch policy {
-          case .default:
-            return lastAuthTime.value == nil
-          default:
-            return false
-          }
-        }
-      )
-
-      XCTAssertTrue(session.isAuthenticationRequired(.default))
-
-      session.recordAuthentication()
-
-      XCTAssertFalse(session.isAuthenticationRequired(.default))
-    }
-
-    func testBiometricSession_alwaysPolicy_alwaysRequiresAuth() {
-      let session = BiometricSession(
-        recordAuthentication: {},
-        reset: {},
-        lastAuthenticationTime: { Date() },
-        isAuthenticationRequired: { policy in
-          switch policy {
-          case .always:
-            return true
-          default:
-            return false
-          }
-        }
-      )
-
-      XCTAssertTrue(session.isAuthenticationRequired(.always))
-    }
-
-    func testBiometricSession_sessionPolicy_requiresAuthAfterTimeout() {
-      let lastAuthTime = LockIsolated<Date?>(Date().addingTimeInterval(-400))  // 400 seconds ago
-
-      let session = BiometricSession(
-        recordAuthentication: { lastAuthTime.setValue(Date()) },
-        reset: { lastAuthTime.setValue(nil) },
-        lastAuthenticationTime: { lastAuthTime.value },
-        isAuthenticationRequired: { policy in
-          switch policy {
-          case .session(let timeout):
-            guard let lastAuth = lastAuthTime.value else { return true }
-            return Date().timeIntervalSince(lastAuth) > timeout
-          default:
-            return false
-          }
-        }
-      )
-
-      // With 300 second timeout and 400 seconds elapsed, should require auth
-      XCTAssertTrue(session.isAuthenticationRequired(.session(timeoutInSeconds: 300)))
-
-      // With 500 second timeout and 400 seconds elapsed, should not require auth
-      XCTAssertFalse(session.isAuthenticationRequired(.session(timeoutInSeconds: 500)))
-    }
-
-    func testBiometricSession_sessionPolicy_noAuthTimeRequiresAuth() {
-      let lastAuthTime = LockIsolated<Date?>(nil)
-
-      let session = BiometricSession(
-        recordAuthentication: { lastAuthTime.setValue(Date()) },
-        reset: { lastAuthTime.setValue(nil) },
-        lastAuthenticationTime: { lastAuthTime.value },
-        isAuthenticationRequired: { policy in
-          switch policy {
-          case .session:
-            return lastAuthTime.value == nil
-          default:
-            return false
-          }
-        }
-      )
-
-      XCTAssertTrue(session.isAuthenticationRequired(.session(timeoutInSeconds: 300)))
-    }
-
-    // MARK: - BiometricAuthenticator Tests
-
-    func testBiometricAuthenticator_mockAvailable() {
-      let authenticator = BiometricAuthenticator.mock(available: true, biometryType: .faceID)
-
-      let availability = authenticator.checkAvailability()
-
-      XCTAssertTrue(availability.isAvailable)
-      XCTAssertEqual(availability.biometryType, .faceID)
-      XCTAssertNil(availability.error)
-    }
-
-    func testBiometricAuthenticator_mockNotAvailable() {
-      let authenticator = BiometricAuthenticator.mock(
-        available: false,
-        biometryType: .none,
-        error: .notAvailable(reason: .noBiometryAvailable)
-      )
-
-      let availability = authenticator.checkAvailability()
-
-      XCTAssertFalse(availability.isAvailable)
-      XCTAssertEqual(availability.biometryType, .none)
-      XCTAssertEqual(availability.error, .notAvailable(reason: .noBiometryAvailable))
-    }
-
-    func testBiometricAuthenticator_mockAuthenticationSuccess() async throws {
-      let authenticator = BiometricAuthenticator.mock(shouldSucceed: true)
-
-      // Should not throw
-      try await authenticator.authenticate("Test", .deviceOwnerAuthenticationWithBiometrics)
-    }
-
-    func testBiometricAuthenticator_mockAuthenticationFailure() async {
-      let authenticator = BiometricAuthenticator.mock(
-        shouldSucceed: false,
-        error: .userCancelled
-      )
-
-      do {
-        try await authenticator.authenticate("Test", .deviceOwnerAuthenticationWithBiometrics)
-        XCTFail("Expected authentication to fail")
-      } catch let error as BiometricError {
-        XCTAssertEqual(error, .userCancelled)
-      } catch {
-        XCTFail("Unexpected error type: \(error)")
-      }
-    }
-
-    func testBiometricAuthenticator_touchID() {
-      let authenticator = BiometricAuthenticator.mock(available: true, biometryType: .touchID)
-
-      let availability = authenticator.checkAvailability()
-
-      XCTAssertEqual(availability.biometryType, .touchID)
-    }
-
     // MARK: - withBiometrics Tests
 
     func testWithBiometrics_disabled_executesOperationDirectly() async throws {
@@ -369,7 +117,12 @@
 
     func testAuthClient_biometricsAvailability() {
       let client = makeAuthClient(
-        authenticator: BiometricAuthenticator.mock(available: true, biometryType: .faceID)
+        authenticator: BiometricAuthenticator(
+          checkAvailability: {
+            BiometricAvailability(isAvailable: true, biometryType: .faceID, error: nil)
+          },
+          authenticate: { _, _ in }
+        )
       )
 
       let availability = client.biometricsAvailability()
@@ -392,7 +145,12 @@
       )
 
       let client = makeAuthClient(
-        authenticator: BiometricAuthenticator.mock(available: true, shouldSucceed: true),
+        authenticator: BiometricAuthenticator(
+          checkAvailability: {
+            BiometricAvailability(isAvailable: true, biometryType: .faceID, error: nil)
+          },
+          authenticate: { _, _ in }
+        ),
         storage: storage
       )
 
@@ -407,9 +165,15 @@
 
     func testAuthClient_enableBiometrics_notAvailable_throws() async {
       let client = makeAuthClient(
-        authenticator: BiometricAuthenticator.mock(
-          available: false,
-          error: .notAvailable(reason: .noBiometryAvailable)
+        authenticator: BiometricAuthenticator(
+          checkAvailability: {
+            BiometricAvailability(
+              isAvailable: false,
+              biometryType: .none,
+              error: .notAvailable(reason: .noBiometryAvailable)
+            )
+          },
+          authenticate: { _, _ in }
         )
       )
 
@@ -429,10 +193,13 @@
 
     func testAuthClient_enableBiometrics_authFails_throws() async {
       let client = makeAuthClient(
-        authenticator: BiometricAuthenticator.mock(
-          available: true,
-          shouldSucceed: false,
-          error: .userCancelled
+        authenticator: BiometricAuthenticator(
+          checkAvailability: {
+            BiometricAvailability(isAvailable: true, biometryType: .faceID, error: nil)
+          },
+          authenticate: { _, _ in
+            throw BiometricError.userCancelled
+          }
         )
       )
 
@@ -556,7 +323,13 @@
         session
         ?? makeBiometricSession(authRequired: authRequired, onRecordAuth: sessionRecordAuth)
       let finalAuthenticator =
-        authenticator ?? BiometricAuthenticator.mock(available: true, shouldSucceed: true)
+        authenticator
+        ?? BiometricAuthenticator(
+          checkAvailability: {
+            BiometricAvailability(isAvailable: true, biometryType: .faceID, error: nil)
+          },
+          authenticate: { _, _ in }
+        )
 
       // Create AuthClient first - this sets up dependencies
       let configuration = AuthClient.Configuration(
@@ -595,7 +368,13 @@
         storage ?? makeBiometricStorage(isEnabled: biometricsEnabled, policy: policy)
       let finalSession = session ?? makeBiometricSession(authRequired: authRequired)
       let finalAuthenticator =
-        authenticator ?? BiometricAuthenticator.mock(available: true, shouldSucceed: true)
+        authenticator
+        ?? BiometricAuthenticator(
+          checkAvailability: {
+            BiometricAvailability(isAvailable: true, biometryType: .faceID, error: nil)
+          },
+          authenticate: { _, _ in }
+        )
 
       Dependencies[client.clientID].biometricAuthenticator = finalAuthenticator
       Dependencies[client.clientID].biometricStorage = finalStorage
