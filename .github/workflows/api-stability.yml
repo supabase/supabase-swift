@@ -112,7 +112,7 @@ jobs:
 
       - name: Post or update PR comment
         if: steps.api-check.outputs.has_breaking_changes == 'true' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@v5
         with:
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
