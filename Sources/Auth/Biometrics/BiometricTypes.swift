@@ -9,7 +9,7 @@
   import LocalAuthentication
 
   /// Policy determining when biometric authentication is required.
-  public enum BiometricPolicy: Sendable, Equatable {
+  public enum BiometricPolicy: Sendable, Hashable {
     /// Biometric authentication is required on first access only.
     /// After successful authentication, no further prompts until app terminates.
     case `default`
