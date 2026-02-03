@@ -53,9 +53,6 @@
 
       // Update session timestamp
       Dependencies[clientID].biometricSession.recordAuthentication()
-
-      // Emit event
-      Dependencies[clientID].eventEmitter.emit(.biometricsEnabled, session: currentSession)
     }
 
     /// Disable biometric protection for session retrieval.
@@ -64,7 +61,6 @@
     nonisolated public func disableBiometrics() {
       Dependencies[clientID].biometricStorage.disable()
       Dependencies[clientID].biometricSession.reset()
-      Dependencies[clientID].eventEmitter.emit(.biometricsDisabled, session: currentSession)
     }
 
     /// Check if biometric authentication would be required on next session access.
