@@ -100,6 +100,18 @@ struct AuthExamplesView: View {
           )
         }
       }
+
+      #if canImport(LocalAuthentication)
+        Section("Security") {
+          NavigationLink(destination: BiometricKeychainExample()) {
+            ExampleRow(
+              title: "Biometric Keychain",
+              description: "Protect session storage with Face ID / Touch ID",
+              icon: "faceid"
+            )
+          }
+        }
+      #endif
     }
     .navigationTitle("Authentication")
   }
