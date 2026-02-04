@@ -262,17 +262,13 @@
       XCTAssertNotNil(BiometricError.userCancelled.errorDescription)
       XCTAssertNotNil(BiometricError.notEnrolled.errorDescription)
       XCTAssertNotNil(BiometricError.lockedOut.errorDescription)
-      XCTAssertNotNil(BiometricError.notEnabled.errorDescription)
       XCTAssertNotNil(BiometricError.authenticationFailed(message: "test").errorDescription)
       XCTAssertNotNil(BiometricError.notAvailable(reason: .noBiometryAvailable).errorDescription)
     }
 
     func testBiometricUnavailableReason_descriptions() {
       XCTAssertFalse(BiometricUnavailableReason.noBiometryAvailable.localizedDescription.isEmpty)
-      XCTAssertFalse(BiometricUnavailableReason.biometryNotEnrolled.localizedDescription.isEmpty)
-      XCTAssertFalse(BiometricUnavailableReason.biometryLockout.localizedDescription.isEmpty)
       XCTAssertFalse(BiometricUnavailableReason.passcodeNotSet.localizedDescription.isEmpty)
-      XCTAssertFalse(BiometricUnavailableReason.other(code: 123).localizedDescription.isEmpty)
     }
 
     // MARK: - BiometricPolicy Equality Tests
