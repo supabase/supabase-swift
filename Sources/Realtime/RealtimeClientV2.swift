@@ -43,6 +43,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     /// Long-running task for listening for incoming messages from WebSocket.
     var messageTask: Task<Void, Never>?
 
+    var stateObserverTask: Task<Void, Never>?
+
     var channels: [String: RealtimeChannelV2] = [:]
     var sendBuffer: [@Sendable (RealtimeClientV2) -> Void] = []
   }
@@ -176,7 +178,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       logger: options.logger
     )
 
-    Task {
+    let stateObserverTask = Task { [connectionManager, statusSubject] in
       for await state in await connectionManager.stateChanges {
         switch state {
         case .connected:
@@ -190,12 +192,17 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         }
       }
     }
+
+    mutableState.withValue {
+      $0.stateObserverTask = stateObserverTask
+    }
   }
 
   deinit {
     mutableState.withValue {
       $0.heartbeatTask?.cancel()
       $0.messageTask?.cancel()
+      $0.stateObserverTask?.cancel()
       $0.channels = [:]
     }
   }

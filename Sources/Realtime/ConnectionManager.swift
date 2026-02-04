@@ -92,6 +92,11 @@ actor ConnectionManager {
   ///
   /// - Parameter error: The error that caused the connection failure
   func handleError(_ error: any Error) {
+    guard !(error is CancellationError) else {
+      logger?.debug("CancellationError do not trigger reconnects.")
+      return
+    }
+
     guard case .connected = state else {
       logger?.debug("Ignoring error in non-connected state: \(error)")
       return
