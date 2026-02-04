@@ -79,9 +79,6 @@
     /// Biometric authentication was locked out due to too many failed attempts.
     case lockedOut
 
-    /// Biometrics are not enabled for this client.
-    case notEnabled
-
     public var errorDescription: String? {
       switch self {
       case .notAvailable(let reason):
@@ -94,8 +91,6 @@
         return "No biometrics enrolled on this device."
       case .lockedOut:
         return "Biometrics locked out due to too many failed attempts."
-      case .notEnabled:
-        return "Biometrics are not enabled for this client."
       }
     }
   }
@@ -105,30 +100,15 @@
     /// No biometric hardware available on this device.
     case noBiometryAvailable
 
-    /// Biometrics are not enrolled (no Face ID / Touch ID set up).
-    case biometryNotEnrolled
-
-    /// Biometrics are temporarily locked out due to too many failed attempts.
-    case biometryLockout
-
     /// Device passcode is not set.
     case passcodeNotSet
-
-    /// Other error with a specific code.
-    case other(code: Int)
 
     var localizedDescription: String {
       switch self {
       case .noBiometryAvailable:
         return "No biometric hardware available."
-      case .biometryNotEnrolled:
-        return "No biometrics enrolled."
-      case .biometryLockout:
-        return "Biometrics temporarily unavailable due to lockout."
       case .passcodeNotSet:
         return "Device passcode is not set."
-      case .other(let code):
-        return "Unknown error (code: \(code))."
       }
     }
   }
