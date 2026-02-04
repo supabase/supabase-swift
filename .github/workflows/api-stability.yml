@@ -103,7 +103,7 @@ jobs:
 
       - name: Find existing comment
         if: steps.api-check.outputs.has_breaking_changes == 'true' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: peter-evans/find-comment@v3
+        uses: peter-evans/find-comment@v4
         id: find-comment
         with:
           issue-number: ${{ github.event.pull_request.number }}
@@ -140,7 +140,7 @@ jobs:
 
       - name: Find stale comment
         if: steps.api-check.outputs.has_breaking_changes == 'false' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: peter-evans/find-comment@v3
+        uses: peter-evans/find-comment@v4
         id: find-old-comment
         with:
           issue-number: ${{ github.event.pull_request.number }}
