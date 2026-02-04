@@ -11,9 +11,10 @@ let version = Helpers.version
 /// An actor representing a client for invoking functions.
 public final class FunctionsClient: Sendable {
   /// Fetch handler used to make requests.
-  public typealias FetchHandler = @Sendable (_ request: URLRequest) async throws -> (
-    Data, URLResponse
-  )
+  public typealias FetchHandler =
+    @Sendable (_ request: URLRequest) async throws -> (
+      Data, URLResponse
+    )
 
   /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
   ///
@@ -78,7 +79,11 @@ public final class FunctionsClient: Sendable {
       interceptors.append(LoggerInterceptor(logger: logger))
     }
 
-    let http = HTTPClient(fetch: fetch, interceptors: interceptors)
+    let http = HTTPClient(
+      fetch: fetch,
+      interceptors: interceptors,
+      sessionConfiguration: sessionConfiguration
+    )
 
     self.init(
       url: url,
@@ -217,30 +222,40 @@ public final class FunctionsClient: Sendable {
   /// - Returns: A stream of Data.
   ///
   /// - Warning: Experimental method.
-  /// - Note: This method doesn't use the same underlying `URLSession` as the remaining methods in the library.
   public func _invokeWithStreamedResponse(
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()
   ) -> AsyncThrowingStream<Data, any Error> {
-    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-    let delegate = StreamResponseDelegate(continuation: continuation)
+    let request = buildRequest(functionName: functionName, options: invokeOptions)
 
-    let session = URLSession(
-      configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
+    return AsyncThrowingStream { continuation in
+      let task = Task {
+        do {
+          let response = try await http.sendStreaming(request)
 
-    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
+          guard 200..<300 ~= response.statusCode else {
+            throw FunctionsError.httpError(code: response.statusCode, data: Data())
+          }
 
-    let task = session.dataTask(with: urlRequest)
-    task.resume()
+          let isRelayError = response.headers[.xRelayError] == "true"
+          if isRelayError {
+            throw FunctionsError.relayError
+          }
 
-    continuation.onTermination = { _ in
-      task.cancel()
+          for try await data in response.body {
+            continuation.yield(data)
+          }
 
-      // Hold a strong reference to delegate until continuation terminates.
-      _ = delegate
+          continuation.finish()
+        } catch {
+          continuation.finish(throwing: error)
+        }
+      }
+
+      continuation.onTermination = { _ in
+        task.cancel()
+      }
     }
-
-    return stream
   }
 
   private func buildRequest(functionName: String, options: FunctionInvokeOptions)
@@ -263,49 +278,5 @@ public final class FunctionsClient: Sendable {
     }
 
     return request
-  }
-}
-
-final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
-  let continuation: AsyncThrowingStream<Data, any Error>.Continuation
-
-  init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
-    self.continuation = continuation
-  }
-
-  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
-    continuation.yield(data)
-  }
-
-  func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    continuation.finish(throwing: error)
-  }
-
-  func urlSession(
-    _: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse,
-    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
-  ) {
-    defer {
-      completionHandler(.allow)
-    }
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      continuation.finish(throwing: URLError(.badServerResponse))
-      return
-    }
-
-    guard 200..<300 ~= httpResponse.statusCode else {
-      let error = FunctionsError.httpError(
-        code: httpResponse.statusCode,
-        data: Data()
-      )
-      continuation.finish(throwing: error)
-      return
-    }
-
-    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
-    if isRelayError {
-      continuation.finish(throwing: FunctionsError.relayError)
-    }
   }
 }

@@ -347,4 +347,17 @@ private struct MockHTTPClient: HTTPClientType {
     )!
     return HTTPResponse(data: Data(), response: urlResponse)
   }
+
+  func sendStreaming(_ request: HTTPRequest) async throws -> HTTPResponse.Stream {
+    let response = try await send(request)
+    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
+    continuation.yield(response.data)
+    continuation.finish()
+    return HTTPResponse.Stream(
+      statusCode: response.statusCode,
+      headers: response.headers,
+      underlyingResponse: response.underlyingResponse,
+      body: stream
+    )
+  }
 }

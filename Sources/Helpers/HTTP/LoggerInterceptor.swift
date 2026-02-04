@@ -19,7 +19,9 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
     next: @Sendable (HTTPRequest) async throws -> HTTPResponse
   ) async throws -> HTTPResponse {
     let id = UUID().uuidString
-    return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(merging: ["requestID": .string(id)]) {
+    return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(merging: [
+      "requestID": .string(id)
+    ]) {
       let urlRequest = request.urlRequest
 
       logger.verbose(
@@ -44,6 +46,35 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
         logger.error("Response: Failure \(error)")
         throw error
       }
+    }
+  }
+
+  package func interceptRequest(_ request: HTTPRequest) async throws -> HTTPRequest {
+    let urlRequest = request.urlRequest
+    logger.verbose(
+      """
+      Streaming Request: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
+      Body: \(stringfy(request.body))
+      """
+    )
+    return request
+  }
+
+  package func onStreamingResponseComplete(_ request: HTTPRequest, error: (any Error)?) async {
+    let urlRequest = request.urlRequest
+    if let error {
+      logger.error(
+        """
+        Streaming Response: Failure for \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
+        Error: \(error)
+        """
+      )
+    } else {
+      logger.verbose(
+        """
+        Streaming Response: Completed for \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
+        """
+      )
     }
   }
 }
