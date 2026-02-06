@@ -65,7 +65,7 @@ final class ConnectionManagerTests: XCTestCase {
     let connectedExpectation = expectation(description: "connected state observed")
 
     let stateObserver = Task {
-      for await state in await sut.stateChanges {
+      for await state in sut.stateChanges {
         switch state {
         case .connecting:
           connectingExpectation.fulfill()
@@ -130,7 +130,7 @@ final class ConnectionManagerTests: XCTestCase {
       transportCallCount, 1,
       "Transport should be invoked only once while first connect is in progress")
 
-    try await firstConnect.value
+    _ = try await firstConnect.value
     try await secondConnect.value
 
     XCTAssertTrue(secondConnectFinished.value)
@@ -202,7 +202,7 @@ final class ConnectionManagerTests: XCTestCase {
     )
 
     let stateObserver = Task {
-      for await state in await sut.stateChanges {
+      for await state in sut.stateChanges {
         if case .reconnecting(_, let reason) = state, reason.contains("sample error") {
           reconnectingExpectation.fulfill()
           return

@@ -49,6 +49,7 @@ actor ConnectionManager {
     self.logger = logger
   }
 
+  @discardableResult
   func connect() async throws -> any WebSocket {
     logger?.debug("current state: \(state)")
 

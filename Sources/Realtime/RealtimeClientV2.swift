@@ -61,10 +61,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   let connectionManager: ConnectionManager
 
-  var conn: (any WebSocket)? {
-    get async { await connectionManager.connection }
-  }
-
   /// All managed channels indexed by their topics.
   public var channels: [String: RealtimeChannelV2] {
     mutableState.channels
