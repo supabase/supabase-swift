@@ -1804,8 +1804,8 @@ final class AuthClientTests: XCTestCase {
   func testMFAUnenroll() async throws {
     Mock(
       url: clientURL.appendingPathComponent("factors/123"),
-      statusCode: 204,
-      data: [.delete: Data(#"{"factor_id":"123"}"#.utf8)]
+      statusCode: 200,
+      data: [.delete: Data(#"{"id":"123"}"#.utf8)]
     )
     .snapshotRequest {
       #"""
@@ -1824,9 +1824,9 @@ final class AuthClientTests: XCTestCase {
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
-    let factorId = try await sut.mfa.unenroll(params: .init(factorId: "123")).factorId
+    let id = try await sut.mfa.unenroll(params: .init(factorId: "123")).id
 
-    expectNoDifference(factorId, "123")
+    expectNoDifference(id, "123")
   }
 
   func testMFAChallengeAndVerify() async throws {
@@ -2229,7 +2229,10 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNil(Dependencies[sut.clientID].sessionStorage.get())
   }
 
-  func testRemoveSessionAndSignoutIfRefreshTokenNotFoundErrorReturned_withEmitLocalSessionAsInitialSession() async throws {
+  func
+    testRemoveSessionAndSignoutIfRefreshTokenNotFoundErrorReturned_withEmitLocalSessionAsInitialSession()
+    async throws
+  {
     let sut = makeSUT(emitLocalSessionAsInitialSession: true)
 
     Mock(
@@ -2676,7 +2679,9 @@ final class AuthClientTests: XCTestCase {
     XCTAssertNotNil(result.claims.aud)
   }
 
-  private func makeSUT(flowType: AuthFlowType = .pkce, emitLocalSessionAsInitialSession: Bool = false) -> AuthClient {
+  private func makeSUT(
+    flowType: AuthFlowType = .pkce, emitLocalSessionAsInitialSession: Bool = false
+  ) -> AuthClient {
     let sessionConfiguration = URLSessionConfiguration.default
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
     let session = URLSession(configuration: sessionConfiguration)

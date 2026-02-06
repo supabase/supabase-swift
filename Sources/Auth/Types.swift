@@ -757,7 +757,7 @@ public typealias AuthMFAVerifyResponse = Session
 
 public struct AuthMFAUnenrollResponse: Decodable, Hashable, Sendable {
   /// ID of the factor that was successfully unenrolled.
-  public let factorId: String
+  public let id: String
 }
 
 public struct AuthMFAListFactorsResponse: Decodable, Hashable, Sendable {
