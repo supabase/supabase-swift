@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 19/11/25.
 //
 
+import ConcurrencyExtras
 import Foundation
 
 actor ConnectionManager {
@@ -32,7 +33,7 @@ actor ConnectionManager {
     return nil
   }
 
-  var stateChanges: AsyncStream<State> { stateStream }
+  nonisolated var stateChanges: AsyncStream<State> { stateStream }
 
   init(
     transport: @escaping WebSocketTransport,
@@ -48,24 +49,38 @@ actor ConnectionManager {
     self.logger = logger
   }
 
-  func connect() async throws {
+  func connect() async throws -> any WebSocket {
     logger?.debug("current state: \(state)")
 
     switch state {
-    case .connected:
+    case .connected(let conn):
       logger?.debug("Already connected")
+      return conn
 
     case .connecting(let task):
       logger?.debug("Connection already in progress, waiting...")
       try await task.value
+      // After waiting, get the connection from state
+      guard case .connected(let conn) = state else {
+        throw WebSocketError.connection(message: "Connection failed", error: NSError(domain: "ConnectionManager", code: -1))
+      }
+      return conn
 
     case .disconnected:
       logger?.debug("Initiating new connection")
       try await performConnection()
+      guard case .connected(let conn) = state else {
+        throw WebSocketError.connection(message: "Connection failed", error: NSError(domain: "ConnectionManager", code: -1))
+      }
+      return conn
 
     case .reconnecting(let task, _):
       logger?.debug("Reconnection in progress, waiting...")
       try await task.value
+      guard case .connected(let conn) = state else {
+        throw WebSocketError.connection(message: "Connection failed", error: NSError(domain: "ConnectionManager", code: -1))
+      }
+      return conn
     }
   }
 
@@ -97,12 +112,17 @@ actor ConnectionManager {
       return
     }
 
-    guard case .connected = state else {
+    guard case .connected(let conn) = state else {
       logger?.debug("Ignoring error in non-connected state: \(error)")
       return
     }
 
     logger?.debug("Connection error, initiating reconnect: \(error.localizedDescription)")
+
+    // Close the connection and update to disconnected before reconnecting
+    conn.close(code: nil, reason: "error: \(error.localizedDescription)")
+    updateState(.disconnected)
+
     initiateReconnect(reason: "error: \(error.localizedDescription)")
   }
 
@@ -137,7 +157,7 @@ actor ConnectionManager {
 
   private func initiateReconnect(reason: String) {
     let reconnectTask = Task {
-      try await Task.sleep(nanoseconds: UInt64(reconnectDelay * 1_000_000_000))
+      try await _clock.sleep(for: reconnectDelay)
       logger?.debug("Attempting to reconnect...")
       try await performConnection()
     }
