@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.41.1](https://github.com/supabase/supabase-swift/compare/v2.41.0...v2.41.1) (2026-02-06)
+
+
+### Bug Fixes
+
+* **auth:** decode MFA unenroll response id field ([#905](https://github.com/supabase/supabase-swift/issues/905)) ([7f42d92](https://github.com/supabase/supabase-swift/commit/7f42d9291008aa8c3863e9f5e677009499676f37))
+
 ## [2.41.0](https://github.com/supabase/supabase-swift/compare/v2.40.0...v2.41.0) (2026-01-28)
 
 
