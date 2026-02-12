@@ -12,6 +12,16 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
+/// Phoenix protocol version used for WebSocket communication.
+public enum RealtimeProtocolVersion: String, Sendable {
+  /// Protocol 1.0.0 — JSON object text frames for all messages.
+  case v1 = "1.0.0"
+
+  /// Protocol 2.0.0 — JSON array text frames for non-broadcast messages,
+  /// binary frames for broadcast messages.
+  case v2 = "2.0.0"
+}
+
 /// Options for initializing ``RealtimeClientV2``.
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
@@ -21,6 +31,9 @@ public struct RealtimeClientOptions: Sendable {
   var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
   var maxRetryAttempts: Int
+
+  /// The Phoenix serializer protocol version.
+  public var vsn: RealtimeProtocolVersion
 
   /// Sets the log level for Realtime
   var logLevel: LogLevel?
@@ -43,6 +56,7 @@ public struct RealtimeClientOptions: Sendable {
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
+    vsn: RealtimeProtocolVersion = .v2,
     logLevel: LogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
@@ -55,6 +69,7 @@ public struct RealtimeClientOptions: Sendable {
     self.disconnectOnSessionLoss = disconnectOnSessionLoss
     self.connectOnSubscribe = connectOnSubscribe
     self.maxRetryAttempts = maxRetryAttempts
+    self.vsn = vsn
     self.logLevel = logLevel
     self.fetch = fetch
     self.accessToken = accessToken
