@@ -148,24 +148,24 @@ import XCTest
 
     func testCallbackManager_triggerBroadcast() {
       let mgr = CallbackManager()
-      var received: JSONObject?
+      let received = LockIsolated<JSONObject?>(nil)
       mgr.addBroadcastCallback(event: "test") { json in
-        received = json
+        received.setValue(json)
       }
       mgr.triggerBroadcast(event: "test", json: ["hello": .string("world")])
-      XCTAssertNotNil(received)
-      XCTAssertEqual(received?["hello"]?.stringValue, "world")
+      XCTAssertNotNil(received.value)
+      XCTAssertEqual(received.value?["hello"]?.stringValue, "world")
     }
 
     func testCallbackManager_triggerBroadcastData() {
       let mgr = CallbackManager()
-      var received: Data?
+      let received = LockIsolated<Data?>(nil)
       mgr.addBroadcastDataCallback(event: "test") { data in
-        received = data
+        received.setValue(data)
       }
       mgr.triggerBroadcastData(event: "test", data: Data([0x01, 0x02]))
-      XCTAssertNotNil(received)
-      XCTAssertEqual(received, Data([0x01, 0x02]))
+      XCTAssertNotNil(received.value)
+      XCTAssertEqual(received.value, Data([0x01, 0x02]))
     }
 
     // MARK: - Receiving JSON broadcast from binary frame
