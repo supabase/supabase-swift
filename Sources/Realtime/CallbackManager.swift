@@ -151,25 +151,33 @@ final class CallbackManager: Sendable {
   }
 
   func triggerBroadcastData(event: String, data: Data) {
-    let broadcastDataCallbacks = mutableState.callbacks.compactMap {
-      if case .broadcastData(let callback) = $0 {
-        return callback
-      }
-      return nil
+    let callbacks = mutableState.callbacks.filter {
+      isBroadcastDataCallback(callback: $0, for: event)
     }
-    let callbacks = broadcastDataCallbacks.filter {
-      $0.event == "*" || $0.event.lowercased() == event.lowercased()
+    .map { callback -> BroadcastDataCallback in
+      if case .broadcastData(let callback) = callback {
+        return callback
+      } else {
+        fatalError("Expected broadcast data callback")
+      }
     }
     callbacks.forEach { $0.callback(data) }
   }
 
   func hasBroadcastDataCallbacks(for event: String) -> Bool {
     mutableState.callbacks.contains {
-      if case .broadcastData(let callback) = $0 {
-        return callback.event == "*" || callback.event.lowercased() == event.lowercased()
-      }
-      return false
+      isBroadcastDataCallback(callback: $0, for: event)
     }
+  }
+
+  private func isBroadcastDataCallback(
+    callback: RealtimeCallback,
+    for event: String
+  ) -> Bool {
+    if case .broadcastData(let callback) = callback {
+      return callback.event == "*" || callback.event.lowercased() == event.lowercased()
+    }
+    return false
   }
 
   func triggerPresenceDiffs(
