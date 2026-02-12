@@ -25,6 +25,12 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
 
   func connect() async
   func push(_ message: RealtimeMessageV2)
+  func pushBroadcast(
+    joinRef: String?, ref: String?, topic: String, event: String, jsonPayload: JSONObject
+  )
+  func pushBroadcast(
+    joinRef: String?, ref: String?, topic: String, event: String, binaryPayload: Data
+  )
   func _getAccessToken() async -> String?
   func makeRef() -> String
   func _remove(_ channel: any RealtimeChannelProtocol)
@@ -56,6 +62,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let mutableState = LockIsolated(MutableState())
   let http: any HTTPClientType
   let apikey: String
+  let serializer = RealtimeSerializer()
 
   var conn: (any WebSocket)? {
     mutableState.conn
@@ -229,6 +236,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           Self.realtimeWebSocketURL(
             baseURL: Self.realtimeBaseURL(url: url),
             apikey: options.apikey,
+            vsn: options.vsn,
             logLevel: options.logLevel
           ),
           options.headers.dictionary
@@ -417,12 +425,29 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           if Task.isCancelled { return }
 
           switch event {
-          case .binary:
-            self.options.logger?.error("Unsupported binary event received.")
-            break
+          case .binary(let data):
+            switch self.options.vsn {
+            case .v1:
+              self.options.logger?.warning(
+                "Received binary frame but vsn is 1.0.0; binary frames are only supported in 2.0.0"
+              )
+            case .v2:
+              do {
+                let broadcast = try self.serializer.decodeBinary(data)
+                await self.onBroadcast(broadcast)
+              } catch {
+                self.options.logger?.error("Failed to decode binary frame: \(error)")
+              }
+            }
+
           case .text(let text):
-            let data = Data(text.utf8)
-            let message = try JSONDecoder().decode(RealtimeMessageV2.self, from: data)
+            let message: RealtimeMessageV2
+            switch self.options.vsn {
+            case .v1:
+              message = try JSONDecoder().decode(RealtimeMessageV2.self, from: Data(text.utf8))
+            case .v2:
+              message = try self.serializer.decodeText(text)
+            }
             await onMessage(message)
 
             if Task.isCancelled {
@@ -586,21 +611,130 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
+  /// Routes a decoded binary broadcast to the appropriate channel.
+  private func onBroadcast(_ broadcast: DecodedBroadcast) async {
+    options.logger?.debug(
+      "Received binary broadcast for topic \(broadcast.topic), event \(broadcast.event)"
+    )
+
+    let channel = mutableState.withValue {
+      $0.channels[broadcast.topic]
+    }
+
+    if let channel {
+      await channel.handleBinaryBroadcast(broadcast)
+    }
+  }
+
   /// Push out a message if the socket is connected.
   ///
   /// If the socket is not connected, the message gets enqueued within a local buffer, and sent out when a connection is next established.
   public func push(_ message: RealtimeMessageV2) {
     let callback = { @Sendable [weak self] in
+      guard let self else { return }
       do {
         // Check cancellation before sending, because this push may have been cancelled before a connection was established.
         try Task.checkCancellation()
-        let data = try JSONEncoder().encode(message)
-        self?.conn?.send(String(decoding: data, as: UTF8.self))
+
+        let text: String
+        switch self.options.vsn {
+        case .v1:
+          let data = try JSONEncoder().encode(message)
+          text = String(data: data, encoding: .utf8)!
+        case .v2:
+          text = try self.serializer.encodeText(message)
+        }
+
+        self.conn?.send(text)
       } catch {
-        self?.options.logger?.error(
+        self.options.logger?.error(
           """
           Failed to send message:
           \(message)
+
+          Error:
+          \(error)
+          """
+        )
+      }
+    }
+
+    if status == .connected {
+      callback()
+    } else {
+      mutableState.withValue {
+        $0.sendBuffer.append(callback)
+      }
+    }
+  }
+
+  /// Push a broadcast message as a binary frame (type 0x03) with a JSON payload.
+  func pushBroadcast(
+    joinRef: String?,
+    ref: String?,
+    topic: String,
+    event: String,
+    jsonPayload: JSONObject
+  ) {
+    let callback = { @Sendable [weak self] in
+      guard let self else { return }
+      do {
+        try Task.checkCancellation()
+        let data = try self.serializer.encodeBroadcastPush(
+          joinRef: joinRef,
+          ref: ref,
+          topic: topic,
+          event: event,
+          jsonPayload: jsonPayload
+        )
+        self.conn?.send(data)
+      } catch {
+        self.options.logger?.error(
+          """
+          Failed to send binary broadcast:
+          topic=\(topic), event=\(event)
+
+          Error:
+          \(error)
+          """
+        )
+      }
+    }
+
+    if status == .connected {
+      callback()
+    } else {
+      mutableState.withValue {
+        $0.sendBuffer.append(callback)
+      }
+    }
+  }
+
+  /// Push a broadcast message as a binary frame (type 0x03) with a binary payload.
+  func pushBroadcast(
+    joinRef: String?,
+    ref: String?,
+    topic: String,
+    event: String,
+    binaryPayload: Data
+  ) {
+    let callback = { @Sendable [weak self] in
+      guard let self else { return }
+      do {
+        try Task.checkCancellation()
+        let data = try self.serializer.encodeBroadcastPush(
+          joinRef: joinRef,
+          ref: ref,
+          topic: topic,
+          event: event,
+          binaryPayload: binaryPayload
+        )
+        self.conn?.send(data)
+      } catch {
+        self.options.logger?.error(
+          """
+          Failed to send binary broadcast:
+          topic=\(topic), event=\(event)
 
           Error:
           \(error)
@@ -650,7 +784,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     return url
   }
 
-  static func realtimeWebSocketURL(baseURL: URL, apikey: String?, logLevel: LogLevel?) -> URL {
+  static func realtimeWebSocketURL(
+    baseURL: URL, apikey: String?, vsn: RealtimeProtocolVersion, logLevel: LogLevel?
+  ) -> URL {
     guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
     else {
       return baseURL
@@ -660,7 +796,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     if let apikey {
       components.queryItems!.append(URLQueryItem(name: "apikey", value: apikey))
     }
-    components.queryItems!.append(URLQueryItem(name: "vsn", value: "1.0.0"))
+    components.queryItems!.append(URLQueryItem(name: "vsn", value: vsn.rawValue))
 
     if let logLevel {
       components.queryItems!.append(URLQueryItem(name: "log_level", value: logLevel.rawValue))
