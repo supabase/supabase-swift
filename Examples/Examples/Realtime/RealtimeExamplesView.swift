@@ -44,6 +44,14 @@ struct RealtimeExamplesView: View {
             icon: "megaphone"
           )
         }
+
+        NavigationLink(destination: BinaryBroadcastView()) {
+          ExampleRow(
+            title: "Binary Broadcast",
+            description: "Send and receive binary data (v2)",
+            icon: "doc.zipper"
+          )
+        }
       }
 
       Section("Presence") {
