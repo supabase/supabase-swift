@@ -412,15 +412,61 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         }
       }
     } else {
-      await push(
-        ChannelEvent.broadcast,
-        payload: [
-          "type": "broadcast",
-          "event": .string(event),
-          "payload": .object(message),
-        ]
-      )
+      switch socket.options.vsn {
+      case .v1:
+        await push(
+          ChannelEvent.broadcast,
+          payload: [
+            "type": "broadcast",
+            "event": .string(event),
+            "payload": .object(message),
+          ]
+        )
+      case .v2:
+        socket.pushBroadcast(
+          joinRef: mutableState.joinRef,
+          ref: socket.makeRef(),
+          topic: topic,
+          event: event,
+          jsonPayload: message
+        )
+      }
     }
+  }
+
+  /// Send a broadcast message with `event` and a raw binary `Data` payload.
+  ///
+  /// Binary broadcasts require protocol version 2.0.0 (`vsn: .v2`).
+  /// - Parameters:
+  ///   - event: Broadcast message event.
+  ///   - data: Binary data payload.
+  @MainActor
+  public func broadcast(event: String, data: Data) async {
+    if status != .subscribed {
+      if !isTesting {
+        reportIssue(
+          "You can only send binary broadcasts after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
+        )
+      }
+      return
+    }
+
+    if socket.options.vsn == .v1 {
+      if !isTesting {
+        reportIssue(
+          "Binary broadcast requires protocol version 2.0.0. Set `vsn: .v2` in RealtimeClientOptions."
+        )
+      }
+      return
+    }
+
+    socket.pushBroadcast(
+      joinRef: mutableState.joinRef,
+      ref: socket.makeRef(),
+      topic: topic,
+      event: event,
+      binaryPayload: data
+    )
   }
 
   /// Tracks the given state in the channel.
@@ -591,6 +637,34 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
+  /// Called by the client when a binary broadcast frame (type 0x04) is received.
+  func handleBinaryBroadcast(_ broadcast: DecodedBroadcast) async {
+    let event = broadcast.event
+
+    switch broadcast.payload {
+    case .json(let json):
+      // Route JSON payload to existing JSON broadcast callbacks.
+      callbackManager.triggerBroadcast(
+        event: event,
+        json: [
+          "event": .string(event),
+          "payload": .object(json),
+          "type": "broadcast",
+        ]
+      )
+
+    case .binary(let data):
+      if callbackManager.hasBroadcastDataCallbacks(for: event) {
+        callbackManager.triggerBroadcastData(event: event, data: data)
+      } else {
+        logger?.warning(
+          "Received binary broadcast for event '\(event)' but no Data callbacks are registered. "
+            + "Register a callback with onBroadcast(event:callback:) that accepts Data."
+        )
+      }
+    }
+  }
+
   /// Listen for clients joining / leaving the channel using presences.
   public func onPresenceChange(
     _ callback: @escaping @Sendable (any PresenceAction) -> Void
@@ -728,6 +802,20 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     let id = callbackManager.addBroadcastCallback(event: event, callback: callback)
     return RealtimeSubscription { [weak callbackManager, logger] in
       logger?.debug("Removing broadcast callback with id: \(id)")
+      callbackManager?.removeCallback(id: id)
+    }
+  }
+
+  /// Listen for binary broadcast messages sent by other clients within the same channel under a specific `event`.
+  ///
+  /// Use this when you expect binary (non-JSON) broadcast payloads.
+  public func onBroadcastData(
+    event: String,
+    callback: @escaping @Sendable (Data) -> Void
+  ) -> RealtimeSubscription {
+    let id = callbackManager.addBroadcastDataCallback(event: event, callback: callback)
+    return RealtimeSubscription { [weak callbackManager, logger] in
+      logger?.debug("Removing broadcast data callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
   }
