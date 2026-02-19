@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 
@@ -7,11 +8,17 @@ import HTTPTypes
 
 /// Base class for Storage API operations.
 ///
-/// - Note: Thread Safety: This class is `@unchecked Sendable` because all stored properties
-///   are immutable (`let`) and themselves `Sendable`. No mutable state exists after initialization.
+/// - Note: Thread Safety: This class is `@unchecked Sendable` because all mutable state
+///   is protected by `LockIsolated`. The `configuration` property is immutable (`let`),
+///   while mutable headers are managed separately via `mutableState`.
 public class StorageApi: @unchecked Sendable {
   public let configuration: StorageClientConfiguration
 
+  private struct MutableState {
+    var headers: [String: String]
+  }
+
+  private let mutableState: LockIsolated<MutableState>
   private let http: any HTTPClientType
 
   public init(configuration: StorageClientConfiguration) {
@@ -42,7 +49,9 @@ public class StorageApi: @unchecked Sendable {
       configuration.url = components.url!
     }
 
+    let initialHeaders = configuration.headers
     self.configuration = configuration
+    self.mutableState = LockIsolated(MutableState(headers: initialHeaders))
 
     var interceptors: [any HTTPClientInterceptor] = []
     if let logger = configuration.logger {
@@ -55,10 +64,25 @@ public class StorageApi: @unchecked Sendable {
     )
   }
 
+  /// Sets an HTTP header for subsequent requests.
+  ///
+  /// This method is thread-safe and creates a copy of the headers to avoid mutating shared state.
+  ///
+  /// - Parameters:
+  ///   - name: The name of the header to set.
+  ///   - value: The value of the header.
+  /// - Returns: `self` to allow method chaining.
+  @discardableResult
+  public func setHeader(name: String, value: String) -> Self {
+    mutableState.withValue { $0.headers[name] = value }
+    return self
+  }
+
   @discardableResult
   func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
     var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+    let headers = mutableState.headers
+    request.headers = HTTPFields(headers).merging(with: request.headers)
 
     let response = try await http.send(request)
 
