@@ -105,22 +105,33 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let cleanPath = _removeEmptyFolders(path)
     let _path = _getFinalPath(cleanPath)
 
-    let response = try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/\(_path)"),
-        method: method,
-        query: [],
-        formData: formData,
-        options: options,
-        headers: headers
-      )
+    let httpRequest = try HTTPRequest(
+      url: configuration.url.appendingPathComponent("object/\(_path)"),
+      method: method,
+      query: [],
+      formData: formData,
+      options: options,
+      headers: headers
     )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
+
+    // Use appropriate upload method based on file type and progress callback
+    let response: Helpers.HTTPResponse
+    switch file {
+    case .data(let data):
+      response = try await upload(httpRequest, data: data, progress: options.onUploadProgress)
+    case .url(let url):
+      response = try await upload(httpRequest, fileURL: url, progress: options.onUploadProgress)
+    }
+
+    let uploadResponse = try response.decoded(
+      as: UploadResponse.self,
+      decoder: configuration.decoder
+    )
 
     return FileUploadResponse(
-      id: response.Id,
+      id: uploadResponse.Id,
       path: path,
-      fullPath: response.Key
+      fullPath: uploadResponse.Key
     )
   }
 
@@ -433,6 +444,26 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: TransformOptions? = nil,
     query additionalQueryItems: [URLQueryItem]? = nil
   ) async throws -> Data {
+    try await download(
+      path: path,
+      options: options,
+      query: additionalQueryItems,
+      fileOptions: nil
+    )
+  }
+
+  /// Downloads a file from an existing bucket with progress tracking.
+  /// - Parameters:
+  ///   - path: The relative file path including the bucket folder. Should be of the format `folder/subfolder/filename.png`
+  ///   - options: Transform options for the file.
+  ///   - additionalQueryItems: Additional query items to include in the request.
+  ///   - fileOptions: File options including progress callback.
+  public func download(
+    path: String,
+    options: TransformOptions? = nil,
+    query additionalQueryItems: [URLQueryItem]? = nil,
+    fileOptions: FileOptions? = nil
+  ) async throws -> Data {
     var queryItems = options?.queryItems ?? []
     let renderPath = options != nil ? "render/image/authenticated" : "object"
     let _path = _getFinalPath(path)
@@ -441,15 +472,14 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       queryItems.append(contentsOf: additionalQueryItems)
     }
 
-    return try await execute(
-      HTTPRequest(
-        url: configuration.url
-          .appendingPathComponent("\(renderPath)/\(_path)"),
-        method: .get,
-        query: queryItems
-      )
+    let httpRequest = HTTPRequest(
+      url: configuration.url
+        .appendingPathComponent("\(renderPath)/\(_path)"),
+      method: .get,
+      query: queryItems
     )
-    .data
+
+    return try await download(httpRequest, progress: fileOptions?.onDownloadProgress)
   }
 
   /// Retrieves the details of an existing file.
@@ -676,6 +706,94 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     return SignedURLUploadResponse(path: path, fullPath: fullPath)
   }
+
+  #if !os(Linux) && !os(Windows) && !os(Android)
+    /// Uploads a file to an existing bucket in the background (Darwin platforms only).
+    ///
+    /// Background uploads continue even when the app is backgrounded or terminated.
+    /// The system will wake the app when the upload completes or requires attention.
+    ///
+    /// - Parameters:
+    ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`.
+    ///   - fileURL: The URL of the file to upload.
+    ///   - sessionIdentifier: Unique identifier for the background session.
+    ///   - options: The options for the uploaded file.
+    /// - Returns: A background task that can be monitored and controlled.
+    @available(macOS 11.0, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @discardableResult
+    public func uploadInBackground(
+      _ path: String,
+      fileURL: URL,
+      sessionIdentifier: String,
+      options: FileOptions = FileOptions()
+    ) async throws -> HTTPBackgroundTask {
+      var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+      headers[.xUpsert] = "\(options.upsert)"
+      headers[.duplex] = options.duplex
+
+      #if DEBUG
+        let formData = MultipartFormData(boundary: testingBoundary.value)
+      #else
+        let formData = MultipartFormData()
+      #endif
+
+      FileUpload.url(fileURL).encode(to: formData, withPath: path, options: options)
+
+      let cleanPath = _removeEmptyFolders(path)
+      let _path = _getFinalPath(cleanPath)
+
+      let httpRequest = try HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/\(_path)"),
+        method: .post,
+        query: [],
+        formData: formData,
+        options: options,
+        headers: headers
+      )
+
+      return try await http.uploadInBackground(
+        httpRequest,
+        fromFile: fileURL,
+        sessionIdentifier: sessionIdentifier
+      )
+    }
+
+    /// Downloads a file from an existing bucket in the background (Darwin platforms only).
+    ///
+    /// Background downloads continue even when the app is backgrounded or terminated.
+    /// The system will wake the app when the download completes or requires attention.
+    ///
+    /// - Parameters:
+    ///   - path: The relative file path including the bucket folder.
+    ///   - fileURL: The destination URL for the downloaded file.
+    ///   - sessionIdentifier: Unique identifier for the background session.
+    ///   - options: Transform options for the file.
+    /// - Returns: A background task that can be monitored and controlled.
+    @available(macOS 11.0, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @discardableResult
+    public func downloadInBackground(
+      _ path: String,
+      toFile fileURL: URL,
+      sessionIdentifier: String,
+      options: TransformOptions? = nil
+    ) async throws -> HTTPBackgroundTask {
+      let queryItems = options?.queryItems ?? []
+      let renderPath = options != nil ? "render/image/authenticated" : "object"
+      let _path = _getFinalPath(path)
+
+      let httpRequest = HTTPRequest(
+        url: configuration.url.appendingPathComponent("\(renderPath)/\(_path)"),
+        method: .get,
+        query: queryItems
+      )
+
+      return try await http.downloadInBackground(
+        httpRequest,
+        toFile: fileURL,
+        sessionIdentifier: sessionIdentifier
+      )
+    }
+  #endif
 
   private func _getFinalPath(_ path: String) -> String {
     "\(bucketId)/\(path)"

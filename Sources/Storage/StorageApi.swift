@@ -12,7 +12,7 @@ import HTTPTypes
 public class StorageApi: @unchecked Sendable {
   public let configuration: StorageClientConfiguration
 
-  private let http: any HTTPClientType
+  let http: any HTTPSession
 
   public init(configuration: StorageClientConfiguration) {
     var configuration = configuration
@@ -43,16 +43,7 @@ public class StorageApi: @unchecked Sendable {
     }
 
     self.configuration = configuration
-
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    http = HTTPClient(
-      fetch: configuration.session.fetch,
-      interceptors: interceptors
-    )
+    http = configuration.session
   }
 
   @discardableResult
@@ -74,6 +65,80 @@ public class StorageApi: @unchecked Sendable {
     }
 
     return response
+  }
+
+  @discardableResult
+  func upload(
+    _ request: Helpers.HTTPRequest,
+    data: Data,
+    progress: (@Sendable (Int64, Int64) -> Void)?
+  ) async throws -> Helpers.HTTPResponse {
+    var request = request
+    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+
+    let response = try await http.upload(request, from: data, progress: progress)
+
+    guard (200..<300).contains(response.statusCode) else {
+      if let error = try? configuration.decoder.decode(
+        StorageError.self,
+        from: response.data
+      ) {
+        throw error
+      }
+
+      throw HTTPError(data: response.data, response: response.underlyingResponse)
+    }
+
+    return response
+  }
+
+  @discardableResult
+  func upload(
+    _ request: Helpers.HTTPRequest,
+    fileURL: URL,
+    progress: (@Sendable (Int64, Int64) -> Void)?
+  ) async throws -> Helpers.HTTPResponse {
+    var request = request
+    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+
+    let response = try await http.upload(request, fromFile: fileURL, progress: progress)
+
+    guard (200..<300).contains(response.statusCode) else {
+      if let error = try? configuration.decoder.decode(
+        StorageError.self,
+        from: response.data
+      ) {
+        throw error
+      }
+
+      throw HTTPError(data: response.data, response: response.underlyingResponse)
+    }
+
+    return response
+  }
+
+  @discardableResult
+  func download(
+    _ request: Helpers.HTTPRequest,
+    progress: (@Sendable (Int64, Int64) -> Void)?
+  ) async throws -> Data {
+    var request = request
+    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+
+    let downloadResponse = try await http.download(request, progress: progress)
+
+    guard (200..<300).contains(downloadResponse.response.statusCode) else {
+      if let error = try? configuration.decoder.decode(
+        StorageError.self,
+        from: downloadResponse.data
+      ) {
+        throw error
+      }
+
+      throw HTTPError(data: downloadResponse.data, response: downloadResponse.response)
+    }
+
+    return downloadResponse.data
   }
 }
 
