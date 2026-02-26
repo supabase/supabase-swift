@@ -16,11 +16,16 @@ import Foundation
 /// This delegate yields data chunks to an AsyncThrowingStream as they arrive from the server.
 /// It validates the response status code and handles errors appropriately.
 package final class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
-  private let continuation: AsyncThrowingStream<Data, any Error>.Continuation
-  private let lock = NSLock()
-  private var response: URLResponse?
+  private let stream: AsyncThrowingStream<Data, any Error>
+  private let streamContinuation: AsyncThrowingStream<Data, any Error>.Continuation
 
-  package init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
+  private let continuation: CheckedContinuation<HTTPStreamingResponse, any Error>
+
+  private let lock = NSLock()
+  private var hasResumedContinuation = false
+
+  package init(continuation: CheckedContinuation<HTTPStreamingResponse, any Error>) {
+    (stream, streamContinuation) = AsyncThrowingStream.makeStream()
     self.continuation = continuation
     super.init()
   }
@@ -33,12 +38,12 @@ package final class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchec
     didReceive response: URLResponse,
     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
   ) {
-    lock.withLock {
-      self.response = response
-    }
-
     guard let httpResponse = response as? HTTPURLResponse else {
-      continuation.finish(throwing: URLError(.badServerResponse))
+      lock.withLock {
+        guard !hasResumedContinuation else { return }
+        hasResumedContinuation = true
+        continuation.resume(throwing: URLError(.badServerResponse))
+      }
       completionHandler(.cancel)
       return
     }
@@ -53,11 +58,26 @@ package final class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchec
           "statusCode": httpResponse.statusCode,
         ]
       )
-      continuation.finish(throwing: error)
+      lock.withLock {
+        guard !hasResumedContinuation else { return }
+        hasResumedContinuation = true
+        continuation.resume(throwing: error)
+      }
       completionHandler(.cancel)
       return
     }
 
+    lock.withLock {
+      guard !hasResumedContinuation else { return }
+      hasResumedContinuation = true
+      continuation.resume(
+        returning: HTTPStreamingResponse(
+          response: httpResponse,
+          stream: stream,
+          task: dataTask
+        )
+      )
+    }
     completionHandler(.allow)
   }
 
@@ -67,7 +87,7 @@ package final class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchec
     didReceive data: Data
   ) {
     // Yield data chunk to the stream
-    continuation.yield(data)
+    streamContinuation.yield(data)
   }
 
   package func urlSession(
@@ -76,15 +96,19 @@ package final class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchec
     didCompleteWithError error: (any Error)?
   ) {
     if let error = error {
-      // Handle cancellation separately
-      if (error as NSError).code == NSURLErrorCancelled {
-        continuation.finish(throwing: CancellationError())
-      } else {
-        continuation.finish(throwing: error)
+      lock.withLock {
+        guard !hasResumedContinuation else {
+          // Already streaming - propagate error through stream
+          streamContinuation.finish(throwing: error)
+          return
+        }
+        // Not yet streaming - fail the initial call
+        hasResumedContinuation = true
+        continuation.resume(throwing: error)
       }
     } else {
-      // Successfully completed
-      continuation.finish()
+      // Success - finish stream normally
+      streamContinuation.finish()
     }
   }
 }
