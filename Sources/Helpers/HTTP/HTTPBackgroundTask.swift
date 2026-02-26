@@ -45,6 +45,9 @@ import Foundation
     private let urlSessionTask: URLSessionTask
 
     /// Stream for progress updates.
+    private let progressStream: AsyncStream<(bytesTransferred: Int64, totalBytes: Int64)>
+
+    /// Continuation for finishing the progress stream on cancellation.
     private let progressContinuation:
       AsyncStream<(bytesTransferred: Int64, totalBytes: Int64)>.Continuation
 
@@ -55,12 +58,14 @@ import Foundation
       taskIdentifier: Int,
       sessionIdentifier: String,
       urlSessionTask: URLSessionTask,
+      progressStream: AsyncStream<(bytesTransferred: Int64, totalBytes: Int64)>,
       progressContinuation: AsyncStream<(bytesTransferred: Int64, totalBytes: Int64)>.Continuation,
       completionTask: Task<HTTPResponse, any Error>
     ) {
       self.taskIdentifier = taskIdentifier
       self.sessionIdentifier = sessionIdentifier
       self.urlSessionTask = urlSessionTask
+      self.progressStream = progressStream
       self.progressContinuation = progressContinuation
       self.completionTask = completionTask
     }
@@ -89,12 +94,7 @@ import Foundation
     ///
     /// Yields tuples of (bytesTransferred, totalBytes) as the transfer progresses.
     package var progress: AsyncStream<(bytesTransferred: Int64, totalBytes: Int64)> {
-      AsyncStream { continuation in
-        // This is a simplified implementation that won't work properly in production
-        // In a real implementation, we would need to properly bridge the progress continuation
-        // For now, just finish immediately
-        continuation.finish()
-      }
+      progressStream
     }
 
     /// The completion task.

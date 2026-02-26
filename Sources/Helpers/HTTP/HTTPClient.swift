@@ -197,8 +197,10 @@ package actor HTTPClient: HTTPClientType, HTTPSession {
         configuration: configuration, delegate: delegate, delegateQueue: nil)
       let task = backgroundSession.uploadTask(with: urlRequest, fromFile: fileURL)
 
-      let (_, progressContinuation) = AsyncStream<(bytesTransferred: Int64, totalBytes: Int64)>
-        .makeStream()
+      let (progressStream, progressContinuation) = AsyncStream<
+        (bytesTransferred: Int64, totalBytes: Int64)
+      >
+      .makeStream()
 
       let completionTask = Task<HTTPResponse, any Error> {
         try await withCheckedThrowingContinuation { continuation in
@@ -220,6 +222,7 @@ package actor HTTPClient: HTTPClientType, HTTPSession {
         taskIdentifier: task.taskIdentifier,
         sessionIdentifier: sessionIdentifier,
         urlSessionTask: task,
+        progressStream: progressStream,
         progressContinuation: progressContinuation,
         completionTask: completionTask
       )
@@ -243,8 +246,10 @@ package actor HTTPClient: HTTPClientType, HTTPSession {
         configuration: configuration, delegate: delegate, delegateQueue: nil)
       let task = backgroundSession.downloadTask(with: urlRequest)
 
-      let (_, progressContinuation) = AsyncStream<(bytesTransferred: Int64, totalBytes: Int64)>
-        .makeStream()
+      let (progressStream, progressContinuation) = AsyncStream<
+        (bytesTransferred: Int64, totalBytes: Int64)
+      >
+      .makeStream()
 
       let completionTask = Task<HTTPResponse, any Error> {
         let response = try await withCheckedThrowingContinuation { continuation in
@@ -273,6 +278,7 @@ package actor HTTPClient: HTTPClientType, HTTPSession {
         taskIdentifier: task.taskIdentifier,
         sessionIdentifier: sessionIdentifier,
         urlSessionTask: task,
+        progressStream: progressStream,
         progressContinuation: progressContinuation,
         completionTask: completionTask
       )
