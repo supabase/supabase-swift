@@ -12,14 +12,14 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
-package struct HTTPResponse: Sendable {
-  package let data: Data
-  package let headers: HTTPFields
-  package let statusCode: Int
+public struct HTTPResponse: Sendable {
+  public let data: Data
+  public let headers: HTTPFields
+  public let statusCode: Int
 
-  package let underlyingResponse: HTTPURLResponse
+  public let underlyingResponse: HTTPURLResponse
 
-  package init(data: Data, response: HTTPURLResponse) {
+  public init(data: Data, response: HTTPURLResponse) {
     self.data = data
     headers = HTTPFields(response.allHeaderFields as? [String: String] ?? [:])
     statusCode = response.statusCode
@@ -28,7 +28,7 @@ package struct HTTPResponse: Sendable {
 }
 
 extension HTTPResponse {
-  package func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder = JSONDecoder()) throws -> T {
+  public func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder = JSONDecoder()) throws -> T {
     try decoder.decode(T.self, from: data)
   }
 }

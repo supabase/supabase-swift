@@ -15,7 +15,7 @@ import Foundation
 ///
 /// This protocol extends the basic HTTP client functionality to support modern networking patterns
 /// including streaming responses, upload/download progress callbacks, and background transfers.
-package protocol HTTPSession: Sendable {
+public protocol HTTPSession: Sendable {
   /// Standard request/response operation.
   ///
   /// - Parameter request: The HTTP request to send.

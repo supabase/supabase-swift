@@ -53,11 +53,16 @@ public final class SupabaseClient: Sendable {
   public var storage: SupabaseStorageClient {
     mutableState.withValue {
       if $0.storage == nil {
+        let httpClient = HTTPClient(
+          fetch: fetchWithAuth,
+          interceptors: []
+        )
+
         $0.storage = SupabaseStorageClient(
           configuration: StorageClientConfiguration(
             url: storageURL,
             headers: headers,
-            session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+            session: httpClient,
             logger: options.global.logger,
             useNewHostname: options.storage.useNewHostname
           )

@@ -34,12 +34,12 @@ import Foundation
   /// // Wait for completion
   /// let response = try await task.completion.value
   /// ```
-  package actor HTTPBackgroundTask: Sendable {
+  public actor HTTPBackgroundTask: Sendable {
     /// The task identifier assigned by URLSession.
-    package let taskIdentifier: Int
+    public let taskIdentifier: Int
 
     /// The background session identifier.
-    package let sessionIdentifier: String
+    public let sessionIdentifier: String
 
     /// Reference to the underlying URLSessionTask.
     private let urlSessionTask: URLSessionTask
@@ -54,7 +54,7 @@ import Foundation
     /// Task for completion handling.
     private let completionTask: Task<HTTPResponse, any Error>
 
-    package init(
+    public init(
       taskIdentifier: Int,
       sessionIdentifier: String,
       urlSessionTask: URLSessionTask,
@@ -73,7 +73,7 @@ import Foundation
     /// Cancel the background task.
     ///
     /// Cancels the underlying URLSessionTask and terminates progress monitoring.
-    package func cancel() async {
+    public func cancel() async {
       urlSessionTask.cancel()
       progressContinuation.finish()
     }
@@ -81,26 +81,26 @@ import Foundation
     /// Suspend the background task.
     ///
     /// The task can be resumed later using `resume()`.
-    package func suspend() async {
+    public func suspend() async {
       urlSessionTask.suspend()
     }
 
     /// Resume a suspended background task.
-    package func resume() async {
+    public func resume() async {
       urlSessionTask.resume()
     }
 
     /// An async stream of progress updates.
     ///
     /// Yields tuples of (bytesTransferred, totalBytes) as the transfer progresses.
-    package var progress: AsyncStream<(bytesTransferred: Int64, totalBytes: Int64)> {
+    public var progress: AsyncStream<(bytesTransferred: Int64, totalBytes: Int64)> {
       progressStream
     }
 
     /// The completion task.
     ///
     /// Await this task's value to get the final HTTP response when the transfer completes.
-    package var completion: Task<HTTPResponse, any Error> {
+    public var completion: Task<HTTPResponse, any Error> {
       completionTask
     }
   }
@@ -109,27 +109,27 @@ import Foundation
 
   // Background transfers are not supported on Linux/Windows/Android
   @available(*, unavailable, message: "Background transfers require Darwin platforms")
-  package struct HTTPBackgroundTask: Sendable {
-    package let taskIdentifier: Int
-    package let sessionIdentifier: String
+  public struct HTTPBackgroundTask: Sendable {
+    public let taskIdentifier: Int
+    public let sessionIdentifier: String
 
-    package func cancel() async {
+    public func cancel() async {
       fatalError("Background transfers not supported on this platform")
     }
 
-    package func suspend() async {
+    public func suspend() async {
       fatalError("Background transfers not supported on this platform")
     }
 
-    package func resume() async {
+    public func resume() async {
       fatalError("Background transfers not supported on this platform")
     }
 
-    package var progress: AsyncStream<(bytesTransferred: Int64, totalBytes: Int64)> {
+    public var progress: AsyncStream<(bytesTransferred: Int64, totalBytes: Int64)> {
       fatalError("Background transfers not supported on this platform")
     }
 
-    package var completion: Task<HTTPResponse, any Error> {
+    public var completion: Task<HTTPResponse, any Error> {
       fatalError("Background transfers not supported on this platform")
     }
   }

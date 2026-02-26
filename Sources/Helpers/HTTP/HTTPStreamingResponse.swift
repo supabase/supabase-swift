@@ -26,17 +26,17 @@ import Foundation
 ///   print("Received \(chunk.count) bytes")
 /// }
 /// ```
-package struct HTTPStreamingResponse: Sendable {
+public struct HTTPStreamingResponse: Sendable {
   /// The HTTP response metadata (status code, headers, etc.).
-  package let response: HTTPURLResponse
+  public let response: HTTPURLResponse
 
   /// An async stream that yields data chunks as they arrive from the server.
-  package let stream: AsyncThrowingStream<Data, any Error>
+  public let stream: AsyncThrowingStream<Data, any Error>
 
   /// Internal reference to the URLSessionDataTask for cancellation.
   private let task: URLSessionDataTask?
 
-  package init(
+  public init(
     response: HTTPURLResponse,
     stream: AsyncThrowingStream<Data, any Error>,
     task: URLSessionDataTask? = nil
@@ -50,7 +50,7 @@ package struct HTTPStreamingResponse: Sendable {
   ///
   /// This method cancels the underlying network task and terminates the stream.
   /// Any in-flight data may be lost.
-  package func cancel() {
+  public func cancel() {
     task?.cancel()
   }
 }

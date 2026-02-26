@@ -24,20 +24,20 @@ import Foundation
 /// }
 /// print("Downloaded \(downloadResponse.bytesReceived) bytes")
 /// ```
-package struct HTTPDownloadResponse: Sendable {
+public struct HTTPDownloadResponse: Sendable {
   /// The downloaded data.
-  package let data: Data
+  public let data: Data
 
   /// The HTTP response metadata (status code, headers, etc.).
-  package let response: HTTPURLResponse
+  public let response: HTTPURLResponse
 
   /// The total number of bytes received during the download.
   ///
   /// This value matches `data.count` and is provided for convenience and consistency
   /// with the progress callback parameters.
-  package let bytesReceived: Int64
+  public let bytesReceived: Int64
 
-  package init(data: Data, response: HTTPURLResponse, bytesReceived: Int64) {
+  public init(data: Data, response: HTTPURLResponse, bytesReceived: Int64) {
     self.data = data
     self.response = response
     self.bytesReceived = bytesReceived
