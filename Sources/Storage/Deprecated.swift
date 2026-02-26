@@ -12,7 +12,7 @@ extension StorageClientConfiguration {
     *,
     deprecated,
     message:
-      "Replace usages of this initializer with new init(url:headers:encoder:decoder:session:logger)"
+      "Replace usages of this initializer with new init(url:headers:encoder:decoder:session:logger). StorageHTTPSession is replaced by HTTPSession from Helpers module."
   )
   public init(
     url: URL,
@@ -21,12 +21,18 @@ extension StorageClientConfiguration {
     decoder: JSONDecoder = .defaultStorageDecoder,
     session: StorageHTTPSession = .init()
   ) {
+    // Convert StorageHTTPSession to HTTPClient
+    let httpClient = HTTPClient(
+      fetch: session.fetch,
+      interceptors: []
+    )
+
     self.init(
       url: url,
       headers: headers,
       encoder: encoder,
       decoder: decoder,
-      session: session,
+      session: httpClient,
       logger: nil
     )
   }

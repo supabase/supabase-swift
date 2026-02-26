@@ -64,13 +64,25 @@ public struct FileOptions: Sendable {
   /// Optionally add extra headers.
   public var headers: [String: String]?
 
+  /// Progress callback for upload operations.
+  ///
+  /// Called periodically during upload with (bytesTransferred, totalBytes).
+  public var onUploadProgress: (@Sendable (Int64, Int64) -> Void)?
+
+  /// Progress callback for download operations.
+  ///
+  /// Called periodically during download with (bytesTransferred, totalBytes).
+  public var onDownloadProgress: (@Sendable (Int64, Int64) -> Void)?
+
   public init(
     cacheControl: String = "3600",
     contentType: String? = nil,
     upsert: Bool = false,
     duplex: String? = nil,
     metadata: [String: AnyJSON]? = nil,
-    headers: [String: String]? = nil
+    headers: [String: String]? = nil,
+    onUploadProgress: (@Sendable (Int64, Int64) -> Void)? = nil,
+    onDownloadProgress: (@Sendable (Int64, Int64) -> Void)? = nil
   ) {
     self.cacheControl = cacheControl
     self.contentType = contentType
@@ -78,6 +90,8 @@ public struct FileOptions: Sendable {
     self.duplex = duplex
     self.metadata = metadata
     self.headers = headers
+    self.onUploadProgress = onUploadProgress
+    self.onDownloadProgress = onDownloadProgress
   }
 }
 

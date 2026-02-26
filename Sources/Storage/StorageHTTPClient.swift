@@ -4,6 +4,12 @@ import Foundation
   import FoundationNetworking
 #endif
 
+@available(
+  *,
+  deprecated,
+  message:
+    "StorageHTTPSession is deprecated. Use HTTPSession from Helpers module instead. For migration, replace StorageHTTPSession with HTTPClient."
+)
 public struct StorageHTTPSession: Sendable {
   public var fetch: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
   public var upload:
@@ -11,9 +17,10 @@ public struct StorageHTTPSession: Sendable {
 
   public init(
     fetch: @escaping @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse),
-    upload: @escaping @Sendable (_ request: URLRequest, _ data: Data) async throws -> (
-      Data, URLResponse
-    )
+    upload:
+      @escaping @Sendable (_ request: URLRequest, _ data: Data) async throws -> (
+        Data, URLResponse
+      )
   ) {
     self.fetch = fetch
     self.upload = upload
