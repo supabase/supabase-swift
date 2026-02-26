@@ -54,31 +54,14 @@ package actor HTTPClient: HTTPClientType, HTTPSession {
 
   package func sendStreaming(_ request: HTTPRequest) async throws -> HTTPStreamingResponse {
     let urlRequest = request.urlRequest
+    return try await withCheckedThrowingContinuation { continuation in
+      let delegate = StreamingDelegate(continuation: continuation)
+      let delegateSession = URLSession(
+        configuration: session.configuration, delegate: delegate, delegateQueue: nil)
+      let task = delegateSession.dataTask(with: urlRequest)
 
-    let (stream, streamContinuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-
-    let delegate = StreamingDelegate(continuation: streamContinuation)
-    let delegateSession = URLSession(
-      configuration: session.configuration, delegate: delegate, delegateQueue: nil)
-    let task = delegateSession.dataTask(with: urlRequest)
-
-    task.resume()
-
-    // Wait for the first response (will be validated in delegate)
-    // We need to create a temporary response object
-    // The actual response validation happens in the delegate's didReceive response callback
-    let placeholderResponse = HTTPURLResponse(
-      url: urlRequest.url!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: nil
-    )!
-
-    return HTTPStreamingResponse(
-      response: placeholderResponse,
-      stream: stream,
-      task: task
-    )
+      task.resume()
+    }
   }
 
   package func upload(
