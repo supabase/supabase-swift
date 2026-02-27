@@ -39,7 +39,7 @@ struct MockResponseInterceptor: ResponseInterceptor {
 
 // MARK: - Tests
 
-@Suite
+@Suite(.serialized)
 struct FunctionsClientV2Tests {
   let baseURL = URL(string: "http://localhost:54321/functions/v1")!
   let apiKey =
@@ -55,6 +55,10 @@ struct FunctionsClientV2Tests {
       headers: ["apikey": apiKey]
     )
   }
+
+  // deinit {
+  //   Mocker.removeAll()
+  // }
 
   // MARK: - Initialization Tests
 
