@@ -91,7 +91,7 @@ struct FunctionsClientV2Tests {
       headers: ["apikey": apiKey]
     )
 
-    await client.setAuth("test-token")
+    await client.setAuth(token: "test-token")
     #expect(await client.headers["Authorization"] == "Bearer test-token")
   }
 
@@ -102,10 +102,10 @@ struct FunctionsClientV2Tests {
       headers: ["apikey": apiKey]
     )
 
-    await client.setAuth("test-token")
+    await client.setAuth(token: "test-token")
     #expect(await client.headers["Authorization"] == "Bearer test-token")
 
-    await client.setAuth(nil)
+    await client.setAuth(token: nil)
     #expect(await client.headers["Authorization"] == nil)
   }
 
@@ -599,10 +599,10 @@ struct FunctionsClientV2Tests {
     )
 
     // These operations should be serialized by the actor
-    await client.setAuth("token-1")
+    await client.setAuth(token: "token-1")
     let headers1 = await client.headers["Authorization"]
 
-    await client.setAuth("token-2")
+    await client.setAuth(token: "token-2")
     let headers2 = await client.headers["Authorization"]
 
     #expect(headers1 == "Bearer token-1")

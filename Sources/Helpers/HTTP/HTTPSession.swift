@@ -170,7 +170,7 @@ package struct Interceptors: ResponseInterceptor {
 /// - `Accept: application/json` on every request.
 /// - `Content-Type: application/json` on requests that carry a body.
 @available(iOS 15.0, macOS 12.0, tvOS 15.0, watchOS 8.0, *)
-package actor HTTPSession {
+package final class HTTPSession: Sendable {
 
   // MARK: Properties
 
