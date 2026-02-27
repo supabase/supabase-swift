@@ -95,6 +95,19 @@ public final class SupabaseClient: Sendable {
     }
   }
 
+  /// Supabase Functions allows you to invoke edge functions.
+  @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+  public func functions2() -> FunctionsClientV2 {
+    FunctionsClientV2(
+      baseURL: functionsURL,
+      sessionConfiguration: session.configuration,
+      requestAdapter: self,
+      headers: headers,
+      region: options.functions.region != nil
+        ? FunctionRegion(rawValue: options.functions.region!) : nil
+    )
+  }
+
   let _headers: HTTPFields
   /// Headers provided to the inner clients on initialization.
   ///
@@ -411,5 +424,11 @@ public final class SupabaseClient: Sendable {
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
       options: realtimeOptions
     )
+  }
+}
+
+extension SupabaseClient: RequestAdapter {
+  package func adapt(_ request: URLRequest) async throws -> URLRequest {
+    await self.adapt(request: request)
   }
 }
