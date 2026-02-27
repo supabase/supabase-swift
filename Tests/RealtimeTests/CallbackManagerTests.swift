@@ -252,7 +252,8 @@ final class CallbackManagerTests: XCTestCase {
 }
 
 extension XCTestCase {
-  func XCTAssertNoLeak(_ object: sending AnyObject, file: StaticString = #file, line: UInt = #line) {
+  func XCTAssertNoLeak(_ object: sending AnyObject, file: StaticString = #file, line: UInt = #line)
+  {
     addTeardownBlock { [weak object] in
       XCTAssertNil(object, file: file, line: line)
     }
