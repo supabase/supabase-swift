@@ -45,15 +45,18 @@ package struct HTTPRequest: Sendable {
     timeoutInterval: TimeInterval = 60
   ) {
     guard let url = URL(string: urlString) else { return nil }
-    self.init(url: url, method: method, query: query, headers: headers, body: body, timeoutInterval: timeoutInterval)
+    self.init(
+      url: url, method: method, query: query, headers: headers, body: body,
+      timeoutInterval: timeoutInterval)
   }
 
   package var urlRequest: URLRequest {
-    var urlRequest = URLRequest(url: query.isEmpty ? url : url.appendingQueryItems(query), timeoutInterval: timeoutInterval)
+    var urlRequest = URLRequest(
+      url: query.isEmpty ? url : url.appendingQueryItems(query), timeoutInterval: timeoutInterval)
     urlRequest.httpMethod = method.rawValue
     urlRequest.allHTTPHeaderFields = .init(headers.map { ($0.name.rawName, $0.value) }) { $1 }
     urlRequest.httpBody = body
-    
+
     if urlRequest.httpBody != nil, urlRequest.value(forHTTPHeaderField: "Content-Type") == nil {
       urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
     }
