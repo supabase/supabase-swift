@@ -482,9 +482,6 @@ public struct UserAttributes: Codable, Hashable, Sendable {
   /// Note: Call ``AuthClient/reauthenticate()`` to obtain the nonce first.
   public var nonce: String?
 
-  /// An email change token.
-  @available(*, deprecated, message: "This is an old field, stop relying on it.")
-  public var emailChangeToken: String?
   /// A custom data object to store the user's metadata. This maps to the `auth.users.user_metadata`
   /// column. The `data` should be a JSON object that includes user-specific info, such as their
   /// first and last name.
@@ -498,14 +495,12 @@ public struct UserAttributes: Codable, Hashable, Sendable {
     phone: String? = nil,
     password: String? = nil,
     nonce: String? = nil,
-    emailChangeToken: String? = nil,
     data: [String: AnyJSON]? = nil
   ) {
     self.email = email
     self.phone = phone
     self.password = password
     self.nonce = nonce
-    self.emailChangeToken = emailChangeToken
     self.data = data
   }
 }

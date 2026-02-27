@@ -40,7 +40,8 @@
       if addStatus == KeychainError.duplicateItem.status {
         let updateQuery = baseQuery(withKey: key)
         let updateAttributes: [String: Any] = [kSecValueData as String: data]
-        let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)
+        let updateStatus = SecItemUpdate(
+          updateQuery as CFDictionary, updateAttributes as CFDictionary)
         try assertSuccess(forStatus: updateStatus)
       } else {
         try assertSuccess(forStatus: addStatus)
@@ -128,8 +129,8 @@
         case .itemNotFound: errSecItemNotFound
         case .interactionNotAllowed: errSecInteractionNotAllowed
         case .decodeFailed: errSecDecode
-        case let .other(status): status
-        case .unknown: errSecSuccess // This is not a Keychain error
+        case .other(let status): status
+        case .unknown: errSecSuccess  // This is not a Keychain error
         }
       }
     }
@@ -170,7 +171,7 @@
         "errSecDecode: Unable to decode the provided data."
       case .other:
         "Unspecified Keychain error: \(status)."
-      case let .unknown(message):
+      case .unknown(let message):
         "Unknown error: \(message)."
       }
     }

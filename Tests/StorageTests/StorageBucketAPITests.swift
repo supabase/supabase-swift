@@ -21,10 +21,6 @@ final class StorageBucketAPITests: XCTestCase {
 
     let session = URLSession(configuration: configuration)
 
-    JSONEncoder.defaultStorageEncoder.outputFormatting = [
-      .sortedKeys
-    ]
-
     storage = SupabaseStorageClient(
       configuration: StorageClientConfiguration(
         url: url,
