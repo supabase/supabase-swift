@@ -78,7 +78,7 @@ final class AuthErrorTests: XCTestCase {
       .userNotFound,
       .invalidCredentials,
       .emailExists,
-      .overRequestRateLimit
+      .overRequestRateLimit,
     ]
 
     for code in errorCodes {

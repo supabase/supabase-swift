@@ -102,43 +102,44 @@ final class MultipartFormDataTests: XCTestCase {
     try testContent.write(to: fileURL)
     defer { try? FileManager.default.removeItem(at: fileURL) }
 
-    formData.append(fileURL, withName: "data", fileName: "custom.json", mimeType: "application/json")
+    formData.append(
+      fileURL, withName: "data", fileName: "custom.json", mimeType: "application/json")
 
     XCTAssertGreaterThan(formData.contentLength, 0)
   }
 
   #if !os(Linux) && !os(Windows) && !os(Android)
-  func testAppendInvalidFileURL() {
-    let formData = MultipartFormData()
-    let invalidURL = URL(fileURLWithPath: "/nonexistent/path/file.txt")
+    func testAppendInvalidFileURL() {
+      let formData = MultipartFormData()
+      let invalidURL = URL(fileURLWithPath: "/nonexistent/path/file.txt")
 
-    formData.append(invalidURL, withName: "file")
+      formData.append(invalidURL, withName: "file")
 
-    // Should fail during encoding
-    XCTAssertThrowsError(try formData.encode())
-  }
+      // Should fail during encoding
+      XCTAssertThrowsError(try formData.encode())
+    }
 
-  func testAppendNonFileURL() {
-    let formData = MultipartFormData()
-    let httpURL = URL(string: "https://example.com/file.txt")!
+    func testAppendNonFileURL() {
+      let formData = MultipartFormData()
+      let httpURL = URL(string: "https://example.com/file.txt")!
 
-    formData.append(httpURL, withName: "file", fileName: "file.txt", mimeType: "text/plain")
+      formData.append(httpURL, withName: "file", fileName: "file.txt", mimeType: "text/plain")
 
-    // Should fail during encoding
-    XCTAssertThrowsError(try formData.encode())
-  }
+      // Should fail during encoding
+      XCTAssertThrowsError(try formData.encode())
+    }
 
-  func testAppendDirectory() throws {
-    let formData = MultipartFormData()
+    func testAppendDirectory() throws {
+      let formData = MultipartFormData()
 
-    // Use a known directory
-    let dirURL = FileManager.default.temporaryDirectory
+      // Use a known directory
+      let dirURL = FileManager.default.temporaryDirectory
 
-    formData.append(dirURL, withName: "dir")
+      formData.append(dirURL, withName: "dir")
 
-    // Should fail during encoding
-    XCTAssertThrowsError(try formData.encode())
-  }
+      // Should fail during encoding
+      XCTAssertThrowsError(try formData.encode())
+    }
   #endif
 
   func testAppendInputStream() {
@@ -170,7 +171,8 @@ final class MultipartFormDataTests: XCTestCase {
 
     // Create 1MB of data
     let largeData = Data(repeating: 0xFF, count: 1024 * 1024)
-    formData.append(largeData, withName: "large", fileName: "large.bin", mimeType: "application/octet-stream")
+    formData.append(
+      largeData, withName: "large", fileName: "large.bin", mimeType: "application/octet-stream")
 
     let encoded = try formData.encode()
     XCTAssertGreaterThan(encoded.count, largeData.count)
