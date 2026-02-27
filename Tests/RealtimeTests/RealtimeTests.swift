@@ -56,7 +56,7 @@ import XCTest
             "custom.access.token"
           }
         ),
-        wsTransport: { _, _ in self.client },
+        wsTransport: { [client] _, _ in client },
         http: http
       )
     }
@@ -589,11 +589,11 @@ import XCTest
     func testBroadcastWithHTTP() async throws {
       await http.when {
         $0.url.path.hasSuffix("broadcast")
-      } return: { _ in
+      } return: { [sut] _ in
         HTTPResponse(
           data: "{}".data(using: .utf8)!,
           response: HTTPURLResponse(
-            url: self.sut.broadcastURL,
+            url: sut.broadcastURL,
             statusCode: 200,
             httpVersion: nil,
             headerFields: nil
