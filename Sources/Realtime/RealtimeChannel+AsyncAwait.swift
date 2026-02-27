@@ -37,8 +37,8 @@ extension RealtimeChannelV2 {
   /// Listen for postgres changes in a channel.
   @available(
     *,
-     deprecated,
-     message: "Use the new filter syntax instead."
+    deprecated,
+    message: "Use the new filter syntax instead."
   )
   @_disfavoredOverload
   public func postgresChange(
@@ -65,8 +65,8 @@ extension RealtimeChannelV2 {
   /// Listen for postgres changes in a channel.
   @available(
     *,
-     deprecated,
-     message: "Use the new filter syntax instead."
+    deprecated,
+    message: "Use the new filter syntax instead."
   )
   @_disfavoredOverload
   public func postgresChange(
@@ -93,8 +93,8 @@ extension RealtimeChannelV2 {
   /// Listen for postgres changes in a channel.
   @available(
     *,
-     deprecated,
-     message: "Use the new filter syntax instead."
+    deprecated,
+    message: "Use the new filter syntax instead."
   )
   @_disfavoredOverload
   public func postgresChange(
@@ -120,8 +120,8 @@ extension RealtimeChannelV2 {
   /// Listen for postgres changes in a channel.
   @available(
     *,
-     deprecated,
-     message: "Use the new filter syntax instead."
+    deprecated,
+    message: "Use the new filter syntax instead."
   )
   @_disfavoredOverload
   public func postgresChange(
@@ -168,7 +168,7 @@ extension RealtimeChannelV2 {
 
     return stream
   }
-  
+
   /// Listen for `system` event.
   public func system() -> AsyncStream<RealtimeMessageV2> {
     let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream()
@@ -184,16 +184,11 @@ extension RealtimeChannelV2 {
     return stream
   }
 
-  /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
-  @available(*, deprecated, renamed: "broadcastStream(event:)")
-  public func broadcast(event: String) -> AsyncStream<JSONObject> {
-    broadcastStream(event: event)
-  }
 }
 
 // Helper to work around type ambiguity in macOS 13
-fileprivate extension AsyncStream<AnyAction> {
-  func compactErase<T: Sendable>() -> AsyncStream<T> {
+extension AsyncStream<AnyAction> {
+  fileprivate func compactErase<T: Sendable>() -> AsyncStream<T> {
     AsyncStream<T>(compactMap { $0.wrappedAction as? T } as AsyncCompactMapSequence<Self, T>)
   }
 }

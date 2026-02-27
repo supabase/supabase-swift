@@ -6,6 +6,7 @@
 //
 
 import XCTest
+
 @testable import Auth
 
 final class URLOpenerTests: XCTestCase {
@@ -124,7 +125,9 @@ final class URLOpenerTests: XCTestCase {
       capture.url = url
     }
 
-    let testURL = URL(string: "myapp://auth/callback?access_token=abc123&refresh_token=def456&expires_in=3600#success")!
+    let testURL = URL(
+      string:
+        "myapp://auth/callback?access_token=abc123&refresh_token=def456&expires_in=3600#success")!
 
     await customOpener.open(testURL)
 

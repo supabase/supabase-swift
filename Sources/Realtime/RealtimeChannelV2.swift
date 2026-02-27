@@ -171,11 +171,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Subscribes to the channel.
-  @available(*, deprecated, message: "Use `subscribeWithError` instead")
-  @MainActor
-  public func subscribe() async {
-    try? await subscribeWithError()
-  }
 
   /// Calculates retry delay with exponential backoff and jitter
   private func calculateRetryDelay(for attempt: Int) -> TimeInterval {
