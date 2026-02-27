@@ -59,7 +59,7 @@ struct FunctionsResponseInterceptor: ResponseInterceptor {
 /// let (data, _) = try await client.invoke("my-function")
 ///
 /// // Typed decoding
-/// let (result, _): (MyResponse, _) = try await client.invoke(as: MyResponse.self, "my-function")
+/// let (result, _) = try await client.invoke("my-function", as: MyResponse.self)
 ///
 /// // Streaming
 /// let (bytes, _) = try await client.streamInvoke("my-function")
@@ -237,17 +237,17 @@ public actor FunctionsClientV2 {
   /// response `Data` through a `JSONDecoder` before returning.
   ///
   /// - Parameters:
+  ///   - functionName: The name of the Edge Function to invoke.
   ///   - as: The `Decodable` type to decode the response body into.
   ///   - decoder: The `JSONDecoder` to use. Defaults to `JSONDecoder()`.
-  ///   - functionName: The name of the Edge Function to invoke.
   ///   - options: A closure used to configure the invocation. Defaults to a no-op closure.
   /// - Returns: A tuple of the decoded `Response` value and the `HTTPURLResponse`.
   /// - Throws: ``FunctionsError`` on invocation failure, `DecodingError` if the response
   ///   body cannot be decoded into `Response`, or any network-level error.
   public func invoke<Response: Decodable>(
+    _ functionName: String,
     as: Response.Type,
     decoder: JSONDecoder = JSONDecoder(),
-    _ functionName: String,
     options: (inout InvokeOptions) -> Void = { _ in }
   ) async throws -> (Response, HTTPURLResponse) {
     let (data, response) = try await invoke(functionName, options: options)
