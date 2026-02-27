@@ -170,7 +170,7 @@ package struct Interceptors: ResponseInterceptor {
 /// - `Accept: application/json` on every request.
 /// - `Content-Type: application/json` on requests that carry a body.
 @available(iOS 15.0, macOS 12.0, tvOS 15.0, watchOS 8.0, *)
-package class HTTPSession: @unchecked Sendable {
+package actor HTTPSession {
 
   // MARK: Properties
 
@@ -371,7 +371,9 @@ package class HTTPSession: @unchecked Sendable {
       throw URLError(.badURL)
     }
     if !query.isEmpty {
-      components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+      var queryItems = components.queryItems ?? []
+      queryItems.append(contentsOf: query.map { URLQueryItem(name: $0.key, value: $0.value) })
+      components.queryItems = queryItems
     }
     guard let resolvedURL = components.url else {
       throw URLError(.badURL)

@@ -82,7 +82,7 @@ public actor FunctionsClientV2 {
   ///
   /// Headers provided in ``InvokeOptions`` are merged on top of these at call time,
   /// with per-invocation values taking precedence.
-  public var headers: [String: String]
+  public private(set) var headers: [String: String]
 
   /// The optional geographic region in which functions are invoked.
   private let region: FunctionRegion?
@@ -197,7 +197,7 @@ public actor FunctionsClientV2 {
   ///
   /// - Parameter token: The bearer token to use. Pass `nil` to remove the
   ///   `Authorization` header entirely.
-  public func setAuth(_ token: String?) {
+  public func setAuth(token: String?) {
     headers["Authorization"] = token.map { "Bearer \($0)" }
   }
 
