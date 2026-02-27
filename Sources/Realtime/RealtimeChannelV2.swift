@@ -146,11 +146,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Subscribes to the channel.
-  @available(*, deprecated, message: "Use `subscribeWithError` instead")
-  @MainActor
-  public func subscribe() async {
-    try? await subscribeWithError()
-  }
 
   public func unsubscribe() async {
     logger?.debug("Unsubscribe requested for channel '\(topic)'")

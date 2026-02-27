@@ -5,11 +5,6 @@ public protocol PostgrestFilterValue {
   var rawValue: String { get }
 }
 
-extension PostgrestFilterValue {
-  @available(*, deprecated, renamed: "rawValue")
-  public var queryValue: String { rawValue }
-}
-
 extension String: PostgrestFilterValue {
   public var rawValue: String { self }
 }
