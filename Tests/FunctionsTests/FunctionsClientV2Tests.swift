@@ -56,10 +56,6 @@ struct FunctionsClientV2Tests {
     )
   }
 
-  // deinit {
-  //   Mocker.removeAll()
-  // }
-
   // MARK: - Initialization Tests
 
   @Test("Client initialization with URL and headers")
