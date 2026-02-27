@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// Represents the body of an HTTP response. It can be either fully collected as `Data` or streamed as `URLSession.AsyncBytes`.
 @available(iOS 15.0, macOS 12.0, tvOS 15.0, watchOS 8.0, *)
 package enum ResponseBody: Sendable {
