@@ -153,7 +153,8 @@ public actor FunctionsClientV2 {
     region: FunctionRegion? = nil
   ) {
     self.session = HTTPSession(
-      baseURL: baseURL,
+      baseURL: baseURL.absoluteString.hasSuffix("/")
+        ? baseURL : URL(string: baseURL.absoluteString + "/")!,
       configuration: sessionConfiguration,
       requestAdapter: requestAdapter,
       responseInterceptor: responseInterceptor != nil
@@ -223,10 +224,9 @@ public actor FunctionsClientV2 {
     var opt = InvokeOptions()
     options(&opt)
 
-    let path = "/\(functionName)"
     let allHeaders = self.headers.merging(opt.headers) { _, new in new }
     let (data, response) = try await session.data(
-      opt.method, path: path, headers: allHeaders, query: opt.query, body: opt.body)
+      opt.method, path: functionName, headers: allHeaders, query: opt.query, body: opt.body)
     return (data, response)
   }
 
@@ -274,10 +274,9 @@ public actor FunctionsClientV2 {
     var opt = InvokeOptions()
     options(&opt)
 
-    let path = "/\(functionName)"
     let allHeaders = self.headers.merging(opt.headers) { _, new in new }
     let (bytes, response) = try await session.bytes(
-      opt.method, path: path, headers: allHeaders, query: opt.query, body: opt.body)
+      opt.method, path: functionName, headers: allHeaders, query: opt.query, body: opt.body)
     return (bytes, response)
   }
 }
