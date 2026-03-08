@@ -44,6 +44,9 @@ final class URLSessionWebSocket: WebSocket {
   /// - Parameters:
   ///   - url: The WebSocket URL to connect to. Must use `ws://` or `wss://` scheme.
   ///   - protocols: Optional array of WebSocket subprotocols to negotiate with the server.
+  ///   - headers: Optional HTTP headers to include in the WebSocket upgrade request.
+  ///              These are set on the URLRequest rather than on URLSessionConfiguration's
+  ///              httpAdditionalHeaders, which can interfere with the WebSocket upgrade handshake.
   ///   - configuration: Optional `URLSessionConfiguration` for customizing the connection.
   ///                   Defaults to `.default` if not provided.
   /// - Returns: A connected `URLSessionWebSocket` instance.
@@ -51,6 +54,7 @@ final class URLSessionWebSocket: WebSocket {
   static func connect(
     to url: URL,
     protocols: [String]? = nil,
+    headers: [String: String]? = nil,
     configuration: URLSessionConfiguration? = nil
   ) async throws -> URLSessionWebSocket {
     guard url.scheme == "ws" || url.scheme == "wss" else {
@@ -110,7 +114,20 @@ final class URLSessionWebSocket: WebSocket {
       }
     )
 
-    let task = session.webSocketTask(with: url, protocols: protocols ?? [])
+    let task: URLSessionWebSocketTask
+    if let headers, !headers.isEmpty {
+      // Use URLRequest to set headers instead of httpAdditionalHeaders on the
+      // URLSessionConfiguration. Setting httpAdditionalHeaders can interfere with
+      // the WebSocket upgrade handshake on iOS, causing -1005 errors.
+      var request = URLRequest(url: url)
+      for (key, value) in headers {
+        request.setValue(value, forHTTPHeaderField: key)
+      }
+      task = session.webSocketTask(with: request)
+    } else {
+      task = session.webSocketTask(with: url, protocols: protocols ?? [])
+    }
+
     return try await withCheckedThrowingContinuation { continuation in
       mutableState.withValue {
         $0.continuation = continuation
