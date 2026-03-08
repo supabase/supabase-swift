@@ -110,11 +110,12 @@ final class URLSessionWebSocket: WebSocket {
       }
     )
 
-    session.webSocketTask(with: url, protocols: protocols ?? []).resume()
+    let task = session.webSocketTask(with: url, protocols: protocols ?? [])
     return try await withCheckedThrowingContinuation { continuation in
       mutableState.withValue {
         $0.continuation = continuation
       }
+      task.resume()
     }
   }
 
