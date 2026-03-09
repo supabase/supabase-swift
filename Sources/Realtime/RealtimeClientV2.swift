@@ -391,7 +391,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   private func rejoinChannels() async {
-    await withTaskGroup { group in
+    await withTaskGroup(of: Void.self) { group in
       for channel in channels.values {
         group.addTask { [options] in
           do {
