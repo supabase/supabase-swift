@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.41.2](https://github.com/supabase/supabase-swift/compare/v2.41.1...v2.41.2) (2026-03-09)
+
+
+### Bug Fixes
+
+* **realtime:** use URLRequest headers instead of httpAdditionalHeaders for WebSocket ([#920](https://github.com/supabase/supabase-swift/issues/920)) ([47969d5](https://github.com/supabase/supabase-swift/commit/47969d52a871f5ef420e3134cc0e54ba66a3eeb8))
+
 ## [2.41.1](https://github.com/supabase/supabase-swift/compare/v2.41.0...v2.41.1) (2026-02-06)
 
 
