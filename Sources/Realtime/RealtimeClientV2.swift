@@ -127,11 +127,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       url: url,
       options: options,
       wsTransport: { url, headers in
-        let configuration = URLSessionConfiguration.default
-        configuration.httpAdditionalHeaders = headers
         return try await URLSessionWebSocket.connect(
           to: url,
-          configuration: configuration
+          headers: headers
         )
       },
       http: HTTPClient(
