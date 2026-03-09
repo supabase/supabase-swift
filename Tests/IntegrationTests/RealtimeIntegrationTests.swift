@@ -68,13 +68,17 @@ final class RealtimeIntegrationTests: XCTestCase {
   }
 
   override func tearDown() async throws {
-    // Clean up channels and disconnect
-    await client.realtimeV2.removeAllChannels()
-    client.realtimeV2.disconnect()
+    #if os(Linux)
+      // No cleanup needed since realtime is not supported.
+    #else
+      // Clean up channels and disconnect
+      await client.realtimeV2.removeAllChannels()
+      client.realtimeV2.disconnect()
 
-    await client2.realtimeV2.removeAllChannels()
-    client2.realtimeV2.disconnect()
+      await client2.realtimeV2.removeAllChannels()
+      client2.realtimeV2.disconnect()
 
+    #endif
     try await super.tearDown()
   }
 
