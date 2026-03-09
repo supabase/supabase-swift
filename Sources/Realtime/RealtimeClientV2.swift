@@ -232,7 +232,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           options.headers.dictionary
         )
         mutableState.withValue { $0.conn = conn }
-        onConnected(reconnect: reconnect)
+        await onConnected(reconnect: reconnect)
       } catch {
         onError(error)
       }
@@ -245,7 +245,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     _ = await statusChange.first { @Sendable in $0 == .connected }
   }
 
-  private func onConnected(reconnect: Bool) {
+  private func onConnected(reconnect: Bool) async {
     options.logger?.debug("Connected to realtime WebSocket")
 
     // Start listeners before setting status to prevent race conditions
@@ -255,9 +255,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     // Now set status to connected
     status = .connected
 
-    if reconnect {
-      rejoinChannels()
-    }
+      await rejoinChannels()
 
     flushSendBuffer()
   }
@@ -392,12 +390,20 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     return mutableState.accessToken
   }
 
-  private func rejoinChannels() {
-    Task {
-      for channel in channels.values {
-        try? await channel.subscribeWithError()
+  private func rejoinChannels() async {
+      await withTaskGroup { group in
+          for channel in channels.values {
+              group.addTask { [options] in
+                  do {
+                      try await channel.subscribeWithError()
+                  } catch {
+                      options.logger?.error("Error re-subscribing to channel '\(channel.topic)' after connection loss: \(error)")
+                  }
+              }
+          }
+          
+          await group.waitForAll()
       }
-    }
   }
 
   private func listenForMessages() {
@@ -566,6 +572,14 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     if message.topic == "phoenix", message.event == "phx_reply" {
       heartbeatSubject.yield(message.status == .ok ? .ok : .error)
     }
+      
+      let refString = message.ref.map { "(\($0))" } ?? ""
+      let status = message.status?.rawValue ?? ""
+      
+      options.logger?.verbose(
+        "receive \(status) \(message.topic) \(message.event) \(refString)".trimmingCharacters(in: .whitespacesAndNewlines)
+        + " \(message.payload)"
+      )
 
     let channel = mutableState.withValue {
       if let ref = message.ref, ref == $0.pendingHeartbeatRef {
