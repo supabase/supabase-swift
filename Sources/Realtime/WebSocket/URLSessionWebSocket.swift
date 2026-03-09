@@ -126,7 +126,8 @@ final class URLSessionWebSocket: WebSocket {
       // session.webSocketTask(with: URLRequest) doesn't accept a protocols
       // parameter, so set the Sec-WebSocket-Protocol header manually.
       if let protocols, !protocols.isEmpty {
-        request.setValue(protocols.joined(separator: ", "), forHTTPHeaderField: "Sec-WebSocket-Protocol")
+        request.setValue(
+          protocols.joined(separator: ", "), forHTTPHeaderField: "Sec-WebSocket-Protocol")
       }
       task = session.webSocketTask(with: request)
     } else {
