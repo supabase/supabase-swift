@@ -1070,6 +1070,26 @@ final class RealtimeIntegrationTests: XCTestCase {
     await channel.unsubscribe()
   }
 
+  func testUnsubscribedChannelDoesNotAutoSubscribeOnConnect() async throws {
+    // Create a channel without subscribing
+    let channel = client.realtimeV2.channel("no-auto-subscribe")
+
+    XCTAssertEqual(channel.status, .unsubscribed)
+
+    // Connect the client - should NOT auto-subscribe unsubscribed channels
+    await client.realtimeV2.connect()
+
+    // Wait a bit to ensure rejoinChannels() completes
+    try await Task.sleep(nanoseconds: 500_000_000)
+
+    // Channel should still be unsubscribed
+    XCTAssertEqual(
+      channel.status,
+      .unsubscribed,
+      "Channel should remain unsubscribed after connect if it was never subscribed"
+    )
+  }
+
   func testChannelRejoinsAfterDisconnection() async throws {
     await client.realtimeV2.connect()
 

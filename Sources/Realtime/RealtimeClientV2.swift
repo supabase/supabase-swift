@@ -393,6 +393,14 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   private func rejoinChannels() async {
     await withTaskGroup(of: Void.self) { group in
       for channel in channels.values {
+        // Only rejoin channels that were previously subscribed or in the process of subscribing
+        // Don't subscribe channels that were never subscribed (status == .unsubscribed)
+        guard channel.status != .unsubscribed else {
+          options.logger?.debug(
+            "Skipping rejoin for channel '\(channel.topic)' - was never subscribed")
+          continue
+        }
+
         group.addTask { [options] in
           do {
             try await channel.subscribeWithError()
