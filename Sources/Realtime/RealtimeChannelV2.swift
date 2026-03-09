@@ -95,13 +95,13 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   /// Subscribes to the channel.
   public func subscribeWithError() async throws {
-    let task = subscribeTask.withValue {
-      if let currentTask = $0 {
+    let task = subscribeTask.withValue { task in
+      if let currentTask = task {
         logger?.debug("Subscription to channel '\(topic)' already in flight, waiting...")
         return currentTask
       }
 
-      $0 = Task {
+      let newTask = Task {
         logger?.debug(
           "Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))"
         )
@@ -181,7 +181,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         throw RealtimeError.maxRetryAttemptsReached
       }
 
-      return $0!
+      return newTask
     }
 
     try await task.value
@@ -267,6 +267,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   public func unsubscribe() async {
+    // Cancel any in-flight subscription task
+    subscribeTask.withValue { task in
+      task?.cancel()
+      task = nil
+    }
+
     status = .unsubscribing
     logger?.debug("Unsubscribing from channel \(topic)")
 

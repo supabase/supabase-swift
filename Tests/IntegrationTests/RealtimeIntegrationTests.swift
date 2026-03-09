@@ -163,42 +163,40 @@ final class RealtimeIntegrationTests: XCTestCase {
     XCTAssertEqual(channel2.status, .unsubscribed)
   }
 
-  // BUG: removeChannel should cancel in-flight subscription.
-  //    func testRemoveChannel() async throws {
-  //        await client.realtimeV2.connect()
-  //
-  //        let channel = client.realtimeV2.channel("remove-test")
-  //        try await channel.subscribeWithError()
-  //
-  //        await client.realtimeV2.removeChannel(channel)
-  //
-  //        XCTAssertEqual(channel.status, .unsubscribed)
-  //        XCTAssertFalse(client.realtimeV2.channels.keys.contains(channel.topic))
-  //    }
+  func testRemoveChannel() async throws {
+    await client.realtimeV2.connect()
 
-  // BUG: removeChannel should cancel in-flight subscription.
-  //    func testRemoveAllChannels() async throws {
-  //        await client.realtimeV2.connect()
-  //
-  //        let channel1 = client.realtimeV2.channel("all-1")
-  //        let channel2 = client.realtimeV2.channel("all-2")
-  //        let channel3 = client.realtimeV2.channel("all-3")
-  //
-  //        try await subscribeMany([channel1, channel2, channel3])
-  //
-  //        await client.realtimeV2.removeAllChannels()
-  //
-  //        XCTAssertEqual(channel1.status, .unsubscribed)
-  //        XCTAssertEqual(channel2.status, .unsubscribed)
-  //        XCTAssertEqual(channel3.status, .unsubscribed)
-  //        XCTAssertEqual(client.realtimeV2.channels.count, 0)
-  //
-  //        XCTAssertEqual(
-  //            client.realtimeV2.status,
-  //            .disconnected,
-  //            "Should disconnect client if all channels are removed"
-  //        )
-  //    }
+    let channel = client.realtimeV2.channel("remove-test")
+    try await channel.subscribeWithError()
+
+    await client.realtimeV2.removeChannel(channel)
+
+    XCTAssertEqual(channel.status, .unsubscribed)
+    XCTAssertFalse(client.realtimeV2.channels.keys.contains(channel.topic))
+  }
+
+  func testRemoveAllChannels() async throws {
+    await client.realtimeV2.connect()
+
+    let channel1 = client.realtimeV2.channel("all-1")
+    let channel2 = client.realtimeV2.channel("all-2")
+    let channel3 = client.realtimeV2.channel("all-3")
+
+    try await subscribeMany([channel1, channel2, channel3])
+
+    await client.realtimeV2.removeAllChannels()
+
+    XCTAssertEqual(channel1.status, .unsubscribed)
+    XCTAssertEqual(channel2.status, .unsubscribed)
+    XCTAssertEqual(channel3.status, .unsubscribed)
+    XCTAssertEqual(client.realtimeV2.channels.count, 0)
+
+    XCTAssertEqual(
+      client.realtimeV2.status,
+      .disconnected,
+      "Should disconnect client if all channels are removed"
+    )
+  }
 
   // MARK: - Broadcast Tests
 
