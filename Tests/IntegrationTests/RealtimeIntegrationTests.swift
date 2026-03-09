@@ -273,10 +273,10 @@ final class RealtimeIntegrationTests: XCTestCase {
     try await channel.subscribeWithError()
     try await channel.waitUntilSubscribed()
 
-    await channel.broadcast(event: "event-1", message: ["data": "1"])
-    await channel.broadcast(event: "event-2", message: ["data": "2"])
-    await channel.broadcast(event: "event-1", message: ["data": "3"])
-    await channel.broadcast(event: "event-2", message: ["data": "4"])
+    try await channel.broadcast(event: "event-1", message: ["data": "1"])
+    try await channel.broadcast(event: "event-2", message: ["data": "2"])
+    try await channel.broadcast(event: "event-1", message: ["data": "3"])
+    try await channel.broadcast(event: "event-2", message: ["data": "4"])
 
     let event1 = try await withTimeout(interval: 5) {
       await event1Messages.value
@@ -307,7 +307,7 @@ final class RealtimeIntegrationTests: XCTestCase {
     try await channel.subscribeWithError()
 
     // Send broadcast - should not receive it
-    await channel.broadcast(event: "test", message: ["data": "test"])
+    try await channel.broadcast(event: "test", message: ["data": "test"])
 
     // Wait a bit
     try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 seconds
