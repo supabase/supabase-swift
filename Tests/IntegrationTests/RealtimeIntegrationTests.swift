@@ -15,12 +15,22 @@ import XCTest
 
 @testable import Realtime
 
+struct ConsoleLogger: SupabaseLogger {
+  func log(message: SupabaseLogMessage) {
+    print(message.description)
+  }
+}
+
 final class RealtimeIntegrationTests: XCTestCase {
   var client: SupabaseClient!
   var client2: SupabaseClient!
 
   override func setUp() async throws {
     try await super.setUp()
+
+    #if os(Linux)
+      throw XCTSkip("Realtime tests are not supported on Linux (WebSockets not available)")
+    #endif
 
     //      try XCTSkipUnless(
     //        ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
@@ -33,7 +43,8 @@ final class RealtimeIntegrationTests: XCTestCase {
       )!,
       supabaseKey: DotEnv.SUPABASE_ANON_KEY,
       options: SupabaseClientOptions(
-        auth: .init(storage: InMemoryLocalStorage())
+        auth: .init(storage: InMemoryLocalStorage()),
+        global: SupabaseClientOptions.GlobalOptions(logger: ConsoleLogger())
       )
     )
 
@@ -43,7 +54,8 @@ final class RealtimeIntegrationTests: XCTestCase {
       )!,
       supabaseKey: DotEnv.SUPABASE_ANON_KEY,
       options: SupabaseClientOptions(
-        auth: .init(storage: InMemoryLocalStorage())
+        auth: .init(storage: InMemoryLocalStorage()),
+        global: SupabaseClientOptions.GlobalOptions(logger: ConsoleLogger())
       )
     )
 
@@ -342,7 +354,9 @@ final class RealtimeIntegrationTests: XCTestCase {
     try await channel.subscribeWithError()
 
     // Wait for subscription
-    _ = await channel.system().first(where: { _ in true })
+    try await withTimeout(interval: 10) {
+      _ = await channel.system().first(where: { _ in true })
+    }
 
     let testKey = UUID().uuidString
 
