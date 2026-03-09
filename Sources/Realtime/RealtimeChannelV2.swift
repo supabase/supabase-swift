@@ -38,8 +38,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     var joinRef: String?
     var pushes: [String: PushV2] = [:]
   }
-    
-    private let subscribeTask = LockIsolated(Task<Void, any Error>?.none)
+
+  private let subscribeTask = LockIsolated(Task<Void, any Error>?.none)
 
   @MainActor
   private var mutableState = MutableState()
@@ -95,103 +95,103 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   /// Subscribes to the channel.
   public func subscribeWithError() async throws {
-      let task = subscribeTask.withValue {
-          if let currentTask = $0 {
-              logger?.debug("Subscription to channel '\(topic)' already in flight, waiting...")
-              return currentTask
-          }
-          
-          $0 = Task {
-              logger?.debug(
-                "Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))"
-              )
-              
-              status = .subscribing
-              
-              defer {
-                  // If the subscription fails, we need to set the status to unsubscribed
-                  // to avoid the channel being stuck in a subscribing state.
-                  if status != .subscribed {
-                      status = .unsubscribed
-                  }
-                  
-                  self.subscribeTask.setValue(nil)
-              }
-              
-              var attempts = 0
-              
-              while attempts < socket.options.maxRetryAttempts {
-                  attempts += 1
-                  
-                  do {
-                      logger?.debug(
-                        "Attempting to subscribe to channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
-                      )
-                      
-                      try await withTimeout(interval: socket.options.timeoutInterval) { [self] in
-                          await _subscribe()
-                      }
-                      
-                      logger?.debug("Successfully subscribed to channel '\(topic)'")
-                      return
-                      
-                  } catch is TimeoutError {
-                      logger?.debug(
-                        "Subscribe timed out for channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
-                      )
-                      
-                      if attempts < socket.options.maxRetryAttempts {
-                          // Add exponential backoff with jitter
-                          let delay = calculateRetryDelay(for: attempts)
-                          logger?.debug(
-                            "Retrying subscription to channel '\(topic)' in \(String(format: "%.2f", delay)) seconds..."
-                          )
-                          
-                          do {
-                              try await _clock.sleep(for: delay)
-                              
-                              // Check if socket is still connected after delay
-                              if socket.status != .connected {
-                                  logger?.debug(
-                                    "Socket disconnected during retry delay for channel '\(topic)', aborting subscription"
-                                  )
-                                  throw CancellationError()
-                              }
-                          } catch {
-                              // If sleep is cancelled, break out of retry loop
-                              logger?.debug("Subscription retry cancelled for channel '\(topic)'")
-                              throw CancellationError()
-                          }
-                      } else {
-                          logger?.error(
-                            "Failed to subscribe to channel '\(topic)' after \(socket.options.maxRetryAttempts) attempts due to timeout"
-                          )
-                      }
-                  } catch is CancellationError {
-                      logger?.debug("Subscription retry cancelled for channel '\(topic)'")
-                      throw CancellationError()
-                  } catch {
-                      preconditionFailure(
-                        "The only possible error here is TimeoutError or CancellationError, this should never happen."
-                      )
-                  }
-              }
-              
-              logger?.error("Subscription to channel '\(topic)' failed after \(attempts) attempts")
-              throw RealtimeError.maxRetryAttemptsReached
-          }
-          
-          return $0!
+    let task = subscribeTask.withValue {
+      if let currentTask = $0 {
+        logger?.debug("Subscription to channel '\(topic)' already in flight, waiting...")
+        return currentTask
       }
-      
-      try await task.value
-  }
-    
-    func waitUntilSubscribed(timeout: TimeInterval = 10) async throws {
-        try await withTimeout(interval: timeout) {
-            _ = await self.statusChange.first { $0 == .subscribed }
+
+      $0 = Task {
+        logger?.debug(
+          "Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))"
+        )
+
+        status = .subscribing
+
+        defer {
+          // If the subscription fails, we need to set the status to unsubscribed
+          // to avoid the channel being stuck in a subscribing state.
+          if status != .subscribed {
+            status = .unsubscribed
+          }
+
+          self.subscribeTask.setValue(nil)
         }
+
+        var attempts = 0
+
+        while attempts < socket.options.maxRetryAttempts {
+          attempts += 1
+
+          do {
+            logger?.debug(
+              "Attempting to subscribe to channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
+            )
+
+            try await withTimeout(interval: socket.options.timeoutInterval) { [self] in
+              await _subscribe()
+            }
+
+            logger?.debug("Successfully subscribed to channel '\(topic)'")
+            return
+
+          } catch is TimeoutError {
+            logger?.debug(
+              "Subscribe timed out for channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
+            )
+
+            if attempts < socket.options.maxRetryAttempts {
+              // Add exponential backoff with jitter
+              let delay = calculateRetryDelay(for: attempts)
+              logger?.debug(
+                "Retrying subscription to channel '\(topic)' in \(String(format: "%.2f", delay)) seconds..."
+              )
+
+              do {
+                try await _clock.sleep(for: delay)
+
+                // Check if socket is still connected after delay
+                if socket.status != .connected {
+                  logger?.debug(
+                    "Socket disconnected during retry delay for channel '\(topic)', aborting subscription"
+                  )
+                  throw CancellationError()
+                }
+              } catch {
+                // If sleep is cancelled, break out of retry loop
+                logger?.debug("Subscription retry cancelled for channel '\(topic)'")
+                throw CancellationError()
+              }
+            } else {
+              logger?.error(
+                "Failed to subscribe to channel '\(topic)' after \(socket.options.maxRetryAttempts) attempts due to timeout"
+              )
+            }
+          } catch is CancellationError {
+            logger?.debug("Subscription retry cancelled for channel '\(topic)'")
+            throw CancellationError()
+          } catch {
+            preconditionFailure(
+              "The only possible error here is TimeoutError or CancellationError, this should never happen."
+            )
+          }
+        }
+
+        logger?.error("Subscription to channel '\(topic)' failed after \(attempts) attempts")
+        throw RealtimeError.maxRetryAttemptsReached
+      }
+
+      return $0!
     }
+
+    try await task.value
+  }
+
+  func waitUntilSubscribed(timeout: TimeInterval = 10) async throws {
+    try await withTimeout(interval: timeout) {
+      _ = await self.statusChange.first { $0 == .subscribed }
+    }
+  }
 
   /// Subscribes to the channel.
   @available(*, deprecated, message: "Use `subscribeWithError` instead")
