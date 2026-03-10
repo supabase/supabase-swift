@@ -12,15 +12,15 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
-package struct HTTPRequest: Sendable {
-  package var url: URL
-  package var method: HTTPTypes.HTTPRequest.Method
-  package var query: [URLQueryItem]
-  package var headers: HTTPFields
-  package var body: Data?
-  package var timeoutInterval: TimeInterval
+public struct HTTPRequest: Sendable {
+  public var url: URL
+  public var method: HTTPTypes.HTTPRequest.Method
+  public var query: [URLQueryItem]
+  public var headers: HTTPFields
+  public var body: Data?
+  public var timeoutInterval: TimeInterval
 
-  package init(
+  public init(
     url: URL,
     method: HTTPTypes.HTTPRequest.Method,
     query: [URLQueryItem] = [],
@@ -48,7 +48,7 @@ package struct HTTPRequest: Sendable {
     self.init(url: url, method: method, query: query, headers: headers, body: body, timeoutInterval: timeoutInterval)
   }
 
-  package var urlRequest: URLRequest {
+  public var urlRequest: URLRequest {
     var urlRequest = URLRequest(url: query.isEmpty ? url : url.appendingQueryItems(query), timeoutInterval: timeoutInterval)
     urlRequest.httpMethod = method.rawValue
     urlRequest.allHTTPHeaderFields = .init(headers.map { ($0.name.rawName, $0.value) }) { $1 }
