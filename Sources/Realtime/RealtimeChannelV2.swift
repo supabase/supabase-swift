@@ -267,6 +267,11 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   public func unsubscribe() async {
+    // If already unsubscribed or unsubscribing, no-op
+    guard status != .unsubscribed && status != .unsubscribing else {
+      return
+    }
+
     // Cancel any in-flight subscription task
     subscribeTask.withValue { task in
       task?.cancel()
@@ -278,8 +283,18 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     await push(ChannelEvent.leave)
 
-    // Wait for server confirmation of unsubscription
-    _ = await statusChange.first { @Sendable in $0 == .unsubscribed }
+    // Wait for server confirmation of unsubscription with a timeout
+    do {
+      try await withTimeout(interval: socket.options.timeoutInterval) {
+        _ = await self.statusChange.first { @Sendable in $0 == .unsubscribed }
+      }
+    } catch {
+      // Timeout or other error - force status to unsubscribed to avoid hanging
+      logger?.warning(
+        "Failed to receive unsubscribe confirmation for channel \(topic), forcing status to unsubscribed: \(error)"
+      )
+      status = .unsubscribed
+    }
   }
 
   @available(
