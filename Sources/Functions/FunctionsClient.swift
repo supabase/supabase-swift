@@ -25,7 +25,7 @@ public actor FunctionsClient {
   let url: URL
 
   /// The Region to invoke the functions in.
-  let region: String?
+  let region: FunctionRegion?
 
   private let http: _HTTPClient
 
@@ -44,22 +44,27 @@ public actor FunctionsClient {
     region: FunctionRegion? = nil,
     session: URLSession = URLSession(configuration: .default)
   ) {
-    self.init(url: url, headers: headers, region: region?.rawValue, session: session)
+    self.url = url
+    self.region = region
+    session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
+    self.http = _HTTPClient(host: url, session: session)
+    self.headers = headers
+    if self.headers["X-Client-Info"] == nil {
+      self.headers["X-Client-Info"] = "functions-swift/\(version)"
+    }
   }
 
   package init(
     url: URL,
     headers: [String: String] = [:],
-    region: String? = nil,
+    region: FunctionRegion? = nil,
     session: URLSession = URLSession(configuration: .default),
-    tokenProvider: TokenProvider? = nil
+    tokenProvider: @escaping TokenProvider
   ) {
     self.url = url
     self.region = region
-
     session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
     self.http = _HTTPClient(host: url, session: session, tokenProvider: tokenProvider)
-
     self.headers = headers
     if self.headers["X-Client-Info"] == nil {
       self.headers["X-Client-Info"] = "functions-swift/\(version)"
@@ -178,7 +183,7 @@ public actor FunctionsClient {
     var query = options.query
     var allHeaders = headers.merging(options.headers) { _, new in new }
 
-    if let region = options.region ?? region {
+    if let region = (options.region ?? region)?.rawValue {
       allHeaders["x-region"] = region
       query["forceFunctionRegion"] = region
     }
