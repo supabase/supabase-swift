@@ -38,10 +38,9 @@
 ## Quick Start
 
 ### Requirements
-
-- iOS 13.0+ / macOS 10.15+ / tvOS 13+ / watchOS 6+ / visionOS 1+
-- Xcode 15.3+
-- Swift 5.10+
+- iOS 16.0+ / macOS 12.0+ / tvOS 16+ / watchOS 9+ / visionOS 1+
+- Xcode 16.3+
+- Swift 6.1+
 
 > [!IMPORTANT]
 > Check the [Support Policy](#support-policy) to learn when dropping Xcode, Swift, and platform versions will not be considered a **breaking change**.

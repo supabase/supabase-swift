@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - v3
       - release/*
   pull_request:
     branches:
@@ -70,6 +71,7 @@ jobs:
           file: lcov.info
 
   spm:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v3' || github.event_name == 'workflow_dispatch'
     runs-on: macos-26
     timeout-minutes: 30
     strategy:
