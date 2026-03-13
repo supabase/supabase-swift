@@ -15,7 +15,7 @@ import Foundation
 let version = Helpers.version
 
 /// An actor representing a client for invoking functions.
-public final class FunctionsClient: Sendable {
+public actor FunctionsClient {
   /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
   ///
   /// See more: https://supabase.com/docs/guides/functions/limits
@@ -27,16 +27,9 @@ public final class FunctionsClient: Sendable {
   /// The Region to invoke the functions in.
   let region: String?
 
-  struct MutableState {
-    var headers: [String: String] = [:]
-  }
-
   private let http: _HTTPClient
-  private let mutableState = LockIsolated(MutableState())
 
-  var headers: [String: String] {
-    mutableState.headers
-  }
+  var headers: [String: String] = [:]
 
   /// Initializes a new instance of `FunctionsClient`.
   ///
@@ -45,7 +38,7 @@ public final class FunctionsClient: Sendable {
   ///   - headers: Headers to be included in all requests.
   ///   - region: The Region to invoke the functions in.
   ///   - session: The `URLSession` used to perform requests. Defaults to a new session.
-  public convenience init(
+  public init(
     url: URL,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
@@ -63,13 +56,13 @@ public final class FunctionsClient: Sendable {
   ) {
     self.url = url
     self.region = region
+
+    session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
     self.http = _HTTPClient(host: url, session: session, tokenProvider: tokenProvider)
 
-    mutableState.withValue {
-      $0.headers = headers
-      if $0.headers["X-Client-Info"] == nil {
-        $0.headers["X-Client-Info"] = "functions-swift/\(version)"
-      }
+    self.headers = headers
+    if self.headers["X-Client-Info"] == nil {
+      self.headers["X-Client-Info"] = "functions-swift/\(version)"
     }
   }
 
@@ -77,12 +70,10 @@ public final class FunctionsClient: Sendable {
   ///
   /// - Parameter token: The new JWT token sent in the authorization header.
   public func setAuth(token: String?) {
-    mutableState.withValue {
-      if let token {
-        $0.headers["Authorization"] = "Bearer \(token)"
-      } else {
-        $0.headers.removeValue(forKey: "Authorization")
-      }
+    if let token {
+      headers["Authorization"] = "Bearer \(token)"
+    } else {
+      headers.removeValue(forKey: "Authorization")
     }
   }
 
@@ -167,51 +158,45 @@ public final class FunctionsClient: Sendable {
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - options: Options for invoking the function.
-  /// - Returns: A stream of `Data` chunks as they arrive.
-  ///
-  /// - Warning: Experimental method.
-  public func _invokeWithStreamedResponse(
+  /// - Returns: Byte-by-byte stream.
+  @available(macOS 12.0, *)
+  public func invokeStream(
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()
-  ) async throws -> AsyncThrowingStream<Data, any Error> {
-    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-    let delegate = StreamResponseDelegate(continuation: continuation)
-
+  ) async throws -> AsyncThrowingStream<UInt8, any Error> {
     let (functionURL, method, query, allHeaders, body) = requestComponents(
       functionName: functionName, options: invokeOptions)
-    var urlRequest = try await http.createRequest(
-      method,
-      url: functionURL,
-      query: query.isEmpty ? nil : query,
-      body: body,
-      headers: allHeaders.isEmpty ? nil : allHeaders
-    )
-    urlRequest.timeoutInterval = FunctionsClient.requestIdleTimeout
 
-    let session = URLSession(
-      configuration: http.session.configuration,
-      delegate: delegate,
-      delegateQueue: nil
-    )
-    let task = session.dataTask(with: urlRequest)
+    do {
+      let (bytes, response) = try await http.fetchStream(
+        method, url: functionURL, query: query.isEmpty ? nil : query, body: body,
+        headers: allHeaders.isEmpty ? nil : allHeaders)
 
-    continuation.onTermination = { _ in
-      task.cancel()
-      _ = delegate
+      if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
+        throw FunctionsError.relayError
+      }
+
+      return bytes
+    } catch let error as HTTPClientError {
+      if case .responseError(let response, let data) = error {
+        throw FunctionsError.httpError(code: response.statusCode, data: data)
+      }
+      throw error
     }
-
-    task.resume()
-    return stream
   }
 
   private func requestComponents(
     functionName: String, options: FunctionInvokeOptions
-  ) -> (url: URL, method: HTTPMethod, query: [String: String], headers: [String: String], body:
-    RequestBody?)
-  {
+  ) -> (
+    url: URL,
+    method: HTTPMethod,
+    query: [String: String],
+    headers: [String: String],
+    body: RequestBody?
+  ) {
     let method = options.method.flatMap { HTTPMethod(rawValue: $0.rawValue) } ?? .post
     var query = options.query
-    var allHeaders = mutableState.headers.merging(options.headers) { _, new in new }
+    var allHeaders = headers.merging(options.headers) { _, new in new }
 
     if let region = options.region ?? region {
       allHeaders["x-region"] = region
@@ -220,45 +205,5 @@ public final class FunctionsClient: Sendable {
 
     let body: RequestBody? = options.body.map { .data($0) }
     return (url.appendingPathComponent(functionName), method, query, allHeaders, body)
-  }
-}
-
-final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
-  let continuation: AsyncThrowingStream<Data, any Error>.Continuation
-
-  init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
-    self.continuation = continuation
-  }
-
-  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
-    continuation.yield(data)
-  }
-
-  func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    continuation.finish(throwing: error)
-  }
-
-  func urlSession(
-    _: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse,
-    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
-  ) {
-    defer {
-      completionHandler(.allow)
-    }
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      continuation.finish(throwing: URLError(.badServerResponse))
-      return
-    }
-
-    guard 200..<300 ~= httpResponse.statusCode else {
-      continuation.finish(
-        throwing: FunctionsError.httpError(code: httpResponse.statusCode, data: Data()))
-      return
-    }
-
-    if httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true" {
-      continuation.finish(throwing: FunctionsError.relayError)
-    }
   }
 }
