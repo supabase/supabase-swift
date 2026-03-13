@@ -23,13 +23,13 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - id: The unique identifier of the bucket you would like to retrieve.
   public func getBucket(_ id: String) async throws -> Bucket {
-    try await execute(
+    let response = try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("bucket/\(id)"),
         method: .get
       )
     )
-    .decoded(decoder: configuration.decoder)
+    return try response.decoded(decoder: configuration.decoder)
   }
 
   struct BucketParameters: Encodable {
