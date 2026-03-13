@@ -47,7 +47,7 @@ package final class _HTTPClient: Sendable {
   let tokenProvider: TokenProvider?
 
   /// The JSONDecoder used to decode responses from the server.
-  let jsonDecoder = JSONDecoder.supabase()
+  package let jsonDecoder = JSONDecoder.supabase()
 
   package init(
     host: URL, session: URLSession = URLSession(configuration: .default),
@@ -107,8 +107,8 @@ package final class _HTTPClient: Sendable {
     package func fetchStream(
       _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
       body: RequestBody? = nil, headers: [String: String]? = nil
-    ) -> AsyncThrowingStream<UInt8, any Error> {
-      performFetchStream(
+    ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+      try await performFetchStream(
         method,
         requestBuilder: { [self] in
           try await self.createRequest(method, path, query: query, body: body, headers: headers)
@@ -123,8 +123,8 @@ package final class _HTTPClient: Sendable {
     package func fetchStream(
       _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
       headers: [String: String]? = nil
-    ) -> AsyncThrowingStream<UInt8, any Error> {
-      performFetchStream(
+    ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+      try await performFetchStream(
         method,
         requestBuilder: { [self] in
           try await self.createRequest(method, url: url, query: query, body: body, headers: headers)
@@ -135,37 +135,33 @@ package final class _HTTPClient: Sendable {
     @available(macOS 12.0, *)
     private func performFetchStream(
       _ method: HTTPMethod, requestBuilder: @escaping @Sendable () async throws -> URLRequest
-    ) -> AsyncThrowingStream<UInt8, any Error> {
-      AsyncThrowingStream { continuation in
-        let task = Task {
-          do {
-            let request = try await requestBuilder()
+    ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+      let request = try await requestBuilder()
 
-            let (bytes, response) = try await session.bytes(for: request)
-            let httpResponse = try validateResponse(response)
+      let (bytes, response) = try await session.bytes(for: request)
+      let httpResponse = try validateResponse(response)
 
-            guard (200..<300).contains(httpResponse.statusCode) else {
-              var errorData = Data()
-              for try await byte in bytes {
-                errorData.append(byte)
-              }
-              // validateResponse will throw the appropriate error
-              _ = try validateResponse(response, data: errorData)
-              return  // This line will never be reached, but satisfies the compiler
-            }
-
-            for try await byte in bytes {
-              continuation.yield(byte)
-            }
-
-            continuation.finish()
-          }
+      guard (200..<300).contains(httpResponse.statusCode) else {
+        var errorData = Data()
+        for try await byte in bytes {
+          errorData.append(byte)
         }
-
-        continuation.onTermination = { _ in
-          task.cancel()
-        }
+        _ = try validateResponse(response, data: errorData)
+        return (.finished(), httpResponse)
       }
+
+      let (stream, continuation) = AsyncThrowingStream<UInt8, any Error>.makeStream()
+
+      let task = Task {
+        for try await byte in bytes {
+          continuation.yield(byte)
+        }
+        continuation.finish()
+      }
+
+      continuation.onTermination = { _ in task.cancel() }
+
+      return (stream, httpResponse)
     }
   #endif
 
@@ -287,7 +283,9 @@ package final class _HTTPClient: Sendable {
   ///   - response: The raw `URLResponse` to validate.
   ///   - data: When provided, included in ``HTTPClientError/responseError(_:data:)`` on failure.
   @discardableResult
-  package func validateResponse(_ response: URLResponse, data: Data? = nil) throws -> HTTPURLResponse {
+  package func validateResponse(_ response: URLResponse, data: Data? = nil) throws
+    -> HTTPURLResponse
+  {
     guard let response = response as? HTTPURLResponse else {
       throw HTTPClientError.unexpectedError(
         "Invalid response from server: \(response)"
