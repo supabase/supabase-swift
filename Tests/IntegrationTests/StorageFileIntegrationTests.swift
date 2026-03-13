@@ -421,7 +421,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   private func uploadFileURL(_ fileName: String) -> URL {
-    URL(fileURLWithPath: #file)
+    URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()
       .appendingPathComponent("Fixtures/Upload")
       .appendingPathComponent(fileName)
