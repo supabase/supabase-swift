@@ -179,7 +179,7 @@ package final class _HTTPClient: Sendable {
     request: URLRequest
   ) async throws -> (Data, HTTPURLResponse) {
     let (data, response) = try await session.data(for: request)
-    let httpResponse = try validateResponse(response)
+    let httpResponse = try validateResponse(response, data: data)
     return (data, httpResponse)
   }
 
