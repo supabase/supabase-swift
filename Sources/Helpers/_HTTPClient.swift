@@ -93,6 +93,7 @@ package final class _HTTPClient: Sendable {
     }
   }
 
+<<<<<<< HEAD
   #if canImport(Darwin)
     /// Streams the response body byte-by-byte via an `AsyncThrowingStream`.
     ///
@@ -161,6 +162,74 @@ package final class _HTTPClient: Sendable {
       return (stream, httpResponse)
     }
   #endif
+=======
+  /// Streams the response body byte-by-byte via an `AsyncThrowingStream`.
+  ///
+  /// Cancelling the stream cancels the underlying `URLSession` task. Non-2xx responses
+  /// buffer the full error body and throw ``HTTPClientError/responseError(_:data:)``.
+  @available(macOS 12.0, *)
+  package func fetchStream(
+    _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
+    body: RequestBody? = nil, headers: [String: String]? = nil
+  ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+    try await performFetchStream(
+      method,
+      requestBuilder: { [self] in
+        try await self.createRequest(method, path, query: query, body: body, headers: headers)
+      }
+    )
+  }
+
+  /// Streams the response body from an absolute `url` byte-by-byte.
+  @available(macOS 12.0, *)
+  package func fetchStream(
+    _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
+    headers: [String: String]? = nil
+  ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+    try await performFetchStream(
+      method,
+      requestBuilder: { [self] in
+        try await self.createRequest(method, url: url, query: query, body: body, headers: headers)
+      }
+    )
+  }
+
+  @available(macOS 12.0, *)
+  private func performFetchStream(
+    _ method: HTTPMethod, requestBuilder: @escaping @Sendable () async throws -> URLRequest
+  ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+    let request = try await requestBuilder()
+
+    let (bytes, response) = try await session.bytes(for: request)
+    let httpResponse = try validateResponse(response)
+
+    guard (200..<300).contains(httpResponse.statusCode) else {
+      var errorData = Data()
+      for try await byte in bytes {
+        errorData.append(byte)
+      }
+      // validateResponse will throw the appropriate error
+      _ = try validateResponse(response, data: errorData)
+      return (.finished(), httpResponse)  // This will never be reached, but is needed to satisfy the return type
+    }
+
+    let (stream, continuation) = AsyncThrowingStream<UInt8, any Error>.makeStream()
+
+    let task = Task {
+      for try await byte in bytes {
+        continuation.yield(byte)
+      }
+
+      continuation.finish()
+    }
+
+    continuation.onTermination = { _ in
+      task.cancel()
+    }
+
+    return (stream, httpResponse)
+  }
+>>>>>>> 0db30d9 (refactor(functions): convert FunctionsClient to actor, simplify streaming API)
 
   /// Performs a request relative to ``host``, returning the raw response body.
   package func fetchData(

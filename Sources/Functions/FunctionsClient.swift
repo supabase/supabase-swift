@@ -8,6 +8,7 @@ import Helpers
 
 let version = Helpers.version
 
+<<<<<<< HEAD
 /// A client for invoking Supabase Edge Functions.
 ///
 /// `FunctionsClient` provides methods for calling Edge Functions deployed on your Supabase project.
@@ -36,6 +37,11 @@ let version = Helpers.version
 /// into every request. You do not need to manage ``setAuth(token:)`` manually in that case.
 public actor FunctionsClient {
   /// The maximum time an Edge Function may be idle before the gateway returns a 504.
+=======
+/// An actor representing a client for invoking functions.
+public actor FunctionsClient {
+  /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
+>>>>>>> 0db30d9 (refactor(functions): convert FunctionsClient to actor, simplify streaming API)
   ///
   /// Supabase enforces a 150-second request idle timeout for Edge Functions. The client
   /// configures the underlying `URLSession` with this value so local timeouts align with
@@ -57,6 +63,7 @@ public actor FunctionsClient {
   /// automatically.
   public let region: FunctionRegion?
 
+<<<<<<< HEAD
   /// The JSON decoder used to decode response bodies in ``invokeDecodable(_:as:decoder:options:)``.
   ///
   /// Per-call override is also available via the `decoder`
@@ -96,6 +103,19 @@ public actor FunctionsClient {
   ///   headers: ["apikey": "<publishable-or-secret-key>", "Authorization": "Bearer <authorization-token>"]
   /// )
   /// ```
+=======
+  private let http: _HTTPClient
+
+  var headers: [String: String] = [:]
+
+  /// Initializes a new instance of `FunctionsClient`.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL for the functions.
+  ///   - headers: Headers to be included in all requests.
+  ///   - region: The Region to invoke the functions in.
+  ///   - session: The `URLSession` used to perform requests. Defaults to a new session.
+>>>>>>> 0db30d9 (refactor(functions): convert FunctionsClient to actor, simplify streaming API)
   public init(
     url: URL,
     headers: [String: String] = [:],
@@ -123,6 +143,7 @@ public actor FunctionsClient {
   ) {
     self.url = url
     self.region = region
+<<<<<<< HEAD
     self.decoder = decoder
     session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
     self.http = _HTTPClient(
@@ -130,6 +151,12 @@ public actor FunctionsClient {
       session: session,
       tokenProvider: tokenProvider
     )
+=======
+
+    session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
+    self.http = _HTTPClient(host: url, session: session, tokenProvider: tokenProvider)
+
+>>>>>>> 0db30d9 (refactor(functions): convert FunctionsClient to actor, simplify streaming API)
     self.headers = headers
     if self.headers["X-Client-Info"] == nil {
       self.headers["X-Client-Info"] = "functions-swift/\(version)"
@@ -266,6 +293,7 @@ public actor FunctionsClient {
     }
   }
 
+<<<<<<< HEAD
   #if canImport(Darwin)
     /// Invokes a function and returns an async byte stream for the response body.
     ///
@@ -330,6 +358,44 @@ public actor FunctionsClient {
   private func requestComponents(
     functionName: String,
     options: FunctionInvokeOptions
+=======
+  /// Invokes a function with streamed response.
+  ///
+  /// Function MUST return a `text/event-stream` content type for this method to work.
+  ///
+  /// - Parameters:
+  ///   - functionName: The name of the function to invoke.
+  ///   - options: Options for invoking the function.
+  /// - Returns: Byte-by-byte stream.
+  @available(macOS 12.0, *)
+  public func invokeStream(
+    _ functionName: String,
+    options invokeOptions: FunctionInvokeOptions = .init()
+  ) async throws -> AsyncThrowingStream<UInt8, any Error> {
+    let (functionURL, method, query, allHeaders, body) = requestComponents(
+      functionName: functionName, options: invokeOptions)
+
+    do {
+      let (bytes, response) = try await http.fetchStream(
+        method, url: functionURL, query: query.isEmpty ? nil : query, body: body,
+        headers: allHeaders.isEmpty ? nil : allHeaders)
+
+      if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
+        throw FunctionsError.relayError
+      }
+
+      return bytes
+    } catch let error as HTTPClientError {
+      if case .responseError(let response, let data) = error {
+        throw FunctionsError.httpError(code: response.statusCode, data: data)
+      }
+      throw error
+    }
+  }
+
+  private func requestComponents(
+    functionName: String, options: FunctionInvokeOptions
+>>>>>>> 0db30d9 (refactor(functions): convert FunctionsClient to actor, simplify streaming API)
   ) -> (
     url: URL,
     method: HTTPMethod,
@@ -337,8 +403,12 @@ public actor FunctionsClient {
     headers: [String: String],
     body: RequestBody?
   ) {
+<<<<<<< HEAD
     let method =
       options.method.flatMap { HTTPMethod(rawValue: $0.rawValue) } ?? .post
+=======
+    let method = options.method.flatMap { HTTPMethod(rawValue: $0.rawValue) } ?? .post
+>>>>>>> 0db30d9 (refactor(functions): convert FunctionsClient to actor, simplify streaming API)
     var query = options.query
     var allHeaders = headers.merging(options.headers) { _, new in new }
 
@@ -348,8 +418,12 @@ public actor FunctionsClient {
     }
 
     let body: RequestBody? = options.body.map { .data($0) }
+<<<<<<< HEAD
     return (
       url.appendingPathComponent(functionName), method, query, allHeaders, body
     )
+=======
+    return (url.appendingPathComponent(functionName), method, query, allHeaders, body)
+>>>>>>> 0db30d9 (refactor(functions): convert FunctionsClient to actor, simplify streaming API)
   }
 }
