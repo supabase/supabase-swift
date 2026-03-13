@@ -1,6 +1,0 @@
-curl \
-	--request POST \
-	--header "apikey: supabase.anon.key" \
-	--header "x-client-info: functions-swift/x.y.z" \
-	--header "x-custom-key: custom value" \
-	"http://localhost:5432/functions/v1/hello-world"

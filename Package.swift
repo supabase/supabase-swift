@@ -85,14 +85,9 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Functions",
         "Mocker",
         "TestHelpers",
-      ],
-      exclude: [
-        "__Snapshots__"
       ]
     ),
     .testTarget(

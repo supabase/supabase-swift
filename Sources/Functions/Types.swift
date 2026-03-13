@@ -1,5 +1,4 @@
 import Foundation
-import HTTPTypes
 
 /// An error type representing various errors that can occur while invoking functions.
 public enum FunctionsError: Error, LocalizedError {
@@ -24,47 +23,46 @@ public struct FunctionInvokeOptions: Sendable {
   /// Method to use in the function invocation.
   let method: Method?
   /// Headers to be included in the function invocation.
-  let headers: HTTPFields
+  let headers: [String: String]
   /// Body data to be sent with the function invocation.
   let body: Data?
   /// The Region to invoke the function in.
   let region: String?
-  /// The query to be included in the function invocation.
-  let query: [URLQueryItem]
+  /// Query parameters to be included in the function invocation.
+  let query: [String: String]
 
   /// Initializes the `FunctionInvokeOptions` structure.
   ///
   /// - Parameters:
   ///   - method: Method to use in the function invocation.
-  ///   - query: The query to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
+  ///   - query: Query parameters to be included in the function invocation.
+  ///   - headers: Headers to be included in the function invocation.
   ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation. (Default: nil)
+  ///   - body: The body to be sent with the function invocation.
   @_disfavoredOverload
   public init(
     method: Method? = nil,
-    query: [URLQueryItem] = [],
+    query: [String: String] = [:],
     headers: [String: String] = [:],
     region: String? = nil,
     body: some Encodable
   ) {
-    var defaultHeaders = HTTPFields()
+    var defaultHeaders: [String: String] = [:]
 
     switch body {
     case let string as String:
-      defaultHeaders[.contentType] = "text/plain"
+      defaultHeaders["Content-Type"] = "text/plain"
       self.body = string.data(using: .utf8)
     case let data as Data:
-      defaultHeaders[.contentType] = "application/octet-stream"
+      defaultHeaders["Content-Type"] = "application/octet-stream"
       self.body = data
     default:
-      // default, assume this is JSON
-      defaultHeaders[.contentType] = "application/json"
+      defaultHeaders["Content-Type"] = "application/json"
       self.body = try? JSONEncoder().encode(body)
     }
 
     self.method = method
-    self.headers = defaultHeaders.merging(with: HTTPFields(headers))
+    self.headers = defaultHeaders.merging(headers) { _, new in new }
     self.region = region
     self.query = query
   }
@@ -73,23 +71,24 @@ public struct FunctionInvokeOptions: Sendable {
   ///
   /// - Parameters:
   ///   - method: Method to use in the function invocation.
-  ///   - query: The query to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
+  ///   - query: Query parameters to be included in the function invocation.
+  ///   - headers: Headers to be included in the function invocation.
   ///   - region: The Region to invoke the function in.
   @_disfavoredOverload
   public init(
     method: Method? = nil,
-    query: [URLQueryItem] = [],
+    query: [String: String] = [:],
     headers: [String: String] = [:],
     region: String? = nil
   ) {
     self.method = method
-    self.headers = HTTPFields(headers)
+    self.headers = headers
     self.region = region
     self.query = query
     body = nil
   }
 
+  /// HTTP method for invoking an Edge Function.
   public enum Method: String, Sendable {
     case get = "GET"
     case post = "POST"
@@ -97,22 +96,37 @@ public struct FunctionInvokeOptions: Sendable {
     case patch = "PATCH"
     case delete = "DELETE"
   }
+}
 
-  static func httpMethod(_ method: Method?) -> HTTPTypes.HTTPRequest.Method? {
-    switch method {
-    case .get:
-      .get
-    case .post:
-      .post
-    case .put:
-      .put
-    case .patch:
-      .patch
-    case .delete:
-      .delete
-    case nil:
-      nil
-    }
+extension FunctionInvokeOptions {
+  /// Initializes the `FunctionInvokeOptions` structure.
+  ///
+  /// - Parameters:
+  ///   - method: Method to use in the function invocation.
+  ///   - headers: Headers to be included in the function invocation.
+  ///   - region: The Region to invoke the function in.
+  ///   - body: The body to be sent with the function invocation.
+  public init(
+    method: Method? = nil,
+    headers: [String: String] = [:],
+    region: FunctionRegion? = nil,
+    body: some Encodable
+  ) {
+    self.init(method: method, headers: headers, region: region?.rawValue, body: body)
+  }
+
+  /// Initializes the `FunctionInvokeOptions` structure.
+  ///
+  /// - Parameters:
+  ///   - method: Method to use in the function invocation.
+  ///   - headers: Headers to be included in the function invocation.
+  ///   - region: The Region to invoke the function in.
+  public init(
+    method: Method? = nil,
+    headers: [String: String] = [:],
+    region: FunctionRegion? = nil
+  ) {
+    self.init(method: method, headers: headers, region: region?.rawValue)
   }
 }
 
@@ -131,41 +145,4 @@ public enum FunctionRegion: String, Sendable {
   case usEast1 = "us-east-1"
   case usWest1 = "us-west-1"
   case usWest2 = "us-west-2"
-}
-
-extension FunctionInvokeOptions {
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation. (Default: nil)
-  public init(
-    method: Method? = nil,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil,
-    body: some Encodable
-  ) {
-    self.init(
-      method: method,
-      headers: headers,
-      region: region?.rawValue,
-      body: body
-    )
-  }
-
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  public init(
-    method: Method? = nil,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil
-  ) {
-    self.init(method: method, headers: headers, region: region?.rawValue)
-  }
 }

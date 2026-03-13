@@ -1,4 +1,3 @@
-import HTTPTypes
 import XCTest
 
 @testable import Functions
@@ -6,13 +5,13 @@ import XCTest
 final class FunctionInvokeOptionsTests: XCTestCase {
   func test_initWithStringBody() {
     let options = FunctionInvokeOptions(body: "string value")
-    XCTAssertEqual(options.headers[.contentType], "text/plain")
+    XCTAssertEqual(options.headers["Content-Type"], "text/plain")
     XCTAssertNotNil(options.body)
   }
 
   func test_initWithDataBody() {
     let options = FunctionInvokeOptions(body: "binary value".data(using: .utf8)!)
-    XCTAssertEqual(options.headers[.contentType], "application/octet-stream")
+    XCTAssertEqual(options.headers["Content-Type"], "application/octet-stream")
     XCTAssertNotNil(options.body)
   }
 
@@ -21,7 +20,7 @@ final class FunctionInvokeOptionsTests: XCTestCase {
       let value: String
     }
     let options = FunctionInvokeOptions(body: Body(value: "value"))
-    XCTAssertEqual(options.headers[.contentType], "application/json")
+    XCTAssertEqual(options.headers["Content-Type"], "application/json")
     XCTAssertNotNil(options.body)
   }
 
@@ -32,21 +31,7 @@ final class FunctionInvokeOptionsTests: XCTestCase {
       headers: ["Content-Type": contentType],
       body: "binary value".data(using: .utf8)!
     )
-    XCTAssertEqual(options.headers[.contentType], contentType)
+    XCTAssertEqual(options.headers["Content-Type"], contentType)
     XCTAssertNotNil(options.body)
-  }
-
-  func testMethod() {
-    let testCases: [FunctionInvokeOptions.Method: HTTPTypes.HTTPRequest.Method] = [
-      .get: .get,
-      .post: .post,
-      .put: .put,
-      .patch: .patch,
-      .delete: .delete,
-    ]
-
-    for (method, expected) in testCases {
-      XCTAssertEqual(FunctionInvokeOptions.httpMethod(method), expected)
-    }
   }
 }
