@@ -421,10 +421,9 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   private func uploadFileURL(_ fileName: String) -> URL {
-    Bundle.module.url(
-      forResource: fileName,
-      withExtension: nil,
-      subdirectory: "Fixtures/Upload"
-    )!
+    URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .appendingPathComponent("Fixtures/Upload")
+      .appendingPathComponent(fileName)
   }
 }
