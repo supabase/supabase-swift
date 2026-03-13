@@ -605,7 +605,7 @@ import XCTest
         $0.broadcast.acknowledgeBroadcasts = true
       }
 
-      try await channel.broadcast(event: "test", message: ["value": 42])
+      await channel.broadcast(event: "test", message: ["value": 42])
 
       let request = await http.receivedRequests.last
       assertInlineSnapshot(of: request?.urlRequest, as: .curl) {
