@@ -7,10 +7,6 @@
 
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 /// HTTP methods supported by ``_HTTPClient``.
 enum HTTPMethod: String {
   case get = "GET"
@@ -22,15 +18,10 @@ enum HTTPMethod: String {
 }
 
 enum RequestBody {
-  case encodable(
-    @autoclosure @Sendable () -> any Encodable,
-    encoder: JSONEncoder = JSONEncoder.supabase()
-  )
-  case json(@autoclosure @Sendable () -> [String: Any])
+  case encodable(any Encodable, encoder: JSONEncoder = JSONEncoder.supabase())
+  case json([String: Any])
   case data(Data)
 }
-
-typealias TokenProvider = @Sendable () async throws -> String?
 
 /// HTTP client for making all Supabase API requests.
 ///
@@ -44,18 +35,12 @@ final class _HTTPClient: Sendable {
   /// The URLSession used to perform network requests.
   let session: URLSession
 
-  let tokenProvider: TokenProvider?
-
   /// The JSONDecoder used to decode responses from the server.
   let jsonDecoder = JSONDecoder.supabase()
 
-  init(
-    host: URL, session: URLSession = URLSession(configuration: .default),
-    tokenProvider: TokenProvider? = nil
-  ) {
+  init(host: URL, session: URLSession = URLSession(configuration: .default)) {
     self.host = host
     self.session = session
-    self.tokenProvider = tokenProvider
   }
 
   /// Performs a request relative to ``host``, decoding the response body as `T`.
@@ -96,78 +81,72 @@ final class _HTTPClient: Sendable {
     }
   }
 
-  #if canImport(Darwin)
-    /// Streams the response body byte-by-byte via an `AsyncThrowingStream`.
-    ///
-    /// Cancelling the stream cancels the underlying `URLSession` task. Non-2xx responses
-    /// buffer the full error body and throw ``HTTPClientError/responseError(_:data:)``.
-    ///
-    /// - Note: Only available on Apple platforms. `URLSession.bytes(for:)` is not available on Linux.
-    @available(macOS 12.0, *)
-    func fetchStream(
-      _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
-      body: RequestBody? = nil, headers: [String: String]? = nil
-    ) -> AsyncThrowingStream<UInt8, any Error> {
-      performFetchStream(
-        method,
-        requestBuilder: { [self] in
-          try await self.createRequest(method, path, query: query, body: body, headers: headers)
-        }
-      )
-    }
+  /// Streams the response body byte-by-byte as `Data` chunks via an `AsyncThrowingStream`.
+  ///
+  /// Cancelling the stream cancels the underlying `URLSession` task. Non-2xx responses
+  /// buffer the full error body and throw ``HTTPClientError/responseError(_:data:)``.
+  @available(macOS 12.0, *)
+  func fetchStream(
+    _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
+    body: RequestBody? = nil, headers: [String: String]? = nil
+  ) -> AsyncThrowingStream<Data, any Error> {
+    performFetchStream(
+      method,
+      requestBuilder: { [self] in
+        try await self.createRequest(method, path, query: query, body: body, headers: headers)
+      }
+    )
+  }
 
-    /// Streams the response body from an absolute `url` byte-by-byte.
-    ///
-    /// - Note: Only available on Apple platforms. `URLSession.bytes(for:)` is not available on Linux.
-    @available(macOS 12.0, *)
-    func fetchStream(
-      _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
-      headers: [String: String]? = nil
-    ) -> AsyncThrowingStream<UInt8, any Error> {
-      performFetchStream(
-        method,
-        requestBuilder: { [self] in
-          try await self.createRequest(method, url: url, query: query, body: body, headers: headers)
-        }
-      )
-    }
+  /// Streams the response body from an absolute `url` as `Data` chunks.
+  @available(macOS 12.0, *)
+  func fetchStream(
+    _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
+    headers: [String: String]? = nil
+  ) -> AsyncThrowingStream<Data, any Error> {
+    performFetchStream(
+      method,
+      requestBuilder: { [self] in
+        try await self.createRequest(method, url: url, query: query, body: body, headers: headers)
+      }
+    )
+  }
 
-    @available(macOS 12.0, *)
-    private func performFetchStream(
-      _ method: HTTPMethod, requestBuilder: @escaping @Sendable () async throws -> URLRequest
-    ) -> AsyncThrowingStream<UInt8, any Error> {
-      AsyncThrowingStream { continuation in
-        let task = Task {
-          do {
-            let request = try await requestBuilder()
+  @available(macOS 12.0, *)
+  private func performFetchStream(
+    _ method: HTTPMethod, requestBuilder: @escaping @Sendable () async throws -> URLRequest
+  ) -> AsyncThrowingStream<Data, any Error> {
+    AsyncThrowingStream { continuation in
+      let task = Task {
+        do {
+          let request = try await requestBuilder()
 
-            let (bytes, response) = try await session.bytes(for: request)
-            let httpResponse = try validateResponse(response)
+          let (bytes, response) = try await session.bytes(for: request)
+          let httpResponse = try validateResponse(response)
 
-            guard (200..<300).contains(httpResponse.statusCode) else {
-              var errorData = Data()
-              for try await byte in bytes {
-                errorData.append(byte)
-              }
-              // validateResponse will throw the appropriate error
-              _ = try validateResponse(response, data: errorData)
-              return  // This line will never be reached, but satisfies the compiler
-            }
-
+          guard (200..<300).contains(httpResponse.statusCode) else {
+            var errorData = Data()
             for try await byte in bytes {
-              continuation.yield(byte)
+              errorData.append(byte)
             }
-
-            continuation.finish()
+            // validateResponse will throw the appropriate error
+            _ = try validateResponse(response, data: errorData)
+            return  // This line will never be reached, but satisfies the compiler
           }
-        }
 
-        continuation.onTermination = { _ in
-          task.cancel()
+          for try await byte in bytes {
+            continuation.yield(Data([byte]))
+          }
+
+          continuation.finish()
         }
       }
+
+      continuation.onTermination = { _ in
+        task.cancel()
+      }
     }
-  #endif
+  }
 
   /// Performs a request relative to ``host``, returning the raw response body.
   func fetchData(
@@ -253,13 +232,6 @@ final class _HTTPClient: Sendable {
       }
     }
 
-    if let tokenProvider,
-      request.value(forHTTPHeaderField: "Authorization") == nil,
-      let token = try await tokenProvider()
-    {
-      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-    }
-
     if request.value(forHTTPHeaderField: "Accept") == nil {
       request.setValue("application/json", forHTTPHeaderField: "Accept")
     }
@@ -267,9 +239,9 @@ final class _HTTPClient: Sendable {
     if let body {
       switch body {
       case .encodable(let value, let encoder):
-        request.httpBody = try encoder.encode(value())
+        request.httpBody = try encoder.encode(value)
       case .json(let dict):
-        request.httpBody = try JSONSerialization.data(withJSONObject: dict())
+        request.httpBody = try JSONSerialization.data(withJSONObject: dict)
       case .data(let data):
         request.httpBody = data
       }
