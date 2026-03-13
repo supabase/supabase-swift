@@ -1,5 +1,5 @@
 {
-  "originHash" : "8ef4a0acd4a4228eca04b86f70fb3f991c48a833b8b5e071fe66e010188bd531",
+  "originHash" : "716d51750da5e9a70fc99c0f011f86f0edd94c87c16d8d46048a9b52954571ad",
   "pins" : [
     {
       "identity" : "mocker",
@@ -8,6 +8,24 @@
       "state" : {
         "revision" : "95fa785c751f6bc40c49e112d433c3acf8417a97",
         "version" : "3.0.2"
+      }
+    },
+    {
+      "identity" : "replay",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mattt/Replay.git",
+      "state" : {
+        "revision" : "f641f9c06a4a01c73342aa0879a860591b608418",
+        "version" : "0.4.0"
+      }
+    },
+    {
+      "identity" : "swift-argument-parser",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-argument-parser.git",
+      "state" : {
+        "revision" : "c5d11a805e765f52ba34ec7284bd4fcd6ba68615",
+        "version" : "1.7.0"
       }
     },
     {
@@ -42,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-crypto.git",
       "state" : {
-        "revision" : "476538ccb827f2dd18efc5de754cc87d77127a47",
-        "version" : "4.4.0"
+        "revision" : "6f70fa9eab24c1fd982af18c281c4525d05e3095",
+        "version" : "4.2.0"
       }
     },
     {
@@ -69,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-snapshot-testing",
       "state" : {
-        "revision" : "ad5e3190cc63dc288f28546f9c6827efc1e9d495",
-        "version" : "1.19.2"
+        "revision" : "bf8d8c27f0f0c6d5e77bff0db76ab68f2050d15d",
+        "version" : "1.18.9"
       }
     },
     {
