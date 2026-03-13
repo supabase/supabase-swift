@@ -58,7 +58,7 @@ final class SupabaseStorageTests: XCTestCase {
   }
 
   func testCreateSignedURLs() async throws {
-    sessionMock.fetch = { _ in
+    sessionMock.fetch = { [supabaseURL] _ in
       (
         """
         [
@@ -71,7 +71,7 @@ final class SupabaseStorageTests: XCTestCase {
         ]
         """.data(using: .utf8)!,
         HTTPURLResponse(
-          url: self.supabaseURL,
+          url: supabaseURL,
           statusCode: 200,
           httpVersion: nil,
           headerFields: nil
@@ -96,7 +96,7 @@ final class SupabaseStorageTests: XCTestCase {
     func testUploadData() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
-      sessionMock.fetch = { request in
+      sessionMock.fetch = { [supabaseURL] request in
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
           curl \
@@ -133,7 +133,7 @@ final class SupabaseStorageTests: XCTestCase {
           }
           """.data(using: .utf8)!,
           HTTPURLResponse(
-            url: self.supabaseURL,
+            url: supabaseURL,
             statusCode: 200,
             httpVersion: nil,
             headerFields: nil
@@ -157,7 +157,7 @@ final class SupabaseStorageTests: XCTestCase {
     func testUploadFileURL() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
-      sessionMock.fetch = { request in
+      sessionMock.fetch = { [supabaseURL] request in
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
           curl \
@@ -179,7 +179,7 @@ final class SupabaseStorageTests: XCTestCase {
           }
           """.data(using: .utf8)!,
           HTTPURLResponse(
-            url: self.supabaseURL,
+            url: supabaseURL,
             statusCode: 200,
             httpVersion: nil,
             headerFields: nil
@@ -209,7 +209,7 @@ final class SupabaseStorageTests: XCTestCase {
   }
 
   private func uploadFileURL(_ fileName: String) -> URL {
-    URL(fileURLWithPath: #file)
+    URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()
       .appendingPathComponent(fileName)
   }
