@@ -267,6 +267,7 @@ public actor FunctionsClient {
     var options = FunctionInvokeOptions()
     applyOptions(&options)
     let (functionURL, method, query, allHeaders, body) = requestComponents(
+<<<<<<< HEAD
       functionName: functionName,
       options: options
     )
@@ -280,6 +281,19 @@ public actor FunctionsClient {
         headers: allHeaders.isEmpty ? nil : allHeaders
       )
 
+=======
+      functionName: functionName, options: invokeOptions)
+
+    do {
+      let (data, response) = try await http.fetchData(
+        method,
+        url: functionURL,
+        query: query.isEmpty ? nil : query,
+        body: body,
+        headers: allHeaders.isEmpty ? nil : allHeaders
+      )
+
+>>>>>>> 9e4ae44 (fix(functions): catch HTTPClientError and convert to FunctionsError in rawInvoke)
       if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
         throw FunctionsError.relayError
       }
