@@ -379,7 +379,7 @@ public final class SupabaseClient: Sendable {
     }
 
     if let accessToken {
-      functions.setAuth(token: accessToken)
+      await functions.setAuth(token: accessToken)
       await realtimeV2.setAuth(accessToken)
     }
   }
