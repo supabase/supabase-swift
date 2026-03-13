@@ -23,6 +23,8 @@ enum RequestBody {
   case data(Data)
 }
 
+typealias TokenProvider = @Sendable () async throws -> String?
+
 /// HTTP client for making all Supabase API requests.
 ///
 /// Builds `URLRequest` values from a base `host` URL and dispatches them via `URLSession`.
@@ -35,12 +37,18 @@ final class _HTTPClient: Sendable {
   /// The URLSession used to perform network requests.
   let session: URLSession
 
+  let tokenProvider: TokenProvider?
+
   /// The JSONDecoder used to decode responses from the server.
   let jsonDecoder = JSONDecoder.supabase()
 
-  init(host: URL, session: URLSession = URLSession(configuration: .default)) {
+  init(
+    host: URL, session: URLSession = URLSession(configuration: .default),
+    tokenProvider: TokenProvider? = nil
+  ) {
     self.host = host
     self.session = session
+    self.tokenProvider = tokenProvider
   }
 
   /// Performs a request relative to ``host``, decoding the response body as `T`.
@@ -230,6 +238,13 @@ final class _HTTPClient: Sendable {
       for (key, value) in headers {
         request.setValue(value, forHTTPHeaderField: key)
       }
+    }
+
+    if let tokenProvider,
+      request.value(forHTTPHeaderField: "Authorization") == nil,
+      let token = try await tokenProvider()
+    {
+      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
 
     if request.value(forHTTPHeaderField: "Accept") == nil {
