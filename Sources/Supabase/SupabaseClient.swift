@@ -86,8 +86,8 @@ public final class SupabaseClient: Sendable {
           url: functionsURL,
           headers: headers,
           region: options.functions.region,
-          logger: options.global.logger,
-          fetch: fetchWithAuth
+          session: session,
+          tokenProvider: { [weak self] in try await self?._getAccessToken() }
         )
       }
 
