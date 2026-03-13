@@ -10,22 +10,40 @@ final class StoredSessionTests: XCTestCase {
 
   func testStoredSession() throws {
     #if os(Android)
-    throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
+      throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
     #endif
 
-    Dependencies[clientID] = Dependencies(
-      configuration: AuthClient.Configuration(
-        url: URL(string: "http://localhost")!,
-        storageKey: "supabase.auth.token",
-        localStorage: try! DiskTestStorage(),
-        logger: nil
-      ),
-      http: HTTPClientMock(),
-      api: .init(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID)
-    )
+    #if canImport(LocalAuthentication)
+      Dependencies[clientID] = Dependencies(
+        configuration: AuthClient.Configuration(
+          url: URL(string: "http://localhost")!,
+          storageKey: "supabase.auth.token",
+          localStorage: try! DiskTestStorage(),
+          logger: nil
+        ),
+        http: HTTPClientMock(),
+        api: .init(clientID: clientID),
+        codeVerifierStorage: .mock,
+        sessionStorage: .live(clientID: clientID),
+        sessionManager: .live(clientID: clientID),
+        biometricStorage: BiometricStorage.mock,
+        biometricSession: BiometricSession.mock
+      )
+    #else
+      Dependencies[clientID] = Dependencies(
+        configuration: AuthClient.Configuration(
+          url: URL(string: "http://localhost")!,
+          storageKey: "supabase.auth.token",
+          localStorage: try! DiskTestStorage(),
+          logger: nil
+        ),
+        http: HTTPClientMock(),
+        api: .init(clientID: clientID),
+        codeVerifierStorage: .mock,
+        sessionStorage: .live(clientID: clientID),
+        sessionManager: .live(clientID: clientID)
+      )
+    #endif
 
     let sut = Dependencies[clientID].sessionStorage
 
