@@ -332,6 +332,18 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
     return UUID().uuidString
   }
 
+  func pushBroadcast(
+    joinRef: String?, ref: String?, topic: String, event: String, jsonPayload: JSONObject
+  ) {
+    // No-op for mock
+  }
+
+  func pushBroadcast(
+    joinRef: String?, ref: String?, topic: String, event: String, binaryPayload: Data
+  ) {
+    // No-op for mock
+  }
+
   func _remove(_ channel: any RealtimeChannelProtocol) {
     // No-op for mock
   }
