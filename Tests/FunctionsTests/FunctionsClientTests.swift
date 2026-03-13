@@ -45,10 +45,14 @@ final class FunctionsClientTests: XCTestCase {
     )
     let region = await client.region
 <<<<<<< HEAD
+<<<<<<< HEAD
     XCTAssertEqual(region?.rawValue, "sa-east-1")
 =======
     XCTAssertEqual(region, "sa-east-1")
 >>>>>>> 0db30d9 (refactor(functions): convert FunctionsClient to actor, simplify streaming API)
+=======
+    XCTAssertEqual(region?.rawValue, "sa-east-1")
+>>>>>>> b0264b0 (refactor(functions): use FunctionRegion everywhere, remove String? region overloads)
 
     let headers = await client.headers
     XCTAssertEqual(headers["apikey"], apiKey)

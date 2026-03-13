@@ -56,12 +56,17 @@ public actor FunctionsClient {
   /// e.g. `https://<project-ref>.supabase.co/functions/v1/my-function`.
   public let url: URL
 
+<<<<<<< HEAD
   /// The default region in which functions are invoked.
   ///
   /// Per-invocation overrides via ``FunctionInvokeOptions/region`` take
   /// precedence over this value. Pass `nil` to let Supabase route to the nearest region
   /// automatically.
   public let region: FunctionRegion?
+=======
+  /// The Region to invoke the functions in.
+  let region: FunctionRegion?
+>>>>>>> b0264b0 (refactor(functions): use FunctionRegion everywhere, remove String? region overloads)
 
 <<<<<<< HEAD
   /// The JSON decoder used to decode response bodies in ``invokeDecodable(_:as:decoder:options:)``.
@@ -123,6 +128,7 @@ public actor FunctionsClient {
     session: URLSession = URLSession(configuration: .default),
     decoder: JSONDecoder = JSONDecoder()
   ) {
+<<<<<<< HEAD
     self.init(
       url: url,
       headers: headers,
@@ -131,6 +137,16 @@ public actor FunctionsClient {
       decoder: decoder,
       tokenProvider: nil
     )
+=======
+    self.url = url
+    self.region = region
+    session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
+    self.http = _HTTPClient(host: url, session: session)
+    self.headers = headers
+    if self.headers["X-Client-Info"] == nil {
+      self.headers["X-Client-Info"] = "functions-swift/\(version)"
+    }
+>>>>>>> b0264b0 (refactor(functions): use FunctionRegion everywhere, remove String? region overloads)
   }
 
   package init(
@@ -138,6 +154,7 @@ public actor FunctionsClient {
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     session: URLSession = URLSession(configuration: .default),
+<<<<<<< HEAD
     decoder: JSONDecoder = JSONDecoder(),
     tokenProvider: TokenProvider?
   ) {
@@ -157,6 +174,14 @@ public actor FunctionsClient {
     self.http = _HTTPClient(host: url, session: session, tokenProvider: tokenProvider)
 
 >>>>>>> 0db30d9 (refactor(functions): convert FunctionsClient to actor, simplify streaming API)
+=======
+    tokenProvider: @escaping TokenProvider
+  ) {
+    self.url = url
+    self.region = region
+    session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
+    self.http = _HTTPClient(host: url, session: session, tokenProvider: tokenProvider)
+>>>>>>> b0264b0 (refactor(functions): use FunctionRegion everywhere, remove String? region overloads)
     self.headers = headers
     if self.headers["X-Client-Info"] == nil {
       self.headers["X-Client-Info"] = "functions-swift/\(version)"
