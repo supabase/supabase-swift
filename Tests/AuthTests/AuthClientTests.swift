@@ -190,7 +190,7 @@ final class AuthClientTests: XCTestCase {
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
 
-    let eventsTask = Task { [sut] in
+    let eventsTask = Task { [sut = sut!] in
       await sut.authStateChanges.prefix(2).collect()
     }
 
@@ -202,7 +202,7 @@ final class AuthClientTests: XCTestCase {
     let sessions = await eventsTask.value.map(\.session)
 
     expectNoDifference(events, [.initialSession, .signedOut])
-    expectNoDifference(sessions, [.validSession, nil])
+    expectNoDifference(sessions, [validSession, nil])
 
     let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
     XCTAssertTrue(sessionRemoved)
@@ -236,7 +236,7 @@ final class AuthClientTests: XCTestCase {
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
 
-    let eventsTask = Task { [sut] in
+    let eventsTask = Task { [sut = sut!] in
       await sut.authStateChanges.prefix(2).collect()
     }
 
@@ -282,7 +282,7 @@ final class AuthClientTests: XCTestCase {
     let validSession = Session.validSession
     Dependencies[sut.clientID].sessionStorage.store(validSession)
 
-    let eventsTask = Task { [sut] in
+    let eventsTask = Task { [sut = sut!] in
       await sut.authStateChanges.prefix(2).collect()
     }
 
@@ -378,7 +378,7 @@ final class AuthClientTests: XCTestCase {
       URL(string: "supabase://auth-callback?code=12345") ?? url
     }
 
-    let events = await eventsTask.value.map(\.event)
+    let events: [AuthChangeEvent] = await eventsTask.value.map(\.event)
 
     expectNoDifference(events, [.initialSession, .signedIn])
   }
