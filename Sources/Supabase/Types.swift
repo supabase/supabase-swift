@@ -116,15 +116,10 @@ public struct SupabaseClientOptions: Sendable {
 
   public struct FunctionsOptions: Sendable {
     /// The Region to invoke the functions in.
-    public let region: String?
-
-    @_disfavoredOverload
-    public init(region: String? = nil) {
-      self.region = region
-    }
+    public let region: FunctionRegion?
 
     public init(region: FunctionRegion? = nil) {
-      self.init(region: region?.rawValue)
+      self.region = region
     }
   }
 
