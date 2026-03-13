@@ -86,9 +86,8 @@ public final class SupabaseClient: Sendable {
           url: functionsURL,
           headers: headers,
           region: options.functions.region,
-          logger: options.global.logger,
-          fetch: fetchWithAuth,
-          decoder: options.functions.decoder
+          session: session,
+          tokenProvider: { [weak self] in try await self?._getAccessToken() }
         )
       }
 
@@ -400,12 +399,6 @@ public final class SupabaseClient: Sendable {
 
     if realtimeOptions.logger == nil {
       realtimeOptions.logger = options.global.logger
-    }
-
-    if realtimeOptions.fetch == nil {
-      realtimeOptions.fetch = { [session = options.global.session] request in
-        try await session.data(for: request)
-      }
     }
 
     if realtimeOptions.accessToken == nil {

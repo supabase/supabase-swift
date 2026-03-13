@@ -1,5 +1,4 @@
 import ConcurrencyExtras
-import HTTPTypes
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -28,14 +27,9 @@ final class FunctionsClientTests: XCTestCase {
 
   lazy var sut = FunctionsClient(
     url: url,
-    headers: [
-      "apikey": apiKey
-    ],
+    headers: ["apikey": apiKey],
     region: region,
-    fetch: { [session] request in
-      try await session.data(for: request)
-    },
-    sessionConfiguration: sessionConfiguration
+    session: self.session
   )
 
   override func setUp() {
@@ -51,8 +45,8 @@ final class FunctionsClientTests: XCTestCase {
     )
     XCTAssertEqual(client.region, "sa-east-1")
 
-    XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
-    XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
+    XCTAssertEqual(client.headers["apikey"], apiKey)
+    XCTAssertNotNil(client.headers["X-Client-Info"])
   }
 
   func testInitWithCustomDecoder() async {
@@ -78,6 +72,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 19" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
@@ -107,6 +102,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello"
@@ -134,6 +130,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request DELETE \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world"
@@ -157,6 +154,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world?key=value"
@@ -166,9 +164,7 @@ final class FunctionsClientTests: XCTestCase {
 
     try await sut.invoke(
       "hello-world",
-      options: .init(
-        query: [URLQueryItem(name: "key", value: "value")]
-      )
+      options: .init(query: ["key": "value"])
     )
   }
 
@@ -185,6 +181,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-region: ca-central-1" \
@@ -207,6 +204,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-region: ca-central-1" \
@@ -230,6 +228,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world"
@@ -251,6 +250,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
@@ -278,6 +278,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
@@ -308,6 +309,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
@@ -326,10 +328,10 @@ final class FunctionsClientTests: XCTestCase {
 
   func test_setAuth() {
     sut.setAuth(token: "access.token")
-    XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
+    XCTAssertEqual(sut.headers["Authorization"], "Bearer access.token")
 
     sut.setAuth(token: nil)
-    XCTAssertNil(sut.headers[.authorization])
+    XCTAssertNil(sut.headers["Authorization"])
   }
 
   func testInvokeWithStreamedResponse() async throws {
@@ -342,6 +344,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/stream"
@@ -349,7 +352,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let stream = try await sut._invokeWithStreamedResponse("stream")
 
     for try await value in stream {
       XCTAssertEqual(String(decoding: value, as: UTF8.self), "hello world")
@@ -366,6 +369,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/stream"
@@ -373,7 +377,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let stream = try await sut._invokeWithStreamedResponse("stream")
 
     do {
       for try await _ in stream {
@@ -397,6 +401,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/stream"
@@ -404,7 +409,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let stream = try await sut._invokeWithStreamedResponse("stream")
 
     do {
       for try await _ in stream {
