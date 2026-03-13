@@ -100,7 +100,7 @@ final class CallbackManager: Sendable {
       ids.contains($0.id)
     }
     let postgresCallbacks = mutableState.callbacks.compactMap {
-      if case let .postgres(callback) = $0 {
+      if case .postgres(let callback) = $0 {
         return callback
       }
       return nil
@@ -119,12 +119,14 @@ final class CallbackManager: Sendable {
 
   func triggerBroadcast(event: String, json: JSONObject) {
     let broadcastCallbacks = mutableState.callbacks.compactMap {
-      if case let .broadcast(callback) = $0 {
+      if case .broadcast(let callback) = $0 {
         return callback
       }
       return nil
     }
-    let callbacks = broadcastCallbacks.filter { $0.event == "*" || $0.event.lowercased() == event.lowercased() }
+    let callbacks = broadcastCallbacks.filter {
+      $0.event == "*" || $0.event.lowercased() == event.lowercased()
+    }
     callbacks.forEach { $0.callback(json) }
   }
 
@@ -134,7 +136,7 @@ final class CallbackManager: Sendable {
     rawMessage: RealtimeMessageV2
   ) {
     let presenceCallbacks = mutableState.callbacks.compactMap {
-      if case let .presence(callback) = $0 {
+      if case .presence(let callback) = $0 {
         return callback
       }
       return nil
@@ -198,10 +200,10 @@ enum RealtimeCallback {
 
   var id: Int {
     switch self {
-    case let .postgres(callback): callback.id
-    case let .broadcast(callback): callback.id
-    case let .presence(callback): callback.id
-    case let .system(callback): callback.id
+    case .postgres(let callback): callback.id
+    case .broadcast(let callback): callback.id
+    case .presence(let callback): callback.id
+    case .system(let callback): callback.id
     }
   }
 

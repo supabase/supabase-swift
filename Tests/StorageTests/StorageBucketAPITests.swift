@@ -21,10 +21,6 @@ final class StorageBucketAPITests: XCTestCase {
 
     let session = URLSession(configuration: configuration)
 
-    JSONEncoder.defaultStorageEncoder.outputFormatting = [
-      .sortedKeys
-    ]
-
     storage = SupabaseStorageClient(
       configuration: StorageClientConfiguration(
         url: url,
@@ -101,12 +97,14 @@ final class StorageBucketAPITests: XCTestCase {
     }
   }
 
-  private func runActivity(named name: String, body: () -> Void) {
+  private func runActivity(named name: String, body: @Sendable () -> Void) {
     #if os(Linux)
       body()
     #else
-      XCTContext.runActivity(named: name) { _ in
-        body()
+      MainActor.assumeIsolated {
+        XCTContext.runActivity(named: name) { _ in
+          body()
+        }
       }
     #endif
   }

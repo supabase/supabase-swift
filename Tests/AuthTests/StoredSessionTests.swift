@@ -10,7 +10,7 @@ final class StoredSessionTests: XCTestCase {
 
   func testStoredSession() throws {
     #if os(Android)
-    throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
+      throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
     #endif
 
     Dependencies[clientID] = Dependencies(
