@@ -8,7 +8,7 @@
 import Foundation
 
 /// HTTP methods supported by ``_HTTPClient``.
-enum HTTPMethod: String {
+package enum HTTPMethod: String {
   case get = "GET"
   case head = "HEAD"
   case post = "POST"
@@ -17,32 +17,32 @@ enum HTTPMethod: String {
   case delete = "DELETE"
 }
 
-enum RequestBody {
+package enum RequestBody: @unchecked Sendable {
   case encodable(any Encodable, encoder: JSONEncoder = JSONEncoder.supabase())
   case json([String: Any])
   case data(Data)
 }
 
-typealias TokenProvider = @Sendable () async throws -> String?
+package typealias TokenProvider = @Sendable () async throws -> String?
 
 /// HTTP client for making all Supabase API requests.
 ///
 /// Builds `URLRequest` values from a base `host` URL and dispatches them via `URLSession`.
 /// Responses are validated for 2xx status codes before being returned.
-final class _HTTPClient: Sendable {
+package final class _HTTPClient: Sendable {
 
   /// The base URL for the API. This will be used as the base for all requests made by this client.
-  let host: URL
+  package let host: URL
 
   /// The URLSession used to perform network requests.
-  let session: URLSession
+  package let session: URLSession
 
   let tokenProvider: TokenProvider?
 
   /// The JSONDecoder used to decode responses from the server.
   let jsonDecoder = JSONDecoder.supabase()
 
-  init(
+  package init(
     host: URL, session: URLSession = URLSession(configuration: .default),
     tokenProvider: TokenProvider? = nil
   ) {
@@ -55,7 +55,7 @@ final class _HTTPClient: Sendable {
   ///
   /// Uses ``jsonDecoder`` (a `JSONDecoder` with Supabase defaults) to decode the response.
   /// If you need custom decoding, use ``fetchData(_:_:query:body:headers:)`` and decode at the call site.
-  func fetch<T: Decodable>(
+  package func fetch<T: Decodable>(
     _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
     body: RequestBody? = nil, headers: [String: String]? = nil
   ) async throws -> (T, HTTPURLResponse) {
@@ -67,7 +67,7 @@ final class _HTTPClient: Sendable {
   ///
   /// Uses ``jsonDecoder`` (a `JSONDecoder` with Supabase defaults) to decode the response.
   /// If you need custom decoding, use ``fetchData(_:url:query:body:headers:)`` and decode at the call site.
-  func fetch<T: Decodable>(
+  package func fetch<T: Decodable>(
     _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
     headers: [String: String]? = nil
   ) async throws -> (T, HTTPURLResponse) {
@@ -94,7 +94,7 @@ final class _HTTPClient: Sendable {
   /// Cancelling the stream cancels the underlying `URLSession` task. Non-2xx responses
   /// buffer the full error body and throw ``HTTPClientError/responseError(_:data:)``.
   @available(macOS 12.0, *)
-  func fetchStream(
+  package func fetchStream(
     _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
     body: RequestBody? = nil, headers: [String: String]? = nil
   ) -> AsyncThrowingStream<UInt8, any Error> {
@@ -108,7 +108,7 @@ final class _HTTPClient: Sendable {
 
   /// Streams the response body from an absolute `url` byte-by-byte.
   @available(macOS 12.0, *)
-  func fetchStream(
+  package func fetchStream(
     _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
     headers: [String: String]? = nil
   ) -> AsyncThrowingStream<UInt8, any Error> {
@@ -157,7 +157,7 @@ final class _HTTPClient: Sendable {
   }
 
   /// Performs a request relative to ``host``, returning the raw response body.
-  func fetchData(
+  package func fetchData(
     _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
     body: RequestBody? = nil, headers: [String: String]? = nil
   ) async throws -> (Data, HTTPURLResponse) {
@@ -166,7 +166,7 @@ final class _HTTPClient: Sendable {
   }
 
   /// Performs a request to an absolute `url`, returning the raw response body.
-  func fetchData(
+  package func fetchData(
     _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
     headers: [String: String]? = nil
   ) async throws -> (Data, HTTPURLResponse) {
@@ -179,7 +179,7 @@ final class _HTTPClient: Sendable {
     request: URLRequest
   ) async throws -> (Data, HTTPURLResponse) {
     let (data, response) = try await session.data(for: request)
-    let httpResponse = try validateResponse(response, data: data)
+    let httpResponse = try validateResponse(response)
     return (data, httpResponse)
   }
 
@@ -191,7 +191,7 @@ final class _HTTPClient: Sendable {
   ///   - query: Optional query parameters. Always encoded as URL query items.
   ///   - body: Optional request body. Encoded according to the ``RequestBody`` case.
   ///   - headers: Optional additional headers. `Accept: application/json` is added by default.
-  func createRequest(
+  package func createRequest(
     _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
     body: RequestBody? = nil, headers: [String: String]? = nil
   ) async throws -> URLRequest {
@@ -203,7 +203,7 @@ final class _HTTPClient: Sendable {
   }
 
   /// Builds a `URLRequest` from an absolute `url`.
-  func createRequest(
+  package func createRequest(
     _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
     headers: [String: String]? = nil
   ) async throws -> URLRequest {
@@ -274,7 +274,7 @@ final class _HTTPClient: Sendable {
   ///   - response: The raw `URLResponse` to validate.
   ///   - data: When provided, included in ``HTTPClientError/responseError(_:data:)`` on failure.
   @discardableResult
-  func validateResponse(_ response: URLResponse, data: Data? = nil) throws -> HTTPURLResponse {
+  package func validateResponse(_ response: URLResponse, data: Data? = nil) throws -> HTTPURLResponse {
     guard let response = response as? HTTPURLResponse else {
       throw HTTPClientError.unexpectedError(
         "Invalid response from server: \(response)"
@@ -290,7 +290,7 @@ final class _HTTPClient: Sendable {
 }
 
 /// Errors thrown by ``_HTTPClient``.
-enum HTTPClientError: Error {
+package enum HTTPClientError: Error {
   /// The server returned a non-2xx status code. The raw response body is included in `data`.
   case responseError(HTTPURLResponse, data: Data)
   /// The response body could not be decoded into the expected type.
