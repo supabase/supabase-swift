@@ -27,7 +27,7 @@ public struct FunctionInvokeOptions: Sendable {
   /// Body data to be sent with the function invocation.
   let body: Data?
   /// The Region to invoke the function in.
-  let region: String?
+  let region: FunctionRegion?
   /// Query parameters to be included in the function invocation.
   let query: [String: String]
 
@@ -39,12 +39,11 @@ public struct FunctionInvokeOptions: Sendable {
   ///   - headers: Headers to be included in the function invocation.
   ///   - region: The Region to invoke the function in.
   ///   - body: The body to be sent with the function invocation.
-  @_disfavoredOverload
   public init(
     method: Method? = nil,
     query: [String: String] = [:],
     headers: [String: String] = [:],
-    region: String? = nil,
+    region: FunctionRegion? = nil,
     body: some Encodable
   ) {
     var defaultHeaders: [String: String] = [:]
@@ -74,12 +73,11 @@ public struct FunctionInvokeOptions: Sendable {
   ///   - query: Query parameters to be included in the function invocation.
   ///   - headers: Headers to be included in the function invocation.
   ///   - region: The Region to invoke the function in.
-  @_disfavoredOverload
   public init(
     method: Method? = nil,
     query: [String: String] = [:],
     headers: [String: String] = [:],
-    region: String? = nil
+    region: FunctionRegion? = nil
   ) {
     self.method = method
     self.headers = headers
@@ -95,38 +93,6 @@ public struct FunctionInvokeOptions: Sendable {
     case put = "PUT"
     case patch = "PATCH"
     case delete = "DELETE"
-  }
-}
-
-extension FunctionInvokeOptions {
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation.
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body to be sent with the function invocation.
-  public init(
-    method: Method? = nil,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil,
-    body: some Encodable
-  ) {
-    self.init(method: method, headers: headers, region: region?.rawValue, body: body)
-  }
-
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation.
-  ///   - region: The Region to invoke the function in.
-  public init(
-    method: Method? = nil,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil
-  ) {
-    self.init(method: method, headers: headers, region: region?.rawValue)
   }
 }
 
