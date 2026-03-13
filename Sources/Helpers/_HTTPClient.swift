@@ -89,7 +89,7 @@ final class _HTTPClient: Sendable {
     }
   }
 
-  /// Streams the response body byte-by-byte as `Data` chunks via an `AsyncThrowingStream`.
+  /// Streams the response body byte-by-byte via an `AsyncThrowingStream`.
   ///
   /// Cancelling the stream cancels the underlying `URLSession` task. Non-2xx responses
   /// buffer the full error body and throw ``HTTPClientError/responseError(_:data:)``.
@@ -97,7 +97,7 @@ final class _HTTPClient: Sendable {
   func fetchStream(
     _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
     body: RequestBody? = nil, headers: [String: String]? = nil
-  ) -> AsyncThrowingStream<Data, any Error> {
+  ) -> AsyncThrowingStream<UInt8, any Error> {
     performFetchStream(
       method,
       requestBuilder: { [self] in
@@ -106,12 +106,12 @@ final class _HTTPClient: Sendable {
     )
   }
 
-  /// Streams the response body from an absolute `url` as `Data` chunks.
+  /// Streams the response body from an absolute `url` byte-by-byte.
   @available(macOS 12.0, *)
   func fetchStream(
     _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
     headers: [String: String]? = nil
-  ) -> AsyncThrowingStream<Data, any Error> {
+  ) -> AsyncThrowingStream<UInt8, any Error> {
     performFetchStream(
       method,
       requestBuilder: { [self] in
@@ -123,7 +123,7 @@ final class _HTTPClient: Sendable {
   @available(macOS 12.0, *)
   private func performFetchStream(
     _ method: HTTPMethod, requestBuilder: @escaping @Sendable () async throws -> URLRequest
-  ) -> AsyncThrowingStream<Data, any Error> {
+  ) -> AsyncThrowingStream<UInt8, any Error> {
     AsyncThrowingStream { continuation in
       let task = Task {
         do {
@@ -143,7 +143,7 @@ final class _HTTPClient: Sendable {
           }
 
           for try await byte in bytes {
-            continuation.yield(Data([byte]))
+            continuation.yield(byte)
           }
 
           continuation.finish()
