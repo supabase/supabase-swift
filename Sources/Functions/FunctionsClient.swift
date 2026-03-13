@@ -138,23 +138,26 @@ public final class FunctionsClient: Sendable {
     let (functionURL, method, query, allHeaders, body) = requestComponents(
       functionName: functionName, options: invokeOptions)
 
-    let (data, response) = try await http.fetchData(
-      method,
-      url: functionURL,
-      query: query.isEmpty ? nil : query,
-      body: body,
-      headers: allHeaders.isEmpty ? nil : allHeaders
-    )
+    do {
+      let (data, response) = try await http.fetchData(
+        method,
+        url: functionURL,
+        query: query.isEmpty ? nil : query,
+        body: body,
+        headers: allHeaders.isEmpty ? nil : allHeaders
+      )
 
-    guard 200..<300 ~= response.statusCode else {
-      throw FunctionsError.httpError(code: response.statusCode, data: data)
+      if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
+        throw FunctionsError.relayError
+      }
+
+      return (data, response)
+    } catch let error as HTTPClientError {
+      if case .responseError(let response, let data) = error {
+        throw FunctionsError.httpError(code: response.statusCode, data: data)
+      }
+      throw error
     }
-
-    if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
-      throw FunctionsError.relayError
-    }
-
-    return (data, response)
   }
 
   /// Invokes a function with streamed response.
