@@ -21,26 +21,58 @@ let package = Package(
     .library(name: "Storage", targets: ["Storage"]),
     .library(
       name: "Supabase",
-      targets: ["Supabase", "Functions", "PostgREST", "Auth", "Realtime", "Storage"]),
+      targets: [
+        "Supabase", "Functions", "PostgREST", "Auth", "Realtime",
+        "Storage",
+      ]
+    ),
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0"..<"5.0.0"),
-    .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
-    .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
-    .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
-    .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
-    .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
-    .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
+    .package(
+      url: "https://github.com/apple/swift-crypto.git",
+      "1.0.0"..<"5.0.0"
+    ),
+    .package(
+      url: "https://github.com/apple/swift-http-types.git",
+      from: "1.3.0"
+    ),
+    .package(
+      url: "https://github.com/pointfreeco/swift-clocks",
+      from: "1.0.0"
+    ),
+    .package(
+      url: "https://github.com/pointfreeco/swift-concurrency-extras",
+      from: "1.1.0"
+    ),
+    .package(
+      url: "https://github.com/pointfreeco/swift-custom-dump",
+      from: "1.3.2"
+    ),
+    .package(
+      url: "https://github.com/pointfreeco/swift-snapshot-testing",
+      from: "1.17.0"
+    ),
+    .package(
+      url: "https://github.com/pointfreeco/xctest-dynamic-overlay",
+      from: "1.2.2"
+    ),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
+    .package(url: "https://github.com/mattt/Replay.git", from: "0.4.0"),
   ],
   targets: [
     .target(
       name: "Helpers",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(
+          name: "ConcurrencyExtras",
+          package: "swift-concurrency-extras"
+        ),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Clocks", package: "swift-clocks"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(
+          name: "XCTestDynamicOverlay",
+          package: "xctest-dynamic-overlay"
+        ),
       ]
     ),
     .testTarget(
@@ -53,7 +85,10 @@ let package = Package(
     .target(
       name: "Auth",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(
+          name: "ConcurrencyExtras",
+          package: "swift-concurrency-extras"
+        ),
         .product(name: "Crypto", package: "swift-crypto"),
         "Helpers",
       ]
@@ -62,9 +97,18 @@ let package = Package(
       name: "AuthTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(
+          name: "InlineSnapshotTesting",
+          package: "swift-snapshot-testing"
+        ),
+        .product(
+          name: "SnapshotTesting",
+          package: "swift-snapshot-testing"
+        ),
+        .product(
+          name: "XCTestDynamicOverlay",
+          package: "xctest-dynamic-overlay"
+        ),
         "Auth",
         "Helpers",
         "TestHelpers",
@@ -83,19 +127,35 @@ let package = Package(
     .testTarget(
       name: "FunctionsTests",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "Replay", package: "Replay"),
+        .product(
+          name: "ConcurrencyExtras",
+          package: "swift-concurrency-extras"
+        ),
+        .product(
+          name: "InlineSnapshotTesting",
+          package: "swift-snapshot-testing"
+        ),
         "Functions",
         "Mocker",
         "TestHelpers",
+      ],
+      resources: [
+        .copy("Replays")
       ]
     ),
     .testTarget(
       name: "IntegrationTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(
+          name: "InlineSnapshotTesting",
+          package: "swift-snapshot-testing"
+        ),
+        .product(
+          name: "XCTestDynamicOverlay",
+          package: "xctest-dynamic-overlay"
+        ),
         "Helpers",
         "Supabase",
         "TestHelpers",
@@ -108,15 +168,24 @@ let package = Package(
     .target(
       name: "PostgREST",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(
+          name: "ConcurrencyExtras",
+          package: "swift-concurrency-extras"
+        ),
         "Helpers",
       ]
     ),
     .testTarget(
       name: "PostgRESTTests",
       dependencies: [
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+        .product(
+          name: "InlineSnapshotTesting",
+          package: "swift-snapshot-testing"
+        ),
+        .product(
+          name: "SnapshotTesting",
+          package: "swift-snapshot-testing"
+        ),
         "Helpers",
         "Mocker",
         "PostgREST",
@@ -129,8 +198,14 @@ let package = Package(
     .target(
       name: "Realtime",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(
+          name: "ConcurrencyExtras",
+          package: "swift-concurrency-extras"
+        ),
+        .product(
+          name: "IssueReporting",
+          package: "xctest-dynamic-overlay"
+        ),
         "Helpers",
       ]
     ),
@@ -138,8 +213,14 @@ let package = Package(
       name: "RealtimeTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(
+          name: "InlineSnapshotTesting",
+          package: "swift-snapshot-testing"
+        ),
+        .product(
+          name: "XCTestDynamicOverlay",
+          package: "xctest-dynamic-overlay"
+        ),
         "PostgREST",
         "Realtime",
         "TestHelpers",
@@ -155,8 +236,14 @@ let package = Package(
       name: "StorageTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(
+          name: "InlineSnapshotTesting",
+          package: "swift-snapshot-testing"
+        ),
+        .product(
+          name: "XCTestDynamicOverlay",
+          package: "xctest-dynamic-overlay"
+        ),
         "Mocker",
         "TestHelpers",
         "Storage",
@@ -172,8 +259,14 @@ let package = Package(
     .target(
       name: "Supabase",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(
+          name: "ConcurrencyExtras",
+          package: "swift-concurrency-extras"
+        ),
+        .product(
+          name: "IssueReporting",
+          package: "xctest-dynamic-overlay"
+        ),
         "Auth",
         "Functions",
         "PostgREST",
@@ -185,16 +278,28 @@ let package = Package(
       name: "SupabaseTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+        .product(
+          name: "InlineSnapshotTesting",
+          package: "swift-snapshot-testing"
+        ),
         "Supabase",
       ]
     ),
     .target(
       name: "TestHelpers",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(
+          name: "ConcurrencyExtras",
+          package: "swift-concurrency-extras"
+        ),
+        .product(
+          name: "InlineSnapshotTesting",
+          package: "swift-snapshot-testing"
+        ),
+        .product(
+          name: "XCTestDynamicOverlay",
+          package: "xctest-dynamic-overlay"
+        ),
         "Auth",
         "Mocker",
       ]
