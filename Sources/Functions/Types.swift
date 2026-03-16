@@ -50,6 +50,7 @@ public enum FunctionsError: Error, LocalizedError {
 /// }
 /// ```
 public struct FunctionInvokeOptions: Sendable {
+<<<<<<< HEAD
   /// The HTTP method to use for the invocation. Defaults to `.post` when `nil`.
   public var method: Method?
 
@@ -64,6 +65,20 @@ public struct FunctionInvokeOptions: Sendable {
   /// Set `headers["Content-Type"]` appropriately when providing a body. For JSON payloads,
   /// encode your value with `JSONEncoder` and set `"Content-Type"` to `"application/json"`.
   public var body: Data?
+=======
+  /// Method to use in the function invocation.
+  public var method: Method?
+  /// Headers to be included in the function invocation.
+  public var headers: [String: String] = [:]
+  /// Body data to be sent with the function invocation.
+  public var body: Data?
+  /// The Region to invoke the function in.
+  public var region: FunctionRegion?
+  /// Query parameters to be included in the function invocation.
+  public var query: [String: String] = [:]
+
+  public init() {}
+>>>>>>> 40b2460 (test(functions): fix tests for builder-pattern API and public init)
 
   /// The region in which to invoke this function, overriding the client-level default.
   ///
