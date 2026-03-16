@@ -456,7 +456,7 @@ struct FunctionsTests {
 
     @Test(.replay("invoke_default"))
     func invokeDefault() async throws {
-        let response = try await client.invoke("echo") as AnyJSON
+        let (response, _): (AnyJSON, _) = try await client.invokeDecodable("echo")
 
         // Verify the request was a POST with no body
         let method = response.objectValue?["method"]?.stringValue
@@ -474,17 +474,14 @@ struct FunctionsTests {
             let active: Bool
         }
 
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(
                     body: RequestBody(
                         message: "Hello from Swift",
                         count: 42,
                         active: true
                     )
-                )
-            ) as AnyJSON
+                ) }
 
         // Verify body was sent correctly
         let body = response.objectValue?["body"]?.objectValue
@@ -501,11 +498,8 @@ struct FunctionsTests {
     func invokeWithJSONArray() async throws {
         let items = ["apple", "banana", "cherry"]
 
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(body: items)
-            ) as AnyJSON
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(body: items) }
 
         // Verify array body
         let body = response.objectValue?["body"]?.arrayValue?.compactMap {
@@ -518,11 +512,8 @@ struct FunctionsTests {
     func invokeWithPlainText() async throws {
         let text = "This is plain text content"
 
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(body: text)
-            ) as AnyJSON
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(body: text) }
 
         // Verify text body
         let body = response.objectValue?["body"]?.stringValue
@@ -537,11 +528,8 @@ struct FunctionsTests {
     func invokeWithBinaryData() async throws {
         let data = Data([0x48, 0x65, 0x6C, 0x6C, 0x6F])  // "Hello" in UTF-8
 
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(body: data)
-            ) as AnyJSON
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(body: data) }
 
         // Verify data was sent (echo will return it as string or data)
         let body = response.objectValue?["body"]
@@ -558,11 +546,8 @@ struct FunctionsTests {
 
     @Test(.replay("invoke_get_method"))
     func invokeGETMethod() async throws {
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(method: .get)
-            ) as AnyJSON
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(method: .get) }
 
         let method = response.objectValue?["method"]?.stringValue
         #expect(method == "GET")
@@ -574,14 +559,11 @@ struct FunctionsTests {
 
     @Test(.replay("invoke_put_method"))
     func invokePUTMethod() async throws {
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(
                     method: .put,
                     body: ["update": "data"]
-                )
-            ) as AnyJSON
+                ) }
 
         let method = response.objectValue?["method"]?.stringValue
         #expect(method == "PUT")
@@ -589,14 +571,11 @@ struct FunctionsTests {
 
     @Test(.replay("invoke_patch_method"))
     func invokePATCHMethod() async throws {
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(
                     method: .patch,
                     body: ["field": "value"]
-                )
-            ) as AnyJSON
+                ) }
 
         let method = response.objectValue?["method"]?.stringValue
         #expect(method == "PATCH")
@@ -604,14 +583,11 @@ struct FunctionsTests {
 
     @Test(.replay("invoke_delete_method"))
     func invokeDELETEMethod() async throws {
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(
                     method: .delete,
                     body: ["id": "123"]
-                )
-            ) as AnyJSON
+                ) }
 
         let method = response.objectValue?["method"]?.stringValue
         #expect(method == "DELETE")
@@ -666,17 +642,14 @@ struct FunctionsTests {
 
     @Test(.replay("invoke_with_custom_headers"))
     func invokeWithCustomHeaders() async throws {
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(
                     headers: [
                         "X-Custom-Header": "custom-value",
                         "X-Request-ID": "req-123",
                         "X-Api-Version": "v1",
                     ]
-                )
-            ) as AnyJSON
+                ) }
 
         // Verify custom headers
         let headers = response.objectValue?["headers"]?.objectValue
@@ -687,14 +660,11 @@ struct FunctionsTests {
 
     @Test(.replay("invoke_with_content_type_override"))
     func invokeWithContentTypeOverride() async throws {
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(
                     headers: ["Content-Type": "application/xml"],
                     body: "<xml>data</xml>"
-                )
-            ) as AnyJSON
+                ) }
 
         // Verify content-type was overridden
         let headers = response.objectValue?["headers"]?.objectValue
@@ -710,10 +680,8 @@ struct FunctionsTests {
             let data: [String: Int]
         }
 
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(
                     method: .post,
                     query: ["debug": "true"],
                     headers: ["X-Test": "comprehensive"],
@@ -721,8 +689,7 @@ struct FunctionsTests {
                         user: "test-user",
                         data: ["score": 100, "level": 5]
                     )
-                )
-            ) as AnyJSON
+                ) }
 
         // Verify all options were applied
         #expect(response.objectValue?["method"]?.stringValue == "POST")
@@ -760,11 +727,8 @@ struct FunctionsTests {
             )
         )
 
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(body: data)
-            ) as AnyJSON
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(body: data) }
 
         // Verify nested structure
         let body = response.objectValue?["body"]?.objectValue
@@ -787,13 +751,10 @@ struct FunctionsTests {
             let query: [String: String]
         }
 
-        let response: EchoResponse = try await client.invoke(
-            "echo",
-            options: FunctionInvokeOptions(
+        let (response, _): (EchoResponse, _) = try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(
                 method: .get,
                 query: ["test": "value"]
-            )
-        )
+            ) }
 
         #expect(response.method == "GET")
         #expect(response.path == "/echo")
@@ -810,11 +771,7 @@ struct FunctionsTests {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
-        let response: EchoResponse = try await client.invoke(
-            "echo",
-            options: FunctionInvokeOptions(method: .get),
-            decoder: decoder
-        )
+        let (response, _): (EchoResponse, _) = try await client.invokeDecodable("echo", decoder: decoder) { $0 = FunctionInvokeOptions(method: .get) }
 
         #expect(response.method == "GET")
         #expect(response.timestamp.timeIntervalSince1970 > 0)
@@ -829,7 +786,7 @@ struct FunctionsTests {
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
         await client.setAuth(token: validToken)
 
-        let response = try await client.invoke("echo") as AnyJSON
+        let (response, _): (AnyJSON, _) = try await client.invokeDecodable("echo")
 
         // Verify auth token is in headers
         let headers = response.objectValue?["headers"]?.objectValue
@@ -842,11 +799,8 @@ struct FunctionsTests {
 
     @Test(.replay("invoke_with_nil_body"))
     func invokeWithNilBody() async throws {
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(method: .post)
-            ) as AnyJSON
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(method: .post) }
 
         let body = response.objectValue?["body"]
         #expect(body?.isNil == true)
@@ -856,7 +810,7 @@ struct FunctionsTests {
 
     @Test(.replay("invoke_verify_metadata"))
     func invokeVerifyMetadata() async throws {
-        let response = try await client.invoke("echo") as AnyJSON
+        let (response, _): (AnyJSON, _) = try await client.invokeDecodable("echo")
 
         // Verify all expected fields are present
         let obj = response.objectValue
@@ -870,13 +824,10 @@ struct FunctionsTests {
 
     @Test(.replay("invoke_verify_url_structure"))
     func invokeVerifyURLStructure() async throws {
-        let response =
-            try await client.invoke(
-                "echo",
-                options: FunctionInvokeOptions(
+        let (response, _): (AnyJSON, _) =
+            try await client.invokeDecodable("echo") { $0 = FunctionInvokeOptions(
                     query: ["param1": "value1"]
-                )
-            ) as AnyJSON
+                ) }
 
         let url = response.objectValue?["url"]?.stringValue
         #expect(url != nil)
