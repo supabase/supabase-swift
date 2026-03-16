@@ -3,51 +3,32 @@ import XCTest
 @testable import Functions
 
 final class FunctionInvokeOptionsTests: XCTestCase {
-  func test_initWithStringBody() {
-    let options = FunctionInvokeOptions(body: "string value")
+  func test_defaultInit() {
+    let options = FunctionInvokeOptions()
+    XCTAssertNil(options.method)
+    XCTAssertEqual(options.headers, [:])
+    XCTAssertNil(options.body)
+    XCTAssertNil(options.region)
+    XCTAssertEqual(options.query, [:])
+  }
+
+  func test_setMethod() {
+    var options = FunctionInvokeOptions()
+    options.method = .delete
+    XCTAssertEqual(options.method, .delete)
+  }
+
+  func test_setBody() {
+    var options = FunctionInvokeOptions()
+    options.body = Data("hello".utf8)
+    options.headers["Content-Type"] = "text/plain"
     XCTAssertEqual(options.headers["Content-Type"], "text/plain")
     XCTAssertNotNil(options.body)
   }
 
-  func test_initWithDataBody() {
-    let options = FunctionInvokeOptions(body: "binary value".data(using: .utf8)!)
-    XCTAssertEqual(options.headers["Content-Type"], "application/octet-stream")
-    XCTAssertNotNil(options.body)
-  }
-
-  func test_initWithEncodableBody() {
-    struct Body: Encodable {
-      let value: String
-    }
-    let options = FunctionInvokeOptions(body: Body(value: "value"))
-    XCTAssertEqual(options.headers["Content-Type"], "application/json")
-    XCTAssertNotNil(options.body)
-  }
-
-  func test_initWithEncodableBodyAndCustomEncoder() {
-    struct Body: Encodable {
-      let userName: String
-    }
-
-    let encoder = JSONEncoder()
-    encoder.keyEncodingStrategy = .convertToSnakeCase
-
-    let options = FunctionInvokeOptions(body: Body(userName: "test"), encoder: encoder)
-    XCTAssertEqual(options.headers[.contentType], "application/json")
-
-    let json = try! JSONSerialization.jsonObject(with: options.body!) as! [String: Any]
-    XCTAssertNotNil(json["user_name"])
-    XCTAssertNil(json["userName"])
-  }
-
-  func test_initWithCustomContentType() {
-    let boundary = "Boundary-\(UUID().uuidString)"
-    let contentType = "multipart/form-data; boundary=\(boundary)"
-    let options = FunctionInvokeOptions(
-      headers: ["Content-Type": contentType],
-      body: "binary value".data(using: .utf8)!
-    )
-    XCTAssertEqual(options.headers["Content-Type"], contentType)
-    XCTAssertNotNil(options.body)
+  func test_setRegion() {
+    var options = FunctionInvokeOptions()
+    options.region = .saEast1
+    XCTAssertEqual(options.region, .saEast1)
   }
 }

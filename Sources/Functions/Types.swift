@@ -21,70 +21,17 @@ public enum FunctionsError: Error, LocalizedError {
 /// Options for invoking a function.
 public struct FunctionInvokeOptions: Sendable {
   /// Method to use in the function invocation.
-  let method: Method?
+  public var method: Method?
   /// Headers to be included in the function invocation.
-  let headers: [String: String]
+  public var headers: [String: String] = [:]
   /// Body data to be sent with the function invocation.
-  let body: Data?
+  public var body: Data?
   /// The Region to invoke the function in.
-  let region: FunctionRegion?
+  public var region: FunctionRegion?
   /// Query parameters to be included in the function invocation.
-  let query: [String: String]
+  public var query: [String: String] = [:]
 
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - query: Query parameters to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation.
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body to be sent with the function invocation.
-  public init(
-    method: Method? = nil,
-    query: [String: String] = [:],
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil,
-    body: some Encodable
-  ) {
-    var defaultHeaders: [String: String] = [:]
-
-    switch body {
-    case let string as String:
-      defaultHeaders["Content-Type"] = "text/plain"
-      self.body = string.data(using: .utf8)
-    case let data as Data:
-      defaultHeaders["Content-Type"] = "application/octet-stream"
-      self.body = data
-    default:
-      defaultHeaders["Content-Type"] = "application/json"
-      self.body = try? JSONEncoder().encode(body)
-    }
-
-    self.method = method
-    self.headers = defaultHeaders.merging(headers) { _, new in new }
-    self.region = region
-    self.query = query
-  }
-
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - query: Query parameters to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation.
-  ///   - region: The Region to invoke the function in.
-  public init(
-    method: Method? = nil,
-    query: [String: String] = [:],
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil
-  ) {
-    self.method = method
-    self.headers = headers
-    self.region = region
-    self.query = query
-    body = nil
-  }
+  public init() {}
 
   /// HTTP method for invoking an Edge Function.
   public enum Method: String, Sendable {

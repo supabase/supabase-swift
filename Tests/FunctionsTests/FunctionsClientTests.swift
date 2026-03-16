@@ -87,7 +87,9 @@ final class FunctionsClientTests: XCTestCase {
     .register()
 
     try await sut.invoke("hello_world") {
-      $0 = FunctionInvokeOptions(headers: ["X-Custom-Key": "value"], body: ["name": "Supabase"])
+      $0.headers["X-Custom-Key"] = "value"
+      $0.headers["Content-Type"] = "application/json"
+      $0.body = try? JSONEncoder().encode(["name": "Supabase"])
     }
   }
 
