@@ -23,6 +23,9 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     /// The options for fetching data from the PostgREST server.
     var fetchOptions: FetchOptions
+
+    /// Whether automatic retries are enabled for this request.
+    var retryEnabled: Bool
   }
 
   let mutableState: LockIsolated<MutableState>
@@ -43,7 +46,8 @@ public class PostgrestBuilder: @unchecked Sendable {
     mutableState = LockIsolated(
       MutableState(
         request: request,
-        fetchOptions: FetchOptions()
+        fetchOptions: FetchOptions(),
+        retryEnabled: configuration.retryEnabled
       )
     )
   }
@@ -53,6 +57,7 @@ public class PostgrestBuilder: @unchecked Sendable {
       configuration: other.configuration,
       request: other.mutableState.value.request
     )
+    mutableState.withValue { $0.retryEnabled = other.mutableState.value.retryEnabled }
   }
 
   /// Set a HTTP header for the request.
@@ -67,6 +72,17 @@ public class PostgrestBuilder: @unchecked Sendable {
     mutableState.withValue {
       $0.request.headers[name] = value
     }
+    return self
+  }
+
+  /// Controls whether automatic retries are enabled for this request.
+  ///
+  /// When enabled, the request will be retried up to 3 times with exponential backoff on
+  /// transient errors (HTTP 520, network errors) for idempotent methods (GET, HEAD).
+  /// - Parameter enabled: Pass `false` to disable retries for this request.
+  @discardableResult
+  public func retry(enabled: Bool) -> Self {
+    mutableState.withValue { $0.retryEnabled = enabled }
     return self
   }
 
@@ -103,7 +119,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     options: FetchOptions,
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    let request = mutableState.withValue {
+    let (request, retryEnabled) = mutableState.withValue {
       $0.fetchOptions = options
 
       if $0.fetchOptions.head {
@@ -127,26 +143,58 @@ public class PostgrestBuilder: @unchecked Sendable {
         }
       }
 
-      return $0.request
+      return ($0.request, $0.retryEnabled)
     }
 
-    let response = try await http.send(request)
+    let isIdempotent = request.method == .get || request.method == .head
+    let shouldRetry = retryEnabled && isIdempotent
+    let maxRetries = 3
 
-    guard 200..<300 ~= response.statusCode else {
-      if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
+    var attempt = 0
+    while true {
+      var requestToSend = request
+      if attempt > 0 {
+        requestToSend.headers[.xRetryCount] = "\(attempt)"
+      }
+
+      let response: Helpers.HTTPResponse
+      do {
+        response = try await http.send(requestToSend)
+      } catch {
+        if shouldRetry && attempt < maxRetries {
+          try await _clock.sleep(for: retryDelay(attempt: attempt))
+          attempt += 1
+          continue
+        }
         throw error
       }
 
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
-    }
+      guard 200..<300 ~= response.statusCode else {
+        if shouldRetry && response.statusCode == 520 && attempt < maxRetries {
+          try await _clock.sleep(for: retryDelay(attempt: attempt))
+          attempt += 1
+          continue
+        }
 
-    let value = try decode(response.data)
-    return PostgrestResponse(
-      data: response.data, response: response.underlyingResponse, value: value)
+        if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
+          throw error
+        }
+        throw HTTPError(data: response.data, response: response.underlyingResponse)
+      }
+
+      let value = try decode(response.data)
+      return PostgrestResponse(
+        data: response.data, response: response.underlyingResponse, value: value)
+    }
+  }
+
+  private func retryDelay(attempt: Int) -> TimeInterval {
+    min(pow(2.0, Double(attempt)), 30.0)
   }
 }
 
 extension HTTPField.Name {
   static let acceptProfile = Self("Accept-Profile")!
   static let contentProfile = Self("Content-Profile")!
+  static let xRetryCount = Self("X-Retry-Count")!
 }

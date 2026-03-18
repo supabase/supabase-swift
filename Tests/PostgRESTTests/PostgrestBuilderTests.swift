@@ -5,6 +5,8 @@
 //  Created by Guilherme Souza on 20/08/24.
 //
 
+import ConcurrencyExtras
+import Helpers
 import InlineSnapshotTesting
 import Mocker
 import XCTest
@@ -94,7 +96,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
       """#
     }
     .register()
-    
+
     try await sut.from("users")
       .select()
       .execute(options: FetchOptions(head: true))
@@ -224,4 +226,213 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
     XCTAssertEqual(query.mutableState.request.headers[.init("key")!], "value")
   }
+
+  // MARK: - Retry tests
+
+  override func setUp() {
+    super.setUp()
+    #if DEBUG
+      _clock = ImmediateRetryTestClock()
+    #endif
+  }
+
+  func testRetryOn520ForGETRequest() async throws {
+    struct MutableState {
+      var callCount = 0
+      var capturedHeaders = [[String: String]]()
+    }
+
+    let state = LockIsolated(MutableState())
+
+    let sut = makeSUTWithCustomFetch { request in
+      state.withValue { state in
+        state.callCount += 1
+        state.capturedHeaders.append(
+          Dictionary(uniqueKeysWithValues: (request.allHTTPHeaderFields ?? [:]).map { $0 }))
+
+        if state.callCount < 3 {
+          return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+        }
+        return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+      }
+    }
+
+    let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
+
+    state.withValue { state in
+      XCTAssertEqual(state.callCount, 3)
+      XCTAssertNil(state.capturedHeaders[0]["X-Retry-Count"])
+      XCTAssertEqual(state.capturedHeaders[1]["X-Retry-Count"], "1")
+      XCTAssertEqual(state.capturedHeaders[2]["X-Retry-Count"], "2")
+      XCTAssertTrue(result.value.isEmpty)
+    }
+  }
+
+  func testRetryOn520ForHEADRequest() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch { _ in
+      callCount.withValue { $0 += 1 }
+      if callCount.value < 2 {
+        return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      }
+      return (Data(), self.makeHTTPURLResponse(statusCode: 200))
+    }
+
+    try await sut.from("users").select().execute(options: FetchOptions(head: true))
+    XCTAssertEqual(callCount.value, 2)
+  }
+
+  func testNoRetryOn520ForPOSTRequest() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch { _ in
+      callCount.withValue { $0 += 1 }
+      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+    }
+
+    do {
+      try await sut.from("users").insert(["username": "test"]).execute()
+      XCTFail("Expected error to be thrown")
+    } catch {
+      XCTAssertEqual(callCount.value, 1)
+    }
+  }
+
+  func testNoRetryOnNon520ErrorForGET() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch { _ in
+      callCount.withValue { $0 += 1 }
+      return (
+        Data(#"{"message":"Bad Request"}"#.utf8),
+        self.makeHTTPURLResponse(statusCode: 400)
+      )
+    }
+
+    do {
+      try await sut.from("users").select().execute()
+      XCTFail("Expected error to be thrown")
+    } catch let error as PostgrestError {
+      XCTAssertEqual(callCount.value, 1)
+      XCTAssertEqual(error.message, "Bad Request")
+    }
+  }
+
+  func testRetryOnNetworkErrorForGET() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch { _ in
+      callCount.withValue { $0 += 1 }
+      if callCount.value < 2 {
+        throw URLError(.networkConnectionLost)
+      }
+      return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+    }
+
+    let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
+    XCTAssertEqual(callCount.value, 2)
+    XCTAssertTrue(result.value.isEmpty)
+  }
+
+  func testNoRetryOnNetworkErrorForPOST() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch { _ in
+      callCount.withValue { $0 += 1 }
+      throw URLError(.networkConnectionLost)
+    }
+
+    do {
+      try await sut.from("users").insert(["username": "test"]).execute()
+      XCTFail("Expected error to be thrown")
+    } catch {
+      XCTAssertEqual(callCount.value, 1)
+    }
+  }
+
+  func testExhaustAllRetries() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch { _ in
+      callCount.withValue { $0 += 1 }
+      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+    }
+
+    do {
+      try await sut.from("users").select().execute()
+      XCTFail("Expected error to be thrown")
+    } catch {
+      XCTAssertEqual(callCount.value, 4)  // 1 initial + 3 retries
+    }
+  }
+
+  func testPerRequestRetryDisabled() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch { _ in
+      callCount.withValue { $0 += 1 }
+      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+    }
+
+    do {
+      try await sut.from("users").select().retry(enabled: false).execute()
+      XCTFail("Expected error to be thrown")
+    } catch {
+      XCTAssertEqual(callCount.value, 1)
+    }
+  }
+
+  func testClientLevelRetryDisabled() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
+      callCount.withValue { $0 += 1 }
+      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+    }
+
+    do {
+      try await sut.from("users").select().execute()
+      XCTFail("Expected error to be thrown")
+    } catch {
+      XCTAssertEqual(callCount.value, 1)
+    }
+  }
+
+  func testRetryEnabledPerRequestOverridesClientDisabled() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
+      callCount.withValue { $0 += 1 }
+      if callCount.value < 2 {
+        return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      }
+      return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+    }
+
+    let result: PostgrestResponse<[User]> = try await sut.from("users").select().retry(
+      enabled: true
+    )
+    .execute()
+    XCTAssertEqual(callCount.value, 2)
+    XCTAssertTrue(result.value.isEmpty)
+  }
+
+  // MARK: - Helpers
+
+  private func makeSUTWithCustomFetch(
+    retryEnabled: Bool = true,
+    fetch: @escaping PostgrestClient.FetchHandler
+  ) -> PostgrestClient {
+    PostgrestClient(url: url, fetch: fetch, retryEnabled: retryEnabled)
+  }
+
+  private func makeHTTPURLResponse(statusCode: Int) -> HTTPURLResponse {
+    HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
+  }
+}
+
+/// A no-op clock for tests — skips all sleep delays so retry tests run instantly.
+struct ImmediateRetryTestClock: _Clock {
+  func sleep(for duration: TimeInterval) async throws {}
 }

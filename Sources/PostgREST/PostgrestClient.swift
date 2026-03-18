@@ -21,6 +21,8 @@ public final class PostgrestClient: Sendable {
     public var fetch: FetchHandler
     public var encoder: JSONEncoder
     public var decoder: JSONDecoder
+    /// Whether automatic retries are enabled for transient errors. Defaults to `true`.
+    public var retryEnabled: Bool
 
     let logger: (any SupabaseLogger)?
 
@@ -33,6 +35,7 @@ public final class PostgrestClient: Sendable {
     ///   - fetch: Custom fetch.
     ///   - encoder: The JSONEncoder to use for encoding.
     ///   - decoder: The JSONDecoder to use for decoding.
+    ///   - retryEnabled: Whether to automatically retry on transient errors (HTTP 520, network errors). Defaults to `true`.
     public init(
       url: URL,
       schema: String? = nil,
@@ -40,7 +43,8 @@ public final class PostgrestClient: Sendable {
       logger: (any SupabaseLogger)? = nil,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
+      retryEnabled: Bool = true
     ) {
       self.url = url
       self.schema = schema
@@ -49,6 +53,7 @@ public final class PostgrestClient: Sendable {
       self.fetch = fetch
       self.encoder = encoder
       self.decoder = decoder
+      self.retryEnabled = retryEnabled
     }
   }
 
@@ -73,6 +78,7 @@ public final class PostgrestClient: Sendable {
   ///   - fetch: Custom fetch.
   ///   - encoder: The JSONEncoder to use for encoding.
   ///   - decoder: The JSONDecoder to use for decoding.
+  ///   - retryEnabled: Whether to automatically retry on transient errors (HTTP 520, network errors). Defaults to `true`.
   public convenience init(
     url: URL,
     schema: String? = nil,
@@ -80,7 +86,8 @@ public final class PostgrestClient: Sendable {
     logger: (any SupabaseLogger)? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
+    retryEnabled: Bool = true
   ) {
     self.init(
       configuration: Configuration(
@@ -90,7 +97,8 @@ public final class PostgrestClient: Sendable {
         logger: logger,
         fetch: fetch,
         encoder: encoder,
-        decoder: decoder
+        decoder: decoder,
+        retryEnabled: retryEnabled
       )
     )
   }
