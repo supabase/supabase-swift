@@ -13,6 +13,10 @@ import XCTest
 
 @testable import PostgREST
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class PostgrestBuilderTests: PostgrestQueryTests {
   func testCustomHeaderOnAPerCallBasis() throws {
     let url = URL(string: "http://localhost:54321/rest/v1")!
