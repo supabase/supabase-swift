@@ -21,9 +21,6 @@ public class PostgrestBuilder: @unchecked Sendable {
   struct MutableState {
     var request: Helpers.HTTPRequest
 
-    /// The options for fetching data from the PostgREST server.
-    var fetchOptions: FetchOptions
-
     /// Whether automatic retries are enabled for this request.
     var retryEnabled: Bool
   }
@@ -46,7 +43,6 @@ public class PostgrestBuilder: @unchecked Sendable {
     mutableState = LockIsolated(
       MutableState(
         request: request,
-        fetchOptions: FetchOptions(),
         retryEnabled: configuration.retryEnabled
       )
     )
@@ -109,7 +105,7 @@ public class PostgrestBuilder: @unchecked Sendable {
       do {
         return try configuration.decoder.decode(T.self, from: data)
       } catch {
-        configuration.logger?.error("Fail to decode type '\(T.self) with error: \(error)")
+        configuration.logger?.error("Failed to decode type '\(T.self) with error: \(error)")
         throw error
       }
     }
@@ -117,51 +113,50 @@ public class PostgrestBuilder: @unchecked Sendable {
 
   private func execute<T>(
     options: FetchOptions,
-    decode: (Data) throws -> T
+    decode: @Sendable (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    let (request, retryEnabled) = mutableState.withValue {
-      $0.fetchOptions = options
+    let (baseRequest, retryEnabled) = mutableState.withValue { ($0.request, $0.retryEnabled) }
+    var request = baseRequest
 
-      if $0.fetchOptions.head {
-        $0.request.method = .head
-      }
-
-      if let count = $0.fetchOptions.count {
-        $0.request.headers.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
-      }
-
-      if $0.request.headers[.accept] == nil {
-        $0.request.headers[.accept] = "application/json"
-      }
-      $0.request.headers[.contentType] = "application/json"
-
-      if let schema = configuration.schema {
-        if $0.request.method == .get || $0.request.method == .head {
-          $0.request.headers[.acceptProfile] = schema
-        } else {
-          $0.request.headers[.contentProfile] = schema
-        }
-      }
-
-      return ($0.request, $0.retryEnabled)
+    if options.head {
+      request.method = .head
     }
 
-    let isIdempotent = request.method == .get || request.method == .head
-    let shouldRetry = retryEnabled && isIdempotent
-    let maxRetries = 3
+    if let count = options.count {
+      request.headers.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
+    }
+
+    if request.headers[.accept] == nil {
+      request.headers[.accept] = "application/json"
+    }
+    request.headers[.contentType] = "application/json"
+
+    if let schema = configuration.schema {
+      if request.method == .get || request.method == .head {
+        request.headers[.acceptProfile] = schema
+      } else {
+        request.headers[.contentProfile] = schema
+      }
+    }
 
     var attempt = 0
     while true {
-      var requestToSend = request
+      try Task.checkCancellation()
+
+      var request = baseRequest
       if attempt > 0 {
-        requestToSend.headers[.xRetryCount] = "\(attempt)"
+        request.headers[.xRetryCount] = "\(attempt)"
       }
 
+      // Separate the network send from decoding so that decode errors are never retried.
       let response: Helpers.HTTPResponse
       do {
-        response = try await http.send(requestToSend)
+        response = try await http.send(request)
       } catch {
-        if shouldRetry && attempt < maxRetries {
+        if shouldRetry(
+          request: request, response: nil, error: error, retryEnabled: retryEnabled,
+          attempt: attempt)
+        {
           try await _clock.sleep(for: retryDelay(attempt: attempt))
           attempt += 1
           continue
@@ -169,28 +164,56 @@ public class PostgrestBuilder: @unchecked Sendable {
         throw error
       }
 
-      guard 200..<300 ~= response.statusCode else {
-        if shouldRetry && response.statusCode == 520 && attempt < maxRetries {
-          try await _clock.sleep(for: retryDelay(attempt: attempt))
-          attempt += 1
-          continue
-        }
-
-        if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
-          throw error
-        }
-        throw HTTPError(data: response.data, response: response.underlyingResponse)
+      if 200..<300 ~= response.statusCode {
+        let value = try decode(response.data)
+        return PostgrestResponse(
+          data: response.data, response: response.underlyingResponse, value: value)
       }
 
-      let value = try decode(response.data)
-      return PostgrestResponse(
-        data: response.data, response: response.underlyingResponse, value: value)
+      if shouldRetry(
+        request: request, response: response, error: nil, retryEnabled: retryEnabled,
+        attempt: attempt)
+      {
+        try await _clock.sleep(for: retryDelay(attempt: attempt))
+        attempt += 1
+        continue
+      }
+
+      if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
+        throw error
+      }
+      throw HTTPError(data: response.data, response: response.underlyingResponse)
     }
   }
 
-  private func retryDelay(attempt: Int) -> TimeInterval {
-    min(pow(2.0, Double(attempt)), 30.0)
+  private static let maxDelay = 30.0
+  private static let maxRetries = 3
+  private static let retryableMethods: Set<HTTPTypes.HTTPRequest.Method> = [.get, .head]
+  private static let retryableStatusCodes: Set<Int> = [520]
+
+  /// Check if a request should be retried based on method, status code, and error type.
+  private func shouldRetry(
+    request: Helpers.HTTPRequest,
+    response: Helpers.HTTPResponse?,
+    error: (any Error)?,
+    retryEnabled: Bool,
+    attempt: Int
+  ) -> Bool {
+    guard retryEnabled, attempt < Self.maxRetries else { return false }
+    guard !(error is CancellationError) else { return false }
+    guard Self.retryableMethods.contains(request.method) else { return false }
+
+    if let statusCode = response?.statusCode {
+      return Self.retryableStatusCodes.contains(statusCode)
+    }
+
+    return true
   }
+
+  private func retryDelay(attempt: Int) -> TimeInterval {
+    min(pow(2.0, Double(attempt)), Self.maxDelay)
+  }
+
 }
 
 extension HTTPField.Name {
