@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 import CustomDump
 import Foundation
 import InlineSnapshotTesting
@@ -212,5 +213,168 @@ final class SupabaseStorageTests: XCTestCase {
     URL(fileURLWithPath: #file)
       .deletingLastPathComponent()
       .appendingPathComponent(fileName)
+  }
+
+  // MARK: - setValue(_:forHTTPHeaderField:) Tests
+
+  func testSetHeader_setsHeaderOnRequest() async throws {
+    let capturedRequest = LockIsolated(URLRequest?.none)
+    sessionMock.fetch = { request in
+      capturedRequest.setValue(request)
+      return (
+        """
+        [
+          {
+            "name": "test.txt",
+            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+            "updatedAt": "2024-01-01T00:00:00Z",
+            "createdAt": "2024-01-01T00:00:00Z",
+            "lastAccessedAt": "2024-01-01T00:00:00Z",
+            "metadata": {}
+          }
+        ]
+        """.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+
+    let sut = makeSUT()
+
+    _ = try await sut.from(bucketId)
+      .setHeader("custom-value", forKey: "X-Custom-Header")
+      .list()
+
+    XCTAssertEqual(
+      capturedRequest.value?.value(forHTTPHeaderField: "X-Custom-Header"), "custom-value")
+  }
+
+  func testSetHeader_supportsMethodChaining() async throws {
+    let capturedRequest = LockIsolated(URLRequest?.none)
+    sessionMock.fetch = { request in
+      capturedRequest.setValue(request)
+      return (
+        """
+        [
+          {
+            "name": "test.txt",
+            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+            "updatedAt": "2024-01-01T00:00:00Z",
+            "createdAt": "2024-01-01T00:00:00Z",
+            "lastAccessedAt": "2024-01-01T00:00:00Z",
+            "metadata": {}
+          }
+        ]
+        """.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+
+    let sut = makeSUT()
+
+    _ = try await sut.from(bucketId)
+      .setHeader("value-a", forKey: "X-Header-A")
+      .setHeader("value-b", forKey: "X-Header-B")
+      .list()
+
+    XCTAssertEqual(capturedRequest.value?.value(forHTTPHeaderField: "X-Header-A"), "value-a")
+    XCTAssertEqual(capturedRequest.value?.value(forHTTPHeaderField: "X-Header-B"), "value-b")
+  }
+
+  func testSetHeader_overridesExistingHeader() async throws {
+    let capturedRequest = LockIsolated(URLRequest?.none)
+    sessionMock.fetch = { request in
+      capturedRequest.setValue(request)
+      return (
+        """
+        [
+          {
+            "name": "test.txt",
+            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+            "updatedAt": "2024-01-01T00:00:00Z",
+            "createdAt": "2024-01-01T00:00:00Z",
+            "lastAccessedAt": "2024-01-01T00:00:00Z",
+            "metadata": {}
+          }
+        ]
+        """.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+
+    let sut = makeSUT()
+
+    _ = try await sut.from(bucketId)
+      .setHeader("initial-value", forKey: "X-Custom-Header")
+      .setHeader("updated-value", forKey: "X-Custom-Header")
+      .list()
+
+    XCTAssertEqual(
+      capturedRequest.value?.value(forHTTPHeaderField: "X-Custom-Header"), "updated-value")
+  }
+
+  func testSetHeader_doesNotMutateParentClientHeaders() async throws {
+    let capturedRequests = LockIsolated<[URLRequest]>([])
+
+    let listResponse = """
+      [
+        {
+          "name": "test.txt",
+          "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+          "updatedAt": "2024-01-01T00:00:00Z",
+          "createdAt": "2024-01-01T00:00:00Z",
+          "lastAccessedAt": "2024-01-01T00:00:00Z",
+          "metadata": {}
+        }
+      ]
+      """
+
+    // Setup mock to capture requests
+    sessionMock.fetch = { [self] request in
+      capturedRequests.withValue { $0.append(request) }
+
+      return (
+        listResponse.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+
+    let sut = makeSUT()
+
+    // First, make a request with setHeader on StorageFileApi
+    _ = try await sut.from(bucketId)
+      .setHeader("child-value", forKey: "X-Child-Header")
+      .list()
+
+    XCTAssertEqual(
+      capturedRequests[0].value(forHTTPHeaderField: "X-Child-Header"),
+      "child-value"
+    )
+
+    // Then make a request from a new StorageFileApi instance (via sut.from())
+    // The new instance should NOT have the previous instance's header
+    _ = try await sut.from(bucketId).list()
+
+    // The new StorageFileApi instance should NOT have the previous instance's header
+    XCTAssertNil(capturedRequests[1].value(forHTTPHeaderField: "X-Child-Header"))
   }
 }
