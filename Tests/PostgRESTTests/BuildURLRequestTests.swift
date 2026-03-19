@@ -243,7 +243,7 @@ final class BuildURLRequestTests: XCTestCase {
     ]
 
     for testCase in testCases {
-      await runningTestCase.withValue { $0 = testCase }
+      runningTestCase.withValue { $0 = testCase }
       let builder = try await testCase.build(client)
       _ = try? await builder.execute()
     }
