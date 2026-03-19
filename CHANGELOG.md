@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.42.0](https://github.com/supabase/supabase-swift/compare/v2.41.1...v2.42.0) (2026-03-19)
+
+
+### Features
+
+* **storage:** implement setHeader method on storage client ([#910](https://github.com/supabase/supabase-swift/issues/910)) ([55a64a4](https://github.com/supabase/supabase-swift/commit/55a64a40350f4947da1b5e74ab051bbb3e734050))
+
+
+### Bug Fixes
+
+* **realtime:** use URLRequest headers instead of httpAdditionalHeaders for WebSocket ([#920](https://github.com/supabase/supabase-swift/issues/920)) ([47969d5](https://github.com/supabase/supabase-swift/commit/47969d52a871f5ef420e3134cc0e54ba66a3eeb8))
+
 ## [2.41.1](https://github.com/supabase/supabase-swift/compare/v2.41.0...v2.41.1) (2026-02-06)
 
 
