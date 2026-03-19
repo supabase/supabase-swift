@@ -143,18 +143,18 @@ public class PostgrestBuilder: @unchecked Sendable {
     while true {
       try Task.checkCancellation()
 
-      var request = baseRequest
+      var currentRequest = request
       if attempt > 0 {
-        request.headers[.xRetryCount] = "\(attempt)"
+        currentRequest.headers[.xRetryCount] = "\(attempt)"
       }
 
       // Separate the network send from decoding so that decode errors are never retried.
       let response: Helpers.HTTPResponse
       do {
-        response = try await http.send(request)
+        response = try await http.send(currentRequest)
       } catch {
         if shouldRetry(
-          request: request, response: nil, error: error, retryEnabled: retryEnabled,
+          request: currentRequest, response: nil, error: error, retryEnabled: retryEnabled,
           attempt: attempt)
         {
           try await _clock.sleep(for: retryDelay(attempt: attempt))
@@ -171,7 +171,7 @@ public class PostgrestBuilder: @unchecked Sendable {
       }
 
       if shouldRetry(
-        request: request, response: response, error: nil, retryEnabled: retryEnabled,
+        request: currentRequest, response: response, error: nil, retryEnabled: retryEnabled,
         attempt: attempt)
       {
         try await _clock.sleep(for: retryDelay(attempt: attempt))

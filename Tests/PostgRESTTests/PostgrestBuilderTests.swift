@@ -240,6 +240,13 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     #endif
   }
 
+  override func tearDown() {
+    super.tearDown()
+    #if DEBUG
+      _clock = _resolveClock()
+    #endif
+  }
+
   func testRetryOn520ForGETRequest() async throws {
     struct MutableState {
       var callCount = 0

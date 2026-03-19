@@ -34,7 +34,7 @@ struct FallbackClock: _Clock {
 }
 
 // Resolves clock instance based on platform availability.
-let _resolveClock: @Sendable () -> any _Clock = {
+package let _resolveClock: @Sendable () -> any _Clock = {
   if #available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *) {
     ContinuousClock()
   } else {
