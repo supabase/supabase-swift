@@ -27,8 +27,8 @@ struct APIClient: Sendable {
     Dependencies[clientID].configuration
   }
 
-  var sessionManager: SessionManager {
-    Dependencies[clientID].sessionManager
+  var sessionMachine: SessionStateMachine {
+    Dependencies[clientID].sessionMachine
   }
 
   var eventEmitter: AuthStateChangeEventEmitter {
@@ -66,11 +66,7 @@ struct APIClient: Sendable {
 
   @discardableResult
   func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
-    var sessionManager: SessionManager {
-      Dependencies[clientID].sessionManager
-    }
-
-    let session = try await sessionManager.session()
+    let session = try await sessionMachine.validSession()
 
     var request = request
     request.headers[.authorization] = "Bearer \(session.accessToken)"
@@ -118,7 +114,7 @@ struct APIClient: Sendable {
       // The `session_id` inside the JWT does not correspond to a row in the
       // `sessions` table. This usually means the user has signed out, has been
       // deleted, or their session has somehow been terminated.
-      await sessionManager.remove()
+      await sessionMachine.remove()
       eventEmitter.emit(.signedOut, session: nil)
       return .sessionMissing
     } else {

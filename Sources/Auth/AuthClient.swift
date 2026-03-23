@@ -81,7 +81,9 @@ public actor AuthClient {
   }
 
   nonisolated private var date: @Sendable () -> Date { Dependencies[clientID].date }
-  nonisolated private var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
+  nonisolated private var sessionMachine: SessionStateMachine {
+    Dependencies[clientID].sessionMachine
+  }
   nonisolated private var eventEmitter: AuthStateChangeEventEmitter {
     Dependencies[clientID].eventEmitter
   }
@@ -96,7 +98,7 @@ public actor AuthClient {
   /// If no session can be found, a ``AuthError/sessionMissing`` error is thrown.
   public var session: Session {
     get async throws {
-      try await sessionManager.session()
+      try await sessionMachine.validSession()
     }
   }
 
@@ -139,7 +141,7 @@ public actor AuthClient {
       api: APIClient(clientID: clientID),
       codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID),
+      sessionMachine: SessionStateMachine(clientID: clientID),
       logger: configuration.logger.map {
         AuthClientLoggerDecorator(clientID: clientID, decoratee: $0)
       }
@@ -351,7 +353,7 @@ public actor AuthClient {
     )
 
     if let session = response.session {
-      await sessionManager.update(session)
+      await sessionMachine.update(session)
       eventEmitter.emit(.signedIn, session: session)
     }
 
@@ -457,7 +459,7 @@ public actor AuthClient {
       decoder: configuration.decoder
     )
 
-    await sessionManager.update(session)
+    await sessionMachine.update(session)
     eventEmitter.emit(.signedIn, session: session)
 
     return session
@@ -635,7 +637,7 @@ public actor AuthClient {
 
     codeVerifierStorage.set(nil)
 
-    await sessionManager.update(session)
+    await sessionMachine.update(session)
     eventEmitter.emit(.signedIn, session: session)
 
     return session
@@ -895,7 +897,7 @@ public actor AuthClient {
       user: user
     )
 
-    await sessionManager.update(session)
+    await sessionMachine.update(session)
     eventEmitter.emit(.signedIn, session: session)
 
     if let type = params["type"], type == "recovery" {
@@ -960,7 +962,7 @@ public actor AuthClient {
       )
     }
 
-    await sessionManager.update(session)
+    await sessionMachine.update(session)
     eventEmitter.emit(.signedIn, session: session)
     return session
   }
@@ -976,7 +978,7 @@ public actor AuthClient {
     }
 
     if scope != .others {
-      await sessionManager.remove()
+      await sessionMachine.remove()
       eventEmitter.emit(.signedOut, session: nil)
     }
 
@@ -1084,7 +1086,7 @@ public actor AuthClient {
     )
 
     if let session = response.session {
-      await sessionManager.update(session)
+      await sessionMachine.update(session)
       eventEmitter.emit(.signedIn, session: session)
     }
 
@@ -1189,7 +1191,7 @@ public actor AuthClient {
       user.codeChallengeMethod = codeChallengeMethod
     }
 
-    var session = try await sessionManager.session()
+    var session = try await sessionMachine.validSession()
     let updatedUser = try await api.authorizedExecute(
       .init(
         url: configuration.url.appendingPathComponent("user"),
@@ -1206,7 +1208,7 @@ public actor AuthClient {
       )
     ).decoded(as: User.self, decoder: configuration.decoder)
     session.user = updatedUser
-    await sessionManager.update(session)
+    await sessionMachine.update(session)
     eventEmitter.emit(.userUpdated, session: session)
     return updatedUser
   }
@@ -1234,7 +1236,7 @@ public actor AuthClient {
       )
     ).decoded(as: Session.self, decoder: configuration.decoder)
 
-    await sessionManager.update(session)
+    await sessionMachine.update(session)
     eventEmitter.emit(.userUpdated, session: session)
 
     return session
@@ -1385,19 +1387,19 @@ public actor AuthClient {
       throw AuthError.sessionMissing
     }
 
-    return try await sessionManager.refreshSession(refreshToken)
+    return try await sessionMachine.refresh(token: refreshToken)
   }
 
   /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
   ///
   /// If you set ``Configuration/autoRefreshToken`` you don't need to call this function, it will be called for you.
   public func startAutoRefresh() {
-    Task { await sessionManager.startAutoRefresh() }
+    Task { await sessionMachine.startAutoRefresh() }
   }
 
   /// Stops an active auto refresh process running in the background (if any).
   public func stopAutoRefresh() {
-    Task { await sessionManager.stopAutoRefresh() }
+    Task { await sessionMachine.stopAutoRefresh() }
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {
@@ -1411,8 +1413,8 @@ public actor AuthClient {
 
       Task {
         if currentSession.isExpired {
-          _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
-          // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
+          _ = try? await sessionMachine.refresh(token: currentSession.refreshToken)
+          // No need to emit `tokenRefreshed` nor `signOut` event since `refresh` does it already.
         }
       }
     } else {

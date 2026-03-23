@@ -19,8 +19,8 @@ final class SessionManagerTests: XCTestCase {
 
   let clientID = AuthClientID()
 
-  var sut: SessionManager {
-    Dependencies[clientID].sessionManager
+  var sut: SessionStateMachine {
+    Dependencies[clientID].sessionMachine
   }
 
   override func setUp() {
@@ -38,7 +38,7 @@ final class SessionManagerTests: XCTestCase {
       api: APIClient(clientID: clientID),
       codeVerifierStorage: .mock,
       sessionStorage: SessionStorage.live(clientID: clientID),
-      sessionManager: SessionManager.live(clientID: clientID)
+      sessionMachine: SessionStateMachine(clientID: clientID)
     )
   }
 
@@ -52,7 +52,7 @@ final class SessionManagerTests: XCTestCase {
 
   func testSession_shouldFailWithSessionNotFound() async {
     do {
-      _ = try await sut.session()
+      _ = try await sut.validSession()
       XCTFail("Expected a \(AuthError.sessionMissing) failure")
     } catch {
       assertInlineSnapshot(of: error, as: .dump) {
@@ -68,7 +68,7 @@ final class SessionManagerTests: XCTestCase {
     let session = Session.validSession
     Dependencies[clientID].sessionStorage.store(session)
 
-    let returnedSession = try await sut.session()
+    let returnedSession = try await sut.validSession()
     expectNoDifference(returnedSession, session)
   }
 
@@ -91,10 +91,10 @@ final class SessionManagerTests: XCTestCase {
       }
     )
 
-    // Fire N tasks and call sut.session()
+    // Fire N tasks and call sut.validSession()
     let tasks = (0..<10).map { _ in
       Task { [weak self] in
-        try await self?.sut.session()
+        try await self?.sut.validSession()
       }
     }
 
