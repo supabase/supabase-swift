@@ -463,23 +463,21 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       return
     }
 
-    // Check if previous heartbeat is still pending (not acknowledged)
-    let shouldSendHeartbeat = mutableState.withValue { state -> Bool in
+    // Check if previous heartbeat is still pending (not acknowledged).
+    // Return the new ref if we should send, nil if previous heartbeat timed out.
+    let heartbeatRef = mutableState.withValue { state -> String? in
       if state.pendingHeartbeatRef != nil {
         // Previous heartbeat was not acknowledged - this is a timeout
-        return false
+        return nil
       }
 
       // No pending heartbeat, we can send a new one
       let ref = makeRef()
       state.pendingHeartbeatRef = ref
-      return true
+      return ref
     }
 
-    if shouldSendHeartbeat {
-      // Get the ref we just set
-      let heartbeatRef = mutableState.withValue { $0.pendingHeartbeatRef }!
-
+    if let heartbeatRef {
       push(
         RealtimeMessageV2(
           joinRef: nil,
