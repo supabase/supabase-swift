@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.43.0](https://github.com/supabase/supabase-swift/compare/v2.42.0...v2.43.0) (2026-03-23)
+
+
+### Features
+
+* **postgrest:** add automatic retries for transient errors ([#927](https://github.com/supabase/supabase-swift/issues/927)) ([fe75f12](https://github.com/supabase/supabase-swift/commit/fe75f12d3225f4d1688eafb161748c31dba450e6))
+
 ## [2.42.0](https://github.com/supabase/supabase-swift/compare/v2.41.1...v2.42.0) (2026-03-19)
 
 
