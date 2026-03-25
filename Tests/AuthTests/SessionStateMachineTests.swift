@@ -1,5 +1,5 @@
 //
-//  SessionManagerTests.swift
+//  SessionStateMachineTests.swift
 //
 //
 //  Created by Guilherme Souza on 23/10/23.
@@ -14,7 +14,7 @@ import XCTestDynamicOverlay
 
 @testable import Auth
 
-final class SessionManagerTests: XCTestCase {
+final class SessionStateMachineTests: XCTestCase {
   var http: HTTPClientMock!
 
   let clientID = AuthClientID()
