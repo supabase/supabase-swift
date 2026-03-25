@@ -70,7 +70,8 @@ final class BuildURLRequestTests: XCTestCase {
 
         return (Data(), URLResponse.empty())
       },
-      encoder: encoder
+      encoder: encoder,
+      retryEnabled: false
     )
 
     let testCases: [TestCase] = [
