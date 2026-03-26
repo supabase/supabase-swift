@@ -25,6 +25,22 @@ final class FunctionInvokeOptionsTests: XCTestCase {
     XCTAssertNotNil(options.body)
   }
 
+  func test_initWithEncodableBodyAndCustomEncoder() {
+    struct Body: Encodable {
+      let userName: String
+    }
+
+    let encoder = JSONEncoder()
+    encoder.keyEncodingStrategy = .convertToSnakeCase
+
+    let options = FunctionInvokeOptions(body: Body(userName: "test"), encoder: encoder)
+    XCTAssertEqual(options.headers[.contentType], "application/json")
+
+    let json = try! JSONSerialization.jsonObject(with: options.body!) as! [String: Any]
+    XCTAssertNotNil(json["user_name"])
+    XCTAssertNil(json["userName"])
+  }
+
   func test_initWithCustomContentType() {
     let boundary = "Boundary-\(UUID().uuidString)"
     let contentType = "multipart/form-data; boundary=\(boundary)"

@@ -118,13 +118,29 @@ public struct SupabaseClientOptions: Sendable {
     /// The Region to invoke the functions in.
     public let region: String?
 
+    /// The JSON encoder to use for encoding function request bodies.
+    public let encoder: JSONEncoder
+
+    /// The JSON decoder to use for decoding function response bodies.
+    public let decoder: JSONDecoder
+
     @_disfavoredOverload
-    public init(region: String? = nil) {
+    public init(
+      region: String? = nil,
+      encoder: JSONEncoder = JSONEncoder(),
+      decoder: JSONDecoder = JSONDecoder()
+    ) {
       self.region = region
+      self.encoder = encoder
+      self.decoder = decoder
     }
 
-    public init(region: FunctionRegion? = nil) {
-      self.init(region: region?.rawValue)
+    public init(
+      region: FunctionRegion? = nil,
+      encoder: JSONEncoder = JSONEncoder(),
+      decoder: JSONDecoder = JSONDecoder()
+    ) {
+      self.init(region: region?.rawValue, encoder: encoder, decoder: decoder)
     }
   }
 
