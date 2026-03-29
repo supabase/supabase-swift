@@ -319,7 +319,8 @@ public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {
 
 public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
   /// Provider name or OIDC `iss` value identifying which provider should be used to verify the
-  /// provided token. Supported names: `google`, `apple`, `azure`, `facebook`.
+  /// provided token. Supported names: `google`, `apple`, `azure`, `facebook`, `keycloak`, `kakao`.
+  /// Custom OIDC providers can be specified with the `"custom:<provider_name>"` format.
   public var provider: Provider
 
   /// OIDC ID token issued by the specified provider. The `iss` claim in the ID token must match the
@@ -355,8 +356,19 @@ public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
     self.gotrueMetaSecurity = gotrueMetaSecurity
   }
 
-  public enum Provider: String, Codable, Hashable, Sendable {
-    case google, apple, azure, facebook
+  public struct Provider: RawRepresentable, Codable, Hashable, Sendable {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    public static let apple = Provider(rawValue: "apple")
+    public static let azure = Provider(rawValue: "azure")
+    public static let facebook = Provider(rawValue: "facebook")
+    public static let google = Provider(rawValue: "google")
+    public static let kakao = Provider(rawValue: "kakao")
+    public static let keycloak = Provider(rawValue: "keycloak")
   }
 }
 
