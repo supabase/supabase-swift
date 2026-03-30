@@ -698,7 +698,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     guard status != .subscribed && status != .subscribing else {
       reportIssue(
         """
-        Cannot add "postgrest_change" callbacks for "\(topic)" after `subscribe()`.
+        Cannot add "postgres_changes" callbacks for "\(topic)" after `subscribe()`.
         Please add all your postgres change callbacks before subscribing to the channel.
         """
       )
