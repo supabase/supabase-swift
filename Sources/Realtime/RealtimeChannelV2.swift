@@ -595,14 +595,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   public func onPresenceChange(
     _ callback: @escaping @Sendable (any PresenceAction) -> Void
   ) -> RealtimeSubscription {
-    if status == .subscribed {
-      logger?.debug(
-        "Resubscribe to \(self.topic) due to change in presence callback on joined channel."
+    guard status != .subscribed && status != .subscribing else {
+      reportIssue(
+        """
+        Cannot add "presence" callbacks for "\(topic)" after `subscribe()`.
+        Please add all your presence callbacks before subscribing to the channel.
+        """
       )
-      Task {
-        await unsubscribe()
-        try? await subscribeWithError()
-      }
+      return RealtimeSubscription {}
     }
 
     let id = callbackManager.addPresenceCallback(callback: callback)
@@ -695,9 +695,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     filter: String?,
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> RealtimeSubscription {
-    guard status != .subscribed else {
+    guard status != .subscribed && status != .subscribing else {
       reportIssue(
-        "You cannot call postgresChange after joining the channel, this won't work as expected."
+        """
+        Cannot add "postgrest_change" callbacks for "\(topic)" after `subscribe()`.
+        Please add all your postgres change callbacks before subscribing to the channel.
+        """
       )
       return RealtimeSubscription {}
     }
