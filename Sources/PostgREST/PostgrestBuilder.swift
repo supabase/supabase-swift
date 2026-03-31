@@ -74,7 +74,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   /// Controls whether automatic retries are enabled for this request.
   ///
   /// When enabled, the request will be retried up to 3 times with exponential backoff on
-  /// transient errors (HTTP 520, network errors) for idempotent methods (GET, HEAD).
+  /// transient errors (HTTP 503, 520, network errors) for idempotent methods (GET, HEAD).
   /// - Parameter enabled: Pass `false` to disable retries for this request.
   @discardableResult
   public func retry(enabled: Bool) -> Self {
@@ -189,7 +189,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   private static let maxDelay = 30.0
   private static let maxRetries = 3
   private static let retryableMethods: Set<HTTPTypes.HTTPRequest.Method> = [.get, .head]
-  private static let retryableStatusCodes: Set<Int> = [520]
+  private static let retryableStatusCodes: Set<Int> = [503, 520]
 
   /// Check if a request should be retried based on method, status code, and error type.
   private func shouldRetry(
