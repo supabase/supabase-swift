@@ -103,6 +103,7 @@ lcov.info
 temp_coverage
 
 .cursor
+.serena/
 
 # Node.js
 node_modules/
