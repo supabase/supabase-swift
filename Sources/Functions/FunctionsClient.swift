@@ -45,7 +45,12 @@ public actor FunctionsClient {
     region: FunctionRegion? = nil,
     session: URLSession = URLSession(configuration: .default)
   ) {
-    self.init(url: url, headers: headers, region: region?.rawValue, session: session)
+    self.init(
+      url: url,
+      headers: headers,
+      region: region?.rawValue,
+      session: session
+    )
   }
 
   package init(
@@ -59,7 +64,11 @@ public actor FunctionsClient {
     self.region = region
 
     session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
-    self.http = _HTTPClient(host: url, session: session, tokenProvider: tokenProvider)
+    self.http = _HTTPClient(
+      host: url,
+      session: session,
+      tokenProvider: tokenProvider
+    )
 
     self.headers = headers
     if self.headers["X-Client-Info"] == nil {
@@ -108,7 +117,9 @@ public actor FunctionsClient {
     var options = FunctionInvokeOptions()
     applyOptions(&options)
     let (functionURL, method, query, allHeaders, body) = requestComponents(
-      functionName: functionName, options: options)
+      functionName: functionName,
+      options: options
+    )
 
     do {
       let (data, response) = try await http.fetchData(
@@ -132,42 +143,51 @@ public actor FunctionsClient {
     }
   }
 
-  /// Invokes a function with streamed response.
-  ///
-  /// - Parameters:
-  ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function.
-  /// - Returns: Byte-by-byte stream and the initial `HTTPURLResponse`.
-  @available(macOS 12.0, *)
-  public func invokeStream(
-    _ functionName: String,
-    options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
-  ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
-    var options = FunctionInvokeOptions()
-    applyOptions(&options)
-    let (functionURL, method, query, allHeaders, body) = requestComponents(
-      functionName: functionName, options: options)
+  #if canImport(Darwin)
+    /// Invokes a function with streamed response.
+    ///
+    /// - Parameters:
+    ///   - functionName: The name of the function to invoke.
+    ///   - options: Options for invoking the function.
+    /// - Returns: Byte-by-byte stream and the initial `HTTPURLResponse`.
+    @available(macOS 12.0, *)
+    public func invokeStream(
+      _ functionName: String,
+      options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
+    ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+      var options = FunctionInvokeOptions()
+      applyOptions(&options)
+      let (functionURL, method, query, allHeaders, body) = requestComponents(
+        functionName: functionName,
+        options: options
+      )
 
-    do {
-      let (bytes, response) = try await http.fetchStream(
-        method, url: functionURL, query: query.isEmpty ? nil : query, body: body,
-        headers: allHeaders.isEmpty ? nil : allHeaders)
+      do {
+        let (bytes, response) = try await http.fetchStream(
+          method,
+          url: functionURL,
+          query: query.isEmpty ? nil : query,
+          body: body,
+          headers: allHeaders.isEmpty ? nil : allHeaders
+        )
 
-      if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
-        throw FunctionsError.relayError
+        if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
+          throw FunctionsError.relayError
+        }
+
+        return (bytes, response)
+      } catch let error as HTTPClientError {
+        if case .responseError(let response, let data) = error {
+          throw FunctionsError.httpError(code: response.statusCode, data: data)
+        }
+        throw error
       }
-
-      return (bytes, response)
-    } catch let error as HTTPClientError {
-      if case .responseError(let response, let data) = error {
-        throw FunctionsError.httpError(code: response.statusCode, data: data)
-      }
-      throw error
     }
-  }
+  #endif
 
   private func requestComponents(
-    functionName: String, options: FunctionInvokeOptions
+    functionName: String,
+    options: FunctionInvokeOptions
   ) -> (
     url: URL,
     method: HTTPMethod,
@@ -175,7 +195,8 @@ public actor FunctionsClient {
     headers: [String: String],
     body: RequestBody?
   ) {
-    let method = options.method.flatMap { HTTPMethod(rawValue: $0.rawValue) } ?? .post
+    let method =
+      options.method.flatMap { HTTPMethod(rawValue: $0.rawValue) } ?? .post
     var query = options.query
     var allHeaders = headers.merging(options.headers) { _, new in new }
 
@@ -185,6 +206,8 @@ public actor FunctionsClient {
     }
 
     let body: RequestBody? = options.body.map { .data($0) }
-    return (url.appendingPathComponent(functionName), method, query, allHeaders, body)
+    return (
+      url.appendingPathComponent(functionName), method, query, allHeaders, body
+    )
   }
 }
