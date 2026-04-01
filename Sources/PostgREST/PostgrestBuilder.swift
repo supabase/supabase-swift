@@ -113,7 +113,7 @@ public class PostgrestBuilder: @unchecked Sendable {
 
   private func execute<T>(
     options: FetchOptions,
-    decode: @Sendable (Data) throws -> T
+    decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
     let (baseRequest, retryEnabled) = mutableState.withValue { ($0.request, $0.retryEnabled) }
     var request = baseRequest
