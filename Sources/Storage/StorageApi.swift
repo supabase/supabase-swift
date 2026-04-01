@@ -20,6 +20,7 @@ public class StorageApi: @unchecked Sendable {
 
   private let mutableState: LockIsolated<MutableState>
   private let http: any HTTPClientType
+  let httpClient: _HTTPClient
 
   public init(configuration: StorageClientConfiguration) {
     var configuration = configuration
@@ -61,6 +62,11 @@ public class StorageApi: @unchecked Sendable {
     http = HTTPClient(
       fetch: configuration.session.fetch,
       interceptors: interceptors
+    )
+    httpClient = _HTTPClient(
+      host: configuration.url,
+      session: URLSession(configuration: .default),
+      tokenProvider: { nil }  // TODO: Support auth tokens in Storage API (requires changes to StorageClientConfiguration and StorageApi init methods
     )
   }
 
