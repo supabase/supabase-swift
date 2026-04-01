@@ -21,9 +21,12 @@ enum HTTPMethod: String {
   case delete = "DELETE"
 }
 
-enum RequestBody: @unchecked Sendable {
-  case encodable(any Encodable, encoder: JSONEncoder = JSONEncoder.supabase())
-  case json([String: Any])
+enum RequestBody {
+  case encodable(
+    @autoclosure @Sendable () -> any Encodable,
+    encoder: JSONEncoder = JSONEncoder.supabase()
+  )
+  case json(@autoclosure @Sendable () -> [String: Any])
   case data(Data)
 }
 
@@ -264,9 +267,9 @@ final class _HTTPClient: Sendable {
     if let body {
       switch body {
       case .encodable(let value, let encoder):
-        request.httpBody = try encoder.encode(value)
+        request.httpBody = try encoder.encode(value())
       case .json(let dict):
-        request.httpBody = try JSONSerialization.data(withJSONObject: dict)
+        request.httpBody = try JSONSerialization.data(withJSONObject: dict())
       case .data(let data):
         request.httpBody = data
       }
