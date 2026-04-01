@@ -97,7 +97,7 @@ public actor FunctionsClient {
   public func invokeDecodable<T: Decodable>(
     _ functionName: String,
     decoder: JSONDecoder = JSONDecoder(),
-    options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
+    options applyOptions: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in }
   ) async throws -> (T, HTTPURLResponse) {
     let (data, response) = try await invoke(functionName, options: applyOptions)
     return (try decoder.decode(T.self, from: data), response)
@@ -112,7 +112,7 @@ public actor FunctionsClient {
   @discardableResult
   public func invoke(
     _ functionName: String,
-    options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
+    options applyOptions: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in }
   ) async throws -> (Data, HTTPURLResponse) {
     var options = FunctionInvokeOptions()
     applyOptions(&options)
@@ -153,7 +153,7 @@ public actor FunctionsClient {
     @available(macOS 12.0, *)
     public func invokeStream(
       _ functionName: String,
-      options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
+      options applyOptions: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in }
     ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
       var options = FunctionInvokeOptions()
       applyOptions(&options)
