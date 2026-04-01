@@ -130,6 +130,82 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     )
   }
 
+  @available(macOS 10.15.4, *)
+  @discardableResult
+  public func uploadFile(
+    _ fileURL: URL,
+    to path: String,
+    options: FileOptions? = nil
+  ) async throws -> FileUploadResponse {
+    let cleanPath = _removeEmptyFolders(path)
+
+    let url = configuration.url
+      .appendingPathComponent("object")
+      .appendingPathComponent(bucketId)
+      .appendingPathComponent(cleanPath)
+
+    let options = options ?? defaultFileOptions
+    var headers = options.headers ?? [:]
+    if options.upsert {
+      headers["x-upsert"] = "true"
+    }
+    headers["duplex"] = options.duplex
+
+    let boundary = "----sb-\(UUID().uuidString)"
+
+    var request = try await httpClient.createRequest(.post, url: url, headers: headers)
+    request.setValue(
+      "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+    // Determine file size for streaming decision
+    let fileSize = try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+    let threshold = 10 * 1024 * 1024  // 10MB
+    let shouldStream = fileSize >= threshold
+
+    let mimeType = options.contentType ?? mimeType(forPathExtension: fileURL.pathExtension)
+
+    let formData = MultipartBuilder(boundary: boundary)
+      .addText(name: "cacheControl", value: options.cacheControl)
+      .addOptionalText(
+        name: "metadata",
+        value: options.metadata.flatMap { String(data: encodeMetadata($0), encoding: .utf8) })
+
+    let responseBody: Data
+
+    if shouldStream {
+      // Large file: stream using a temp file to avoid loading the entire file into memory
+      let tempFile =
+        try formData
+        .addFile(name: "", fileURL: fileURL, mimeType: mimeType)
+        .buildToTempFile()
+      defer { try? FileManager.default.removeItem(at: tempFile) }
+
+      let (data, response) = try await httpClient.session.upload(for: request, fromFile: tempFile)
+      _ = try httpClient.validateResponse(response)
+
+      responseBody = data
+    } else {
+      // Small file: build in memory and upload directly
+      let body =
+        try formData
+        .addFile(name: "", fileURL: fileURL, mimeType: mimeType)
+        .buildInMemory()
+      let (data, response) = try await httpClient.session.upload(for: request, from: body)
+      _ = try httpClient.validateResponse(response)
+
+      responseBody = data
+
+    }
+
+    struct UploadResponse: Decodable {
+      let Key: String
+      let Id: String
+    }
+
+    let uploadResponse = try configuration.decoder.decode(UploadResponse.self, from: responseBody)
+    return FileUploadResponse(id: uploadResponse.Id, path: path, fullPath: uploadResponse.Key)
+  }
+
   /// Uploads a file to an existing bucket.
   /// - Parameters:
   ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
