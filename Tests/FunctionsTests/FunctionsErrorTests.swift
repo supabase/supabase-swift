@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 20/01/25.
 //
 
-import Supabase
+import Functions
 import XCTest
 
 final class FunctionsErrorTests: XCTestCase {
