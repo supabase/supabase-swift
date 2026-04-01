@@ -7,6 +7,10 @@
 
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// HTTP methods supported by ``_HTTPClient``.
 enum HTTPMethod: String {
   case get = "GET"
@@ -17,7 +21,7 @@ enum HTTPMethod: String {
   case delete = "DELETE"
 }
 
-enum RequestBody {
+enum RequestBody: @unchecked Sendable {
   case encodable(any Encodable, encoder: JSONEncoder = JSONEncoder.supabase())
   case json([String: Any])
   case data(Data)
