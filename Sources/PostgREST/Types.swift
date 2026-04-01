@@ -39,6 +39,8 @@ public struct PostgrestResponse<T> {
   }
 }
 
+extension PostgrestResponse: Sendable where T: Sendable {}
+
 /// Returns count as part of the response when specified.
 public enum CountOption: String, Sendable {
   /// Exact but slow count algorithm. Performs a `COUNT(*)` under the hood.

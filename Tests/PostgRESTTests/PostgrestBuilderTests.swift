@@ -20,19 +20,33 @@ import XCTest
 final class PostgrestBuilderTests: PostgrestQueryTests {
   func testCustomHeaderOnAPerCallBasis() throws {
     let url = URL(string: "http://localhost:54321/rest/v1")!
-    let postgrest1 = PostgrestClient(url: url, headers: ["apikey": "foo"], logger: nil)
-    let postgrest2 = try postgrest1.rpc("void_func").setHeader(name: .init("apikey")!, value: "bar")
+    let postgrest1 = PostgrestClient(
+      url: url,
+      headers: ["apikey": "foo"],
+      logger: nil
+    )
+    let postgrest2 = try postgrest1.rpc("void_func").setHeader(
+      name: .init("apikey")!,
+      value: "bar"
+    )
 
     // Original client object isn't affected
     XCTAssertEqual(
-      postgrest1.from("users").select().mutableState.request.headers[.init("apikey")!], "foo")
+      postgrest1.from("users").select().mutableState.request.headers[
+        .init("apikey")!
+      ],
+      "foo"
+    )
     // Derived client object uses new header value
-    XCTAssertEqual(postgrest2.mutableState.request.headers[.init("apikey")!], "bar")
+    XCTAssertEqual(
+      postgrest2.mutableState.request.headers[.init("apikey")!],
+      "bar"
+    )
   }
 
   func testExecuteWithNonSuccessStatusCode() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 400,
       data: [
@@ -59,7 +73,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
   func testExecuteWithNonJSONError() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 400,
       data: [
@@ -81,7 +95,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
   func testExecuteWithHead() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -108,7 +122,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
   func testExecuteWithCount() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -135,7 +149,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
   func testExecuteWithCustomSchema() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -164,7 +178,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
   func testExecuteWithCustomSchemaAndHeadMethod() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -194,7 +208,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
   func testExecuteWithCustomSchemaAndPostMethod() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 201,
       data: [
@@ -259,16 +273,22 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
       state.withValue { state in
         state.callCount += 1
         state.capturedHeaders.append(
-          Dictionary(uniqueKeysWithValues: (request.allHTTPHeaderFields ?? [:]).map { $0 }))
+          Dictionary(
+            uniqueKeysWithValues: (request.allHTTPHeaderFields ?? [:]).map {
+              $0
+            }
+          )
+        )
 
         if state.callCount < 3 {
-          return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+          return (Data(), Self.makeHTTPURLResponse(statusCode: 520))
         }
-        return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+        return (Data("[]".utf8), Self.makeHTTPURLResponse(statusCode: 200))
       }
     }
 
-    let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
+    let result: PostgrestResponse<[User]> = try await sut.from("users").select()
+      .execute()
 
     state.withValue { state in
       XCTAssertEqual(state.callCount, 3)
@@ -285,12 +305,14 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     let sut = makeSUTWithCustomFetch { _ in
       callCount.withValue { $0 += 1 }
       if callCount.value < 2 {
-        return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+        return (Data(), Self.makeHTTPURLResponse(statusCode: 520))
       }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 200))
+      return (Data(), Self.makeHTTPURLResponse(statusCode: 200))
     }
 
-    try await sut.from("users").select().execute(options: FetchOptions(head: true))
+    try await sut.from("users").select().execute(
+      options: FetchOptions(head: true)
+    )
     XCTAssertEqual(callCount.value, 2)
   }
 
@@ -299,7 +321,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
     let sut = makeSUTWithCustomFetch { _ in
       callCount.withValue { $0 += 1 }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      return (Data(), Self.makeHTTPURLResponse(statusCode: 520))
     }
 
     do {
@@ -317,7 +339,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
       callCount.withValue { $0 += 1 }
       return (
         Data(#"{"message":"Bad Request"}"#.utf8),
-        self.makeHTTPURLResponse(statusCode: 400)
+        Self.makeHTTPURLResponse(statusCode: 400)
       )
     }
 
@@ -338,10 +360,11 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
       if callCount.value < 2 {
         throw URLError(.networkConnectionLost)
       }
-      return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+      return (Data("[]".utf8), Self.makeHTTPURLResponse(statusCode: 200))
     }
 
-    let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
+    let result: PostgrestResponse<[User]> = try await sut.from("users").select()
+      .execute()
     XCTAssertEqual(callCount.value, 2)
     XCTAssertTrue(result.value.isEmpty)
   }
@@ -367,7 +390,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
     let sut = makeSUTWithCustomFetch { _ in
       callCount.withValue { $0 += 1 }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      return (Data(), Self.makeHTTPURLResponse(statusCode: 520))
     }
 
     do {
@@ -383,7 +406,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
     let sut = makeSUTWithCustomFetch { _ in
       callCount.withValue { $0 += 1 }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      return (Data(), Self.makeHTTPURLResponse(statusCode: 520))
     }
 
     do {
@@ -399,7 +422,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
     let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
       callCount.withValue { $0 += 1 }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      return (Data(), Self.makeHTTPURLResponse(statusCode: 520))
     }
 
     do {
@@ -416,15 +439,15 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
       callCount.withValue { $0 += 1 }
       if callCount.value < 2 {
-        return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+        return (Data(), Self.makeHTTPURLResponse(statusCode: 520))
       }
-      return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+      return (Data("[]".utf8), Self.makeHTTPURLResponse(statusCode: 200))
     }
 
-    let result: PostgrestResponse<[User]> = try await sut.from("users").select().retry(
-      enabled: true
-    )
-    .execute()
+    let result: PostgrestResponse<[User]> = try await sut.from("users")
+      .select()
+      .retry(enabled: true)
+      .execute()
     XCTAssertEqual(callCount.value, 2)
     XCTAssertTrue(result.value.isEmpty)
   }
@@ -435,11 +458,18 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     retryEnabled: Bool = true,
     fetch: @escaping PostgrestClient.FetchHandler
   ) -> PostgrestClient {
-    PostgrestClient(url: url, fetch: fetch, retryEnabled: retryEnabled)
+    PostgrestClient(url: Self.url, fetch: fetch, retryEnabled: retryEnabled)
   }
 
-  private func makeHTTPURLResponse(statusCode: Int) -> HTTPURLResponse {
-    HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
+  private static func makeHTTPURLResponse(statusCode: Int)
+    -> HTTPURLResponse
+  {
+    HTTPURLResponse(
+      url: url,
+      statusCode: statusCode,
+      httpVersion: nil,
+      headerFields: nil
+    )!
   }
 }
 
