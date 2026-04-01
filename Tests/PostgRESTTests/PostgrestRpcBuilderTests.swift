@@ -13,7 +13,7 @@ import XCTest
 final class PostgrestRpcBuilderTests: PostgrestQueryTests {
   func testRpc() async throws {
     Mock(
-      url: url.appendingPathComponent("rpc/list_stored_countries"),
+      url: Self.url.appendingPathComponent("rpc/list_stored_countries"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -52,7 +52,7 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
 
   func testRpcReadOnly() async throws {
     Mock(
-      url: url.appendingPathComponent("rpc/hello_world"),
+      url: Self.url.appendingPathComponent("rpc/hello_world"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -100,7 +100,7 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
 
   func testRpcWithGetMethodAndJSOBOjectShouldCleanArray() async throws {
     Mock(
-      url: url.appendingPathComponent("rpc/sum"),
+      url: Self.url.appendingPathComponent("rpc/sum"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -147,7 +147,7 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
 
   func testRpcWithCount() async throws {
     Mock(
-      url: url.appendingPathComponent("rpc/hello"),
+      url: Self.url.appendingPathComponent("rpc/hello"),
       statusCode: 200,
       data: [.post: Data()]
     )
