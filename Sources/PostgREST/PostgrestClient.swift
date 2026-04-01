@@ -35,7 +35,7 @@ public final class PostgrestClient: Sendable {
     ///   - fetch: Custom fetch.
     ///   - encoder: The JSONEncoder to use for encoding.
     ///   - decoder: The JSONDecoder to use for decoding.
-    ///   - retryEnabled: Whether to automatically retry on transient errors (HTTP 520, network errors). Defaults to `true`.
+    ///   - retryEnabled: Whether to automatically retry on transient errors (HTTP 503, 520, network errors). Defaults to `true`.
     public init(
       url: URL,
       schema: String? = nil,
@@ -78,7 +78,7 @@ public final class PostgrestClient: Sendable {
   ///   - fetch: Custom fetch.
   ///   - encoder: The JSONEncoder to use for encoding.
   ///   - decoder: The JSONDecoder to use for decoding.
-  ///   - retryEnabled: Whether to automatically retry on transient errors (HTTP 520, network errors). Defaults to `true`.
+  ///   - retryEnabled: Whether to automatically retry on transient errors (HTTP 503, 520, network errors). Defaults to `true`.
   public convenience init(
     url: URL,
     schema: String? = nil,

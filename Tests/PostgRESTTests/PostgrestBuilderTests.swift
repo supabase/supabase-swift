@@ -330,6 +330,37 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     }
   }
 
+  func testRetryOn503ForGETRequest() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch { _ in
+      callCount.withValue { $0 += 1 }
+      if callCount.value < 2 {
+        return (Data(), self.makeHTTPURLResponse(statusCode: 503))
+      }
+      return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+    }
+
+    let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
+    XCTAssertEqual(callCount.value, 2)
+    XCTAssertTrue(result.value.isEmpty)
+  }
+
+  func testRetryOn503ForHEADRequest() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch { _ in
+      callCount.withValue { $0 += 1 }
+      if callCount.value < 2 {
+        return (Data(), self.makeHTTPURLResponse(statusCode: 503))
+      }
+      return (Data(), self.makeHTTPURLResponse(statusCode: 200))
+    }
+
+    try await sut.from("users").select().execute(options: FetchOptions(head: true))
+    XCTAssertEqual(callCount.value, 2)
+  }
+
   func testRetryOnNetworkErrorForGET() async throws {
     let callCount = LockIsolated(0)
 
