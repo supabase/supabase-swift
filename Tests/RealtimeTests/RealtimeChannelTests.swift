@@ -34,209 +34,209 @@ final class RealtimeChannelTests: XCTestCase {
 
   // MARK: - Callback rejection tests
 
-  @MainActor
-  func testPresenceChangeCallbackRejectedWhileSubscribing() async {
-    let (client, server) = FakeWebSocket.fakes()
-    let socket = RealtimeClientV2(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
-        accessToken: { "test-token" }
-      ),
-      wsTransport: { _, _ in client },
-      http: HTTPClientMock()
-    )
+  #if canImport(Darwin)
+    @MainActor
+    func testPresenceChangeCallbackRejectedWhileSubscribing() async {
+      let (client, server) = FakeWebSocket.fakes()
+      let socket = RealtimeClientV2(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        options: RealtimeClientOptions(
+          headers: ["apikey": "test-key"],
+          accessToken: { "test-token" }
+        ),
+        wsTransport: { _, _ in client },
+        http: HTTPClientMock()
+      )
 
-    let channel = socket.channel("test-topic")
+      let channel = socket.channel("test-topic")
 
-    // Never respond to phx_join, so channel stays in .subscribing
-    server.onEvent = { @Sendable [server] event in
-      guard let msg = event.realtimeMessage else { return }
-      if msg.event == "heartbeat" {
-        server.send(
-          RealtimeMessageV2(
-            joinRef: msg.joinRef,
-            ref: msg.ref,
-            topic: "phoenix",
-            event: "phx_reply",
-            payload: ["response": [:]]
+      // Never respond to phx_join, so channel stays in .subscribing
+      server.onEvent = { @Sendable [server] event in
+        guard let msg = event.realtimeMessage else { return }
+        if msg.event == "heartbeat" {
+          server.send(
+            RealtimeMessageV2(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: "phoenix",
+              event: "phx_reply",
+              payload: ["response": [:]]
+            )
           )
-        )
+        }
       }
-    }
 
-    await socket.connect()
+      await socket.connect()
 
-    let subscribeTask = Task { try? await channel.subscribeWithError() }
+      let subscribeTask = Task { try? await channel.subscribeWithError() }
 
-    await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
-    XCTAssertEqual(channel.status, .subscribing)
+      await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
+      XCTAssertEqual(channel.status, .subscribing)
 
-    let callbackCountBefore = channel.callbackManager.callbacks.count
+      let callbackCountBefore = channel.callbackManager.callbacks.count
 
-    #if canImport(Darwin)
       withExpectedIssue {
         _ = channel.onPresenceChange { _ in }
       }
-    #endif
 
-    XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
+      XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
 
-    subscribeTask.cancel()
-    socket.disconnect()
-  }
-
-  @MainActor
-  func testPresenceChangeCallbackRejectedWhileSubscribed() async {
-    let (client, server) = FakeWebSocket.fakes()
-    let socket = RealtimeClientV2(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
-        accessToken: { "test-token" }
-      ),
-      wsTransport: { _, _ in client },
-      http: HTTPClientMock()
-    )
-
-    let channel = socket.channel("test-topic")
-
-    server.onEvent = { @Sendable [server] event in
-      guard let msg = event.realtimeMessage else { return }
-      if msg.event == "phx_join" {
-        server.send(
-          RealtimeMessageV2(
-            joinRef: msg.joinRef,
-            ref: msg.ref,
-            topic: "realtime:test-topic",
-            event: "phx_reply",
-            payload: [
-              "response": ["postgres_changes": []],
-              "status": "ok",
-            ]
-          )
-        )
-      }
+      subscribeTask.cancel()
+      socket.disconnect()
     }
+  #endif
 
-    await socket.connect()
-    try? await channel.subscribeWithError()
-    XCTAssertEqual(channel.status, .subscribed)
+  #if canImport(Darwin)
+    @MainActor
+    func testPresenceChangeCallbackRejectedWhileSubscribed() async {
+      let (client, server) = FakeWebSocket.fakes()
+      let socket = RealtimeClientV2(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        options: RealtimeClientOptions(
+          headers: ["apikey": "test-key"],
+          accessToken: { "test-token" }
+        ),
+        wsTransport: { _, _ in client },
+        http: HTTPClientMock()
+      )
 
-    let callbackCountBefore = channel.callbackManager.callbacks.count
+      let channel = socket.channel("test-topic")
 
-    #if canImport(Darwin)
+      server.onEvent = { @Sendable [server] event in
+        guard let msg = event.realtimeMessage else { return }
+        if msg.event == "phx_join" {
+          server.send(
+            RealtimeMessageV2(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: "realtime:test-topic",
+              event: "phx_reply",
+              payload: [
+                "response": ["postgres_changes": []],
+                "status": "ok",
+              ]
+            )
+          )
+        }
+      }
+
+      await socket.connect()
+      try? await channel.subscribeWithError()
+      XCTAssertEqual(channel.status, .subscribed)
+
+      let callbackCountBefore = channel.callbackManager.callbacks.count
+
       withExpectedIssue {
         _ = channel.onPresenceChange { _ in }
       }
-    #endif
 
-    XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
+      XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
 
-    socket.disconnect()
-  }
-
-  @MainActor
-  func testPostgresChangeCallbackRejectedWhileSubscribing() async {
-    let (client, server) = FakeWebSocket.fakes()
-    let socket = RealtimeClientV2(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
-        accessToken: { "test-token" }
-      ),
-      wsTransport: { _, _ in client },
-      http: HTTPClientMock()
-    )
-
-    let channel = socket.channel("test-topic")
-
-    // Never respond to phx_join, so channel stays in .subscribing
-    server.onEvent = { @Sendable [server] event in
-      guard let msg = event.realtimeMessage else { return }
-      if msg.event == "heartbeat" {
-        server.send(
-          RealtimeMessageV2(
-            joinRef: msg.joinRef,
-            ref: msg.ref,
-            topic: "phoenix",
-            event: "phx_reply",
-            payload: ["response": [:]]
-          )
-        )
-      }
+      socket.disconnect()
     }
+  #endif
 
-    await socket.connect()
+  #if canImport(Darwin)
+    @MainActor
+    func testPostgresChangeCallbackRejectedWhileSubscribing() async {
+      let (client, server) = FakeWebSocket.fakes()
+      let socket = RealtimeClientV2(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        options: RealtimeClientOptions(
+          headers: ["apikey": "test-key"],
+          accessToken: { "test-token" }
+        ),
+        wsTransport: { _, _ in client },
+        http: HTTPClientMock()
+      )
 
-    let subscribeTask = Task { try? await channel.subscribeWithError() }
+      let channel = socket.channel("test-topic")
 
-    await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
-    XCTAssertEqual(channel.status, .subscribing)
+      // Never respond to phx_join, so channel stays in .subscribing
+      server.onEvent = { @Sendable [server] event in
+        guard let msg = event.realtimeMessage else { return }
+        if msg.event == "heartbeat" {
+          server.send(
+            RealtimeMessageV2(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: "phoenix",
+              event: "phx_reply",
+              payload: ["response": [:]]
+            )
+          )
+        }
+      }
 
-    let callbackCountBefore = channel.callbackManager.callbacks.count
+      await socket.connect()
 
-    #if canImport(Darwin)
+      let subscribeTask = Task { try? await channel.subscribeWithError() }
+
+      await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
+      XCTAssertEqual(channel.status, .subscribing)
+
+      let callbackCountBefore = channel.callbackManager.callbacks.count
+
       withExpectedIssue {
         _ = channel.onPostgresChange(AnyAction.self, schema: "public") { _ in }
       }
-    #endif
 
-    XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
+      XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
 
-    subscribeTask.cancel()
-    socket.disconnect()
-  }
-
-  @MainActor
-  func testPostgresChangeCallbackRejectedWhileSubscribed() async {
-    let (client, server) = FakeWebSocket.fakes()
-    let socket = RealtimeClientV2(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
-        accessToken: { "test-token" }
-      ),
-      wsTransport: { _, _ in client },
-      http: HTTPClientMock()
-    )
-
-    let channel = socket.channel("test-topic")
-
-    server.onEvent = { @Sendable [server] event in
-      guard let msg = event.realtimeMessage else { return }
-      if msg.event == "phx_join" {
-        server.send(
-          RealtimeMessageV2(
-            joinRef: msg.joinRef,
-            ref: msg.ref,
-            topic: "realtime:test-topic",
-            event: "phx_reply",
-            payload: [
-              "response": ["postgres_changes": []],
-              "status": "ok",
-            ]
-          )
-        )
-      }
+      subscribeTask.cancel()
+      socket.disconnect()
     }
+  #endif
 
-    await socket.connect()
-    try? await channel.subscribeWithError()
-    XCTAssertEqual(channel.status, .subscribed)
+  #if canImport(Darwin)
+    @MainActor
+    func testPostgresChangeCallbackRejectedWhileSubscribed() async {
+      let (client, server) = FakeWebSocket.fakes()
+      let socket = RealtimeClientV2(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        options: RealtimeClientOptions(
+          headers: ["apikey": "test-key"],
+          accessToken: { "test-token" }
+        ),
+        wsTransport: { _, _ in client },
+        http: HTTPClientMock()
+      )
 
-    let callbackCountBefore = channel.callbackManager.callbacks.count
+      let channel = socket.channel("test-topic")
 
-    #if canImport(Darwin)
+      server.onEvent = { @Sendable [server] event in
+        guard let msg = event.realtimeMessage else { return }
+        if msg.event == "phx_join" {
+          server.send(
+            RealtimeMessageV2(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: "realtime:test-topic",
+              event: "phx_reply",
+              payload: [
+                "response": ["postgres_changes": []],
+                "status": "ok",
+              ]
+            )
+          )
+        }
+      }
+
+      await socket.connect()
+      try? await channel.subscribeWithError()
+      XCTAssertEqual(channel.status, .subscribed)
+
+      let callbackCountBefore = channel.callbackManager.callbacks.count
+
       withExpectedIssue {
         _ = channel.onPostgresChange(AnyAction.self, schema: "public") { _ in }
       }
-    #endif
 
-    XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
+      XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
 
-    socket.disconnect()
-  }
+      socket.disconnect()
+    }
+  #endif
 
   func testAttachCallbacks() {
     var subscriptions = Set<RealtimeSubscription>()
