@@ -86,10 +86,10 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke(
-      "hello_world",
-      options: .init(headers: ["X-Custom-Key": "value"], body: ["name": "Supabase"])
-    )
+    try await sut.invoke("hello_world") {
+      $0.headers["X-Custom-Key"] = "value"
+      $0.body = try! JSONEncoder().encode(["name": "Supabase"] as [String: String])
+    }
   }
 
   func testInvokeReturningDecodable() async throws {
@@ -117,7 +117,7 @@ final class FunctionsClientTests: XCTestCase {
       var status: String
     }
 
-    let response = try await sut.invoke("hello") as Payload
+    let (response, _): (Payload, _) = try await sut.invokeDecodable("hello")
     XCTAssertEqual(response.message, "Hello, world!")
     XCTAssertEqual(response.status, "ok")
   }
@@ -140,7 +140,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke("hello-world", options: .init(method: .delete))
+    try await sut.invoke("hello-world") { $0.method = .delete }
   }
 
   func testInvokeWithQuery() async throws {
@@ -164,10 +164,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke(
-      "hello-world",
-      options: .init(query: ["key": "value"])
-    )
+    try await sut.invoke("hello-world") { $0.query = ["key": "value"] }
   }
 
   func testInvokeWithRegionDefinedInClient() async throws {
@@ -215,7 +212,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke("hello-world", options: .init(region: .caCentral1))
+    try await sut.invoke("hello-world") { $0.region = .caCentral1 }
   }
 
   func testInvokeWithoutRegion() async throws {
@@ -356,7 +353,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = try await sut.invokeStream("stream")
+    let (stream, _) = try await sut.invokeStream("stream")
 
     var bytes: [UInt8] = []
     for try await byte in stream {

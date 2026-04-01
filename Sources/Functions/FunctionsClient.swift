@@ -179,7 +179,7 @@ public actor FunctionsClient {
     var query = options.query
     var allHeaders = headers.merging(options.headers) { _, new in new }
 
-    if let region = options.region ?? region {
+    if let region = options.region?.rawValue ?? region {
       allHeaders["x-region"] = region
       query["forceFunctionRegion"] = region
     }
