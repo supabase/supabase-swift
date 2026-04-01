@@ -116,7 +116,7 @@ public class PostgrestBuilder: @unchecked Sendable {
 
   private func execute<T>(
     options: FetchOptions,
-    decode: @Sendable (Data) throws -> T
+    decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
     let (baseRequest, retryEnabled) = try mutableState.withValue {
       if let message = $0.pendingError {

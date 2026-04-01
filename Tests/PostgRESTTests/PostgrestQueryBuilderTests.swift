@@ -28,7 +28,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
 
   func testSelect() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -69,7 +69,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
 
   func testSelectWithWhitespaceInQuery() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -96,7 +96,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
 
   func testSelectWithQuoteInQuery() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -123,7 +123,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
 
   func testSelectWithCount() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -159,7 +159,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
 
   func testInsert() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 201,
       data: [
@@ -197,7 +197,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
 
   func testInsertWithExistingPreferHeader() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       statusCode: 201,
       data: [
         .post: Data()
@@ -228,7 +228,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
 
   func testUpdate() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 201,
       data: [
@@ -261,7 +261,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
 
   func testUpsert() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 201,
       data: [
@@ -301,7 +301,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
 
   func testUpsertIgnoreDuplicates() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 201,
       data: [
@@ -332,7 +332,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
 
   func testDelete() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 204,
       data: [
