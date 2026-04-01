@@ -77,57 +77,37 @@ public actor FunctionsClient {
     }
   }
 
-  /// Invokes a function and decodes the response.
-  ///
-  /// - Parameters:
-  ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function.
-  ///   - decode: A closure to decode the response data and `HTTPURLResponse` into a `Response` object.
-  /// - Returns: The decoded `Response` object.
-  public func invoke<Response>(
-    _ functionName: String,
-    options: FunctionInvokeOptions = .init(),
-    decode: (Data, HTTPURLResponse) throws -> Response
-  ) async throws -> Response {
-    let (data, response) = try await rawInvoke(functionName: functionName, invokeOptions: options)
-    return try decode(data, response)
-  }
-
   /// Invokes a function and decodes the response as a specific type.
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - options: Options for invoking the function.
   ///   - decoder: The JSON decoder to use. Defaults to `JSONDecoder()`.
-  /// - Returns: The decoded object of type `T`.
-  public func invoke<T: Decodable>(
+  /// - Returns: A tuple containing the decoded object of type `T` and the `HTTPURLResponse`.
+  public func invokeDecodable<T: Decodable>(
     _ functionName: String,
-    options: FunctionInvokeOptions = .init(),
-    decoder: JSONDecoder = JSONDecoder()
-  ) async throws -> T {
-    try await invoke(functionName, options: options) { data, _ in
-      try decoder.decode(T.self, from: data)
-    }
+    decoder: JSONDecoder = JSONDecoder(),
+    options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
+  ) async throws -> (T, HTTPURLResponse) {
+    let (data, response) = try await invoke(functionName, options: applyOptions)
+    return (try decoder.decode(T.self, from: data), response)
   }
 
-  /// Invokes a function without expecting a response.
+  /// Invokes a function and returns the raw response data and `HTTPURLResponse`.
   ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - options: Options for invoking the function.
+  /// - Returns: A tuple containing the raw response data and `HTTPURLResponse`.
+  @discardableResult
   public func invoke(
     _ functionName: String,
-    options: FunctionInvokeOptions = .init()
-  ) async throws {
-    try await invoke(functionName, options: options) { _, _ in () }
-  }
-
-  private func rawInvoke(
-    functionName: String,
-    invokeOptions: FunctionInvokeOptions
+    options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
   ) async throws -> (Data, HTTPURLResponse) {
+    var options = FunctionInvokeOptions()
+    applyOptions(&options)
     let (functionURL, method, query, allHeaders, body) = requestComponents(
-      functionName: functionName, options: invokeOptions)
+      functionName: functionName, options: options)
 
     do {
       let (data, response) = try await http.fetchData(
@@ -153,19 +133,19 @@ public actor FunctionsClient {
 
   /// Invokes a function with streamed response.
   ///
-  /// Function MUST return a `text/event-stream` content type for this method to work.
-  ///
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - options: Options for invoking the function.
-  /// - Returns: Byte-by-byte stream.
+  /// - Returns: Byte-by-byte stream and the initial `HTTPURLResponse`.
   @available(macOS 12.0, *)
   public func invokeStream(
     _ functionName: String,
-    options invokeOptions: FunctionInvokeOptions = .init()
-  ) async throws -> AsyncThrowingStream<UInt8, any Error> {
+    options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
+  ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+    var options = FunctionInvokeOptions()
+    applyOptions(&options)
     let (functionURL, method, query, allHeaders, body) = requestComponents(
-      functionName: functionName, options: invokeOptions)
+      functionName: functionName, options: options)
 
     do {
       let (bytes, response) = try await http.fetchStream(
@@ -176,7 +156,7 @@ public actor FunctionsClient {
         throw FunctionsError.relayError
       }
 
-      return bytes
+      return (bytes, response)
     } catch let error as HTTPClientError {
       if case .responseError(let response, let data) = error {
         throw FunctionsError.httpError(code: response.statusCode, data: data)
