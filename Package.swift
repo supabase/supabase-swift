@@ -65,7 +65,6 @@ let package = Package(
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Auth",
         "Helpers",
-        "SnapshotHelpers",
         "TestHelpers",
       ],
       exclude: [
@@ -88,7 +87,6 @@ let package = Package(
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Functions",
         "Mocker",
-        "SnapshotHelpers",
         "TestHelpers",
       ],
       exclude: [
@@ -125,7 +123,6 @@ let package = Package(
         "Helpers",
         "Mocker",
         "PostgREST",
-        "SnapshotHelpers",
         "TestHelpers",
       ],
       exclude: [
@@ -163,7 +160,6 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Mocker",
-        "SnapshotHelpers",
         "TestHelpers",
         "Storage",
       ],
@@ -199,16 +195,10 @@ let package = Package(
       name: "TestHelpers",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Auth",
-      ]
-    ),
-    .target(
-      name: "SnapshotHelpers",
-      dependencies: [
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         "Mocker",
-        "TestHelpers",
       ]
     ),
   ]

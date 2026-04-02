@@ -8,7 +8,6 @@
 import InlineSnapshotTesting
 import Mocker
 import PostgREST
-import SnapshotHelpers
 import XCTest
 
 final class PostgrestRpcBuilderTests: PostgrestQueryTests {

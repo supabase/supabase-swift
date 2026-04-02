@@ -7,7 +7,6 @@
 
 import Mocker
 import PostgREST
-import SnapshotHelpers
 import XCTest
 
 final class PostgrestTransformBuilderTests: PostgrestQueryTests {

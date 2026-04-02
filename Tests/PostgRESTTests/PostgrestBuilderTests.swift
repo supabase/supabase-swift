@@ -9,7 +9,6 @@ import ConcurrencyExtras
 import Helpers
 import InlineSnapshotTesting
 import Mocker
-import SnapshotHelpers
 import XCTest
 
 @testable import PostgREST
