@@ -8,6 +8,7 @@
 import InlineSnapshotTesting
 import Mocker
 import PostgREST
+import SnapshotHelpers
 import TestHelpers
 import XCTest
 

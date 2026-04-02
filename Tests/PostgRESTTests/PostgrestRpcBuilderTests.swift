@@ -8,6 +8,7 @@
 import InlineSnapshotTesting
 import Mocker
 import PostgREST
+import SnapshotHelpers
 import XCTest
 
 final class PostgrestRpcBuilderTests: PostgrestQueryTests {
@@ -135,7 +136,7 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
         "sum",
         params: [
           "numbers": [1, 2, 3],
-          "key": "value"
+          "key": "value",
         ] as JSONObject,
         get: true
       )
