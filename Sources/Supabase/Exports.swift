@@ -7,7 +7,6 @@
 
 @_exported import Auth
 @_exported import Functions
-@_exported import Helpers
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
