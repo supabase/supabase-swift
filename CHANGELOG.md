@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.43.1](https://github.com/supabase/supabase-swift/compare/v2.43.0...v2.43.1) (2026-04-07)
+
+
+### Bug Fixes
+
+* **functions:** import Functions directly in FunctionsErrorTests instead of Supabase ([#947](https://github.com/supabase/supabase-swift/issues/947)) ([ff6cae0](https://github.com/supabase/supabase-swift/commit/ff6cae07647887e8c2e0bf8102eddaf4a50e340c))
+* **postgrest:** drop sendability from rpc param ([#951](https://github.com/supabase/supabase-swift/issues/951)) ([bdc95b0](https://github.com/supabase/supabase-swift/commit/bdc95b0c10e34331bd663f3a8b938618e4a5dde5))
+* **postgrest:** retry on HTTP 503 (Service Unavailable) errors ([#939](https://github.com/supabase/supabase-swift/issues/939)) ([1725e92](https://github.com/supabase/supabase-swift/commit/1725e92d6fead50aedc6af6f367c14cea7c3bb97))
+* **realtime:** reject presence and postgres change callbacks while subscribing or subscribed ([#938](https://github.com/supabase/supabase-swift/issues/938)) ([824d9d1](https://github.com/supabase/supabase-swift/commit/824d9d185d90513ac96e05a74508e296becaf76d))
+
 ## [2.43.0](https://github.com/supabase/supabase-swift/compare/v2.42.0...v2.43.0) (2026-03-23)
 
 
