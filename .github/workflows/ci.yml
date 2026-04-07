@@ -51,7 +51,7 @@ jobs:
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS]
-        xcode: ["26.2", "16.4"]
+        xcode: ["26.4", "16.4"]
         include:
           - { command: test, skip_release: 1 }
         exclude:
@@ -84,11 +84,11 @@ jobs:
         if: matrix.skip_release != '1'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
       - name: Install lcov
-        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.2'
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.4'
         run: brew install lcov
       - name: Export code coverage
         id: coverage
-        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.2'
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.4'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
       - uses: coverallsapp/github-action@5cbfd81b66ca5d10c19b062c04de0199c215fb6e # v2.3.7
         if: steps.coverage.outcome == 'success'
@@ -220,7 +220,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        xcode: ["16.3"]
+        xcode: ["26.4"]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Cache derived data
@@ -252,9 +252,9 @@ jobs:
             deriveddata-examples-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
             deriveddata-examples-
-            deriveddata-xcodebuild-IOS-26.2--
-      - name: Select Xcode 26.2
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app
+            deriveddata-xcodebuild-IOS-26.4--
+      - name: Select Xcode 26.4
+        run: sudo xcode-select -s /Applications/Xcode_26.4.app
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds
