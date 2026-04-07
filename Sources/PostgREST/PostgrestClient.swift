@@ -138,7 +138,7 @@ public final class PostgrestClient: Sendable {
   ///   - count: Count algorithm to use to count rows returned by the function. Only applicable for [set-returning functions](https://www.postgresql.org/docs/current/functions-srf.html).
   public func rpc(
     _ fn: String,
-    params: some Encodable & Sendable,
+    params: some Encodable,
     head: Bool = false,
     get: Bool = false,
     count: CountOption? = nil

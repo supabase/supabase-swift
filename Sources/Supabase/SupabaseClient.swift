@@ -215,7 +215,7 @@ public final class SupabaseClient: Sendable {
   /// - Throws: An error if the function call fails.
   public func rpc(
     _ fn: String,
-    params: some Encodable & Sendable,
+    params: some Encodable,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     try rest.rpc(fn, params: params, count: count)
