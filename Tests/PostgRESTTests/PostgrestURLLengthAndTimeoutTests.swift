@@ -3,6 +3,7 @@
 //  Supabase
 //
 
+import ConcurrencyExtras
 import Foundation
 import Mocker
 import XCTest
@@ -82,12 +83,12 @@ final class PostgrestURLLengthAndTimeoutTests: PostgrestQueryTests {
   }
 
   func testTimeoutIsAppliedToRequest() async throws {
-    var capturedTimeoutInterval: TimeInterval?
+    let capturedTimeoutInterval = LockIsolated<TimeInterval?>(nil)
 
     let client = PostgrestClient(
       url: url,
       fetch: { request in
-        capturedTimeoutInterval = request.timeoutInterval
+        capturedTimeoutInterval.setValue(request.timeoutInterval)
         return (
           Data("[]".utf8),
           HTTPURLResponse(
@@ -106,16 +107,16 @@ final class PostgrestURLLengthAndTimeoutTests: PostgrestQueryTests {
       .select()
       .execute()
 
-    XCTAssertEqual(capturedTimeoutInterval, 5.0)
+    XCTAssertEqual(capturedTimeoutInterval.value, 5.0)
   }
 
   func testDefaultTimeoutIntervalUsedWhenNoTimeoutConfigured() async throws {
-    var capturedTimeoutInterval: TimeInterval?
+    let capturedTimeoutInterval = LockIsolated<TimeInterval?>(nil)
 
     let client = PostgrestClient(
       url: url,
       fetch: { request in
-        capturedTimeoutInterval = request.timeoutInterval
+        capturedTimeoutInterval.setValue(request.timeoutInterval)
         return (
           Data("[]".utf8),
           HTTPURLResponse(
@@ -134,7 +135,7 @@ final class PostgrestURLLengthAndTimeoutTests: PostgrestQueryTests {
       .execute()
 
     // Default URLSession timeout is 60 seconds
-    XCTAssertEqual(capturedTimeoutInterval, 60.0)
+    XCTAssertEqual(capturedTimeoutInterval.value, 60.0)
   }
 
   func testConfigurationStoresTimeoutAndURLLengthLimit() {
