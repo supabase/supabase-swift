@@ -23,6 +23,12 @@ public final class PostgrestClient: Sendable {
     public var decoder: JSONDecoder
     /// Whether automatic retries are enabled for transient errors. Defaults to `true`.
     public var retryEnabled: Bool
+    /// Optional timeout in seconds for PostgREST requests. When set, requests automatically
+    /// abort after this duration to prevent indefinite hangs.
+    public var timeout: TimeInterval?
+    /// Maximum URL length in characters before a warning is logged. Defaults to 8000.
+    /// Protects against exceeding server URL limits with large queries.
+    public var urlLengthLimit: Int
 
     let logger: (any SupabaseLogger)?
 
@@ -36,6 +42,8 @@ public final class PostgrestClient: Sendable {
     ///   - encoder: The JSONEncoder to use for encoding.
     ///   - decoder: The JSONDecoder to use for decoding.
     ///   - retryEnabled: Whether to automatically retry on transient errors (HTTP 503, 520, network errors). Defaults to `true`.
+    ///   - timeout: Optional timeout in seconds. When set, requests abort after this duration.
+    ///   - urlLengthLimit: Maximum URL length before a warning is logged. Defaults to 8000.
     public init(
       url: URL,
       schema: String? = nil,
@@ -44,7 +52,9 @@ public final class PostgrestClient: Sendable {
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
-      retryEnabled: Bool = true
+      retryEnabled: Bool = true,
+      timeout: TimeInterval? = nil,
+      urlLengthLimit: Int = 8000
     ) {
       self.url = url
       self.schema = schema
@@ -54,6 +64,8 @@ public final class PostgrestClient: Sendable {
       self.encoder = encoder
       self.decoder = decoder
       self.retryEnabled = retryEnabled
+      self.timeout = timeout
+      self.urlLengthLimit = urlLengthLimit
     }
   }
 
@@ -79,6 +91,8 @@ public final class PostgrestClient: Sendable {
   ///   - encoder: The JSONEncoder to use for encoding.
   ///   - decoder: The JSONDecoder to use for decoding.
   ///   - retryEnabled: Whether to automatically retry on transient errors (HTTP 503, 520, network errors). Defaults to `true`.
+  ///   - timeout: Optional timeout in seconds. When set, requests abort after this duration.
+  ///   - urlLengthLimit: Maximum URL length before a warning is logged. Defaults to 8000.
   public convenience init(
     url: URL,
     schema: String? = nil,
@@ -87,7 +101,9 @@ public final class PostgrestClient: Sendable {
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
-    retryEnabled: Bool = true
+    retryEnabled: Bool = true,
+    timeout: TimeInterval? = nil,
+    urlLengthLimit: Int = 8000
   ) {
     self.init(
       configuration: Configuration(
@@ -98,7 +114,9 @@ public final class PostgrestClient: Sendable {
         fetch: fetch,
         encoder: encoder,
         decoder: decoder,
-        retryEnabled: retryEnabled
+        retryEnabled: retryEnabled,
+        timeout: timeout,
+        urlLengthLimit: urlLengthLimit
       )
     )
   }

@@ -139,6 +139,21 @@ public class PostgrestBuilder: @unchecked Sendable {
       }
     }
 
+    let fullUrl =
+      request.query.isEmpty
+      ? request.url
+      : request.url.appendingQueryItems(request.query)
+    let urlLength = fullUrl.absoluteString.count
+    if urlLength > configuration.urlLengthLimit {
+      configuration.logger?.warning(
+        "Request URL is \(urlLength) characters, which exceeds the limit of \(configuration.urlLengthLimit). If selecting many fields, consider using a view. If filtering with large arrays, consider using an RPC function."
+      )
+    }
+
+    if let timeout = configuration.timeout {
+      request.timeoutInterval = timeout
+    }
+
     var attempt = 0
     while true {
       try Task.checkCancellation()

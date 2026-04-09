@@ -23,14 +23,26 @@ public struct SupabaseClientOptions: Sendable {
     /// The JSONDecoder to use when decoding database response objects.
     public let decoder: JSONDecoder
 
+    /// Optional timeout in seconds for PostgREST requests. When set, requests automatically
+    /// abort after this duration to prevent indefinite hangs.
+    public let timeout: TimeInterval?
+
+    /// Maximum URL length in characters before a warning is logged. Defaults to 8000.
+    /// Protects against exceeding server URL limits with large queries.
+    public let urlLengthLimit: Int
+
     public init(
       schema: String? = nil,
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
+      timeout: TimeInterval? = nil,
+      urlLengthLimit: Int = 8000
     ) {
       self.schema = schema
       self.encoder = encoder
       self.decoder = decoder
+      self.timeout = timeout
+      self.urlLengthLimit = urlLengthLimit
     }
   }
 
@@ -131,7 +143,7 @@ public struct SupabaseClientOptions: Sendable {
   public struct StorageOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let useNewHostname: Bool
-    
+
     public init(useNewHostname: Bool = false) {
       self.useNewHostname = useNewHostname
     }
