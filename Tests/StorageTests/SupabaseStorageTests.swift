@@ -64,11 +64,13 @@ final class SupabaseStorageTests: XCTestCase {
         """
         [
           {
+            "path": "file1.txt",
             "signedURL": "/sign/file1.txt?token=abc.def.ghi"
           },
           {
+            "path": "file2.txt",
             "signedURL": "/sign/file2.txt?token=abc.def.ghi"
-          },
+          }
         ]
         """.data(using: .utf8)!,
         HTTPURLResponse(
@@ -81,16 +83,26 @@ final class SupabaseStorageTests: XCTestCase {
     }
 
     let sut = makeSUT()
-    let urls = try await sut.from(bucketId).createSignedURLs(
+    let results: [SignedURLResult] = try await sut.from(bucketId).createSignedURLs(
       paths: ["file1.txt", "file2.txt"],
       expiresIn: 60
     )
 
-    assertInlineSnapshot(of: urls, as: .description) {
-      """
-      [http://localhost:54321/storage/v1/sign/file1.txt?token=abc.def.ghi, http://localhost:54321/storage/v1/sign/file2.txt?token=abc.def.ghi]
-      """
+    XCTAssertEqual(results.count, 2)
+    guard case .success(let path0, let url0) = results[0] else {
+      return XCTFail("Expected success for file1.txt")
     }
+    XCTAssertEqual(path0, "file1.txt")
+    XCTAssertEqual(
+      url0.absoluteString,
+      "http://localhost:54321/storage/v1/sign/file1.txt?token=abc.def.ghi")
+    guard case .success(let path1, let url1) = results[1] else {
+      return XCTFail("Expected success for file2.txt")
+    }
+    XCTAssertEqual(path1, "file2.txt")
+    XCTAssertEqual(
+      url1.absoluteString,
+      "http://localhost:54321/storage/v1/sign/file2.txt?token=abc.def.ghi")
   }
 
   #if !os(Linux) && !os(Android)

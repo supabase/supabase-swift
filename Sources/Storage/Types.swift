@@ -98,6 +98,44 @@ public struct SignedURL: Decodable, Sendable {
   }
 }
 
+/// Represents the per-item result of a ``StorageFileApi/createSignedURLs(paths:expiresIn:download:)`` call.
+///
+/// It is guaranteed that exactly one case applies per item: either the URL was signed
+/// successfully, or the path did not exist / was inaccessible.
+public enum SignedURLResult: Sendable {
+  /// The URL was signed successfully.
+  /// - Parameters:
+  ///   - path: The requested file path.
+  ///   - signedURL: The signed URL ready for use.
+  case success(path: String, signedURL: URL)
+
+  /// The path could not be signed.
+  /// - Parameters:
+  ///   - path: The requested file path.
+  ///   - error: The reason the URL could not be created.
+  case failure(path: String, error: String)
+
+  /// The requested file path, available regardless of outcome.
+  public var path: String {
+    switch self {
+    case .success(let path, _): return path
+    case .failure(let path, _): return path
+    }
+  }
+
+  /// The signed URL, or `nil` if this result is a failure.
+  public var signedURL: URL? {
+    if case .success(_, let url) = self { return url }
+    return nil
+  }
+
+  /// The error message, or `nil` if this result is a success.
+  public var error: String? {
+    if case .failure(_, let error) = self { return error }
+    return nil
+  }
+}
+
 public struct SignedUploadURL: Sendable {
   public let signedURL: URL
   public let path: String
