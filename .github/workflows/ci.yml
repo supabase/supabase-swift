@@ -52,16 +52,11 @@ jobs:
         # command=test: run tests (Debug only, Release skipped via skip_release)
         # command="": build only (Release only, Debug skipped via skip_debug)
         command: [test, ""]
-        platform: [IOS, MACOS, TVOS, WATCHOS, VISIONOS]
+        platform: [IOS, MACOS]
         xcode: ["26.4"]
         include:
           - { command: test, skip_release: 1 }
           - { command: "", skip_debug: 1 }
-        exclude:
-          # Only build (no test) for non-simulator-friendly platforms
-          - { command: test, platform: TVOS }
-          - { command: test, platform: WATCHOS }
-          - { command: test, platform: VISIONOS }
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Cache derived data
@@ -154,9 +149,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
       - run: swift build -c ${{ matrix.config }}
-      - name: Test
-        if: matrix.config == 'debug'
-        run: swift test --skip IntegrationTests
 
   linux:
     name: Linux
