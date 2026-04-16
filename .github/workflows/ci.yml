@@ -53,6 +53,7 @@ jobs:
         # command="": build only (Release only, Debug skipped via skip_debug)
         command: [test, ""]
         platform: [IOS, MACOS, TVOS, WATCHOS, VISIONOS]
+        xcode: ["26.4"]
         include:
           - { command: test, skip_release: 1 }
           - { command: "", skip_debug: 1 }
@@ -68,12 +69,12 @@ jobs:
         with:
           path: ~/.derivedData
           key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-26.4-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-26.4-${{ matrix.command }}-
-            deriveddata-xcodebuild-${{ matrix.platform }}-26.4-
-      - name: Select Xcode 26.4
-        run: sudo xcode-select -s /Applications/Xcode_26.4.app
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-
+      - name: Select Xcode ${{ matrix.xcode }}
+        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: List available devices
         run: xcrun simctl list devices available
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
@@ -107,6 +108,7 @@ jobs:
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS, MAC_CATALYST]
+        xcode: ["15.4"]
         include:
           - { command: test, skip_release: 1 }
           - { command: "", skip_debug: 1 }
@@ -118,12 +120,12 @@ jobs:
           path: |
             ~/.derivedData
           key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-15.4-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-15.4-${{ matrix.command }}-
-            deriveddata-xcodebuild-${{ matrix.platform }}-15.4-
-      - name: Select Xcode 15.4
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-
+      - name: Select Xcode ${{ matrix.xcode }}
+        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: List available devices
         run: xcrun simctl list devices available
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
@@ -225,6 +227,9 @@ jobs:
     name: Library (evolution)
     runs-on: macos-26
     timeout-minutes: 30
+    strategy:
+      matrix:
+        xcode: ["26.4"]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Cache derived data
@@ -232,12 +237,12 @@ jobs:
         with:
           path: ~/.derivedData
           key: |
-            deriveddata-library-evolution-26.4-${{ hashFiles('**/Package.resolved') }}
+            deriveddata-library-evolution-${{ matrix.xcode }}-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
-            deriveddata-library-evolution-26.4-
+            deriveddata-library-evolution-${{ matrix.xcode }}-
             deriveddata-library-evolution-
-      - name: Select Xcode 26.4
-        run: sudo xcode-select -s /Applications/Xcode_26.4.app
+      - name: Select Xcode ${{ matrix.xcode }}
+        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: Build for library evolution
         run: make build-for-library-evolution
 
