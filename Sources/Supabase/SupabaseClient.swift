@@ -165,7 +165,19 @@ public final class SupabaseClient: Sendable {
       .merging(with: HTTPFields(options.global.headers))
 
     // default storage key uses the supabase project ref as a namespace
-    let defaultStorageKey = "sb-\(supabaseURL.host!.split(separator: ".")[0])-auth-token"
+    let host: String
+    if #available(iOS 16, macOS 13, tvOS 16, watchOS 9, *) {
+      guard let h = supabaseURL.host(percentEncoded: false) else {
+        preconditionFailure("supabaseURL must have a valid host.")
+      }
+      host = h
+    } else {
+      guard let h = supabaseURL.host else {
+        preconditionFailure("supabaseURL must have a valid host.")
+      }
+      host = h
+    }
+    let defaultStorageKey = "sb-\(host.split(separator: ".")[0])-auth-token"
 
     _auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
