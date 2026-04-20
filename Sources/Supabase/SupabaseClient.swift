@@ -166,7 +166,7 @@ public final class SupabaseClient: Sendable {
 
     // default storage key uses the supabase project ref as a namespace
     let optionalHost: String?
-    if #available(iOS 16, macOS 13, tvOS 16, watchOS 9, *) {
+    if #available(iOS 16, macOS 13, tvOS 16, watchOS 9, visionOS 1, *) {
       optionalHost = supabaseURL.host(percentEncoded: false)
     } else {
       optionalHost = supabaseURL.host
