@@ -34,6 +34,38 @@ extension StorageClientConfiguration {
 
 extension StorageFileApi {
   @_disfavoredOverload
+  @available(
+    *,
+    deprecated,
+    message:
+      "Use createSignedURLs(paths:expiresIn:download:) that returns [SignedURLResult] to handle paths that do not exist."
+  )
+  public func createSignedURLs(
+    paths: [String],
+    expiresIn: Int,
+    download: String? = nil
+  ) async throws -> [URL] {
+    let results: [SignedURLResult] = try await createSignedURLs(
+      paths: paths, expiresIn: expiresIn, download: download)
+    return results.compactMap(\.signedURL)
+  }
+
+  @_disfavoredOverload
+  @available(
+    *,
+    deprecated,
+    message:
+      "Use createSignedURLs(paths:expiresIn:download:) that returns [SignedURLResult] to handle paths that do not exist."
+  )
+  public func createSignedURLs(
+    paths: [String],
+    expiresIn: Int,
+    download: Bool
+  ) async throws -> [URL] {
+    try await createSignedURLs(paths: paths, expiresIn: expiresIn, download: download ? "" : nil)
+  }
+
+  @_disfavoredOverload
   @available(*, deprecated, message: "Please use method that returns FileUploadResponse.")
   @discardableResult
   public func upload(

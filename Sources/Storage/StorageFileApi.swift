@@ -71,8 +71,14 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let message: String
   }
 
-  private struct SignedURLResponse: Decodable {
+  private struct SignedURLAPIResponse: Decodable {
     let signedURL: String
+  }
+
+  private struct SignedURLsAPIResponse: Decodable {
+    let signedURL: String?
+    let path: String
+    let error: String?
   }
 
   private func _uploadOrUpdate(
@@ -287,7 +293,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         )
       )
     )
-    .decoded(as: SignedURLResponse.self, decoder: configuration.decoder)
+    .decoded(as: SignedURLAPIResponse.self, decoder: configuration.decoder)
 
     return try makeSignedURL(response.signedURL, download: download)
   }
@@ -313,6 +319,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   }
 
   /// Creates multiple signed URLs. Use a signed URL to share a file for a fixed amount of time.
+  ///
+  /// Each item in the returned array is a ``SignedURLResult``: either `.success(path:signedURL:)` or
+  /// `.failure(path:error:)`. Exactly one case is guaranteed per item.
   /// - Parameters:
   ///   - paths: The file paths to be downloaded, including the current file names. For example `["folder/image.png", "folder2/image2.png"]`.
   ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs which are valid for one minute.
@@ -321,7 +330,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     paths: [String],
     expiresIn: Int,
     download: String? = nil
-  ) async throws -> [URL] {
+  ) async throws -> [SignedURLResult] {
     struct Params: Encodable {
       let expiresIn: Int
       let paths: [String]
@@ -338,12 +347,22 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         )
       )
     )
-    .decoded(as: [SignedURLResponse].self, decoder: configuration.decoder)
+    .decoded(as: [SignedURLsAPIResponse].self, decoder: configuration.decoder)
 
-    return try response.map { try makeSignedURL($0.signedURL, download: download) }
+    return try response.map { item in
+      if let signedURLString = item.signedURL {
+        let url = try makeSignedURL(signedURLString, download: download)
+        return .success(path: item.path, signedURL: url)
+      } else {
+        return .failure(path: item.path, error: item.error ?? "Unknown error")
+      }
+    }
   }
 
   /// Creates multiple signed URLs. Use a signed URL to share a file for a fixed amount of time.
+  ///
+  /// Each item in the returned array is a ``SignedURLResult``: either `.success(path:signedURL:)` or
+  /// `.failure(path:error:)`. Exactly one case is guaranteed per item.
   /// - Parameters:
   ///   - paths: The file paths to be downloaded, including the current file names. For example `["folder/image.png", "folder2/image2.png"]`.
   ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs which are valid for one minute.
@@ -352,7 +371,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     paths: [String],
     expiresIn: Int,
     download: Bool
-  ) async throws -> [URL] {
+  ) async throws -> [SignedURLResult] {
     try await createSignedURLs(paths: paths, expiresIn: expiresIn, download: download ? "" : nil)
   }
 
