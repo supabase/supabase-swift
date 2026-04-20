@@ -49,8 +49,6 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        # command=test: run tests (Debug only, Release skipped via skip_release)
-        # command="": build only (Release only, Debug skipped via skip_debug)
         command: [test, ""]
         platform: [IOS, MACOS]
         xcode: ["26.4"]
