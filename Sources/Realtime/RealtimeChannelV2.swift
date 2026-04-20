@@ -659,7 +659,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       } else {
         logger?.warning(
           "Received binary broadcast for event '\(event)' but no Data callbacks are registered. "
-            + "Register a callback with onBroadcast(event:callback:) that accepts Data."
+            + "Register a callback with onBroadcastData(event:callback:) to receive Data."
         )
       }
     }

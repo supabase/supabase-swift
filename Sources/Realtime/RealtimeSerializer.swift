@@ -24,7 +24,9 @@ struct DecodedBroadcast: Sendable {
 ///
 /// Protocol 2.0.0 uses:
 /// - JSON array text frames for non-broadcast messages: `[joinRef, ref, topic, event, payload]`
-/// - Binary frames for broadcast messages (type 0x03 client->server, type 0x04 server->client)
+/// - Binary frames (type 0x03 client->server, type 0x04 server->client) for broadcast messages.
+///   Note: broadcast messages can also arrive as JSON array text frames — the server may deliver
+///   broadcasts on either transport, so the client must be able to handle both.
 struct RealtimeSerializer: Sendable {
   enum BinaryKind: UInt8 {
     /// Client -> server broadcast push.
