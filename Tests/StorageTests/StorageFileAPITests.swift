@@ -256,15 +256,25 @@ final class StorageFileAPITests: XCTestCase {
     .register()
 
     let paths = ["file.txt", "file2.txt"]
-    let urls = try await storage.from("bucket").createSignedURLs(
+    let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
       paths: paths,
       expiresIn: 3600
     )
-    XCTAssertEqual(urls.count, 2)
+    XCTAssertEqual(results.count, 2)
+    guard case .success(let path0, let url0) = results[0] else {
+      return XCTFail("Expected success for file.txt")
+    }
+    XCTAssertEqual(path0, "file.txt")
     XCTAssertEqual(
-      urls[0].absoluteString, "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
+      url0.absoluteString,
+      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
+    guard case .success(let path1, let url1) = results[1] else {
+      return XCTFail("Expected success for file2.txt")
+    }
+    XCTAssertEqual(path1, "file2.txt")
     XCTAssertEqual(
-      urls[1].absoluteString, "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi")
+      url1.absoluteString,
+      "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi")
   }
 
   func testCreateSignedURLs_download() async throws {
@@ -303,18 +313,64 @@ final class StorageFileAPITests: XCTestCase {
     .register()
 
     let paths = ["file.txt", "file2.txt"]
-    let urls = try await storage.from("bucket").createSignedURLs(
+    let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
       paths: paths,
       expiresIn: 3600,
       download: true
     )
-    XCTAssertEqual(urls.count, 2)
+    XCTAssertEqual(results.count, 2)
+    guard case .success(_, let url0) = results[0] else {
+      return XCTFail("Expected success for file.txt")
+    }
     XCTAssertEqual(
-      urls[0].absoluteString,
+      url0.absoluteString,
       "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
+    guard case .success(_, let url1) = results[1] else {
+      return XCTFail("Expected success for file2.txt")
+    }
     XCTAssertEqual(
-      urls[1].absoluteString,
+      url1.absoluteString,
       "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi&download=")
+  }
+
+  func testCreateSignedURLs_withNullSignedURL() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/sign/bucket"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          [
+            {
+              "path": "file.txt",
+              "signedURL": "object/upload/sign/bucket/file.txt?token=abc.def.ghi"
+            },
+            {
+              "path": "missing.txt",
+              "signedURL": null,
+              "error": "Either the object does not exist or you do not have access to it"
+            }
+          ]
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
+      paths: ["file.txt", "missing.txt"],
+      expiresIn: 3600
+    )
+    XCTAssertEqual(results.count, 2)
+    guard case .success(let path0, _) = results[0] else {
+      return XCTFail("Expected success for file.txt")
+    }
+    XCTAssertEqual(path0, "file.txt")
+    guard case .failure(let path1, let error1) = results[1] else {
+      return XCTFail("Expected failure for missing.txt")
+    }
+    XCTAssertEqual(path1, "missing.txt")
+    XCTAssertEqual(error1, "Either the object does not exist or you do not have access to it")
   }
 
   func testRemove() async throws {
