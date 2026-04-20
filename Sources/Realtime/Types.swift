@@ -76,6 +76,38 @@ public struct RealtimeClientOptions: Sendable {
     self.logger = logger
   }
 
+  /// Backward-compatible initializer preserving the pre-`vsn` signature.
+  /// Calls the primary initializer with `vsn: .v2`.
+  @_disfavoredOverload
+  public init(
+    headers: [String: String] = [:],
+    heartbeatInterval: TimeInterval = Self.defaultHeartbeatInterval,
+    reconnectDelay: TimeInterval = Self.defaultReconnectDelay,
+    timeoutInterval: TimeInterval = Self.defaultTimeoutInterval,
+    disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
+    connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
+    maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
+    logLevel: LogLevel? = nil,
+    fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
+    accessToken: (@Sendable () async throws -> String?)? = nil,
+    logger: (any SupabaseLogger)? = nil
+  ) {
+    self.init(
+      headers: headers,
+      heartbeatInterval: heartbeatInterval,
+      reconnectDelay: reconnectDelay,
+      timeoutInterval: timeoutInterval,
+      disconnectOnSessionLoss: disconnectOnSessionLoss,
+      connectOnSubscribe: connectOnSubscribe,
+      maxRetryAttempts: maxRetryAttempts,
+      vsn: .v2,
+      logLevel: logLevel,
+      fetch: fetch,
+      accessToken: accessToken,
+      logger: logger
+    )
+  }
+
   var apikey: String? {
     headers[.apiKey]
   }
