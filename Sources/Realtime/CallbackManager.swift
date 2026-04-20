@@ -100,7 +100,7 @@ final class CallbackManager: Sendable {
       ids.contains($0.id)
     }
     let postgresCallbacks = mutableState.callbacks.compactMap {
-      if case let .postgres(callback) = $0 {
+      if case .postgres(let callback) = $0 {
         return callback
       }
       return nil
@@ -117,15 +117,67 @@ final class CallbackManager: Sendable {
     }
   }
 
+  @discardableResult
+  func addBroadcastDataCallback(
+    event: String,
+    callback: @escaping @Sendable (Data) -> Void
+  ) -> Int {
+    mutableState.withValue {
+      $0.id += 1
+      $0.callbacks.append(
+        .broadcastData(
+          BroadcastDataCallback(
+            id: $0.id,
+            event: event,
+            callback: callback
+          )
+        )
+      )
+      return $0.id
+    }
+  }
+
   func triggerBroadcast(event: String, json: JSONObject) {
     let broadcastCallbacks = mutableState.callbacks.compactMap {
-      if case let .broadcast(callback) = $0 {
+      if case .broadcast(let callback) = $0 {
         return callback
       }
       return nil
     }
-    let callbacks = broadcastCallbacks.filter { $0.event == "*" || $0.event.lowercased() == event.lowercased() }
+    let callbacks = broadcastCallbacks.filter {
+      $0.event == "*" || $0.event.lowercased() == event.lowercased()
+    }
     callbacks.forEach { $0.callback(json) }
+  }
+
+  func triggerBroadcastData(event: String, data: Data) {
+    let callbacks = mutableState.callbacks.filter {
+      isBroadcastDataCallback(callback: $0, for: event)
+    }
+    .map { callback -> BroadcastDataCallback in
+      if case .broadcastData(let callback) = callback {
+        return callback
+      } else {
+        fatalError("Expected broadcast data callback")
+      }
+    }
+    callbacks.forEach { $0.callback(data) }
+  }
+
+  func hasBroadcastDataCallbacks(for event: String) -> Bool {
+    mutableState.callbacks.contains {
+      isBroadcastDataCallback(callback: $0, for: event)
+    }
+  }
+
+  private func isBroadcastDataCallback(
+    callback: RealtimeCallback,
+    for event: String
+  ) -> Bool {
+    if case .broadcastData(let callback) = callback {
+      return callback.event == "*" || callback.event.lowercased() == event.lowercased()
+    }
+    return false
   }
 
   func triggerPresenceDiffs(
@@ -134,7 +186,7 @@ final class CallbackManager: Sendable {
     rawMessage: RealtimeMessageV2
   ) {
     let presenceCallbacks = mutableState.callbacks.compactMap {
-      if case let .presence(callback) = $0 {
+      if case .presence(let callback) = $0 {
         return callback
       }
       return nil
@@ -190,18 +242,26 @@ struct SystemCallback {
   var callback: @Sendable (RealtimeMessageV2) -> Void
 }
 
+struct BroadcastDataCallback {
+  var id: Int
+  var event: String
+  var callback: @Sendable (Data) -> Void
+}
+
 enum RealtimeCallback {
   case postgres(PostgresCallback)
   case broadcast(BroadcastCallback)
+  case broadcastData(BroadcastDataCallback)
   case presence(PresenceCallback)
   case system(SystemCallback)
 
   var id: Int {
     switch self {
-    case let .postgres(callback): callback.id
-    case let .broadcast(callback): callback.id
-    case let .presence(callback): callback.id
-    case let .system(callback): callback.id
+    case .postgres(let callback): callback.id
+    case .broadcast(let callback): callback.id
+    case .broadcastData(let callback): callback.id
+    case .presence(let callback): callback.id
+    case .system(let callback): callback.id
     }
   }
 

@@ -12,6 +12,16 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
+/// Phoenix protocol version used for WebSocket communication.
+public enum RealtimeProtocolVersion: String, Sendable {
+  /// Protocol 1.0.0 — JSON object text frames for all messages.
+  case v1 = "1.0.0"
+
+  /// Protocol 2.0.0 — JSON array text frames for non-broadcast messages,
+  /// binary frames for broadcast messages.
+  case v2 = "2.0.0"
+}
+
 /// Options for initializing ``RealtimeClientV2``.
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
@@ -21,6 +31,9 @@ public struct RealtimeClientOptions: Sendable {
   var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
   var maxRetryAttempts: Int
+
+  /// The Phoenix serializer protocol version.
+  public var vsn: RealtimeProtocolVersion
 
   /// Sets the log level for Realtime
   var logLevel: LogLevel?
@@ -43,6 +56,7 @@ public struct RealtimeClientOptions: Sendable {
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
+    vsn: RealtimeProtocolVersion = .v2,
     logLevel: LogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
@@ -55,10 +69,43 @@ public struct RealtimeClientOptions: Sendable {
     self.disconnectOnSessionLoss = disconnectOnSessionLoss
     self.connectOnSubscribe = connectOnSubscribe
     self.maxRetryAttempts = maxRetryAttempts
+    self.vsn = vsn
     self.logLevel = logLevel
     self.fetch = fetch
     self.accessToken = accessToken
     self.logger = logger
+  }
+
+  /// Backward-compatible initializer preserving the pre-`vsn` signature.
+  /// Calls the primary initializer with `vsn: .v2`.
+  @_disfavoredOverload
+  public init(
+    headers: [String: String] = [:],
+    heartbeatInterval: TimeInterval = Self.defaultHeartbeatInterval,
+    reconnectDelay: TimeInterval = Self.defaultReconnectDelay,
+    timeoutInterval: TimeInterval = Self.defaultTimeoutInterval,
+    disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
+    connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
+    maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
+    logLevel: LogLevel? = nil,
+    fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
+    accessToken: (@Sendable () async throws -> String?)? = nil,
+    logger: (any SupabaseLogger)? = nil
+  ) {
+    self.init(
+      headers: headers,
+      heartbeatInterval: heartbeatInterval,
+      reconnectDelay: reconnectDelay,
+      timeoutInterval: timeoutInterval,
+      disconnectOnSessionLoss: disconnectOnSessionLoss,
+      connectOnSubscribe: connectOnSubscribe,
+      maxRetryAttempts: maxRetryAttempts,
+      vsn: .v2,
+      logLevel: logLevel,
+      fetch: fetch,
+      accessToken: accessToken,
+      logger: logger
+    )
   }
 
   var apikey: String? {
