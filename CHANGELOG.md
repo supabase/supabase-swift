@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.44.0](https://github.com/supabase/supabase-swift/compare/v2.43.1...v2.44.0) (2026-04-20)
+
+
+### Features
+
+* **realtime:** add protocol 2.0.0 support with binary broadcast frames ([#908](https://github.com/supabase/supabase-swift/issues/908)) ([83f8a9c](https://github.com/supabase/supabase-swift/commit/83f8a9c52dda65f9c1cbad4215871bf165c1b9ff))
+
+
+### Bug Fixes
+
+* **storage:** make signedURL optional in createSignedURLs response ([#958](https://github.com/supabase/supabase-swift/issues/958)) ([52c44ba](https://github.com/supabase/supabase-swift/commit/52c44ba919616f471e98f791fbf2f6f3a4f3837d))
+* use host(percentEncoded:) to avoid iOS 26 crash in SupabaseClient ([#962](https://github.com/supabase/supabase-swift/issues/962)) ([e56fd8a](https://github.com/supabase/supabase-swift/commit/e56fd8ac6b543e4f545b1ce85c16412430351f7f))
+
 ## [2.43.1](https://github.com/supabase/supabase-swift/compare/v2.43.0...v2.43.1) (2026-04-07)
 
 
