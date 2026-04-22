@@ -65,7 +65,7 @@ import Foundation
 
     private func handleForeground() {
       guard let client else { return }
-      Task { await client.setAppStateActive(true) }
+      Task { await client.handleAppForeground() }
     }
   }
 

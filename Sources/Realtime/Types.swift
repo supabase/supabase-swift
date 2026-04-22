@@ -44,6 +44,9 @@ public struct RealtimeClientOptions: Sendable {
   /// disconnect on backgrounding; short background/foreground cycles keep the
   /// connection alive without churn.
   ///
+  /// Disable this to manage the connection yourself with ``RealtimeClientV2/connect()`` and
+  /// ``RealtimeClientV2/disconnect(code:reason:)``.
+  ///
   /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on other platforms
   /// (including watchOS and Linux), where lifecycle observation is not supported.
   public var handleAppLifecycle: Bool

@@ -561,22 +561,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  /// Notifies the client of an app state change so it can recover the connection if needed.
+  /// Recover the connection on app foregrounding: reconnect and re-join existing channels if the
+  /// socket was torn down while the app was in the background. No-op if still connected.
   ///
-  /// When `isActive` is `true` and the client is not currently connected, the client reconnects
-  /// and re-joins any channels that were previously created on it. When `isActive` is `false`,
-  /// this method is a no-op: the WebSocket often survives short background/foreground cycles, so
-  /// the client leaves an active connection in place and relies on the existing error-driven
-  /// reconnect logic if the OS tears the socket down during suspension.
-  ///
-  /// Call this method manually when ``RealtimeClientOptions/handleAppLifecycle`` is `false` or to
-  /// integrate with a custom lifecycle pipeline. When `handleAppLifecycle` is `true`, the client
-  /// invokes this method automatically in response to platform lifecycle notifications.
-  ///
-  /// - Parameter isActive: `true` when the app becomes active/foregrounded, `false` when it
-  ///   becomes inactive/backgrounded.
-  public func setAppStateActive(_ isActive: Bool) async {
-    guard isActive else { return }
+  /// Invoked automatically by ``RealtimeLifecycleManager`` when
+  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  func handleAppForeground() async {
     guard status != .connected else { return }
 
     let hadChannels = !mutableState.channels.isEmpty
