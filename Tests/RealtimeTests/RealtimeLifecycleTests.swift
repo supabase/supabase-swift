@@ -87,16 +87,32 @@ import XCTest
       )
     }
 
-    func testSetAppStateActiveFalseDisconnects() async {
+    func testSetAppStateActiveFalseIsNoOp() async {
       let sut = makeClient()
       await sut.connect()
       XCTAssertEqual(sut.status, .connected)
 
+      // Backgrounding should not tear down an active connection.
       await sut.setAppStateActive(false)
-      XCTAssertEqual(sut.status, .disconnected)
+      XCTAssertEqual(sut.status, .connected)
     }
 
-    func testSetAppStateActiveTrueConnects() async {
+    func testSetAppStateActiveTrueWhileConnectedIsNoOp() async throws {
+      let sut = makeClient()
+      let channel = sut.channel("public:messages")
+      try await channel.subscribeWithError()
+
+      let statusBefore = sut.status
+      let channelStatusBefore = channel.status
+
+      // Quick foreground while still connected — no churn.
+      await sut.setAppStateActive(true)
+
+      XCTAssertEqual(sut.status, statusBefore)
+      XCTAssertEqual(channel.status, channelStatusBefore)
+    }
+
+    func testSetAppStateActiveTrueReconnectsWhenDisconnected() async {
       let sut = makeClient()
       XCTAssertEqual(sut.status, .disconnected)
 
@@ -104,18 +120,14 @@ import XCTest
       XCTAssertEqual(sut.status, .connected)
     }
 
-    func testSetAppStateActiveTrueResubscribesChannels() async throws {
+    func testSetAppStateActiveTrueResubscribesChannelsWhenDisconnected() async throws {
+      // Pre-register a channel on a client that has never connected, then
+      // setAppStateActive(true) should both connect and rejoin the channel.
       let sut = makeClient()
       let channel = sut.channel("public:messages")
-
-      try await channel.subscribeWithError()
-      XCTAssertEqual(channel.status, .subscribed)
-
-      // Background: disconnect
-      await sut.setAppStateActive(false)
       XCTAssertEqual(sut.status, .disconnected)
+      XCTAssertEqual(channel.status, .unsubscribed)
 
-      // Foreground: connect and rejoin channels
       await sut.setAppStateActive(true)
       XCTAssertEqual(sut.status, .connected)
       XCTAssertEqual(channel.status, .subscribed)
@@ -130,45 +142,12 @@ import XCTest
       func testHandleAppLifecycleTrueInstallsLifecycleManager() {
         let sut = makeClient(handleAppLifecycle: true)
         XCTAssertNotNil(sut.mutableState.lifecycleManager)
-        // Keep a reference alive until assertion runs.
         _ = sut
       }
 
-      func testBackgroundNotificationDisconnects() async throws {
+      func testForegroundNotificationConnectsWhenDisconnected() async throws {
         let sut = makeClient(handleAppLifecycle: true)
-        await sut.connect()
-        XCTAssertEqual(sut.status, .connected)
-
-        #if canImport(UIKit)
-          NotificationCenter.default.post(
-            name: UIApplication.didEnterBackgroundNotification, object: nil
-          )
-        #elseif canImport(AppKit)
-          NotificationCenter.default.post(
-            name: NSApplication.willResignActiveNotification, object: nil
-          )
-        #endif
-
-        // Poll briefly for the async task dispatched by the observer to complete.
-        try await waitFor(timeout: 1.0) { sut.status == .disconnected }
         XCTAssertEqual(sut.status, .disconnected)
-      }
-
-      func testForegroundNotificationReconnects() async throws {
-        let sut = makeClient(handleAppLifecycle: true)
-        await sut.connect()
-        XCTAssertEqual(sut.status, .connected)
-
-        #if canImport(UIKit)
-          NotificationCenter.default.post(
-            name: UIApplication.didEnterBackgroundNotification, object: nil
-          )
-        #elseif canImport(AppKit)
-          NotificationCenter.default.post(
-            name: NSApplication.willResignActiveNotification, object: nil
-          )
-        #endif
-        try await waitFor(timeout: 1.0) { sut.status == .disconnected }
 
         #if canImport(UIKit)
           NotificationCenter.default.post(
@@ -179,7 +158,27 @@ import XCTest
             name: NSApplication.willBecomeActiveNotification, object: nil
           )
         #endif
+
         try await waitFor(timeout: 1.0) { sut.status == .connected }
+      }
+
+      func testForegroundNotificationIsNoOpWhenConnectionAlive() async throws {
+        let sut = makeClient(handleAppLifecycle: true)
+        await sut.connect()
+        XCTAssertEqual(sut.status, .connected)
+
+        #if canImport(UIKit)
+          NotificationCenter.default.post(
+            name: UIApplication.willEnterForegroundNotification, object: nil
+          )
+        #elseif canImport(AppKit)
+          NotificationCenter.default.post(
+            name: NSApplication.willBecomeActiveNotification, object: nil
+          )
+        #endif
+
+        // Allow any dispatched task to run.
+        try await Task.sleep(nanoseconds: 50_000_000)
         XCTAssertEqual(sut.status, .connected)
       }
     #endif

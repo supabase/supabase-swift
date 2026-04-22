@@ -38,8 +38,11 @@ public struct RealtimeClientOptions: Sendable {
 
   /// Whether to automatically handle app lifecycle changes (background/foreground).
   ///
-  /// When enabled, the client will disconnect when the app enters the background and
-  /// reconnect (re-joining any subscribed channels) when it returns to the foreground.
+  /// When enabled, the client observes platform lifecycle notifications and — on
+  /// foregrounding — reconnects and re-joins any existing channels if the WebSocket
+  /// was closed while the app was backgrounded. The client does not proactively
+  /// disconnect on backgrounding; short background/foreground cycles keep the
+  /// connection alive without churn.
   ///
   /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on other platforms
   /// (including watchOS and Linux), where lifecycle observation is not supported.

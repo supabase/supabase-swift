@@ -561,11 +561,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  /// Notifies the client of an app state change, driving connection and subscription lifecycle.
+  /// Notifies the client of an app state change so it can recover the connection if needed.
   ///
-  /// When `isActive` becomes `false`, any in-flight reconnect is cancelled and the client is
-  /// disconnected. When `isActive` becomes `true`, the client reconnects and any channels that
-  /// were previously created on this client are resubscribed.
+  /// When `isActive` is `true` and the client is not currently connected, the client reconnects
+  /// and re-joins any channels that were previously created on it. When `isActive` is `false`,
+  /// this method is a no-op: the WebSocket often survives short background/foreground cycles, so
+  /// the client leaves an active connection in place and relies on the existing error-driven
+  /// reconnect logic if the OS tears the socket down during suspension.
   ///
   /// Call this method manually when ``RealtimeClientOptions/handleAppLifecycle`` is `false` or to
   /// integrate with a custom lifecycle pipeline. When `handleAppLifecycle` is `true`, the client
@@ -574,15 +576,14 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// - Parameter isActive: `true` when the app becomes active/foregrounded, `false` when it
   ///   becomes inactive/backgrounded.
   public func setAppStateActive(_ isActive: Bool) async {
-    if isActive {
-      let hadChannels = !mutableState.channels.isEmpty
-      await connect()
+    guard isActive else { return }
+    guard status != .connected else { return }
 
-      if hadChannels, status == .connected {
-        await rejoinChannels()
-      }
-    } else {
-      disconnect()
+    let hadChannels = !mutableState.channels.isEmpty
+    await connect()
+
+    if hadChannels, status == .connected {
+      await rejoinChannels()
     }
   }
 
