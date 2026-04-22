@@ -36,6 +36,15 @@ public struct RealtimeClientOptions: Sendable {
   /// The Phoenix serializer protocol version.
   public var vsn: RealtimeProtocolVersion
 
+  /// Whether to automatically handle app lifecycle changes (background/foreground).
+  ///
+  /// When enabled, the client will disconnect when the app enters the background and
+  /// reconnect (re-joining any subscribed channels) when it returns to the foreground.
+  ///
+  /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on other platforms
+  /// (including watchOS and Linux), where lifecycle observation is not supported.
+  public var handleAppLifecycle: Bool
+
   /// Sets the log level for Realtime
   var logLevel: LogLevel?
   package var fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))?
@@ -55,6 +64,14 @@ public struct RealtimeClientOptions: Sendable {
   public static let defaultDisconnectOnEmptyChannelsAfter: TimeInterval =
     2 * defaultHeartbeatInterval
 
+  public static let defaultHandleAppLifecycle: Bool = {
+    #if os(iOS) || os(macOS) || os(tvOS) || os(visionOS)
+      return true
+    #else
+      return false
+    #endif
+  }()
+
   public init(
     headers: [String: String] = [:],
     heartbeatInterval: TimeInterval = Self.defaultHeartbeatInterval,
@@ -65,6 +82,7 @@ public struct RealtimeClientOptions: Sendable {
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     disconnectOnEmptyChannelsAfter: TimeInterval = Self.defaultDisconnectOnEmptyChannelsAfter,
     vsn: RealtimeProtocolVersion = .v2,
+    handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle,
     logLevel: LogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
@@ -79,6 +97,7 @@ public struct RealtimeClientOptions: Sendable {
     self.maxRetryAttempts = maxRetryAttempts
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
     self.vsn = vsn
+    self.handleAppLifecycle = handleAppLifecycle
     self.logLevel = logLevel
     self.fetch = fetch
     self.accessToken = accessToken

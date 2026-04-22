@@ -60,6 +60,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     /// Pending task that will call `disconnect()` after `disconnectOnEmptyChannelsAfter` elapses.
     /// Cancelled when a new channel is created or `disconnect()` is called directly.
     var pendingDisconnectTask: Task<Void, Never>?
+
+    /// Retains the optional app-lifecycle observer for the client's lifetime.
+    /// Stored as `AnyObject?` so this type remains available on platforms where
+    /// the concrete `RealtimeLifecycleManager` is not compiled.
+    var lifecycleManager: AnyObject?
   }
 
   let url: URL
@@ -217,6 +222,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     mutableState.withValue {
       $0.stateObserverTask = stateObserverTask
     }
+
+    #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
+      if options.handleAppLifecycle {
+        let manager = RealtimeLifecycleManager(client: self)
+        mutableState.withValue { $0.lifecycleManager = manager }
+      }
+    #endif
   }
 
   private static func yieldStatusIfChanged(
@@ -233,7 +245,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     listenForMessages(conn: conn)
     startHeartbeating()
     if isReconnect {
-      rejoinChannels()
+      Task { await rejoinChannels() }
     }
     flushSendBuffer()
   }
@@ -397,11 +409,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     return mutableState.accessToken
   }
 
-  private func rejoinChannels() {
-    Task {
-      for channel in channels.values {
-        try? await channel.subscribeWithError()
-      }
+  private func rejoinChannels() async {
+    for channel in channels.values {
+      try? await channel.subscribeWithError()
     }
   }
 
@@ -548,6 +558,31 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
     Task { [connectionManager, reason] in
       await connectionManager.disconnect(reason: reason ?? "Client disconnect")
+    }
+  }
+
+  /// Notifies the client of an app state change, driving connection and subscription lifecycle.
+  ///
+  /// When `isActive` becomes `false`, any in-flight reconnect is cancelled and the client is
+  /// disconnected. When `isActive` becomes `true`, the client reconnects and any channels that
+  /// were previously created on this client are resubscribed.
+  ///
+  /// Call this method manually when ``RealtimeClientOptions/handleAppLifecycle`` is `false` or to
+  /// integrate with a custom lifecycle pipeline. When `handleAppLifecycle` is `true`, the client
+  /// invokes this method automatically in response to platform lifecycle notifications.
+  ///
+  /// - Parameter isActive: `true` when the app becomes active/foregrounded, `false` when it
+  ///   becomes inactive/backgrounded.
+  public func setAppStateActive(_ isActive: Bool) async {
+    if isActive {
+      let hadChannels = !mutableState.channels.isEmpty
+      await connect()
+
+      if hadChannels, status == .connected {
+        await rejoinChannels()
+      }
+    } else {
+      disconnect()
     }
   }
 
