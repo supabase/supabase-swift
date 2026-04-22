@@ -63,6 +63,16 @@ struct RealtimeExamplesView: View {
           )
         }
       }
+
+      Section("Lifecycle") {
+        NavigationLink(destination: AppLifecycleView()) {
+          ExampleRow(
+            title: "App Lifecycle",
+            description: "Reconnect and re-join on foreground",
+            icon: "arrow.clockwise.circle"
+          )
+        }
+      }
     }
     .navigationTitle("Realtime")
   }
