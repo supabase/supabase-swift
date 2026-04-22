@@ -412,7 +412,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
               await connectionManager.handleClose(code: code, reason: reason)
             }
           }
+        } catch is CancellationError {
+          return
         } catch {
+          if Task.isCancelled { return }
           options.logger?
             .debug(
               "WebSocket error \(error.localizedDescription). Trying again in \(options.reconnectDelay)"
@@ -587,7 +590,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         switch client.options.vsn {
         case .v1:
           let data = try JSONEncoder().encode(message)
-          text = String(data: data, encoding: .utf8)!
+          guard let encoded = String(data: data, encoding: .utf8) else {
+            client.options.logger?.error("Failed to encode message as UTF-8.")
+            return
+          }
+          text = encoded
         case .v2:
           text = try client.serializer.encodeText(message)
         }

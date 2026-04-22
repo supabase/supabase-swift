@@ -1,15 +1,8 @@
-//
-//  ConnectionManager.swift
-//  Supabase
-//
-//  Created by Guilherme Souza on 19/11/25.
-//
-
 import ConcurrencyExtras
 import Foundation
 
 actor ConnectionManager {
-  enum State {
+  enum State: Sendable {
     case disconnected
     case connecting(Task<Void, any Error>)
     case connected(any WebSocket)

@@ -1,10 +1,3 @@
-//
-//  ConnectionManagerTests.swift
-//  Supabase
-//
-//  Created by Guilherme Souza on 19/11/25.
-//
-
 import ConcurrencyExtras
 import XCTest
 
@@ -19,16 +12,16 @@ final class ConnectionManagerTests: XCTestCase {
 
   var sut: ConnectionManager!
   var ws: FakeWebSocket!
-  var transportCallCount = 0
-  var lastConnectURL: URL?
-  var lastConnectHeaders: [String: String]?
+  let transportCallCount = LockIsolated(0)
+  let lastConnectURL = LockIsolated<URL?>(nil)
+  let lastConnectHeaders = LockIsolated<[String: String]?>(nil)
 
   override func setUp() {
     super.setUp()
 
-    transportCallCount = 0
-    lastConnectURL = nil
-    lastConnectHeaders = nil
+    transportCallCount.setValue(0)
+    lastConnectURL.setValue(nil)
+    lastConnectHeaders.setValue(nil)
     (ws, _) = FakeWebSocket.fakes()
   }
 
@@ -44,12 +37,16 @@ final class ConnectionManagerTests: XCTestCase {
     reconnectDelay: TimeInterval = 0.1,
     transport: WebSocketTransport? = nil
   ) -> ConnectionManager {
-    ConnectionManager(
+    let transportCallCount = self.transportCallCount
+    let lastConnectURL = self.lastConnectURL
+    let lastConnectHeaders = self.lastConnectHeaders
+    let ws = self.ws
+    return ConnectionManager(
       transport: transport ?? { url, headers in
-        self.transportCallCount += 1
-        self.lastConnectURL = url
-        self.lastConnectHeaders = headers
-        return self.ws!
+        transportCallCount.withValue { $0 += 1 }
+        lastConnectURL.setValue(url)
+        lastConnectHeaders.setValue(headers)
+        return ws!
       },
       url: url,
       headers: headers,
@@ -84,9 +81,9 @@ final class ConnectionManagerTests: XCTestCase {
 
     let isConnected = await sut.connection != nil
     XCTAssertTrue(isConnected)
-    XCTAssertEqual(transportCallCount, 1)
-    XCTAssertEqual(lastConnectURL?.absoluteString, "ws://localhost")
-    XCTAssertEqual(lastConnectHeaders, ["apikey": "key"])
+    XCTAssertEqual(transportCallCount.value, 1)
+    XCTAssertEqual(lastConnectURL.value?.absoluteString, "ws://localhost")
+    XCTAssertEqual(lastConnectHeaders.value, ["apikey": "key"])
 
     await fulfillment(of: [connectingExpectation, connectedExpectation], timeout: 1)
     stateObserver.cancel()
@@ -96,21 +93,23 @@ final class ConnectionManagerTests: XCTestCase {
     sut = makeSUT()
 
     try await sut.connect()
-    XCTAssertEqual(transportCallCount, 1)
+    XCTAssertEqual(transportCallCount.value, 1)
 
     try await sut.connect()
 
     let stillConnected = await sut.connection != nil
     XCTAssertTrue(stillConnected)
-    XCTAssertEqual(transportCallCount, 1, "Second connect should reuse existing connection")
+    XCTAssertEqual(transportCallCount.value, 1, "Second connect should reuse existing connection")
   }
 
   func testConnectWhileConnectingWaitsForExistingTask() async throws {
+    let transportCallCount = self.transportCallCount
+    let ws = self.ws
     sut = makeSUT(
       transport: { _, _ in
-        self.transportCallCount += 1
+        transportCallCount.withValue { $0 += 1 }
         try await Task.sleep(nanoseconds: 200_000_000)
-        return self.ws!
+        return ws!
       }
     )
 
@@ -127,7 +126,7 @@ final class ConnectionManagerTests: XCTestCase {
     try await Task.sleep(nanoseconds: 50_000_000)
     XCTAssertFalse(secondConnectFinished.value)
     XCTAssertEqual(
-      transportCallCount, 1,
+      transportCallCount.value, 1,
       "Transport should be invoked only once while first connect is in progress")
 
     _ = try await firstConnect.value
@@ -136,7 +135,7 @@ final class ConnectionManagerTests: XCTestCase {
     XCTAssertTrue(secondConnectFinished.value)
     let isConnected = await sut.connection != nil
     XCTAssertTrue(isConnected)
-    XCTAssertEqual(transportCallCount, 1)
+    XCTAssertEqual(transportCallCount.value, 1)
   }
 
   func testDisconnectFromConnectedClosesWebSocketAndUpdatesState() async throws {
@@ -156,13 +155,15 @@ final class ConnectionManagerTests: XCTestCase {
 
   func testDisconnectCancelsOngoingConnectionAttempt() async throws {
     let wasCancelled = LockIsolated(false)
+    let transportCallCount = self.transportCallCount
+    let ws = self.ws
 
     sut = makeSUT(
       transport: { _, _ in
-        self.transportCallCount += 1
+        transportCallCount.withValue { $0 += 1 }
         return try await withTaskCancellationHandler {
           try await Task.sleep(nanoseconds: 5_000_000_000)
-          return self.ws!
+          return ws!
         } onCancel: {
           wasCancelled.setValue(true)
         }
