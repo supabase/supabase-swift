@@ -42,8 +42,13 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
   ]
 
   /// The default set of retryable HTTP status codes.
+  ///
+  /// Includes Cloudflare-specific error codes (520-524, 530) which represent transient
+  /// infrastructure errors that should not cause session invalidation.
   package static let defaultRetryableHTTPStatusCodes: Set<Int> = [
     408, 500, 502, 503, 504,
+    // Cloudflare-specific transient errors
+    520, 521, 522, 523, 524, 530,
   ]
 
   /// The maximum number of retries.
