@@ -977,4 +977,97 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(response.path, "file.txt")
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
+
+  func testCreateSignedURL_cacheNonce() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/sign/bucket/file.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "signedURL": "object/upload/sign/bucket/file.txt?token=abc.def.ghi"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let url = try await storage.from("bucket").createSignedURL(
+      path: "file.txt",
+      expiresIn: 3600,
+      cacheNonce: "abc123"
+    )
+    XCTAssertEqual(
+      url.absoluteString,
+      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&cacheNonce=abc123")
+  }
+
+  func testCreateSignedURLs_cacheNonce() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/sign/bucket"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          [
+            {
+              "path": "file.txt",
+              "signedURL": "object/upload/sign/bucket/file.txt?token=abc.def.ghi"
+            }
+          ]
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
+      paths: ["file.txt"],
+      expiresIn: 3600,
+      cacheNonce: "abc123"
+    )
+    guard case .success(_, let url) = results[0] else {
+      return XCTFail("Expected success for file.txt")
+    }
+    XCTAssertEqual(
+      url.absoluteString,
+      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&cacheNonce=abc123")
+  }
+
+  func testGetPublicURL_cacheNonce() throws {
+    let url = try storage.from("bucket").getPublicURL(
+      path: "file.txt",
+      cacheNonce: "abc123"
+    )
+    XCTAssertEqual(
+      url.absoluteString,
+      "\(self.url)/object/public/bucket/file.txt?cacheNonce=abc123")
+  }
+
+  func testDownload_cacheNonce() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/file.txt"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data("hello world".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/object/bucket/file.txt?cacheNonce=abc123"
+      """#
+    }
+    .register()
+
+    let data = try await storage.from("bucket")
+      .download(path: "file.txt", cacheNonce: "abc123")
+
+    XCTAssertEqual(data, Data("hello world".utf8))
+  }
 }
