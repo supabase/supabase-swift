@@ -28,9 +28,6 @@ public final class FunctionsClient: Sendable {
   /// The Region to invoke the functions in.
   let region: String?
 
-  /// The JSON encoder to use for encoding request bodies.
-  public let encoder: JSONEncoder
-
   /// The JSON decoder to use for decoding response bodies.
   public let decoder: JSONDecoder
 
@@ -55,7 +52,6 @@ public final class FunctionsClient: Sendable {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  ///   - encoder: The JSON encoder to use for encoding request bodies. (Default: `JSONEncoder()`)
   ///   - decoder: The JSON decoder to use for decoding response bodies. (Default: `JSONDecoder()`)
   @_disfavoredOverload
   public convenience init(
@@ -64,7 +60,6 @@ public final class FunctionsClient: Sendable {
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    encoder: JSONEncoder = JSONEncoder(),
     decoder: JSONDecoder = JSONDecoder()
   ) {
     self.init(
@@ -73,7 +68,6 @@ public final class FunctionsClient: Sendable {
       region: region,
       logger: logger,
       fetch: fetch,
-      encoder: encoder,
       decoder: decoder,
       sessionConfiguration: .default
     )
@@ -85,7 +79,6 @@ public final class FunctionsClient: Sendable {
     region: String? = nil,
     logger: (any SupabaseLogger)? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    encoder: JSONEncoder = JSONEncoder(),
     decoder: JSONDecoder = JSONDecoder(),
     sessionConfiguration: URLSessionConfiguration
   ) {
@@ -100,7 +93,6 @@ public final class FunctionsClient: Sendable {
       url: url,
       headers: headers,
       region: region,
-      encoder: encoder,
       decoder: decoder,
       http: http,
       sessionConfiguration: sessionConfiguration
@@ -111,14 +103,12 @@ public final class FunctionsClient: Sendable {
     url: URL,
     headers: [String: String],
     region: String?,
-    encoder: JSONEncoder = JSONEncoder(),
     decoder: JSONDecoder = JSONDecoder(),
     http: any HTTPClientType,
     sessionConfiguration: URLSessionConfiguration = .default
   ) {
     self.url = url
     self.region = region
-    self.encoder = encoder
     self.decoder = decoder
     self.http = http
     self.sessionConfiguration = sessionConfiguration
@@ -139,7 +129,6 @@ public final class FunctionsClient: Sendable {
   ///   - region: The Region to invoke the functions in.
   ///   - logger: SupabaseLogger instance to use.
   ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  ///   - encoder: The JSON encoder to use for encoding request bodies. (Default: `JSONEncoder()`)
   ///   - decoder: The JSON decoder to use for decoding response bodies. (Default: `JSONDecoder()`)
   public convenience init(
     url: URL,
@@ -147,7 +136,6 @@ public final class FunctionsClient: Sendable {
     region: FunctionRegion? = nil,
     logger: (any SupabaseLogger)? = nil,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    encoder: JSONEncoder = JSONEncoder(),
     decoder: JSONDecoder = JSONDecoder()
   ) {
     self.init(
@@ -156,7 +144,6 @@ public final class FunctionsClient: Sendable {
       region: region?.rawValue,
       logger: logger,
       fetch: fetch,
-      encoder: encoder,
       decoder: decoder
     )
   }

@@ -90,7 +90,6 @@ public final class SupabaseClient: Sendable {
           region: options.functions.region,
           logger: options.global.logger,
           fetch: fetchWithAuth,
-          encoder: options.functions.encoder,
           decoder: options.functions.decoder
         )
       }
