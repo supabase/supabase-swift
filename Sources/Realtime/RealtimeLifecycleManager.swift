@@ -19,11 +19,12 @@ import Foundation
   /// Observes platform app lifecycle notifications and nudges the Realtime client to recover
   /// its connection when the app returns to the foreground.
   ///
-  /// On foregrounding, the manager forwards the event to
-  /// ``RealtimeClientV2/setAppStateActive(_:)``, which reconnects and re-joins existing channels
-  /// only if the WebSocket was actually closed while the app was in the background. The manager
-  /// does not react to backgrounding — connections often survive short background cycles, and
-  /// tearing them down preemptively wastes work during rapid transitions.
+  /// On backgrounding, the manager tells the client to record whether the socket was connected.
+  /// On foregrounding, it forwards the event to ``RealtimeClientV2/handleAppForeground()``,
+  /// which reconnects and re-joins channels only if the socket was connected before the app
+  /// backgrounded and has since been torn down. The manager does not proactively disconnect
+  /// on backgrounding — connections often survive short background cycles, and tearing them
+  /// down preemptively wastes work during rapid transitions.
   final class RealtimeLifecycleManager: @unchecked Sendable {
     private weak var client: RealtimeClientV2?
     private var observers: [any NSObjectProtocol] = []
@@ -46,8 +47,10 @@ import Foundation
 
       #if canImport(UIKit)
         let foregroundName = UIApplication.willEnterForegroundNotification
+        let backgroundName = UIApplication.didEnterBackgroundNotification
       #elseif canImport(AppKit)
         let foregroundName = NSApplication.willBecomeActiveNotification
+        let backgroundName = NSApplication.didResignActiveNotification
       #endif
 
       let foregroundObserver = center.addObserver(
@@ -58,14 +61,28 @@ import Foundation
         self?.handleForeground()
       }
 
+      let backgroundObserver = center.addObserver(
+        forName: backgroundName,
+        object: nil,
+        queue: nil
+      ) { [weak self] _ in
+        self?.handleBackground()
+      }
+
       lock.lock()
       observers.append(foregroundObserver)
+      observers.append(backgroundObserver)
       lock.unlock()
     }
 
     private func handleForeground() {
       guard let client else { return }
       Task { await client.handleAppForeground() }
+    }
+
+    private func handleBackground() {
+      guard let client else { return }
+      client.handleAppBackground()
     }
   }
 

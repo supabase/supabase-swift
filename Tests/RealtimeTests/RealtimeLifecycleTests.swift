@@ -25,14 +25,6 @@ import XCTest
     let url = URL(string: "http://localhost:54321/realtime/v1")!
     let apiKey = "anon.api.key"
 
-    #if !os(Windows) && !os(Linux) && !os(Android)
-      override func invokeTest() {
-        withMainSerialExecutor {
-          super.invokeTest()
-        }
-      }
-    #endif
-
     var http: HTTPClientMock!
     var testClock: TestClock<Duration>!
     var servers: LockIsolated<[FakeWebSocket]>!
@@ -69,7 +61,22 @@ import XCTest
                 )
               )
             } else if msg.event == "phx_join" {
-              server?.send(.messagesSubscribed)
+              // Mirror the incoming ref so the client's pending push resolves,
+              // regardless of reconnect cycles (ref counter resets on disconnect).
+              server?.send(
+                RealtimeMessageV2(
+                  joinRef: msg.joinRef,
+                  ref: msg.ref,
+                  topic: msg.topic,
+                  event: "phx_reply",
+                  payload: [
+                    "response": [
+                      "postgres_changes": []
+                    ],
+                    "status": "ok",
+                  ]
+                )
+              )
             }
           }
           // Retain the server so `client.other` (a weak ref) stays valid.
@@ -88,25 +95,53 @@ import XCTest
       let statusBefore = sut.status
       let channelStatusBefore = channel.status
 
+      sut.handleAppBackground()
       await sut.handleAppForeground()
 
       XCTAssertEqual(sut.status, statusBefore)
       XCTAssertEqual(channel.status, channelStatusBefore)
     }
 
-    func testHandleAppForegroundReconnectsWhenDisconnected() async {
+    func testHandleAppForegroundWithoutPriorBackgroundIsNoOp() async {
       let sut = makeClient()
+      XCTAssertEqual(sut.status, .disconnected)
+
+      await sut.handleAppForeground()
+      XCTAssertEqual(sut.status, .disconnected)
+    }
+
+    func testHandleAppForegroundDoesNotConnectIfNotConnectedBeforeBackground() async {
+      let sut = makeClient()
+      XCTAssertEqual(sut.status, .disconnected)
+
+      sut.handleAppBackground()
+      await sut.handleAppForeground()
+      XCTAssertEqual(sut.status, .disconnected)
+    }
+
+    func testHandleAppForegroundReconnectsWhenBackgroundedWhileConnected() async throws {
+      let sut = makeClient()
+      await sut.connect()
+      XCTAssertEqual(sut.status, .connected)
+
+      sut.handleAppBackground()
+      sut.disconnect()
       XCTAssertEqual(sut.status, .disconnected)
 
       await sut.handleAppForeground()
       XCTAssertEqual(sut.status, .connected)
     }
 
-    func testHandleAppForegroundResubscribesChannelsWhenDisconnected() async throws {
+    func testHandleAppForegroundResubscribesChannelsWhenBackgroundedWhileConnected() async throws {
       let sut = makeClient()
       let channel = sut.channel("public:messages")
+      try await channel.subscribeWithError()
+      XCTAssertEqual(sut.status, .connected)
+      XCTAssertEqual(channel.status, .subscribed)
+
+      sut.handleAppBackground()
+      sut.disconnect()
       XCTAssertEqual(sut.status, .disconnected)
-      XCTAssertEqual(channel.status, .unsubscribed)
 
       await sut.handleAppForeground()
       XCTAssertEqual(sut.status, .connected)

@@ -65,6 +65,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     /// Stored as `AnyObject?` so this type remains available on platforms where
     /// the concrete `RealtimeLifecycleManager` is not compiled.
     var lifecycleManager: AnyObject?
+
+    /// Whether the socket was `.connected` the last time the app entered the
+    /// background. `handleAppForeground` only attempts recovery when this is
+    /// `true` — otherwise foregrounding a client that was intentionally idle
+    /// would spuriously open a connection.
+    var wasConnectedBeforeBackground: Bool = false
   }
 
   let url: URL
@@ -561,12 +567,28 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
+  /// Records that the app is entering the background. Captures whether the socket was connected
+  /// at that moment so ``handleAppForeground()`` knows whether to attempt recovery when the app
+  /// returns to the foreground.
+  ///
+  /// Invoked automatically by ``RealtimeLifecycleManager`` when
+  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  func handleAppBackground() {
+    let wasConnected = status == .connected
+    mutableState.withValue { $0.wasConnectedBeforeBackground = wasConnected }
+  }
+
   /// Recover the connection on app foregrounding: reconnect and re-join existing channels if the
-  /// socket was torn down while the app was in the background. No-op if still connected.
+  /// socket was connected before the app backgrounded and has since been torn down. No-op if the
+  /// socket was already disconnected at background time, or if it is still connected now.
   ///
   /// Invoked automatically by ``RealtimeLifecycleManager`` when
   /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
   func handleAppForeground() async {
+    let wasConnected = mutableState.wasConnectedBeforeBackground
+    mutableState.withValue { $0.wasConnectedBeforeBackground = false }
+
+    guard wasConnected else { return }
     guard status != .connected else { return }
 
     let hadChannels = !mutableState.channels.isEmpty
