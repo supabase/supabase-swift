@@ -571,4 +571,61 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
       .maxAffected(3)
       .execute()
   }
+
+  func testStripNulls() async throws {
+    Mock(
+      url: url.appendingPathComponent("countries"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: return=stripped-nulls" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/countries?select=*"
+      """#
+    }
+    .register()
+
+    try await sut
+      .from("countries")
+      .select()
+      .stripNulls()
+      .execute()
+  }
+
+  func testStripNullsWithCSVThrowsError() async throws {
+    do {
+      try await sut
+        .from("countries")
+        .select()
+        .csv()
+        .stripNulls()
+        .execute()
+      XCTFail("Expected error to be thrown")
+    } catch let error as PostgrestError {
+      XCTAssertEqual(error.message, "`.stripNulls()` cannot be combined with `.csv()`")
+    }
+  }
+
+  func testCSVWithStripNullsThrowsError() async throws {
+    do {
+      try await sut
+        .from("countries")
+        .select()
+        .stripNulls()
+        .csv()
+        .execute()
+      XCTFail("Expected error to be thrown")
+    } catch let error as PostgrestError {
+      XCTAssertEqual(error.message, "`.csv()` cannot be combined with `.stripNulls()`")
+    }
+  }
 }

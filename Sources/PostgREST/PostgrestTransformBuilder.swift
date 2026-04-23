@@ -121,7 +121,24 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   ///  Return `value` as a string in CSV format.
   public func csv() -> PostgrestTransformBuilder {
     mutableState.withValue {
+      let preferComponents = $0.request.headers[.prefer]?.components(separatedBy: ",") ?? []
+      if preferComponents.contains("return=stripped-nulls") {
+        $0.pendingError = "`.csv()` cannot be combined with `.stripNulls()`"
+      }
       $0.request.headers[.accept] = "text/csv"
+    }
+    return self
+  }
+
+  /// Strip null values from the response.
+  ///
+  /// Requires PostgREST 11.2.0+. Not compatible with ``csv()``.
+  public func stripNulls() -> PostgrestTransformBuilder {
+    mutableState.withValue {
+      if $0.request.headers[.accept] == "text/csv" {
+        $0.pendingError = "`.stripNulls()` cannot be combined with `.csv()`"
+      }
+      $0.request.headers.appendOrUpdate(.prefer, value: "return=stripped-nulls")
     }
     return self
   }

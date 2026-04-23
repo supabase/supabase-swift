@@ -23,6 +23,9 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     /// Whether automatic retries are enabled for this request.
     var retryEnabled: Bool
+
+    /// An error to throw when execute() is called, set when an invalid method combination is detected.
+    var pendingError: String?
   }
 
   let mutableState: LockIsolated<MutableState>
@@ -115,7 +118,12 @@ public class PostgrestBuilder: @unchecked Sendable {
     options: FetchOptions,
     decode: @Sendable (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    let (baseRequest, retryEnabled) = mutableState.withValue { ($0.request, $0.retryEnabled) }
+    let (baseRequest, retryEnabled) = try mutableState.withValue {
+      if let message = $0.pendingError {
+        throw PostgrestError(message: message)
+      }
+      return ($0.request, $0.retryEnabled)
+    }
     var request = baseRequest
 
     if options.head {
