@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.44.1](https://github.com/supabase/supabase-swift/compare/v2.44.0...v2.44.1) (2026-04-22)
+
+
+### Bug Fixes
+
+* **realtime:** extract ConnectionManager actor and fix connection lifecycle races ([#855](https://github.com/supabase/supabase-swift/issues/855)) ([dcbc63d](https://github.com/supabase/supabase-swift/commit/dcbc63d59dac46da96cec26e69d298e4735d217e))
+
 ## [2.44.0](https://github.com/supabase/supabase-swift/compare/v2.43.1...v2.44.0) (2026-04-20)
 
 
