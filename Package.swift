@@ -16,6 +16,7 @@ let package = Package(
   products: [
     .library(name: "Auth", targets: ["Auth"]),
     .library(name: "Functions", targets: ["Functions"]),
+    .library(name: "Helpers", targets: ["Helpers"]),
     .library(name: "PostgREST", targets: ["PostgREST"]),
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
@@ -41,6 +42,7 @@ let package = Package(
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
       ]
     ),
     .testTarget(
