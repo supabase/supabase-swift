@@ -34,6 +34,7 @@ actor ChannelStateManager {
 
   typealias MakeRef = @Sendable () -> String
   typealias EnsureSocketConnected = @Sendable () async -> Bool
+  typealias GetClientChanges = @Sendable () -> [PostgresJoinConfig]
   typealias JoinOperation =
     @Sendable (_ joinRef: String, _ clientChanges: [PostgresJoinConfig])
     async -> Void
@@ -58,7 +59,6 @@ actor ChannelStateManager {
   // MARK: - Per-subscription mutable state
 
   private(set) var joinRef: String?
-  private(set) var clientChanges: [PostgresJoinConfig] = []
   private var pushes: [String: PushV2] = [:]
 
   // MARK: - Config & injected operations
@@ -70,6 +70,7 @@ actor ChannelStateManager {
 
   private let makeRef: MakeRef
   private let ensureSocketConnected: EnsureSocketConnected
+  private let getClientChanges: GetClientChanges
   private let joinOperation: JoinOperation
   private let leaveOperation: LeaveOperation
   private let retryDelay: RetryDelay
@@ -81,6 +82,7 @@ actor ChannelStateManager {
     timeoutInterval: TimeInterval,
     makeRef: @escaping MakeRef,
     ensureSocketConnected: @escaping EnsureSocketConnected,
+    getClientChanges: @escaping GetClientChanges,
     joinOperation: @escaping JoinOperation,
     leaveOperation: @escaping LeaveOperation,
     retryDelay: @escaping RetryDelay = ChannelStateManager.defaultRetryDelay,
@@ -92,6 +94,7 @@ actor ChannelStateManager {
     self.timeoutInterval = timeoutInterval
     self.makeRef = makeRef
     self.ensureSocketConnected = ensureSocketConnected
+    self.getClientChanges = getClientChanges
     self.joinOperation = joinOperation
     self.leaveOperation = leaveOperation
     self.retryDelay = retryDelay
@@ -100,12 +103,25 @@ actor ChannelStateManager {
 
   // MARK: - Mutable state accessors
 
-  func addClientChange(_ config: PostgresJoinConfig) {
-    clientChanges.append(config)
-  }
-
-  func storePush(_ push: PushV2, ref: String) {
+  /// Atomically register `push` under `ref` only if `joinRef` still matches
+  /// the snapshot the caller captured when building the outgoing message.
+  ///
+  /// Fixes a race where `didReceiveClose` could interleave between the
+  /// caller reading `joinRef` and calling this method. If the close wins,
+  /// the caller's message is from a previous subscription cycle — the
+  /// server will reject it, and registering the push would orphan it in
+  /// `pushes` (nothing would clear it again).
+  ///
+  /// Returns `true` if the push was stored (caller should send the
+  /// message); `false` if the state changed (caller should abandon it).
+  func storePushIfJoinRefMatches(
+    _ push: PushV2,
+    ref: String,
+    joinRef: String?
+  ) -> Bool {
+    guard self.joinRef == joinRef else { return false }
     pushes[ref] = push
+    return true
   }
 
   func removePush(ref: String) -> PushV2? {
@@ -131,7 +147,13 @@ actor ChannelStateManager {
     case .unsubscribing(let task):
       logger?.debug("Waiting for in-flight unsubscribe on '\(topic)' before subscribing")
       await task.value
-      try await beginSubscribe()
+      // Re-dispatch through `subscribe()` rather than calling `beginSubscribe()`
+      // directly — under actor re-entrancy, another caller may have flipped
+      // state to `.subscribing` while we were awaiting the unsubscribe task.
+      // Re-reading state here prevents us from overwriting their in-flight
+      // subscribe with a second one (which would orphan the first task and
+      // send a duplicate `phx_join`).
+      try await subscribe()
 
     case .unsubscribed:
       try await beginSubscribe()
@@ -274,7 +296,10 @@ actor ChannelStateManager {
 
     let ref = makeRef()
     joinRef = ref
-    let changes = clientChanges
+    // Read through the injected closure — the channel owns the buffer so
+    // `onPostgresChange` can append synchronously without a racy
+    // fire-and-forget Task.
+    let changes = getClientChanges()
 
     await joinOperation(ref, changes)
 

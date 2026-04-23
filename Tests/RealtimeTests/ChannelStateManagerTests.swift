@@ -11,6 +11,7 @@ final class ChannelStateManagerTests: XCTestCase {
     let sut: ChannelStateManager
     let ref: LockIsolated<Int>
     let ensureConnected: LockIsolated<Bool>
+    let clientChanges: LockIsolated<[PostgresJoinConfig]>
     let joinCallCount: LockIsolated<Int>
     let lastJoinRef: LockIsolated<String?>
     let lastJoinChanges: LockIsolated<[PostgresJoinConfig]>
@@ -24,6 +25,7 @@ final class ChannelStateManagerTests: XCTestCase {
   ) -> Harness {
     let ref = LockIsolated<Int>(0)
     let ensureConnected = LockIsolated<Bool>(true)
+    let clientChanges = LockIsolated<[PostgresJoinConfig]>([])
     let joinCallCount = LockIsolated<Int>(0)
     let lastJoinRef = LockIsolated<String?>(nil)
     let lastJoinChanges = LockIsolated<[PostgresJoinConfig]>([])
@@ -39,6 +41,7 @@ final class ChannelStateManagerTests: XCTestCase {
         return "\(ref.value)"
       },
       ensureSocketConnected: { ensureConnected.value },
+      getClientChanges: { clientChanges.value },
       joinOperation: { ref, changes in
         joinCallCount.withValue { $0 += 1 }
         lastJoinRef.setValue(ref)
@@ -54,6 +57,7 @@ final class ChannelStateManagerTests: XCTestCase {
       sut: sut,
       ref: ref,
       ensureConnected: ensureConnected,
+      clientChanges: clientChanges,
       joinCallCount: joinCallCount,
       lastJoinRef: lastJoinRef,
       lastJoinChanges: lastJoinChanges,
@@ -86,9 +90,6 @@ final class ChannelStateManagerTests: XCTestCase {
 
     let joinRef = await h.sut.joinRef
     XCTAssertNil(joinRef)
-
-    let changes = await h.sut.clientChanges
-    XCTAssertTrue(changes.isEmpty)
   }
 
   // MARK: - Subscribe
@@ -339,24 +340,12 @@ final class ChannelStateManagerTests: XCTestCase {
 
   // MARK: - Client changes & pushes
 
-  func testAddClientChangeAppendsConfig() async {
-    let h = makeHarness()
-    let config1 = PostgresJoinConfig(event: .insert, schema: "public", table: "users", filter: nil)
-    let config2 = PostgresJoinConfig(event: .update, schema: "public", table: "posts", filter: nil)
-
-    await h.sut.addClientChange(config1)
-    await h.sut.addClientChange(config2)
-
-    let changes = await h.sut.clientChanges
-    XCTAssertEqual(changes.count, 2)
-    XCTAssertEqual(changes[0].table, "users")
-    XCTAssertEqual(changes[1].table, "posts")
-  }
-
   func testClientChangesAreForwardedToJoinOperation() async throws {
     let h = makeHarness()
     let config = PostgresJoinConfig(event: .insert, schema: "public", table: "users", filter: nil)
-    await h.sut.addClientChange(config)
+    // The channel owns the buffer — the actor reads it through the injected
+    // `getClientChanges` closure when it builds the join payload.
+    h.clientChanges.withValue { $0.append(config) }
 
     // Poll-then-confirm avoids a race where an eager `didReceiveSubscribedOK`
     // runs before `subscribe()` has transitioned into `.subscribing` and is
@@ -375,19 +364,50 @@ final class ChannelStateManagerTests: XCTestCase {
   }
 
   @MainActor
-  func testStorePushAndRemovePush() async {
+  func testStorePushIfJoinRefMatchesStoresWhenJoinRefMatches() async throws {
     let h = makeHarness()
+    let confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+
+    let joinRef = await h.sut.joinRef
     let message = RealtimeMessageV2(
-      joinRef: nil, ref: "r1", topic: "t", event: "e", payload: [:]
+      joinRef: joinRef, ref: "r1", topic: "t", event: "e", payload: [:]
     )
     let push = PushV2(channel: nil, message: message)
 
-    await h.sut.storePush(push, ref: "r1")
+    let stored = await h.sut.storePushIfJoinRefMatches(push, ref: "r1", joinRef: joinRef)
+    XCTAssertTrue(stored)
+
     let fetched = await h.sut.removePush(ref: "r1")
     XCTAssertTrue(fetched === push)
+  }
 
-    let fetchedAgain = await h.sut.removePush(ref: "r1")
-    XCTAssertNil(fetchedAgain)
+  @MainActor
+  func testStorePushIfJoinRefMatchesSkipsWhenJoinRefChanged() async throws {
+    let h = makeHarness()
+    let confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+
+    // Caller snapshots joinRef…
+    let staleJoinRef = await h.sut.joinRef
+
+    // …then the channel closes before the caller registers the push.
+    await h.sut.didReceiveClose()
+
+    let message = RealtimeMessageV2(
+      joinRef: staleJoinRef, ref: "r1", topic: "t", event: "e", payload: [:]
+    )
+    let push = PushV2(channel: nil, message: message)
+
+    let stored = await h.sut.storePushIfJoinRefMatches(
+      push, ref: "r1", joinRef: staleJoinRef
+    )
+    XCTAssertFalse(stored, "Push from a stale join cycle must not be registered")
+
+    let fetched = await h.sut.removePush(ref: "r1")
+    XCTAssertNil(fetched, "Stale push must not leak into the pushes dict")
   }
 
   @MainActor
@@ -397,11 +417,12 @@ final class ChannelStateManagerTests: XCTestCase {
     try await h.sut.subscribe()
     _ = await confirmer.value
 
+    let joinRef = await h.sut.joinRef
     let message = RealtimeMessageV2(
-      joinRef: nil, ref: "r1", topic: "t", event: "e", payload: [:]
+      joinRef: joinRef, ref: "r1", topic: "t", event: "e", payload: [:]
     )
     let push = PushV2(channel: nil, message: message)
-    await h.sut.storePush(push, ref: "r1")
+    _ = await h.sut.storePushIfJoinRefMatches(push, ref: "r1", joinRef: joinRef)
 
     await h.sut.didReceiveClose()
 

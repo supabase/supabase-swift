@@ -43,6 +43,13 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   let stateManager: ChannelStateManager
   let callbackManager = CallbackManager()
 
+  /// Buffer of `postgres_changes` filters registered via
+  /// ``onPostgresChange`` prior to ``subscribe()``. Lives on the channel
+  /// (not on ``stateManager``) so the synchronous `onPostgresChange` API
+  /// can append without a fire-and-forget `Task` — which would race with
+  /// a subsequent `subscribe()` call and sometimes lose the filter.
+  let clientChanges = LockIsolated<[PostgresJoinConfig]>([])
+
   private let statusSubject = AsyncValueSubject<RealtimeChannelStatus>(.unsubscribed)
 
   public private(set) var status: RealtimeChannelStatus {
@@ -79,6 +86,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     let weakSelfRef = WeakChannelRef()
     let statusSubject = self.statusSubject
+    let clientChanges = self.clientChanges
     self.stateManager = ChannelStateManager(
       topic: topic,
       logger: logger,
@@ -97,6 +105,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         await socket.connect()
         return socket.status == .connected
       },
+      getClientChanges: { clientChanges.value },
       joinOperation: { [weakSelfRef] ref, changes in
         guard let channel = weakSelfRef.value else { return }
         await channel.performJoin(ref: ref, clientChanges: changes)
@@ -706,9 +715,11 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       filter: filter
     )
 
-    Task { [stateManager] in
-      await stateManager.addClientChange(config)
-    }
+    // Synchronous append — the buffer lives on the channel, not the actor,
+    // so this write cannot be reordered against a subsequent `subscribe()`
+    // call (previously a fire-and-forget `Task` could lose this race,
+    // causing `phx_join` to be sent with an empty `postgres_changes` set).
+    clientChanges.withValue { $0.append(config) }
 
     let id = callbackManager.addPostgresCallback(filter: config, callback: callback)
     return RealtimeSubscription { [weak callbackManager, logger] in
@@ -775,7 +786,21 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     let push = PushV2(channel: self, message: message)
     if let ref = message.ref {
-      await stateManager.storePush(push, ref: ref)
+      // Registering under `ref` must be guarded by the `joinRef` snapshot:
+      // if `didReceiveClose` ran on the actor between our `joinRef` read
+      // above and this call, the message we'd be sending is from a prior
+      // subscription cycle (the server will reject it) and keeping the
+      // push in the dictionary would orphan it — nothing would clear it
+      // again. `storePushIfJoinRefMatches` makes this pair atomic.
+      let stored = await stateManager.storePushIfJoinRefMatches(
+        push, ref: ref, joinRef: joinRef
+      )
+      guard stored else {
+        logger?.debug(
+          "Abandoning stale push for '\(topic)': channel closed between joinRef snapshot and store"
+        )
+        return .error
+      }
     }
 
     return await push.send()
