@@ -125,7 +125,11 @@ import XCTest
       XCTAssertEqual(sut.status, .connected)
 
       sut.handleAppBackground()
-      sut.disconnect()
+      // Simulate the OS tearing down the socket while backgrounded (not a user-initiated
+      // disconnect). Closing the server side triggers a .close event on the client without
+      // going through disconnect(), so wasConnectedBeforeBackground remains set.
+      servers.value.last?.close(code: nil, reason: "OS teardown")
+      _ = await sut.statusChange.first { $0 == .disconnected }
       XCTAssertEqual(sut.status, .disconnected)
 
       await sut.handleAppForeground()
@@ -140,12 +144,29 @@ import XCTest
       XCTAssertEqual(channel.status, .subscribed)
 
       sut.handleAppBackground()
-      sut.disconnect()
+      // Simulate the OS tearing down the socket while backgrounded.
+      servers.value.last?.close(code: nil, reason: "OS teardown")
+      _ = await sut.statusChange.first { $0 == .disconnected }
       XCTAssertEqual(sut.status, .disconnected)
 
       await sut.handleAppForeground()
       XCTAssertEqual(sut.status, .connected)
       XCTAssertEqual(channel.status, .subscribed)
+    }
+
+    func testExplicitDisconnectWhileBackgroundedDoesNotReconnectOnForeground() async throws {
+      let sut = makeClient()
+      await sut.connect()
+      XCTAssertEqual(sut.status, .connected)
+
+      sut.handleAppBackground()
+      // Explicit developer disconnect (e.g. sign-out) must clear the lifecycle flag so
+      // handleAppForeground() does not silently undo it.
+      sut.disconnect()
+      XCTAssertEqual(sut.status, .disconnected)
+
+      await sut.handleAppForeground()
+      XCTAssertEqual(sut.status, .disconnected)
     }
 
     func testHandleAppLifecycleFalseDoesNotInstallLifecycleManager() {

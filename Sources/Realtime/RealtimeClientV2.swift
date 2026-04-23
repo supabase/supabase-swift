@@ -558,6 +558,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.pendingDisconnectTask = nil
       $0.connection = nil
       $0.sendBuffer = []
+      // A developer-initiated disconnect should not be undone on the next foreground event.
+      $0.wasConnectedBeforeBackground = false
     }
 
     Self.yieldStatusIfChanged(statusSubject, .disconnected)
@@ -585,11 +587,17 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// Invoked automatically by ``RealtimeLifecycleManager`` when
   /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
   func handleAppForeground() async {
-    let wasConnected = mutableState.wasConnectedBeforeBackground
-    mutableState.withValue { $0.wasConnectedBeforeBackground = false }
+    // Atomic read-modify-write so two rapid foreground notifications can't both observe `true`.
+    let wasConnected = mutableState.withValue { state -> Bool in
+      let previous = state.wasConnectedBeforeBackground
+      state.wasConnectedBeforeBackground = false
+      return previous
+    }
 
     guard wasConnected else { return }
-    guard status != .connected else { return }
+    // Skip if already connected OR if an auto-reconnect is in-flight (.connecting),
+    // because the state observer will drive rejoinChannels() when that reconnect completes.
+    guard status == .disconnected else { return }
 
     let hadChannels = !mutableState.channels.isEmpty
     await connect()
