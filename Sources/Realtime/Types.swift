@@ -31,6 +31,7 @@ public struct RealtimeClientOptions: Sendable {
   var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
   var maxRetryAttempts: Int
+  var disconnectOnEmptyChannelsAfter: TimeInterval
 
   /// The Phoenix serializer protocol version.
   public var vsn: RealtimeProtocolVersion
@@ -47,6 +48,12 @@ public struct RealtimeClientOptions: Sendable {
   public static let defaultDisconnectOnSessionLoss = true
   public static let defaultConnectOnSubscribe: Bool = true
   public static let defaultMaxRetryAttempts: Int = 5
+  /// Defers the WebSocket disconnect after the last channel is removed, giving a window to reuse
+  /// the existing connection when switching channels without a reconnect penalty. Defaults to
+  /// `2 × defaultHeartbeatInterval`. Set to 0 for immediate disconnect. If a new channel is
+  /// created before the timer fires, the pending disconnect is cancelled.
+  public static let defaultDisconnectOnEmptyChannelsAfter: TimeInterval =
+    2 * defaultHeartbeatInterval
 
   public init(
     headers: [String: String] = [:],
@@ -56,6 +63,7 @@ public struct RealtimeClientOptions: Sendable {
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
+    disconnectOnEmptyChannelsAfter: TimeInterval = Self.defaultDisconnectOnEmptyChannelsAfter,
     vsn: RealtimeProtocolVersion = .v2,
     logLevel: LogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
@@ -69,6 +77,7 @@ public struct RealtimeClientOptions: Sendable {
     self.disconnectOnSessionLoss = disconnectOnSessionLoss
     self.connectOnSubscribe = connectOnSubscribe
     self.maxRetryAttempts = maxRetryAttempts
+    self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
     self.vsn = vsn
     self.logLevel = logLevel
     self.fetch = fetch
@@ -87,6 +96,7 @@ public struct RealtimeClientOptions: Sendable {
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
+    disconnectOnEmptyChannelsAfter: TimeInterval = Self.defaultDisconnectOnEmptyChannelsAfter,
     logLevel: LogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
@@ -100,6 +110,7 @@ public struct RealtimeClientOptions: Sendable {
       disconnectOnSessionLoss: disconnectOnSessionLoss,
       connectOnSubscribe: connectOnSubscribe,
       maxRetryAttempts: maxRetryAttempts,
+      disconnectOnEmptyChannelsAfter: disconnectOnEmptyChannelsAfter,
       vsn: .v2,
       logLevel: logLevel,
       fetch: fetch,

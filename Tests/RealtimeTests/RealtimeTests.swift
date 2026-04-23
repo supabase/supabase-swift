@@ -827,6 +827,99 @@ import XCTest
       }
     }
 
+    // MARK: - Deferred Disconnect Tests
+
+    func testDeferredDisconnect_disconnectsAfterDelay() async {
+      let deferredSut = makeClientWithDeferredDisconnect(delay: 5)
+      defer { deferredSut.disconnect() }
+
+      await deferredSut.connect()
+      XCTAssertEqual(deferredSut.status, .connected)
+
+      let channel = deferredSut.channel("test:deferred")
+      await deferredSut.removeChannel(channel)
+
+      // Still connected — pending disconnect has not fired yet.
+      XCTAssertEqual(deferredSut.status, .connected)
+      XCTAssertNotNil(deferredSut.mutableState.pendingDisconnectTask)
+
+      // Advance past the delay — pending task fires and disconnects.
+      await testClock.advance(by: .seconds(5))
+
+      XCTAssertEqual(deferredSut.status, .disconnected)
+      XCTAssertNil(deferredSut.mutableState.pendingDisconnectTask)
+    }
+
+    func testDeferredDisconnect_cancelledByNewChannel() async {
+      let deferredSut = makeClientWithDeferredDisconnect(delay: 5)
+      defer { deferredSut.disconnect() }
+
+      await deferredSut.connect()
+
+      let channel = deferredSut.channel("test:deferred")
+      await deferredSut.removeChannel(channel)
+
+      XCTAssertEqual(deferredSut.status, .connected)
+      XCTAssertNotNil(deferredSut.mutableState.pendingDisconnectTask)
+      let pendingTask = deferredSut.mutableState.pendingDisconnectTask
+
+      // Creating a new channel cancels the pending disconnect.
+      _ = deferredSut.channel("test:new")
+
+      XCTAssertNil(deferredSut.mutableState.pendingDisconnectTask)
+      XCTAssertTrue(pendingTask?.isCancelled ?? false)
+
+      // Advance past what would have been the delay — client stays connected.
+      await testClock.advance(by: .seconds(5))
+      XCTAssertEqual(deferredSut.status, .connected)
+    }
+
+    func testDeferredDisconnect_cancelledByDirectDisconnect() async {
+      let deferredSut = makeClientWithDeferredDisconnect(delay: 5)
+
+      await deferredSut.connect()
+
+      let channel = deferredSut.channel("test:deferred")
+      await deferredSut.removeChannel(channel)
+
+      let pendingTask = deferredSut.mutableState.pendingDisconnectTask
+      XCTAssertNotNil(pendingTask)
+
+      // Calling disconnect() directly cancels the pending timer.
+      deferredSut.disconnect()
+
+      XCTAssertTrue(pendingTask?.isCancelled ?? false)
+      XCTAssertNil(deferredSut.mutableState.pendingDisconnectTask)
+    }
+
+    func testRemoveAllChannels_disconnectsImmediately_withDeferredOption() async {
+      let deferredSut = makeClientWithDeferredDisconnect(delay: 5)
+      defer { deferredSut.disconnect() }
+
+      await deferredSut.connect()
+
+      _ = deferredSut.channel("test:ch1")
+      _ = deferredSut.channel("test:ch2")
+
+      await deferredSut.removeAllChannels()
+
+      // removeAllChannels always disconnects immediately, regardless of delay.
+      XCTAssertEqual(deferredSut.status, .disconnected)
+      XCTAssertNil(deferredSut.mutableState.pendingDisconnectTask)
+    }
+
+    private func makeClientWithDeferredDisconnect(delay: TimeInterval) -> RealtimeClientV2 {
+      RealtimeClientV2(
+        url: url,
+        options: RealtimeClientOptions(
+          headers: ["apikey": apiKey],
+          disconnectOnEmptyChannelsAfter: delay
+        ),
+        wsTransport: { _, _ in self.client },
+        http: http
+      )
+    }
+
     func waitUntil(
       timeout: TimeInterval = 1.0,
       pollInterval: UInt64 = 10_000_000,
