@@ -42,8 +42,8 @@ import XCTest
         url: url,
         options: RealtimeClientOptions(
           headers: ["apikey": apiKey],
-          handleAppLifecycle: handleAppLifecycle,
-          accessToken: { "custom.access.token" }
+          accessToken: { "custom.access.token" },
+          handleAppLifecycle: handleAppLifecycle
         ),
         wsTransport: { [servers] _, _ in
           let (client, server) = FakeWebSocket.fakes()

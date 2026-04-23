@@ -88,11 +88,11 @@ public struct RealtimeClientOptions: Sendable {
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     disconnectOnEmptyChannelsAfter: TimeInterval = Self.defaultDisconnectOnEmptyChannelsAfter,
     vsn: RealtimeProtocolVersion = .v2,
-    handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle,
     logLevel: LogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
-    logger: (any SupabaseLogger)? = nil
+    logger: (any SupabaseLogger)? = nil,
+    handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle
   ) {
     self.headers = HTTPFields(headers)
     self.heartbeatInterval = heartbeatInterval
