@@ -38,7 +38,7 @@ public struct RealtimeClientOptions: Sendable {
 
   /// Sets the log level for Realtime
   var logLevel: LogLevel?
-  var fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))?
+  package var fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))?
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: (any SupabaseLogger)?
 
