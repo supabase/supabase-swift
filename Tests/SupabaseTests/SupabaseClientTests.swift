@@ -113,26 +113,35 @@ final class SupabaseClientTests: XCTestCase {
   #endif
 
   func testCustomSessionPropagatedToRealtimeClient() {
-    let customSession = URLSession(configuration: .ephemeral)
+    let localStorage = AuthLocalStorageMock()
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "ANON_KEY",
       options: SupabaseClientOptions(
-        global: SupabaseClientOptions.GlobalOptions(session: customSession)
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(session: .shared)
       )
     )
 
     XCTAssertNotNil(
       client.realtimeV2.options.fetch,
-      "custom URLSession should be propagated to Realtime client as a fetch closure"
+      "global URLSession should be propagated to Realtime client as a fetch closure"
     )
   }
 
   func testUserProvidedRealtimeFetchIsNotOverridden() {
+    let localStorage = AuthLocalStorageMock()
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "ANON_KEY",
       options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
         realtime: RealtimeClientOptions(
           fetch: { _ in throw URLError(.cancelled) }
         )
