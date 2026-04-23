@@ -48,11 +48,12 @@ public struct RealtimeClientOptions: Sendable {
   public static let defaultDisconnectOnSessionLoss = true
   public static let defaultConnectOnSubscribe: Bool = true
   public static let defaultMaxRetryAttempts: Int = 5
-  /// When set to 0 (the default), the client disconnects immediately when the last channel is
-  /// removed. A positive value defers the disconnect by that many seconds; if a new channel is
-  /// created before the timer fires, the pending disconnect is cancelled and the existing
-  /// connection is reused.
-  public static let defaultDisconnectOnEmptyChannelsAfter: TimeInterval = 0
+  /// Defers the WebSocket disconnect after the last channel is removed, giving a window to reuse
+  /// the existing connection when switching channels without a reconnect penalty. Defaults to
+  /// `2 × defaultHeartbeatInterval`. Set to 0 for immediate disconnect. If a new channel is
+  /// created before the timer fires, the pending disconnect is cancelled.
+  public static let defaultDisconnectOnEmptyChannelsAfter: TimeInterval =
+    2 * defaultHeartbeatInterval
 
   public init(
     headers: [String: String] = [:],
