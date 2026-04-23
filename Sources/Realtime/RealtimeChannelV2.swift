@@ -33,15 +33,6 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 }
 
 public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
-  struct MutableState {
-    var clientChanges: [PostgresJoinConfig] = []
-    var joinRef: String?
-    var pushes: [String: PushV2] = [:]
-  }
-
-  @MainActor
-  private var mutableState = MutableState()
-
   public let topic: String
 
   @MainActor public private(set) var config: RealtimeChannelConfig
@@ -49,9 +40,16 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   let logger: (any SupabaseLogger)?
   let socket: any RealtimeClientProtocol
 
-  @MainActor var joinRef: String? { mutableState.joinRef }
-
+  let stateManager: ChannelStateManager
   let callbackManager = CallbackManager()
+
+  /// Buffer of `postgres_changes` filters registered via
+  /// ``onPostgresChange`` prior to ``subscribe()``. Lives on the channel
+  /// (not on ``stateManager``) so the synchronous `onPostgresChange` API
+  /// can append without a fire-and-forget `Task` — which would race with
+  /// a subsequent `subscribe()` call and sometimes lose the filter.
+  let clientChanges = LockIsolated<[PostgresJoinConfig]>([])
+
   private let statusSubject = AsyncValueSubject<RealtimeChannelStatus>(.unsubscribed)
 
   public private(set) var status: RealtimeChannelStatus {
@@ -85,89 +83,66 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     self.config = config
     self.logger = logger
     self.socket = socket
+
+    let weakSelfRef = WeakChannelRef()
+    let statusSubject = self.statusSubject
+    let clientChanges = self.clientChanges
+    self.stateManager = ChannelStateManager(
+      topic: topic,
+      logger: logger,
+      maxRetryAttempts: socket.options.maxRetryAttempts,
+      timeoutInterval: socket.options.timeoutInterval,
+      makeRef: { [socket] in socket.makeRef() },
+      ensureSocketConnected: { [weak socket] in
+        guard let socket else { return false }
+        if socket.status == .connected { return true }
+        guard socket.options.connectOnSubscribe else {
+          reportIssue(
+            "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
+          )
+          return false
+        }
+        await socket.connect()
+        return socket.status == .connected
+      },
+      getClientChanges: { clientChanges.value },
+      joinOperation: { [weakSelfRef] ref, changes in
+        guard let channel = weakSelfRef.value else { return }
+        await channel.performJoin(ref: ref, clientChanges: changes)
+      },
+      leaveOperation: { [weakSelfRef] in
+        guard let channel = weakSelfRef.value else { return }
+        await channel.push(ChannelEvent.leave)
+      },
+      stateDidChange: { state in
+        // Forward every state-machine transition to the public status
+        // subject synchronously. Running this on the actor avoids the
+        // async observer-Task delay, so reads of ``status`` right after
+        // ``subscribe()`` returns see the latest value.
+        statusSubject.yield(Self.mapState(state))
+      }
+    )
+
+    weakSelfRef.value = self
   }
 
   deinit {
     callbackManager.reset()
   }
 
+  private static func mapState(_ state: ChannelStateManager.State) -> RealtimeChannelStatus {
+    switch state {
+    case .unsubscribed: .unsubscribed
+    case .subscribing: .subscribing
+    case .subscribed: .subscribed
+    case .unsubscribing: .unsubscribing
+    }
+  }
+
   /// Subscribes to the channel.
   public func subscribeWithError() async throws {
-    logger?.debug(
-      "Starting subscription to channel '\(topic)' (attempt 1/\(socket.options.maxRetryAttempts))"
-    )
-
-    status = .subscribing
-
-    defer {
-      // If the subscription fails, we need to set the status to unsubscribed
-      // to avoid the channel being stuck in a subscribing state.
-      if status != .subscribed {
-        status = .unsubscribed
-      }
-    }
-
-    var attempts = 0
-
-    while attempts < socket.options.maxRetryAttempts {
-      attempts += 1
-
-      do {
-        logger?.debug(
-          "Attempting to subscribe to channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
-        )
-
-        try await withTimeout(interval: socket.options.timeoutInterval) { [self] in
-          await _subscribe()
-        }
-
-        logger?.debug("Successfully subscribed to channel '\(topic)'")
-        return
-
-      } catch is TimeoutError {
-        logger?.debug(
-          "Subscribe timed out for channel '\(topic)' (attempt \(attempts)/\(socket.options.maxRetryAttempts))"
-        )
-
-        if attempts < socket.options.maxRetryAttempts {
-          // Add exponential backoff with jitter
-          let delay = calculateRetryDelay(for: attempts)
-          logger?.debug(
-            "Retrying subscription to channel '\(topic)' in \(String(format: "%.2f", delay)) seconds..."
-          )
-
-          do {
-            try await _clock.sleep(for: delay)
-
-            // Check if socket is still connected after delay
-            if socket.status != .connected {
-              logger?.debug(
-                "Socket disconnected during retry delay for channel '\(topic)', aborting subscription"
-              )
-              throw CancellationError()
-            }
-          } catch {
-            // If sleep is cancelled, break out of retry loop
-            logger?.debug("Subscription retry cancelled for channel '\(topic)'")
-            throw CancellationError()
-          }
-        } else {
-          logger?.error(
-            "Failed to subscribe to channel '\(topic)' after \(socket.options.maxRetryAttempts) attempts due to timeout"
-          )
-        }
-      } catch is CancellationError {
-        logger?.debug("Subscription retry cancelled for channel '\(topic)'")
-        throw CancellationError()
-      } catch {
-        preconditionFailure(
-          "The only possible error here is TimeoutError or CancellationError, this should never happen."
-        )
-      }
-    }
-
-    logger?.error("Subscription to channel '\(topic)' failed after \(attempts) attempts")
-    throw RealtimeError.maxRetryAttemptsReached
+    logger?.debug("Subscribe requested for channel '\(topic)'")
+    try await stateManager.subscribe()
   }
 
   /// Subscribes to the channel.
@@ -177,49 +152,24 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     try? await subscribeWithError()
   }
 
-  /// Calculates retry delay with exponential backoff and jitter
-  private func calculateRetryDelay(for attempt: Int) -> TimeInterval {
-    let baseDelay: TimeInterval = 1.0
-    let maxDelay: TimeInterval = 30.0
-    let backoffMultiplier: Double = 2.0
-
-    let exponentialDelay = baseDelay * pow(backoffMultiplier, Double(attempt - 1))
-    let cappedDelay = min(exponentialDelay, maxDelay)
-
-    // Add jitter (±25% random variation) to prevent thundering herd
-    let jitterRange = cappedDelay * 0.25
-    let jitter = Double.random(in: -jitterRange...jitterRange)
-
-    return max(0.1, cappedDelay + jitter)
+  public func unsubscribe() async {
+    logger?.debug("Unsubscribe requested for channel '\(topic)'")
+    await stateManager.unsubscribe()
   }
 
-  /// Subscribes to the channel
+  /// Build the `phx_join` payload from the current config and push it.
+  /// Invoked by ``ChannelStateManager`` via the ``ChannelStateManager/JoinOperation``
+  /// closure at the moment the state machine is ready to join.
   @MainActor
-  private func _subscribe() async {
-    if socket.status != .connected {
-      if socket.options.connectOnSubscribe != true {
-        reportIssue(
-          "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
-        )
-        return
-      }
-      await socket.connect()
-
-      // Verify connection succeeded after await
-      if socket.status != .connected {
-        logger?.debug("Socket failed to connect, cannot subscribe to channel \(topic)")
-        return
-      }
-    }
-
-    logger?.debug("Subscribing to channel \(topic)")
+  private func performJoin(ref: String, clientChanges: [PostgresJoinConfig]) async {
+    logger?.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
 
     config.presence.enabled = callbackManager.callbacks.contains(where: { $0.isPresence })
 
     let joinConfig = RealtimeJoinConfig(
       broadcast: config.broadcast,
       presence: config.presence,
-      postgresChanges: mutableState.clientChanges,
+      postgresChanges: clientChanges,
       isPrivate: config.isPrivate
     )
 
@@ -229,28 +179,11 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       version: socket.options.headers[.xClientInfo]
     )
 
-    let joinRef = socket.makeRef()
-    mutableState.joinRef = joinRef
-
-    logger?.debug("Subscribing to channel with body: \(joinConfig)")
-
     await push(
       ChannelEvent.join,
-      ref: joinRef,
+      ref: ref,
       payload: try! JSONObject(payload)
     )
-
-    _ = await statusChange.first { @Sendable in $0 == .subscribed }
-  }
-
-  public func unsubscribe() async {
-    status = .unsubscribing
-    logger?.debug("Unsubscribing from channel \(topic)")
-
-    await push(ChannelEvent.leave)
-
-    // Wait for server confirmation of unsubscription
-    _ = await statusChange.first { @Sendable in $0 == .unsubscribed }
   }
 
   @available(
@@ -423,8 +356,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
           ]
         )
       case .v2:
+        let joinRef = await stateManager.joinRef
         socket.pushBroadcast(
-          joinRef: mutableState.joinRef,
+          joinRef: joinRef,
           ref: socket.makeRef(),
           topic: topic,
           event: event,
@@ -460,8 +394,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       return
     }
 
+    let joinRef = await stateManager.joinRef
     socket.pushBroadcast(
-      joinRef: mutableState.joinRef,
+      joinRef: joinRef,
       ref: socket.makeRef(),
       topic: topic,
       event: event,
@@ -520,8 +455,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
       case .system:
         if message.status == .ok {
-          logger?.debug("Subscribed to channel \(message.topic)")
-          status = .subscribed
+          await stateManager.didReceiveSubscribedOK()
         } else {
           logger?.debug(
             "Failed to subscribe to channel \(message.topic): \(message.payload)"
@@ -548,11 +482,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
             .decode(as: [PostgresJoinConfig].self)
 
           callbackManager.setServerChanges(changes: serverPostgresChanges ?? [])
-
-          if self.status != .subscribed {
-            self.status = .subscribed
-            logger?.debug("Subscribed to channel \(message.topic)")
-          }
+          await stateManager.didReceiveSubscribedOK()
         }
 
       case .postgresChanges:
@@ -615,8 +545,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
       case .close:
         socket._remove(self)
-        logger?.debug("Unsubscribed from channel \(message.topic)")
-        status = .unsubscribed
+        await stateManager.didReceiveClose()
 
       case .error:
         logger?.error(
@@ -786,9 +715,11 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       filter: filter
     )
 
-    Task { @MainActor in
-      mutableState.clientChanges.append(config)
-    }
+    // Synchronous append — the buffer lives on the channel, not the actor,
+    // so this write cannot be reordered against a subsequent `subscribe()`
+    // call (previously a fire-and-forget `Task` could lose this race,
+    // causing `phx_join` to be sent with an empty `postgres_changes` set).
+    clientChanges.withValue { $0.append(config) }
 
     let id = callbackManager.addPostgresCallback(filter: config, callback: callback)
     return RealtimeSubscription { [weak callbackManager, logger] in
@@ -844,6 +775,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   @MainActor
   @discardableResult
   func push(_ event: String, ref: String? = nil, payload: JSONObject = [:]) async -> PushStatus {
+    let joinRef = await stateManager.joinRef
     let message = RealtimeMessageV2(
       joinRef: joinRef,
       ref: ref ?? socket.makeRef(),
@@ -854,15 +786,36 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     let push = PushV2(channel: self, message: message)
     if let ref = message.ref {
-      mutableState.pushes[ref] = push
+      // Registering under `ref` must be guarded by the `joinRef` snapshot:
+      // if `didReceiveClose` ran on the actor between our `joinRef` read
+      // above and this call, the message we'd be sending is from a prior
+      // subscription cycle (the server will reject it) and keeping the
+      // push in the dictionary would orphan it — nothing would clear it
+      // again. `storePushIfJoinRefMatches` makes this pair atomic.
+      let stored = await stateManager.storePushIfJoinRefMatches(
+        push, ref: ref, joinRef: joinRef
+      )
+      guard stored else {
+        logger?.debug(
+          "Abandoning stale push for '\(topic)': channel closed between joinRef snapshot and store"
+        )
+        return .error
+      }
     }
 
     return await push.send()
   }
 
   @MainActor
-  private func didReceiveReply(ref: String, status: String) {
-    let push = mutableState.pushes.removeValue(forKey: ref)
+  private func didReceiveReply(ref: String, status: String) async {
+    let push = await stateManager.removePush(ref: ref)
     push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
   }
+}
+
+/// Holds a weak reference so the closures we hand to ``ChannelStateManager``
+/// at init don't pin the channel alive. Assignment happens exactly once in
+/// ``RealtimeChannelV2.init``, before the reference escapes the initializer.
+private final class WeakChannelRef: @unchecked Sendable {
+  weak var value: RealtimeChannelV2?
 }
