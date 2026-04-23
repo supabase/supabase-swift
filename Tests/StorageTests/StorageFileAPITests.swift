@@ -665,6 +665,46 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(data, Data("hello world".utf8))
   }
 
+  func testDownload_withEmptyTransformOptions() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/file.txt"),
+      statusCode: 200,
+      data: [
+        .get: Data("hello world".utf8)
+      ]
+    )
+    .register()
+
+    let data = try await storage.from("bucket")
+      .download(path: "file.txt", options: TransformOptions())
+
+    XCTAssertEqual(data, Data("hello world".utf8))
+  }
+
+  func testGetPublicURL_withEmptyTransformOptions() throws {
+    let publicURL = try storage.from("bucket")
+      .getPublicURL(path: "image.png", options: TransformOptions())
+
+    XCTAssertTrue(
+      publicURL.absoluteString.contains("/object/public/"),
+      "Empty transform should use /object/public/ path, got: \(publicURL.absoluteString)"
+    )
+    XCTAssertFalse(
+      publicURL.absoluteString.contains("/render/image/"),
+      "Empty transform should not use /render/image/ path, got: \(publicURL.absoluteString)"
+    )
+  }
+
+  func testGetPublicURL_withActualTransformOptions() throws {
+    let publicURL = try storage.from("bucket")
+      .getPublicURL(path: "image.png", options: TransformOptions(width: 200))
+
+    XCTAssertTrue(
+      publicURL.absoluteString.contains("/render/image/"),
+      "Non-empty transform should use /render/image/ path, got: \(publicURL.absoluteString)"
+    )
+  }
+
   func testDownload_withOptions() async throws {
     let imageData = try! Data(
       contentsOf: Bundle.module.url(forResource: "sadcat", withExtension: "jpg")!)
@@ -682,7 +722,7 @@ final class StorageFileAPITests: XCTestCase {
       curl \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/render/image/authenticated/bucket/sadcat.txt?format=cover&quality=80"
+      	"http://localhost:54321/storage/v1/render/image/authenticated/bucket/sadcat.txt?format=cover"
       """#
     }
     .register()

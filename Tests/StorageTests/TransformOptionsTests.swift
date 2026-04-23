@@ -9,8 +9,32 @@ final class TransformOptionsTests: XCTestCase {
     XCTAssertNil(options.width)
     XCTAssertNil(options.height)
     XCTAssertNil(options.resize)
-    XCTAssertEqual(options.quality, 80)  // Default value
+    XCTAssertNil(options.quality)
     XCTAssertNil(options.format)
+  }
+
+  func testIsEmpty_defaultOptions() {
+    XCTAssertTrue(TransformOptions().isEmpty)
+  }
+
+  func testIsEmpty_withWidth() {
+    XCTAssertFalse(TransformOptions(width: 200).isEmpty)
+  }
+
+  func testIsEmpty_withHeight() {
+    XCTAssertFalse(TransformOptions(height: 300).isEmpty)
+  }
+
+  func testIsEmpty_withResize() {
+    XCTAssertFalse(TransformOptions(resize: "cover").isEmpty)
+  }
+
+  func testIsEmpty_withQuality() {
+    XCTAssertFalse(TransformOptions(quality: 90).isEmpty)
+  }
+
+  func testIsEmpty_withFormat() {
+    XCTAssertFalse(TransformOptions(format: "webp").isEmpty)
   }
 
   func testCustomInitialization() {

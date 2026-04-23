@@ -56,6 +56,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
     var channels: [String: RealtimeChannelV2] = [:]
     var sendBuffer: [@Sendable (RealtimeClientV2) -> Void] = []
+
+    /// Pending task that will call `disconnect()` after `disconnectOnEmptyChannelsAfter` elapses.
+    /// Cancelled when a new channel is created or `disconnect()` is called directly.
+    var pendingDisconnectTask: Task<Void, Never>?
   }
 
   let url: URL
@@ -239,6 +243,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.heartbeatTask?.cancel()
       $0.messageTask?.cancel()
       $0.stateObserverTask?.cancel()
+      $0.pendingDisconnectTask?.cancel()
       $0.channels = [:]
     }
   }
@@ -277,6 +282,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
   ) -> RealtimeChannelV2 {
     mutableState.withValue {
+      // Cancel any pending deferred disconnect — a new channel is being added.
+      $0.pendingDisconnectTask?.cancel()
+      $0.pendingDisconnectTask = nil
+
       let realtimeTopic = "realtime:\(topic)"
 
       if let channel = $0.channels[realtimeTopic] {
@@ -317,7 +326,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   /// Unsubscribe and removes channel.
   ///
-  /// If there is no channel left, client is disconnected.
+  /// If there is no channel left, client is disconnected (or schedules a deferred disconnect when
+  /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter`` is positive).
   public func removeChannel(_ channel: RealtimeChannelV2) async {
     if channel.status == .subscribed {
       await channel.unsubscribe()
@@ -331,7 +341,27 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
     if shouldDisconnect {
       options.logger?.debug("No more subscribed channel in socket")
-      disconnect()
+      let delay = options.disconnectOnEmptyChannelsAfter
+      if delay <= 0 {
+        disconnect()
+      } else {
+        schedulePendingDisconnect()
+      }
+    }
+  }
+
+  private func schedulePendingDisconnect() {
+    let delay = options.disconnectOnEmptyChannelsAfter
+    mutableState.withValue { state in
+      state.pendingDisconnectTask?.cancel()
+      state.pendingDisconnectTask = Task { [weak self] in
+        do {
+          try await _clock.sleep(for: delay)
+          self?.disconnect()
+        } catch {
+          // Cancelled: a new channel was added or disconnect() was called directly.
+        }
+      }
     }
   }
 
@@ -341,7 +371,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  /// Unsubscribes and removes all channels.
+  /// Unsubscribes and removes all channels, then disconnects immediately regardless of
+  /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``.
   public func removeAllChannels() async {
     await withTaskGroup(of: Void.self) { group in
       for channel in channels.values {
@@ -350,6 +381,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
       await group.waitForAll()
     }
+
+    // Cancel any pending deferred disconnect and disconnect immediately.
+    mutableState.withValue {
+      $0.pendingDisconnectTask?.cancel()
+      $0.pendingDisconnectTask = nil
+    }
+    disconnect()
   }
 
   func _getAccessToken() async -> String? {
@@ -500,6 +538,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.heartbeatTask?.cancel()
       $0.heartbeatTask = nil
       $0.pendingHeartbeatRef = nil
+      $0.pendingDisconnectTask?.cancel()
+      $0.pendingDisconnectTask = nil
       $0.connection = nil
       $0.sendBuffer = []
     }

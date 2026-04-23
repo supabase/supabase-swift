@@ -472,7 +472,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     cacheNonce: String? = nil
   ) async throws -> Data {
     var queryItems = options?.queryItems ?? []
-    let renderPath = options != nil ? "render/image/authenticated" : "object"
+    let renderPath = options.map { !$0.isEmpty } == true ? "render/image/authenticated" : "object"
     let _path = _getFinalPath(path)
 
     if let additionalQueryItems {
@@ -567,7 +567,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
     }
 
-    let renderPath = options != nil ? "render/image" : "object"
+    let renderPath = options.map { !$0.isEmpty } == true ? "render/image" : "object"
 
     components.path += "/\(renderPath)/public/\(bucketId)/\(path)"
     components.queryItems = !queryItems.isEmpty ? queryItems : nil

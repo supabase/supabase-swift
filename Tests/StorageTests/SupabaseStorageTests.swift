@@ -53,7 +53,7 @@ final class SupabaseStorageTests: XCTestCase {
     )
     assertInlineSnapshot(of: baseUrlWithAllOptions, as: .description) {
       """
-      http://localhost:54321/storage/v1/render/image/public/tests/README.md?download=test&width=300&height=300&quality=80
+      http://localhost:54321/storage/v1/render/image/public/tests/README.md?download=test&width=300&height=300
       """
     }
   }

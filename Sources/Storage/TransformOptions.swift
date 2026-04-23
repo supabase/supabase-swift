@@ -20,7 +20,7 @@ public struct TransformOptions: Encodable, Sendable {
     width: Int? = nil,
     height: Int? = nil,
     resize: String? = nil,
-    quality: Int? = 80,
+    quality: Int? = nil,
     format: String? = nil
   ) {
     self.width = width
@@ -28,6 +28,10 @@ public struct TransformOptions: Encodable, Sendable {
     self.resize = resize
     self.quality = quality
     self.format = format
+  }
+
+  var isEmpty: Bool {
+    queryItems.isEmpty
   }
 
   var queryItems: [URLQueryItem] {
