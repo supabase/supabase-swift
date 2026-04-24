@@ -60,6 +60,17 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     /// Pending task that will call `disconnect()` after `disconnectOnEmptyChannelsAfter` elapses.
     /// Cancelled when a new channel is created or `disconnect()` is called directly.
     var pendingDisconnectTask: Task<Void, Never>?
+
+    /// Retains the optional app-lifecycle observer for the client's lifetime.
+    /// Stored as `AnyObject?` so this type remains available on platforms where
+    /// the concrete `RealtimeLifecycleManager` is not compiled.
+    var lifecycleManager: AnyObject?
+
+    /// Whether the socket was `.connected` the last time the app entered the
+    /// background. `handleAppForeground` only attempts recovery when this is
+    /// `true` — otherwise foregrounding a client that was intentionally idle
+    /// would spuriously open a connection.
+    var wasConnectedBeforeBackground: Bool = false
   }
 
   let url: URL
@@ -217,6 +228,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     mutableState.withValue {
       $0.stateObserverTask = stateObserverTask
     }
+
+    #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
+      if options.handleAppLifecycle {
+        let manager = RealtimeLifecycleManager(client: self)
+        mutableState.withValue { $0.lifecycleManager = manager }
+      }
+    #endif
   }
 
   private static func yieldStatusIfChanged(
@@ -233,7 +251,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     listenForMessages(conn: conn)
     startHeartbeating()
     if isReconnect {
-      rejoinChannels()
+      Task { await rejoinChannels() }
     }
     flushSendBuffer()
   }
@@ -397,11 +415,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     return mutableState.accessToken
   }
 
-  private func rejoinChannels() {
-    Task {
-      for channel in channels.values {
-        try? await channel.subscribeWithError()
-      }
+  private func rejoinChannels() async {
+    for channel in channels.values {
+      try? await channel.subscribeWithError()
     }
   }
 
@@ -542,12 +558,52 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.pendingDisconnectTask = nil
       $0.connection = nil
       $0.sendBuffer = []
+      // A developer-initiated disconnect should not be undone on the next foreground event.
+      $0.wasConnectedBeforeBackground = false
     }
 
     Self.yieldStatusIfChanged(statusSubject, .disconnected)
 
     Task { [connectionManager, reason] in
       await connectionManager.disconnect(reason: reason ?? "Client disconnect")
+    }
+  }
+
+  /// Records that the app is entering the background. Captures whether the socket was connected
+  /// at that moment so ``handleAppForeground()`` knows whether to attempt recovery when the app
+  /// returns to the foreground.
+  ///
+  /// Invoked automatically by ``RealtimeLifecycleManager`` when
+  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  func handleAppBackground() {
+    let wasConnected = status == .connected
+    mutableState.withValue { $0.wasConnectedBeforeBackground = wasConnected }
+  }
+
+  /// Recover the connection on app foregrounding: reconnect and re-join existing channels if the
+  /// socket was connected before the app backgrounded and has since been torn down. No-op if the
+  /// socket was already disconnected at background time, or if it is still connected now.
+  ///
+  /// Invoked automatically by ``RealtimeLifecycleManager`` when
+  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  func handleAppForeground() async {
+    // Atomic read-modify-write so two rapid foreground notifications can't both observe `true`.
+    let wasConnected = mutableState.withValue { state -> Bool in
+      let previous = state.wasConnectedBeforeBackground
+      state.wasConnectedBeforeBackground = false
+      return previous
+    }
+
+    guard wasConnected else { return }
+    // Skip if already connected OR if an auto-reconnect is in-flight (.connecting),
+    // because the state observer will drive rejoinChannels() when that reconnect completes.
+    guard status == .disconnected else { return }
+
+    let hadChannels = !mutableState.channels.isEmpty
+    await connect()
+
+    if hadChannels, status == .connected {
+      await rejoinChannels()
     }
   }
 
