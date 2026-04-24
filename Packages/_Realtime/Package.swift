@@ -11,9 +11,10 @@ let package = Package(
     .visionOS(.v1),
   ],
   products: [
-    .library(name: "_Realtime", targets: ["_Realtime"]),
+    .library(name: "_Realtime", targets: ["_Realtime"])
   ],
   dependencies: [
+    .package(path: "../_RealtimeTableMacros"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
@@ -24,6 +25,7 @@ let package = Package(
     .target(
       name: "_Realtime",
       dependencies: [
+        .product(name: "_RealtimeTableMacros", package: "_RealtimeTableMacros"),
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),

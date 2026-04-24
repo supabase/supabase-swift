@@ -93,6 +93,7 @@ iOSInjectionProject/
 /.build
 /Packages/*
 !/Packages/_Realtime
+!/Packages/_RealtimeTableMacros
 /*.xcodeproj
 /.swiftpm
 
