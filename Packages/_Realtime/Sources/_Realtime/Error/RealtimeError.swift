@@ -1,6 +1,6 @@
 import Foundation
 
-public enum RealtimeError: Error, Sendable {
+public enum RealtimeError: Error, Sendable, Equatable {
   // Connection
   case disconnected
   case transportFailure(underlying: any Error & Sendable)
@@ -39,6 +39,30 @@ public enum CloseReason: Sendable, Equatable {
   case unauthorized
   case policyViolation(String)
   case transportFailure
+}
+
+extension RealtimeError {
+  public static func == (lhs: RealtimeError, rhs: RealtimeError) -> Bool {
+    switch (lhs, rhs) {
+    case (.disconnected, .disconnected): return true
+    case (.transportFailure, .transportFailure): return true
+    case (.reconnectionGaveUp, .reconnectionGaveUp): return true
+    case (.channelNotJoined, .channelNotJoined): return true
+    case (.channelJoinTimeout, .channelJoinTimeout): return true
+    case (.channelJoinRejected(let l), .channelJoinRejected(let r)): return l == r
+    case (.channelClosed(let l), .channelClosed(let r)): return l == r
+    case (.authenticationFailed(let lr, _), .authenticationFailed(let rr, _)): return lr == rr
+    case (.tokenExpired, .tokenExpired): return true
+    case (.rateLimited(let l), .rateLimited(let r)): return l == r
+    case (.serverError(let lc, let lm), .serverError(let rc, let rm)): return lc == rc && lm == rm
+    case (.broadcastFailed(let l), .broadcastFailed(let r)): return l == r
+    case (.broadcastAckTimeout, .broadcastAckTimeout): return true
+    case (.decoding(let lt, _), .decoding(let rt, _)): return lt == rt
+    case (.encoding, .encoding): return true
+    case (.cancelled, .cancelled): return true
+    default: return false
+    }
+  }
 }
 
 extension RealtimeError: LocalizedError {
