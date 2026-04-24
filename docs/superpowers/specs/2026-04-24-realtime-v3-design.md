@@ -80,7 +80,6 @@ let package = Package(
     .library(name: "_Realtime", targets: ["_Realtime"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
@@ -91,7 +90,6 @@ let package = Package(
     .target(
       name: "_Realtime",
       dependencies: [
-        .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
@@ -125,13 +123,14 @@ Sources/_Realtime/
     RealtimeLogger.swift         — RealtimeLogger protocol, LogEvent, LogLevel, Category
   Transport/
     RealtimeTransport.swift      — RealtimeTransport + RealtimeConnection protocols, TransportFrame enum
-    URLSessionTransport.swift    — production URLSession-based implementation
+                                   connect(to:headers:) uses plain URL + [String: String]; no HTTPTypes
+    URLSessionTransport.swift    — production URLSession/URLSessionWebSocketTask-based implementation
   Config/
     APIKeySource.swift           — APIKeySource enum: .literal(String), .dynamic(@Sendable () async throws -> String)
     ReconnectionPolicy.swift     — ReconnectionPolicy struct + .never, .exponentialBackoff, .fixed factories
     Configuration.swift          — Configuration struct: heartbeat, joinTimeout, leaveTimeout, broadcastAckTimeout,
                                    reconnection, disconnectOnEmptyChannelsAfter, handleAppLifecycle,
-                                   protocolVersion, clock, headers, logger, decoder, encoder
+                                   protocolVersion, clock, headers: [String: String], logger, decoder, encoder
 ```
 
 ### Phase 2 — Test Infrastructure
