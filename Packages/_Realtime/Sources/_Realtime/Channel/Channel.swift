@@ -22,7 +22,6 @@ public final actor Channel: Sendable {
   var stateContinuations: [UUID: AsyncStream<ChannelState>.Continuation] = [:]
 
   private var joinRef: String?
-  private var optionsLocked = false
 
   init(topic: String, options: ChannelOptions, realtime: Realtime) {
     self.topic = topic
@@ -45,7 +44,6 @@ public final actor Channel: Sendable {
 
   public func join() async throws(RealtimeError) {
     guard _state == .unsubscribed || _state == .closed(.userRequested) else { return }
-    optionsLocked = true
     try await _join()
   }
 
@@ -87,8 +85,8 @@ public final actor Channel: Sendable {
     case "phx_error":
       let reasonStr = msg.payload["reason"].flatMap {
         if case .string(let s) = $0 { return s } else { return nil }
-      } ?? "unknown"
-      let reason = CloseReason.policyViolation(reasonStr)
+      }
+      let reason = CloseReason.serverClosed(code: 0, message: reasonStr)
       setState(.closed(reason))
       finishAllContinuations(throwing: .channelClosed(reason))
     case "broadcast":
