@@ -50,6 +50,13 @@ public final class InMemoryTransport: RealtimeTransport, @unchecked Sendable {
 }
 
 /// The server side of an `InMemoryTransport` pair.
+///
+/// **API contract — choose one per test:**
+/// - Use `receivedFrames` when you need a continuous stream of client frames (e.g., auto-reply loop in a `Task`).
+/// - Use `receive()` when you need to await exactly one frame at a time.
+///
+/// Do NOT use both APIs concurrently on the same `InMemoryServer` instance — they share the same
+/// underlying `AsyncThrowingStream` buffer and concurrent use will cause frames to be dropped.
 public final class InMemoryServer: Sendable {
   // All stored properties are `let` — Sendable is safe.
   private let _receivedFrames: AsyncThrowingStream<TransportFrame, any Error>
@@ -77,6 +84,9 @@ public final class InMemoryServer: Sendable {
   }
 
   /// Simulate server-initiated close.
+  ///
+  /// The `code` and `reason` parameters are accepted for API compatibility but are not propagated —
+  /// the client always sees a `URLError(.networkConnectionLost)`.
   public func close(code: Int = 1000, reason: String = "") {
     sendContinuation.finish(throwing: URLError(.networkConnectionLost))
   }
