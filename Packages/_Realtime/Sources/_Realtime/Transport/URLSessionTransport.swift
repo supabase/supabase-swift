@@ -19,7 +19,10 @@ public struct URLSessionTransport: RealtimeTransport {
 }
 
 private final class URLSessionConnection: RealtimeConnection, @unchecked Sendable {
+  // @unchecked Sendable: all stored properties are `let`; URLSessionWebSocketTask's
+  // send/cancel APIs are thread-safe.
   private let task: URLSessionWebSocketTask
+  private let receiveTask: Task<Void, Never>
   let frames: AsyncThrowingStream<TransportFrame, any Error>
   private let continuation: AsyncThrowingStream<TransportFrame, any Error>.Continuation
 
@@ -28,26 +31,27 @@ private final class URLSessionConnection: RealtimeConnection, @unchecked Sendabl
     let (stream, cont) = AsyncThrowingStream<TransportFrame, any Error>.makeStream()
     self.frames = stream
     self.continuation = cont
-    startReceiving()
-  }
-
-  private func startReceiving() {
-    let task = self.task
-    let continuation = self.continuation
-    Task {
+    let wsTask = task
+    let c = cont
+    self.receiveTask = Task {
       do {
         while true {
-          let message = try await task.receive()
+          let message = try await wsTask.receive()
           switch message {
-          case .string(let text): continuation.yield(.text(text))
-          case .data(let data): continuation.yield(.binary(data))
+          case .string(let text): c.yield(.text(text))
+          case .data(let data): c.yield(.binary(data))
           @unknown default: break
           }
         }
       } catch {
-        continuation.finish(throwing: error)
+        c.finish(throwing: error)
       }
     }
+  }
+
+  deinit {
+    receiveTask.cancel()
+    task.cancel(with: .normalClosure, reason: nil)
   }
 
   func send(_ frame: TransportFrame) async throws {
@@ -58,6 +62,7 @@ private final class URLSessionConnection: RealtimeConnection, @unchecked Sendabl
   }
 
   func close(code: Int, reason: String) async {
+    receiveTask.cancel()
     task.cancel(with: .normalClosure, reason: reason.data(using: .utf8))
   }
 }

@@ -40,3 +40,45 @@ public enum CloseReason: Sendable, Equatable {
   case policyViolation(String)
   case transportFailure
 }
+
+extension RealtimeError: LocalizedError {
+  public var errorDescription: String? {
+    switch self {
+    case .disconnected:
+      return "Not connected to the Realtime server."
+    case .transportFailure(let underlying):
+      return "Transport failure: \(underlying.localizedDescription)"
+    case .reconnectionGaveUp(let lastError):
+      return "Reconnection exhausted: \(lastError.localizedDescription)"
+    case .channelNotJoined:
+      return "Channel is not joined."
+    case .channelJoinTimeout:
+      return "Channel join timed out."
+    case .channelJoinRejected(let reason):
+      return "Channel join rejected: \(reason)"
+    case .channelClosed(let reason):
+      return "Channel closed: \(reason)"
+    case .authenticationFailed(let reason, _):
+      return "Authentication failed: \(reason)"
+    case .tokenExpired:
+      return "Authentication token expired."
+    case .rateLimited(let retryAfter):
+      if let d = retryAfter {
+        return "Rate limited. Retry after \(d)."
+      }
+      return "Rate limited."
+    case .serverError(let code, let message):
+      return "Server error \(code): \(message)"
+    case .broadcastFailed(let reason):
+      return "Broadcast failed: \(reason)"
+    case .broadcastAckTimeout:
+      return "Broadcast acknowledgement timed out."
+    case .decoding(let type, let underlying):
+      return "Failed to decode \(type): \(underlying.localizedDescription)"
+    case .encoding(let underlying):
+      return "Encoding error: \(underlying.localizedDescription)"
+    case .cancelled:
+      return "Operation was cancelled."
+    }
+  }
+}

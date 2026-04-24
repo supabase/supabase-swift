@@ -11,8 +11,8 @@ public struct ReconnectionPolicy: Sendable {
     max: Duration,
     jitter: Double = 0.2
   ) -> ReconnectionPolicy {
-    let initialSecs = Double(initial.components.seconds)
-    let maxSecs = Double(max.components.seconds)
+    let initialSecs = Double(initial.components.seconds) + Double(initial.components.attoseconds) / 1e18
+    let maxSecs = Double(max.components.seconds) + Double(max.components.attoseconds) / 1e18
     return ReconnectionPolicy { attempt, _ in
       let base = initialSecs * pow(2.0, Double(attempt - 1))
       let capped = Swift.min(base, maxSecs)

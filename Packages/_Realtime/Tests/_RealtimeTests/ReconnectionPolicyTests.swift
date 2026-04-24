@@ -35,4 +35,18 @@ import Testing
     let d10 = policy.nextDelay(10, URLError(.notConnectedToInternet))!
     #expect(d10.components.seconds <= 5)
   }
+
+  @Test func exponentialBackoffHandlesSubSecondInitial() {
+    let policy = ReconnectionPolicy.exponentialBackoff(
+      initial: .milliseconds(500), max: .seconds(16), jitter: 0
+    )
+    let d1 = policy.nextDelay(1, URLError(.notConnectedToInternet))!
+    // Should be ~0.5 seconds, not zero
+    #expect(d1 >= .milliseconds(400) && d1 <= .milliseconds(600))
+  }
+
+  @Test func fixedPolicyWithNoMaxAttemptsRetriresForever() {
+    let policy = ReconnectionPolicy.fixed(.seconds(1))
+    #expect(policy.nextDelay(1000, URLError(.notConnectedToInternet)) == .seconds(1))
+  }
 }
