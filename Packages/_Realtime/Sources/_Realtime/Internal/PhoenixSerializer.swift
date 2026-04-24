@@ -166,13 +166,17 @@ enum PhoenixSerializer {
     let rBytes  = Data((ref ?? "").utf8)
     let tBytes  = Data(topic.utf8)
     let eBytes  = Data(event.utf8)
-    guard jrBytes.count <= 255, rBytes.count <= 255, tBytes.count <= 255, eBytes.count <= 255 else {
-      throw RealtimeError.encoding(
-        underlying: EncodingError.invalidValue(
-          topic,
-          .init(codingPath: [], debugDescription: "Header field exceeds 255 bytes")
-        )
-      )
+    guard jrBytes.count <= 255 else {
+      throw RealtimeError.encoding(underlying: EncodingError.invalidValue(joinRef ?? "", .init(codingPath: [], debugDescription: "joinRef exceeds 255 bytes (\(jrBytes.count))")))
+    }
+    guard rBytes.count <= 255 else {
+      throw RealtimeError.encoding(underlying: EncodingError.invalidValue(ref ?? "", .init(codingPath: [], debugDescription: "ref exceeds 255 bytes (\(rBytes.count))")))
+    }
+    guard tBytes.count <= 255 else {
+      throw RealtimeError.encoding(underlying: EncodingError.invalidValue(topic, .init(codingPath: [], debugDescription: "topic exceeds 255 bytes (\(tBytes.count))")))
+    }
+    guard eBytes.count <= 255 else {
+      throw RealtimeError.encoding(underlying: EncodingError.invalidValue(event, .init(codingPath: [], debugDescription: "event exceeds 255 bytes (\(eBytes.count))")))
     }
     var out = Data()
     out.append(BinaryKind.clientBroadcastPush.rawValue)

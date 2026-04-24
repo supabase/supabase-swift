@@ -53,5 +53,41 @@ import Foundation
     let broadcast = try PhoenixSerializer.decodeBinary(data)
     #expect(broadcast.topic == "room:1")
     #expect(broadcast.event == "chat")
+    if case .json(let obj) = broadcast.payload {
+      #expect(obj["msg"] == .string("hi"))
+    } else {
+      #expect(Bool(false), "Expected .json payload, got .binary")
+    }
+  }
+
+  @Test func encodeBroadcastPushRoundTrip() throws {
+    let encoded = try PhoenixSerializer.encodeBroadcastPush(
+      joinRef: "1", ref: "2",
+      topic: "room:1", event: "chat",
+      payload: ["text": .string("hello"), "count": .int(42)]
+    )
+    // Decode it — but our decodeBinary expects type 0x04 (server), not 0x03 (client).
+    // The client-encode format differs in header layout. Instead, verify the raw bytes.
+    // Kind byte should be 0x03
+    #expect(encoded[encoded.startIndex] == 0x03)
+    // Verify the data can be re-parsed by checking the header fields
+    let joinRefLen = Int(encoded[encoded.startIndex + 1])
+    let refLen     = Int(encoded[encoded.startIndex + 2])
+    let topicLen   = Int(encoded[encoded.startIndex + 3])
+    let eventLen   = Int(encoded[encoded.startIndex + 4])
+    let metaLen    = Int(encoded[encoded.startIndex + 5])
+    let encByte    = encoded[encoded.startIndex + 6]
+    #expect(joinRefLen == 1)  // "1"
+    #expect(refLen == 1)       // "2"
+    #expect(topicLen == 6)     // "room:1"
+    #expect(eventLen == 4)     // "chat"
+    #expect(metaLen == 0)
+    #expect(encByte == 0x01)  // json encoding
+    // Verify the payload section contains valid JSON
+    let headerAndFieldsSize = 7 + joinRefLen + refLen + topicLen + eventLen + metaLen
+    let payloadData = Data(encoded.dropFirst(headerAndFieldsSize))
+    let decoded = try JSONDecoder().decode([String: JSONValue].self, from: payloadData)
+    #expect(decoded["text"] == .string("hello"))
+    #expect(decoded["count"] == .int(42))
   }
 }
