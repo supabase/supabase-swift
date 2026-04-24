@@ -74,7 +74,9 @@ extension SupabaseClient {
   private var _realtimeWebSocketURL: URL {
     var comps = URLComponents(url: supabaseURL, resolvingAgainstBaseURL: false)!
     comps.scheme = comps.scheme == "https" ? "wss" : "ws"
-    comps.path = "/realtime/v1"
+    // Append rather than replace path so deployments under a path prefix work correctly.
+    let base = comps.path.hasSuffix("/") ? comps.path : comps.path + "/"
+    comps.path = base + "realtime/v1"
     return comps.url!
   }
 }
