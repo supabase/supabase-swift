@@ -7,6 +7,13 @@
 
 import Foundation
 
+struct PostgresSubscription: Sendable {
+  let id: UUID
+  let schema: String
+  let table: String
+  let filter: String?
+}
+
 public final actor Channel: Sendable {
   public let topic: String
   public private(set) var options: ChannelOptions
@@ -18,8 +25,6 @@ public final actor Channel: Sendable {
   // Fan-out continuation dictionaries — populated by Phase 5/6/7 extensions
   var broadcastContinuations:
     [UUID: AsyncThrowingStream<BroadcastMessage, any Error>.Continuation] = [:]
-  var postgresContinuations:
-    [UUID: AsyncThrowingStream<[String: JSONValue], any Error>.Continuation] = [:]
   var stateContinuations: [UUID: AsyncStream<ChannelState>.Continuation] = [:]
 
   // Presence handler registrations
@@ -28,6 +33,11 @@ public final actor Channel: Sendable {
   var presenceFinishHandlers: [UUID: @Sendable () -> Void] = [:]
   // Track registry: presenceTrackId → state, for auto re-track on rejoin
   var trackedStates: [UUID: [String: JSONValue]] = [:]
+
+  // Postgres Changes handler registrations
+  var postgresHandlers: [UUID: @Sendable ([String: JSONValue]) -> Void] = [:]
+  var postgresFinishHandlers: [UUID: @Sendable () -> Void] = [:]
+  var _postgresSubscriptions: [UUID: PostgresSubscription] = [:]
 
   var joinRef: String?
 
@@ -72,6 +82,7 @@ public final actor Channel: Sendable {
     _ = try await realtime.sendAndAwait(msg, timeout: config.leaveTimeout)
     setState(.closed(.userRequested))
     trackedStates.removeAll()
+    _postgresSubscriptions.removeAll()
     finishAllContinuations(throwing: .channelClosed(.userRequested))
     await realtime.removeChannel(topic)
   }
@@ -98,7 +109,7 @@ public final actor Channel: Sendable {
     case "presence_diff":
       for handler in presenceDiffHandlers.values { handler(msg.payload) }
     case "postgres_changes":
-      for cont in postgresContinuations.values { cont.yield(msg.payload) }
+      for handler in postgresHandlers.values { handler(msg.payload) }
     default:
       break
     }
@@ -175,6 +186,7 @@ public final actor Channel: Sendable {
         } ?? "rejected"
       setState(.closed(.policyViolation(reason)))
       trackedStates.removeAll()
+      _postgresSubscriptions.removeAll()
       throw .channelJoinRejected(reason: reason)
     }
   }
@@ -200,6 +212,18 @@ public final actor Channel: Sendable {
       config["private"] = true
     }
 
+    // Add postgres_changes subscriptions
+    let changes: [JSONValue] = _postgresSubscriptions.values.map { sub in
+      var entry: [String: JSONValue] = [
+        "event": "*",
+        "schema": .string(sub.schema),
+        "table": .string(sub.table),
+      ]
+      if let f = sub.filter { entry["filter"] = .string(f) }
+      return .object(entry)
+    }
+    if !changes.isEmpty { config["postgres_changes"] = .array(changes) }
+
     return ["config": .object(config)]
   }
 
@@ -211,15 +235,16 @@ public final actor Channel: Sendable {
   func finishAllContinuations(throwing error: RealtimeError) {
     let err: any Error = error
     for cont in broadcastContinuations.values { cont.finish(throwing: err) }
-    for cont in postgresContinuations.values { cont.finish(throwing: err) }
     for cont in stateContinuations.values { cont.finish() }
     broadcastContinuations.removeAll()
-    postgresContinuations.removeAll()
     stateContinuations.removeAll()
     for finish in presenceFinishHandlers.values { finish() }
     presenceSnapshotHandlers.removeAll()
     presenceDiffHandlers.removeAll()
     presenceFinishHandlers.removeAll()
+    for finish in postgresFinishHandlers.values { finish() }
+    postgresHandlers.removeAll()
+    postgresFinishHandlers.removeAll()
     // Note: trackedStates is intentionally NOT cleared here — transient errors
     // (phx_close / phx_error) should preserve tracked states so rejoin() can re-track them.
     // trackedStates is cleared only on permanent closes: leave() and _join() rejection.
@@ -249,9 +274,5 @@ public final actor Channel: Sendable {
 
   func removeBroadcastContinuation(id: UUID) {
     broadcastContinuations.removeValue(forKey: id)
-  }
-
-  func removePostgresContinuation(id: UUID) {
-    postgresContinuations.removeValue(forKey: id)
   }
 }
