@@ -71,6 +71,7 @@ public final actor Channel: Sendable {
     )
     _ = try await realtime.sendAndAwait(msg, timeout: config.leaveTimeout)
     setState(.closed(.userRequested))
+    trackedStates.removeAll()
     finishAllContinuations(throwing: .channelClosed(.userRequested))
     await realtime.removeChannel(topic)
   }
@@ -131,6 +132,16 @@ public final actor Channel: Sendable {
   func rejoin() async throws(RealtimeError) {
     guard _state == .unsubscribed else { return }
     try await _join()
+    // Re-track all live presence handles after rejoining
+    guard let realtime else { return }
+    for (_, state) in trackedStates {
+      let msg = PhoenixMessage(
+        joinRef: joinRef, ref: nil,
+        topic: topic, event: "presence",
+        payload: ["event": "track", "payload": .object(state)]
+      )
+      try? await realtime.sendAndAwait(msg, timeout: realtime.configuration.joinTimeout)
+    }
   }
 
   // MARK: - Private
@@ -163,6 +174,7 @@ public final actor Channel: Sendable {
           if case .string(let s) = $0 { return s } else { return nil }
         } ?? "rejected"
       setState(.closed(.policyViolation(reason)))
+      trackedStates.removeAll()
       throw .channelJoinRejected(reason: reason)
     }
   }
@@ -208,7 +220,9 @@ public final actor Channel: Sendable {
     presenceSnapshotHandlers.removeAll()
     presenceDiffHandlers.removeAll()
     presenceFinishHandlers.removeAll()
-    trackedStates.removeAll()
+    // Note: trackedStates is intentionally NOT cleared here — transient errors
+    // (phx_close / phx_error) should preserve tracked states so rejoin() can re-track them.
+    // trackedStates is cleared only on permanent closes: leave() and _join() rejection.
   }
 
   // MARK: - Continuation cleanup helpers (called from onTermination Tasks)
