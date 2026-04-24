@@ -20,9 +20,9 @@ public final actor Realtime: Sendable {
   private var heartbeatTask: Task<Void, Never>?
   private var channelRegistry: [String: Channel] = [:]
   private var pendingReplies: [String: CheckedContinuation<PhoenixMessage, any Error>] = [:]
-  var refCounter: Int = 0
+  private var refCounter: Int = 0
   private var statusContinuations: [UUID: AsyncStream<ConnectionStatus>.Continuation] = [:]
-  var _currentStatus: ConnectionStatus.State = .idle
+  private var _currentStatus: ConnectionStatus.State = .idle
 
   public var currentStatus: ConnectionStatus.State { _currentStatus }
 
@@ -44,6 +44,8 @@ public final actor Realtime: Sendable {
     AsyncStream { continuation in
       let id = UUID()
       statusContinuations[id] = continuation
+      // Emit current state immediately so new subscribers don't miss existing state.
+      continuation.yield(ConnectionStatus(state: _currentStatus))
       continuation.onTermination = { [id] _ in
         Task { [weak self] in
           await self?.removeStatusContinuation(id: id)
@@ -58,6 +60,10 @@ public final actor Realtime: Sendable {
 
   public func connect() async throws(RealtimeError) {
     guard _currentStatus == .idle || _currentStatus == .closed(.userRequested) else { return }
+    try await _connect()
+  }
+
+  private func _connect() async throws(RealtimeError) {
     setStatus(.connecting(attempt: 1))
 
     let token: String
@@ -100,7 +106,7 @@ public final actor Realtime: Sendable {
 
   public func updateToken(_ newToken: String) async throws(RealtimeError) {
     let msg = PhoenixMessage(
-      joinRef: nil, ref: nextRef(),
+      joinRef: nil, ref: nil,
       topic: "phoenix", event: "access_token",
       payload: ["access_token": .string(newToken)]
     )
@@ -293,7 +299,7 @@ public final actor Realtime: Sendable {
       try? await configuration.clock.sleep(for: delay)
       guard !Task.isCancelled else { return }
       do {
-        try await connect()
+        try await _connect()
         for ch in channelRegistry.values {
           try? await ch.rejoin()
         }
