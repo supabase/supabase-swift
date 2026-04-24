@@ -10,6 +10,11 @@ import Foundation
 extension Channel {
   public var presence: Presence { Presence(channel: self) }
 
+  /// Returns topic and joinRef atomically (both read while holding actor isolation).
+  func presenceTrackInfo() -> (topic: String, joinRef: String?) {
+    (topic, joinRef)
+  }
+
   func registerTrack(id: UUID, state: [String: JSONValue]) {
     trackedStates[id] = state
   }

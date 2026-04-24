@@ -19,7 +19,7 @@ public final actor Realtime: Sendable {
   private var receiveTask: Task<Void, Never>?
   private var heartbeatTask: Task<Void, Never>?
   private var channelRegistry: [String: Channel] = [:]
-  private var pendingReplies: [String: CheckedContinuation<PhoenixMessage, any Error>] = [:]
+  private var pendingReplies: [String: OnceResumingContinuation<PhoenixMessage>] = [:]
   private var refCounter: Int = 0
   private var statusContinuations: [UUID: AsyncStream<ConnectionStatus>.Continuation] = [:]
   private var _currentStatus: ConnectionStatus.State = .idle
@@ -191,7 +191,7 @@ public final actor Realtime: Sendable {
   private func registerAndSend(
     ref: String,
     text: String,
-    continuation: CheckedContinuation<PhoenixMessage, any Error>
+    continuation: OnceResumingContinuation<PhoenixMessage>
   ) async {
     pendingReplies[ref] = continuation
     do {
@@ -361,13 +361,14 @@ public final actor Realtime: Sendable {
 func withRealtimeTimeout<T: Sendable>(
   _ duration: Duration,
   clock: any Clock<Duration>,
-  sendAndAwait: @escaping @Sendable (CheckedContinuation<T, any Error>) async -> Void,
+  sendAndAwait: @escaping @Sendable (OnceResumingContinuation<T>) async -> Void,
   onTimeout: @escaping @Sendable () -> Void
 ) async throws(RealtimeError) -> T {
   // We use a manual continuation + a racing Task instead of TaskGroup so the
   // sendAndAwait closure can be called while already inside the actor.
   do {
-    return try await withCheckedThrowingContinuation { continuation in
+    return try await withCheckedThrowingContinuation { rawContinuation in
+      let once = OnceResumingContinuation(rawContinuation)
       Task {
         await withTaskGroup(of: Void.self) { group in
           // Timeout race.
@@ -375,14 +376,14 @@ func withRealtimeTimeout<T: Sendable>(
             do {
               try await clock.sleep(for: duration)
               onTimeout()
-              continuation.resume(throwing: RealtimeError.channelJoinTimeout)
+              once.resume(throwing: RealtimeError.channelJoinTimeout)
             } catch {
               // Task cancelled — operation already completed.
             }
           }
           // Actual work.
           group.addTask {
-            await sendAndAwait(continuation)
+            await sendAndAwait(once)
           }
           // Wait for the first one to finish, then cancel the other.
           await group.next()

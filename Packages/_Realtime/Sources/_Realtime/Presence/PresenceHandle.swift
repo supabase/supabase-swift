@@ -29,13 +29,3 @@ public final class PresenceHandle: Sendable {
     try await _cancel()
   }
 }
-
-final class _Atomic<T: Sendable>: @unchecked Sendable {
-  private var _value: T
-  private let lock = NSLock()
-  init(_ value: T) { _value = value }
-  var value: T { lock.withLock { _value } }
-  @discardableResult func exchange(_ newValue: T) -> T {
-    lock.withLock { let old = _value; _value = newValue; return old }
-  }
-}

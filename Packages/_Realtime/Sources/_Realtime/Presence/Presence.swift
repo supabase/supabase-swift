@@ -26,8 +26,7 @@ public struct Presence: Sendable {
       throw .encoding(underlying: error)
     }
 
-    let topic = channel.topic
-    let joinRef = await channel.joinRef
+    let (topic, joinRef) = await channel.presenceTrackInfo()
     let trackMsg = PhoenixMessage(
       joinRef: joinRef, ref: nil,
       topic: topic, event: "presence",
@@ -40,9 +39,10 @@ public struct Presence: Sendable {
 
     let cancelClosure: @Sendable () async throws(RealtimeError) -> Void = {
       await channel.unregisterTrack(id: trackId)
+      let (cancelTopic, cancelJoinRef) = await channel.presenceTrackInfo()
       let untrackMsg = PhoenixMessage(
-        joinRef: await channel.joinRef, ref: nil,
-        topic: topic, event: "presence",
+        joinRef: cancelJoinRef, ref: nil,
+        topic: cancelTopic, event: "presence",
         payload: ["event": "untrack"]
       )
       _ = try await realtime.sendAndAwait(untrackMsg, timeout: realtime.configuration.joinTimeout)
