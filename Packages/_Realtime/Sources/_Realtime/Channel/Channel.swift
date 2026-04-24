@@ -10,15 +10,17 @@ import Foundation
 public final actor Channel: Sendable {
   public let topic: String
   public private(set) var options: ChannelOptions
-  private weak var realtime: Realtime?
+  weak var realtime: Realtime?
 
   private var _state: ChannelState = .unsubscribed
   var currentState: ChannelState { _state }
 
   // Fan-out continuation dictionaries — populated by Phase 5/6/7 extensions
-  var broadcastContinuations: [UUID: AsyncThrowingStream<[String: JSONValue], any Error>.Continuation] = [:]
+  var broadcastContinuations:
+    [UUID: AsyncThrowingStream<BroadcastMessage, any Error>.Continuation] = [:]
   var presenceContinuations: [UUID: AsyncStream<[String: JSONValue]>.Continuation] = [:]
-  var postgresContinuations: [UUID: AsyncThrowingStream<[String: JSONValue], any Error>.Continuation] = [:]
+  var postgresContinuations:
+    [UUID: AsyncThrowingStream<[String: JSONValue], any Error>.Continuation] = [:]
   var stateContinuations: [UUID: AsyncStream<ChannelState>.Continuation] = [:]
 
   private var joinRef: String?
@@ -62,18 +64,6 @@ public final actor Channel: Sendable {
     await realtime.removeChannel(topic)
   }
 
-  // MARK: - Minimal stub for Phase 5 to compile tests
-  // Full implementation in Channel+Broadcast.swift (Phase 5)
-  func broadcasts() -> AsyncThrowingStream<[String: JSONValue], any Error> {
-    AsyncThrowingStream { continuation in
-      let id = UUID()
-      broadcastContinuations[id] = continuation
-      continuation.onTermination = { [id] _ in
-        Task { await self.removeBroadcastContinuation(id: id) }
-      }
-    }
-  }
-
   // MARK: - Internal routing (called by Realtime actor)
 
   func handle(_ msg: PhoenixMessage) async {
@@ -90,7 +80,7 @@ public final actor Channel: Sendable {
       setState(.closed(reason))
       finishAllContinuations(throwing: .channelClosed(reason))
     case "broadcast":
-      for cont in broadcastContinuations.values { cont.yield(msg.payload) }
+      await deliverBroadcast(from: msg.payload)
     case "presence_diff":
       for cont in presenceContinuations.values { cont.yield(msg.payload) }
     case "presence_state":
@@ -104,7 +94,21 @@ public final actor Channel: Sendable {
 
   func handleBinaryBroadcast(_ broadcast: BinaryBroadcast) async {
     guard case .json(let obj) = broadcast.payload else { return }
-    for cont in broadcastContinuations.values { cont.yield(obj) }
+    await deliverBroadcast(event: broadcast.event, payload: .object(obj))
+  }
+
+  /// Converts a raw Phoenix broadcast payload dict to `BroadcastMessage` and fans out to subscribers.
+  func deliverBroadcast(from payload: [String: JSONValue]) async {
+    guard let eventValue = payload["event"],
+      case .string(let event) = eventValue
+    else { return }
+    let innerPayload: JSONValue = payload["payload"] ?? .object([:])
+    await deliverBroadcast(event: event, payload: innerPayload)
+  }
+
+  private func deliverBroadcast(event: String, payload: JSONValue) async {
+    let msg = BroadcastMessage(event: event, payload: payload)
+    for cont in broadcastContinuations.values { cont.yield(msg) }
   }
 
   func handleConnectionLoss() async {
@@ -143,9 +147,10 @@ public final actor Channel: Sendable {
       let responseObj = reply.payload["response"].flatMap {
         if case .object(let o) = $0 { return o } else { return nil }
       }
-      let reason = responseObj?["reason"].flatMap {
-        if case .string(let s) = $0 { return s } else { return nil }
-      } ?? "rejected"
+      let reason =
+        responseObj?["reason"].flatMap {
+          if case .string(let s) = $0 { return s } else { return nil }
+        } ?? "rejected"
       setState(.closed(.policyViolation(reason)))
       throw .channelJoinRejected(reason: reason)
     }
@@ -183,9 +188,9 @@ public final actor Channel: Sendable {
   func finishAllContinuations(throwing error: RealtimeError) {
     let err: any Error = error
     for cont in broadcastContinuations.values { cont.finish(throwing: err) }
-    for cont in postgresContinuations.values  { cont.finish(throwing: err) }
-    for cont in presenceContinuations.values  { cont.finish() }
-    for cont in stateContinuations.values     { cont.finish() }
+    for cont in postgresContinuations.values { cont.finish(throwing: err) }
+    for cont in presenceContinuations.values { cont.finish() }
+    for cont in stateContinuations.values { cont.finish() }
     broadcastContinuations.removeAll()
     postgresContinuations.removeAll()
     presenceContinuations.removeAll()
@@ -194,11 +199,24 @@ public final actor Channel: Sendable {
 
   // MARK: - Continuation cleanup helpers (called from onTermination Tasks)
 
+  func joinIfNeeded() async throws(RealtimeError) {
+    if _state == .unsubscribed || _state == .closed(.userRequested) {
+      try await _join()
+    }
+  }
+
+  func registerBroadcastContinuation(
+    id: UUID,
+    continuation: AsyncThrowingStream<BroadcastMessage, any Error>.Continuation
+  ) {
+    broadcastContinuations[id] = continuation
+  }
+
   private func removeStateContinuation(id: UUID) {
     stateContinuations.removeValue(forKey: id)
   }
 
-  private func removeBroadcastContinuation(id: UUID) {
+  func removeBroadcastContinuation(id: UUID) {
     broadcastContinuations.removeValue(forKey: id)
   }
 

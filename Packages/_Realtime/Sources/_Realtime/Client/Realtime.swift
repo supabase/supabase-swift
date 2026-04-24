@@ -10,7 +10,7 @@ import Foundation
 import IssueReporting
 
 public final actor Realtime: Sendable {
-  private let url: URL
+  let url: URL
   private let apiKey: APIKeySource
   public let configuration: Configuration
   private let transport: any RealtimeTransport
@@ -127,6 +127,17 @@ public final actor Realtime: Sendable {
 
   // MARK: - Internal API (used by Channel)
 
+  func sendBinary(_ data: Data) async throws(RealtimeError) {
+    guard let connection else { throw .disconnected }
+    do {
+      try await connection.send(.binary(data))
+    } catch let e as RealtimeError {
+      throw e
+    } catch {
+      throw .transportFailure(underlying: error)
+    }
+  }
+
   func nextRef() -> String {
     refCounter += 1
     return String(refCounter)
@@ -209,7 +220,7 @@ public final actor Realtime: Sendable {
 
   // MARK: - Private
 
-  private func resolveToken() async throws -> String {
+  func resolveToken() async throws -> String {
     switch apiKey {
     case .literal(let key): return key
     case .dynamic(let fn): return try await fn()
