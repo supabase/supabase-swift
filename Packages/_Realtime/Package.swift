@@ -36,6 +36,7 @@ let package = Package(
     .testTarget(
       name: "_RealtimeTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
