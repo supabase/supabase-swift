@@ -112,6 +112,202 @@ private struct PGMessage: Codable, Sendable {
     }
   }
 
+  // MARK: - Test 1: Additional filter operator encoding
+
+  @Test func filterNeqAndGtEncode() {
+    struct Post: RealtimeTable {
+      static let schema = "public"
+      static let tableName = "posts"
+      static func columnName<V>(for kp: KeyPath<Post, V>) -> String {
+        switch kp {
+        case \Self.status: return "status"
+        case \Self.viewCount: return "view_count"
+        default: return "unknown"
+        }
+      }
+      var status: String
+      var viewCount: Int
+    }
+    let neqFilter = Filter.neq(\Post.status, "draft")
+    #expect(neqFilter.wireValue == "status=neq.draft")
+
+    let gtFilter = Filter.gt(\Post.viewCount, 100)
+    #expect(gtFilter.wireValue == "view_count=gt.100")
+  }
+
+  // MARK: - Test 2: Per-event convenience streams
+
+  @Test func perEventConvenienceStreams() async throws {
+    struct ConvMessage: Codable, Sendable, RealtimeTable {
+      static let schema = "public"
+      static let tableName = "messages"
+      static func columnName<V>(for kp: KeyPath<ConvMessage, V>) -> String { "id" }
+      let id: Int
+      let text: String
+    }
+
+    let testURL = URL(string: "ws://localhost:4000/realtime/v1")!
+    let (transport, server) = InMemoryTransport.pair()
+    let realtime = Realtime(url: testURL, apiKey: .literal("key"), transport: transport)
+    try await realtime.connect()
+
+    let autoReplyTask = Task { [server] in
+      do {
+        for try await frame in server.receivedFrames {
+          guard case .text(let text) = frame,
+            let msg = try? PhoenixSerializer.decodeText(text),
+            msg.event == "phx_join"
+          else { continue }
+          let reply = PhoenixMessage(
+            joinRef: msg.joinRef, ref: msg.ref, topic: msg.topic,
+            event: "phx_reply", payload: ["status": "ok", "response": .object([:])]
+          )
+          await server.send(.text(try! PhoenixSerializer.encodeText(reply)))
+        }
+      } catch {
+        // stream ended
+      }
+    }
+    defer { autoReplyTask.cancel() }
+
+    let channel = await realtime.channel("room:convenience")
+    let inserts = LockIsolated<[ConvMessage]>([])
+    let updates = LockIsolated<[(old: ConvMessage, new: ConvMessage)]>([])
+    let deletes = LockIsolated<[ConvMessage]>([])
+
+    let insertsStream = await channel.inserts(into: ConvMessage.self)
+    let updatesStream = await channel.updates(of: ConvMessage.self)
+    let deletesStream = await channel.deletes(from: ConvMessage.self)
+
+    let t1 = Task {
+      for try await m in insertsStream {
+        inserts.withValue { $0.append(m) }
+      }
+    }
+    let t2 = Task {
+      for try await p in updatesStream {
+        updates.withValue { $0.append(p) }
+      }
+    }
+    let t3 = Task {
+      for try await m in deletesStream {
+        deletes.withValue { $0.append(m) }
+      }
+    }
+    defer { t1.cancel(); t2.cancel(); t3.cancel() }
+
+    try await Task.sleep(for: .milliseconds(50))
+
+    let record: JSONValue = .object(["id": .int(1), "text": .string("hello")])
+    let oldRecord: JSONValue = .object(["id": .int(1), "text": .string("old")])
+
+    func makePayload(type: String, rec: JSONValue, old: JSONValue) -> [String: JSONValue] {
+      [
+        "data": .object([
+          "type": .string(type),
+          "record": rec,
+          "old_record": old,
+          "columns": .array([]),
+          "commit_timestamp": .string("2026-01-01T00:00:00Z"),
+        ])
+      ]
+    }
+
+    let events: [(String, JSONValue, JSONValue)] = [
+      ("INSERT", record, .null),
+      ("UPDATE", record, oldRecord),
+      ("DELETE", .null, oldRecord),
+    ]
+    for (eventType, rec, old) in events {
+      let push = PhoenixMessage(
+        joinRef: nil, ref: nil, topic: "room:convenience",
+        event: "postgres_changes",
+        payload: makePayload(type: eventType, rec: rec, old: old)
+      )
+      await server.send(.text(try! PhoenixSerializer.encodeText(push)))
+    }
+
+    try await Task.sleep(for: .milliseconds(100))
+
+    #expect(inserts.value.count == 1)
+    #expect(inserts.value.first?.text == "hello")
+    #expect(updates.value.count == 1)
+    #expect(updates.value.first?.new.text == "hello")
+    #expect(deletes.value.count == 1)
+    #expect(deletes.value.first?.text == "old")
+  }
+
+  // MARK: - Test 3: Typed changes(to:) live stream
+
+  @Test func typedChangesStreamDecodesLivePayload() async throws {
+    struct TypedMessage: Codable, Sendable, RealtimeTable {
+      static let schema = "public"
+      static let tableName = "messages"
+      static func columnName<V>(for kp: KeyPath<TypedMessage, V>) -> String { "id" }
+      let id: Int
+      let body: String
+    }
+
+    let testURL = URL(string: "ws://localhost:4000/realtime/v1")!
+    let (transport, server) = InMemoryTransport.pair()
+    let realtime = Realtime(url: testURL, apiKey: .literal("key"), transport: transport)
+    try await realtime.connect()
+
+    let autoReplyTask = Task { [server] in
+      do {
+        for try await frame in server.receivedFrames {
+          guard case .text(let text) = frame,
+            let msg = try? PhoenixSerializer.decodeText(text),
+            msg.event == "phx_join"
+          else { continue }
+          let reply = PhoenixMessage(
+            joinRef: msg.joinRef, ref: msg.ref, topic: msg.topic,
+            event: "phx_reply", payload: ["status": "ok", "response": .object([:])]
+          )
+          await server.send(.text(try! PhoenixSerializer.encodeText(reply)))
+        }
+      } catch {
+        // stream ended
+      }
+    }
+    defer { autoReplyTask.cancel() }
+
+    let channel = await realtime.channel("room:typed")
+    let stream = await channel.changes(to: TypedMessage.self)
+    let received = LockIsolated<[PostgresChange<TypedMessage>]>([])
+    let task = Task {
+      for try await c in stream { received.withValue { $0.append(c) } }
+    }
+    defer { task.cancel() }
+
+    try await Task.sleep(for: .milliseconds(50))
+
+    let insertPayload: [String: JSONValue] = [
+      "data": .object([
+        "type": "INSERT",
+        "record": .object(["id": .int(7), "body": .string("typed!")]),
+        "old_record": .null,
+        "columns": .array([]),
+        "commit_timestamp": .string("2026-01-01T00:00:00Z"),
+      ])
+    ]
+    let push = PhoenixMessage(
+      joinRef: nil, ref: nil, topic: "room:typed",
+      event: "postgres_changes", payload: insertPayload
+    )
+    await server.send(.text(try! PhoenixSerializer.encodeText(push)))
+
+    try await Task.sleep(for: .milliseconds(50))
+
+    #expect(received.value.count == 1)
+    if case .insert(let row) = received.value.first {
+      #expect(row.id == 7)
+      #expect(row.body == "typed!")
+    } else {
+      Issue.record("Expected .insert, got \(String(describing: received.value.first))")
+    }
+  }
+
   @Test func untypedChangesStreamReceivesPayload() async throws {
     let testURL = URL(string: "ws://localhost:4000/realtime/v1")!
     let (transport, server) = InMemoryTransport.pair()
