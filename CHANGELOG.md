@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.45.0](https://github.com/supabase/supabase-swift/compare/v2.44.1...v2.45.0) (2026-04-24)
+
+
+### Features
+
+* **postgrest:** add stripNulls method for null value stripping ([#972](https://github.com/supabase/supabase-swift/issues/972)) ([984c263](https://github.com/supabase/supabase-swift/commit/984c2634e4cf201feba9f3718a2b37ff7497a9ec))
+* **realtime:** add deferred disconnect on empty channels ([#973](https://github.com/supabase/supabase-swift/issues/973)) ([770670f](https://github.com/supabase/supabase-swift/commit/770670f1f9a64997c75cae84db7985b1de0a4b84))
+* **realtime:** handle app lifecycle background/foreground transitions ([#967](https://github.com/supabase/supabase-swift/issues/967)) ([6039ede](https://github.com/supabase/supabase-swift/commit/6039edeaf385b43c488467988f7f10e45cff31b0))
+* **storage:** add cacheNonce parameter for cache invalidation ([#970](https://github.com/supabase/supabase-swift/issues/970)) ([6397521](https://github.com/supabase/supabase-swift/commit/6397521dc4e95de1b9285b435f10fca2c01b0752))
+
+
+### Bug Fixes
+
+* **auth:** include Cloudflare error codes in retryable network errors ([#969](https://github.com/supabase/supabase-swift/issues/969)) ([e9eafd7](https://github.com/supabase/supabase-swift/commit/e9eafd7c7cf0018d4007abea3c1807591b095e67))
+* **realtime:** resolve subscribe/unsubscribe lifecycle races via ChannelStateManager actor ([#974](https://github.com/supabase/supabase-swift/issues/974)) ([8130762](https://github.com/supabase/supabase-swift/commit/813076247356d371ca1118090f07210ef295dbf2))
+* **storage:** guard against empty transform routing through render endpoint ([#968](https://github.com/supabase/supabase-swift/issues/968)) ([bee53cc](https://github.com/supabase/supabase-swift/commit/bee53cc42125c012e6716e61afb5cfaa300b5e3f))
+* **supabase:** propagate custom URLSession to Realtime client ([#971](https://github.com/supabase/supabase-swift/issues/971)) ([52db062](https://github.com/supabase/supabase-swift/commit/52db0621c5387246c8cbb53cef6d48c13716e98e))
+
 ## [2.44.1](https://github.com/supabase/supabase-swift/compare/v2.44.0...v2.44.1) (2026-04-22)
 
 
