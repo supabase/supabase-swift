@@ -16,6 +16,7 @@ public struct Configuration: Sendable {
   public var clock: any Clock<Duration> = ContinuousClock()
   public var headers: [String: String] = [:]
   public var logger: (any RealtimeLogger)? = nil
+  public var urlSession: URLSession = .shared
   public var decoder: JSONDecoder = {
     let d = JSONDecoder()
     d.dateDecodingStrategy = .iso8601
@@ -37,9 +38,9 @@ public struct Configuration: Sendable {
   }
 
   #if os(iOS) || os(macOS) || os(tvOS) || os(visionOS)
-  static let defaultHandleAppLifecycle = true
+    static let defaultHandleAppLifecycle = true
   #else
-  static let defaultHandleAppLifecycle = false
+    static let defaultHandleAppLifecycle = false
   #endif
 }
 

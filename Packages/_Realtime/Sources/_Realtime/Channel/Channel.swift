@@ -45,7 +45,12 @@ public final actor Channel: Sendable {
   }
 
   public func join() async throws(RealtimeError) {
-    guard _state == .unsubscribed || _state == .closed(.userRequested) else { return }
+    switch _state {
+    case .unsubscribed, .closed:
+      break  // allowed to join
+    default:
+      return  // already joining, joined, or leaving
+    }
     try await _join()
   }
 
@@ -200,8 +205,11 @@ public final actor Channel: Sendable {
   // MARK: - Continuation cleanup helpers (called from onTermination Tasks)
 
   func joinIfNeeded() async throws(RealtimeError) {
-    if _state == .unsubscribed || _state == .closed(.userRequested) {
+    switch _state {
+    case .unsubscribed, .closed:
       try await _join()
+    default:
+      break
     }
   }
 

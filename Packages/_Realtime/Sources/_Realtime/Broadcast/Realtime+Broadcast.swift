@@ -11,14 +11,14 @@ import Foundation
 public struct HttpBroadcastMessage: Sendable {
   public let topic: String
   public let event: String
-  /// The payload to broadcast. Must be `Encodable` and `Sendable`.
-  public let payload: any Encodable & Sendable
+  /// The payload to broadcast as a JSON value.
+  public let payload: JSONValue
   public let isPrivate: Bool
 
   public init(
     topic: String,
     event: String,
-    payload: any Encodable & Sendable,
+    payload: JSONValue,
     isPrivate: Bool = false
   ) {
     self.topic = topic
@@ -47,8 +47,30 @@ extension Realtime {
     payload: T,
     isPrivate: Bool = false
   ) async throws(RealtimeError) {
+    let jsonPayload: JSONValue
+    do {
+      let data = try configuration.encoder.encode(payload)
+      guard
+        let obj = try? JSONDecoder().decode([String: JSONValue].self, from: data)
+      else {
+        throw RealtimeError.encoding(
+          underlying: EncodingError.invalidValue(
+            payload,
+            EncodingError.Context(
+              codingPath: [],
+              debugDescription: "Payload must be a JSON object (dictionary)"
+            )
+          )
+        )
+      }
+      jsonPayload = .object(obj)
+    } catch let e as RealtimeError {
+      throw e
+    } catch {
+      throw .encoding(underlying: error)
+    }
     let msg = HttpBroadcastMessage(
-      topic: topic, event: event, payload: payload, isPrivate: isPrivate)
+      topic: topic, event: event, payload: jsonPayload, isPrivate: isPrivate)
     try await httpBroadcast([msg])
   }
 
@@ -62,18 +84,10 @@ extension Realtime {
 
     var bodyMessages: [[String: JSONValue]] = []
     for m in messages {
-      let payloadDict: [String: JSONValue]
-      do {
-        let data = try configuration.encoder.encode(m.payload)
-        payloadDict = (try? JSONDecoder().decode([String: JSONValue].self, from: data)) ?? [:]
-      } catch {
-        throw .encoding(underlying: error)
-      }
-
       var entry: [String: JSONValue] = [
         "topic": .string(m.topic),
         "event": .string(m.event),
-        "payload": .object(payloadDict),
+        "payload": m.payload,
       ]
       if m.isPrivate { entry["private"] = true }
       bodyMessages.append(entry)
@@ -94,7 +108,7 @@ extension Realtime {
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
     do {
-      let (_, response) = try await URLSession.shared.data(for: request)
+      let (_, response) = try await configuration.urlSession.data(for: request)
       if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
         if http.statusCode == 429 {
           throw RealtimeError.rateLimited(retryAfter: nil)

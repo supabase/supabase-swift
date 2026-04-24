@@ -126,7 +126,7 @@ extension Channel {
   ///   - data: The raw binary payload.
   ///   - event: The event name carried by the broadcast.
   /// - Throws: `RealtimeError.channelNotJoined` if not joined, or a transport error.
-  public func broadcastBinary(_ data: Data, as event: String) async throws(RealtimeError) {
+  public func broadcast(_ data: Data, as event: String) async throws(RealtimeError) {
     guard currentState == .joined else { throw .channelNotJoined }
     guard let realtime else { throw .disconnected }
 
