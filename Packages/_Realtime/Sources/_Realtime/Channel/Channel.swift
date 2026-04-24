@@ -18,12 +18,18 @@ public final actor Channel: Sendable {
   // Fan-out continuation dictionaries — populated by Phase 5/6/7 extensions
   var broadcastContinuations:
     [UUID: AsyncThrowingStream<BroadcastMessage, any Error>.Continuation] = [:]
-  var presenceContinuations: [UUID: AsyncStream<[String: JSONValue]>.Continuation] = [:]
   var postgresContinuations:
     [UUID: AsyncThrowingStream<[String: JSONValue], any Error>.Continuation] = [:]
   var stateContinuations: [UUID: AsyncStream<ChannelState>.Continuation] = [:]
 
-  private var joinRef: String?
+  // Presence handler registrations
+  var presenceSnapshotHandlers: [UUID: @Sendable ([String: JSONValue]) -> Void] = [:]
+  var presenceDiffHandlers: [UUID: @Sendable ([String: JSONValue]) -> Void] = [:]
+  var presenceFinishHandlers: [UUID: @Sendable () -> Void] = [:]
+  // Track registry: presenceTrackId → state, for auto re-track on rejoin
+  var trackedStates: [UUID: [String: JSONValue]] = [:]
+
+  var joinRef: String?
 
   init(topic: String, options: ChannelOptions, realtime: Realtime) {
     self.topic = topic
@@ -86,10 +92,10 @@ public final actor Channel: Sendable {
       finishAllContinuations(throwing: .channelClosed(reason))
     case "broadcast":
       await deliverBroadcast(from: msg.payload)
-    case "presence_diff":
-      for cont in presenceContinuations.values { cont.yield(msg.payload) }
     case "presence_state":
-      for cont in presenceContinuations.values { cont.yield(msg.payload) }
+      for handler in presenceSnapshotHandlers.values { handler(msg.payload) }
+    case "presence_diff":
+      for handler in presenceDiffHandlers.values { handler(msg.payload) }
     case "postgres_changes":
       for cont in postgresContinuations.values { cont.yield(msg.payload) }
     default:
@@ -194,12 +200,15 @@ public final actor Channel: Sendable {
     let err: any Error = error
     for cont in broadcastContinuations.values { cont.finish(throwing: err) }
     for cont in postgresContinuations.values { cont.finish(throwing: err) }
-    for cont in presenceContinuations.values { cont.finish() }
     for cont in stateContinuations.values { cont.finish() }
     broadcastContinuations.removeAll()
     postgresContinuations.removeAll()
-    presenceContinuations.removeAll()
     stateContinuations.removeAll()
+    for finish in presenceFinishHandlers.values { finish() }
+    presenceSnapshotHandlers.removeAll()
+    presenceDiffHandlers.removeAll()
+    presenceFinishHandlers.removeAll()
+    trackedStates.removeAll()
   }
 
   // MARK: - Continuation cleanup helpers (called from onTermination Tasks)
@@ -226,10 +235,6 @@ public final actor Channel: Sendable {
 
   func removeBroadcastContinuation(id: UUID) {
     broadcastContinuations.removeValue(forKey: id)
-  }
-
-  func removePresenceContinuation(id: UUID) {
-    presenceContinuations.removeValue(forKey: id)
   }
 
   func removePostgresContinuation(id: UUID) {
