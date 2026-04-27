@@ -20,7 +20,7 @@ public struct AuthAdminOAuth: Sendable {
   /// Lists all OAuth clients with optional pagination.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func listClients(
     params: PageParams? = nil
   ) async throws -> ListOAuthClientsPaginatedResponse {
@@ -71,7 +71,7 @@ public struct AuthAdminOAuth: Sendable {
   /// Creates a new OAuth client.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   @discardableResult
   public func createClient(params: CreateOAuthClientParams) async throws -> OAuthClient {
     try await api.execute(
@@ -88,7 +88,7 @@ public struct AuthAdminOAuth: Sendable {
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client.
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func getClient(clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
@@ -104,7 +104,7 @@ public struct AuthAdminOAuth: Sendable {
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client.
   /// - Parameter params: The fields to update.
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func updateClient(
     clientId: UUID,
     params: UpdateOAuthClientParams
@@ -123,7 +123,7 @@ public struct AuthAdminOAuth: Sendable {
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client to delete.
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   @discardableResult
   public func deleteClient(clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
@@ -139,7 +139,7 @@ public struct AuthAdminOAuth: Sendable {
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client.
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the client.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   @discardableResult
   public func regenerateClientSecret(clientId: UUID) async throws -> OAuthClient {
     try await api.execute(

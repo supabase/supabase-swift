@@ -218,12 +218,12 @@ The app is pre-configured to use the local instance:
 <dict>
   <key>SUPABASE_URL</key>
   <string>http://127.0.0.1:54321</string>
-  <key>SUPABASE_ANON_KEY</key>
+  <key>SUPABASE_PUBLISHABLE_KEY</key>
   <string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0</string>
 </dict>
 ```
 
-This is the default anon key for local Supabase development.
+This is the default publishable key for local Supabase development.
 
 ### 4. Running the App
 
@@ -546,8 +546,8 @@ Update `Supabase.plist`:
 ```xml
 <key>SUPABASE_URL</key>
 <string>https://your-project.supabase.co</string>
-<key>SUPABASE_ANON_KEY</key>
-<string>your-anon-key</string>
+<key>SUPABASE_PUBLISHABLE_KEY</key>
+<string>your-publishable-key</string>
 ```
 
 ### 2. Apply Migrations

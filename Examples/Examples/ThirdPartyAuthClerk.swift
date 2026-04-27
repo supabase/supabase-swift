@@ -12,7 +12,7 @@ import Supabase
 extension SupabaseClient {
   static let thirdPartyAuthWithClerk = SupabaseClient(
     supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
-    supabaseKey: SupabaseConfig["SUPABASE_ANON_KEY"]!,
+    supabaseKey: SupabaseConfig["SUPABASE_PUBLISHABLE_KEY"]!,
     options: SupabaseClientOptions(
       auth: SupabaseClientOptions.AuthOptions(
         accessToken: {
