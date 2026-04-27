@@ -5,34 +5,10 @@ on:
     branches:
       - main
       - release/*
-    paths:
-      - "Sources/**"
-      - "Tests/**"
-      - "Examples/**"
-      - "*.swift"
-      - "Package.swift"
-      - "Package.resolved"
-      - ".github/workflows/ci.yml"
-      - "Makefile"
-      - "*.xcodeproj/**"
-      - "*.xcworkspace/**"
-      - ".swiftpm/**"
   pull_request:
     branches:
       - "*"
       - release/*
-    paths:
-      - "Sources/**"
-      - "Tests/**"
-      - "Examples/**"
-      - "*.swift"
-      - "Package.swift"
-      - "Package.resolved"
-      - ".github/workflows/ci.yml"
-      - "Makefile"
-      - "*.xcodeproj/**"
-      - "*.xcworkspace/**"
-      - ".swiftpm/**"
   workflow_dispatch:
 
 concurrency:
@@ -282,8 +258,8 @@ jobs:
 
   format-check:
     name: Format check (changed files only)
-    runs-on: macos-26
     if: github.event_name == 'pull_request'
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
