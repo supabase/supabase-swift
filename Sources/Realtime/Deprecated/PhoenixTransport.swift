@@ -176,8 +176,8 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
     let endpoint = url.absoluteString
     let wsEndpoint =
       endpoint
-      .replacingOccurrences(of: "http://", with: "ws://")
-      .replacingOccurrences(of: "https://", with: "wss://")
+        .replacingOccurrences(of: "http://", with: "ws://")
+        .replacingOccurrences(of: "https://", with: "wss://")
 
     // Force unwrapping should be safe here since a valid URL came in and we just
     // replaced the protocol.
@@ -282,7 +282,7 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
         switch result {
         case .data:
           print("Data received. This method is unsupported by the Client")
-        case .string(let text):
+        case let .string(text):
           self.delegate?.onMessage(message: text)
         default:
           fatalError("Unknown result was received. [\(String(describing: result))]")

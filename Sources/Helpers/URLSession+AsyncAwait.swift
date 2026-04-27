@@ -57,7 +57,7 @@
     private func actuallyCancel() {
       // Handle whatever needs to be done based on the current state
       switch state {
-      case .registered(let task):
+      case let .registered(task):
         task.cancel()
       case .cancelled:
         break

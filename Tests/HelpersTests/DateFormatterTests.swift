@@ -6,7 +6,6 @@
 //
 
 import XCTest
-
 @testable import Helpers
 
 final class DateFormatterTests: XCTestCase {
@@ -22,7 +21,7 @@ final class DateFormatterTests: XCTestCase {
     components.hour = 10
     components.minute = 30
     components.second = 45
-    components.nanosecond = 123_000_000  // 123 milliseconds
+    components.nanosecond = 123_000_000 // 123 milliseconds
     components.timeZone = TimeZone(secondsFromGMT: 0)
 
     let calendar = Calendar(identifier: .iso8601)
@@ -44,9 +43,9 @@ final class DateFormatterTests: XCTestCase {
 
     // Verify it's not empty and has proper format
     XCTAssertFalse(iso8601String.isEmpty)
-    XCTAssertTrue(iso8601String.contains("T"))  // Should have date-time separator
-    XCTAssertTrue(iso8601String.contains("-"))  // Should have date separators
-    XCTAssertTrue(iso8601String.contains(":"))  // Should have time separators
+    XCTAssertTrue(iso8601String.contains("T")) // Should have date-time separator
+    XCTAssertTrue(iso8601String.contains("-")) // Should have date separators
+    XCTAssertTrue(iso8601String.contains(":")) // Should have time separators
   }
 
   // MARK: - String to Date Parsing Tests
@@ -96,11 +95,11 @@ final class DateFormatterTests: XCTestCase {
   func testParseInvalidDateString() {
     let invalidStrings = [
       "not a date",
-      "2024-13-45",  // Invalid month and day
-      "2024/01/15",  // Wrong separator
-      "15-01-2024",  // Wrong order
+      "2024-13-45", // Invalid month and day
+      "2024/01/15", // Wrong separator
+      "15-01-2024", // Wrong order
       "",
-      "2024-01-15 10:30:45",  // Space instead of T
+      "2024-01-15 10:30:45", // Space instead of T
     ]
 
     for invalidString in invalidStrings {
@@ -200,7 +199,7 @@ final class DateFormatterTests: XCTestCase {
   }
 
   func testParseLeapYearDate() {
-    let dateString = "2024-02-29T12:00:00"  // 2024 is a leap year
+    let dateString = "2024-02-29T12:00:00" // 2024 is a leap year
     XCTAssertNotNil(dateString.date, "Should parse leap year date")
   }
 
@@ -226,7 +225,7 @@ final class DateFormatterTests: XCTestCase {
       "2021-06-15T12:30:45",
       "2022-12-31T23:59:59",
       "2023-07-04T16:20:30.500",
-      "2024-02-29T08:15:22",  // Leap year
+      "2024-02-29T08:15:22", // Leap year
     ]
 
     for dateString in dates {

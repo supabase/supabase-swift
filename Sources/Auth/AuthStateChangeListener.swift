@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 
+
 /// A listener that can be removed by calling ``AuthStateChangeListenerRegistration/remove()``.
 ///
 /// - Note: Listener is automatically removed on deinit.
@@ -18,8 +19,7 @@ public protocol AuthStateChangeListenerRegistration: Sendable {
 
 extension ObservationToken: AuthStateChangeListenerRegistration {}
 
-public typealias AuthStateChangeListener =
-  @Sendable (
-    _ event: AuthChangeEvent,
-    _ session: Session?
-  ) -> Void
+public typealias AuthStateChangeListener = @Sendable (
+  _ event: AuthChangeEvent,
+  _ session: Session?
+) -> Void

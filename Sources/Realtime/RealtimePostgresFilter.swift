@@ -17,19 +17,19 @@ public enum RealtimePostgresFilter {
 
   var value: String {
     switch self {
-    case .eq(let column, let value):
+    case let .eq(column, value):
       return "\(column)=eq.\(value.rawValue)"
-    case .neq(let column, let value):
+    case let .neq(column, value):
       return "\(column)=neq.\(value.rawValue)"
-    case .gt(let column, let value):
+    case let .gt(column, value):
       return "\(column)=gt.\(value.rawValue)"
-    case .gte(let column, let value):
+    case let .gte(column, value):
       return "\(column)=gte.\(value.rawValue)"
-    case .lt(let column, let value):
+    case let .lt(column, value):
       return "\(column)=lt.\(value.rawValue)"
-    case .lte(let column, let value):
+    case let .lte(column, value):
       return "\(column)=lte.\(value.rawValue)"
-    case .in(let column, let values):
+    case let .in(column, values):
       return "\(column)=in.(\(values.map(\.rawValue).joined(separator: ",")))"
     }
   }

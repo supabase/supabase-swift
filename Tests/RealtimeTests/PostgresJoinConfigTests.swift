@@ -5,9 +5,8 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
-import XCTest
-
 @testable import Realtime
+import XCTest
 
 final class PostgresJoinConfigTests: XCTestCase {
   func testSameConfigButDifferentIdAreEqual() {

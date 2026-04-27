@@ -122,9 +122,7 @@ public struct AuthMFA: Sendable {
   /// Returns the Authenticator Assurance Level (AAL) for the active session.
   ///
   /// - Returns: An authentication response with the Authenticator Assurance Level.
-  public func getAuthenticatorAssuranceLevel() async throws
-    -> AuthMFAGetAuthenticatorAssuranceLevelResponse
-  {
+  public func getAuthenticatorAssuranceLevel() async throws -> AuthMFAGetAuthenticatorAssuranceLevelResponse {
     do {
       let session = try await sessionManager.session()
       let payload = JWT.decodePayload(session.accessToken)

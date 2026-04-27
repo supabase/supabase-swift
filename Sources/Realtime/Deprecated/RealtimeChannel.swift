@@ -20,8 +20,8 @@
 
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 import Swift
+import HTTPTypes
 
 /// Container class of bindings to the channel
 struct Binding {
@@ -94,13 +94,13 @@ public struct RealtimeChannelOptions {
     [
       "config": [
         "presence": [
-          "key": presenceKey ?? ""
+          "key": presenceKey ?? "",
         ],
         "broadcast": [
           "ack": broadcastAcknowledge,
           "self": broadcastSelf,
         ],
-      ]
+      ],
     ]
   }
 }
@@ -135,8 +135,7 @@ public enum RealtimeSubscribeStates {
 @available(
   *,
   deprecated,
-  message:
-    "Use new RealtimeChannelV2 class instead. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
+  message: "Use new RealtimeChannelV2 class instead. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
 )
 public class RealtimeChannel {
   /// The topic of the RealtimeChannel. e.g. "rooms:friends"
@@ -378,7 +377,7 @@ public class RealtimeChannel {
 
     var accessTokenPayload: Payload = [:]
     var config: Payload = [
-      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? []
+      "postgres_changes": bindings.value["postgres_changes"]?.map(\.filter) ?? [],
     ]
 
     config["broadcast"] = broadcast
@@ -409,7 +408,7 @@ public class RealtimeChannel {
         let bindingsCount = clientPostgresBindings.count
         var newPostgresBindings: [Binding] = []
 
-        for i in 0..<bindingsCount {
+        for i in 0 ..< bindingsCount {
           let clientPostgresBinding = clientPostgresBindings[i]
 
           let event = clientPostgresBinding.filter["event"]
@@ -420,9 +419,9 @@ public class RealtimeChannel {
           let serverPostgresFilter = serverPostgresFilters[i]
 
           if serverPostgresFilter["event", as: String.self] == event,
-            serverPostgresFilter["schema", as: String.self] == schema,
-            serverPostgresFilter["table", as: String.self] == table,
-            serverPostgresFilter["filter", as: String.self] == filter
+             serverPostgresFilter["schema", as: String.self] == schema,
+             serverPostgresFilter["table", as: String.self] == table,
+             serverPostgresFilter["filter", as: String.self] == filter
           {
             newPostgresBindings.append(
               Binding(
@@ -739,7 +738,7 @@ public class RealtimeChannel {
           "topic": subTopic,
           "payload": payload,
           "event": event as Any,
-        ]
+        ],
       ]
 
       do {
@@ -751,7 +750,7 @@ public class RealtimeChannel {
         )
 
         let response = try await socket?.http.send(request)
-        guard let response, 200..<300 ~= response.statusCode else {
+        guard let response, 200 ..< 300 ~= response.statusCode else {
           return .error
         }
         return .ok
@@ -766,8 +765,8 @@ public class RealtimeChannel {
         )
 
         if let type = payload["type"] as? String, type == "broadcast",
-          let config = self.params["config"] as? [String: Any],
-          let broadcast = config["broadcast"] as? [String: Any]
+           let config = self.params["config"] as? [String: Any],
+           let broadcast = config["broadcast"] as? [String: Any]
         {
           let ack = broadcast["ack"] as? Bool
           if ack == nil || ack == false {
@@ -915,32 +914,33 @@ public class RealtimeChannel {
 
     let handledMessage = message
 
-    let bindings: [Binding] =
-      if ["insert", "update", "delete"].contains(typeLower) {
-        self.bindings.value["postgres_changes", default: []].filter { bind in
-          bind.filter["event"] == "*" || bind.filter["event"] == typeLower
-        }
-      } else {
-        self.bindings.value[typeLower, default: []].filter { bind in
-          if ["broadcast", "presence", "postgres_changes"].contains(typeLower) {
-            let bindEvent = bind.filter["event"]?.lowercased()
+    let bindings: [Binding] = if ["insert", "update", "delete"].contains(typeLower) {
+      self.bindings.value["postgres_changes", default: []].filter { bind in
+        bind.filter["event"] == "*" || bind.filter["event"] == typeLower
+      }
+    } else {
+      self.bindings.value[typeLower, default: []].filter { bind in
+        if ["broadcast", "presence", "postgres_changes"].contains(typeLower) {
+          let bindEvent = bind.filter["event"]?.lowercased()
 
-            if let bindId = bind.id.flatMap(Int.init) {
-              let ids = message.payload["ids", as: [Int].self] ?? []
-              return ids.contains(bindId)
-                && (bindEvent == "*"
+          if let bindId = bind.id.flatMap(Int.init) {
+            let ids = message.payload["ids", as: [Int].self] ?? []
+            return ids.contains(bindId)
+              && (
+                bindEvent == "*"
                   || bindEvent
-                    == message.payload["data", as: [String: Any].self]?["type", as: String.self]?
-                    .lowercased())
-            }
-
-            return bindEvent == "*"
-              || bindEvent == message.payload["event", as: String.self]?.lowercased()
+                  == message.payload["data", as: [String: Any].self]?["type", as: String.self]?
+                  .lowercased()
+              )
           }
 
-          return bind.type.lowercased() == typeLower
+          return bindEvent == "*"
+            || bindEvent == message.payload["event", as: String.self]?.lowercased()
         }
+
+        return bind.type.lowercased() == typeLower
       }
+    }
 
     bindings.forEach { $0.callback.call(handledMessage) }
   }

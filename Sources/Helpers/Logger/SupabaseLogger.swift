@@ -214,3 +214,4 @@ extension SupabaseLogger {
     }
   }
 #endif
+
