@@ -184,10 +184,10 @@ final class StorageFileIntegrationTests: XCTestCase {
         """
         ▿ StorageError
           ▿ error: Optional<String>
-            - some: "InvalidRequest"
+            - some: "invalid_mime_type"
           - message: "mime type image/jpeg is not supported"
           ▿ statusCode: Optional<String>
-            - some: "400"
+            - some: "415"
 
         """
       }
