@@ -1,0 +1,107 @@
+//
+//  SupabaseClient+RealtimeV3.swift
+//  Supabase
+//
+//  Created by Guilherme Souza on 24/04/25.
+//
+
+import Foundation
+import Supabase
+import _Realtime
+
+#if canImport(ObjectiveC)
+  import ObjectiveC
+#endif
+
+extension SupabaseClient {
+  /// Realtime v3 client — the new idiomatic Swift API targeting iOS 17+.
+  ///
+  /// Lazily created and cached. Shares the project URL and API key with the parent client.
+  /// For older OS versions, use ``realtimeV2`` instead.
+  @available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, visionOS 1.0, *)
+  public var realtimeV3: _Realtime.Realtime {
+    #if canImport(ObjectiveC)
+      if let existing = _realtimeV3Cache { return existing }
+      let client = _makeRealtimeV3()
+      _realtimeV3Cache = client
+      return client
+    #else
+      // On Linux / non-ObjC runtimes, associated objects are not available.
+      // Returning a fresh instance each call avoids retain semantics we can't enforce.
+      return _makeRealtimeV3()
+    #endif
+  }
+
+  @available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, visionOS 1.0, *)
+  private func _makeRealtimeV3() -> _Realtime.Realtime {
+    let wsURL = _realtimeWebSocketURL
+    let key = supabaseKey
+    var config = _Realtime.Configuration()
+    config.headers = headers
+    if let logger = options.global.logger {
+      config.logger = RealtimeBridgedLogger(supabaseLogger: logger)
+    }
+    return _Realtime.Realtime(
+      url: wsURL,
+      apiKey: .dynamic { [weak self] in
+        // Use auth session token if available; fall back to anon key.
+        guard let self else { return key }
+        do {
+          return try await self.auth.session.accessToken
+        } catch {
+          return key
+        }
+      },
+      configuration: config
+    )
+  }
+
+  #if canImport(ObjectiveC)
+    @available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, visionOS 1.0, *)
+    private var _realtimeV3Cache: _Realtime.Realtime? {
+      get {
+        objc_getAssociatedObject(self, &SupabaseClientRealtimeV3Key) as? _Realtime.Realtime
+      }
+      set {
+        objc_setAssociatedObject(
+          self, &SupabaseClientRealtimeV3Key, newValue,
+          .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        )
+      }
+    }
+  #endif
+
+  private var _realtimeWebSocketURL: URL {
+    var comps = URLComponents(url: supabaseURL, resolvingAgainstBaseURL: false)!
+    comps.scheme = comps.scheme == "https" ? "wss" : "ws"
+    // Append rather than replace path so deployments under a path prefix work correctly.
+    let base = comps.path.hasSuffix("/") ? comps.path : comps.path + "/"
+    comps.path = base + "realtime/v1"
+    return comps.url!
+  }
+}
+
+#if canImport(ObjectiveC)
+  private nonisolated(unsafe) var SupabaseClientRealtimeV3Key: UInt8 = 0
+#endif
+
+// MARK: - Logger bridge
+
+@available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, visionOS 1.0, *)
+private struct RealtimeBridgedLogger: _Realtime.RealtimeLogger, Sendable {
+  let supabaseLogger: any SupabaseLogger
+
+  func log(_ event: _Realtime.LogEvent) {
+    let level: SupabaseLogLevel
+    switch event.level {
+    case .debug: level = .debug
+    case .info:  level = .verbose
+    case .warn:  level = .warning
+    case .error: level = .error
+    }
+    supabaseLogger.log(
+      level,
+      message: event.message
+    )
+  }
+}

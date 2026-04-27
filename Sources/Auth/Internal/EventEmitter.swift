@@ -2,7 +2,8 @@ import ConcurrencyExtras
 import Foundation
 
 struct AuthStateChangeEventEmitter {
-  var emitter = EventEmitter<(AuthChangeEvent, Session?)?>(initialEvent: nil, emitsLastEventWhenAttaching: false)
+  var emitter = EventEmitter<(AuthChangeEvent, Session?)?>(
+    initialEvent: nil, emitsLastEventWhenAttaching: false)
   var logger: (any SupabaseLogger)?
 
   func attach(_ listener: @escaping AuthStateChangeListener) -> ObservationToken {

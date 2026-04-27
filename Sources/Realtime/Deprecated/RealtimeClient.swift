@@ -60,7 +60,8 @@ struct StateChangeCallbacks {
 @available(
   *,
   deprecated,
-  message: "Use new RealtimeClientV2 class instead. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
+  message:
+    "Use new RealtimeClientV2 class instead. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
 )
 public class RealtimeClient: PhoenixTransportDelegate {
   // ----------------------------------------------------------------------
@@ -158,7 +159,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
   var sendBuffer: [(ref: String?, callback: () throws -> Void)] = []
 
   /// Ref counter for messages
-  var ref: UInt64 = .min // 0 (max: 18,446,744,073,709,551,615)
+  var ref: UInt64 = .min  // 0 (max: 18,446,744,073,709,551,615)
 
   /// Timer that triggers sending new Heartbeat messages
   var heartbeatTimer: HeartbeatTimer?
@@ -939,7 +940,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
     // If there is a pending heartbeat ref, then the last heartbeat was
     // never acknowledged by the server. Close the connection and attempt
     // to reconnect.
-    if let _ = pendingHeartbeatRef {
+    if pendingHeartbeatRef != nil {
       pendingHeartbeatRef = nil
       logItems(
         "transport",
