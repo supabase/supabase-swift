@@ -11,9 +11,10 @@ public struct StorageHTTPSession: Sendable {
 
   public init(
     fetch: @escaping @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse),
-    upload: @escaping @Sendable (_ request: URLRequest, _ data: Data) async throws -> (
-      Data, URLResponse
-    )
+    upload:
+      @escaping @Sendable (_ request: URLRequest, _ data: Data) async throws -> (
+        Data, URLResponse
+      )
   ) {
     self.fetch = fetch
     self.upload = upload
