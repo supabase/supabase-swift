@@ -184,7 +184,6 @@ extension RealtimeChannelV2 {
     return stream
   }
 
-
   /// Listen for `system` event.
   public func system() -> AsyncStream<RealtimeMessageV2> {
     let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream()
