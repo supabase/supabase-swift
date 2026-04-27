@@ -358,9 +358,9 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     let sut = makeSUTWithCustomFetch { _ in
       callCount.withValue { $0 += 1 }
       if callCount.value < 2 {
-        return (Data(), self.makeHTTPURLResponse(statusCode: 503))
+        return (Data(), Self.makeHTTPURLResponse(statusCode: 503))
       }
-      return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+      return (Data("[]".utf8), Self.makeHTTPURLResponse(statusCode: 200))
     }
 
     let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
@@ -374,9 +374,9 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     let sut = makeSUTWithCustomFetch { _ in
       callCount.withValue { $0 += 1 }
       if callCount.value < 2 {
-        return (Data(), self.makeHTTPURLResponse(statusCode: 503))
+        return (Data(), Self.makeHTTPURLResponse(statusCode: 503))
       }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 200))
+      return (Data(), Self.makeHTTPURLResponse(statusCode: 200))
     }
 
     try await sut.from("users").select().execute(options: FetchOptions(head: true))

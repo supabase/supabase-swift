@@ -574,7 +574,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testStripNulls() async throws {
     Mock(
-      url: url.appendingPathComponent("countries"),
+      url: Self.url.appendingPathComponent("countries"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
