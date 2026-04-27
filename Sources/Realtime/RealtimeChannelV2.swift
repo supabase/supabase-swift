@@ -261,11 +261,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
 
     let response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) {
-      [self] in
-      await Result {
-        try await socket.http.send(request)
-      }
-    }.get()
+      [self] in try await socket.http.send(request)
+    }
 
     guard response.statusCode == 202 else {
       // Try to parse error message from response body
