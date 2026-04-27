@@ -22,7 +22,7 @@ import XCTest
   import AuthenticationServices
 #endif
 
-final class AuthClientTests: XCTestCase {
+final class AuthClientTests: XCTestCase, @unchecked Sendable {
   var sessionManager: SessionManager!
 
   var storage: InMemoryLocalStorage!
