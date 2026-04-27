@@ -36,7 +36,7 @@
 
       client = SupabaseClient(
         supabaseURL: URL(string: DotEnv.SUPABASE_URL) ?? URL(string: "http://127.0.0.1:54321")!,
-        supabaseKey: DotEnv.SUPABASE_ANON_KEY,
+        supabaseKey: DotEnv.SUPABASE_PUBLISHABLE_KEY,
         options: SupabaseClientOptions(
           auth: .init(storage: InMemoryLocalStorage()),
           global: .init(
@@ -49,7 +49,7 @@
 
       client2 = SupabaseClient(
         supabaseURL: URL(string: DotEnv.SUPABASE_URL) ?? URL(string: "http://127.0.0.1:54321")!,
-        supabaseKey: DotEnv.SUPABASE_ANON_KEY,
+        supabaseKey: DotEnv.SUPABASE_PUBLISHABLE_KEY,
         options: SupabaseClientOptions(
           auth: .init(storage: InMemoryLocalStorage()),
           global: .init(

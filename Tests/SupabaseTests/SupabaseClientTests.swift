@@ -34,7 +34,7 @@ final class SupabaseClientTests: XCTestCase {
 
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "ANON_KEY",
+      supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         db: SupabaseClientOptions.DatabaseOptions(schema: customSchema),
         auth: SupabaseClientOptions.AuthOptions(
@@ -56,7 +56,7 @@ final class SupabaseClientTests: XCTestCase {
     )
 
     XCTAssertEqual(client.supabaseURL.absoluteString, "https://project-ref.supabase.co")
-    XCTAssertEqual(client.supabaseKey, "ANON_KEY")
+    XCTAssertEqual(client.supabaseKey, "PUBLISHABLE_KEY")
     XCTAssertEqual(client.storageURL.absoluteString, "https://project-ref.supabase.co/storage/v1")
     XCTAssertEqual(client.databaseURL.absoluteString, "https://project-ref.supabase.co/rest/v1")
     XCTAssertEqual(
@@ -67,8 +67,8 @@ final class SupabaseClientTests: XCTestCase {
     assertInlineSnapshot(of: client.headers, as: .customDump) {
       """
       [
-        "Apikey": "ANON_KEY",
-        "Authorization": "Bearer ANON_KEY",
+        "Apikey": "PUBLISHABLE_KEY",
+        "Authorization": "Bearer PUBLISHABLE_KEY",
         "X-Client-Info": "supabase-swift/0.0.0",
         "X-Supabase-Client-Platform": "macOS",
         "X-Supabase-Client-Platform-Version": "0.0.0",
@@ -107,7 +107,7 @@ final class SupabaseClientTests: XCTestCase {
     func testClientInitWithDefaultOptionsShouldBeAvailableInNonLinux() {
       _ = SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-        supabaseKey: "ANON_KEY"
+        supabaseKey: "PUBLISHABLE_KEY"
       )
     }
   #endif
@@ -116,7 +116,7 @@ final class SupabaseClientTests: XCTestCase {
     let localStorage = AuthLocalStorageMock()
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "ANON_KEY",
+      supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: localStorage,
@@ -136,7 +136,7 @@ final class SupabaseClientTests: XCTestCase {
     let localStorage = AuthLocalStorageMock()
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "ANON_KEY",
+      supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: localStorage,
@@ -159,7 +159,7 @@ final class SupabaseClientTests: XCTestCase {
 
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "ANON_KEY",
+      supabaseKey: "PUBLISHABLE_KEY",
       options: .init(
         auth: .init(
           storage: localStorage,

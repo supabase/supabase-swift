@@ -30,7 +30,7 @@ final class AuthClientIntegrationTests: XCTestCase {
   }
 
   static func makeClient(serviceRole: Bool = false) -> AuthClient {
-    let key = serviceRole ? DotEnv.SUPABASE_SERVICE_ROLE_KEY : DotEnv.SUPABASE_ANON_KEY
+    let key = serviceRole ? DotEnv.SUPABASE_SECRET_KEY : DotEnv.SUPABASE_PUBLISHABLE_KEY
     return AuthClient(
       configuration: AuthClient.Configuration(
         url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
@@ -240,7 +240,7 @@ final class AuthClientIntegrationTests: XCTestCase {
 
     var request = URLRequest(url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1/rpc/delete_user")!)
     request.httpMethod = "POST"
-    request.setValue(DotEnv.SUPABASE_ANON_KEY, forHTTPHeaderField: "apikey")
+    request.setValue(DotEnv.SUPABASE_PUBLISHABLE_KEY, forHTTPHeaderField: "apikey")
     request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
 
     _ = try await URLSession.shared.data(for: request)
@@ -259,9 +259,9 @@ final class AuthClientIntegrationTests: XCTestCase {
   }
 
   func testListUsers() async throws {
-    // Skip: Requires pre-seeded users and service role key configuration
+    // Skip: Requires pre-seeded users and secret key configuration
     // that may not be available in all CI environments
-    try XCTSkipIf(true, "Requires service role key and pre-seeded users")
+    try XCTSkipIf(true, "Requires secret key and pre-seeded users")
     let client = Self.makeClient(serviceRole: true)
     let pagination = try await client.admin.listUsers(params: PageParams(perPage: 10))
     XCTAssertEqual(pagination.users.count, 10)

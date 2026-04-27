@@ -120,7 +120,7 @@ public actor AuthClient {
   }
 
   /// Namespace for the GoTrue admin methods.
-  /// - Warning: This methods requires `service_role` key, be careful to never expose `service_role`
+  /// - Warning: This methods requires `secret` key, be careful to never expose `secret`
   /// key in the client.
   nonisolated public var admin: AuthAdmin {
     AuthAdmin(clientID: clientID)

@@ -51,7 +51,7 @@ Then you're able to import the package and establish the connection with the dat
 /// Create a single supabase client for interacting with your database
 let client = SupabaseClient(
     supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
-    supabaseKey: "public-anon-key"
+    supabaseKey: "your-publishable-key"
 )
 ```
 
@@ -60,7 +60,7 @@ let client = SupabaseClient(
 ```swift
 let client = SupabaseClient(
     supabaseURL: URL(string: "https://xyzcompany.supabase.co")!, 
-    supabaseKey: "public-anon-key",
+    supabaseKey: "your-publishable-key",
     options: SupabaseClientOptions(
         db: .init(
             schema: "public"

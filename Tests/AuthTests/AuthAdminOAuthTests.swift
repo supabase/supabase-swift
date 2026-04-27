@@ -63,8 +63,8 @@ final class AuthAdminOAuthTests: XCTestCase {
     let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: [
-        "apikey": "supabase.anon.key",
-        "Authorization": "Bearer supabase.service_role.key",
+        "apikey": "supabase.publishable.key",
+        "Authorization": "Bearer supabase.secret.key",
       ],
       localStorage: storage,
       logger: nil,
@@ -111,10 +111,10 @@ final class AuthAdminOAuthTests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
-      	--header "Authorization: Bearer supabase.service_role.key" \
+      	--header "Authorization: Bearer supabase.secret.key" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
-      	--header "apikey: supabase.anon.key" \
+      	--header "apikey: supabase.publishable.key" \
       	"http://localhost:54321/auth/v1/admin/oauth/clients?page=&per_page="
       """#
     }
@@ -158,12 +158,12 @@ final class AuthAdminOAuthTests: XCTestCase {
       #"""
       curl \
       	--request PUT \
-      	--header "Authorization: Bearer supabase.service_role.key" \
+      	--header "Authorization: Bearer supabase.secret.key" \
       	--header "Content-Length: 141" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
-      	--header "apikey: supabase.anon.key" \
+      	--header "apikey: supabase.publishable.key" \
       	--data "{\"client_name\":\"Update Client name\",\"grant_types\":[\"authorization_code\",\"refresh_token\"],\"redirect_uris\":[\"https:\/\/example.com\/callback\"]}" \
       	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
       """#
@@ -213,12 +213,12 @@ final class AuthAdminOAuthTests: XCTestCase {
       #"""
       curl \
       	--request POST \
-      	--header "Authorization: Bearer supabase.service_role.key" \
+      	--header "Authorization: Bearer supabase.secret.key" \
       	--header "Content-Length: 80" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
-      	--header "apikey: supabase.anon.key" \
+      	--header "apikey: supabase.publishable.key" \
       	--data "{\"client_name\":\"New Client\",\"redirect_uris\":[\"https:\/\/example.com\/callback\"]}" \
       	"http://localhost:54321/auth/v1/admin/oauth/clients"
       """#
@@ -263,10 +263,10 @@ final class AuthAdminOAuthTests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
-      	--header "Authorization: Bearer supabase.service_role.key" \
+      	--header "Authorization: Bearer supabase.secret.key" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
-      	--header "apikey: supabase.anon.key" \
+      	--header "apikey: supabase.publishable.key" \
       	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
       """#
     }
@@ -305,10 +305,10 @@ final class AuthAdminOAuthTests: XCTestCase {
       #"""
       curl \
       	--request DELETE \
-      	--header "Authorization: Bearer supabase.service_role.key" \
+      	--header "Authorization: Bearer supabase.secret.key" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
-      	--header "apikey: supabase.anon.key" \
+      	--header "apikey: supabase.publishable.key" \
       	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
       """#
     }
@@ -347,10 +347,10 @@ final class AuthAdminOAuthTests: XCTestCase {
       #"""
       curl \
       	--request POST \
-      	--header "Authorization: Bearer supabase.service_role.key" \
+      	--header "Authorization: Bearer supabase.secret.key" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
-      	--header "apikey: supabase.anon.key" \
+      	--header "apikey: supabase.publishable.key" \
       	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F/regenerate_secret"
       """#
     }

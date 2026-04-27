@@ -18,14 +18,14 @@ public struct AuthAdmin: Sendable {
   /// Contains all OAuth client administration methods.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
-  /// - Warning: This property requires `service_role` key. Be careful to never expose your `service_role` key in the browser.
+  /// - Warning: This property requires `secret` key. Be careful to never expose your `secret` key in the browser.
   public var oauth: AuthAdminOAuth {
     AuthAdminOAuth(clientID: clientID)
   }
 
   /// Get user by id.
   /// - Parameter uid: The user's unique identifier.
-  /// - Note: This function should only be called on a server. Never expose your `service_role` key in the browser.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
   public func getUserById(_ uid: UUID) async throws -> User {
     try await api.execute(
       HTTPRequest(
@@ -55,7 +55,7 @@ public struct AuthAdmin: Sendable {
   /// - To confirm the user's email address or phone number, set ``AdminUserAttributes/emailConfirm`` or ``AdminUserAttributes/phoneConfirm`` to `true`. Both arguments default to `false`.
   /// - ``createUser(attributes:)`` will not send a confirmation email to the user. You can use ``inviteUserByEmail(_:data:redirectTo:)`` if you want to send them an email invite instead.
   /// - If you are sure that the created user's email or phone number is legitimate and verified, you can set the ``AdminUserAttributes/emailConfirm`` or ``AdminUserAttributes/phoneConfirm`` param to true.
-  /// - Warning: Never expose your `service_role` key on the client.
+  /// - Warning: Never expose your `secret` key on the client.
   @discardableResult
   public func createUser(attributes: AdminUserAttributes) async throws -> User {
     try await api.execute(
@@ -106,13 +106,13 @@ public struct AuthAdmin: Sendable {
     .decoded(decoder: configuration.decoder)
   }
 
-  /// Delete a user. Requires `service_role` key.
+  /// Delete a user. Requires `secret` key.
   /// - Parameter id: The id of the user you want to delete.
   /// - Parameter shouldSoftDelete: If true, then the user will be soft-deleted (setting
   /// `deleted_at` to the current timestamp and disabling their account while preserving their data)
   /// from the auth schema.
   ///
-  /// - Warning: Never expose your `service_role` key on the client.
+  /// - Warning: Never expose your `secret` key on the client.
   public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws {
     _ = try await api.execute(
       HTTPRequest(
@@ -129,7 +129,7 @@ public struct AuthAdmin: Sendable {
   ///
   /// This function should only be called on a server.
   ///
-  /// - Warning: Never expose your `service_role` key in the client.
+  /// - Warning: Never expose your `secret` key in the client.
   public func listUsers(params: PageParams? = nil) async throws -> ListUsersPaginatedResponse {
     struct Response: Decodable {
       let users: [User]
@@ -178,7 +178,7 @@ public struct AuthAdmin: Sendable {
   /*
    Generate link is commented out temporarily due issues with they Auth's decoding is configured.
    Will revisit it later.
-
+  
   /// Generates email links and OTPs to be sent via a custom email provider.
   ///
   /// - Parameter params: The parameters for the link generation.

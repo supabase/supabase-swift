@@ -20,7 +20,7 @@ import XCTest
   @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   final class RealtimeTests: XCTestCase {
     let url = URL(string: "http://localhost:54321/realtime/v1")!
-    let apiKey = "anon.api.key"
+    let apiKey = "publishable.api.key"
 
     #if !os(Windows) && !os(Linux) && !os(Android)
       override func invokeTest() {
@@ -79,7 +79,7 @@ import XCTest
         wsTransport: { url, headers in
           assertInlineSnapshot(of: url, as: .description) {
             """
-            ws://localhost:54321/realtime/v1/websocket?apikey=anon.api.key&vsn=2.0.0&log_level=warn
+            ws://localhost:54321/realtime/v1/websocket?apikey=publishable.api.key&vsn=2.0.0&log_level=warn
             """
           }
           return FakeWebSocket.fakes().0
@@ -605,7 +605,7 @@ import XCTest
         	--request POST \
         	--header "Authorization: Bearer custom.access.token" \
         	--header "Content-Type: application/json" \
-        	--header "apiKey: anon.api.key" \
+        	--header "apiKey: publishable.api.key" \
         	--data "{\"messages\":[{\"event\":\"test\",\"payload\":{\"value\":42},\"private\":false,\"topic\":\"realtime:public:messages\"}]}" \
         	"http://localhost:54321/realtime/v1/api/broadcast"
         """#

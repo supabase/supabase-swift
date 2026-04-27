@@ -5,13 +5,14 @@
 //  Created by Guilherme Souza on 23/04/24.
 //
 
-@testable import Functions
 import SnapshotTesting
 import XCTest
 
+@testable import Functions
+
 final class RequestTests: XCTestCase {
   let url = URL(string: "http://localhost:5432/functions/v1")!
-  let apiKey = "supabase.anon.key"
+  let apiKey = "supabase.publishable.key"
 
   func testInvokeWithDefaultOptions() async {
     await snapshot {
@@ -56,10 +57,11 @@ final class RequestTests: XCTestCase {
     ) { request in
       await MainActor.run {
         #if os(Android)
-        // missing snapshots for Android
-        return
+          // missing snapshots for Android
+          return
         #endif
-        assertSnapshot(of: request, as: .curl, record: record, file: file, testName: testName, line: line)
+        assertSnapshot(
+          of: request, as: .curl, record: record, file: file, testName: testName, line: line)
       }
       throw NSError(domain: "Error", code: 0, userInfo: nil)
     }

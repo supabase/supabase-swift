@@ -4,7 +4,7 @@
 <dict>
 	<key>SUPABASE_URL</key>
 	<string>http://127.0.0.1:54321</string>
-	<key>SUPABASE_ANON_KEY</key>
+	<key>SUPABASE_PUBLISHABLE_KEY</key>
 	<string>sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH</string>
 </dict>
 </plist>
