@@ -5,10 +5,11 @@
 //  Created by Guilherme Souza on 24/04/25.
 //
 
-import Testing
 import Clocks
-import Foundation
 import ConcurrencyExtras
+import Foundation
+import Testing
+
 @testable import _Realtime
 
 @Suite struct RealtimeClientTests {

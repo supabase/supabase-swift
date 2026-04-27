@@ -5,8 +5,9 @@
 //  Created by Guilherme Souza on 24/04/26.
 //
 
-import Testing
 import Foundation
+import Testing
+
 @testable import _Realtime
 
 @Suite struct PhoenixSerializerTests {
@@ -41,11 +42,11 @@ import Foundation
     let payload = Data("{\"msg\":\"hi\"}".utf8)
 
     var data = Data()
-    data.append(0x04)                          // kind = server broadcast
-    data.append(UInt8(topic.utf8.count))       // topic_len
-    data.append(UInt8(event.utf8.count))       // event_len
-    data.append(0x00)                          // meta_len
-    data.append(0x01)                          // encoding = json
+    data.append(0x04)  // kind = server broadcast
+    data.append(UInt8(topic.utf8.count))  // topic_len
+    data.append(UInt8(event.utf8.count))  // event_len
+    data.append(0x00)  // meta_len
+    data.append(0x01)  // encoding = json
     data.append(contentsOf: topic.utf8)
     data.append(contentsOf: event.utf8)
     data.append(payload)
@@ -72,15 +73,15 @@ import Foundation
     #expect(encoded[encoded.startIndex] == 0x03)
     // Verify the data can be re-parsed by checking the header fields
     let joinRefLen = Int(encoded[encoded.startIndex + 1])
-    let refLen     = Int(encoded[encoded.startIndex + 2])
-    let topicLen   = Int(encoded[encoded.startIndex + 3])
-    let eventLen   = Int(encoded[encoded.startIndex + 4])
-    let metaLen    = Int(encoded[encoded.startIndex + 5])
-    let encByte    = encoded[encoded.startIndex + 6]
+    let refLen = Int(encoded[encoded.startIndex + 2])
+    let topicLen = Int(encoded[encoded.startIndex + 3])
+    let eventLen = Int(encoded[encoded.startIndex + 4])
+    let metaLen = Int(encoded[encoded.startIndex + 5])
+    let encByte = encoded[encoded.startIndex + 6]
     #expect(joinRefLen == 1)  // "1"
-    #expect(refLen == 1)       // "2"
-    #expect(topicLen == 6)     // "room:1"
-    #expect(eventLen == 4)     // "chat"
+    #expect(refLen == 1)  // "2"
+    #expect(topicLen == 6)  // "room:1"
+    #expect(eventLen == 4)  // "chat"
     #expect(metaLen == 0)
     #expect(encByte == 0x01)  // json encoding
     // Verify the payload section contains valid JSON

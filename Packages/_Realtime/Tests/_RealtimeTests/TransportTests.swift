@@ -1,6 +1,7 @@
-import Testing
-import Foundation
 import ConcurrencyExtras
+import Foundation
+import Testing
+
 @testable import _Realtime
 
 @Suite struct TransportTests {

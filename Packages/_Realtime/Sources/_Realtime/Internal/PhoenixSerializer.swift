@@ -51,10 +51,10 @@ enum PhoenixSerializer {
       )
     }
     let joinRef: String? = if case .string(let s) = array[0] { s } else { nil }
-    let ref: String?     = if case .string(let s) = array[1] { s } else { nil }
-    guard case .string(let topic)   = array[2],
-          case .string(let event)   = array[3],
-          case .object(let payload) = array[4]
+    let ref: String? = if case .string(let s) = array[1] { s } else { nil }
+    guard case .string(let topic) = array[2],
+      case .string(let event) = array[3],
+      case .object(let payload) = array[4]
     else {
       throw RealtimeError.decoding(
         type: "PhoenixMessage",
@@ -88,8 +88,8 @@ enum PhoenixSerializer {
     }
     let topicLen = Int(data[data.startIndex + 1])
     let eventLen = Int(data[data.startIndex + 2])
-    let metaLen  = Int(data[data.startIndex + 3])
-    let encByte  = data[data.startIndex + 4]
+    let metaLen = Int(data[data.startIndex + 3])
+    let encByte = data[data.startIndex + 4]
     guard let encoding = PayloadEncoding(rawValue: encByte) else {
       throw RealtimeError.decoding(
         type: "BinaryBroadcast",
@@ -108,12 +108,15 @@ enum PhoenixSerializer {
       )
     }
     var offset = data.startIndex + headerSize
-    let topicData = data[offset..<(offset + topicLen)]; offset += topicLen
-    let eventData = data[offset..<(offset + eventLen)]; offset += eventLen
+    let topicData = data[offset..<(offset + topicLen)]
+    offset += topicLen
+    let eventData = data[offset..<(offset + eventLen)]
+    offset += eventLen
     offset += metaLen
     let payloadData = data[offset...]
     guard let topic = String(data: topicData, encoding: .utf8),
-          let event = String(data: eventData, encoding: .utf8) else {
+      let event = String(data: eventData, encoding: .utf8)
+    else {
       throw RealtimeError.decoding(
         type: "BinaryBroadcast",
         underlying: DecodingError.dataCorrupted(
@@ -163,20 +166,32 @@ enum PhoenixSerializer {
     encoding: PayloadEncoding, payload: Data
   ) throws -> Data {
     let jrBytes = Data((joinRef ?? "").utf8)
-    let rBytes  = Data((ref ?? "").utf8)
-    let tBytes  = Data(topic.utf8)
-    let eBytes  = Data(event.utf8)
+    let rBytes = Data((ref ?? "").utf8)
+    let tBytes = Data(topic.utf8)
+    let eBytes = Data(event.utf8)
     guard jrBytes.count <= 255 else {
-      throw RealtimeError.encoding(underlying: EncodingError.invalidValue(joinRef ?? "", .init(codingPath: [], debugDescription: "joinRef exceeds 255 bytes (\(jrBytes.count))")))
+      throw RealtimeError.encoding(
+        underlying: EncodingError.invalidValue(
+          joinRef ?? "",
+          .init(codingPath: [], debugDescription: "joinRef exceeds 255 bytes (\(jrBytes.count))")))
     }
     guard rBytes.count <= 255 else {
-      throw RealtimeError.encoding(underlying: EncodingError.invalidValue(ref ?? "", .init(codingPath: [], debugDescription: "ref exceeds 255 bytes (\(rBytes.count))")))
+      throw RealtimeError.encoding(
+        underlying: EncodingError.invalidValue(
+          ref ?? "",
+          .init(codingPath: [], debugDescription: "ref exceeds 255 bytes (\(rBytes.count))")))
     }
     guard tBytes.count <= 255 else {
-      throw RealtimeError.encoding(underlying: EncodingError.invalidValue(topic, .init(codingPath: [], debugDescription: "topic exceeds 255 bytes (\(tBytes.count))")))
+      throw RealtimeError.encoding(
+        underlying: EncodingError.invalidValue(
+          topic,
+          .init(codingPath: [], debugDescription: "topic exceeds 255 bytes (\(tBytes.count))")))
     }
     guard eBytes.count <= 255 else {
-      throw RealtimeError.encoding(underlying: EncodingError.invalidValue(event, .init(codingPath: [], debugDescription: "event exceeds 255 bytes (\(eBytes.count))")))
+      throw RealtimeError.encoding(
+        underlying: EncodingError.invalidValue(
+          event,
+          .init(codingPath: [], debugDescription: "event exceeds 255 bytes (\(eBytes.count))")))
     }
     var out = Data()
     out.append(BinaryKind.clientBroadcastPush.rawValue)
@@ -184,9 +199,12 @@ enum PhoenixSerializer {
     out.append(UInt8(rBytes.count))
     out.append(UInt8(tBytes.count))
     out.append(UInt8(eBytes.count))
-    out.append(0x00)               // meta_len = 0
+    out.append(0x00)  // meta_len = 0
     out.append(encoding.rawValue)
-    out.append(jrBytes); out.append(rBytes); out.append(tBytes); out.append(eBytes)
+    out.append(jrBytes)
+    out.append(rBytes)
+    out.append(tBytes)
+    out.append(eBytes)
     out.append(payload)
     return out
   }

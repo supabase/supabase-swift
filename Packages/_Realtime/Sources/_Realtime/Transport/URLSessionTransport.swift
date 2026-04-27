@@ -7,7 +7,8 @@ public struct URLSessionTransport: RealtimeTransport {
     self.session = session
   }
 
-  public func connect(to url: URL, headers: [String: String]) async throws -> any RealtimeConnection {
+  public func connect(to url: URL, headers: [String: String]) async throws -> any RealtimeConnection
+  {
     var request = URLRequest(url: url)
     for (key, value) in headers {
       request.setValue(value, forHTTPHeaderField: key)

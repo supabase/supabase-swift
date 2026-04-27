@@ -41,7 +41,8 @@ public final class InMemoryTransport: RealtimeTransport, @unchecked Sendable {
     return (t, s)
   }
 
-  public func connect(to url: URL, headers: [String: String]) async throws -> any RealtimeConnection {
+  public func connect(to url: URL, headers: [String: String]) async throws -> any RealtimeConnection
+  {
     InMemoryConnection(
       inbound: serverToClientStream,
       outbound: clientToServerCont

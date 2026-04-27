@@ -19,13 +19,34 @@ public enum JSONValue: Codable, Sendable, Equatable {
 
   public init(from decoder: any Decoder) throws {
     let c = try decoder.singleValueContainer()
-    if let v = try? c.decode(Bool.self)             { self = .bool(v);   return }
-    if let v = try? c.decode(Int.self)              { self = .int(v);    return }
-    if let v = try? c.decode(Double.self)           { self = .double(v); return }
-    if let v = try? c.decode(String.self)           { self = .string(v); return }
-    if c.decodeNil()                                { self = .null;      return }
-    if let v = try? c.decode([JSONValue].self)      { self = .array(v);  return }
-    if let v = try? c.decode([String: JSONValue].self) { self = .object(v); return }
+    if let v = try? c.decode(Bool.self) {
+      self = .bool(v)
+      return
+    }
+    if let v = try? c.decode(Int.self) {
+      self = .int(v)
+      return
+    }
+    if let v = try? c.decode(Double.self) {
+      self = .double(v)
+      return
+    }
+    if let v = try? c.decode(String.self) {
+      self = .string(v)
+      return
+    }
+    if c.decodeNil() {
+      self = .null
+      return
+    }
+    if let v = try? c.decode([JSONValue].self) {
+      self = .array(v)
+      return
+    }
+    if let v = try? c.decode([String: JSONValue].self) {
+      self = .object(v)
+      return
+    }
     throw DecodingError.dataCorrupted(
       .init(codingPath: decoder.codingPath, debugDescription: "Cannot decode JSONValue")
     )
@@ -36,10 +57,10 @@ public enum JSONValue: Codable, Sendable, Equatable {
     switch self {
     case .string(let v): try c.encode(v)
     case .double(let v): try c.encode(v)
-    case .int(let v):    try c.encode(v)
-    case .bool(let v):   try c.encode(v)
-    case .null:          try c.encodeNil()
-    case .array(let v):  try c.encode(v)
+    case .int(let v): try c.encode(v)
+    case .bool(let v): try c.encode(v)
+    case .null: try c.encodeNil()
+    case .array(let v): try c.encode(v)
     case .object(let v): try c.encode(v)
     }
   }

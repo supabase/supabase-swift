@@ -5,9 +5,10 @@
 //  Created by Guilherme Souza on 24/04/25.
 //
 
-import Testing
-import Foundation
 import ConcurrencyExtras
+import Foundation
+import Testing
+
 @testable import _Realtime
 
 @Suite struct ChannelTests {
@@ -19,8 +20,9 @@ import ConcurrencyExtras
       do {
         for try await frame in server.receivedFrames {
           guard case .text(let text) = frame,
-                let msg = try? PhoenixSerializer.decodeText(text),
-                msg.event == "phx_join" || msg.event == "phx_leave" else { continue }
+            let msg = try? PhoenixSerializer.decodeText(text),
+            msg.event == "phx_join" || msg.event == "phx_leave"
+          else { continue }
           let reply = PhoenixMessage(
             joinRef: msg.joinRef, ref: msg.ref, topic: msg.topic,
             event: "phx_reply",
@@ -88,7 +90,7 @@ import ConcurrencyExtras
 
     let collectTask = Task {
       do {
-        for try await _ in broadcastStream { /* drain */ }
+        for try await _ in broadcastStream { /* drain */  }
       } catch let e as RealtimeError {
         caughtError.withValue { $0 = e }
       } catch {
