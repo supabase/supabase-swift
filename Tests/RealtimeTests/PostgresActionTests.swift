@@ -113,7 +113,7 @@ final class PostgresActionTests: XCTestCase {
     let anyAction = AnyAction.insert(insertAction)
     XCTAssertEqual(anyAction.rawMessage.topic, "test:table")
 
-    if case let .insert(wrappedAction) = anyAction {
+    if case .insert(let wrappedAction) = anyAction {
       XCTAssertEqual(wrappedAction.record, record)
     } else {
       XCTFail("Expected insert case")
@@ -135,7 +135,7 @@ final class PostgresActionTests: XCTestCase {
     let anyAction = AnyAction.update(updateAction)
     XCTAssertEqual(anyAction.rawMessage.topic, "test:table")
 
-    if case let .update(wrappedAction) = anyAction {
+    if case .update(let wrappedAction) = anyAction {
       XCTAssertEqual(wrappedAction.record, record)
       XCTAssertEqual(wrappedAction.oldRecord, oldRecord)
     } else {
@@ -156,7 +156,7 @@ final class PostgresActionTests: XCTestCase {
     let anyAction = AnyAction.delete(deleteAction)
     XCTAssertEqual(anyAction.rawMessage.topic, "test:table")
 
-    if case let .delete(wrappedAction) = anyAction {
+    if case .delete(let wrappedAction) = anyAction {
       XCTAssertEqual(wrappedAction.oldRecord, oldRecord)
     } else {
       XCTFail("Expected delete case")
