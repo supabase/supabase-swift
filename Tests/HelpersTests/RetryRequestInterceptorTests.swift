@@ -20,7 +20,7 @@ final class RetryRequestInterceptorTests: XCTestCase {
 
   // MARK: - Helpers
 
-  func makeResponse(statusCode: Int) -> Helpers.HTTPResponse {
+  static func makeResponse(statusCode: Int) -> Helpers.HTTPResponse {
     let urlResponse = HTTPURLResponse(
       url: URL(string: "https://example.com")!,
       statusCode: statusCode,
@@ -75,9 +75,9 @@ final class RetryRequestInterceptorTests: XCTestCase {
       let finalResponse = try await interceptor.intercept(request) { _ in
         callCount.withValue { $0 += 1 }
         if callCount.value < 2 {
-          return self.makeResponse(statusCode: code)
+          return Self.makeResponse(statusCode: code)
         }
-        return self.makeResponse(statusCode: 200)
+        return Self.makeResponse(statusCode: 200)
       }
       XCTAssertEqual(finalResponse.statusCode, 200, "Should retry on \(code) and succeed")
       XCTAssertEqual(callCount.value, 2, "Should have called next twice for \(code)")
@@ -93,7 +93,7 @@ final class RetryRequestInterceptorTests: XCTestCase {
       let callCount = LockIsolated(0)
       let response = try await interceptor.intercept(request) { _ in
         callCount.withValue { $0 += 1 }
-        return self.makeResponse(statusCode: code)
+        return Self.makeResponse(statusCode: code)
       }
       XCTAssertEqual(response.statusCode, code)
       XCTAssertEqual(callCount.value, 1, "Should not retry on \(code)")
@@ -110,9 +110,9 @@ final class RetryRequestInterceptorTests: XCTestCase {
       let finalResponse = try await interceptor.intercept(request) { _ in
         callCount.withValue { $0 += 1 }
         if callCount.value < 2 {
-          return self.makeResponse(statusCode: code)
+          return Self.makeResponse(statusCode: code)
         }
-        return self.makeResponse(statusCode: 200)
+        return Self.makeResponse(statusCode: 200)
       }
       XCTAssertEqual(finalResponse.statusCode, 200, "Should retry on \(code) and succeed")
       XCTAssertEqual(callCount.value, 2, "Should have called next twice for \(code)")
@@ -126,7 +126,7 @@ final class RetryRequestInterceptorTests: XCTestCase {
     let callCount = LockIsolated(0)
     let response = try await interceptor.intercept(request) { _ in
       callCount.withValue { $0 += 1 }
-      return self.makeResponse(statusCode: 500)
+      return Self.makeResponse(statusCode: 500)
     }
     XCTAssertEqual(response.statusCode, 500)
     XCTAssertEqual(callCount.value, 1, "POST should not be retried")
@@ -139,7 +139,7 @@ final class RetryRequestInterceptorTests: XCTestCase {
     let callCount = LockIsolated(0)
     let response = try await interceptor.intercept(request) { _ in
       callCount.withValue { $0 += 1 }
-      return self.makeResponse(statusCode: 520)
+      return Self.makeResponse(statusCode: 520)
     }
     XCTAssertEqual(response.statusCode, 520)
     XCTAssertEqual(callCount.value, 2, "Should not exceed retryLimit")
