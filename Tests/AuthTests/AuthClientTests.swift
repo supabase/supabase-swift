@@ -18,7 +18,7 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class AuthClientTests: XCTestCase {
+final class AuthClientTests: XCTestCase, @unchecked Sendable {
   var sessionManager: SessionManager!
 
   var storage: InMemoryLocalStorage!
