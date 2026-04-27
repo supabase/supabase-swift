@@ -13,7 +13,7 @@ public enum FunctionsError: Error, LocalizedError {
     switch self {
     case .relayError:
       "Relay Error invoking the Edge Function"
-    case let .httpError(code, _):
+    case .httpError(let code, _):
       "Edge Function returned a non-2xx status code: \(code)"
     }
   }
@@ -39,14 +39,16 @@ public struct FunctionInvokeOptions: Sendable {
   ///   - query: The query to be included in the function invocation.
   ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
   ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation. (Default: nil)
+  ///   - body: The body data to be sent with the function invocation.
+  ///   - encoder: The JSON encoder to use for encoding the body. (Default: `JSONEncoder()`)
   @_disfavoredOverload
   public init(
     method: Method? = nil,
     query: [URLQueryItem] = [],
     headers: [String: String] = [:],
     region: String? = nil,
-    body: some Encodable
+    body: some Encodable,
+    encoder: JSONEncoder = JSONEncoder()
   ) {
     var defaultHeaders = HTTPFields()
 
@@ -58,9 +60,8 @@ public struct FunctionInvokeOptions: Sendable {
       defaultHeaders[.contentType] = "application/octet-stream"
       self.body = data
     default:
-      // default, assume this is JSON
       defaultHeaders[.contentType] = "application/json"
-      self.body = try? JSONEncoder().encode(body)
+      self.body = try? encoder.encode(body)
     }
 
     self.method = method
@@ -140,18 +141,21 @@ extension FunctionInvokeOptions {
   ///   - method: Method to use in the function invocation.
   ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
   ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation. (Default: nil)
+  ///   - body: The body data to be sent with the function invocation.
+  ///   - encoder: The JSON encoder to use for encoding the body. (Default: `JSONEncoder()`)
   public init(
     method: Method? = nil,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
-    body: some Encodable
+    body: some Encodable,
+    encoder: JSONEncoder = JSONEncoder()
   ) {
     self.init(
       method: method,
       headers: headers,
       region: region?.rawValue,
-      body: body
+      body: body,
+      encoder: encoder
     )
   }
 

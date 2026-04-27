@@ -118,20 +118,30 @@ public struct SupabaseClientOptions: Sendable {
     /// The Region to invoke the functions in.
     public let region: String?
 
+    /// The JSON decoder to use for decoding function response bodies.
+    public let decoder: JSONDecoder
+
     @_disfavoredOverload
-    public init(region: String? = nil) {
+    public init(
+      region: String? = nil,
+      decoder: JSONDecoder = JSONDecoder()
+    ) {
       self.region = region
+      self.decoder = decoder
     }
 
-    public init(region: FunctionRegion? = nil) {
-      self.init(region: region?.rawValue)
+    public init(
+      region: FunctionRegion? = nil,
+      decoder: JSONDecoder = JSONDecoder()
+    ) {
+      self.init(region: region?.rawValue, decoder: decoder)
     }
   }
 
   public struct StorageOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let useNewHostname: Bool
-    
+
     public init(useNewHostname: Bool = false) {
       self.useNewHostname = useNewHostname
     }

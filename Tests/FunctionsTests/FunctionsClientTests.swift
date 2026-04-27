@@ -55,6 +55,19 @@ final class FunctionsClientTests: XCTestCase {
     XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
   }
 
+  func testInitWithCustomDecoder() async {
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+    let client = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      decoder: decoder
+    )
+
+    XCTAssertTrue(client.decoder === decoder)
+  }
+
   func testInvoke() async throws {
     Mock(
       url: self.url.appendingPathComponent("hello_world"),
