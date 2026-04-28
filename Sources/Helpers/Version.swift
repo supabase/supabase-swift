@@ -66,3 +66,25 @@ private let _platformVersion: String? = {
 #else
   package let platformVersion = _platformVersion
 #endif
+
+private let _runtimeVersion: String = {
+  #if swift(>=6.3)
+    return "6.3"
+  #elseif swift(>=6.2)
+    return "6.2"
+  #elseif swift(>=6.1)
+    return "6.1"
+  #elseif swift(>=6.0)
+    return "6.0"
+  #elseif swift(>=5.10)
+    return "5.10"
+  #else
+    return "unknown"
+  #endif
+}()
+
+#if DEBUG
+  package let runtimeVersion = isTesting ? "0.0.0" : _runtimeVersion
+#else
+  package let runtimeVersion = _runtimeVersion
+#endif

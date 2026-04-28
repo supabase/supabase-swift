@@ -8,17 +8,18 @@
 import Foundation
 
 let defaultHeaders: [String: String] = {
-  var headers = [
-    "X-Client-Info": "supabase-swift/\(version)"
-  ]
+  var clientInfo = "supabase-swift/\(version)"
 
   if let platform {
-    headers["X-Supabase-Client-Platform"] = platform
+    clientInfo += "; platform=\(platform)"
   }
 
   if let platformVersion {
-    headers["X-Supabase-Client-Platform-Version"] = platformVersion
+    clientInfo += "; platform-version=\(platformVersion)"
   }
 
-  return headers
+  clientInfo += "; runtime=swift"
+  clientInfo += "; runtime-version=\(runtimeVersion)"
+
+  return ["X-Client-Info": clientInfo]
 }()
