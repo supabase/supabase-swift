@@ -11,8 +11,12 @@ import Helpers
 import Replay
 import Testing
 
-@Suite(
-  .playbackIsolated(replaysRootURL: Bundle.module.resourceURL?.appendingPathComponent("Replays")))
+// Resolved once at module init; used by each @Test trait to build the archive path
+// directly via ReplayTrait.rootURL (step 1 of getArchiveURL), bypassing both
+// ReplayTestDefaults and Bundle.url(forResource:subdirectory:) which is broken on Linux.
+private let _replaysURL: URL? = Bundle.module.resourceURL?.appendingPathComponent("Replays")
+
+@Suite
 struct FunctionsTests {
 
   let client = FunctionsClient(
@@ -25,7 +29,7 @@ struct FunctionsTests {
 
   // MARK: - Basic Invocation Tests
 
-  @Test(.replay("invoke_default"))
+  @Test(ReplayTrait("invoke_default", rootURL: _replaysURL))
   func invokeDefault() async throws {
     let (response, _): (AnyJSON, _) = try await client.invokeDecodable("echo")
 
@@ -37,7 +41,7 @@ struct FunctionsTests {
     #expect(body?.isNil == true)
   }
 
-  @Test(.replay("invoke_with_json_body"))
+  @Test(ReplayTrait("invoke_with_json_body", rootURL: _replaysURL))
   func invokeWithJSONBody() async throws {
     struct RequestBody: Codable {
       let message: String
@@ -64,7 +68,7 @@ struct FunctionsTests {
     #expect(headers?["content-type"]?.stringValue == "application/json")
   }
 
-  @Test(.replay("invoke_with_json_array"))
+  @Test(ReplayTrait("invoke_with_json_array", rootURL: _replaysURL))
   func invokeWithJSONArray() async throws {
     let items = ["apple", "banana", "cherry"]
 
@@ -81,7 +85,7 @@ struct FunctionsTests {
     #expect(body == items)
   }
 
-  @Test(.replay("invoke_with_plain_text"))
+  @Test(ReplayTrait("invoke_with_plain_text", rootURL: _replaysURL))
   func invokeWithPlainText() async throws {
     let text = "This is plain text content"
 
@@ -100,7 +104,7 @@ struct FunctionsTests {
     #expect(headers?["content-type"]?.stringValue == "text/plain")
   }
 
-  @Test(.replay("invoke_with_binary_data"))
+  @Test(ReplayTrait("invoke_with_binary_data", rootURL: _replaysURL))
   func invokeWithBinaryData() async throws {
     let data = Data([0x48, 0x65, 0x6C, 0x6C, 0x6F])  // "Hello" in UTF-8
 
@@ -123,7 +127,7 @@ struct FunctionsTests {
 
   // MARK: - HTTP Method Tests
 
-  @Test(.replay("invoke_get_method"))
+  @Test(ReplayTrait("invoke_get_method", rootURL: _replaysURL))
   func invokeGETMethod() async throws {
     let (response, _): (AnyJSON, _) =
       try await client.invokeDecodable("echo") { $0.method = .get }
@@ -136,7 +140,7 @@ struct FunctionsTests {
     #expect(body?.isNil == true)
   }
 
-  @Test(.replay("invoke_put_method"))
+  @Test(ReplayTrait("invoke_put_method", rootURL: _replaysURL))
   func invokePUTMethod() async throws {
     let (response, _): (AnyJSON, _) =
       try await client.invokeDecodable("echo") {
@@ -149,7 +153,7 @@ struct FunctionsTests {
     #expect(method == "PUT")
   }
 
-  @Test(.replay("invoke_patch_method"))
+  @Test(ReplayTrait("invoke_patch_method", rootURL: _replaysURL))
   func invokePATCHMethod() async throws {
     let (response, _): (AnyJSON, _) =
       try await client.invokeDecodable("echo") {
@@ -162,7 +166,7 @@ struct FunctionsTests {
     #expect(method == "PATCH")
   }
 
-  @Test(.replay("invoke_delete_method"))
+  @Test(ReplayTrait("invoke_delete_method", rootURL: _replaysURL))
   func invokeDELETEMethod() async throws {
     let (response, _): (AnyJSON, _) =
       try await client.invokeDecodable("echo") {
@@ -222,7 +226,7 @@ struct FunctionsTests {
 
   // MARK: - Custom Headers Tests
 
-  @Test(.replay("invoke_with_custom_headers"))
+  @Test(ReplayTrait("invoke_with_custom_headers", rootURL: _replaysURL))
   func invokeWithCustomHeaders() async throws {
     let (response, _): (AnyJSON, _) =
       try await client.invokeDecodable("echo") {
@@ -238,7 +242,7 @@ struct FunctionsTests {
     #expect(headers?["x-api-version"]?.stringValue == "v1")
   }
 
-  @Test(.replay("invoke_with_content_type_override"))
+  @Test(ReplayTrait("invoke_with_content_type_override", rootURL: _replaysURL))
   func invokeWithContentTypeOverride() async throws {
     let (response, _): (AnyJSON, _) =
       try await client.invokeDecodable("echo") {
@@ -253,7 +257,7 @@ struct FunctionsTests {
 
   // MARK: - Complex Scenarios
 
-  @Test(.replay("invoke_with_all_options"))
+  @Test(ReplayTrait("invoke_with_all_options", rootURL: _replaysURL))
   func invokeWithAllOptions() async throws {
     struct ComplexBody: Codable {
       let user: String
@@ -286,7 +290,7 @@ struct FunctionsTests {
     #expect(body?["user"]?.stringValue == "test-user")
   }
 
-  @Test(.replay("invoke_with_nested_json"))
+  @Test(ReplayTrait("invoke_with_nested_json", rootURL: _replaysURL))
   func invokeWithNestedJSON() async throws {
     struct NestedData: Codable {
       let level1: Level1
@@ -327,7 +331,7 @@ struct FunctionsTests {
 
   // MARK: - Decode Tests
 
-  @Test(.replay("invoke_with_decode"))
+  @Test(ReplayTrait("invoke_with_decode", rootURL: _replaysURL))
   func invokeWithDecode() async throws {
     struct EchoResponse: Codable {
       let method: String
@@ -347,7 +351,7 @@ struct FunctionsTests {
     #expect(response.query["test"] == "value")
   }
 
-  @Test(.replay("invoke_with_custom_decoder"))
+  @Test(ReplayTrait("invoke_with_custom_decoder", rootURL: _replaysURL))
   func invokeWithCustomDecoder() async throws {
     struct EchoResponse: Codable {
       let method: String
@@ -368,7 +372,7 @@ struct FunctionsTests {
 
   // MARK: - Authentication Tests
 
-  @Test(.replay("invoke_with_auth_token"))
+  @Test(ReplayTrait("invoke_with_auth_token", rootURL: _replaysURL))
   func invokeWithAuthToken() async throws {
     // Use the valid anon token from supabase
     let validToken =
@@ -386,7 +390,7 @@ struct FunctionsTests {
 
   // MARK: - Empty/Nil Body Tests
 
-  @Test(.replay("invoke_with_nil_body"))
+  @Test(ReplayTrait("invoke_with_nil_body", rootURL: _replaysURL))
   func invokeWithNilBody() async throws {
     let (response, _): (AnyJSON, _) =
       try await client.invokeDecodable("echo") { $0.method = .post }
@@ -397,7 +401,7 @@ struct FunctionsTests {
 
   // MARK: - Response Metadata Tests
 
-  @Test(.replay("invoke_verify_metadata"))
+  @Test(ReplayTrait("invoke_verify_metadata", rootURL: _replaysURL))
   func invokeVerifyMetadata() async throws {
     let (response, _): (AnyJSON, _) = try await client.invokeDecodable("echo")
 
@@ -411,7 +415,7 @@ struct FunctionsTests {
     #expect(obj?["timestamp"] != nil)
   }
 
-  @Test(.replay("invoke_verify_url_structure"))
+  @Test(ReplayTrait("invoke_verify_url_structure", rootURL: _replaysURL))
   func invokeVerifyURLStructure() async throws {
     let (response, _): (AnyJSON, _) =
       try await client.invokeDecodable("echo") { $0.query["param1"] = "value1" }
