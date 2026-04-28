@@ -86,9 +86,8 @@ public final class SupabaseClient: Sendable {
           url: functionsURL,
           headers: headers,
           region: options.functions.region,
-          logger: options.global.logger,
-          fetch: fetchWithAuth,
-          decoder: options.functions.decoder
+          session: session,
+          tokenProvider: { [weak self] in try await self?._getAccessToken() }
         )
       }
 
@@ -389,7 +388,7 @@ public final class SupabaseClient: Sendable {
     }
 
     if let accessToken {
-      functions.setAuth(token: accessToken)
+      await functions.setAuth(token: accessToken)
       await realtimeV2.setAuth(accessToken)
     }
   }

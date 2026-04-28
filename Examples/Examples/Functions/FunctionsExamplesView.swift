@@ -106,11 +106,14 @@ struct FunctionsExamplesView: View {
       }
 
       let request = HelloWorldRequest(name: name)
+      let requestBody = try JSONEncoder().encode(request)
 
-      let response: HelloWorldResponse = try await supabase.functions.invoke(
-        "hello-world",
-        options: FunctionInvokeOptions(body: request)
-      )
+      let (response, _): (HelloWorldResponse, _) = try await supabase.functions.invokeDecodable(
+        "hello-world"
+      ) {
+        $0.body = requestBody
+        $0.headers["Content-Type"] = "application/json"
+      }
 
       result = response.message
     } catch {

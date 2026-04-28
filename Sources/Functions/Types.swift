@@ -1,11 +1,29 @@
 import Foundation
-import HTTPTypes
 
-/// An error type representing various errors that can occur while invoking functions.
+/// An error type representing failures that can occur when invoking an Edge Function.
 public enum FunctionsError: Error, LocalizedError {
-  /// Error indicating a relay error while invoking the Edge Function.
+  /// The Supabase relay reported an error before the function could respond.
+  ///
+  /// This typically indicates a network or infrastructure problem between the client and the
+  /// Supabase edge network rather than an error inside the function itself.
   case relayError
-  /// Error indicating a non-2xx status code returned by the Edge Function.
+
+  /// The Edge Function responded with a non-2xx HTTP status code.
+  ///
+  /// - Parameters:
+  ///   - code: The HTTP status code returned by the function.
+  ///   - data: The raw response body, which may contain a JSON error payload from the function.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// do {
+  ///   let (data, _) = try await functions.invoke("my-function")
+  /// } catch FunctionsError.httpError(let code, let data) {
+  ///   let message = String(data: data, encoding: .utf8) ?? "<binary>"
+  ///   print("Function failed with status \(code): \(message)")
+  /// }
+  /// ```
   case httpError(code: Int, data: Data)
 
   /// A localized description of the error.
@@ -19,157 +37,105 @@ public enum FunctionsError: Error, LocalizedError {
   }
 }
 
-/// Options for invoking a function.
+/// Options used to customise a single Edge Function invocation.
+///
+/// Build an instance by passing a closure to any of the `invoke` methods on ``FunctionsClient``:
+///
+/// ```swift
+/// try await functions.invoke("my-function") {
+///   $0.method = .post
+///   $0.body = try! JSONEncoder().encode(payload)
+///   $0.headers["Content-Type"] = "application/json"
+///   $0.region = .usEast1
+/// }
+/// ```
 public struct FunctionInvokeOptions: Sendable {
-  /// Method to use in the function invocation.
-  let method: Method?
-  /// Headers to be included in the function invocation.
-  let headers: HTTPFields
-  /// Body data to be sent with the function invocation.
-  let body: Data?
-  /// The Region to invoke the function in.
-  let region: String?
-  /// The query to be included in the function invocation.
-  let query: [URLQueryItem]
+  /// The HTTP method to use for the invocation. Defaults to `.post` when `nil`.
+  public var method: Method?
 
-  /// Initializes the `FunctionInvokeOptions` structure.
+  /// Additional HTTP headers merged into the request.
   ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - query: The query to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation.
-  ///   - encoder: The JSON encoder to use for encoding the body. (Default: `JSONEncoder()`)
-  @_disfavoredOverload
-  public init(
-    method: Method? = nil,
-    query: [URLQueryItem] = [],
-    headers: [String: String] = [:],
-    region: String? = nil,
-    body: some Encodable,
-    encoder: JSONEncoder = JSONEncoder()
-  ) {
-    var defaultHeaders = HTTPFields()
+  /// These headers are merged with the client-level headers set on ``FunctionsClient/headers``.
+  /// Per-invocation values win on collision.
+  public var headers: [String: String] = [:]
 
-    switch body {
-    case let string as String:
-      defaultHeaders[.contentType] = "text/plain"
-      self.body = string.data(using: .utf8)
-    case let data as Data:
-      defaultHeaders[.contentType] = "application/octet-stream"
-      self.body = data
-    default:
-      defaultHeaders[.contentType] = "application/json"
-      self.body = try? encoder.encode(body)
-    }
-
-    self.method = method
-    self.headers = defaultHeaders.merging(with: HTTPFields(headers))
-    self.region = region
-    self.query = query
-  }
-
-  /// Initializes the `FunctionInvokeOptions` structure.
+  /// The raw body data sent with the request.
   ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - query: The query to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  @_disfavoredOverload
-  public init(
-    method: Method? = nil,
-    query: [URLQueryItem] = [],
-    headers: [String: String] = [:],
-    region: String? = nil
-  ) {
-    self.method = method
-    self.headers = HTTPFields(headers)
-    self.region = region
-    self.query = query
-    body = nil
-  }
+  /// Set `headers["Content-Type"]` appropriately when providing a body. For JSON payloads,
+  /// encode your value with `JSONEncoder` and set `"Content-Type"` to `"application/json"`.
+  public var body: Data?
 
+  /// The region in which to invoke this function, overriding the client-level default.
+  ///
+  /// Pass `nil` to fallback to ``FunctionsClient/region``, or automatic routing if that is also `nil`.
+  public var region: FunctionRegion?
+
+  /// URL query parameters appended to the function URL.
+  ///
+  /// ```swift
+  /// $0.query = ["filter": "active", "page": "1"]
+  /// ```
+  public var query: [String: String] = [:]
+
+  /// Creates a default `FunctionInvokeOptions` with all fields at their zero values.
+  public init() {}
+
+  /// HTTP methods supported for Edge Function invocations.
   public enum Method: String, Sendable {
+    /// Retrieves data without a request body. Useful for read-only functions.
     case get = "GET"
+    /// Submits data to the function. This is the default when no method is specified.
     case post = "POST"
+    /// Replaces a resource; the function receives the full new representation.
     case put = "PUT"
+    /// Partially updates a resource; the function receives only the changed fields.
     case patch = "PATCH"
+    /// Requests the function to delete a resource.
     case delete = "DELETE"
   }
-
-  static func httpMethod(_ method: Method?) -> HTTPTypes.HTTPRequest.Method? {
-    switch method {
-    case .get:
-      .get
-    case .post:
-      .post
-    case .put:
-      .put
-    case .patch:
-      .patch
-    case .delete:
-      .delete
-    case nil:
-      nil
-    }
-  }
 }
 
-public enum FunctionRegion: String, Sendable {
-  case apNortheast1 = "ap-northeast-1"
-  case apNortheast2 = "ap-northeast-2"
-  case apSouth1 = "ap-south-1"
-  case apSoutheast1 = "ap-southeast-1"
-  case apSoutheast2 = "ap-southeast-2"
-  case caCentral1 = "ca-central-1"
-  case euCentral1 = "eu-central-1"
-  case euWest1 = "eu-west-1"
-  case euWest2 = "eu-west-2"
-  case euWest3 = "eu-west-3"
-  case saEast1 = "sa-east-1"
-  case usEast1 = "us-east-1"
-  case usWest1 = "us-west-1"
-  case usWest2 = "us-west-2"
-}
+/// A Supabase Edge Network region identifier.
+///
+/// Use the predefined static constants for known regions, or create a custom value with
+/// ``init(rawValue:)`` or a string literal when targeting a region not listed here:
+///
+/// ```swift
+/// // Using a predefined constant
+/// $0.region = .usEast1
+///
+/// // Using a string literal (ExpressibleByStringLiteral)
+/// $0.region = "ap-northeast-1"
+///
+/// // Using a custom raw value
+/// $0.region = FunctionRegion(rawValue: "custom-region")
+/// ```
+public struct FunctionRegion: RawRepresentable, Hashable, Sendable {
+  /// The raw region string sent in the requests.
+  public var rawValue: String
 
-extension FunctionInvokeOptions {
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation.
-  ///   - encoder: The JSON encoder to use for encoding the body. (Default: `JSONEncoder()`)
-  public init(
-    method: Method? = nil,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil,
-    body: some Encodable,
-    encoder: JSONEncoder = JSONEncoder()
-  ) {
-    self.init(
-      method: method,
-      headers: headers,
-      region: region?.rawValue,
-      body: body,
-      encoder: encoder
-    )
+  public init(rawValue: String) {
+    self.rawValue = rawValue
   }
 
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  public init(
-    method: Method? = nil,
-    headers: [String: String] = [:],
-    region: FunctionRegion? = nil
-  ) {
-    self.init(method: method, headers: headers, region: region?.rawValue)
+  public static let apNortheast1 = FunctionRegion(rawValue: "ap-northeast-1")
+  public static let apNortheast2 = FunctionRegion(rawValue: "ap-northeast-2")
+  public static let apSouth1 = FunctionRegion(rawValue: "ap-south-1")
+  public static let apSoutheast1 = FunctionRegion(rawValue: "ap-southeast-1")
+  public static let apSoutheast2 = FunctionRegion(rawValue: "ap-southeast-2")
+  public static let caCentral1 = FunctionRegion(rawValue: "ca-central-1")
+  public static let euCentral1 = FunctionRegion(rawValue: "eu-central-1")
+  public static let euWest1 = FunctionRegion(rawValue: "eu-west-1")
+  public static let euWest2 = FunctionRegion(rawValue: "eu-west-2")
+  public static let euWest3 = FunctionRegion(rawValue: "eu-west-3")
+  public static let saEast1 = FunctionRegion(rawValue: "sa-east-1")
+  public static let usEast1 = FunctionRegion(rawValue: "us-east-1")
+  public static let usWest1 = FunctionRegion(rawValue: "us-west-1")
+  public static let usWest2 = FunctionRegion(rawValue: "us-west-2")
+}
+
+extension FunctionRegion: ExpressibleByStringLiteral {
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
   }
 }
