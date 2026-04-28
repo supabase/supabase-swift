@@ -64,7 +64,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     /// Retains the optional app-lifecycle observer for the client's lifetime.
     /// Stored as `AnyObject?` so this type remains available on platforms where
     /// the concrete `RealtimeLifecycleManager` is not compiled.
-    var lifecycleManager: AnyObject?
+    var lifecycleManager: (any Sendable & AnyObject)?
 
     /// Whether the socket was `.connected` the last time the app entered the
     /// background. `handleAppForeground` only attempts recovery when this is
