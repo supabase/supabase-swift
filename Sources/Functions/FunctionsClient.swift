@@ -7,7 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
-
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -45,14 +45,13 @@ public actor FunctionsClient {
     region: FunctionRegion? = nil,
     session: URLSession = URLSession(configuration: .default)
   ) {
-    self.url = url
-    self.region = region
-    session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
-    self.http = _HTTPClient(host: url, session: session)
-    self.headers = headers
-    if self.headers["X-Client-Info"] == nil {
-      self.headers["X-Client-Info"] = "functions-swift/\(version)"
-    }
+    self.init(
+      url: url,
+      headers: headers,
+      region: region,
+      session: session,
+      tokenProvider: nil
+    )
   }
 
   package init(
@@ -60,12 +59,16 @@ public actor FunctionsClient {
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     session: URLSession = URLSession(configuration: .default),
-    tokenProvider: @escaping TokenProvider
+    tokenProvider: TokenProvider?
   ) {
     self.url = url
     self.region = region
     session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
-    self.http = _HTTPClient(host: url, session: session, tokenProvider: tokenProvider)
+    self.http = _HTTPClient(
+      host: url,
+      session: session,
+      tokenProvider: tokenProvider
+    )
     self.headers = headers
     if self.headers["X-Client-Info"] == nil {
       self.headers["X-Client-Info"] = "functions-swift/\(version)"
@@ -113,7 +116,9 @@ public actor FunctionsClient {
     var options = FunctionInvokeOptions()
     applyOptions(&options)
     let (functionURL, method, query, allHeaders, body) = requestComponents(
-      functionName: functionName, options: options)
+      functionName: functionName,
+      options: options
+    )
 
     do {
       let (data, response) = try await http.fetchData(
@@ -151,12 +156,18 @@ public actor FunctionsClient {
     var options = FunctionInvokeOptions()
     applyOptions(&options)
     let (functionURL, method, query, allHeaders, body) = requestComponents(
-      functionName: functionName, options: options)
+      functionName: functionName,
+      options: options
+    )
 
     do {
       let (bytes, response) = try await http.fetchStream(
-        method, url: functionURL, query: query.isEmpty ? nil : query, body: body,
-        headers: allHeaders.isEmpty ? nil : allHeaders)
+        method,
+        url: functionURL,
+        query: query.isEmpty ? nil : query,
+        body: body,
+        headers: allHeaders.isEmpty ? nil : allHeaders
+      )
 
       if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
         throw FunctionsError.relayError
@@ -172,7 +183,8 @@ public actor FunctionsClient {
   }
 
   private func requestComponents(
-    functionName: String, options: FunctionInvokeOptions
+    functionName: String,
+    options: FunctionInvokeOptions
   ) -> (
     url: URL,
     method: HTTPMethod,
@@ -180,7 +192,8 @@ public actor FunctionsClient {
     headers: [String: String],
     body: RequestBody?
   ) {
-    let method = options.method.flatMap { HTTPMethod(rawValue: $0.rawValue) } ?? .post
+    let method =
+      options.method.flatMap { HTTPMethod(rawValue: $0.rawValue) } ?? .post
     var query = options.query
     var allHeaders = headers.merging(options.headers) { _, new in new }
 
@@ -190,6 +203,8 @@ public actor FunctionsClient {
     }
 
     let body: RequestBody? = options.body.map { .data($0) }
-    return (url.appendingPathComponent(functionName), method, query, allHeaders, body)
+    return (
+      url.appendingPathComponent(functionName), method, query, allHeaders, body
+    )
   }
 }
