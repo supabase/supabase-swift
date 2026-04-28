@@ -265,66 +265,66 @@ public actor FunctionsClient {
     }
   }
 
-#if canImport(Darwin)
-  /// Invokes a function and returns an async byte stream for the response body.
-  ///
-  /// Use this method for functions that return large payloads or use server-sent events /
-  /// chunked transfer encoding. The stream yields individual `UInt8` bytes as they arrive.
-  ///
-  /// - Parameters:
-  ///   - functionName: The name of the Edge Function to invoke.
-  ///   - options: A closure that configures ``FunctionInvokeOptions`` before the request is sent.
-  ///     Defaults to a no-op closure.
-  /// - Returns: A tuple of an `AsyncThrowingStream<UInt8, Error>` and the initial
-  ///   `HTTPURLResponse`.
-  /// - Throws: ``FunctionsError/relayError`` if the relay reports an error,
-  ///   ``FunctionsError/httpError(code:data:)`` for non-2xx responses, or a transport-level error.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let (stream, _) = try await functions.invokeStream("stream-data")
-  ///
-  /// var buffer = Data()
-  /// for try await byte in stream {
-  ///   buffer.append(byte)
-  /// }
-  /// print(String(data: buffer, encoding: .utf8) ?? "")
-  /// ```
-  @available(macOS 12.0, *)
-  public func invokeStream(
-    _ functionName: String,
-    options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
-  ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
-    var options = FunctionInvokeOptions()
-    applyOptions(&options)
-    let (functionURL, method, query, allHeaders, body) = requestComponents(
-      functionName: functionName,
-      options: options
-    )
-
-    do {
-      let (bytes, response) = try await http.fetchStream(
-        method,
-        url: functionURL,
-        query: query.isEmpty ? nil : query,
-        body: body,
-        headers: allHeaders.isEmpty ? nil : allHeaders
+  #if canImport(Darwin)
+    /// Invokes a function and returns an async byte stream for the response body.
+    ///
+    /// Use this method for functions that return large payloads or use server-sent events /
+    /// chunked transfer encoding. The stream yields individual `UInt8` bytes as they arrive.
+    ///
+    /// - Parameters:
+    ///   - functionName: The name of the Edge Function to invoke.
+    ///   - options: A closure that configures ``FunctionInvokeOptions`` before the request is sent.
+    ///     Defaults to a no-op closure.
+    /// - Returns: A tuple of an `AsyncThrowingStream<UInt8, Error>` and the initial
+    ///   `HTTPURLResponse`.
+    /// - Throws: ``FunctionsError/relayError`` if the relay reports an error,
+    ///   ``FunctionsError/httpError(code:data:)`` for non-2xx responses, or a transport-level error.
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let (stream, _) = try await functions.invokeStream("stream-data")
+    ///
+    /// var buffer = Data()
+    /// for try await byte in stream {
+    ///   buffer.append(byte)
+    /// }
+    /// print(String(data: buffer, encoding: .utf8) ?? "")
+    /// ```
+    @available(macOS 12.0, *)
+    public func invokeStream(
+      _ functionName: String,
+      options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
+    ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+      var options = FunctionInvokeOptions()
+      applyOptions(&options)
+      let (functionURL, method, query, allHeaders, body) = requestComponents(
+        functionName: functionName,
+        options: options
       )
 
-      if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
-        throw FunctionsError.relayError
-      }
+      do {
+        let (bytes, response) = try await http.fetchStream(
+          method,
+          url: functionURL,
+          query: query.isEmpty ? nil : query,
+          body: body,
+          headers: allHeaders.isEmpty ? nil : allHeaders
+        )
 
-      return (bytes, response)
-    } catch let error as HTTPClientError {
-      if case .responseError(let response, let data) = error {
-        throw FunctionsError.httpError(code: response.statusCode, data: data)
+        if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
+          throw FunctionsError.relayError
+        }
+
+        return (bytes, response)
+      } catch let error as HTTPClientError {
+        if case .responseError(let response, let data) = error {
+          throw FunctionsError.httpError(code: response.statusCode, data: data)
+        }
+        throw error
       }
-      throw error
     }
-  }
-#endif
+  #endif
 
   private func requestComponents(
     functionName: String,
