@@ -3,7 +3,7 @@ import XCTest
 
 @testable import Realtime
 
-final class ConnectionManagerTests: XCTestCase {
+final class ConnectionManagerTests: XCTestCase, @unchecked Sendable {
   private enum TestError: LocalizedError {
     case sample
 
@@ -190,6 +190,7 @@ final class ConnectionManagerTests: XCTestCase {
     let secondConnectionExpectation = expectation(description: "second connection attempt")
 
     let connectionCount = LockIsolated(0)
+    let ws = self.ws
 
     sut = makeSUT(
       reconnectDelay: 0.01,
@@ -198,7 +199,7 @@ final class ConnectionManagerTests: XCTestCase {
         if connectionCount.value == 2 {
           secondConnectionExpectation.fulfill()
         }
-        return self.ws!
+        return ws!
       }
     )
 

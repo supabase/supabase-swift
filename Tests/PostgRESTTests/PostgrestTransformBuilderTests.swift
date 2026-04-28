@@ -13,7 +13,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testSelect() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 201,
       data: [
@@ -45,7 +45,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testOrder() async throws {
     Mock(
-      url: url.appendingPathComponent("cities"),
+      url: Self.url.appendingPathComponent("cities"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -104,7 +104,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testMultipleOrder() async throws {
     Mock(
-      url: url.appendingPathComponent("cities"),
+      url: Self.url.appendingPathComponent("cities"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -133,7 +133,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testLimit() async throws {
     Mock(
-      url: url.appendingPathComponent("countries"),
+      url: Self.url.appendingPathComponent("countries"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -184,7 +184,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testRange() async throws {
     Mock(
-      url: url.appendingPathComponent("countries"),
+      url: Self.url.appendingPathComponent("countries"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -235,7 +235,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testRangeWithReferencedTable() async throws {
     Mock(
-      url: url.appendingPathComponent("countries"),
+      url: Self.url.appendingPathComponent("countries"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -270,7 +270,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testSingle() async throws {
     Mock(
-      url: url.appendingPathComponent("countries"),
+      url: Self.url.appendingPathComponent("countries"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -308,7 +308,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testCSV() async throws {
     Mock(
-      url: url.appendingPathComponent("countries"),
+      url: Self.url.appendingPathComponent("countries"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -346,7 +346,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testGeoJSON() async throws {
     Mock(
-      url: url.appendingPathComponent("countries"),
+      url: Self.url.appendingPathComponent("countries"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -374,7 +374,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testExplain() async throws {
     Mock(
-      url: url.appendingPathComponent("countries"),
+      url: Self.url.appendingPathComponent("countries"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -418,7 +418,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testMaxAffectedOnUpdate() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -451,7 +451,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testMaxAffectedTwice() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -485,7 +485,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testMaxAffectedOnDelete() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -516,7 +516,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testMaxAffectedOnRpc() async throws {
     Mock(
-      url: url.appendingPathComponent("rpc/delete_users"),
+      url: Self.url.appendingPathComponent("rpc/delete_users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -545,7 +545,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testMaxAffectedOnSelect() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -574,7 +574,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
 
   func testStripNulls() async throws {
     Mock(
-      url: url.appendingPathComponent("countries"),
+      url: Self.url.appendingPathComponent("countries"),
       ignoreQuery: true,
       statusCode: 200,
       data: [

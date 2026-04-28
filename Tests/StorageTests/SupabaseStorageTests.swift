@@ -12,7 +12,7 @@ import XCTestDynamicOverlay
 #endif
 
 final class SupabaseStorageTests: XCTestCase {
-  let supabaseURL = URL(string: "http://localhost:54321/storage/v1")!
+  static let supabaseURL = URL(string: "http://localhost:54321/storage/v1")!
   let bucketId = "tests"
 
   var sessionMock = StorageHTTPSession(
@@ -26,7 +26,7 @@ final class SupabaseStorageTests: XCTestCase {
     let path = "README.md"
 
     let baseUrl = try sut.from(bucketId).getPublicURL(path: path)
-    XCTAssertEqual(baseUrl.absoluteString, "\(supabaseURL)/object/public/\(bucketId)/\(path)")
+    XCTAssertEqual(baseUrl.absoluteString, "\(Self.supabaseURL)/object/public/\(bucketId)/\(path)")
 
     let baseUrlWithDownload = try sut.from(bucketId).getPublicURL(
       path: path,
@@ -74,7 +74,7 @@ final class SupabaseStorageTests: XCTestCase {
         ]
         """.data(using: .utf8)!,
         HTTPURLResponse(
-          url: self.supabaseURL,
+          url: Self.supabaseURL,
           statusCode: 200,
           httpVersion: nil,
           headerFields: nil
@@ -146,7 +146,7 @@ final class SupabaseStorageTests: XCTestCase {
           }
           """.data(using: .utf8)!,
           HTTPURLResponse(
-            url: self.supabaseURL,
+            url: Self.supabaseURL,
             statusCode: 200,
             httpVersion: nil,
             headerFields: nil
@@ -192,7 +192,7 @@ final class SupabaseStorageTests: XCTestCase {
           }
           """.data(using: .utf8)!,
           HTTPURLResponse(
-            url: self.supabaseURL,
+            url: Self.supabaseURL,
             statusCode: 200,
             httpVersion: nil,
             headerFields: nil
@@ -215,14 +215,14 @@ final class SupabaseStorageTests: XCTestCase {
 
   private func makeSUT() -> SupabaseStorageClient {
     SupabaseStorageClient.test(
-      supabaseURL: supabaseURL.absoluteString,
+      supabaseURL: Self.supabaseURL.absoluteString,
       apiKey: "test.api.key",
       session: sessionMock
     )
   }
 
   private func uploadFileURL(_ fileName: String) -> URL {
-    URL(fileURLWithPath: #file)
+    URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()
       .appendingPathComponent(fileName)
   }
@@ -247,7 +247,7 @@ final class SupabaseStorageTests: XCTestCase {
         ]
         """.data(using: .utf8)!,
         HTTPURLResponse(
-          url: self.supabaseURL,
+          url: Self.supabaseURL,
           statusCode: 200,
           httpVersion: nil,
           headerFields: nil
@@ -283,7 +283,7 @@ final class SupabaseStorageTests: XCTestCase {
         ]
         """.data(using: .utf8)!,
         HTTPURLResponse(
-          url: self.supabaseURL,
+          url: Self.supabaseURL,
           statusCode: 200,
           httpVersion: nil,
           headerFields: nil
@@ -320,7 +320,7 @@ final class SupabaseStorageTests: XCTestCase {
         ]
         """.data(using: .utf8)!,
         HTTPURLResponse(
-          url: self.supabaseURL,
+          url: Self.supabaseURL,
           statusCode: 200,
           httpVersion: nil,
           headerFields: nil
@@ -356,13 +356,13 @@ final class SupabaseStorageTests: XCTestCase {
       """
 
     // Setup mock to capture requests
-    sessionMock.fetch = { [self] request in
+    sessionMock.fetch = { request in
       capturedRequests.withValue { $0.append(request) }
 
       return (
         listResponse.data(using: .utf8)!,
         HTTPURLResponse(
-          url: self.supabaseURL,
+          url: Self.supabaseURL,
           statusCode: 200,
           httpVersion: nil,
           headerFields: nil

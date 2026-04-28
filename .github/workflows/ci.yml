@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - v3
       - release/*
   pull_request:
     branches:
@@ -69,46 +70,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           file: lcov.info
 
-  macos-legacy:
-    name: xcodebuild (macOS legacy)
-    runs-on: macos-14
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        command: [test, ""]
-        platform: [IOS, MACOS, MAC_CATALYST]
-        xcode: ["15.4"]
-        include:
-          - { command: test, skip_release: 1 }
-          - { command: "", skip_debug: 1 }
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Cache derived data
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: |
-            ~/.derivedData
-          key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
-          restore-keys: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-
-      - name: Select Xcode ${{ matrix.xcode }}
-        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-      - name: List available devices
-        run: xcrun simctl list devices available
-      - name: Set IgnoreFileSystemDeviceInodeChanges flag
-        run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
-      - name: Update mtime for incremental builds
-        uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
-      - name: Debug
-        if: matrix.skip_debug != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
-      - name: Release
-        if: matrix.skip_release != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
-
   spm:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v3' || github.event_name == 'workflow_dispatch'
     runs-on: macos-26
     timeout-minutes: 30
     strategy:
@@ -304,7 +267,7 @@ jobs:
   ci-success:
     name: CI Success
     if: always()
-    needs: [macos, macos-legacy, spm, linux, integration-tests, library-evolution, examples, docs, format-check]
+    needs: [macos, spm, linux, integration-tests, library-evolution, examples, docs, format-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs

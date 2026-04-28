@@ -251,9 +251,9 @@ actor ChannelStateManager {
           "Subscribe attempt \(attempts)/\(maxRetryAttempts) for channel '\(topic)'"
         )
 
-        try await withTimeout(interval: timeoutInterval) { [self] in
-          await Result { try await runOneSubscribeAttempt() }
-        }.get()
+        try await withTimeout(interval: timeoutInterval) {
+          [self] in try await runOneSubscribeAttempt()
+        }
 
         logger?.debug("Subscribe succeeded for channel '\(topic)'")
         return
