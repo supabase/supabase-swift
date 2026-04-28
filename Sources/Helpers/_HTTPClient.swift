@@ -7,6 +7,10 @@
 
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// HTTP methods supported by ``_HTTPClient``.
 package enum HTTPMethod: String {
   case get = "GET"
