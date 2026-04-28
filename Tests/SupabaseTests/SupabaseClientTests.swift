@@ -79,15 +79,7 @@ final class SupabaseClientTests: XCTestCase {
     let functionsHeaders = await client.functions.headers
     let functionsRegion = await client.functions.region
     expectNoDifference(client.headers, client.auth.configuration.headers)
-<<<<<<< HEAD
-<<<<<<< HEAD
     expectNoDifference(client.headers, functionsHeaders)
-=======
-    expectNoDifference(client.headers, client.functions.headers)
->>>>>>> 9e4ae44 (fix(functions): catch HTTPClientError and convert to FunctionsError in rawInvoke)
-=======
-    expectNoDifference(client.headers, functionsHeaders)
->>>>>>> b0264b0 (refactor(functions): use FunctionRegion everywhere, remove String? region overloads)
     expectNoDifference(client.headers, client.storage.configuration.headers)
     expectNoDifference(client.headers, client.rest.configuration.headers)
 
