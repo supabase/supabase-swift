@@ -28,6 +28,8 @@ public actor FunctionsClient {
   /// The Region to invoke the functions in.
   let region: FunctionRegion?
 
+  let decoder: JSONDecoder?
+
   private let http: _HTTPClient
 
   var headers: [String: String] = [:]
@@ -43,13 +45,15 @@ public actor FunctionsClient {
     url: URL,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
-    session: URLSession = URLSession(configuration: .default)
+    session: URLSession = URLSession(configuration: .default),
+    decoder: JSONDecoder? = nil
   ) {
     self.init(
       url: url,
       headers: headers,
       region: region,
       session: session,
+      decoder: decoder,
       tokenProvider: nil
     )
   }
@@ -59,10 +63,12 @@ public actor FunctionsClient {
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     session: URLSession = URLSession(configuration: .default),
+    decoder: JSONDecoder? = nil,
     tokenProvider: TokenProvider?
   ) {
     self.url = url
     self.region = region
+    self.decoder = decoder
     session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
     self.http = _HTTPClient(
       host: url,
@@ -95,11 +101,14 @@ public actor FunctionsClient {
   /// - Returns: A tuple containing the decoded object of type `T` and the `HTTPURLResponse`.
   public func invokeDecodable<T: Decodable>(
     _ functionName: String,
-    decoder: JSONDecoder = JSONDecoder(),
+    decoder: JSONDecoder? = nil,
     options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
   ) async throws -> (T, HTTPURLResponse) {
     let (data, response) = try await invoke(functionName, options: applyOptions)
-    return (try decoder.decode(T.self, from: data), response)
+    return (
+      try (decoder ?? self.decoder ?? JSONDecoder()).decode(T.self, from: data),
+      response
+    )
   }
 
   /// Invokes a function and returns the raw response data and `HTTPURLResponse`.

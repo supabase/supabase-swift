@@ -43,19 +43,30 @@ public struct FunctionInvokeOptions: Sendable {
   }
 }
 
-public enum FunctionRegion: String, Sendable {
-  case apNortheast1 = "ap-northeast-1"
-  case apNortheast2 = "ap-northeast-2"
-  case apSouth1 = "ap-south-1"
-  case apSoutheast1 = "ap-southeast-1"
-  case apSoutheast2 = "ap-southeast-2"
-  case caCentral1 = "ca-central-1"
-  case euCentral1 = "eu-central-1"
-  case euWest1 = "eu-west-1"
-  case euWest2 = "eu-west-2"
-  case euWest3 = "eu-west-3"
-  case saEast1 = "sa-east-1"
-  case usEast1 = "us-east-1"
-  case usWest1 = "us-west-1"
-  case usWest2 = "us-west-2"
+public struct FunctionRegion: RawRepresentable, Hashable, Sendable {
+  public var rawValue: String
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  public static let apNortheast1 = FunctionRegion(rawValue: "ap-northeast-1")
+  public static let apNortheast2 = FunctionRegion(rawValue: "ap-northeast-2")
+  public static let apSouth1 = FunctionRegion(rawValue: "ap-south-1")
+  public static let apSoutheast1 = FunctionRegion(rawValue: "ap-southeast-1")
+  public static let apSoutheast2 = FunctionRegion(rawValue: "ap-southeast-2")
+  public static let caCentral1 = FunctionRegion(rawValue: "ca-central-1")
+  public static let euCentral1 = FunctionRegion(rawValue: "eu-central-1")
+  public static let euWest1 = FunctionRegion(rawValue: "eu-west-1")
+  public static let euWest2 = FunctionRegion(rawValue: "eu-west-2")
+  public static let euWest3 = FunctionRegion(rawValue: "eu-west-3")
+  public static let saEast1 = FunctionRegion(rawValue: "sa-east-1")
+  public static let usEast1 = FunctionRegion(rawValue: "us-east-1")
+  public static let usWest1 = FunctionRegion(rawValue: "us-west-1")
+  public static let usWest2 = FunctionRegion(rawValue: "us-west-2")
+}
+
+extension FunctionRegion: ExpressibleByStringLiteral {
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
 }

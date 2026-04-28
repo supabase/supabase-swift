@@ -61,7 +61,8 @@ final class FunctionsClientTests: XCTestCase {
       decoder: decoder
     )
 
-    XCTAssertTrue(client.decoder === decoder)
+    let clientDecoder = await client.decoder
+    XCTAssertTrue(clientDecoder === decoder)
   }
 
   func testInvoke() async throws {

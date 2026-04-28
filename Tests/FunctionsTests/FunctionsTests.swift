@@ -7,20 +7,11 @@
 
 import Foundation
 import Functions
-import InlineSnapshotTesting
+import Helpers
 import Replay
 import Testing
 
-private final class TestBundleToken {}
-
-@Suite(
-  .playbackIsolated(
-    replaysRootURL: URL(fileURLWithPath: #file)
-      .deletingLastPathComponent()
-      .appendingPathComponent("Replays")
-  ),
-  .serialized
-)
+@Suite(.playbackIsolated(replaysFrom: Bundle.module))
 struct FunctionsTests {
 
   let client = FunctionsClient(
@@ -55,7 +46,9 @@ struct FunctionsTests {
 
     let (response, _): (AnyJSON, _) =
       try await client.invokeDecodable("echo") {
-        $0.body = try! JSONEncoder().encode(RequestBody(message: "Hello from Swift", count: 42, active: true))
+        $0.body = try! JSONEncoder().encode(
+          RequestBody(message: "Hello from Swift", count: 42, active: true)
+        )
         $0.headers["Content-Type"] = "application/json"
       }
 
@@ -275,7 +268,8 @@ struct FunctionsTests {
           ComplexBody(
             user: "test-user",
             data: ["score": 100, "level": 5]
-          ))
+          )
+        )
       }
 
     // Verify all options were applied
@@ -340,7 +334,9 @@ struct FunctionsTests {
       let query: [String: String]
     }
 
-    let (response, _): (EchoResponse, _) = try await client.invokeDecodable("echo") {
+    let (response, _): (EchoResponse, _) = try await client.invokeDecodable(
+      "echo"
+    ) {
       $0.method = .get
       $0.query = ["test": "value"]
     }
@@ -361,7 +357,8 @@ struct FunctionsTests {
     decoder.dateDecodingStrategy = .iso8601
 
     let (response, _): (EchoResponse, _) = try await client.invokeDecodable(
-      "echo", decoder: decoder
+      "echo",
+      decoder: decoder
     ) { $0.method = .get }
 
     #expect(response.method == "GET")
