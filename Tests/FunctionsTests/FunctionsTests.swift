@@ -11,7 +11,8 @@ import Helpers
 import Replay
 import Testing
 
-@Suite(.playbackIsolated(replaysFrom: Bundle.module))
+@Suite(
+  .playbackIsolated(replaysRootURL: Bundle.module.resourceURL?.appendingPathComponent("Replays")))
 struct FunctionsTests {
 
   let client = FunctionsClient(
