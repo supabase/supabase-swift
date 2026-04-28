@@ -47,7 +47,7 @@ public actor FunctionsClient {
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     session: URLSession = URLSession(configuration: .default),
-    decoder: JSONDecoder? = nil
+    decoder: JSONDecoder = JSONDecoder()
   ) {
     self.init(
       url: url,
@@ -64,7 +64,7 @@ public actor FunctionsClient {
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     session: URLSession = URLSession(configuration: .default),
-    decoder: JSONDecoder? = nil,
+    decoder: JSONDecoder = JSONDecoder(),
     tokenProvider: TokenProvider?
   ) {
     self.url = url
@@ -98,7 +98,7 @@ public actor FunctionsClient {
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - options: Options for invoking the function.
-  ///   - decoder: The JSON decoder to use. Defaults to `JSONDecoder()`.
+  ///   - decoder: The JSON decoder to use.
   /// - Returns: A tuple containing the decoded object of type `T` and the `HTTPURLResponse`.
   public func invokeDecodable<T: Decodable>(
     _ functionName: String,
@@ -107,7 +107,7 @@ public actor FunctionsClient {
   ) async throws -> (T, HTTPURLResponse) {
     let (data, response) = try await invoke(functionName, options: applyOptions)
     return (
-      try (decoder ?? self.decoder ?? JSONDecoder()).decode(T.self, from: data),
+      try (decoder ?? self.decoder).decode(T.self, from: data),
       response
     )
   }
