@@ -41,6 +41,16 @@ private actor LiveSessionManager {
   }
 
   func session() async throws -> Session {
+    #if canImport(LocalAuthentication)
+      return try await withBiometrics(clientID: clientID) {
+        try await getOrRefreshSession()
+      }
+    #else
+      return try await getOrRefreshSession()
+    #endif
+  }
+
+  private func getOrRefreshSession() async throws -> Session {
     try await trace(using: logger) {
       guard let currentSession = sessionStorage.get() else {
         logger?.debug("session missing")

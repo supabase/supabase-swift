@@ -8,11 +8,16 @@
 import Supabase
 import SwiftUI
 
+#if canImport(LocalAuthentication)
+  import LocalAuthentication
+#endif
+
 struct ProfileView: View {
   @State var user: User?
   @State var error: Error?
   @State var isLoading = false
   @State var showingMFA = false
+  @State var showingBiometrics = false
 
   var identities: [UserIdentity] {
     user?.identities ?? []
@@ -123,6 +128,10 @@ struct ProfileView: View {
 
           // Security Section
           Section("Security") {
+            #if canImport(LocalAuthentication)
+              BiometricsRow(showingBiometrics: $showingBiometrics, error: $error)
+            #endif
+
             HStack {
               Label("Multi-Factor Auth", systemImage: "lock.shield.fill")
               Spacer()
@@ -224,6 +233,7 @@ struct ProfileView: View {
               Label("Change password", systemImage: "checkmark.circle")
               Label("Link/unlink OAuth identities", systemImage: "checkmark.circle")
               Label("Enable multi-factor authentication", systemImage: "checkmark.circle")
+              Label("Enable biometric protection", systemImage: "checkmark.circle")
               Label("Reauthenticate for sensitive operations", systemImage: "checkmark.circle")
             }
             .font(.caption)
@@ -247,6 +257,11 @@ struct ProfileView: View {
         MFAFlow(status: status)
       }
     }
+    #if canImport(LocalAuthentication)
+      .sheet(isPresented: $showingBiometrics) {
+        BiometricsConfigurationSheet()
+      }
+    #endif
   }
 
   @MainActor
@@ -304,3 +319,267 @@ struct ProfileView: View {
 #Preview {
   ProfileView()
 }
+
+// MARK: - Biometrics Views
+
+#if canImport(LocalAuthentication)
+  struct BiometricsRow: View {
+    @Binding var showingBiometrics: Bool
+    @Binding var error: Error?
+
+    private var isBiometricsEnabled: Bool {
+      supabase.auth.isBiometricsEnabled
+    }
+
+    private var biometryTypeName: String {
+      let availability = supabase.auth.biometricsAvailability()
+      switch availability.biometryType {
+      case .none:
+        return "None"
+      case .touchID:
+        return "Touch ID"
+      case .faceID:
+        return "Face ID"
+      case .opticID:
+        return "Optic ID"
+      @unknown default:
+        return "Biometrics"
+      }
+    }
+
+    private var biometryIcon: String {
+      let availability = supabase.auth.biometricsAvailability()
+      switch availability.biometryType {
+      case .faceID:
+        return "faceid"
+      case .touchID:
+        return "touchid"
+      case .opticID:
+        return "opticid"
+      default:
+        return "lock.shield"
+      }
+    }
+
+    var body: some View {
+      HStack {
+        Label(biometryTypeName, systemImage: biometryIcon)
+        Spacer()
+        if isBiometricsEnabled {
+          Text("Enabled")
+            .font(.caption)
+            .foregroundColor(.green)
+        } else {
+          Text("Not Enabled")
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+      }
+      .contentShape(Rectangle())
+      .onTapGesture {
+        showingBiometrics = true
+      }
+    }
+  }
+
+  struct BiometricsConfigurationSheet: View {
+    @Environment(\.dismiss) var dismiss
+
+    @State private var selectedPolicy: BiometricPolicy = .default
+    @State private var selectedEvaluationPolicy: BiometricEvaluationPolicy =
+      .deviceOwnerAuthenticationWithBiometrics
+    @State private var customTimeout: TimeInterval = 300
+    @State private var isLoading = false
+    @State private var error: Error?
+
+    private var isBiometricsEnabled: Bool {
+      supabase.auth.isBiometricsEnabled
+    }
+
+    private var availability: BiometricAvailability {
+      supabase.auth.biometricsAvailability()
+    }
+
+    private var biometryTypeName: String {
+      switch availability.biometryType {
+      case .none:
+        return "Biometrics"
+      case .touchID:
+        return "Touch ID"
+      case .faceID:
+        return "Face ID"
+      case .opticID:
+        return "Optic ID"
+      @unknown default:
+        return "Biometrics"
+      }
+    }
+
+    var body: some View {
+      NavigationStack {
+        List {
+          Section {
+            Text(
+              "Protect your session with \(biometryTypeName). When enabled, you'll need to authenticate before accessing your account."
+            )
+            .font(.caption)
+            .foregroundColor(.secondary)
+          }
+
+          if !availability.isAvailable {
+            Section {
+              HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                  .foregroundColor(.orange)
+                Text(
+                  availability.error?.localizedDescription
+                    ?? "Biometrics not available on this device"
+                )
+                .font(.caption)
+              }
+            }
+          }
+
+          Section("Status") {
+            HStack {
+              Text("Currently")
+              Spacer()
+              Text(isBiometricsEnabled ? "Enabled" : "Disabled")
+                .foregroundColor(isBiometricsEnabled ? .green : .secondary)
+            }
+          }
+
+          if !isBiometricsEnabled && availability.isAvailable {
+            Section("Configuration") {
+              Picker("Policy", selection: $selectedPolicy) {
+                Text("Default (First Access)").tag(BiometricPolicy.default)
+                Text("Always").tag(BiometricPolicy.always)
+                Text("Session Timeout").tag(
+                  BiometricPolicy.session(timeoutInSeconds: customTimeout))
+                Text("App Lifecycle").tag(BiometricPolicy.appLifecycle)
+              }
+
+              if case .session = selectedPolicy {
+                HStack {
+                  Text("Timeout")
+                  Spacer()
+                  TextField("Seconds", value: $customTimeout, format: .number)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 80)
+                  Text("sec")
+                    .foregroundColor(.secondary)
+                }
+              }
+
+              Picker("Fallback", selection: $selectedEvaluationPolicy) {
+                Text("Biometrics Only").tag(
+                  BiometricEvaluationPolicy.deviceOwnerAuthenticationWithBiometrics)
+                Text("Biometrics + Passcode").tag(
+                  BiometricEvaluationPolicy.deviceOwnerAuthentication)
+              }
+            }
+
+            Section {
+              VStack(alignment: .leading, spacing: 4) {
+                Text("Policy Options:")
+                  .font(.caption)
+                  .fontWeight(.medium)
+                Group {
+                  Text("Default: Authenticate once per app launch")
+                  Text("Always: Authenticate every session access")
+                  Text("Session Timeout: Authenticate after inactivity")
+                  Text("App Lifecycle: Authenticate when returning from background")
+                }
+                .font(.caption2)
+                .foregroundColor(.secondary)
+              }
+            }
+          }
+
+          if let error {
+            Section {
+              ErrorText(error)
+            }
+          }
+
+          Section {
+            if isBiometricsEnabled {
+              Button(role: .destructive) {
+                disableBiometrics()
+              } label: {
+                HStack {
+                  Spacer()
+                  if isLoading {
+                    ProgressView()
+                  } else {
+                    Text("Disable \(biometryTypeName)")
+                  }
+                  Spacer()
+                }
+              }
+            } else {
+              Button {
+                Task {
+                  await enableBiometrics()
+                }
+              } label: {
+                HStack {
+                  Spacer()
+                  if isLoading {
+                    ProgressView()
+                  } else {
+                    Text("Enable \(biometryTypeName)")
+                  }
+                  Spacer()
+                }
+              }
+              .disabled(!availability.isAvailable)
+            }
+          }
+        }
+        .navigationTitle(biometryTypeName)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Done") {
+              dismiss()
+            }
+          }
+        }
+      }
+    }
+
+    @MainActor
+    private func enableBiometrics() async {
+      do {
+        error = nil
+        isLoading = true
+        defer { isLoading = false }
+
+        let policy: BiometricPolicy
+        if case .session = selectedPolicy {
+          policy = .session(timeoutInSeconds: customTimeout)
+        } else {
+          policy = selectedPolicy
+        }
+
+        try await supabase.auth.enableBiometrics(
+          title: "Enable \(biometryTypeName)",
+          evaluationPolicy: selectedEvaluationPolicy,
+          policy: policy
+        )
+
+        dismiss()
+      } catch {
+        self.error = error
+      }
+    }
+
+    private func disableBiometrics() {
+      error = nil
+      supabase.auth.disableBiometrics()
+      dismiss()
+    }
+  }
+#endif
