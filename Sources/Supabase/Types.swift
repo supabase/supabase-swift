@@ -116,25 +116,10 @@ public struct SupabaseClientOptions: Sendable {
 
   public struct FunctionsOptions: Sendable {
     /// The Region to invoke the functions in.
-    public let region: String?
+    public let region: FunctionRegion?
 
-    /// The JSON decoder to use for decoding function response bodies.
-    public let decoder: JSONDecoder
-
-    @_disfavoredOverload
-    public init(
-      region: String? = nil,
-      decoder: JSONDecoder = JSONDecoder()
-    ) {
+    public init(region: FunctionRegion? = nil) {
       self.region = region
-      self.decoder = decoder
-    }
-
-    public init(
-      region: FunctionRegion? = nil,
-      decoder: JSONDecoder = JSONDecoder()
-    ) {
-      self.init(region: region?.rawValue, decoder: decoder)
     }
   }
 

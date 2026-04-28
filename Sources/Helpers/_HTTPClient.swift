@@ -12,7 +12,7 @@ import Foundation
 #endif
 
 /// HTTP methods supported by ``_HTTPClient``.
-enum HTTPMethod: String {
+package enum HTTPMethod: String {
   case get = "GET"
   case head = "HEAD"
   case post = "POST"
@@ -21,35 +21,32 @@ enum HTTPMethod: String {
   case delete = "DELETE"
 }
 
-enum RequestBody {
-  case encodable(
-    @autoclosure @Sendable () -> any Encodable,
-    encoder: JSONEncoder = JSONEncoder.supabase()
-  )
-  case json(@autoclosure @Sendable () -> [String: Any])
+package enum RequestBody: @unchecked Sendable {
+  case encodable(any Encodable, encoder: JSONEncoder = JSONEncoder.supabase())
+  case json([String: Any])
   case data(Data)
 }
 
-typealias TokenProvider = @Sendable () async throws -> String?
+package typealias TokenProvider = @Sendable () async throws -> String?
 
 /// HTTP client for making all Supabase API requests.
 ///
 /// Builds `URLRequest` values from a base `host` URL and dispatches them via `URLSession`.
 /// Responses are validated for 2xx status codes before being returned.
-final class _HTTPClient: Sendable {
+package final class _HTTPClient: Sendable {
 
   /// The base URL for the API. This will be used as the base for all requests made by this client.
-  let host: URL
+  package let host: URL
 
   /// The URLSession used to perform network requests.
-  let session: URLSession
+  package let session: URLSession
 
   let tokenProvider: TokenProvider?
 
   /// The JSONDecoder used to decode responses from the server.
-  let jsonDecoder = JSONDecoder.supabase()
+  package let jsonDecoder = JSONDecoder.supabase()
 
-  init(
+  package init(
     host: URL, session: URLSession = URLSession(configuration: .default),
     tokenProvider: TokenProvider? = nil
   ) {
@@ -62,7 +59,7 @@ final class _HTTPClient: Sendable {
   ///
   /// Uses ``jsonDecoder`` (a `JSONDecoder` with Supabase defaults) to decode the response.
   /// If you need custom decoding, use ``fetchData(_:_:query:body:headers:)`` and decode at the call site.
-  func fetch<T: Decodable>(
+  package func fetch<T: Decodable>(
     _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
     body: RequestBody? = nil, headers: [String: String]? = nil
   ) async throws -> (T, HTTPURLResponse) {
@@ -74,7 +71,7 @@ final class _HTTPClient: Sendable {
   ///
   /// Uses ``jsonDecoder`` (a `JSONDecoder` with Supabase defaults) to decode the response.
   /// If you need custom decoding, use ``fetchData(_:url:query:body:headers:)`` and decode at the call site.
-  func fetch<T: Decodable>(
+  package func fetch<T: Decodable>(
     _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
     headers: [String: String]? = nil
   ) async throws -> (T, HTTPURLResponse) {
@@ -101,14 +98,12 @@ final class _HTTPClient: Sendable {
     ///
     /// Cancelling the stream cancels the underlying `URLSession` task. Non-2xx responses
     /// buffer the full error body and throw ``HTTPClientError/responseError(_:data:)``.
-    ///
-    /// - Note: Only available on Apple platforms. `URLSession.bytes(for:)` is not available on Linux.
     @available(macOS 12.0, *)
-    func fetchStream(
+    package func fetchStream(
       _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
       body: RequestBody? = nil, headers: [String: String]? = nil
-    ) -> AsyncThrowingStream<UInt8, any Error> {
-      performFetchStream(
+    ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+      try await performFetchStream(
         method,
         requestBuilder: { [self] in
           try await self.createRequest(method, path, query: query, body: body, headers: headers)
@@ -117,14 +112,12 @@ final class _HTTPClient: Sendable {
     }
 
     /// Streams the response body from an absolute `url` byte-by-byte.
-    ///
-    /// - Note: Only available on Apple platforms. `URLSession.bytes(for:)` is not available on Linux.
     @available(macOS 12.0, *)
-    func fetchStream(
+    package func fetchStream(
       _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
       headers: [String: String]? = nil
-    ) -> AsyncThrowingStream<UInt8, any Error> {
-      performFetchStream(
+    ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+      try await performFetchStream(
         method,
         requestBuilder: { [self] in
           try await self.createRequest(method, url: url, query: query, body: body, headers: headers)
@@ -135,42 +128,42 @@ final class _HTTPClient: Sendable {
     @available(macOS 12.0, *)
     private func performFetchStream(
       _ method: HTTPMethod, requestBuilder: @escaping @Sendable () async throws -> URLRequest
-    ) -> AsyncThrowingStream<UInt8, any Error> {
-      AsyncThrowingStream { continuation in
-        let task = Task {
-          do {
-            let request = try await requestBuilder()
+    ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
+      let request = try await requestBuilder()
 
-            let (bytes, response) = try await session.bytes(for: request)
-            let httpResponse = try validateResponse(response)
+      let (bytes, response) = try await session.bytes(for: request)
+      let httpResponse = try validateResponse(response)
 
-            guard (200..<300).contains(httpResponse.statusCode) else {
-              var errorData = Data()
-              for try await byte in bytes {
-                errorData.append(byte)
-              }
-              // validateResponse will throw the appropriate error
-              _ = try validateResponse(response, data: errorData)
-              return  // This line will never be reached, but satisfies the compiler
-            }
-
-            for try await byte in bytes {
-              continuation.yield(byte)
-            }
-
-            continuation.finish()
-          }
+      guard (200..<300).contains(httpResponse.statusCode) else {
+        var errorData = Data()
+        for try await byte in bytes {
+          errorData.append(byte)
         }
-
-        continuation.onTermination = { _ in
-          task.cancel()
-        }
+        // validateResponse will throw the appropriate error
+        _ = try validateResponse(response, data: errorData)
+        return (.finished(), httpResponse)  // This will never be reached, but is needed to satisfy the return type
       }
+
+      let (stream, continuation) = AsyncThrowingStream<UInt8, any Error>.makeStream()
+
+      let task = Task {
+        for try await byte in bytes {
+          continuation.yield(byte)
+        }
+
+        continuation.finish()
+      }
+
+      continuation.onTermination = { _ in
+        task.cancel()
+      }
+
+      return (stream, httpResponse)
     }
   #endif
 
   /// Performs a request relative to ``host``, returning the raw response body.
-  func fetchData(
+  package func fetchData(
     _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
     body: RequestBody? = nil, headers: [String: String]? = nil
   ) async throws -> (Data, HTTPURLResponse) {
@@ -179,7 +172,7 @@ final class _HTTPClient: Sendable {
   }
 
   /// Performs a request to an absolute `url`, returning the raw response body.
-  func fetchData(
+  package func fetchData(
     _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
     headers: [String: String]? = nil
   ) async throws -> (Data, HTTPURLResponse) {
@@ -204,7 +197,7 @@ final class _HTTPClient: Sendable {
   ///   - query: Optional query parameters. Always encoded as URL query items.
   ///   - body: Optional request body. Encoded according to the ``RequestBody`` case.
   ///   - headers: Optional additional headers. `Accept: application/json` is added by default.
-  func createRequest(
+  package func createRequest(
     _ method: HTTPMethod, _ path: String, query: [String: String]? = nil,
     body: RequestBody? = nil, headers: [String: String]? = nil
   ) async throws -> URLRequest {
@@ -216,7 +209,7 @@ final class _HTTPClient: Sendable {
   }
 
   /// Builds a `URLRequest` from an absolute `url`.
-  func createRequest(
+  package func createRequest(
     _ method: HTTPMethod, url: URL, query: [String: String]? = nil, body: RequestBody? = nil,
     headers: [String: String]? = nil
   ) async throws -> URLRequest {
@@ -267,9 +260,9 @@ final class _HTTPClient: Sendable {
     if let body {
       switch body {
       case .encodable(let value, let encoder):
-        request.httpBody = try encoder.encode(value())
+        request.httpBody = try encoder.encode(value)
       case .json(let dict):
-        request.httpBody = try JSONSerialization.data(withJSONObject: dict())
+        request.httpBody = try JSONSerialization.data(withJSONObject: dict)
       case .data(let data):
         request.httpBody = data
       }
@@ -287,7 +280,9 @@ final class _HTTPClient: Sendable {
   ///   - response: The raw `URLResponse` to validate.
   ///   - data: When provided, included in ``HTTPClientError/responseError(_:data:)`` on failure.
   @discardableResult
-  func validateResponse(_ response: URLResponse, data: Data? = nil) throws -> HTTPURLResponse {
+  package func validateResponse(_ response: URLResponse, data: Data? = nil) throws
+    -> HTTPURLResponse
+  {
     guard let response = response as? HTTPURLResponse else {
       throw HTTPClientError.unexpectedError(
         "Invalid response from server: \(response)"
@@ -303,7 +298,7 @@ final class _HTTPClient: Sendable {
 }
 
 /// Errors thrown by ``_HTTPClient``.
-enum HTTPClientError: Error {
+package enum HTTPClientError: Error {
   /// The server returned a non-2xx status code. The raw response body is included in `data`.
   case responseError(HTTPURLResponse, data: Data)
   /// The response body could not be decoded into the expected type.
