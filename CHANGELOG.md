@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.46.0](https://github.com/supabase/supabase-swift/compare/v2.45.0...v2.46.0) (2026-04-28)
+
+
+### Features
+
+* **functions:** support custom JSON encoder and decoder ([#975](https://github.com/supabase/supabase-swift/issues/975)) ([b7e6a63](https://github.com/supabase/supabase-swift/commit/b7e6a63d31b50506c793525aefe2ad7703e7c3a9))
+
+
+### Bug Fixes
+
+* **ci:** remove path filters so CI always runs ([#985](https://github.com/supabase/supabase-swift/issues/985)) ([15aefe5](https://github.com/supabase/supabase-swift/commit/15aefe5bd8de32bd3d434f3d9c748fd11bf32e82))
+
 ## [2.45.0](https://github.com/supabase/supabase-swift/compare/v2.44.1...v2.45.0) (2026-04-24)
 
 
