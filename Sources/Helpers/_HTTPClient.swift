@@ -93,6 +93,7 @@ package final class _HTTPClient: Sendable {
     }
   }
 
+#if canImport(Darwin)
   /// Streams the response body byte-by-byte via an `AsyncThrowingStream`.
   ///
   /// Cancelling the stream cancels the underlying `URLSession` task. Non-2xx responses
@@ -159,6 +160,7 @@ package final class _HTTPClient: Sendable {
 
     return (stream, httpResponse)
   }
+#endif
 
   /// Performs a request relative to ``host``, returning the raw response body.
   package func fetchData(

@@ -265,6 +265,7 @@ public actor FunctionsClient {
     }
   }
 
+#if canImport(Darwin)
   /// Invokes a function and returns an async byte stream for the response body.
   ///
   /// Use this method for functions that return large payloads or use server-sent events /
@@ -323,6 +324,7 @@ public actor FunctionsClient {
       throw error
     }
   }
+#endif
 
   private func requestComponents(
     functionName: String,
