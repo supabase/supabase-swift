@@ -28,7 +28,8 @@ public actor FunctionsClient {
   /// The Region to invoke the functions in.
   let region: FunctionRegion?
 
-  let decoder: JSONDecoder?
+  /// The JSON decoder to use for decoding response bodies.
+  public let decoder: JSONDecoder
 
   private let http: _HTTPClient
 
