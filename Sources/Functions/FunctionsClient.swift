@@ -196,7 +196,7 @@ public actor FunctionsClient {
     _ functionName: String,
     as _: T.Type = T.self,
     decoder: JSONDecoder? = nil,
-    options applyOptions: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in }
+    options applyOptions: sending (inout FunctionInvokeOptions) -> Void = { _ in }
   ) async throws -> (T, HTTPURLResponse) {
     let (data, response) = try await invoke(functionName, options: applyOptions)
     return (
@@ -235,7 +235,7 @@ public actor FunctionsClient {
   @discardableResult
   public func invoke(
     _ functionName: String,
-    options applyOptions: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in }
+    options applyOptions: sending (inout FunctionInvokeOptions) -> Void = { _ in }
   ) async throws -> (Data, HTTPURLResponse) {
     var options = FunctionInvokeOptions()
     applyOptions(&options)
@@ -295,7 +295,7 @@ public actor FunctionsClient {
     @available(macOS 12.0, *)
     public func invokeStream(
       _ functionName: String,
-      options applyOptions: @Sendable (inout FunctionInvokeOptions) -> Void = { _ in }
+      options applyOptions: sending (inout FunctionInvokeOptions) -> Void = { _ in }
     ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
       var options = FunctionInvokeOptions()
       applyOptions(&options)
