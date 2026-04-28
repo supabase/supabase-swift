@@ -4,15 +4,22 @@ import Foundation
   import FoundationNetworking
 #endif
 
+@available(*, deprecated)
 public struct StorageHTTPSession: Sendable {
   public var fetch: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse)
   public var upload:
-    @Sendable (_ request: URLRequest, _ data: Data) async throws -> (Data, URLResponse)
+    @Sendable (_ request: URLRequest, _ data: Data) async throws -> (
+      Data, URLResponse
+    )
 
   public init(
-    fetch: @escaping @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse),
+    fetch:
+      @escaping @Sendable (_ request: URLRequest) async throws -> (
+        Data, URLResponse
+      ),
     upload:
-      @escaping @Sendable (_ request: URLRequest, _ data: Data) async throws -> (
+      @escaping @Sendable (_ request: URLRequest, _ data: Data) async throws ->
+      (
         Data, URLResponse
       )
   ) {
