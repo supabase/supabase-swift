@@ -67,9 +67,7 @@ public struct FunctionInvokeOptions: Sendable {
 
   /// The region in which to invoke this function, overriding the client-level default.
   ///
-  /// When set, an `x-region` header and a `forceFunctionRegion` query parameter are added to
-  /// the request. Pass `nil` to fall back to ``FunctionsClient/region``, or automatic routing
-  /// if that is also `nil`.
+  /// Pass `nil` to fallback to ``FunctionsClient/region``, or automatic routing if that is also `nil`.
   public var region: FunctionRegion?
 
   /// URL query parameters appended to the function URL.
@@ -113,50 +111,30 @@ public struct FunctionInvokeOptions: Sendable {
 /// $0.region = FunctionRegion(rawValue: "custom-region")
 /// ```
 public struct FunctionRegion: RawRepresentable, Hashable, Sendable {
-  /// The raw region string sent in the `x-region` header and `forceFunctionRegion` query parameter.
+  /// The raw region string sent in the requests.
   public var rawValue: String
 
-  /// Creates a `FunctionRegion` from an arbitrary region string.
-  ///
-  /// - Parameter rawValue: The region identifier, e.g. `"us-east-1"`.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
-  /// Asia Pacific (Tokyo).
   public static let apNortheast1 = FunctionRegion(rawValue: "ap-northeast-1")
-  /// Asia Pacific (Seoul).
   public static let apNortheast2 = FunctionRegion(rawValue: "ap-northeast-2")
-  /// Asia Pacific (Mumbai).
   public static let apSouth1 = FunctionRegion(rawValue: "ap-south-1")
-  /// Asia Pacific (Singapore).
   public static let apSoutheast1 = FunctionRegion(rawValue: "ap-southeast-1")
-  /// Asia Pacific (Sydney).
   public static let apSoutheast2 = FunctionRegion(rawValue: "ap-southeast-2")
-  /// Canada (Central).
   public static let caCentral1 = FunctionRegion(rawValue: "ca-central-1")
-  /// Europe (Frankfurt).
   public static let euCentral1 = FunctionRegion(rawValue: "eu-central-1")
-  /// Europe (Ireland).
   public static let euWest1 = FunctionRegion(rawValue: "eu-west-1")
-  /// Europe (London).
   public static let euWest2 = FunctionRegion(rawValue: "eu-west-2")
-  /// Europe (Paris).
   public static let euWest3 = FunctionRegion(rawValue: "eu-west-3")
-  /// South America (São Paulo).
   public static let saEast1 = FunctionRegion(rawValue: "sa-east-1")
-  /// US East (N. Virginia).
   public static let usEast1 = FunctionRegion(rawValue: "us-east-1")
-  /// US West (N. California).
   public static let usWest1 = FunctionRegion(rawValue: "us-west-1")
-  /// US West (Oregon).
   public static let usWest2 = FunctionRegion(rawValue: "us-west-2")
 }
 
 extension FunctionRegion: ExpressibleByStringLiteral {
-  /// Creates a `FunctionRegion` from a string literal.
-  ///
-  /// - Parameter value: The region identifier string.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }

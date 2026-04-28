@@ -52,25 +52,21 @@ public actor FunctionsClient {
 
   /// The default region in which functions are invoked.
   ///
-  /// When set, every request includes an `x-region` header and a `forceFunctionRegion`
-  /// query parameter. Per-invocation overrides via ``FunctionInvokeOptions/region`` take
+  /// Per-invocation overrides via ``FunctionInvokeOptions/region`` take
   /// precedence over this value. Pass `nil` to let Supabase route to the nearest region
   /// automatically.
   public let region: FunctionRegion?
 
   /// The JSON decoder used to decode response bodies in ``invokeDecodable(_:decoder:options:)``.
   ///
-  /// You can customise date decoding strategies, key decoding strategies, and other options
-  /// by providing a configured `JSONDecoder` at initialisation time. A per-call override is
-  /// also available via the `decoder` parameter of ``invokeDecodable(_:decoder:options:)``.
+  /// Per-call override is also available via the `decoder`
+  /// parameter of ``invokeDecodable(_:decoder:options:)``.
   public let decoder: JSONDecoder
 
   /// The HTTP headers sent with every request.
   ///
-  /// Includes at minimum an `X-Client-Info` header set automatically during initialisation.
-  /// Call ``setAuth(token:)`` to update the `Authorization` header at runtime. Per-invocation
-  /// headers supplied via ``FunctionInvokeOptions/headers`` are merged on top of these values,
-  /// with the per-invocation values winning on collision.
+  /// Per-invocation headers supplied via ``FunctionInvokeOptions/headers`` are merged on
+  /// top of these values, with the per-invocation values winning on collision.
   public private(set) var headers: [String: String] = [:]
 
   private let http: _HTTPClient
@@ -97,7 +93,7 @@ public actor FunctionsClient {
   /// ```swift
   /// let functions = FunctionsClient(
   ///   url: URL(string: "https://<project-ref>.supabase.co/functions/v1")!,
-  ///   headers: ["apikey": "<anon-key>", "Authorization": "Bearer <anon-key>"]
+  ///   headers: ["apikey": "<publishable-or-secret-key>", "Authorization": "Bearer <authorization-token>"]
   /// )
   /// ```
   public init(
