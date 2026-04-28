@@ -186,8 +186,14 @@ let package = Package(
       name: "RealtimeTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(
+          name: "InlineSnapshotTesting",
+          package: "swift-snapshot-testing"
+        ),
+        .product(
+          name: "XCTestDynamicOverlay",
+          package: "xctest-dynamic-overlay"
+        ),
         "PostgREST",
         "Realtime",
         "TestHelpers",
