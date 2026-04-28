@@ -22,7 +22,7 @@ let version = Helpers.version
 /// )
 ///
 /// // Invoke a function and decode the JSON response
-/// let (result, _): (MyResponse, _) = try await client.invokeDecodable("my-function")
+/// let (result, _) = try await client.invokeDecodable("my-function", as: MyResponse.self)
 ///
 /// // Invoke a function and handle raw data
 /// let (data, response) = try await client.invoke("my-function") {
@@ -57,10 +57,10 @@ public actor FunctionsClient {
   /// automatically.
   public let region: FunctionRegion?
 
-  /// The JSON decoder used to decode response bodies in ``invokeDecodable(_:decoder:options:)``.
+  /// The JSON decoder used to decode response bodies in ``invokeDecodable(_:as:decoder:options:)``.
   ///
   /// Per-call override is also available via the `decoder`
-  /// parameter of ``invokeDecodable(_:decoder:options:)``.
+  /// parameter of ``invokeDecodable(_:as:decoder:options:)``.
   public let decoder: JSONDecoder
 
   /// The HTTP headers sent with every request.
@@ -85,7 +85,7 @@ public actor FunctionsClient {
   ///   - region: The default region to invoke functions in. Defaults to `nil` (automatic routing).
   ///   - session: The `URLSession` used to perform HTTP requests. Defaults to a new session with
   ///     ``requestIdleTimeout`` applied to `timeoutIntervalForRequest`.
-  ///   - decoder: The `JSONDecoder` used by ``invokeDecodable(_:decoder:options:)``.
+  ///   - decoder: The `JSONDecoder` used by ``invokeDecodable(_:as:decoder:options:)``.
   ///     Defaults to `JSONDecoder()`.
   ///
   /// ## Example
@@ -186,7 +186,7 @@ public actor FunctionsClient {
   ///   let message: String
   /// }
   ///
-  /// let (response, _): (HelloResponse, _) = try await functions.invokeDecodable("hello") {
+  /// let (response, _) = try await functions.invokeDecodable("hello", as: HelloResponse.self) {
   ///   $0.method = .get
   ///   $0.query = ["name": "world"]
   /// }
@@ -194,6 +194,7 @@ public actor FunctionsClient {
   /// ```
   public func invokeDecodable<T: Decodable>(
     _ functionName: String,
+    as _: T.Type = T.self,
     decoder: JSONDecoder? = nil,
     options applyOptions: (inout FunctionInvokeOptions) -> Void = { _ in }
   ) async throws -> (T, HTTPURLResponse) {
