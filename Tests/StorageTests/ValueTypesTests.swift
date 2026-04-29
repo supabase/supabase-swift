@@ -1,62 +1,65 @@
-import XCTest
+import Foundation
+import Testing
 
 @testable import Storage
 
-final class ValueTypesTests: XCTestCase {
+@Suite
+struct ValueTypesTests {
 
   // MARK: - ResizeMode
 
-  func testResizeMode_knownValues() {
-    XCTAssertEqual(ResizeMode.cover.rawValue, "cover")
-    XCTAssertEqual(ResizeMode.contain.rawValue, "contain")
-    XCTAssertEqual(ResizeMode.fill.rawValue, "fill")
+  @Test func resizeMode_knownValues() {
+    #expect(ResizeMode.cover.rawValue == "cover")
+    #expect(ResizeMode.contain.rawValue == "contain")
+    #expect(ResizeMode.fill.rawValue == "fill")
   }
 
-  func testResizeMode_customValue() {
+  @Test func resizeMode_customValue() {
     let custom = ResizeMode(rawValue: "fit")
-    XCTAssertEqual(custom.rawValue, "fit")
+    #expect(custom.rawValue == "fit")
   }
 
-  func testResizeMode_stringLiteral() {
+  @Test func resizeMode_stringLiteral() {
     let mode: ResizeMode = "cover"
-    XCTAssertEqual(mode, .cover)
+    #expect(mode == .cover)
   }
 
   // MARK: - ImageFormat
 
-  func testImageFormat_knownValues() {
-    XCTAssertEqual(ImageFormat.origin.rawValue, "origin")
-    XCTAssertEqual(ImageFormat.webp.rawValue, "webp")
-    XCTAssertEqual(ImageFormat.avif.rawValue, "avif")
+  @Test func imageFormat_knownValues() {
+    #expect(ImageFormat.origin.rawValue == "origin")
+    #expect(ImageFormat.webp.rawValue == "webp")
+    #expect(ImageFormat.avif.rawValue == "avif")
   }
 
-  func testImageFormat_customValue() {
+  @Test func imageFormat_customValue() {
     let custom = ImageFormat(rawValue: "jpeg")
-    XCTAssertEqual(custom.rawValue, "jpeg")
+    #expect(custom.rawValue == "jpeg")
   }
 
-  func testImageFormat_stringLiteral() {
+  @Test func imageFormat_stringLiteral() {
     let format: ImageFormat = "webp"
-    XCTAssertEqual(format, .webp)
+    #expect(format == .webp)
   }
 
   // MARK: - SortOrder
 
-  func testSortOrder_knownValues() {
-    XCTAssertEqual(Storage.SortOrder.ascending.rawValue, "asc")
-    XCTAssertEqual(Storage.SortOrder.descending.rawValue, "desc")
+  @Test func sortOrder_knownValues() {
+    #expect(Storage.SortOrder.ascending.rawValue == "asc")
+    #expect(Storage.SortOrder.descending.rawValue == "desc")
   }
 
-  func testSortOrder_encodes_asRawValue() throws {
-    let encoder = JSONEncoder()
-    let data = try encoder.encode(Storage.SortOrder.ascending)
+  @Test func sortOrder_encodesAsRawValue() throws {
+    let data = try JSONEncoder().encode(Storage.SortOrder.ascending)
     let string = String(data: data, encoding: .utf8)
-    XCTAssertEqual(string, "\"asc\"")
+    #expect(string == "\"asc\"")
   }
 
-  func testSortOrder_decodes_fromRawValue() throws {
-    let data = "\"desc\"".data(using: .utf8)!
+  @Test func sortOrder_decodesFromRawValue() throws {
+    let data = Data("\"desc\"".utf8)
     let order = try JSONDecoder().decode(Storage.SortOrder.self, from: data)
-    XCTAssertEqual(order, .descending)
+    #expect(order == .descending)
   }
+
+  // MARK: - DownloadBehavior
 }
