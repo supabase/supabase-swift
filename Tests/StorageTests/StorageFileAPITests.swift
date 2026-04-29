@@ -11,7 +11,7 @@ import XCTest
 
 final class StorageFileAPITests: XCTestCase {
   let url = URL(string: "http://localhost:54321/storage/v1")!
-  var storage: SupabaseStorageClient!
+  var storage: StorageClient!
 
   override func setUp() {
     super.setUp()
@@ -25,17 +25,14 @@ final class StorageFileAPITests: XCTestCase {
 
     let session = URLSession(configuration: configuration)
 
-    storage = SupabaseStorageClient(
+    storage = StorageClient(
       configuration: StorageClientConfiguration(
         url: url,
         headers: [
           "apikey":
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
         ],
-        session: StorageHTTPSession(
-          fetch: { try await session.data(for: $0) },
-          upload: { try await session.upload(for: $0, from: $1) }
-        ),
+        session: session,
         logger: nil
       )
     )
@@ -66,6 +63,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 83" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -93,6 +91,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 107" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -127,6 +126,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 111" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -163,6 +163,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 18" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -199,6 +200,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 18" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -244,6 +246,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 51" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -301,6 +304,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 51" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -404,6 +408,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request DELETE \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 38" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -440,6 +445,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 98" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -471,6 +477,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 98" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -510,6 +517,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request PUT \
+      	--header "Accept: application/json" \
       	--header "Cache-Control: max-age=3600" \
       	--header "Content-Length: 390" \
       	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
@@ -570,6 +578,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request PUT \
+      	--header "Accept: application/json" \
       	--header "Cache-Control: max-age=3600" \
       	--header "Content-Length: 392" \
       	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
@@ -623,6 +632,7 @@ final class StorageFileAPITests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/object/bucket/file.txt"
@@ -648,6 +658,7 @@ final class StorageFileAPITests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/object/bucket/file.txt?version=1"
@@ -719,6 +730,7 @@ final class StorageFileAPITests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/render/image/authenticated/bucket/sadcat.txt?format=cover"
@@ -754,6 +766,7 @@ final class StorageFileAPITests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/object/info/bucket/file.txt"
@@ -778,6 +791,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--head \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/object/bucket/file.txt"
@@ -802,6 +816,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--head \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/object/bucket/file.txt"
@@ -826,6 +841,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--head \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/object/bucket/file.txt"
@@ -856,6 +872,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt"
@@ -891,6 +908,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-upsert: true" \
@@ -932,6 +950,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request PUT \
+      	--header "Accept: application/json" \
       	--header "Cache-Control: max-age=3600" \
       	--header "Content-Length: 297" \
       	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
@@ -979,6 +998,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request PUT \
+      	--header "Accept: application/json" \
       	--header "Cache-Control: max-age=3600" \
       	--header "Content-Length: 285" \
       	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
@@ -1011,6 +1031,65 @@ final class StorageFileAPITests: XCTestCase {
         options: FileOptions(
           headers: ["X-Mode": "test"]
         )
+      )
+
+    XCTAssertEqual(response.path, "file.txt")
+    XCTAssertEqual(response.fullPath, "bucket/file.txt")
+  }
+
+  func testUploadToSignedURL_fromFileURLWithoutOptionsDerivesMimeTypeFromFileExtension()
+    async throws
+  {
+    let fileURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("signed-upload.json")
+    try Data("{}".utf8).write(to: fileURL)
+    defer { try? FileManager.default.removeItem(at: fileURL) }
+
+    Mock(
+      url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .put: Data(
+          """
+          {
+            "Key": "bucket/file.txt"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request PUT \
+      	--header "Accept: application/json" \
+      	--header "Cache-Control: max-age=3600" \
+      	--header "Content-Length: 290" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      \#r
+      3600\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"\"; filename=\"signed-upload.json\"\#r
+      Content-Type: application/json\#r
+      \#r
+      {}\#r
+      --alamofire.boundary.e56f43407f772505--\#r
+      " \
+      	"http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket")
+      .uploadToSignedURL(
+        "file.txt",
+        token: "abc.def.ghi",
+        fileURL: fileURL
       )
 
     XCTAssertEqual(response.path, "file.txt")
@@ -1097,6 +1176,7 @@ final class StorageFileAPITests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/object/bucket/file.txt?cacheNonce=abc123"

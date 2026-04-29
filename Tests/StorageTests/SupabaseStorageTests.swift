@@ -1,9 +1,7 @@
 import ConcurrencyExtras
-import CustomDump
 import Foundation
 import InlineSnapshotTesting
 import XCTest
-import XCTestDynamicOverlay
 
 @testable import Storage
 
@@ -15,10 +13,16 @@ final class SupabaseStorageTests: XCTestCase {
   static let supabaseURL = URL(string: "http://localhost:54321/storage/v1")!
   let bucketId = "tests"
 
-  var sessionMock = StorageHTTPSession(
-    fetch: unimplemented("StorageHTTPSession.fetch"),
-    upload: unimplemented("StorageHTTPSession.upload")
-  )
+  private lazy var session: URLSession = {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [StorageURLProtocolMock.self]
+    return URLSession(configuration: configuration)
+  }()
+
+  override func tearDown() {
+    super.tearDown()
+    StorageURLProtocolMock.requestHandler.setValue(nil)
+  }
 
   func testGetPublicURL() throws {
     let sut = makeSUT()
@@ -59,7 +63,7 @@ final class SupabaseStorageTests: XCTestCase {
   }
 
   func testCreateSignedURLs() async throws {
-    sessionMock.fetch = { _ in
+    StorageURLProtocolMock.requestHandler.setValue { _ in
       (
         """
         [
@@ -109,32 +113,18 @@ final class SupabaseStorageTests: XCTestCase {
     func testUploadData() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
-      sessionMock.fetch = { request in
+      StorageURLProtocolMock.requestHandler.setValue { request in
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
           curl \
           	--request POST \
+          	--header "Accept: application/json" \
           	--header "Apikey: test.api.key" \
-          	--header "Authorization: Bearer test.api.key" \
           	--header "Cache-Control: max-age=14400" \
+          	--header "Content-Length: 390" \
           	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
           	--header "X-Client-Info: storage-swift/x.y.z" \
           	--header "x-upsert: false" \
-          	--data "--alamofire.boundary.c21f947c1c7b0c57\#r
-          Content-Disposition: form-data; name=\"cacheControl\"\#r
-          \#r
-          14400\#r
-          --alamofire.boundary.c21f947c1c7b0c57\#r
-          Content-Disposition: form-data; name=\"metadata\"\#r
-          \#r
-          {\"key\":\"value\"}\#r
-          --alamofire.boundary.c21f947c1c7b0c57\#r
-          Content-Disposition: form-data; name=\"\"; filename=\"file1.txt\"\#r
-          Content-Type: text/plain\#r
-          \#r
-          test data\#r
-          --alamofire.boundary.c21f947c1c7b0c57--\#r
-          " \
           	"http://localhost:54321/storage/v1/object/tests/file1.txt"
           """#
         }
@@ -170,14 +160,15 @@ final class SupabaseStorageTests: XCTestCase {
     func testUploadFileURL() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
-      sessionMock.fetch = { request in
+      StorageURLProtocolMock.requestHandler.setValue { request in
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
           curl \
           	--request POST \
+          	--header "Accept: application/json" \
           	--header "Apikey: test.api.key" \
-          	--header "Authorization: Bearer test.api.key" \
           	--header "Cache-Control: max-age=3600" \
+          	--header "Content-Length: 29907" \
           	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
           	--header "X-Client-Info: storage-swift/x.y.z" \
           	--header "x-upsert: false" \
@@ -213,11 +204,11 @@ final class SupabaseStorageTests: XCTestCase {
     }
   #endif
 
-  private func makeSUT() -> SupabaseStorageClient {
-    SupabaseStorageClient.test(
+  private func makeSUT() -> StorageClient {
+    StorageClient.test(
       supabaseURL: Self.supabaseURL.absoluteString,
       apiKey: "test.api.key",
-      session: sessionMock
+      session: session
     )
   }
 
@@ -227,166 +218,35 @@ final class SupabaseStorageTests: XCTestCase {
       .appendingPathComponent(fileName)
   }
 
-  // MARK: - setValue(_:forHTTPHeaderField:) Tests
+}
 
-  func testSetHeader_setsHeaderOnRequest() async throws {
-    let capturedRequest = LockIsolated(URLRequest?.none)
-    sessionMock.fetch = { request in
-      capturedRequest.setValue(request)
-      return (
-        """
-        [
-          {
-            "name": "test.txt",
-            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "updatedAt": "2024-01-01T00:00:00Z",
-            "createdAt": "2024-01-01T00:00:00Z",
-            "lastAccessedAt": "2024-01-01T00:00:00Z",
-            "metadata": {}
-          }
-        ]
-        """.data(using: .utf8)!,
-        HTTPURLResponse(
-          url: Self.supabaseURL,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
-    }
+private final class StorageURLProtocolMock: URLProtocol {
+  static let requestHandler = LockIsolated<(@Sendable (URLRequest) throws -> (Data, URLResponse))?>(
+    nil
+  )
 
-    let sut = makeSUT()
-
-    _ = try await sut.from(bucketId)
-      .setHeader("custom-value", forKey: "X-Custom-Header")
-      .list()
-
-    XCTAssertEqual(
-      capturedRequest.value?.value(forHTTPHeaderField: "X-Custom-Header"), "custom-value")
+  override class func canInit(with request: URLRequest) -> Bool {
+    true
   }
 
-  func testSetHeader_supportsMethodChaining() async throws {
-    let capturedRequest = LockIsolated(URLRequest?.none)
-    sessionMock.fetch = { request in
-      capturedRequest.setValue(request)
-      return (
-        """
-        [
-          {
-            "name": "test.txt",
-            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "updatedAt": "2024-01-01T00:00:00Z",
-            "createdAt": "2024-01-01T00:00:00Z",
-            "lastAccessedAt": "2024-01-01T00:00:00Z",
-            "metadata": {}
-          }
-        ]
-        """.data(using: .utf8)!,
-        HTTPURLResponse(
-          url: Self.supabaseURL,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
-    }
-
-    let sut = makeSUT()
-
-    _ = try await sut.from(bucketId)
-      .setHeader("value-a", forKey: "X-Header-A")
-      .setHeader("value-b", forKey: "X-Header-B")
-      .list()
-
-    XCTAssertEqual(capturedRequest.value?.value(forHTTPHeaderField: "X-Header-A"), "value-a")
-    XCTAssertEqual(capturedRequest.value?.value(forHTTPHeaderField: "X-Header-B"), "value-b")
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    request
   }
 
-  func testSetHeader_overridesExistingHeader() async throws {
-    let capturedRequest = LockIsolated(URLRequest?.none)
-    sessionMock.fetch = { request in
-      capturedRequest.setValue(request)
-      return (
-        """
-        [
-          {
-            "name": "test.txt",
-            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "updatedAt": "2024-01-01T00:00:00Z",
-            "createdAt": "2024-01-01T00:00:00Z",
-            "lastAccessedAt": "2024-01-01T00:00:00Z",
-            "metadata": {}
-          }
-        ]
-        """.data(using: .utf8)!,
-        HTTPURLResponse(
-          url: Self.supabaseURL,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
+  override func startLoading() {
+    do {
+      guard let handler = Self.requestHandler.value else {
+        throw URLError(.badServerResponse)
+      }
+
+      let (data, response) = try handler(request)
+      client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+      client?.urlProtocol(self, didLoad: data)
+      client?.urlProtocolDidFinishLoading(self)
+    } catch {
+      client?.urlProtocol(self, didFailWithError: error)
     }
-
-    let sut = makeSUT()
-
-    _ = try await sut.from(bucketId)
-      .setHeader("initial-value", forKey: "X-Custom-Header")
-      .setHeader("updated-value", forKey: "X-Custom-Header")
-      .list()
-
-    XCTAssertEqual(
-      capturedRequest.value?.value(forHTTPHeaderField: "X-Custom-Header"), "updated-value")
   }
 
-  func testSetHeader_doesNotMutateParentClientHeaders() async throws {
-    let capturedRequests = LockIsolated<[URLRequest]>([])
-
-    let listResponse = """
-      [
-        {
-          "name": "test.txt",
-          "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-          "updatedAt": "2024-01-01T00:00:00Z",
-          "createdAt": "2024-01-01T00:00:00Z",
-          "lastAccessedAt": "2024-01-01T00:00:00Z",
-          "metadata": {}
-        }
-      ]
-      """
-
-    // Setup mock to capture requests
-    sessionMock.fetch = { request in
-      capturedRequests.withValue { $0.append(request) }
-
-      return (
-        listResponse.data(using: .utf8)!,
-        HTTPURLResponse(
-          url: Self.supabaseURL,
-          statusCode: 200,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
-    }
-
-    let sut = makeSUT()
-
-    // First, make a request with setHeader on StorageFileApi
-    _ = try await sut.from(bucketId)
-      .setHeader("child-value", forKey: "X-Child-Header")
-      .list()
-
-    XCTAssertEqual(
-      capturedRequests[0].value(forHTTPHeaderField: "X-Child-Header"),
-      "child-value"
-    )
-
-    // Then make a request from a new StorageFileApi instance (via sut.from())
-    // The new instance should NOT have the previous instance's header
-    _ = try await sut.from(bucketId).list()
-
-    // The new StorageFileApi instance should NOT have the previous instance's header
-    XCTAssertNil(capturedRequests[1].value(forHTTPHeaderField: "X-Child-Header"))
-  }
+  override func stopLoading() {}
 }

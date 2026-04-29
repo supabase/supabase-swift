@@ -11,7 +11,7 @@ import XCTest
 
 final class StorageBucketAPITests: XCTestCase {
   let url = URL(string: "http://localhost:54321/storage/v1")!
-  var storage: SupabaseStorageClient!
+  var storage: StorageClient!
 
   override func setUp() {
     super.setUp()
@@ -21,17 +21,14 @@ final class StorageBucketAPITests: XCTestCase {
 
     let session = URLSession(configuration: configuration)
 
-    storage = SupabaseStorageClient(
+    storage = StorageClient(
       configuration: StorageClientConfiguration(
         url: url,
         headers: [
           "apikey":
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
         ],
-        session: StorageHTTPSession(
-          fetch: { try await session.data(for: $0) },
-          upload: { try await session.upload(for: $0, from: $1) }
-        ),
+        session: session,
         logger: nil
       )
     )
@@ -74,7 +71,7 @@ final class StorageBucketAPITests: XCTestCase {
 
     for (input, expect, description) in urlTestCases {
       runActivity(named: "should \(description) if useNewHostname is true") {
-        let storage = SupabaseStorageClient(
+        let storage = StorageClient(
           configuration: StorageClientConfiguration(
             url: URL(string: input)!,
             headers: [:],
@@ -85,7 +82,7 @@ final class StorageBucketAPITests: XCTestCase {
       }
 
       runActivity(named: "should not modify host if useNewHostname is false") {
-        let storage = SupabaseStorageClient(
+        let storage = StorageClient(
           configuration: StorageClientConfiguration(
             url: URL(string: input)!,
             headers: [:],
@@ -131,6 +128,7 @@ final class StorageBucketAPITests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/bucket/bucket123"
@@ -167,6 +165,7 @@ final class StorageBucketAPITests: XCTestCase {
     .snapshotRequest {
       #"""
       curl \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/bucket"
@@ -202,6 +201,7 @@ final class StorageBucketAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 51" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -242,6 +242,7 @@ final class StorageBucketAPITests: XCTestCase {
       #"""
       curl \
       	--request PUT \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 51" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -271,6 +272,7 @@ final class StorageBucketAPITests: XCTestCase {
       #"""
       curl \
       	--request DELETE \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/bucket/bucket123"
@@ -293,6 +295,7 @@ final class StorageBucketAPITests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/storage/v1/bucket/bucket123/empty"
