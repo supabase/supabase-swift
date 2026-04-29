@@ -86,10 +86,33 @@ enum FileUpload {
   let testingBoundary = LockIsolated<String?>(nil)
 #endif
 
-/// Supabase Storage File API for file operations within a bucket.
+/// File operations API for objects stored within a single Supabase Storage bucket.
 ///
-/// - Note: Thread Safety: Inherits immutable design from `StorageApi`. The additional `bucketId`
-///   property is also immutable (`let`).
+/// Obtain an instance by calling ``StorageClient/from(_:)`` — do not create one directly.
+///
+/// `StorageFileAPI` covers the full lifecycle of objects in a bucket: uploading, updating,
+/// downloading, listing, deleting, moving, copying, and generating signed or public URLs.
+///
+/// ## Basic usage
+///
+/// ```swift
+/// let bucket = supabase.storage.from("avatars")
+///
+/// // Upload
+/// let response = try await bucket.upload("user-123/photo.png", data: imageData)
+///
+/// // Download
+/// let data = try await bucket.download(path: "user-123/photo.png")
+///
+/// // Public URL (public bucket)
+/// let url = try bucket.getPublicURL(path: "user-123/photo.png")
+///
+/// // Signed URL (private bucket, valid for 60 seconds)
+/// let signedURL = try await bucket.createSignedURL(path: "user-123/photo.png", expiresIn: 60)
+/// ```
+///
+/// - Note: All stored properties are immutable, making `StorageFileAPI` safe to share across
+///   concurrency boundaries.
 public struct StorageFileAPI {
   /// The bucket id to operate on.
   let bucketId: String
@@ -161,6 +184,27 @@ public struct StorageFileAPI {
     )
   }
 
+  /// Uploads a file from a local URL to an existing bucket.
+  ///
+  /// This is a convenience wrapper around ``upload(_:fileURL:options:)`` that accepts the
+  /// arguments in the reverse order and infers sensible default ``FileOptions`` from the file.
+  ///
+  /// - Parameters:
+  ///   - fileURL: The local `file://` URL of the file to upload.
+  ///   - path: The destination path within the bucket, e.g. `"folder/image.png"`.
+  ///     The bucket must already exist.
+  ///   - options: Upload options. When `nil`, defaults are inferred from the file (MIME type
+  ///     from the extension, no explicit content type).
+  /// - Returns: A ``FileUploadResponse`` containing the assigned storage ID and full path.
+  /// - Throws: ``StorageError`` if the upload fails or the bucket does not exist.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let fileURL = URL(fileURLWithPath: "/tmp/photo.jpg")
+  /// let response = try await storage.from("avatars").uploadFile(fileURL, to: "user-123/photo.jpg")
+  /// print(response.fullPath)
+  /// ```
   @available(macOS 10.15.4, *)
   @discardableResult
   public func uploadFile(
@@ -172,11 +216,31 @@ public struct StorageFileAPI {
       path, fileURL: fileURL, options: options ?? FileUpload.url(fileURL).defaultOptions())
   }
 
-  /// Uploads a file to an existing bucket.
+  /// Uploads a `Data` value to an existing bucket.
+  ///
+  /// If the path already exists and ``FileOptions/upsert`` is `false` (the default), an error
+  /// is returned. Set `upsert: true` to overwrite silently instead.
+  ///
   /// - Parameters:
-  ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
-  ///   - data: The Data to be stored in the bucket.
-  ///   - options: The options for the uploaded file.
+  ///   - path: The destination path within the bucket, e.g. `"folder/image.png"`.
+  ///     The bucket must already exist.
+  ///   - data: The raw file bytes to store.
+  ///   - options: Upload options such as content type, cache duration, and upsert behaviour.
+  /// - Returns: A ``FileUploadResponse`` containing the assigned storage ID and full path.
+  /// - Throws: ``StorageError`` if the path already exists (when `upsert` is `false`), the
+  ///   bucket does not exist, or the request otherwise fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let imageData = UIImage(named: "photo")!.jpegData(compressionQuality: 0.8)!
+  /// let response = try await storage.from("avatars").upload(
+  ///   "user-123/photo.jpg",
+  ///   data: imageData,
+  ///   options: FileOptions(contentType: "image/jpeg", upsert: true)
+  /// )
+  /// print(response.fullPath) // "avatars/user-123/photo.jpg"
+  /// ```
   @discardableResult
   public func upload(
     _ path: String,
@@ -191,11 +255,30 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Uploads a file to an existing bucket.
+  /// Uploads a file from a local `URL` to an existing bucket.
+  ///
+  /// For files ≥ 10 MB the SDK automatically streams from a temporary file on disk to avoid
+  /// loading the entire payload into memory.
+  ///
   /// - Parameters:
-  ///   - path: The relative file path. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
-  ///   - fileURL: The file URL to be stored in the bucket.
-  ///   - options: The options for the uploaded file.
+  ///   - path: The destination path within the bucket, e.g. `"folder/image.png"`.
+  ///     The bucket must already exist.
+  ///   - fileURL: A local `file://` URL pointing to the file to upload.
+  ///   - options: Upload options such as content type, cache duration, and upsert behaviour.
+  ///     When `contentType` is `nil`, the MIME type is inferred from the file extension.
+  /// - Returns: A ``FileUploadResponse`` containing the assigned storage ID and full path.
+  /// - Throws: ``StorageError`` if the path already exists (when `upsert` is `false`), the
+  ///   bucket does not exist, or the request otherwise fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let fileURL = URL(fileURLWithPath: "/tmp/report.pdf")
+  /// let response = try await storage.from("documents").upload(
+  ///   "reports/2024/annual.pdf",
+  ///   fileURL: fileURL
+  /// )
+  /// ```
   @discardableResult
   public func upload(
     _ path: String,
@@ -210,11 +293,29 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Replaces an existing file at the specified path with a new one.
+  /// Replaces an existing file at the specified path with new `Data`.
+  ///
+  /// Unlike ``upload(_:data:options:)``, this method always overwrites the existing object and
+  /// returns an error if no object exists at the given path.
+  ///
   /// - Parameters:
-  ///   - path: The relative file path. Should be of the format `folder/subfolder`. The bucket already exist before attempting to upload.
-  ///   - data: The Data to be stored in the bucket.
-  ///   - options: The options for the updated file.
+  ///   - path: The path of the file to replace, e.g. `"folder/image.png"`.
+  ///     The bucket must already exist.
+  ///   - data: The new raw file bytes.
+  ///   - options: Upload options such as content type and cache duration.
+  /// - Returns: A ``FileUploadResponse`` containing the storage ID and full path of the updated object.
+  /// - Throws: ``StorageError`` if the path does not exist or the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let newImageData = UIImage(named: "updated-photo")!.pngData()!
+  /// let response = try await storage.from("avatars").update(
+  ///   "user-123/photo.png",
+  ///   data: newImageData,
+  ///   options: FileOptions(contentType: "image/png")
+  /// )
+  /// ```
   @discardableResult
   public func update(
     _ path: String,
@@ -229,11 +330,26 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Replaces an existing file at the specified path with a new one.
+  /// Replaces an existing file at the specified path with the contents of a local `URL`.
+  ///
+  /// Unlike ``upload(_:fileURL:options:)``, this method always overwrites the existing object and
+  /// returns an error if no object exists at the given path.
+  ///
   /// - Parameters:
-  ///   - path: The relative file path. Should be of the format `folder/subfolder`. The bucket already exist before attempting to upload.
-  ///   - fileURL: The file URL to be stored in the bucket.
-  ///   - options: The options for the updated file.
+  ///   - path: The path of the file to replace, e.g. `"folder/image.png"`.
+  ///     The bucket must already exist.
+  ///   - fileURL: A local `file://` URL pointing to the replacement file.
+  ///   - options: Upload options such as content type and cache duration.
+  ///     When `contentType` is `nil`, the MIME type is inferred from the file extension.
+  /// - Returns: A ``FileUploadResponse`` containing the storage ID and full path of the updated object.
+  /// - Throws: ``StorageError`` if the path does not exist or the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let newFileURL = URL(fileURLWithPath: "/tmp/updated-report.pdf")
+  /// try await storage.from("documents").update("reports/2024/annual.pdf", fileURL: newFileURL)
+  /// ```
   @discardableResult
   public func update(
     _ path: String,
@@ -248,11 +364,29 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Moves an existing file to a new path.
+  /// Moves an existing file to a new path within the same or a different bucket.
+  ///
+  /// The source file is removed after the move completes. To keep the original, use ``copy(from:to:options:)`` instead.
+  ///
   /// - Parameters:
-  ///   - source: The original file path, including the current file name. For example `folder/image.png`.
-  ///   - destination: The new file path, including the new file name. For example `folder/image-new.png`.
-  ///   - options: The destination options.
+  ///   - source: The current file path, e.g. `"folder/image.png"`.
+  ///   - destination: The new file path, e.g. `"archive/image.png"`.
+  ///   - options: Optional destination overrides, such as moving the file into a different bucket.
+  /// - Throws: ``StorageError`` if the source path does not exist or the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // Rename within the same bucket
+  /// try await storage.from("avatars").move(from: "old-name.png", to: "new-name.png")
+  ///
+  /// // Move to a different bucket
+  /// try await storage.from("avatars").move(
+  ///   from: "user-123/photo.png",
+  ///   to: "user-123/photo.png",
+  ///   options: DestinationOptions(destinationBucket: "archive")
+  /// )
+  /// ```
   public func move(
     from source: String,
     to destination: String,
@@ -272,11 +406,27 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Copies an existing file to a new path.
+  /// Copies an existing file to a new path, leaving the original in place.
+  ///
+  /// To move a file without keeping the original, use ``move(from:to:options:)`` instead.
+  ///
   /// - Parameters:
-  ///   - source: The original file path, including the current file name. For example `folder/image.png`.
-  ///   - destination: The new file path, including the new file name. For example `folder/image-copy.png`.
-  ///   - options: The destination options.
+  ///   - source: The current file path, e.g. `"folder/image.png"`.
+  ///   - destination: The path for the copy, e.g. `"folder/image-copy.png"`.
+  ///   - options: Optional destination overrides, such as copying the file into a different bucket.
+  /// - Returns: The full storage key of the newly created copy.
+  /// - Throws: ``StorageError`` if the source path does not exist or the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // Duplicate a file in the same bucket
+  /// let key = try await storage.from("avatars").copy(
+  ///   from: "user-123/photo.png",
+  ///   to: "user-123/photo-backup.png"
+  /// )
+  /// print(key) // "avatars/user-123/photo-backup.png"
+  /// ```
   @discardableResult
   public func copy(
     from source: String,
@@ -303,13 +453,40 @@ public struct StorageFileAPI {
     return response.Key
   }
 
-  /// Creates a signed URL. Use a signed URL to share a file for a fixed amount of time.
+  /// Creates a signed URL that grants time-limited access to a private file.
+  ///
+  /// Signed URLs work for both private and public buckets. They are useful for sharing individual
+  /// files with users who do not have Storage credentials.
+  ///
   /// - Parameters:
-  ///   - path: The file path, including the current file name. For example `folder/image.png`.
-  ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL which is valid for one minute.
-  ///   - download: Trigger a download with the specified file name.
-  ///   - transform: Transform the asset before serving it to the client.
-  ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  ///   - path: The file path within the bucket, e.g. `"folder/image.png"`.
+  ///   - expiresIn: The number of seconds until the signed URL expires.
+  ///     For example, `3600` for a URL valid for one hour.
+  ///   - download: When non-`nil`, the browser treats the URL as a file download and uses this
+  ///     string as the suggested file name. Pass an empty string (`""`) to use the original file name.
+  ///   - transform: Optional on-the-fly image transformation applied before the file is served.
+  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter. Use this to
+  ///     invalidate cached signed URLs without changing the path.
+  /// - Returns: A signed `URL` ready to be shared or embedded.
+  /// - Throws: ``StorageError`` if the file does not exist or the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // URL valid for 10 minutes
+  /// let url = try await storage.from("private-docs").createSignedURL(
+  ///   path: "user-123/contract.pdf",
+  ///   expiresIn: 600,
+  ///   download: "contract.pdf"
+  /// )
+  ///
+  /// // Resized image URL valid for 1 hour
+  /// let thumbnailURL = try await storage.from("photos").createSignedURL(
+  ///   path: "gallery/hero.jpg",
+  ///   expiresIn: 3600,
+  ///   transform: TransformOptions(width: 300, height: 300, resize: "cover")
+  /// )
+  /// ```
   public func createSignedURL(
     path: String,
     expiresIn: Int,
@@ -341,13 +518,33 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Creates a signed URL. Use a signed URL to share a file for a fixed amount of time.
+  /// Creates a signed URL that grants time-limited access to a private file, with a boolean
+  /// download trigger.
+  ///
+  /// This overload is a convenience variant of
+  /// ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)`` that accepts a `Bool`
+  /// instead of an optional file name string. When `download` is `true`, the browser uses the
+  /// original file name for the download prompt.
+  ///
   /// - Parameters:
-  ///   - path: The file path, including the current file name. For example `folder/image.png`.
-  ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL which is valid for one minute.
-  ///   - download: Trigger a download with the default file name.
-  ///   - transform: Transform the asset before serving it to the client.
-  ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  ///   - path: The file path within the bucket, e.g. `"folder/image.png"`.
+  ///   - expiresIn: The number of seconds until the signed URL expires.
+  ///   - download: Pass `true` to trigger a browser download using the original file name.
+  ///   - transform: Optional on-the-fly image transformation applied before the file is served.
+  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter for cache
+  ///     invalidation.
+  /// - Returns: A signed `URL` ready to be shared or embedded.
+  /// - Throws: ``StorageError`` if the file does not exist or the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let url = try await storage.from("docs").createSignedURL(
+  ///   path: "report.pdf",
+  ///   expiresIn: 300,
+  ///   download: true
+  /// )
+  /// ```
   public func createSignedURL(
     path: String,
     expiresIn: Int,
@@ -364,15 +561,40 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Creates multiple signed URLs. Use a signed URL to share a file for a fixed amount of time.
+  /// Creates signed URLs for multiple files in a single request.
   ///
-  /// Each item in the returned array is a ``SignedURLResult``: either `.success(path:signedURL:)` or
-  /// `.failure(path:error:)`. Exactly one case is guaranteed per item.
+  /// All URLs share the same expiry window. The returned array has one ``SignedURLResult`` per
+  /// input path, in the same order. Paths that cannot be signed (e.g. because the file does not
+  /// exist) produce a ``SignedURLResult/failure(path:error:)`` entry rather than throwing.
+  ///
   /// - Parameters:
-  ///   - paths: The file paths to be downloaded, including the current file names. For example `["folder/image.png", "folder2/image2.png"]`.
-  ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs which are valid for one minute.
-  ///   - download: Trigger a download with the specified file name.
-  ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  ///   - paths: The file paths within the bucket, e.g. `["folder/a.png", "folder/b.png"]`.
+  ///   - expiresIn: The number of seconds until the signed URLs expire.
+  ///   - download: When non-`nil`, the browser treats each URL as a file download and uses this
+  ///     string as the suggested file name. Pass an empty string (`""`) to use each file's
+  ///     original name.
+  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter. Use this to
+  ///     invalidate cached signed URLs without changing the paths.
+  /// - Returns: An array of ``SignedURLResult`` values, one per input path.
+  /// - Throws: ``StorageError`` if the batch request itself fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let results = try await storage.from("photos").createSignedURLs(
+  ///   paths: ["gallery/a.jpg", "gallery/b.jpg", "missing.jpg"],
+  ///   expiresIn: 3600
+  /// )
+  ///
+  /// for result in results {
+  ///   switch result {
+  ///   case .success(let path, let url):
+  ///     print("\(path) → \(url)")
+  ///   case .failure(let path, let error):
+  ///     print("\(path) failed: \(error)")
+  ///   }
+  /// }
+  /// ```
   public func createSignedURLs(
     paths: [String],
     expiresIn: Int,
@@ -410,15 +632,21 @@ public struct StorageFileAPI {
     }
   }
 
-  /// Creates multiple signed URLs. Use a signed URL to share a file for a fixed amount of time.
+  /// Creates signed URLs for multiple files, with a boolean download trigger.
   ///
-  /// Each item in the returned array is a ``SignedURLResult``: either `.success(path:signedURL:)` or
-  /// `.failure(path:error:)`. Exactly one case is guaranteed per item.
+  /// This overload is a convenience variant of
+  /// ``createSignedURLs(paths:expiresIn:download:cacheNonce:)`` that accepts a `Bool`
+  /// instead of an optional file name string. When `download` is `true`, the browser uses each
+  /// file's original name for the download prompt.
+  ///
   /// - Parameters:
-  ///   - paths: The file paths to be downloaded, including the current file names. For example `["folder/image.png", "folder2/image2.png"]`.
-  ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs which are valid for one minute.
-  ///   - download: Trigger a download with the default file name.
-  ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  ///   - paths: The file paths within the bucket, e.g. `["folder/a.png", "folder/b.png"]`.
+  ///   - expiresIn: The number of seconds until the signed URLs expire.
+  ///   - download: Pass `true` to trigger browser downloads using each file's original name.
+  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter for cache
+  ///     invalidation.
+  /// - Returns: An array of ``SignedURLResult`` values, one per input path.
+  /// - Throws: ``StorageError`` if the batch request itself fails.
   public func createSignedURLs(
     paths: [String],
     expiresIn: Int,
@@ -475,10 +703,23 @@ public struct StorageFileAPI {
     return signedURL
   }
 
-  /// Deletes files within the same bucket
-  /// - Parameters:
-  ///   - paths: An array of files to be deletes, including the path and file name. For example [`folder/image.png`].
-  /// - Returns: A list of removed ``FileObject``.
+  /// Deletes one or more files from the bucket.
+  ///
+  /// All listed paths are deleted in a single request. Non-existent paths are silently ignored.
+  ///
+  /// - Parameter paths: The paths of the files to delete, e.g. `["folder/image.png", "other.pdf"]`.
+  /// - Returns: An array of ``FileObject`` values describing the deleted files.
+  /// - Throws: ``StorageError`` if the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let deleted = try await storage.from("avatars").remove(paths: [
+  ///   "user-123/photo.png",
+  ///   "user-456/photo.png"
+  /// ])
+  /// print("Deleted \(deleted.count) file(s)")
+  /// ```
   @discardableResult
   public func remove(paths: [String]) async throws -> [FileObject] {
     try await client.fetchDecoded(
@@ -488,10 +729,30 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Lists all the files within a bucket.
+  /// Lists files and folders within the bucket, optionally scoped to a path prefix.
+  ///
+  /// Results include both files and virtual folder entries. Paginate large buckets using
+  /// ``SearchOptions/limit`` and ``SearchOptions/offset``.
+  ///
   /// - Parameters:
-  ///   - path: The folder path.
-  ///   - options: Search options, including `limit`, `offset`, and `sortBy`.
+  ///   - path: An optional folder path to list. When `nil`, lists the bucket root.
+  ///   - options: Filtering, sorting, and pagination options. Defaults to 100 items sorted
+  ///     by name ascending when `nil`.
+  /// - Returns: An array of ``FileObject`` values representing the matching files and folders.
+  /// - Throws: ``StorageError`` if the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // List all files in the "user-123" folder
+  /// let files = try await storage.from("avatars").list(path: "user-123")
+  ///
+  /// // Paginate with custom sort
+  /// let page2 = try await storage.from("photos").list(
+  ///   path: "gallery",
+  ///   options: SearchOptions(limit: 20, offset: 20, sortBy: SortBy(column: "created_at", order: "desc"))
+  /// )
+  /// ```
   public func list(
     path: String? = nil,
     options: SearchOptions? = nil
@@ -508,14 +769,34 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Downloads a file from a private bucket. For public buckets, make a request to the URL returned
-  /// from ``StorageFileApi/getPublicURL(path:download:fileName:options:)`` instead.
+  /// Downloads a file from the bucket and returns its raw bytes.
+  ///
+  /// Use this method for files in private buckets. For public buckets, construct a URL with
+  /// ``getPublicURL(path:download:options:cacheNonce:)`` and fetch it directly instead —
+  /// it avoids routing the bytes through the SDK.
+  ///
   /// - Parameters:
-  ///   - path: The file path to be downloaded, including the path and file name. For example `folder/image.png`.
-  ///   - options: Transform the asset before serving it to the client.
-  ///   - additionalQueryItems: Additional query items to be added to the request.
-  ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
-  /// - Returns: The data of the downloaded file.
+  ///   - path: The path of the file to download, e.g. `"folder/image.png"`.
+  ///   - options: Optional on-the-fly image transformation applied before the file is served.
+  ///     When non-`nil` and non-empty, the request is routed through the image rendering pipeline.
+  ///   - additionalQueryItems: Extra URL query parameters appended to the download request.
+  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter for cache
+  ///     invalidation.
+  /// - Returns: The raw file data.
+  /// - Throws: ``StorageError`` if the file does not exist or the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // Download raw file
+  /// let data = try await storage.from("private-docs").download(path: "user-123/report.pdf")
+  ///
+  /// // Download with image transformation
+  /// let thumbnail = try await storage.from("photos").download(
+  ///   path: "gallery/hero.jpg",
+  ///   options: TransformOptions(width: 100, height: 100, resize: "cover")
+  /// )
+  /// ```
   @discardableResult
   public func download(
     path: String,
@@ -544,14 +825,45 @@ public struct StorageFileAPI {
     return data
   }
 
-  /// Retrieves the details of an existing file.
+  /// Retrieves extended metadata for a file without downloading its contents.
+  ///
+  /// Returns a ``FileObjectV2`` that includes the file size, ETag, content type, and other
+  /// server-side metadata. To check only whether a file exists, prefer ``exists(path:)``.
+  ///
+  /// - Parameter path: The path of the file within the bucket, e.g. `"folder/image.png"`.
+  /// - Returns: A ``FileObjectV2`` containing the file's metadata.
+  /// - Throws: ``StorageError`` if the file does not exist or the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let info = try await storage.from("avatars").info(path: "user-123/photo.png")
+  /// print("Size: \(info.size ?? 0) bytes, type: \(info.contentType ?? "unknown")")
+  /// ```
   public func info(path: String) async throws -> FileObjectV2 {
     let _path = _getFinalPath(path)
 
     return try await client.fetchDecoded(.get, "object/info/\(_path)")
   }
 
-  /// Checks the existence of file.
+  /// Checks whether a file exists in the bucket.
+  ///
+  /// Issues a `HEAD` request and returns `true` if the server responds with a success status,
+  /// `false` if the server returns 400 or 404. Any other error is re-thrown.
+  ///
+  /// - Parameter path: The path of the file within the bucket, e.g. `"folder/image.png"`.
+  /// - Returns: `true` if the file exists, `false` if it does not.
+  /// - Throws: ``StorageError`` for server errors other than 400/404.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// if try await storage.from("avatars").exists(path: "user-123/photo.png") {
+  ///   print("File found")
+  /// } else {
+  ///   print("File not found")
+  /// }
+  /// ```
   public func exists(path: String) async throws -> Bool {
     do {
       try await client.fetchData(.head, "object/\(bucketId)/\(path)")
@@ -575,14 +887,43 @@ public struct StorageFileAPI {
     }
   }
 
-  /// A simple convenience function to get the URL for an asset in a public bucket. If you do not want to use this function, you can construct the public URL by concatenating the bucket URL with the path to the asset. This function does not verify if the bucket is public. If a public URL is created for a bucket which is not public, you will not be able to download the asset.
-  /// - Parameters:
-  ///  - path: The path and name of the file to generate the public URL for. For example `folder/image.png`.
-  ///  - download: Trigger a download with the specified file name.
-  ///  - options: Transform the asset before retrieving it on the client.
-  ///  - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  /// Returns the public URL for a file in a public bucket.
   ///
-  ///  - Note: The bucket needs to be set to public, either via ``StorageBucketApi/updateBucket(_:options:)`` or by going to Storage on [supabase.com/dashboard](https://supabase.com/dashboard), clicking the overflow menu on a bucket and choosing "Make public".
+  /// The URL is constructed locally without a network request. This method does **not** verify
+  /// that the bucket is actually public — requests to the returned URL will fail with a
+  /// permission error if the bucket is private.
+  ///
+  /// > Note: Make the bucket public via ``StorageClient/updateBucket(_:options:)`` (set
+  /// > `BucketOptions(public: true)`) or via the Supabase dashboard before using this method.
+  ///
+  /// - Parameters:
+  ///   - path: The path of the file within the bucket, e.g. `"folder/image.png"`.
+  ///   - download: When non-`nil`, the browser treats the URL as a file download and uses this
+  ///     string as the suggested file name. Pass an empty string (`""`) to use the original name.
+  ///   - options: Optional on-the-fly image transformation applied when the URL is fetched.
+  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter for cache
+  ///     invalidation.
+  /// - Returns: The public `URL` for the file.
+  /// - Throws: `URLError(.badURL)` if the resulting URL cannot be constructed.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // Plain public URL
+  /// let url = try storage.from("avatars").getPublicURL(path: "user-123/photo.png")
+  ///
+  /// // Resized thumbnail URL
+  /// let thumbURL = try storage.from("avatars").getPublicURL(
+  ///   path: "user-123/photo.png",
+  ///   options: TransformOptions(width: 100, height: 100, resize: "cover")
+  /// )
+  ///
+  /// // Force-download URL with a custom file name
+  /// let downloadURL = try storage.from("documents").getPublicURL(
+  ///   path: "report.pdf",
+  ///   download: "annual-report-2024.pdf"
+  /// )
+  /// ```
   public func getPublicURL(
     path: String,
     download: String? = nil,
@@ -625,14 +966,27 @@ public struct StorageFileAPI {
     return generatedUrl
   }
 
-  /// A simple convenience function to get the URL for an asset in a public bucket. If you do not want to use this function, you can construct the public URL by concatenating the bucket URL with the path to the asset. This function does not verify if the bucket is public. If a public URL is created for a bucket which is not public, you will not be able to download the asset.
-  /// - Parameters:
-  ///  - path: The path and name of the file to generate the public URL for. For example `folder/image.png`.
-  ///  - download: Trigger a download with the default file name.
-  ///  - options: Transform the asset before retrieving it on the client.
-  ///  - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  /// Returns the public URL for a file in a public bucket, with a boolean download trigger.
   ///
-  ///  - Note: The bucket needs to be set to public, either via ``StorageBucketApi/updateBucket(_:options:)`` or by going to Storage on [supabase.com/dashboard](https://supabase.com/dashboard), clicking the overflow menu on a bucket and choosing "Make public".
+  /// This overload is a convenience variant of
+  /// ``getPublicURL(path:download:options:cacheNonce:)`` that accepts a `Bool` instead of an
+  /// optional file name string. When `download` is `true`, the browser uses the original file
+  /// name for the download prompt.
+  ///
+  /// - Parameters:
+  ///   - path: The path of the file within the bucket, e.g. `"folder/image.png"`.
+  ///   - download: Pass `true` to trigger a browser download using the original file name.
+  ///   - options: Optional on-the-fly image transformation applied when the URL is fetched.
+  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter for cache
+  ///     invalidation.
+  /// - Returns: The public `URL` for the file.
+  /// - Throws: `URLError(.badURL)` if the resulting URL cannot be constructed.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let url = try storage.from("documents").getPublicURL(path: "report.pdf", download: true)
+  /// ```
   public func getPublicURL(
     path: String,
     download: Bool,
@@ -647,10 +1001,35 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Creates a signed upload URL. Signed upload URLs can be used to upload files to the bucket without further authentication. They are valid for 2 hours.
-  /// - Parameter path: The file path, including the current file name. For example `folder/image.png`.
-  /// - Returns: A URL that can be used to upload files to the bucket without further
-  /// authentication.
+  /// Creates a signed upload URL for uploading a file without further authentication.
+  ///
+  /// Signed upload URLs are valid for **2 hours** and allow anyone in possession of the URL to
+  /// upload a file to the specified path. This is useful for client-side uploads where you do not
+  /// want to expose Storage credentials.
+  ///
+  /// After calling this method, pass the returned ``SignedUploadURL/token`` to
+  /// ``uploadToSignedURL(_:token:data:options:)`` or
+  /// ``uploadToSignedURL(_:token:fileURL:options:)`` to perform the actual upload.
+  ///
+  /// - Parameters:
+  ///   - path: The destination path within the bucket, e.g. `"user-123/upload.png"`.
+  ///   - options: Optional overrides, such as enabling upsert behaviour.
+  /// - Returns: A ``SignedUploadURL`` containing the signed URL, path, and extracted token.
+  /// - Throws: ``StorageError`` if the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let signed = try await storage.from("uploads").createSignedUploadURL(path: "user-123/photo.png")
+  ///
+  /// // Later, upload the file using the signed token
+  /// try await storage.from("uploads").uploadToSignedURL(
+  ///   signed.path,
+  ///   token: signed.token,
+  ///   data: imageData,
+  ///   options: FileOptions(contentType: "image/png")
+  /// )
+  /// ```
   public func createSignedUploadURL(
     path: String,
     options: CreateSignedUploadURLOptions? = nil
@@ -703,13 +1082,32 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Upload a file with a token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
+  /// Uploads `Data` to a path using a token obtained from ``createSignedUploadURL(path:options:)``.
+  ///
+  /// The token must match the path and must not have expired (signed upload URLs are valid for
+  /// 2 hours).
+  ///
   /// - Parameters:
-  ///   - path: The file path, including the file name. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
-  ///   - token: The token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
-  ///   - data: The Data to be stored in the bucket.
-  ///   - options: HTTP headers, for example `cacheControl`.
-  /// - Returns: A key pointing to stored location.
+  ///   - path: The destination path within the bucket, matching the path used when the token
+  ///     was created.
+  ///   - token: The upload token from ``SignedUploadURL/token``.
+  ///   - data: The raw file bytes to store.
+  ///   - options: Upload options such as content type and cache duration.
+  /// - Returns: A ``SignedURLUploadResponse`` containing the path and full storage key.
+  /// - Throws: ``StorageError`` if the token is invalid or expired, or if the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let signed = try await storage.from("uploads").createSignedUploadURL(path: "file.pdf")
+  /// let response = try await storage.from("uploads").uploadToSignedURL(
+  ///   signed.path,
+  ///   token: signed.token,
+  ///   data: pdfData,
+  ///   options: FileOptions(contentType: "application/pdf")
+  /// )
+  /// print(response.fullPath)
+  /// ```
   @discardableResult
   public func uploadToSignedURL(
     _ path: String,
@@ -725,13 +1123,33 @@ public struct StorageFileAPI {
     )
   }
 
-  /// Upload a file with a token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
+  /// Uploads a file from a local `URL` to a path using a token obtained from
+  /// ``createSignedUploadURL(path:options:)``.
+  ///
+  /// For files ≥ 10 MB the SDK automatically streams from a temporary file on disk to avoid
+  /// loading the entire payload into memory.
+  ///
   /// - Parameters:
-  ///   - path: The file path, including the file name. Should be of the format `folder/subfolder/filename.png`. The bucket must already exist before attempting to upload.
-  ///   - token: The token generated from ``StorageFileApi/createSignedUploadURL(path:)``.
-  ///   - fileURL: The file URL to be stored in the bucket.
-  ///   - options: HTTP headers, for example `cacheControl`.
-  /// - Returns: A key pointing to stored location.
+  ///   - path: The destination path within the bucket, matching the path used when the token
+  ///     was created.
+  ///   - token: The upload token from ``SignedUploadURL/token``.
+  ///   - fileURL: A local `file://` URL pointing to the file to upload.
+  ///   - options: Upload options such as content type and cache duration.
+  ///     When `contentType` is `nil`, the MIME type is inferred from the file extension.
+  /// - Returns: A ``SignedURLUploadResponse`` containing the path and full storage key.
+  /// - Throws: ``StorageError`` if the token is invalid or expired, or if the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let fileURL = URL(fileURLWithPath: "/tmp/video.mp4")
+  /// let signed = try await storage.from("uploads").createSignedUploadURL(path: "user-123/video.mp4")
+  /// let response = try await storage.from("uploads").uploadToSignedURL(
+  ///   signed.path,
+  ///   token: signed.token,
+  ///   fileURL: fileURL
+  /// )
+  /// ```
   @discardableResult
   public func uploadToSignedURL(
     _ path: String,

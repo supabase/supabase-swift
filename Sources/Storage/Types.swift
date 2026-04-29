@@ -1,18 +1,43 @@
 import Foundation
 
+/// Parameters used to filter and paginate results from ``StorageFileAPI/list(path:options:)``.
+///
+/// All fields are optional; omitted fields fall back to server-side defaults (100 items per page,
+/// sorted by name ascending).
+///
+/// ## Example
+///
+/// ```swift
+/// // List up to 20 files inside "user-123/", sorted by creation date (newest first)
+/// let files = try await storage.from("documents").list(
+///   path: "user-123",
+///   options: SearchOptions(
+///     limit: 20,
+///     offset: 0,
+///     sortBy: SortBy(column: "created_at", order: "desc"),
+///     search: "report"
+///   )
+/// )
+/// ```
 public struct SearchOptions: Encodable, Sendable {
   var prefix: String
 
-  /// The number of files you want to be returned.
+  /// The maximum number of files to return. Defaults to `100` when `nil`.
   public var limit: Int?
 
-  /// The starting position.
+  /// The zero-based index of the first file to return. Use together with ``limit`` to paginate
+  /// results. Defaults to `0` when `nil`.
   public var offset: Int?
 
-  /// The column to sort by. Can be any column inside a ``FileObject``.
+  /// The column and direction used to sort the results.
+  ///
+  /// Can reference any property exposed on ``FileObject``, e.g. `"name"`, `"created_at"`,
+  /// `"updated_at"`. Defaults to ascending by `"name"` when `nil`.
   public var sortBy: SortBy?
 
-  /// The search string to filter files by.
+  /// A string used to filter files whose names contain the given value.
+  ///
+  /// Pass `nil` (the default) to return all files within the specified path.
   public var search: String?
 
   public init(
@@ -29,8 +54,20 @@ public struct SearchOptions: Encodable, Sendable {
   }
 }
 
+/// Defines the sort column and direction for a ``StorageFileAPI/list(path:options:)`` response.
+///
+/// ## Example
+///
+/// ```swift
+/// let options = SearchOptions(sortBy: SortBy(column: "updated_at", order: "desc"))
+/// ```
 public struct SortBy: Encodable, Sendable {
+  /// The column to sort by.
+  ///
+  /// Can be any field exposed in ``FileObject``, e.g. `"name"`, `"created_at"`, `"updated_at"`.
   public var column: String?
+
+  /// The sort direction: `"asc"` for ascending or `"desc"` for descending.
   public var order: String?
 
   public init(column: String? = nil, order: String? = nil) {
@@ -39,29 +76,55 @@ public struct SortBy: Encodable, Sendable {
   }
 }
 
+/// Options that control how a file is stored when uploading or updating it in a bucket.
+///
+/// Pass a `FileOptions` value to any of the upload or update methods on ``StorageFileAPI`` to
+/// customise caching behaviour, content type, upsert semantics, and optional metadata.
+///
+/// ## Example
+///
+/// ```swift
+/// let options = FileOptions(
+///   cacheControl: "86400",        // cache for 24 hours
+///   contentType: "image/jpeg",
+///   upsert: true,                  // overwrite if the path already exists
+///   metadata: ["userId": "abc123"]
+/// )
+/// try await storage.from("avatars").upload("user.jpg", data: jpegData, options: options)
+/// ```
 public struct FileOptions: Sendable {
-  /// The number of seconds the asset is cached in the browser and in the Supabase CDN. This is set
-  /// in the `Cache-Control: max-age=<seconds>` header. Defaults to 3600 seconds.
+  /// The number of seconds the asset is cached in the browser and in the Supabase CDN.
+  ///
+  /// Sets the `Cache-Control: max-age=<seconds>` response header. Defaults to `"3600"` (1 hour).
   public var cacheControl: String
 
-  /// The `Content-Type` header value.
+  /// The MIME type of the file, sent as the `Content-Type` header.
+  ///
+  /// When `nil`, the MIME type is inferred from the file extension. Defaults to `nil`.
   public var contentType: String?
 
-  /// When upsert is set to `true`, the file is overwritten if it exists. When set to `false`, an error
-  /// is thrown if the object already exists. Defaults to `false`.
+  /// Whether to overwrite an existing file at the same path.
+  ///
+  /// When `true`, any existing object at the path is silently replaced. When `false` (the
+  /// default), an error is returned if the path is already occupied.
   public var upsert: Bool
 
-  /// The duplex option is a string parameter that enables or disables duplex streaming, allowing
-  /// for both reading and writing data in the same stream. It can be passed as an option to the
-  /// fetch() method.
+  /// Enables or disables duplex streaming for the underlying fetch request.
+  ///
+  /// Pass `"half"` to enable half-duplex streaming. Leave `nil` (the default) for standard
+  /// request behaviour.
   public var duplex: String?
 
-  /// The metadata option is an object that allows you to store additional information about the file.
-  /// This information can be used to filter and search for files.
-  /// The metadata object can contain any key-value pairs you want to store.
+  /// Arbitrary key-value metadata attached to the object in the storage backend.
+  ///
+  /// Values must be JSON-serialisable. The metadata can be queried and filtered through the
+  /// Supabase Storage API. Defaults to `nil`.
   public var metadata: [String: AnyJSON]?
 
-  /// Optionally add extra headers.
+  /// Additional HTTP headers sent with the upload request.
+  ///
+  /// Use sparingly; most upload behaviour is controlled by the dedicated properties above.
+  /// Defaults to `nil`.
   public var headers: [String: String]?
 
   public init(
@@ -81,14 +144,19 @@ public struct FileOptions: Sendable {
   }
 }
 
+/// A signed URL together with its associated file path and an optional error message.
+///
+/// > Note: Prefer ``SignedURLResult`` for the per-item results returned by
+/// > ``StorageFileAPI/createSignedURLs(paths:expiresIn:download:cacheNonce:)``.
+/// > `SignedURL` is retained for backward compatibility.
 public struct SignedURL: Decodable, Sendable {
-  /// An optional error message.
+  /// An error message when the signed URL could not be generated. `nil` on success.
   public var error: String?
 
-  /// The signed url.
+  /// The ready-to-use signed URL.
   public var signedURL: URL
 
-  /// The path of the file.
+  /// The relative path of the file within the bucket.
   public var path: String
 
   public init(error: String? = nil, signedURL: URL, path: String) {
@@ -98,7 +166,8 @@ public struct SignedURL: Decodable, Sendable {
   }
 }
 
-/// Represents the per-item result of a ``StorageFileApi/createSignedURLs(paths:expiresIn:download:)`` call.
+/// Represents the per-item result of a
+/// ``StorageFileAPI/createSignedURLs(paths:expiresIn:download:cacheNonce:)`` call.
 ///
 /// It is guaranteed that exactly one case applies per item: either the URL was signed
 /// successfully, or the path did not exist / was inaccessible.
@@ -136,32 +205,89 @@ public enum SignedURLResult: Sendable {
   }
 }
 
+/// The result of ``StorageFileAPI/createSignedUploadURL(path:options:)``.
+///
+/// Use ``signedURL`` to perform a multipart upload without further authentication, and pass
+/// ``token`` to ``StorageFileAPI/uploadToSignedURL(_:token:data:options:)`` to complete the
+/// upload.
+///
+/// ## Example
+///
+/// ```swift
+/// let signed = try await storage.from("uploads").createSignedUploadURL(path: "report.pdf")
+/// try await storage.from("uploads").uploadToSignedURL(
+///   signed.path,
+///   token: signed.token,
+///   data: pdfData
+/// )
+/// ```
 public struct SignedUploadURL: Sendable {
+  /// The pre-signed URL to which the file should be uploaded.
   public let signedURL: URL
+
+  /// The relative path within the bucket where the file will be stored.
   public let path: String
+
+  /// The upload token embedded in ``signedURL``, extracted for convenience.
+  ///
+  /// Pass this value to ``StorageFileAPI/uploadToSignedURL(_:token:data:options:)`` or
+  /// ``StorageFileAPI/uploadToSignedURL(_:token:fileURL:options:)`` to perform the upload.
   public let token: String
 }
 
+/// The server's response after a successful file upload or update.
+///
+/// Returned by ``StorageFileAPI/upload(_:data:options:)``,
+/// ``StorageFileAPI/upload(_:fileURL:options:)``,
+/// ``StorageFileAPI/update(_:data:options:)``, and
+/// ``StorageFileAPI/update(_:fileURL:options:)``.
 public struct FileUploadResponse: Sendable {
+  /// The storage-object identifier assigned by Supabase.
   public let id: String
+
+  /// The relative path supplied at upload time, e.g. `"folder/image.png"`.
   public let path: String
+
+  /// The full storage key, including the bucket name prefix, e.g. `"avatars/folder/image.png"`.
   public let fullPath: String
 }
 
+/// The server's response after a successful upload via a signed upload URL.
+///
+/// Returned by ``StorageFileAPI/uploadToSignedURL(_:token:data:options:)`` and
+/// ``StorageFileAPI/uploadToSignedURL(_:token:fileURL:options:)``.
 public struct SignedURLUploadResponse: Sendable {
+  /// The relative path within the bucket where the file was stored.
   public let path: String
+
+  /// The full storage key, including the bucket name prefix.
   public let fullPath: String
 }
 
+/// Options for ``StorageFileAPI/createSignedUploadURL(path:options:)``.
 public struct CreateSignedUploadURLOptions: Sendable {
+  /// When `true`, any existing file at the target path is overwritten.
+  ///
+  /// Defaults to `false`, which means an error is returned if the path is already occupied.
   public var upsert: Bool
 
+  /// Creates signed upload URL options.
+  ///
+  /// - Parameter upsert: Pass `true` to overwrite an existing file at the upload path.
   public init(upsert: Bool) {
     self.upsert = upsert
   }
 }
 
+/// Options that control the destination when moving or copying a file.
+///
+/// Pass to ``StorageFileAPI/move(from:to:options:)`` or
+/// ``StorageFileAPI/copy(from:to:options:)``.
 public struct DestinationOptions: Sendable {
+  /// The identifier of the destination bucket.
+  ///
+  /// When `nil`, the operation stays within the same bucket as the source. Supply a bucket ID
+  /// to move or copy a file across buckets.
   public var destinationBucket: String?
 
   public init(destinationBucket: String? = nil) {
@@ -169,15 +295,38 @@ public struct DestinationOptions: Sendable {
   }
 }
 
+/// Metadata for a file or folder stored in a Supabase Storage bucket.
+///
+/// Returned by ``StorageFileAPI/list(path:options:)`` and ``StorageFileAPI/remove(paths:)``.
+/// Folders appear as `FileObject` values whose ``name`` ends with a trailing `/`.
 public struct FileObject: Identifiable, Hashable, Codable, Sendable {
+  /// The name of the file or folder, e.g. `"avatar.png"`.
   public var name: String
+
+  /// The identifier of the bucket that contains this object.
   public var bucketId: String?
+
+  /// The user ID of the object owner.
   public var owner: String?
+
+  /// The unique identifier of the storage object, assigned by Supabase.
   public var id: UUID?
+
+  /// When the object was last modified.
   public var updatedAt: Date?
+
+  /// When the object was first created.
   public var createdAt: Date?
+
+  /// When the object was last accessed.
   public var lastAccessedAt: Date?
+
+  /// Arbitrary key-value metadata attached to the object at upload time.
   public var metadata: [String: AnyJSON]?
+
+  /// The ``Bucket`` that contains this object.
+  ///
+  /// Populated only when the bucket details are joined in the query; otherwise `nil`.
   public var buckets: Bucket?
 
   public init(
@@ -215,19 +364,48 @@ public struct FileObject: Identifiable, Hashable, Codable, Sendable {
   }
 }
 
+/// Extended metadata for a file stored in a Supabase Storage bucket.
+///
+/// Returned by ``StorageFileAPI/info(path:)``. Unlike ``FileObject``, this type includes
+/// content-level details such as file size, ETag, and content type.
 public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
+  /// The unique storage identifier for the object.
   public let id: String
+
+  /// The internal version string of the object, used for cache busting.
   public let version: String
+
+  /// The name of the file, e.g. `"avatar.png"`.
   public let name: String
+
+  /// The identifier of the bucket that contains this object.
   public let bucketId: String?
+
+  /// When the object was last modified.
   public let updatedAt: Date?
+
+  /// When the object was first created.
   public let createdAt: Date?
+
+  /// When the object was last accessed.
   public let lastAccessedAt: Date?
+
+  /// The file size in bytes.
   public let size: Int?
+
+  /// The `Cache-Control` header value associated with the object.
   public let cacheControl: String?
+
+  /// The MIME content type of the object (e.g. `"image/png"`).
   public let contentType: String?
+
+  /// The ETag of the object, which can be used for conditional HTTP requests.
   public let etag: String?
+
+  /// The `Last-Modified` date as reported by the storage server.
   public let lastModified: Date?
+
+  /// Arbitrary key-value metadata attached to the object at upload time.
   public let metadata: [String: AnyJSON]?
 
   enum CodingKeys: String, CodingKey {
@@ -247,14 +425,37 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
   }
 }
 
+/// Metadata for a Supabase Storage bucket.
+///
+/// Returned by ``StorageClient/listBuckets()`` and ``StorageClient/getBucket(_:)``, and
+/// embedded in ``FileObject/buckets`` when bucket details are joined in a list query.
 public struct Bucket: Identifiable, Hashable, Codable, Sendable {
+  /// The unique identifier for the bucket.
   public var id: String
+
+  /// The human-readable display name of the bucket.
   public var name: String
+
+  /// The user ID of the bucket owner.
   public var owner: String
+
+  /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool
+
+  /// When the bucket was created.
   public var createdAt: Date
+
+  /// When the bucket was last updated.
   public var updatedAt: Date
+
+  /// The MIME types permitted for uploads into this bucket.
+  ///
+  /// `nil` means all MIME types are accepted.
   public var allowedMimeTypes: [String]?
+
+  /// The maximum file size in bytes that can be uploaded to this bucket.
+  ///
+  /// `nil` means the global project limit applies.
   public var fileSizeLimit: Int64?
 
   public init(
