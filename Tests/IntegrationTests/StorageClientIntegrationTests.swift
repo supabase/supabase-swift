@@ -50,7 +50,7 @@ final class StorageClientIntegrationTests: XCTestCase {
     var buckets = try await storage.listBuckets()
     XCTAssertFalse(buckets.contains(where: { $0.name == bucketName }))
 
-    try await storage.createBucket(bucketName, options: .init(public: true))
+    try await storage.createBucket(bucketName, options: .init(isPublic: true))
 
     var bucket = try await storage.getBucket(bucketName)
     XCTAssertEqual(bucket.name, bucketName)

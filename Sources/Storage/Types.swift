@@ -519,8 +519,7 @@ extension StorageByteCount: ExpressibleByIntegerLiteral {
 /// Options used when creating or updating a Storage bucket.
 ///
 /// Pass an instance to ``StorageClient/createBucket(_:options:)`` or
-/// ``StorageClient/updateBucket(_:options:)`` to configure bucket-level defaults for visibility,
-/// file-size limits, and allowed MIME types.
+/// ``StorageClient/updateBucket(_:options:)``.
 ///
 /// ## Example
 ///
@@ -529,24 +528,24 @@ extension StorageByteCount: ExpressibleByIntegerLiteral {
 /// try await storage.createBucket(
 ///   "avatars",
 ///   options: BucketOptions(
-///     public: true,
-///     fileSizeLimit: "5242880",
+///     isPublic: true,
+///     fileSizeLimit: .megabytes(5),
 ///     allowedMimeTypes: ["image/*"]
 ///   )
 /// )
 /// ```
 public struct BucketOptions: Sendable {
-  /// Whether the bucket is publicly accessible.
+  /// Whether the bucket is publicly accessible without an authorization token.
   ///
-  /// Public buckets allow file downloads without an authorization token. All other operations
-  /// (upload, delete, list) still require a valid token. Defaults to `false`.
-  public var `public`: Bool
+  /// Defaults to `false`.
+  public var isPublic: Bool
 
-  /// The maximum file size allowed for uploads, expressed in bytes as a string (e.g. `"5242880"` for 5 MB).
+  /// The maximum file size allowed for uploads.
   ///
-  /// The global project file-size limit takes precedence over this value.
+  /// Use ``StorageByteCount`` factory methods for readable values:
+  /// `.megabytes(5)`, `.gigabytes(1)`, or an integer literal for raw bytes.
   /// Pass `nil` to impose no per-bucket limit (the default).
-  public var fileSizeLimit: String?
+  public var fileSizeLimit: StorageByteCount?
 
   /// MIME types accepted during upload to this bucket.
   ///
@@ -555,11 +554,11 @@ public struct BucketOptions: Sendable {
   public var allowedMimeTypes: [String]?
 
   public init(
-    public: Bool = false,
-    fileSizeLimit: String? = nil,
+    isPublic: Bool = false,
+    fileSizeLimit: StorageByteCount? = nil,
     allowedMimeTypes: [String]? = nil
   ) {
-    self.public = `public`
+    self.isPublic = isPublic
     self.fileSizeLimit = fileSizeLimit
     self.allowedMimeTypes = allowedMimeTypes
   }

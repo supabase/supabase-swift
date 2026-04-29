@@ -119,7 +119,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testUploadFileWithinFileSizeLimit() async throws {
     bucketName = try await newBucket(
       prefix: "with-limit",
-      options: BucketOptions(public: true, fileSizeLimit: "1mb")
+      options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1))
     )
 
     try await storage.from(bucketName).upload(uploadPath, data: file)
@@ -128,7 +128,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testUploadFileThatExceedFileSizeLimit() async throws {
     bucketName = try await newBucket(
       prefix: "with-limit",
-      options: BucketOptions(public: true, fileSizeLimit: "1kb")
+      options: BucketOptions(isPublic: true, fileSizeLimit: .kilobytes(1))
     )
 
     do {
@@ -152,7 +152,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testUploadFileWithValidMimeType() async throws {
     bucketName = try await newBucket(
       prefix: "with-mimetype",
-      options: BucketOptions(public: true, allowedMimeTypes: ["image/jpeg"])
+      options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/jpeg"])
     )
 
     try await storage.from(bucketName).upload(
@@ -167,7 +167,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testUploadFileWithInvalidMimeType() async throws {
     bucketName = try await newBucket(
       prefix: "with-mimetype",
-      options: BucketOptions(public: true, allowedMimeTypes: ["image/png"])
+      options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/png"])
     )
 
     do {
@@ -400,7 +400,7 @@ final class StorageFileIntegrationTests: XCTestCase {
 
   private func newBucket(
     prefix: String = "",
-    options: BucketOptions = BucketOptions(public: true)
+    options: BucketOptions = BucketOptions(isPublic: true)
   ) async throws -> String {
     let bucketName = "\(!prefix.isEmpty ? prefix + "-" : "")bucket-\(UUID().uuidString)"
     return try await findOrCreateBucket(name: bucketName, options: options)
@@ -409,7 +409,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   @discardableResult
   private func findOrCreateBucket(
     name: String,
-    options: BucketOptions = BucketOptions(public: true)
+    options: BucketOptions = BucketOptions(isPublic: true)
   ) async throws -> String {
     do {
       _ = try await storage.getBucket(name)
