@@ -156,7 +156,8 @@ public struct StorageFileAPI: Sendable {
     method: HTTPMethod,
     path: String,
     file: FileUpload,
-    options: FileOptions?
+    options: FileOptions?,
+    progress: (@Sendable (UploadProgress) -> Void)? = nil
   ) async throws -> FileUploadResponse {
     let options = options ?? defaultFileOptions
     let cleanPath = _removeEmptyFolders(path)
@@ -173,7 +174,8 @@ public struct StorageFileAPI: Sendable {
       path: path,
       file: file,
       options: options,
-      headers: headers
+      headers: headers,
+      progress: progress
     )
 
     return FileUploadResponse(
@@ -212,13 +214,15 @@ public struct StorageFileAPI: Sendable {
   public func upload(
     _ path: String,
     data: Data,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    progress: (@Sendable (UploadProgress) -> Void)? = nil
   ) async throws -> FileUploadResponse {
     try await _uploadOrUpdate(
       method: .post,
       path: path,
       file: .data(data),
-      options: options
+      options: options,
+      progress: progress
     )
   }
 
@@ -250,13 +254,15 @@ public struct StorageFileAPI: Sendable {
   public func upload(
     _ path: String,
     fileURL: URL,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    progress: (@Sendable (UploadProgress) -> Void)? = nil
   ) async throws -> FileUploadResponse {
     try await _uploadOrUpdate(
       method: .post,
       path: path,
       file: .url(fileURL),
-      options: options
+      options: options,
+      progress: progress
     )
   }
 
@@ -287,13 +293,15 @@ public struct StorageFileAPI: Sendable {
   public func update(
     _ path: String,
     data: Data,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    progress: (@Sendable (UploadProgress) -> Void)? = nil
   ) async throws -> FileUploadResponse {
     try await _uploadOrUpdate(
       method: .put,
       path: path,
       file: .data(data),
-      options: options
+      options: options,
+      progress: progress
     )
   }
 
@@ -321,13 +329,15 @@ public struct StorageFileAPI: Sendable {
   public func update(
     _ path: String,
     fileURL: URL,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    progress: (@Sendable (UploadProgress) -> Void)? = nil
   ) async throws -> FileUploadResponse {
     try await _uploadOrUpdate(
       method: .put,
       path: path,
       file: .url(fileURL),
-      options: options
+      options: options,
+      progress: progress
     )
   }
 
@@ -880,13 +890,15 @@ public struct StorageFileAPI: Sendable {
     _ path: String,
     token: String,
     data: Data,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    progress: (@Sendable (UploadProgress) -> Void)? = nil
   ) async throws -> SignedURLUploadResponse {
     try await _uploadToSignedURL(
       path: path,
       token: token,
       file: .data(data),
-      options: options
+      options: options,
+      progress: progress
     )
   }
 
@@ -922,13 +934,15 @@ public struct StorageFileAPI: Sendable {
     _ path: String,
     token: String,
     fileURL: URL,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    progress: (@Sendable (UploadProgress) -> Void)? = nil
   ) async throws -> SignedURLUploadResponse {
     try await _uploadToSignedURL(
       path: path,
       token: token,
       file: .url(fileURL),
-      options: options
+      options: options,
+      progress: progress
     )
   }
 
@@ -936,7 +950,8 @@ public struct StorageFileAPI: Sendable {
     path: String,
     token: String,
     file: FileUpload,
-    options: FileOptions
+    options: FileOptions,
+    progress: (@Sendable (UploadProgress) -> Void)? = nil
   ) async throws -> SignedURLUploadResponse {
     var headers = multipartHeaders(options: options)
     headers[Header.xUpsert] = "\(options.upsert)"
@@ -950,7 +965,8 @@ public struct StorageFileAPI: Sendable {
       path: path,
       file: file,
       options: options,
-      headers: headers
+      headers: headers,
+      progress: progress
     )
 
     return SignedURLUploadResponse(path: path, fullPath: response.Key)
@@ -962,7 +978,8 @@ public struct StorageFileAPI: Sendable {
     path: String,
     file: FileUpload,
     options: FileOptions,
-    headers: [String: String]
+    headers: [String: String],
+    progress: (@Sendable (UploadProgress) -> Void)? = nil
   ) async throws -> Response {
     #if DEBUG
       let builder = MultipartBuilder(
@@ -986,6 +1003,8 @@ public struct StorageFileAPI: Sendable {
       headers: client.mergedHeaders(headers)
     )
 
+    let delegate = progress.map { UploadProgressDelegate(onProgress: $0) }
+
     do {
       client.logRequest(method, url: url)
       let data: Data
@@ -997,12 +1016,14 @@ public struct StorageFileAPI: Sendable {
 
         (data, response) = try await client.http.session.upload(
           for: request,
-          fromFile: tempFile
+          fromFile: tempFile,
+          delegate: delegate
         )
       } else {
         (data, response) = try await client.http.session.upload(
           for: request,
-          from: try multipart.buildInMemory()
+          from: try multipart.buildInMemory(),
+          delegate: delegate
         )
       }
 
@@ -1049,6 +1070,31 @@ public struct StorageFileAPI: Sendable {
 
   private func _getFinalPath(_ path: String) -> String {
     "\(bucketId)/\(path)"
+  }
+}
+
+// MARK: - Upload progress
+
+private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+  private let onProgress: @Sendable (UploadProgress) -> Void
+
+  init(onProgress: @escaping @Sendable (UploadProgress) -> Void) {
+    self.onProgress = onProgress
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    didSendBodyData bytesSent: Int64,
+    totalBytesSent: Int64,
+    totalBytesExpectedToSend: Int64
+  ) {
+    onProgress(
+      UploadProgress(
+        totalBytesSent: totalBytesSent,
+        totalBytesExpectedToSend: totalBytesExpectedToSend
+      )
+    )
   }
 }
 

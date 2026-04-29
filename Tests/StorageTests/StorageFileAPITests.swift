@@ -1160,6 +1160,35 @@ final class StorageFileAPITests: XCTestCase {
       "\(self.url)/object/public/bucket/file.txt?cacheNonce=abc123")
   }
 
+  func testUploadWithProgressClosure() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/file.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Id": "123",
+            "Key": "bucket/file.txt"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    // Verify upload succeeds when a progress handler is provided.
+    let response = try await storage.from("bucket").upload(
+      "file.txt",
+      data: Data("hello world".utf8),
+      progress: { _ in }
+    )
+
+    XCTAssertEqual(response.id, "123")
+    XCTAssertEqual(response.path, "file.txt")
+    XCTAssertEqual(response.fullPath, "bucket/file.txt")
+  }
+
   func testDownload_cacheNonce() async throws {
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
