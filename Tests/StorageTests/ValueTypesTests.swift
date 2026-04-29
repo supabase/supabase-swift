@@ -77,4 +77,15 @@ struct ValueTypesTests {
       Issue.record("Expected .downloadAs case")
     }
   }
+
+  // MARK: - SortBy
+
+  @Test func sortBy_encodesOrderAsRawValue() throws {
+    let sortBy = SortBy(column: "name", order: .descending)
+    let encoder = JSONEncoder()
+    let data = try encoder.encode(sortBy)
+    let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+    #expect(json["column"] as? String == "name")
+    #expect(json["order"] as? String == "desc")
+  }
 }
