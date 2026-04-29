@@ -117,28 +117,6 @@ public struct FileOptions: Sendable {
   }
 }
 
-/// A signed URL together with its associated file path and an optional error message.
-///
-/// > Note: Prefer ``SignedURLResult`` for the per-item results returned by
-/// > ``StorageFileAPI/createSignedURLs(paths:expiresIn:download:cacheNonce:)``.
-/// > `SignedURL` is retained for backward compatibility.
-public struct SignedURL: Decodable, Sendable {
-  /// An error message when the signed URL could not be generated. `nil` on success.
-  public var error: String?
-
-  /// The ready-to-use signed URL.
-  public var signedURL: URL
-
-  /// The relative path of the file within the bucket.
-  public var path: String
-
-  public init(error: String? = nil, signedURL: URL, path: String) {
-    self.error = error
-    self.signedURL = signedURL
-    self.path = path
-  }
-}
-
 /// Represents the per-item result of a
 /// ``StorageFileAPI/createSignedURLs(paths:expiresIn:download:cacheNonce:)`` call.
 ///
@@ -337,11 +315,12 @@ public struct FileObject: Identifiable, Hashable, Codable, Sendable {
   }
 }
 
-/// Extended metadata for a file stored in a Supabase Storage bucket.
+/// Detailed metadata for a file stored in a Supabase Storage bucket.
 ///
-/// Returned by ``StorageFileAPI/info(path:)``. Unlike ``FileObject``, this type includes
-/// content-level details such as file size, ETag, and content type.
-public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
+/// Returned by ``StorageFileAPI/info(path:)``. Includes content-level details
+/// such as file size, ETag, and content type that are not available in the
+/// directory-listing type ``FileObject``.
+public struct FileInfo: Identifiable, Hashable, Decodable, Sendable {
   /// The unique storage identifier for the object.
   public let id: String
 
@@ -372,7 +351,7 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
   /// The MIME content type of the object (e.g. `"image/png"`).
   public let contentType: String?
 
-  /// The ETag of the object, which can be used for conditional HTTP requests.
+  /// The ETag of the object, for conditional HTTP requests.
   public let etag: String?
 
   /// The `Last-Modified` date as reported by the storage server.
