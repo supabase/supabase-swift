@@ -8,6 +8,10 @@
 import Foundation
 import Storage
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 extension StorageClient {
   static func test(
     supabaseURL: String,
