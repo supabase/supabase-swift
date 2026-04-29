@@ -1,5 +1,5 @@
 import Foundation
-import HTTPTypes
+import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -24,32 +24,59 @@ enum FileUpload {
   case data(Data)
   case url(URL)
 
-  func encode(
-    to formData: MultipartFormData,
+  func append(
+    to builder: MultipartBuilder,
     withPath path: String,
     options: FileOptions
-  ) {
-    formData.append(
-      options.cacheControl.data(using: .utf8)!,
-      withName: "cacheControl"
-    )
+  ) -> MultipartBuilder {
+    var builder = builder.addText(name: "cacheControl", value: options.cacheControl)
 
     if let metadata = options.metadata {
-      formData.append(encodeMetadata(metadata), withName: "metadata")
+      builder = builder.addText(
+        name: "metadata",
+        value: String(data: encodeMetadata(metadata), encoding: .utf8) ?? ""
+      )
     }
 
     switch self {
     case .data(let data):
-      formData.append(
-        data,
-        withName: "",
+      return builder.addData(
+        name: "",
+        data: data,
         fileName: path.fileName,
         mimeType: options.contentType
           ?? mimeType(forPathExtension: path.pathExtension)
       )
 
     case .url(let url):
-      formData.append(url, withName: "")
+      return builder.addFile(
+        name: "",
+        fileURL: url,
+        fileName: url.lastPathComponent,
+        mimeType: options.contentType
+          ?? mimeType(forPathExtension: url.pathExtension)
+      )
+    }
+  }
+
+  var usesTempFileUpload: Bool {
+    get throws {
+      guard case .url(let url) = self else { return false }
+
+      let fileSize = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+      return fileSize >= 10 * 1024 * 1024
+    }
+  }
+
+  func defaultOptions() -> FileOptions {
+    switch self {
+    case .data:
+      return defaultFileOptions
+
+    case .url:
+      var options = defaultFileOptions
+      options.contentType = nil
+      return options
     }
   }
 }
@@ -66,9 +93,9 @@ enum FileUpload {
 public struct StorageFileAPI {
   /// The bucket id to operate on.
   let bucketId: String
-  let client: SupabaseStorageClient
+  let client: StorageClient
 
-  init(bucketId: String, client: SupabaseStorageClient) {
+  init(bucketId: String, client: StorageClient) {
     self.bucketId = bucketId
     self.client = client
   }
@@ -87,47 +114,45 @@ public struct StorageFileAPI {
     let error: String?
   }
 
+  private enum Header {
+    static let cacheControl = "Cache-Control"
+    static let contentType = "Content-Type"
+    static let duplex = "duplex"
+    static let xUpsert = "x-upsert"
+  }
+
+  private struct UploadResponse: Decodable {
+    let Key: String
+    let Id: String
+  }
+
+  private struct SignedUploadResponse: Decodable {
+    let Key: String
+  }
+
   private func _uploadOrUpdate(
-    method: HTTPTypes.HTTPRequest.Method,
+    method: HTTPMethod,
     path: String,
     file: FileUpload,
     options: FileOptions?
   ) async throws -> FileUploadResponse {
     let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
-
-    if method == .post {
-      headers[.xUpsert] = "\(options.upsert)"
-    }
-
-    headers[.duplex] = options.duplex
-
-    #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary.value)
-    #else
-      let formData = MultipartFormData()
-    #endif
-    file.encode(to: formData, withPath: path, options: options)
-
-    struct UploadResponse: Decodable {
-      let Key: String
-      let Id: String
-    }
-
     let cleanPath = _removeEmptyFolders(path)
     let _path = _getFinalPath(cleanPath)
 
-    let response = try await client.execute(
-      HTTPRequest(
-        url: client.configuration.url.appendingPathComponent("object/\(_path)"),
-        method: method,
-        query: [],
-        formData: formData,
-        options: options,
-        headers: headers
-      )
+    var headers = multipartHeaders(options: options)
+    if method == .post {
+      headers[Header.xUpsert] = "\(options.upsert)"
+    }
+
+    let response: UploadResponse = try await uploadMultipart(
+      method,
+      url: client.configuration.url.appendingPathComponent("object/\(_path)"),
+      path: path,
+      file: file,
+      options: options,
+      headers: headers
     )
-    .decoded(as: UploadResponse.self, decoder: client.configuration.decoder)
 
     return FileUploadResponse(
       id: response.Id,
@@ -143,97 +168,8 @@ public struct StorageFileAPI {
     to path: String,
     options: FileOptions? = nil
   ) async throws -> FileUploadResponse {
-    let cleanPath = _removeEmptyFolders(path)
-
-    let url = client.configuration.url
-      .appendingPathComponent("object")
-      .appendingPathComponent(bucketId)
-      .appendingPathComponent(cleanPath)
-
-    let options = options ?? defaultFileOptions
-    var headers = options.headers ?? [:]
-    if options.upsert {
-      headers["x-upsert"] = "true"
-    }
-    headers["duplex"] = options.duplex
-
-    let boundary = "----sb-\(UUID().uuidString)"
-
-    var request = try await client.httpClient.createRequest(
-      .post,
-      url: url,
-      headers: headers
-    )
-    request.setValue(
-      "multipart/form-data; boundary=\(boundary)",
-      forHTTPHeaderField: "Content-Type"
-    )
-
-    // Determine file size for streaming decision
-    let fileSize =
-      try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-    let threshold = 10 * 1024 * 1024  // 10MB
-    let shouldStream = fileSize >= threshold
-
-    let mimeType =
-      options.contentType ?? mimeType(forPathExtension: fileURL.pathExtension)
-
-    let formData = MultipartBuilder(boundary: boundary)
-      .addText(name: "cacheControl", value: options.cacheControl)
-      .addOptionalText(
-        name: "metadata",
-        value: options.metadata.flatMap {
-          String(data: encodeMetadata($0), encoding: .utf8)
-        }
-      )
-
-    let responseBody: Data
-
-    if shouldStream {
-      // Large file: stream using a temp file to avoid loading the entire file into memory
-      let tempFile =
-        try formData
-        .addFile(name: "", fileURL: fileURL, mimeType: mimeType)
-        .buildToTempFile()
-      defer { try? FileManager.default.removeItem(at: tempFile) }
-
-      let (data, response) = try await client.httpClient.session.upload(
-        for: request,
-        fromFile: tempFile
-      )
-      _ = try client.httpClient.validateResponse(response)
-
-      responseBody = data
-    } else {
-      // Small file: build in memory and upload directly
-      let body =
-        try formData
-        .addFile(name: "", fileURL: fileURL, mimeType: mimeType)
-        .buildInMemory()
-      let (data, response) = try await client.httpClient.session.upload(
-        for: request,
-        from: body
-      )
-      _ = try client.httpClient.validateResponse(response)
-
-      responseBody = data
-
-    }
-
-    struct UploadResponse: Decodable {
-      let Key: String
-      let Id: String
-    }
-
-    let uploadResponse = try client.configuration.decoder.decode(
-      UploadResponse.self,
-      from: responseBody
-    )
-    return FileUploadResponse(
-      id: uploadResponse.Id,
-      path: path,
-      fullPath: uploadResponse.Key
-    )
+    try await upload(
+      path, fileURL: fileURL, options: options ?? FileUpload.url(fileURL).defaultOptions())
   }
 
   /// Uploads a file to an existing bucket.
@@ -322,19 +258,17 @@ public struct StorageFileAPI {
     to destination: String,
     options: DestinationOptions? = nil
   ) async throws {
-    try await client.execute(
-      HTTPRequest(
-        url: client.configuration.url.appendingPathComponent("object/move"),
-        method: .post,
-        body: client.configuration.encoder.encode(
-          [
-            "bucketId": bucketId,
-            "sourceKey": source,
-            "destinationKey": destination,
-            "destinationBucket": options?.destinationBucket,
-          ]
-        )
-      )
+    let body: [String: String?] = [
+      "bucketId": bucketId,
+      "sourceKey": source,
+      "destinationKey": destination,
+      "destinationBucket": options?.destinationBucket,
+    ]
+
+    try await client.fetchData(
+      .post,
+      "object/move",
+      body: .data(client.configuration.encoder.encode(body))
     )
   }
 
@@ -353,22 +287,20 @@ public struct StorageFileAPI {
       let Key: String
     }
 
-    return try await client.execute(
-      HTTPRequest(
-        url: client.configuration.url.appendingPathComponent("object/copy"),
-        method: .post,
-        body: client.configuration.encoder.encode(
-          [
-            "bucketId": bucketId,
-            "sourceKey": source,
-            "destinationKey": destination,
-            "destinationBucket": options?.destinationBucket,
-          ]
-        )
-      )
+    let body: [String: String?] = [
+      "bucketId": bucketId,
+      "sourceKey": source,
+      "destinationKey": destination,
+      "destinationBucket": options?.destinationBucket,
+    ]
+
+    let response: UploadResponse = try await client.fetchDecoded(
+      .post,
+      "object/copy",
+      body: .data(client.configuration.encoder.encode(body))
     )
-    .decoded(as: UploadResponse.self, decoder: client.configuration.decoder)
-    .Key
+
+    return response.Key
   }
 
   /// Creates a signed URL. Use a signed URL to share a file for a fixed amount of time.
@@ -392,20 +324,14 @@ public struct StorageFileAPI {
 
     let encoder = JSONEncoder.unconfiguredEncoder
 
-    let response = try await client.execute(
-      HTTPRequest(
-        url: client.configuration.url.appendingPathComponent(
-          "object/sign/\(bucketId)/\(path)"
-        ),
-        method: .post,
-        body: encoder.encode(
+    let response: SignedURLAPIResponse = try await client.fetchDecoded(
+      .post,
+      "object/sign/\(bucketId)/\(path)",
+      body: .data(
+        encoder.encode(
           Body(expiresIn: expiresIn, transform: transform)
         )
       )
-    )
-    .decoded(
-      as: SignedURLAPIResponse.self,
-      decoder: client.configuration.decoder
     )
 
     return try makeSignedURL(
@@ -460,20 +386,14 @@ public struct StorageFileAPI {
 
     let encoder = JSONEncoder.unconfiguredEncoder
 
-    let response = try await client.execute(
-      HTTPRequest(
-        url: client.configuration.url.appendingPathComponent(
-          "object/sign/\(bucketId)"
-        ),
-        method: .post,
-        body: encoder.encode(
+    let response: [SignedURLsAPIResponse] = try await client.fetchDecoded(
+      .post,
+      "object/sign/\(bucketId)",
+      body: .data(
+        encoder.encode(
           Params(expiresIn: expiresIn, paths: paths)
         )
       )
-    )
-    .decoded(
-      as: [SignedURLsAPIResponse].self,
-      decoder: client.configuration.decoder
     )
 
     return try response.map { item in
@@ -561,16 +481,11 @@ public struct StorageFileAPI {
   /// - Returns: A list of removed ``FileObject``.
   @discardableResult
   public func remove(paths: [String]) async throws -> [FileObject] {
-    try await client.execute(
-      HTTPRequest(
-        url: client.configuration.url.appendingPathComponent(
-          "object/\(bucketId)"
-        ),
-        method: .delete,
-        body: client.configuration.encoder.encode(["prefixes": paths])
-      )
+    try await client.fetchDecoded(
+      .delete,
+      "object/\(bucketId)",
+      body: .data(client.configuration.encoder.encode(["prefixes": paths]))
     )
-    .decoded(decoder: client.configuration.decoder)
   }
 
   /// Lists all the files within a bucket.
@@ -586,16 +501,11 @@ public struct StorageFileAPI {
     var options = options ?? defaultSearchOptions
     options.prefix = path ?? ""
 
-    return try await client.execute(
-      HTTPRequest(
-        url: client.configuration.url.appendingPathComponent(
-          "object/list/\(bucketId)"
-        ),
-        method: .post,
-        body: encoder.encode(options)
-      )
+    return try await client.fetchDecoded(
+      .post,
+      "object/list/\(bucketId)",
+      body: .data(encoder.encode(options))
     )
-    .decoded(decoder: client.configuration.decoder)
   }
 
   /// Downloads a file from a private bucket. For public buckets, make a request to the URL returned
@@ -627,43 +537,24 @@ public struct StorageFileAPI {
       queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
     }
 
-    return try await client.execute(
-      HTTPRequest(
-        url: client.configuration.url
-          .appendingPathComponent("\(renderPath)/\(_path)"),
-        method: .get,
-        query: queryItems
-      )
+    let (data, _) = try await client.fetchData(
+      .get,
+      url: storageURL(path: "\(renderPath)/\(_path)", queryItems: queryItems)
     )
-    .data
+    return data
   }
 
   /// Retrieves the details of an existing file.
   public func info(path: String) async throws -> FileObjectV2 {
     let _path = _getFinalPath(path)
 
-    return try await client.execute(
-      HTTPRequest(
-        url: client.configuration.url.appendingPathComponent(
-          "object/info/\(_path)"
-        ),
-        method: .get
-      )
-    )
-    .decoded(decoder: client.configuration.decoder)
+    return try await client.fetchDecoded(.get, "object/info/\(_path)")
   }
 
   /// Checks the existence of file.
   public func exists(path: String) async throws -> Bool {
     do {
-      try await client.execute(
-        HTTPRequest(
-          url: client.configuration.url.appendingPathComponent(
-            "object/\(bucketId)/\(path)"
-          ),
-          method: .head
-        )
-      )
+      try await client.fetchData(.head, "object/\(bucketId)/\(path)")
       return true
     } catch {
       var statusCode: Int?
@@ -672,6 +563,8 @@ public struct StorageFileAPI {
         statusCode = error.statusCode.flatMap(Int.init)
       } else if let error = error as? HTTPError {
         statusCode = error.response.statusCode
+      } else if case HTTPClientError.responseError(let response, _) = error {
+        statusCode = response.statusCode
       }
 
       if let statusCode, [400, 404].contains(statusCode) {
@@ -766,21 +659,16 @@ public struct StorageFileAPI {
       let url: String
     }
 
-    var headers = HTTPFields()
+    var headers = [String: String]()
     if let upsert = options?.upsert, upsert {
-      headers[.xUpsert] = "true"
+      headers[Header.xUpsert] = "true"
     }
 
-    let response = try await client.execute(
-      HTTPRequest(
-        url: client.configuration.url.appendingPathComponent(
-          "object/upload/sign/\(bucketId)/\(path)"
-        ),
-        method: .post,
-        headers: headers
-      )
+    let response: Response = try await client.fetchDecoded(
+      .post,
+      "object/upload/sign/\(bucketId)/\(path)",
+      headers: headers
     )
-    .decoded(as: Response.self, decoder: client.configuration.decoder)
 
     let signedURL = try makeSignedURL(response.url, download: nil)
 
@@ -865,48 +753,124 @@ public struct StorageFileAPI {
     file: FileUpload,
     options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
-    let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    let options = options ?? file.defaultOptions()
+    var headers = multipartHeaders(options: options)
+    headers[Header.xUpsert] = "\(options.upsert)"
 
-    headers[.xUpsert] = "\(options.upsert)"
-    headers[.duplex] = options.duplex
+    let response: SignedUploadResponse = try await uploadMultipart(
+      .put,
+      url: storageURL(
+        path: "object/upload/sign/\(bucketId)/\(path)",
+        queryItems: [URLQueryItem(name: "token", value: token)]
+      ),
+      path: path,
+      file: file,
+      options: options,
+      headers: headers
+    )
 
+    return SignedURLUploadResponse(path: path, fullPath: response.Key)
+  }
+
+  private func uploadMultipart<Response: Decodable>(
+    _ method: HTTPMethod,
+    url: URL,
+    path: String,
+    file: FileUpload,
+    options: FileOptions,
+    headers: [String: String]
+  ) async throws -> Response {
     #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary.value)
+      let builder = MultipartBuilder(
+        boundary: testingBoundary.value ?? "----sb-\(UUID().uuidString)")
     #else
-      let formData = MultipartFormData()
+      let builder = MultipartBuilder()
     #endif
-    file.encode(to: formData, withPath: path, options: options)
 
-    struct UploadResponse: Decodable {
-      let Key: String
+    let multipart = file.append(
+      to: builder,
+      withPath: path,
+      options: options
+    )
+
+    var headers = headers
+    headers[Header.contentType] = multipart.contentType
+
+    let request = try await client.http.createRequest(
+      method,
+      url: url,
+      headers: client.mergedHeaders(headers)
+    )
+
+    do {
+      client.logRequest(method, url: url)
+      let data: Data
+      let response: URLResponse
+
+      if try file.usesTempFileUpload {
+        let tempFile = try multipart.buildToTempFile()
+        defer { try? FileManager.default.removeItem(at: tempFile) }
+
+        (data, response) = try await client.http.session.upload(
+          for: request,
+          fromFile: tempFile
+        )
+      } else {
+        (data, response) = try await client.http.session.upload(
+          for: request,
+          from: try multipart.buildInMemory()
+        )
+      }
+
+      let httpResponse = try client.http.validateResponse(response, data: data)
+      client.logResponse(httpResponse, data: data)
+      return try client.configuration.decoder.decode(Response.self, from: data)
+    } catch {
+      client.logFailure(error)
+      throw translateStorageError(error)
+    }
+  }
+
+  private func multipartHeaders(options: FileOptions) -> [String: String] {
+    var headers = options.headers ?? [:]
+    headers.setIfMissing(Header.cacheControl, value: "max-age=\(options.cacheControl)")
+
+    if let duplex = options.duplex {
+      headers[Header.duplex] = duplex
     }
 
-    let fullPath = try await client.execute(
-      HTTPRequest(
-        url: client.configuration.url
-          .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
-        method: .put,
-        query: [URLQueryItem(name: "token", value: token)],
-        formData: formData,
-        options: options,
-        headers: headers
-      )
-    )
-    .decoded(as: UploadResponse.self, decoder: client.configuration.decoder)
-    .Key
+    return headers
+  }
 
-    return SignedURLUploadResponse(path: path, fullPath: fullPath)
+  private func storageURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
+    var components = URLComponents(
+      url: client.configuration.url.appendingPathComponent(path),
+      resolvingAgainstBaseURL: false
+    )
+    components?.queryItems = queryItems.isEmpty ? nil : queryItems
+
+    guard let url = components?.url else {
+      throw URLError(.badURL)
+    }
+
+    return url
+  }
+
+  private func translateStorageError(_ error: any Error) -> any Error {
+    guard case HTTPClientError.responseError(let response, let data) = error else {
+      return error
+    }
+
+    if let storageError = try? client.configuration.decoder.decode(StorageError.self, from: data) {
+      return storageError
+    }
+
+    return HTTPError(data: data, response: response)
   }
 
   private func _getFinalPath(_ path: String) -> String {
     "\(bucketId)/\(path)"
   }
-}
-
-extension HTTPField.Name {
-  static let duplex = Self("duplex")!
-  static let xUpsert = Self("x-upsert")!
 }
 
 func _removeEmptyFolders(_ path: String) -> String {
@@ -917,4 +881,14 @@ func _removeEmptyFolders(_ path: String) -> String {
     options: .regularExpression
   )
   return cleanedPath
+}
+
+extension [String: String] {
+  fileprivate mutating func setIfMissing(_ key: String, value: String) {
+    guard keys.first(where: { $0.caseInsensitiveCompare(key) == .orderedSame }) == nil else {
+      return
+    }
+
+    self[key] = value
+  }
 }

@@ -14,7 +14,7 @@ import XCTest
 #endif
 
 final class StorageFileIntegrationTests: XCTestCase {
-  let storage = SupabaseStorageClient(
+  let storage = StorageClient(
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
       headers: [
