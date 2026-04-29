@@ -145,7 +145,7 @@ public struct StorageFileAPI: Sendable {
 
   private struct UploadResponse: Decodable {
     let Key: String
-    let Id: String
+    let Id: UUID
   }
 
   private struct SignedUploadResponse: Decodable {

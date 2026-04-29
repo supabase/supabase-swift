@@ -506,7 +506,7 @@ final class StorageFileAPITests: XCTestCase {
         .put: Data(
           """
           {
-            "Id": "123",
+            "Id": "eaa8bdb5-2e00-4767-b5a9-d2502efe2196",
             "Key": "bucket/file.txt"
           }
           """.utf8
@@ -554,7 +554,7 @@ final class StorageFileAPITests: XCTestCase {
         )
       )
 
-    XCTAssertEqual(response.id, "123")
+    XCTAssertEqual(response.id, UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
     XCTAssertEqual(response.path, "file.txt")
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
@@ -567,7 +567,7 @@ final class StorageFileAPITests: XCTestCase {
         .put: Data(
           """
           {
-            "Id": "123",
+            "Id": "eaa8bdb5-2e00-4767-b5a9-d2502efe2196",
             "Key": "bucket/file.txt"
           }
           """.utf8
@@ -616,7 +616,7 @@ final class StorageFileAPITests: XCTestCase {
         )
       )
 
-    XCTAssertEqual(response.id, "123")
+    XCTAssertEqual(response.id, UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
     XCTAssertEqual(response.path, "file.txt")
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
@@ -1168,7 +1168,7 @@ final class StorageFileAPITests: XCTestCase {
         .post: Data(
           """
           {
-            "Id": "123",
+            "Id": "eaa8bdb5-2e00-4767-b5a9-d2502efe2196",
             "Key": "bucket/file.txt"
           }
           """.utf8
@@ -1184,7 +1184,7 @@ final class StorageFileAPITests: XCTestCase {
       progress: { _ in }
     )
 
-    XCTAssertEqual(response.id, "123")
+    XCTAssertEqual(response.id, UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
     XCTAssertEqual(response.path, "file.txt")
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }

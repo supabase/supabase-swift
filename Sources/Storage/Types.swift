@@ -194,7 +194,7 @@ public struct SignedUploadURL: Sendable {
 /// ``StorageFileAPI/update(_:fileURL:options:)``.
 public struct FileUploadResponse: Sendable {
   /// The storage-object identifier assigned by Supabase.
-  public let id: String
+  public let id: UUID
 
   /// The relative path supplied at upload time, e.g. `"folder/image.png"`.
   public let path: String
@@ -350,7 +350,7 @@ public struct FileObject: Identifiable, Hashable, Codable, Sendable {
 /// directory-listing type ``FileObject``.
 public struct FileInfo: Identifiable, Hashable, Decodable, Sendable {
   /// The unique storage identifier for the object.
-  public let id: String
+  public let id: UUID
 
   /// The internal version string of the object, used for cache busting.
   public let version: String
