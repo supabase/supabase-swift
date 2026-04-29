@@ -490,6 +490,34 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
   }
 }
 
+/// A type-safe byte count, modelled after `Swift.Duration`.
+///
+/// Uses `Int64` backing to avoid the precision loss of `Measurement<UnitInformationStorage>`
+/// and sidesteps the SI vs binary ambiguity of Foundation's `UnitInformationStorage`.
+///
+/// ## Example
+///
+/// ```swift
+/// BucketOptions(isPublic: true, fileSizeLimit: .megabytes(5))
+/// BucketOptions(isPublic: true, fileSizeLimit: .gigabytes(1))
+/// BucketOptions(isPublic: true, fileSizeLimit: 5_242_880)  // raw bytes via integer literal
+/// ```
+public struct StorageByteCount: Sendable, Hashable {
+  /// The raw byte count.
+  public let bytes: Int64
+
+  public init(_ bytes: Int64) { self.bytes = bytes }
+
+  public static func bytes(_ value: Int64) -> Self { Self(value) }
+  public static func kilobytes(_ value: Int64) -> Self { Self(value * 1_024) }
+  public static func megabytes(_ value: Int64) -> Self { Self(value * 1_024 * 1_024) }
+  public static func gigabytes(_ value: Int64) -> Self { Self(value * 1_024 * 1_024 * 1_024) }
+}
+
+extension StorageByteCount: ExpressibleByIntegerLiteral {
+  public init(integerLiteral value: Int64) { self.init(value) }
+}
+
 /// Options used when creating or updating a Storage bucket.
 ///
 /// Pass an instance to ``StorageClient/createBucket(_:options:)`` or
