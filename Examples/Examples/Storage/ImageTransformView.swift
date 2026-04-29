@@ -251,9 +251,9 @@ struct ImageTransformView: View {
       let options = TransformOptions(
         width: Int(width),
         height: Int(height),
-        resize: resizeMode.rawValue,
+        resize: Storage.ResizeMode(rawValue: resizeMode.rawValue),
         quality: Int(quality),
-        format: format.value
+        format: format.value.map { Storage.ImageFormat(rawValue: $0) }
       )
 
       let data = try await supabase.storage

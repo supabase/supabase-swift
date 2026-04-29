@@ -452,7 +452,7 @@ public struct StorageFileAPI: Sendable {
   /// let thumbnailURL = try await storage.from("photos").createSignedURL(
   ///   path: "gallery/hero.jpg",
   ///   expiresIn: 3600,
-  ///   transform: TransformOptions(width: 300, height: 300, resize: "cover")
+  ///   transform: TransformOptions(width: 300, height: 300, resize: .cover)
   /// )
   /// ```
   public func createSignedURL(
@@ -762,7 +762,7 @@ public struct StorageFileAPI: Sendable {
   /// // Download with image transformation
   /// let thumbnail = try await storage.from("photos").download(
   ///   path: "gallery/hero.jpg",
-  ///   options: TransformOptions(width: 100, height: 100, resize: "cover")
+  ///   options: TransformOptions(width: 100, height: 100, resize: .cover)
   /// )
   /// ```
   @discardableResult
@@ -883,7 +883,7 @@ public struct StorageFileAPI: Sendable {
   /// // Resized thumbnail URL
   /// let thumbURL = try storage.from("avatars").getPublicURL(
   ///   path: "user-123/photo.png",
-  ///   options: TransformOptions(width: 100, height: 100, resize: "cover")
+  ///   options: TransformOptions(width: 100, height: 100, resize: .cover)
   /// )
   ///
   /// // Force-download URL with a custom file name

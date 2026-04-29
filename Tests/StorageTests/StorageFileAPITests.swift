@@ -733,7 +733,7 @@ final class StorageFileAPITests: XCTestCase {
       	--header "Accept: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/render/image/authenticated/bucket/sadcat.txt?format=cover"
+      	"http://localhost:54321/storage/v1/render/image/authenticated/bucket/sadcat.txt?format=origin"
       """#
     }
     .register()
@@ -741,7 +741,7 @@ final class StorageFileAPITests: XCTestCase {
     let data = try await storage.from("bucket")
       .download(
         path: "sadcat.txt",
-        options: TransformOptions(format: "cover")
+        options: TransformOptions(format: .origin)
       )
 
     XCTAssertEqual(data, imageData)
