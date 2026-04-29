@@ -794,11 +794,11 @@ public struct StorageFileAPI: Sendable {
 
   /// Retrieves extended metadata for a file without downloading its contents.
   ///
-  /// Returns a ``FileObjectV2`` that includes the file size, ETag, content type, and other
+  /// Returns a ``FileInfo`` that includes the file size, ETag, content type, and other
   /// server-side metadata. To check only whether a file exists, prefer ``exists(path:)``.
   ///
   /// - Parameter path: The path of the file within the bucket, e.g. `"folder/image.png"`.
-  /// - Returns: A ``FileObjectV2`` containing the file's metadata.
+  /// - Returns: A ``FileInfo`` containing the file's metadata.
   /// - Throws: ``StorageError`` if the file does not exist or the request fails.
   ///
   /// ## Example
@@ -807,7 +807,7 @@ public struct StorageFileAPI: Sendable {
   /// let info = try await storage.from("avatars").info(path: "user-123/photo.png")
   /// print("Size: \(info.size ?? 0) bytes, type: \(info.contentType ?? "unknown")")
   /// ```
-  public func info(path: String) async throws -> FileObjectV2 {
+  public func info(path: String) async throws -> FileInfo {
     let _path = _getFinalPath(path)
 
     return try await client.fetchDecoded(.get, "object/info/\(_path)")

@@ -17,7 +17,7 @@ struct FileSearchView: View {
   @State private var sortColumn: SortColumn = .name
   @State private var sortOrder: SortOrder = .ascending
   @State private var limit = "100"
-  @State private var selectedFile: FileObjectV2?
+  @State private var selectedFile: FileInfo?
   @State private var error: Error?
   @State private var isLoading = false
 
