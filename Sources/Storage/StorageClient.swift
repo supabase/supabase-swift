@@ -90,7 +90,7 @@ public struct StorageClientConfiguration: Sendable {
 /// )
 ///
 /// // Create a bucket
-/// try await storage.createBucket("avatars", options: BucketOptions(public: true))
+/// try await storage.createBucket("avatars", options: BucketOptions(isPublic: true))
 ///
 /// // Upload a file
 /// try await storage.from("avatars").upload("user.png", data: imageData)
@@ -379,9 +379,19 @@ public final class StorageClient: Sendable {
   struct BucketParameters: Encodable {
     var id: String
     var name: String
-    var `public`: Bool
-    var fileSizeLimit: String?
+    var isPublic: Bool
+    var fileSizeLimit: Int64?
     var allowedMimeTypes: [String]?
+
+    // Explicit CodingKeys required: keyEncodingStrategy (.convertToSnakeCase) would map
+    // `isPublic` → `is_public`, but the backend wire key must be `"public"`.
+    enum CodingKeys: String, CodingKey {
+      case id
+      case name
+      case isPublic = "public"
+      case fileSizeLimit = "file_size_limit"
+      case allowedMimeTypes = "allowed_mime_types"
+    }
   }
 
   /// Creates a new Storage bucket.
@@ -399,8 +409,8 @@ public final class StorageClient: Sendable {
   /// try await storage.createBucket(
   ///   "avatars",
   ///   options: BucketOptions(
-  ///     public: false,
-  ///     fileSizeLimit: "5242880",
+  ///     isPublic: false,
+  ///     fileSizeLimit: .megabytes(5),
   ///     allowedMimeTypes: ["image/*"]
   ///   )
   /// )
@@ -416,8 +426,8 @@ public final class StorageClient: Sendable {
           BucketParameters(
             id: id,
             name: id,
-            public: options.public,
-            fileSizeLimit: options.fileSizeLimit,
+            isPublic: options.isPublic,
+            fileSizeLimit: options.fileSizeLimit?.bytes,
             allowedMimeTypes: options.allowedMimeTypes
           )
         )
@@ -436,7 +446,7 @@ public final class StorageClient: Sendable {
   ///
   /// ```swift
   /// // Make an existing bucket public
-  /// try await storage.updateBucket("avatars", options: BucketOptions(public: true))
+  /// try await storage.updateBucket("avatars", options: BucketOptions(isPublic: true))
   /// ```
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
     try await fetchData(
@@ -447,8 +457,8 @@ public final class StorageClient: Sendable {
           BucketParameters(
             id: id,
             name: id,
-            public: options.public,
-            fileSizeLimit: options.fileSizeLimit,
+            isPublic: options.isPublic,
+            fileSizeLimit: options.fileSizeLimit?.bytes,
             allowedMimeTypes: options.allowedMimeTypes
           )
         )

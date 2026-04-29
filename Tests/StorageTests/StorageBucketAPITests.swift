@@ -212,7 +212,7 @@ final class StorageBucketAPITests: XCTestCase {
     }
     .register()
 
-    let options = BucketOptions(public: true)
+    let options = BucketOptions(isPublic: true)
     try await storage.createBucket(
       "newbucket",
       options: options
@@ -253,7 +253,7 @@ final class StorageBucketAPITests: XCTestCase {
     }
     .register()
 
-    let options = BucketOptions(public: true)
+    let options = BucketOptions(isPublic: true)
     try await storage.updateBucket(
       "bucket123",
       options: options

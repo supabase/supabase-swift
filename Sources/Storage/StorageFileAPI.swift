@@ -862,7 +862,7 @@ public struct StorageFileAPI: Sendable {
   /// permission error if the bucket is private.
   ///
   /// > Note: Make the bucket public via ``StorageClient/updateBucket(_:options:)`` (set
-  /// > `BucketOptions(public: true)`) or via the Supabase dashboard before using this method.
+  /// > `BucketOptions(isPublic: true)`) or via the Supabase dashboard before using this method.
   ///
   /// - Parameters:
   ///   - path: The path of the file within the bucket, e.g. `"folder/image.png"`.
