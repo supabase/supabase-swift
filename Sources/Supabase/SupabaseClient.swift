@@ -59,8 +59,8 @@ public final class SupabaseClient: Sendable {
         }
 
         $0.storage = StorageClient(
+          url: storageURL,
           configuration: StorageClientConfiguration(
-            url: storageURL,
             headers: storageHeaders,
             session: session,
             logger: options.global.logger,

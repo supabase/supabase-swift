@@ -147,7 +147,7 @@ public struct StorageFileAPI {
 
     let response: UploadResponse = try await uploadMultipart(
       method,
-      url: client.configuration.url.appendingPathComponent("object/\(_path)"),
+      url: client.url.appendingPathComponent("object/\(_path)"),
       path: path,
       file: file,
       options: options,
@@ -442,7 +442,7 @@ public struct StorageFileAPI {
   {
     guard let signedURLComponents = URLComponents(string: signedURL),
       var baseComponents = URLComponents(
-        url: client.configuration.url,
+        url: client.url,
         resolvingAgainstBaseURL: false
       )
     else {
@@ -593,7 +593,7 @@ public struct StorageFileAPI {
 
     guard
       var components = URLComponents(
-        url: client.configuration.url,
+        url: client.url,
         resolvingAgainstBaseURL: true
       )
     else {
@@ -844,7 +844,7 @@ public struct StorageFileAPI {
 
   private func storageURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
     var components = URLComponents(
-      url: client.configuration.url.appendingPathComponent(path),
+      url: client.url.appendingPathComponent(path),
       resolvingAgainstBaseURL: false
     )
     components?.queryItems = queryItems.isEmpty ? nil : queryItems

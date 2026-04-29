@@ -11,8 +11,8 @@ import XCTest
 
 final class StorageClientIntegrationTests: XCTestCase {
   let storage = StorageClient(
+    url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
     configuration: StorageClientConfiguration(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
       headers: [
         "Authorization": "Bearer \(DotEnv.SUPABASE_SECRET_KEY)"
       ],
