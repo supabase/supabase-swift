@@ -20,24 +20,18 @@ import Foundation
 /// )
 /// ```
 public struct SearchOptions: Encodable, Sendable {
-  var prefix: String
+  var prefix: String  // internal — set by list() before encoding, never by callers
 
   /// The maximum number of files to return. Defaults to `100` when `nil`.
   public var limit: Int?
 
-  /// The zero-based index of the first file to return. Use together with ``limit`` to paginate
-  /// results. Defaults to `0` when `nil`.
+  /// The zero-based index of the first file to return.
   public var offset: Int?
 
   /// The column and direction used to sort the results.
-  ///
-  /// Can reference any property exposed on ``FileObject``, e.g. `"name"`, `"created_at"`,
-  /// `"updated_at"`. Defaults to ascending by `"name"` when `nil`.
   public var sortBy: SortBy?
 
   /// A string used to filter files whose names contain the given value.
-  ///
-  /// Pass `nil` (the default) to return all files within the specified path.
   public var search: String?
 
   public init(
