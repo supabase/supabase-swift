@@ -140,7 +140,6 @@ public struct StorageFileAPI: Sendable {
   private enum Header {
     static let cacheControl = "Cache-Control"
     static let contentType = "Content-Type"
-    static let duplex = "duplex"
     static let xUpsert = "x-upsert"
   }
 
@@ -1218,13 +1217,8 @@ public struct StorageFileAPI: Sendable {
   }
 
   private func multipartHeaders(options: FileOptions) -> [String: String] {
-    var headers = options.headers ?? [:]
+    var headers: [String: String] = [:]
     headers.setIfMissing(Header.cacheControl, value: "max-age=\(options.cacheControl)")
-
-    if let duplex = options.duplex {
-      headers[Header.duplex] = duplex
-    }
-
     return headers
   }
 
