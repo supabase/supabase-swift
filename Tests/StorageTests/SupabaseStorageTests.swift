@@ -89,7 +89,7 @@ final class SupabaseStorageTests: XCTestCase {
     let sut = makeSUT()
     let results: [SignedURLResult] = try await sut.from(bucketId).createSignedURLs(
       paths: ["file1.txt", "file2.txt"],
-      expiresIn: 60
+      expiresIn: .seconds(60)
     )
 
     XCTAssertEqual(results.count, 2)
