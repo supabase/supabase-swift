@@ -422,42 +422,35 @@ public struct StorageFileAPI: Sendable {
 
   /// Creates a signed URL that grants time-limited access to a private file.
   ///
-  /// Signed URLs work for both private and public buckets. They are useful for sharing individual
-  /// files with users who do not have Storage credentials.
-  ///
   /// - Parameters:
   ///   - path: The file path within the bucket, e.g. `"folder/image.png"`.
-  ///   - expiresIn: The number of seconds until the signed URL expires.
-  ///     For example, `3600` for a URL valid for one hour.
-  ///   - download: When non-`nil`, the browser treats the URL as a file download and uses this
-  ///     string as the suggested file name. Pass an empty string (`""`) to use the original file name.
+  ///   - expiresIn: How long until the signed URL expires, e.g. `.seconds(3600)`.
+  ///   - download: When non-`nil`, the browser treats the URL as a file download.
   ///   - transform: Optional on-the-fly image transformation applied before the file is served.
-  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter. Use this to
-  ///     invalidate cached signed URLs without changing the path.
+  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter.
   /// - Returns: A signed `URL` ready to be shared or embedded.
   /// - Throws: ``StorageError`` if the file does not exist or the request fails.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// // URL valid for 10 minutes
-  /// let url = try await storage.from("private-docs").createSignedURL(
-  ///   path: "user-123/contract.pdf",
-  ///   expiresIn: 600,
-  ///   download: "contract.pdf"
-  /// )
-  ///
-  /// // Resized image URL valid for 1 hour
-  /// let thumbnailURL = try await storage.from("photos").createSignedURL(
-  ///   path: "gallery/hero.jpg",
-  ///   expiresIn: 3600,
-  ///   transform: TransformOptions(width: 300, height: 300, resize: .cover)
-  /// )
-  /// ```
+  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   public func createSignedURL(
     path: String,
+    expiresIn: Duration,
+    download: DownloadBehavior? = nil,
+    transform: TransformOptions? = nil,
+    cacheNonce: String? = nil
+  ) async throws -> URL {
+    try await _createSignedURL(
+      path: path,
+      expiresIn: Int(expiresIn.components.seconds),
+      download: download,
+      transform: transform,
+      cacheNonce: cacheNonce
+    )
+  }
+
+  private func _createSignedURL(
+    path: String,
     expiresIn: Int,
-    download: String? = nil,
+    download: DownloadBehavior? = nil,
     transform: TransformOptions? = nil,
     cacheNonce: String? = nil
   ) async throws -> URL {
@@ -467,7 +460,6 @@ public struct StorageFileAPI: Sendable {
     }
 
     let encoder = JSONEncoder.unconfiguredEncoder
-
     let response: SignedURLAPIResponse = try await client.fetchDecoded(
       .post,
       "object/sign/\(bucketId)/\(path)",
@@ -478,94 +470,37 @@ public struct StorageFileAPI: Sendable {
       )
     )
 
-    return try makeSignedURL(
-      response.signedURL,
+    return try makeSignedURL(response.signedURL, download: download, cacheNonce: cacheNonce)
+  }
+
+  /// Creates signed URLs for multiple files in a single request.
+  ///
+  /// - Parameters:
+  ///   - paths: The file paths within the bucket.
+  ///   - expiresIn: How long until the signed URLs expire.
+  ///   - download: When non-`nil`, the browser treats each URL as a file download.
+  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter.
+  /// - Returns: An array of ``SignedURLResult`` values, one per input path.
+  /// - Throws: ``StorageError`` if the batch request itself fails.
+  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
+  public func createSignedURLs(
+    paths: [String],
+    expiresIn: Duration,
+    download: DownloadBehavior? = nil,
+    cacheNonce: String? = nil
+  ) async throws -> [SignedURLResult] {
+    try await _createSignedURLs(
+      paths: paths,
+      expiresIn: Int(expiresIn.components.seconds),
       download: download,
       cacheNonce: cacheNonce
     )
   }
 
-  /// Creates a signed URL that grants time-limited access to a private file, with a boolean
-  /// download trigger.
-  ///
-  /// This overload is a convenience variant of
-  /// ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)`` that accepts a `Bool`
-  /// instead of an optional file name string. When `download` is `true`, the browser uses the
-  /// original file name for the download prompt.
-  ///
-  /// - Parameters:
-  ///   - path: The file path within the bucket, e.g. `"folder/image.png"`.
-  ///   - expiresIn: The number of seconds until the signed URL expires.
-  ///   - download: Pass `true` to trigger a browser download using the original file name.
-  ///   - transform: Optional on-the-fly image transformation applied before the file is served.
-  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter for cache
-  ///     invalidation.
-  /// - Returns: A signed `URL` ready to be shared or embedded.
-  /// - Throws: ``StorageError`` if the file does not exist or the request fails.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let url = try await storage.from("docs").createSignedURL(
-  ///   path: "report.pdf",
-  ///   expiresIn: 300,
-  ///   download: true
-  /// )
-  /// ```
-  public func createSignedURL(
-    path: String,
-    expiresIn: Int,
-    download: Bool,
-    transform: TransformOptions? = nil,
-    cacheNonce: String? = nil
-  ) async throws -> URL {
-    try await createSignedURL(
-      path: path,
-      expiresIn: expiresIn,
-      download: download ? "" : nil,
-      transform: transform,
-      cacheNonce: cacheNonce
-    )
-  }
-
-  /// Creates signed URLs for multiple files in a single request.
-  ///
-  /// All URLs share the same expiry window. The returned array has one ``SignedURLResult`` per
-  /// input path, in the same order. Paths that cannot be signed (e.g. because the file does not
-  /// exist) produce a ``SignedURLResult/failure(path:error:)`` entry rather than throwing.
-  ///
-  /// - Parameters:
-  ///   - paths: The file paths within the bucket, e.g. `["folder/a.png", "folder/b.png"]`.
-  ///   - expiresIn: The number of seconds until the signed URLs expire.
-  ///   - download: When non-`nil`, the browser treats each URL as a file download and uses this
-  ///     string as the suggested file name. Pass an empty string (`""`) to use each file's
-  ///     original name.
-  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter. Use this to
-  ///     invalidate cached signed URLs without changing the paths.
-  /// - Returns: An array of ``SignedURLResult`` values, one per input path.
-  /// - Throws: ``StorageError`` if the batch request itself fails.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let results = try await storage.from("photos").createSignedURLs(
-  ///   paths: ["gallery/a.jpg", "gallery/b.jpg", "missing.jpg"],
-  ///   expiresIn: 3600
-  /// )
-  ///
-  /// for result in results {
-  ///   switch result {
-  ///   case .success(let path, let url):
-  ///     print("\(path) → \(url)")
-  ///   case .failure(let path, let error):
-  ///     print("\(path) failed: \(error)")
-  ///   }
-  /// }
-  /// ```
-  public func createSignedURLs(
+  private func _createSignedURLs(
     paths: [String],
     expiresIn: Int,
-    download: String? = nil,
+    download: DownloadBehavior? = nil,
     cacheNonce: String? = nil
   ) async throws -> [SignedURLResult] {
     struct Params: Encodable {
@@ -574,24 +509,15 @@ public struct StorageFileAPI: Sendable {
     }
 
     let encoder = JSONEncoder.unconfiguredEncoder
-
     let response: [SignedURLsAPIResponse] = try await client.fetchDecoded(
       .post,
       "object/sign/\(bucketId)",
-      body: .data(
-        encoder.encode(
-          Params(expiresIn: expiresIn, paths: paths)
-        )
-      )
+      body: .data(encoder.encode(Params(expiresIn: expiresIn, paths: paths)))
     )
 
     return try response.map { item in
       if let signedURLString = item.signedURL {
-        let url = try makeSignedURL(
-          signedURLString,
-          download: download,
-          cacheNonce: cacheNonce
-        )
+        let url = try makeSignedURL(signedURLString, download: download, cacheNonce: cacheNonce)
         return .success(path: item.path, signedURL: url)
       } else {
         return .failure(path: item.path, error: item.error ?? "Unknown error")
@@ -599,47 +525,13 @@ public struct StorageFileAPI: Sendable {
     }
   }
 
-  /// Creates signed URLs for multiple files, with a boolean download trigger.
-  ///
-  /// This overload is a convenience variant of
-  /// ``createSignedURLs(paths:expiresIn:download:cacheNonce:)`` that accepts a `Bool`
-  /// instead of an optional file name string. When `download` is `true`, the browser uses each
-  /// file's original name for the download prompt.
-  ///
-  /// - Parameters:
-  ///   - paths: The file paths within the bucket, e.g. `["folder/a.png", "folder/b.png"]`.
-  ///   - expiresIn: The number of seconds until the signed URLs expire.
-  ///   - download: Pass `true` to trigger browser downloads using each file's original name.
-  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter for cache
-  ///     invalidation.
-  /// - Returns: An array of ``SignedURLResult`` values, one per input path.
-  /// - Throws: ``StorageError`` if the batch request itself fails.
-  public func createSignedURLs(
-    paths: [String],
-    expiresIn: Int,
-    download: Bool,
-    cacheNonce: String? = nil
-  ) async throws -> [SignedURLResult] {
-    try await createSignedURLs(
-      paths: paths,
-      expiresIn: expiresIn,
-      download: download ? "" : nil,
-      cacheNonce: cacheNonce
-    )
-  }
-
   private func makeSignedURL(
     _ signedURL: String,
-    download: String?,
+    download: DownloadBehavior?,
     cacheNonce: String? = nil
-  )
-    throws -> URL
-  {
+  ) throws -> URL {
     guard let signedURLComponents = URLComponents(string: signedURL),
-      var baseComponents = URLComponents(
-        url: client.url,
-        resolvingAgainstBaseURL: false
-      )
+      var baseComponents = URLComponents(url: client.url, resolvingAgainstBaseURL: false)
     else {
       throw URLError(.badURL)
     }
@@ -651,23 +543,23 @@ public struct StorageFileAPI: Sendable {
 
     if let download {
       baseComponents.queryItems = baseComponents.queryItems ?? []
-      baseComponents.queryItems!.append(
-        URLQueryItem(name: "download", value: download)
-      )
+      let value: String
+      switch download {
+      case .download: value = ""
+      case .downloadAs(let name): value = name
+      }
+      baseComponents.queryItems!.append(URLQueryItem(name: "download", value: value))
     }
 
     if let cacheNonce {
       baseComponents.queryItems = baseComponents.queryItems ?? []
-      baseComponents.queryItems!.append(
-        URLQueryItem(name: "cacheNonce", value: cacheNonce)
-      )
+      baseComponents.queryItems!.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
     }
 
-    guard let signedURL = baseComponents.url else {
+    guard let url = baseComponents.url else {
       throw URLError(.badURL)
     }
-
-    return signedURL
+    return url
   }
 
   /// Deletes one or more files from the bucket.

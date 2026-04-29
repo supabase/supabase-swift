@@ -176,7 +176,7 @@ final class StorageFileAPITests: XCTestCase {
 
     let url = try await storage.from("bucket").createSignedURL(
       path: "file.txt",
-      expiresIn: 3600
+      expiresIn: .seconds(3600)
     )
     XCTAssertEqual(
       url.absoluteString, "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
@@ -213,8 +213,8 @@ final class StorageFileAPITests: XCTestCase {
 
     let url = try await storage.from("bucket").createSignedURL(
       path: "file.txt",
-      expiresIn: 3600,
-      download: true
+      expiresIn: .seconds(3600),
+      download: .download
     )
     XCTAssertEqual(
       url.absoluteString,
@@ -260,7 +260,7 @@ final class StorageFileAPITests: XCTestCase {
     let paths = ["file.txt", "file2.txt"]
     let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
       paths: paths,
-      expiresIn: 3600
+      expiresIn: .seconds(3600)
     )
     XCTAssertEqual(results.count, 2)
     guard case .success(let path0, let url0) = results[0] else {
@@ -318,8 +318,8 @@ final class StorageFileAPITests: XCTestCase {
     let paths = ["file.txt", "file2.txt"]
     let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
       paths: paths,
-      expiresIn: 3600,
-      download: true
+      expiresIn: .seconds(3600),
+      download: .download
     )
     XCTAssertEqual(results.count, 2)
     guard case .success(_, let url0) = results[0] else {
@@ -362,7 +362,7 @@ final class StorageFileAPITests: XCTestCase {
 
     let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
       paths: ["file.txt", "missing.txt"],
-      expiresIn: 3600
+      expiresIn: .seconds(3600)
     )
     XCTAssertEqual(results.count, 2)
     guard case .success(let path0, _) = results[0] else {
@@ -1110,7 +1110,7 @@ final class StorageFileAPITests: XCTestCase {
 
     let url = try await storage.from("bucket").createSignedURL(
       path: "file.txt",
-      expiresIn: 3600,
+      expiresIn: .seconds(3600),
       cacheNonce: "abc123"
     )
     XCTAssertEqual(
@@ -1139,7 +1139,7 @@ final class StorageFileAPITests: XCTestCase {
 
     let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
       paths: ["file.txt"],
-      expiresIn: 3600,
+      expiresIn: .seconds(3600),
       cacheNonce: "abc123"
     )
     guard case .success(_, let url) = results[0] else {

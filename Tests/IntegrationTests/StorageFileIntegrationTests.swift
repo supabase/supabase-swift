@@ -76,7 +76,8 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testSignURL() async throws {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    let url = try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000)
+    let url = try await storage.from(bucketName).createSignedURL(
+      path: uploadPath, expiresIn: .seconds(2000))
     XCTAssertTrue(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -87,7 +88,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: 2000, download: true)
+      path: uploadPath, expiresIn: .seconds(2000), download: .download)
     XCTAssertTrue(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -99,7 +100,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: 2000, download: "test.jpg")
+      path: uploadPath, expiresIn: .seconds(2000), download: .downloadAs("test.jpg"))
     XCTAssertTrue(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
