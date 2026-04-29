@@ -9,7 +9,7 @@ import Supabase
 import SwiftUI
 
 struct FileObjectDetailView: View {
-  let api: StorageFileApi
+  let api: StorageFileAPI
   let fileObject: FileObject
 
   @Environment(\.openURL) var openURL
