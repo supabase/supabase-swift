@@ -113,7 +113,7 @@ enum FileUpload {
 ///
 /// - Note: All stored properties are immutable, making `StorageFileAPI` safe to share across
 ///   concurrency boundaries.
-public struct StorageFileAPI {
+public struct StorageFileAPI: Sendable {
   /// The bucket id to operate on.
   let bucketId: String
   let client: StorageClient
