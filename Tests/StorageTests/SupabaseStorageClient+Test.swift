@@ -15,8 +15,8 @@ extension StorageClient {
     session: URLSession = .shared
   ) -> StorageClient {
     StorageClient(
+      url: URL(string: supabaseURL)!,
       configuration: StorageClientConfiguration(
-        url: URL(string: supabaseURL)!,
         headers: [
           "Apikey": apiKey,
           "X-Client-Info": "storage-swift/x.y.z",

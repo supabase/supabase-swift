@@ -6,20 +6,17 @@ import Helpers
 #endif
 
 public struct StorageClientConfiguration: Sendable {
-  public var url: URL
   public var headers: [String: String]
   public let session: URLSession
   public let logger: (any SupabaseLogger)?
   public let useNewHostname: Bool
 
   public init(
-    url: URL,
     headers: [String: String],
     session: URLSession = URLSession(configuration: .default),
     logger: (any SupabaseLogger)? = nil,
     useNewHostname: Bool = false
   ) {
-    self.url = url
     self.headers = headers
     self.session = session
     self.logger = logger
@@ -32,6 +29,7 @@ public struct StorageClientConfiguration: Sendable {
 /// - Note: Thread Safety: Inherits immutable design from `StorageApi`. All state is set at
 ///   initialization and never mutated.
 public final class StorageClient: Sendable {
+  public let url: URL
   public let configuration: StorageClientConfiguration
 
   package let http: _HTTPClient
@@ -45,11 +43,11 @@ public final class StorageClient: Sendable {
 
   let decoder = JSONDecoder.supabase()
 
-  public convenience init(configuration: StorageClientConfiguration) {
-    self.init(configuration: configuration, tokenProvider: nil)
+  public convenience init(url: URL, configuration: StorageClientConfiguration) {
+    self.init(url: url, configuration: configuration, tokenProvider: nil)
   }
 
-  package init(configuration: StorageClientConfiguration, tokenProvider: TokenProvider?) {
+  package init(url: URL, configuration: StorageClientConfiguration, tokenProvider: TokenProvider?) {
     var configuration = configuration
 
     let clientInfoHeader = "X-Client-Info"
@@ -71,17 +69,16 @@ public final class StorageClient: Sendable {
       configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
     }
 
+    var resolvedURL = url
+
     // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
     // "project-ref.supabase.co" becomes "project-ref.storage.supabase.co"
     if configuration.useNewHostname == true {
       guard
-        var components = URLComponents(
-          url: configuration.url,
-          resolvingAgainstBaseURL: false
-        ),
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
         let host = components.host
       else {
-        fatalError("Client initialized with invalid URL: \(configuration.url)")
+        fatalError("Client initialized with invalid URL: \(url)")
       }
 
       let regex = try! NSRegularExpression(pattern: "supabase.(co|in|red)$")
@@ -99,14 +96,15 @@ public final class StorageClient: Sendable {
         )
       }
 
-      configuration.url = components.url!
+      resolvedURL = components.url!
     }
 
+    self.url = resolvedURL
     self.configuration = configuration
     usesTokenProvider = tokenProvider != nil
 
     http = _HTTPClient(
-      host: configuration.url,
+      host: resolvedURL,
       session: configuration.session,
       tokenProvider: tokenProvider
     )
@@ -142,7 +140,7 @@ public final class StorageClient: Sendable {
     body: RequestBody? = nil,
     headers: [String: String]? = nil
   ) async throws -> (Data, HTTPURLResponse) {
-    let url = configuration.url.appendingPathComponent(path)
+    let url = self.url.appendingPathComponent(path)
 
     do {
       logRequest(method, url: url)

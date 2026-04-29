@@ -22,8 +22,8 @@ final class StorageBucketAPITests: XCTestCase {
     let session = URLSession(configuration: configuration)
 
     storage = StorageClient(
+      url: url,
       configuration: StorageClientConfiguration(
-        url: url,
         headers: [
           "apikey":
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
@@ -72,24 +72,24 @@ final class StorageBucketAPITests: XCTestCase {
     for (input, expect, description) in urlTestCases {
       runActivity(named: "should \(description) if useNewHostname is true") {
         let storage = StorageClient(
+          url: URL(string: input)!,
           configuration: StorageClientConfiguration(
-            url: URL(string: input)!,
             headers: [:],
             useNewHostname: true
           )
         )
-        XCTAssertEqual(storage.configuration.url.absoluteString, expect)
+        XCTAssertEqual(storage.url.absoluteString, expect)
       }
 
       runActivity(named: "should not modify host if useNewHostname is false") {
         let storage = StorageClient(
+          url: URL(string: input)!,
           configuration: StorageClientConfiguration(
-            url: URL(string: input)!,
             headers: [:],
             useNewHostname: false
           )
         )
-        XCTAssertEqual(storage.configuration.url.absoluteString, input)
+        XCTAssertEqual(storage.url.absoluteString, input)
       }
     }
   }
