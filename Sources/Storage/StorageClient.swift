@@ -8,8 +8,6 @@ import Helpers
 public struct StorageClientConfiguration: Sendable {
   public var url: URL
   public var headers: [String: String]
-  public let encoder: JSONEncoder
-  public let decoder: JSONDecoder
   public let session: URLSession
   public let logger: (any SupabaseLogger)?
   public let useNewHostname: Bool
@@ -17,22 +15,12 @@ public struct StorageClientConfiguration: Sendable {
   public init(
     url: URL,
     headers: [String: String],
-    encoder: JSONEncoder? = nil,
-    decoder: JSONDecoder? = nil,
     session: URLSession = URLSession(configuration: .default),
     logger: (any SupabaseLogger)? = nil,
     useNewHostname: Bool = false
   ) {
     self.url = url
     self.headers = headers
-    self.encoder =
-      encoder
-      ?? {
-        let encoder = JSONEncoder.supabase()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        return encoder
-      }()
-    self.decoder = decoder ?? .supabase()
     self.session = session
     self.logger = logger
     self.useNewHostname = useNewHostname
@@ -48,6 +36,14 @@ public final class StorageClient: Sendable {
 
   package let http: _HTTPClient
   private let usesTokenProvider: Bool
+
+  let encoder: JSONEncoder = {
+    let encoder = JSONEncoder.supabase()
+    encoder.keyEncodingStrategy = .convertToSnakeCase
+    return encoder
+  }()
+
+  let decoder = JSONDecoder.supabase()
 
   public convenience init(configuration: StorageClientConfiguration) {
     self.init(configuration: configuration, tokenProvider: nil)
@@ -199,7 +195,7 @@ public final class StorageClient: Sendable {
     as _: T.Type = T.self
   ) async throws -> T {
     let (data, _) = try await fetchData(method, path, query: query, body: body, headers: headers)
-    return try configuration.decoder.decode(T.self, from: data)
+    return try decoder.decode(T.self, from: data)
   }
 
   private func translateStorageError(_ error: any Error) -> any Error {
@@ -207,7 +203,7 @@ public final class StorageClient: Sendable {
       return error
     }
 
-    if let storageError = try? configuration.decoder.decode(StorageError.self, from: data) {
+    if let storageError = try? decoder.decode(StorageError.self, from: data) {
       return storageError
     }
 
@@ -268,7 +264,7 @@ public final class StorageClient: Sendable {
       .post,
       "bucket",
       body: .data(
-        configuration.encoder.encode(
+        encoder.encode(
           BucketParameters(
             id: id,
             name: id,
@@ -290,7 +286,7 @@ public final class StorageClient: Sendable {
       .put,
       "bucket/\(id)",
       body: .data(
-        configuration.encoder.encode(
+        encoder.encode(
           BucketParameters(
             id: id,
             name: id,

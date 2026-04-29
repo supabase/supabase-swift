@@ -268,7 +268,7 @@ public struct StorageFileAPI {
     try await client.fetchData(
       .post,
       "object/move",
-      body: .data(client.configuration.encoder.encode(body))
+      body: .data(client.encoder.encode(body))
     )
   }
 
@@ -297,7 +297,7 @@ public struct StorageFileAPI {
     let response: UploadResponse = try await client.fetchDecoded(
       .post,
       "object/copy",
-      body: .data(client.configuration.encoder.encode(body))
+      body: .data(client.encoder.encode(body))
     )
 
     return response.Key
@@ -484,7 +484,7 @@ public struct StorageFileAPI {
     try await client.fetchDecoded(
       .delete,
       "object/\(bucketId)",
-      body: .data(client.configuration.encoder.encode(["prefixes": paths]))
+      body: .data(client.encoder.encode(["prefixes": paths]))
     )
   }
 
@@ -824,7 +824,7 @@ public struct StorageFileAPI {
 
       let httpResponse = try client.http.validateResponse(response, data: data)
       client.logResponse(httpResponse, data: data)
-      return try client.configuration.decoder.decode(Response.self, from: data)
+      return try client.decoder.decode(Response.self, from: data)
     } catch {
       client.logFailure(error)
       throw translateStorageError(error)
@@ -861,7 +861,7 @@ public struct StorageFileAPI {
       return error
     }
 
-    if let storageError = try? client.configuration.decoder.decode(StorageError.self, from: data) {
+    if let storageError = try? client.decoder.decode(StorageError.self, from: data) {
       return storageError
     }
 
