@@ -7,15 +7,18 @@ import Foundation
 /// Builder for constructing multipart/form-data payloads
 @available(macOS 10.15.4, *)
 struct MultipartBuilder {
-  private let boundary: String
+  let boundary: String
   private var parts: [Part] = []
+
+  var contentType: String { "multipart/form-data; boundary=\(boundary)" }
 
   enum Part {
     case text(name: String, value: String)
-    case file(name: String, fileURL: URL, mimeType: String?)
+    case data(name: String, data: Data, fileName: String?, mimeType: String?)
+    case file(name: String, fileURL: URL, fileName: String?, mimeType: String?)
   }
 
-  init(boundary: String) {
+  init(boundary: String = "----sb-\(UUID().uuidString)") {
     self.boundary = boundary
   }
 
@@ -34,18 +37,42 @@ struct MultipartBuilder {
     return self
   }
 
-  /// Add a file field to the multipart payload (loads entire file into memory)
-  func addFile(name: String, fileURL: URL, mimeType: String?) -> MultipartBuilder {
+  /// Add a data field to the multipart payload.
+  func addData(
+    name: String,
+    data: Data,
+    fileName: String? = nil,
+    mimeType: String? = nil
+  ) -> MultipartBuilder {
     var builder = self
-    builder.parts.append(.file(name: name, fileURL: fileURL, mimeType: mimeType))
+    builder.parts.append(.data(name: name, data: data, fileName: fileName, mimeType: mimeType))
+    return builder
+  }
+
+  /// Add a file field to the multipart payload (loads entire file into memory)
+  func addFile(
+    name: String,
+    fileURL: URL,
+    fileName: String? = nil,
+    mimeType: String? = nil
+  ) -> MultipartBuilder {
+    var builder = self
+    builder.parts.append(
+      .file(name: name, fileURL: fileURL, fileName: fileName, mimeType: mimeType))
     return builder
   }
 
   /// Add a file field to the multipart payload (for streamed output)
-  func addFileStreamed(name: String, fileURL: URL, mimeType: String?) -> MultipartBuilder {
+  func addFileStreamed(
+    name: String,
+    fileURL: URL,
+    fileName: String? = nil,
+    mimeType: String? = nil
+  ) -> MultipartBuilder {
     // For now, same as addFile - streaming happens in buildToTempFile
     var builder = self
-    builder.parts.append(.file(name: name, fileURL: fileURL, mimeType: mimeType))
+    builder.parts.append(
+      .file(name: name, fileURL: fileURL, fileName: fileName, mimeType: mimeType))
     return builder
   }
 
@@ -53,14 +80,20 @@ struct MultipartBuilder {
   /// - Note: Only suitable for small payloads. Use `buildToTempFile()` for large files.
   /// - Returns: Complete multipart body data
   func buildInMemory() throws -> Data {
+    guard !parts.isEmpty else { return Data() }
+
     var body = Data()
 
     for part in parts {
       switch part {
       case .text(let name, let value):
         body.append(textPart(name: name, value: value))
-      case .file(let name, let fileURL, let mimeType):
-        body.append(try filePart(name: name, fileURL: fileURL, mimeType: mimeType))
+      case .data(let name, let data, let fileName, let mimeType):
+        body.append(dataPart(name: name, data: data, fileName: fileName, mimeType: mimeType))
+      case .file(let name, let fileURL, let fileName, let mimeType):
+        body.append(
+          try filePart(name: name, fileURL: fileURL, fileName: fileName, mimeType: mimeType)
+        )
       }
     }
 
@@ -80,11 +113,23 @@ struct MultipartBuilder {
       throw MultipartBuilderError.createTempFileFailed
     }
 
+    var didReturnTempFile = false
+    defer {
+      if !didReturnTempFile {
+        try? FileManager.default.removeItem(at: tempFile)
+      }
+    }
+
     guard let handle = FileHandle(forWritingAtPath: tempFile.path) else {
       throw MultipartBuilderError.openTempFileFailed
     }
 
     defer { try? handle.close() }
+
+    guard !parts.isEmpty else {
+      didReturnTempFile = true
+      return tempFile
+    }
 
     // Write parts
     for part in parts {
@@ -93,11 +138,16 @@ struct MultipartBuilder {
         let data = textPart(name: name, value: value)
         try handle.write(contentsOf: data)
 
-      case .file(let name, let fileURL, let mimeType):
+      case .data(let name, let data, let fileName, let mimeType):
+        try handle.write(contentsOf: partHeader(name: name, fileName: fileName, mimeType: mimeType))
+        try handle.write(contentsOf: data)
+        try handle.write(contentsOf: Data("\r\n".utf8))
+
+      case .file(let name, let fileURL, let fileName, let mimeType):
         // Write file part header
-        let header = filePartHeader(
+        let header = partHeader(
           name: name,
-          fileName: fileURL.lastPathComponent,
+          fileName: fileName ?? fileURL.lastPathComponent,
           mimeType: mimeType
         )
         try handle.write(contentsOf: header)
@@ -113,6 +163,7 @@ struct MultipartBuilder {
     // Write closing boundary
     try handle.write(contentsOf: closingBoundary())
 
+    didReturnTempFile = true
     return tempFile
   }
 
@@ -127,31 +178,47 @@ struct MultipartBuilder {
     return data
   }
 
-  private func filePart(name: String, fileURL: URL, mimeType: String?) throws -> Data {
+  private func dataPart(
+    name: String,
+    data: Data,
+    fileName: String?,
+    mimeType: String?
+  ) -> Data {
+    var partData = Data()
+    partData.append(partHeader(name: name, fileName: fileName, mimeType: mimeType))
+    partData.append(data)
+    partData.append(Data("\r\n".utf8))
+    return partData
+  }
+
+  private func filePart(
+    name: String,
+    fileURL: URL,
+    fileName: String?,
+    mimeType: String?
+  ) throws -> Data {
     var data = Data()
 
-    // Header
-    data.append(filePartHeader(name: name, fileName: fileURL.lastPathComponent, mimeType: mimeType))
+    data.append(
+      partHeader(name: name, fileName: fileName ?? fileURL.lastPathComponent, mimeType: mimeType)
+    )
 
-    // File content
     let fileData = try Data(contentsOf: fileURL)
     data.append(fileData)
 
-    // Trailing newline
     data.append(Data("\r\n".utf8))
 
     return data
   }
 
-  private func filePartHeader(name: String, fileName: String, mimeType: String?) -> Data {
+  private func partHeader(name: String, fileName: String?, mimeType: String?) -> Data {
     var header = Data()
     header.append(Data("--\(boundary)\r\n".utf8))
-    header.append(
-      Data(
-        "Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(fileName)\"\r\n"
-          .utf8
-      )
-    )
+    var disposition = "Content-Disposition: form-data; name=\"\(name)\""
+    if let fileName {
+      disposition.append("; filename=\"\(fileName)\"")
+    }
+    header.append(Data("\(disposition)\r\n".utf8))
 
     if let mimeType = mimeType {
       header.append(Data("Content-Type: \(mimeType)\r\n".utf8))
@@ -195,7 +262,7 @@ public enum MultipartBuilderError: LocalizedError {
   case createTempFileFailed
   case openTempFileFailed
   case openInputStreamFailed
-  case readInputStreamFailed(underlying: Error?)
+  case readInputStreamFailed(underlying: (any Error)?)
 
   public var errorDescription: String? {
     switch self {
