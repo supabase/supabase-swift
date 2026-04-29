@@ -430,26 +430,9 @@ public struct StorageFileAPI: Sendable {
   ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter.
   /// - Returns: A signed `URL` ready to be shared or embedded.
   /// - Throws: ``StorageError`` if the file does not exist or the request fails.
-  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   public func createSignedURL(
     path: String,
     expiresIn: Duration,
-    download: DownloadBehavior? = nil,
-    transform: TransformOptions? = nil,
-    cacheNonce: String? = nil
-  ) async throws -> URL {
-    try await _createSignedURL(
-      path: path,
-      expiresIn: Int(expiresIn.components.seconds),
-      download: download,
-      transform: transform,
-      cacheNonce: cacheNonce
-    )
-  }
-
-  private func _createSignedURL(
-    path: String,
-    expiresIn: Int,
     download: DownloadBehavior? = nil,
     transform: TransformOptions? = nil,
     cacheNonce: String? = nil
@@ -465,7 +448,7 @@ public struct StorageFileAPI: Sendable {
       "object/sign/\(bucketId)/\(path)",
       body: .data(
         encoder.encode(
-          Body(expiresIn: expiresIn, transform: transform)
+          Body(expiresIn: Int(expiresIn.components.seconds), transform: transform)
         )
       )
     )
@@ -482,24 +465,9 @@ public struct StorageFileAPI: Sendable {
   ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter.
   /// - Returns: An array of ``SignedURLResult`` values, one per input path.
   /// - Throws: ``StorageError`` if the batch request itself fails.
-  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   public func createSignedURLs(
     paths: [String],
     expiresIn: Duration,
-    download: DownloadBehavior? = nil,
-    cacheNonce: String? = nil
-  ) async throws -> [SignedURLResult] {
-    try await _createSignedURLs(
-      paths: paths,
-      expiresIn: Int(expiresIn.components.seconds),
-      download: download,
-      cacheNonce: cacheNonce
-    )
-  }
-
-  private func _createSignedURLs(
-    paths: [String],
-    expiresIn: Int,
     download: DownloadBehavior? = nil,
     cacheNonce: String? = nil
   ) async throws -> [SignedURLResult] {
@@ -512,7 +480,9 @@ public struct StorageFileAPI: Sendable {
     let response: [SignedURLsAPIResponse] = try await client.fetchDecoded(
       .post,
       "object/sign/\(bucketId)",
-      body: .data(encoder.encode(Params(expiresIn: expiresIn, paths: paths)))
+      body: .data(
+        encoder.encode(Params(expiresIn: Int(expiresIn.components.seconds), paths: paths))
+      )
     )
 
     return try response.map { item in
