@@ -910,7 +910,7 @@ public struct StorageFileAPI: Sendable {
     _ path: String,
     token: String,
     data: Data,
-    options: FileOptions? = nil
+    options: FileOptions = FileOptions()
   ) async throws -> SignedURLUploadResponse {
     try await _uploadToSignedURL(
       path: path,
@@ -952,7 +952,7 @@ public struct StorageFileAPI: Sendable {
     _ path: String,
     token: String,
     fileURL: URL,
-    options: FileOptions? = nil
+    options: FileOptions = FileOptions()
   ) async throws -> SignedURLUploadResponse {
     try await _uploadToSignedURL(
       path: path,
@@ -966,9 +966,8 @@ public struct StorageFileAPI: Sendable {
     path: String,
     token: String,
     file: FileUpload,
-    options: FileOptions?
+    options: FileOptions
   ) async throws -> SignedURLUploadResponse {
-    let options = options ?? file.defaultOptions()
     var headers = multipartHeaders(options: options)
     headers[Header.xUpsert] = "\(options.upsert)"
 
