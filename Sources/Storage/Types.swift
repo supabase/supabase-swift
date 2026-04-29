@@ -539,6 +539,100 @@ public struct BucketOptions: Sendable {
   }
 }
 
+/// Resize mode for on-the-fly image transformation.
+///
+/// Follows the `FunctionRegion` pattern: open to custom backend values without
+/// requiring an SDK update.
+public struct ResizeMode: RawRepresentable, Hashable, Sendable {
+  public var rawValue: String
+  public init(rawValue: String) { self.rawValue = rawValue }
+
+  /// Fill the target dimensions, cropping any overflow. Default behaviour.
+  public static let cover = ResizeMode(rawValue: "cover")
+  /// Fit the image within the target dimensions, letterboxing if needed.
+  public static let contain = ResizeMode(rawValue: "contain")
+  /// Stretch the image to exactly fill the target dimensions.
+  public static let fill = ResizeMode(rawValue: "fill")
+}
+
+extension ResizeMode: ExpressibleByStringLiteral {
+  public init(stringLiteral value: String) { self.init(rawValue: value) }
+}
+
+extension ResizeMode: Encodable {
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
+}
+
+extension ResizeMode: Decodable {
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    rawValue = try container.decode(String.self)
+  }
+}
+
+/// Output format for on-the-fly image transformation.
+///
+/// Follows the `FunctionRegion` pattern: open to custom backend values.
+public struct ImageFormat: RawRepresentable, Hashable, Sendable {
+  public var rawValue: String
+  public init(rawValue: String) { self.rawValue = rawValue }
+
+  /// Preserve the original file format.
+  public static let origin = ImageFormat(rawValue: "origin")
+  public static let webp = ImageFormat(rawValue: "webp")
+  public static let avif = ImageFormat(rawValue: "avif")
+}
+
+extension ImageFormat: ExpressibleByStringLiteral {
+  public init(stringLiteral value: String) { self.init(rawValue: value) }
+}
+
+extension ImageFormat: Encodable {
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
+}
+
+extension ImageFormat: Decodable {
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    rawValue = try container.decode(String.self)
+  }
+}
+
+/// Sort direction for ``StorageFileAPI/list(path:options:)`` results.
+///
+/// Follows the `FunctionRegion` pattern: open to custom backend values.
+public struct SortOrder: RawRepresentable, Hashable, Sendable {
+  public var rawValue: String
+  public init(rawValue: String) { self.rawValue = rawValue }
+
+  public static let ascending = SortOrder(rawValue: "asc")
+  public static let descending = SortOrder(rawValue: "desc")
+}
+
+extension SortOrder: ExpressibleByStringLiteral {
+  public init(stringLiteral value: String) { self.init(rawValue: value) }
+}
+
+extension SortOrder: Encodable {
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
+}
+
+extension SortOrder: Decodable {
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    rawValue = try container.decode(String.self)
+  }
+}
+
 /// Options for on-the-fly image transformation via the Supabase Storage image transformation API.
 ///
 /// Use `TransformOptions` when calling
