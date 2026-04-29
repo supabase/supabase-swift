@@ -10,7 +10,7 @@ let defaultSearchOptions = SearchOptions(
   offset: 0,
   sortBy: SortBy(
     column: "name",
-    order: "asc"
+    order: .ascending
   )
 )
 
@@ -718,7 +718,7 @@ public struct StorageFileAPI: Sendable {
   /// // Paginate with custom sort
   /// let page2 = try await storage.from("photos").list(
   ///   path: "gallery",
-  ///   options: SearchOptions(limit: 20, offset: 20, sortBy: SortBy(column: "created_at", order: "desc"))
+  ///   options: SearchOptions(limit: 20, offset: 20, sortBy: SortBy(column: "created_at", order: .descending))
   /// )
   /// ```
   public func list(

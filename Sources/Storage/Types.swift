@@ -14,7 +14,7 @@ import Foundation
 ///   options: SearchOptions(
 ///     limit: 20,
 ///     offset: 0,
-///     sortBy: SortBy(column: "created_at", order: "desc"),
+///     sortBy: SortBy(column: "created_at", order: .descending),
 ///     search: "report"
 ///   )
 /// )
@@ -59,18 +59,16 @@ public struct SearchOptions: Encodable, Sendable {
 /// ## Example
 ///
 /// ```swift
-/// let options = SearchOptions(sortBy: SortBy(column: "updated_at", order: "desc"))
+/// let options = SearchOptions(sortBy: SortBy(column: "updated_at", order: .descending))
 /// ```
 public struct SortBy: Encodable, Sendable {
-  /// The column to sort by.
-  ///
-  /// Can be any field exposed in ``FileObject``, e.g. `"name"`, `"created_at"`, `"updated_at"`.
+  /// The column to sort by, e.g. `"name"`, `"created_at"`, `"updated_at"`.
   public var column: String?
 
-  /// The sort direction: `"asc"` for ascending or `"desc"` for descending.
-  public var order: String?
+  /// The sort direction.
+  public var order: SortOrder?
 
-  public init(column: String? = nil, order: String? = nil) {
+  public init(column: String? = nil, order: SortOrder? = nil) {
     self.column = column
     self.order = order
   }
