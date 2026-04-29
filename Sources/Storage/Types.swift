@@ -661,6 +661,33 @@ extension SortOrder: Decodable {
   }
 }
 
+/// Controls browser download behaviour for public and signed URLs.
+///
+/// Pass to ``StorageFileAPI/getPublicURL(path:download:options:cacheNonce:)``,
+/// ``StorageFileAPI/createSignedURL(path:expiresIn:download:transform:cacheNonce:)``, or
+/// ``StorageFileAPI/createSignedURLs(paths:expiresIn:download:cacheNonce:)``.
+///
+/// ## Example
+///
+/// ```swift
+/// // Trigger download using the file's original filename
+/// let url = try bucket.getPublicURL(path: "report.pdf", download: .download)
+///
+/// // Trigger download with a custom filename
+/// let url = try bucket.getPublicURL(path: "report.pdf", download: .downloadAs("annual-2024.pdf"))
+/// ```
+public enum DownloadBehavior: Sendable {
+  /// Trigger a browser download prompt using the file's original name.
+  ///
+  /// Wire format: appends `?download=` (empty string value) to the URL.
+  case download
+
+  /// Trigger a browser download prompt using a custom filename.
+  ///
+  /// Wire format: appends `?download=<filename>` to the URL.
+  case downloadAs(String)
+}
+
 /// Options for on-the-fly image transformation via the Supabase Storage image transformation API.
 ///
 /// Use `TransformOptions` when calling
