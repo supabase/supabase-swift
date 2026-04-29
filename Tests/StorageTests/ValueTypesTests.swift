@@ -62,4 +62,19 @@ struct ValueTypesTests {
   }
 
   // MARK: - DownloadBehavior
+
+  @Test func downloadBehavior_download() {
+    if case .download = DownloadBehavior.download {
+    } else {
+      Issue.record("Expected .download case")
+    }
+  }
+
+  @Test func downloadBehavior_downloadAs() {
+    if case .downloadAs(let name) = DownloadBehavior.downloadAs("report.pdf") {
+      #expect(name == "report.pdf")
+    } else {
+      Issue.record("Expected .downloadAs case")
+    }
+  }
 }
