@@ -1,11 +1,41 @@
 import Foundation
 
+/// Options used when creating or updating a Storage bucket.
+///
+/// Pass an instance to ``StorageClient/createBucket(_:options:)`` or
+/// ``StorageClient/updateBucket(_:options:)`` to configure bucket-level defaults for visibility,
+/// file-size limits, and allowed MIME types.
+///
+/// ## Example
+///
+/// ```swift
+/// // Create a public bucket that only accepts images up to 5 MB
+/// try await storage.createBucket(
+///   "avatars",
+///   options: BucketOptions(
+///     public: true,
+///     fileSizeLimit: "5242880",
+///     allowedMimeTypes: ["image/*"]
+///   )
+/// )
+/// ```
 public struct BucketOptions: Sendable {
-  /// The visibility of the bucket. Public buckets don't require an authorization token to download objects, but still require a valid token for all other operations. Bu default, buckets are private.
+  /// Whether the bucket is publicly accessible.
+  ///
+  /// Public buckets allow file downloads without an authorization token. All other operations
+  /// (upload, delete, list) still require a valid token. Defaults to `false`.
   public var `public`: Bool
-  /// Specifies the allowed mime types that this bucket can accept during upload. The default value is null, which allows files with all mime types to be uploaded. Each mime type specified can be a wildcard, e.g. image/*, or a specific mime type, e.g. image/png.
+
+  /// The maximum file size allowed for uploads, expressed in bytes as a string (e.g. `"5242880"` for 5 MB).
+  ///
+  /// The global project file-size limit takes precedence over this value.
+  /// Pass `nil` to impose no per-bucket limit (the default).
   public var fileSizeLimit: String?
-  /// Specifies the max file size in bytes that can be uploaded to this bucket. The global file size limit takes precedence over this value. The default value is null, which doesn't set a per bucket file size limit.
+
+  /// MIME types accepted during upload to this bucket.
+  ///
+  /// Each entry can be an exact MIME type (`"image/png"`) or a wildcard (`"image/*"`).
+  /// Pass `nil` to allow all MIME types (the default).
   public var allowedMimeTypes: [String]?
 
   public init(
