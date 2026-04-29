@@ -184,38 +184,6 @@ public struct StorageFileAPI: Sendable {
     )
   }
 
-  /// Uploads a file from a local URL to an existing bucket.
-  ///
-  /// This is a convenience wrapper around ``upload(_:fileURL:options:)`` that accepts the
-  /// arguments in the reverse order and infers sensible default ``FileOptions`` from the file.
-  ///
-  /// - Parameters:
-  ///   - fileURL: The local `file://` URL of the file to upload.
-  ///   - path: The destination path within the bucket, e.g. `"folder/image.png"`.
-  ///     The bucket must already exist.
-  ///   - options: Upload options. When `nil`, defaults are inferred from the file (MIME type
-  ///     from the extension, no explicit content type).
-  /// - Returns: A ``FileUploadResponse`` containing the assigned storage ID and full path.
-  /// - Throws: ``StorageError`` if the upload fails or the bucket does not exist.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let fileURL = URL(fileURLWithPath: "/tmp/photo.jpg")
-  /// let response = try await storage.from("avatars").uploadFile(fileURL, to: "user-123/photo.jpg")
-  /// print(response.fullPath)
-  /// ```
-  @available(macOS 10.15.4, *)
-  @discardableResult
-  public func uploadFile(
-    _ fileURL: URL,
-    to path: String,
-    options: FileOptions? = nil
-  ) async throws -> FileUploadResponse {
-    try await upload(
-      path, fileURL: fileURL, options: options ?? FileUpload.url(fileURL).defaultOptions())
-  }
-
   /// Uploads a `Data` value to an existing bucket.
   ///
   /// If the path already exists and ``FileOptions/upsert`` is `false` (the default), an error
