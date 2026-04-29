@@ -76,69 +76,50 @@ public struct SortBy: Encodable, Sendable {
 
 /// Options that control how a file is stored when uploading or updating it in a bucket.
 ///
-/// Pass a `FileOptions` value to any of the upload or update methods on ``StorageFileAPI`` to
-/// customise caching behaviour, content type, upsert semantics, and optional metadata.
-///
 /// ## Example
 ///
 /// ```swift
 /// let options = FileOptions(
-///   cacheControl: "86400",        // cache for 24 hours
+///   cacheControl: "86400",         // cache for 24 hours
 ///   contentType: "image/jpeg",
-///   upsert: true,                  // overwrite if the path already exists
+///   upsert: true,
 ///   metadata: ["userId": "abc123"]
 /// )
 /// try await storage.from("avatars").upload("user.jpg", data: jpegData, options: options)
 /// ```
 public struct FileOptions: Sendable {
-  /// The number of seconds the asset is cached in the browser and in the Supabase CDN.
+  /// The `Cache-Control` header value for the stored object.
   ///
-  /// Sets the `Cache-Control: max-age=<seconds>` response header. Defaults to `"3600"` (1 hour).
+  /// Accepts standard Cache-Control directives such as `"3600"`, `"no-cache"`,
+  /// or `"public, max-age=3600"`. Defaults to `"3600"`.
   public var cacheControl: String
 
   /// The MIME type of the file, sent as the `Content-Type` header.
   ///
-  /// When `nil`, the MIME type is inferred from the file extension. Defaults to `nil`.
+  /// When `nil`, the MIME type is inferred from the file extension.
   public var contentType: String?
 
   /// Whether to overwrite an existing file at the same path.
   ///
-  /// When `true`, any existing object at the path is silently replaced. When `false` (the
-  /// default), an error is returned if the path is already occupied.
+  /// When `true`, any existing object at the path is silently replaced.
+  /// Defaults to `false`.
   public var upsert: Bool
-
-  /// Enables or disables duplex streaming for the underlying fetch request.
-  ///
-  /// Pass `"half"` to enable half-duplex streaming. Leave `nil` (the default) for standard
-  /// request behaviour.
-  public var duplex: String?
 
   /// Arbitrary key-value metadata attached to the object in the storage backend.
   ///
-  /// Values must be JSON-serialisable. The metadata can be queried and filtered through the
-  /// Supabase Storage API. Defaults to `nil`.
+  /// Values must be JSON-serialisable. Defaults to `nil`.
   public var metadata: [String: AnyJSON]?
-
-  /// Additional HTTP headers sent with the upload request.
-  ///
-  /// Use sparingly; most upload behaviour is controlled by the dedicated properties above.
-  /// Defaults to `nil`.
-  public var headers: [String: String]?
 
   public init(
     cacheControl: String = "3600",
     contentType: String? = nil,
     upsert: Bool = false,
-    duplex: String? = nil,
-    metadata: [String: AnyJSON]? = nil,
-    headers: [String: String]? = nil
+    metadata: [String: AnyJSON]? = nil
   ) {
     self.cacheControl = cacheControl
     self.contentType = contentType
     self.upsert = upsert
-    self.duplex = duplex
     self.metadata = metadata
-    self.headers = headers
   }
 }
 
