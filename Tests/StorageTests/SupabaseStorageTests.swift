@@ -26,7 +26,6 @@ final class SupabaseStorageTests: XCTestCase {
 
   func testGetPublicURL() throws {
     let sut = makeSUT()
-
     let path = "README.md"
 
     let baseUrl = try sut.from(bucketId).getPublicURL(path: path)
@@ -34,7 +33,7 @@ final class SupabaseStorageTests: XCTestCase {
 
     let baseUrlWithDownload = try sut.from(bucketId).getPublicURL(
       path: path,
-      download: true
+      download: .download
     )
     assertInlineSnapshot(of: baseUrlWithDownload, as: .description) {
       """
@@ -43,7 +42,7 @@ final class SupabaseStorageTests: XCTestCase {
     }
 
     let baseUrlWithDownloadAndFileName = try sut.from(bucketId).getPublicURL(
-      path: path, download: "test"
+      path: path, download: .downloadAs("test")
     )
     assertInlineSnapshot(of: baseUrlWithDownloadAndFileName, as: .description) {
       """
@@ -52,7 +51,7 @@ final class SupabaseStorageTests: XCTestCase {
     }
 
     let baseUrlWithAllOptions = try sut.from(bucketId).getPublicURL(
-      path: path, download: "test",
+      path: path, download: .downloadAs("test"),
       options: TransformOptions(width: 300, height: 300)
     )
     assertInlineSnapshot(of: baseUrlWithAllOptions, as: .description) {

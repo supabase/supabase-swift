@@ -57,7 +57,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testGetPublicURLWithDownloadQueryString() throws {
-    let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath, download: true)
+    let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath, download: .download)
     XCTAssertEqual(
       publicURL.absoluteString,
       "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download="
@@ -66,7 +66,7 @@ final class StorageFileIntegrationTests: XCTestCase {
 
   func testGetPublicURLWithCustomDownload() throws {
     let publicURL = try storage.from(bucketName).getPublicURL(
-      path: uploadPath, download: "test.jpg")
+      path: uploadPath, download: .downloadAs("test.jpg"))
     XCTAssertEqual(
       publicURL.absoluteString,
       "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download=test.jpg"

@@ -748,60 +748,36 @@ public struct StorageFileAPI: Sendable {
 
   /// Returns the public URL for a file in a public bucket.
   ///
-  /// The URL is constructed locally without a network request. This method does **not** verify
-  /// that the bucket is actually public — requests to the returned URL will fail with a
-  /// permission error if the bucket is private.
-  ///
-  /// > Note: Make the bucket public via ``StorageClient/updateBucket(_:options:)`` (set
-  /// > `BucketOptions(isPublic: true)`) or via the Supabase dashboard before using this method.
+  /// The URL is constructed locally without a network request.
   ///
   /// - Parameters:
-  ///   - path: The path of the file within the bucket, e.g. `"folder/image.png"`.
-  ///   - download: When non-`nil`, the browser treats the URL as a file download and uses this
-  ///     string as the suggested file name. Pass an empty string (`""`) to use the original name.
-  ///   - options: Optional on-the-fly image transformation applied when the URL is fetched.
-  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter for cache
-  ///     invalidation.
+  ///   - path: The path of the file within the bucket.
+  ///   - download: When non-`nil`, the browser treats the URL as a file download.
+  ///   - options: Optional on-the-fly image transformation.
+  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter.
   /// - Returns: The public `URL` for the file.
   /// - Throws: `URLError(.badURL)` if the resulting URL cannot be constructed.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// // Plain public URL
-  /// let url = try storage.from("avatars").getPublicURL(path: "user-123/photo.png")
-  ///
-  /// // Resized thumbnail URL
-  /// let thumbURL = try storage.from("avatars").getPublicURL(
-  ///   path: "user-123/photo.png",
-  ///   options: TransformOptions(width: 100, height: 100, resize: .cover)
-  /// )
-  ///
-  /// // Force-download URL with a custom file name
-  /// let downloadURL = try storage.from("documents").getPublicURL(
-  ///   path: "report.pdf",
-  ///   download: "annual-report-2024.pdf"
-  /// )
-  /// ```
   public func getPublicURL(
     path: String,
-    download: String? = nil,
+    download: DownloadBehavior? = nil,
     options: TransformOptions? = nil,
     cacheNonce: String? = nil
   ) throws -> URL {
     var queryItems: [URLQueryItem] = []
 
     guard
-      var components = URLComponents(
-        url: client.url,
-        resolvingAgainstBaseURL: true
-      )
+      var components = URLComponents(url: client.url, resolvingAgainstBaseURL: true)
     else {
       throw URLError(.badURL)
     }
 
     if let download {
-      queryItems.append(URLQueryItem(name: "download", value: download))
+      let value: String
+      switch download {
+      case .download: value = ""
+      case .downloadAs(let name): value = name
+      }
+      queryItems.append(URLQueryItem(name: "download", value: value))
     }
 
     if let optionsQueryItems = options?.queryItems {
@@ -812,52 +788,14 @@ public struct StorageFileAPI: Sendable {
       queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
     }
 
-    let renderPath =
-      options.map { !$0.isEmpty } == true ? "render/image" : "object"
-
+    let renderPath = options.map { !$0.isEmpty } == true ? "render/image" : "object"
     components.path += "/\(renderPath)/public/\(bucketId)/\(path)"
     components.queryItems = !queryItems.isEmpty ? queryItems : nil
 
     guard let generatedUrl = components.url else {
       throw URLError(.badURL)
     }
-
     return generatedUrl
-  }
-
-  /// Returns the public URL for a file in a public bucket, with a boolean download trigger.
-  ///
-  /// This overload is a convenience variant of
-  /// ``getPublicURL(path:download:options:cacheNonce:)`` that accepts a `Bool` instead of an
-  /// optional file name string. When `download` is `true`, the browser uses the original file
-  /// name for the download prompt.
-  ///
-  /// - Parameters:
-  ///   - path: The path of the file within the bucket, e.g. `"folder/image.png"`.
-  ///   - download: Pass `true` to trigger a browser download using the original file name.
-  ///   - options: Optional on-the-fly image transformation applied when the URL is fetched.
-  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter for cache
-  ///     invalidation.
-  /// - Returns: The public `URL` for the file.
-  /// - Throws: `URLError(.badURL)` if the resulting URL cannot be constructed.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let url = try storage.from("documents").getPublicURL(path: "report.pdf", download: true)
-  /// ```
-  public func getPublicURL(
-    path: String,
-    download: Bool,
-    options: TransformOptions? = nil,
-    cacheNonce: String? = nil
-  ) throws -> URL {
-    try getPublicURL(
-      path: path,
-      download: download ? "" : nil,
-      options: options,
-      cacheNonce: cacheNonce
-    )
   }
 
   /// Creates a signed upload URL for uploading a file without further authentication.
