@@ -1,5 +1,4 @@
 import ConcurrencyExtras
-import HTTPTypes
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -24,18 +23,13 @@ final class FunctionsClientTests: XCTestCase {
 
   lazy var session = URLSession(configuration: sessionConfiguration)
 
-  var region: String?
+  var region: FunctionRegion?
 
   lazy var sut = FunctionsClient(
     url: url,
-    headers: [
-      "apikey": apiKey
-    ],
+    headers: ["apikey": apiKey],
     region: region,
-    fetch: { request in
-      try await self.session.data(for: request)
-    },
-    sessionConfiguration: sessionConfiguration
+    session: self.session
   )
 
   override func setUp() {
@@ -49,10 +43,12 @@ final class FunctionsClientTests: XCTestCase {
       headers: ["apikey": apiKey],
       region: .saEast1
     )
-    XCTAssertEqual(client.region, "sa-east-1")
+    let region = await client.region
+    XCTAssertEqual(region?.rawValue, "sa-east-1")
 
-    XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
-    XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
+    let headers = await client.headers
+    XCTAssertEqual(headers["apikey"], apiKey)
+    XCTAssertNotNil(headers["X-Client-Info"])
   }
 
   func testInitWithCustomDecoder() async {
@@ -65,7 +61,8 @@ final class FunctionsClientTests: XCTestCase {
       decoder: decoder
     )
 
-    XCTAssertTrue(client.decoder === decoder)
+    let clientDecoder = await client.decoder
+    XCTAssertTrue(clientDecoder === decoder)
   }
 
   func testInvoke() async throws {
@@ -78,6 +75,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "Content-Length: 19" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
@@ -89,10 +87,11 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke(
-      "hello_world",
-      options: .init(headers: ["X-Custom-Key": "value"], body: ["name": "Supabase"])
-    )
+    try await sut.invoke("hello_world") {
+      $0.headers["X-Custom-Key"] = "value"
+      $0.headers["Content-Type"] = "application/json"
+      $0.body = try? JSONEncoder().encode(["name": "Supabase"])
+    }
   }
 
   func testInvokeReturningDecodable() async throws {
@@ -107,6 +106,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello"
@@ -119,7 +119,7 @@ final class FunctionsClientTests: XCTestCase {
       var status: String
     }
 
-    let response = try await sut.invoke("hello") as Payload
+    let (response, _): (Payload, _) = try await sut.invokeDecodable("hello")
     XCTAssertEqual(response.message, "Hello, world!")
     XCTAssertEqual(response.status, "ok")
   }
@@ -134,6 +134,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request DELETE \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world"
@@ -141,7 +142,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke("hello-world", options: .init(method: .delete))
+    try await sut.invoke("hello-world") { $0.method = .delete }
   }
 
   func testInvokeWithQuery() async throws {
@@ -157,6 +158,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world?key=value"
@@ -164,16 +166,11 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke(
-      "hello-world",
-      options: .init(
-        query: [URLQueryItem(name: "key", value: "value")]
-      )
-    )
+    try await sut.invoke("hello-world") { $0.query = ["key": "value"] }
   }
 
   func testInvokeWithRegionDefinedInClient() async throws {
-    region = FunctionRegion.caCentral1.rawValue
+    region = .caCentral1
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -185,6 +182,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-region: ca-central-1" \
@@ -207,6 +205,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-region: ca-central-1" \
@@ -215,7 +214,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    try await sut.invoke("hello-world", options: .init(region: .caCentral1))
+    try await sut.invoke("hello-world") { $0.region = .caCentral1 }
   }
 
   func testInvokeWithoutRegion() async throws {
@@ -230,6 +229,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world"
@@ -251,6 +251,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
@@ -278,6 +279,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
@@ -308,6 +310,7 @@ final class FunctionsClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Accept: application/json" \
       	--header "X-Client-Info: functions-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
@@ -324,93 +327,96 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 
-  func test_setAuth() {
-    sut.setAuth(token: "access.token")
-    XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
+  func test_setAuth() async {
+    await sut.setAuth(token: "access.token")
+    let authHeader = await sut.headers["Authorization"]
+    XCTAssertEqual(authHeader, "Bearer access.token")
 
-    sut.setAuth(token: nil)
-    XCTAssertNil(sut.headers[.authorization])
+    await sut.setAuth(token: nil)
+    let authHeaderNil = await sut.headers["Authorization"]
+    XCTAssertNil(authHeaderNil)
   }
 
-  func testInvokeWithStreamedResponse() async throws {
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 200,
-      data: [.post: Data("hello world".utf8)]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/stream"
-      """#
-    }
-    .register()
-
-    let stream = sut._invokeWithStreamedResponse("stream")
-
-    for try await value in stream {
-      XCTAssertEqual(String(decoding: value, as: UTF8.self), "hello world")
-    }
-  }
-
-  func testInvokeWithStreamedResponseHTTPError() async throws {
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 300,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/stream"
-      """#
-    }
-    .register()
-
-    let stream = sut._invokeWithStreamedResponse("stream")
-
-    do {
-      for try await _ in stream {
-        XCTFail("should throw error")
+  #if canImport(Darwin)
+    func testInvokeWithStreamedResponse() async throws {
+      Mock(
+        url: url.appendingPathComponent("stream"),
+        statusCode: 200,
+        data: [.post: Data("hello world".utf8)]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "X-Client-Info: functions-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:5432/functions/v1/stream"
+        """#
       }
-    } catch let FunctionsError.httpError(code, _) {
-      XCTAssertEqual(code, 300)
-    }
-  }
+      .register()
 
-  func testInvokeWithStreamedResponseRelayError() async throws {
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 200,
-      data: [.post: Data()],
-      additionalHeaders: [
-        "x-relay-error": "true"
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/stream"
-      """#
-    }
-    .register()
+      let (stream, _) = try await sut.invokeStream("stream")
 
-    let stream = sut._invokeWithStreamedResponse("stream")
-
-    do {
-      for try await _ in stream {
-        XCTFail("should throw error")
+      var bytes: [UInt8] = []
+      for try await byte in stream {
+        bytes.append(byte)
       }
-    } catch FunctionsError.relayError {
+      XCTAssertEqual(String(bytes: bytes, encoding: .utf8), "hello world")
     }
-  }
+
+    func testInvokeWithStreamedResponseHTTPError() async throws {
+      Mock(
+        url: url.appendingPathComponent("stream"),
+        statusCode: 300,
+        data: [.post: Data()]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "X-Client-Info: functions-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:5432/functions/v1/stream"
+        """#
+      }
+      .register()
+
+      do {
+        _ = try await sut.invokeStream("stream")
+        XCTFail("should throw error")
+      } catch let FunctionsError.httpError(code, _) {
+        XCTAssertEqual(code, 300)
+      }
+    }
+
+    func testInvokeWithStreamedResponseRelayError() async throws {
+      Mock(
+        url: url.appendingPathComponent("stream"),
+        statusCode: 200,
+        data: [.post: Data()],
+        additionalHeaders: [
+          "x-relay-error": "true"
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "X-Client-Info: functions-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:5432/functions/v1/stream"
+        """#
+      }
+      .register()
+
+      do {
+        _ = try await sut.invokeStream("stream")
+        XCTFail("should throw error")
+      } catch FunctionsError.relayError {
+      }
+    }
+  #endif
 }

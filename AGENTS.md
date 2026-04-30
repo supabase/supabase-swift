@@ -23,9 +23,9 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
 
 ### Requirements
 
-- Xcode 15.3+ (supports versions eligible for App Store submission)
-- Swift 5.10+
-- Supported platforms: iOS 13.0+, macOS 10.15+, tvOS 13+, watchOS 6+, visionOS 1+
+- Xcode 16.3+ (supports versions eligible for App Store submission)
+- Swift 6.1+
+- Supported platforms: iOS 16.0+, macOS 12.0+, tvOS 16+, watchOS 9+, visionOS 1+
 - Linux is supported for building but not officially supported for production use
 
 ### Build Commands

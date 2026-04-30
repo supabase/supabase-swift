@@ -19,7 +19,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testNotFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -46,7 +46,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testOrFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -73,7 +73,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testOrFilterWithReferencedTable() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -100,7 +100,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testContainsFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -127,7 +127,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testTextSearchFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -154,7 +154,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testMultipleFilters() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -182,7 +182,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testLikeFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -209,7 +209,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testILikeFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -236,7 +236,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testIsFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -263,7 +263,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testInFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -290,7 +290,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testContainedByFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -317,7 +317,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testRangeFilters() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -348,7 +348,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testOverlapsFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -375,7 +375,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testMatchFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -402,7 +402,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testFilterEscapeHatch() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -429,7 +429,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testNeqFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -456,7 +456,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testGtFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -483,7 +483,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testLtFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -510,7 +510,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testLteFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -537,7 +537,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testLikeAllOfFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -564,7 +564,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testLikeAnyOfFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -591,7 +591,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testILikeAllOfFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -618,7 +618,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testILikeAnyOfFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -645,7 +645,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testFtsFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -672,7 +672,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testRegexMatchFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -699,7 +699,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testRegexImatchFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]
@@ -726,7 +726,7 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
   func testIsDistinctFilter() async throws {
     Mock(
-      url: url.appendingPathComponent("users"),
+      url: Self.url.appendingPathComponent("users"),
       ignoreQuery: true,
       statusCode: 200,
       data: [.get: Data("[]".utf8)]

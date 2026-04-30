@@ -146,11 +146,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Subscribes to the channel.
-  @available(*, deprecated, message: "Use `subscribeWithError` instead")
-  @MainActor
-  public func subscribe() async {
-    try? await subscribeWithError()
-  }
 
   public func unsubscribe() async {
     logger?.debug("Unsubscribe requested for channel '\(topic)'")
@@ -266,11 +261,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
 
     let response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) {
-      [self] in
-      await Result {
-        try await socket.http.send(request)
-      }
-    }.get()
+      [self] in try await socket.http.send(request)
+    }
 
     guard response.statusCode == 202 else {
       // Try to parse error message from response body

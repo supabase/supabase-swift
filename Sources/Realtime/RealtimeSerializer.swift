@@ -44,7 +44,7 @@ struct RealtimeSerializer: Sendable {
 
   /// Encodes a ``RealtimeMessageV2`` as a JSON array string: `[joinRef, ref, topic, event, payload]`.
   func encodeText(_ message: RealtimeMessageV2) throws -> String {
-    var array: [AnyJSON] = [
+    let array: [AnyJSON] = [
       message.joinRef.map { .string($0) } ?? .null,
       message.ref.map { .string($0) } ?? .null,
       .string(message.topic),

@@ -15,8 +15,8 @@ import XCTest
   @MainActor
   @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   final class _PushTests: XCTestCase {
-    var ws: FakeWebSocket!
-    var socket: RealtimeClientV2!
+    nonisolated(unsafe) var ws: FakeWebSocket!
+    nonisolated(unsafe) var socket: RealtimeClientV2!
 
     override func setUp() {
       super.setUp()
