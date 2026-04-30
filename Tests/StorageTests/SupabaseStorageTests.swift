@@ -33,7 +33,7 @@ struct SupabaseStorageTests {
 
     let baseUrlWithDownload = try sut.from(bucketId).getPublicURL(
       path: path,
-      download: .download
+      download: .withOriginalName
     )
     assertInlineSnapshot(of: baseUrlWithDownload, as: .description) {
       """
@@ -42,7 +42,7 @@ struct SupabaseStorageTests {
     }
 
     let baseUrlWithDownloadAndFileName = try sut.from(bucketId).getPublicURL(
-      path: path, download: .downloadAs("test")
+      path: path, download: .named("test")
     )
     assertInlineSnapshot(of: baseUrlWithDownloadAndFileName, as: .description) {
       """
@@ -51,7 +51,7 @@ struct SupabaseStorageTests {
     }
 
     let baseUrlWithAllOptions = try sut.from(bucketId).getPublicURL(
-      path: path, download: .downloadAs("test"),
+      path: path, download: .named("test"),
       options: TransformOptions(width: 300, height: 300)
     )
     assertInlineSnapshot(of: baseUrlWithAllOptions, as: .description) {

@@ -655,21 +655,21 @@ extension SortOrder: Decodable {
 ///
 /// ```swift
 /// // Trigger download using the file's original filename
-/// let url = try bucket.getPublicURL(path: "report.pdf", download: .download)
+/// let url = try bucket.getPublicURL(path: "report.pdf", download: .withOriginalName)
 ///
 /// // Trigger download with a custom filename
-/// let url = try bucket.getPublicURL(path: "report.pdf", download: .downloadAs("annual-2024.pdf"))
+/// let url = try bucket.getPublicURL(path: "report.pdf", download: .named("annual-2024.pdf"))
 /// ```
 public enum DownloadBehavior: Sendable {
   /// Trigger a browser download prompt using the file's original name.
   ///
   /// Wire format: appends `?download=` (empty string value) to the URL.
-  case download
+  case withOriginalName
 
   /// Trigger a browser download prompt using a custom filename.
   ///
   /// Wire format: appends `?download=<filename>` to the URL.
-  case downloadAs(String)
+  case named(String)
 }
 
 /// Options for on-the-fly image transformation via the Supabase Storage image transformation API.

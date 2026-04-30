@@ -214,7 +214,7 @@ struct StorageFileAPITests {
     let signedURL = try await storage.from("bucket").createSignedURL(
       path: "file.txt",
       expiresIn: .seconds(3600),
-      download: .download
+      download: .withOriginalName
     )
     #expect(
       signedURL.absoluteString
@@ -326,7 +326,7 @@ struct StorageFileAPITests {
       .createSignedURLs(
         paths: paths,
         expiresIn: .seconds(3600),
-        download: .download
+        download: .withOriginalName
       )
     #expect(results.count == 2)
     guard case .success(_, let url0) = results[0] else {
