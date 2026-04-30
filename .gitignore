@@ -104,6 +104,8 @@ temp_coverage
 
 .cursor
 .serena/
+.claude/
+.claire/
 
 # Node.js
 node_modules/
