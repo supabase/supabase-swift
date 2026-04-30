@@ -69,9 +69,7 @@ final class SupabaseClientTests: XCTestCase {
       [
         "Apikey": "PUBLISHABLE_KEY",
         "Authorization": "Bearer PUBLISHABLE_KEY",
-        "X-Client-Info": "supabase-swift/0.0.0",
-        "X-Supabase-Client-Platform": "macOS",
-        "X-Supabase-Client-Platform-Version": "0.0.0",
+        "X-Client-Info": "supabase-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0",
         "header_field": "header_value"
       ]
       """
