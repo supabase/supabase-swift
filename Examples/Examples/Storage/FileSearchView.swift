@@ -144,7 +144,7 @@ struct FileSearchView: View {
       if let selectedFile {
         Section("File Details") {
           DetailRow(label: "Name", value: selectedFile.name)
-          DetailRow(label: "ID", value: selectedFile.id)
+          DetailRow(label: "ID", value: selectedFile.id.uuidString)
           DetailRow(label: "Version", value: selectedFile.version)
 
           if let contentType = selectedFile.contentType {
@@ -300,7 +300,7 @@ struct FileSearchView: View {
         offset: 0,
         sortBy: SortBy(
           column: sortColumn.rawValue,
-          order: sortOrder.rawValue
+          order: .init(rawValue: sortOrder.rawValue)
         ),
         search: searchText.isEmpty ? nil : searchText
       )
