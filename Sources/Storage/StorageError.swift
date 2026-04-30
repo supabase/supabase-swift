@@ -150,11 +150,11 @@ public struct StorageError: Error, Sendable {
 extension StorageError {
   /// `true` when the error indicates that the requested object or bucket does not exist.
   ///
-  /// Covers HTTP status codes 400 and 404 as well as the explicit error codes
+  /// Covers HTTP status code 404 and the explicit error codes
   /// ``StorageErrorCode/objectNotFound``, ``StorageErrorCode/bucketNotFound``, and
   /// ``StorageErrorCode/notFound``.
   public var isNotFound: Bool {
-    statusCode == 400 || statusCode == 404
+    statusCode == 404
       || errorCode == .objectNotFound
       || errorCode == .bucketNotFound
       || errorCode == .notFound

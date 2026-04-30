@@ -62,20 +62,6 @@ struct MultipartBuilder {
     return builder
   }
 
-  /// Add a file field to the multipart payload (for streamed output)
-  func addFileStreamed(
-    name: String,
-    fileURL: URL,
-    fileName: String? = nil,
-    mimeType: String? = nil
-  ) -> MultipartBuilder {
-    // For now, same as addFile - streaming happens in buildToTempFile
-    var builder = self
-    builder.parts.append(
-      .file(name: name, fileURL: fileURL, fileName: fileName, mimeType: mimeType))
-    return builder
-  }
-
   /// Build the multipart payload in memory
   /// - Note: Only suitable for small payloads. Use `buildToTempFile()` for large files.
   /// - Returns: Complete multipart body data
