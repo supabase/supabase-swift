@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 07/05/24.
 //
 
-import InlineSnapshotTesting
 import Storage
 import XCTest
 
@@ -76,18 +75,11 @@ final class StorageClientIntegrationTests: XCTestCase {
     do {
       _ = try await storage.getBucket("not-exist-id")
       XCTFail("Unexpected success")
+    } catch let error as StorageError {
+      XCTAssertEqual(error.statusCode, 404)
+      XCTAssertEqual(error.message, "Bucket not found")
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Bucket not found"
-          - message: "Bucket not found"
-          ▿ statusCode: Optional<String>
-            - some: "404"
-
-        """
-      }
+      XCTFail("Unexpected error type: \(error)")
     }
   }
 }

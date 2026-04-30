@@ -136,18 +136,11 @@ final class StorageFileIntegrationTests: XCTestCase {
     do {
       try await storage.from(bucketName).upload(uploadPath, data: file)
       XCTFail("Unexpected success")
+    } catch let error as StorageError {
+      XCTAssertEqual(error.statusCode, 413)
+      XCTAssertEqual(error.message, "The object exceeded the maximum allowed size")
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Payload too large"
-          - message: "The object exceeded the maximum allowed size"
-          ▿ statusCode: Optional<String>
-            - some: "413"
-
-        """
-      }
+      XCTFail("Unexpected error type: \(error)")
     }
   }
 
@@ -181,18 +174,11 @@ final class StorageFileIntegrationTests: XCTestCase {
         )
       )
       XCTFail("Unexpected success")
+    } catch let error as StorageError {
+      XCTAssertEqual(error.statusCode, 415)
+      XCTAssertEqual(error.message, "mime type image/jpeg is not supported")
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "invalid_mime_type"
-          - message: "mime type image/jpeg is not supported"
-          ▿ statusCode: Optional<String>
-            - some: "415"
-
-        """
-      }
+      XCTFail("Unexpected error type: \(error)")
     }
   }
 
@@ -232,18 +218,11 @@ final class StorageFileIntegrationTests: XCTestCase {
     do {
       try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
       XCTFail("Unexpected success")
+    } catch let error as StorageError {
+      XCTAssertEqual(error.statusCode, 409)
+      XCTAssertEqual(error.message, "The resource already exists")
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Duplicate"
-          - message: "The resource already exists"
-          ▿ statusCode: Optional<String>
-            - some: "409"
-
-        """
-      }
+      XCTFail("Unexpected error type: \(error)")
     }
   }
 
