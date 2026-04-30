@@ -168,9 +168,7 @@ public struct StorageFileAPI: Sendable {
     let _path = _getFinalPath(cleanPath)
 
     var headers = multipartHeaders(options: options)
-    if method == .post {
-      headers[Header.xUpsert] = "\(options.upsert)"
-    }
+    headers[Header.xUpsert] = "\(options.upsert)"
 
     let response: UploadResponse = try await uploadMultipart(
       method,
@@ -731,7 +729,8 @@ public struct StorageFileAPI: Sendable {
     do {
       try await client.fetchData(.head, "object/\(bucketId)/\(path)")
       return true
-    } catch let error as StorageError where error.isNotFound {
+    } catch let error as StorageError where error.isNotFound || error.statusCode == 400 {
+      // The Storage server returns 400 (instead of 404) for HEAD requests on non-existent objects.
       return false
     }
   }
