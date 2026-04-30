@@ -1,43 +1,131 @@
+import Foundation
 import XCTest
 
 @testable import Storage
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 final class StorageErrorTests: XCTestCase {
-  func testErrorInitialization() {
-    let error = StorageError(
-      statusCode: "404",
-      message: "File not found",
-      error: "NotFound"
-    )
 
-    XCTAssertEqual(error.statusCode, "404")
-    XCTAssertEqual(error.message, "File not found")
-    XCTAssertEqual(error.error, "NotFound")
+  // MARK: - StorageErrorCode
+
+  func testErrorCodeRawRepresentable() {
+    let code = StorageErrorCode("ObjectNotFound")
+    XCTAssertEqual(code.rawValue, "ObjectNotFound")
   }
 
-  func testLocalizedError() {
-    let error = StorageError(
-      statusCode: "500",
-      message: "Internal server error",
-      error: nil
-    )
-
-    XCTAssertEqual(error.errorDescription, "Internal server error")
+  func testErrorCodeInitFromRawValue() {
+    let code = StorageErrorCode(rawValue: "BucketNotFound")
+    XCTAssertEqual(code, .bucketNotFound)
   }
 
-  func testDecoding() throws {
-    let json = """
-      {
-          "statusCode": "403",
-          "message": "Unauthorized access",
-          "error": "Forbidden"
-      }
-      """.data(using: .utf8)!
+  func testErrorCodeEquality() {
+    XCTAssertEqual(StorageErrorCode("ObjectNotFound"), .objectNotFound)
+    XCTAssertNotEqual(StorageErrorCode("ObjectNotFound"), .bucketNotFound)
+  }
 
-    let error = try JSONDecoder().decode(StorageError.self, from: json)
+  func testUnknownCodeRoundTrips() {
+    let code = StorageErrorCode("SomeFutureCode")
+    XCTAssertEqual(code.rawValue, "SomeFutureCode")
+    XCTAssertNotEqual(code, .unknown)
+  }
 
-    XCTAssertEqual(error.statusCode, "403")
-    XCTAssertEqual(error.message, "Unauthorized access")
-    XCTAssertEqual(error.error, "Forbidden")
+  // MARK: - StorageError initialisation
+
+  func testAPIErrorWithFullHTTPContext() throws {
+    let response = try XCTUnwrap(
+      HTTPURLResponse(
+        url: URL(string: "https://example.com")!,
+        statusCode: 404,
+        httpVersion: nil,
+        headerFields: nil
+      )
+    )
+    let data = Data("not found".utf8)
+
+    let error = StorageError(
+      message: "Object not found",
+      errorCode: .objectNotFound,
+      statusCode: 404,
+      underlyingResponse: response,
+      underlyingData: data
+    )
+
+    XCTAssertEqual(error.message, "Object not found")
+    XCTAssertEqual(error.errorCode, .objectNotFound)
+    XCTAssertEqual(error.statusCode, 404)
+    XCTAssertEqual(error.underlyingResponse?.statusCode, 404)
+    XCTAssertEqual(error.underlyingData, data)
+  }
+
+  func testClientSideErrorHasNoHTTPContext() {
+    let error = StorageError.noTokenReturned
+    XCTAssertEqual(error.message, "No token returned by API")
+    XCTAssertEqual(error.errorCode, .noTokenReturned)
+    XCTAssertNil(error.statusCode)
+    XCTAssertNil(error.underlyingResponse)
+    XCTAssertNil(error.underlyingData)
+  }
+
+  // MARK: - LocalizedError
+
+  func testErrorDescriptionEqualsMessage() {
+    let error = StorageError(
+      message: "Bucket not found",
+      errorCode: .bucketNotFound,
+      statusCode: 404
+    )
+    XCTAssertEqual(error.errorDescription, "Bucket not found")
+  }
+
+  // MARK: - isNotFound
+
+  func testIsNotFoundStatus404() {
+    let error = StorageError(message: "x", errorCode: .unknown, statusCode: 404)
+    XCTAssertTrue(error.isNotFound)
+  }
+
+  func testIsNotFoundStatus400() {
+    let error = StorageError(message: "x", errorCode: .unknown, statusCode: 400)
+    XCTAssertTrue(error.isNotFound)
+  }
+
+  func testIsNotFoundObjectNotFoundCode() {
+    let error = StorageError(message: "x", errorCode: .objectNotFound, statusCode: 200)
+    XCTAssertTrue(error.isNotFound)
+  }
+
+  func testIsNotFoundBucketNotFoundCode() {
+    let error = StorageError(message: "x", errorCode: .bucketNotFound, statusCode: 200)
+    XCTAssertTrue(error.isNotFound)
+  }
+
+  func testIsNotFoundGenericNotFoundCode() {
+    let error = StorageError(message: "x", errorCode: .notFound, statusCode: 200)
+    XCTAssertTrue(error.isNotFound)
+  }
+
+  func testIsNotFoundFalseForServerError() {
+    let error = StorageError(message: "x", errorCode: .unknown, statusCode: 500)
+    XCTAssertFalse(error.isNotFound)
+  }
+
+  // MARK: - isUnauthorized
+
+  func testIsUnauthorized401() {
+    let error = StorageError(message: "x", errorCode: .unauthorized, statusCode: 401)
+    XCTAssertTrue(error.isUnauthorized)
+  }
+
+  func testIsUnauthorized403() {
+    let error = StorageError(message: "x", errorCode: .unauthorized, statusCode: 403)
+    XCTAssertTrue(error.isUnauthorized)
+  }
+
+  func testIsUnauthorizedFalseForOtherStatus() {
+    let error = StorageError(message: "x", errorCode: .objectNotFound, statusCode: 404)
+    XCTAssertFalse(error.isUnauthorized)
   }
 }
