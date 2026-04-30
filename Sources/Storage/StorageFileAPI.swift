@@ -545,8 +545,8 @@ public struct StorageFileAPI: Sendable {
       baseComponents.queryItems = baseComponents.queryItems ?? []
       let value: String
       switch download {
-      case .download: value = ""
-      case .downloadAs(let name): value = name
+      case .withOriginalName: value = ""
+      case .named(let name): value = name
       }
       baseComponents.queryItems!.append(
         URLQueryItem(name: "download", value: value)
@@ -767,8 +767,8 @@ public struct StorageFileAPI: Sendable {
     if let download {
       let value: String
       switch download {
-      case .download: value = ""
-      case .downloadAs(let name): value = name
+      case .withOriginalName: value = ""
+      case .named(let name): value = name
       }
       queryItems.append(URLQueryItem(name: "download", value: value))
     }
