@@ -106,6 +106,7 @@ temp_coverage
 .serena/
 .claude/
 .claire/
+docs/superpowers/
 
 # Node.js
 node_modules/
