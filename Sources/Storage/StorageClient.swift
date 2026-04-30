@@ -304,7 +304,8 @@ public final class StorageClient: Sendable {
 
     let decoded = try? decoder.decode(ServerErrorResponse.self, from: data)
     return StorageError(
-      message: decoded?.message ?? decoded?.error ?? String(data: data, encoding: .utf8) ?? "Unknown error",
+      message: decoded?.message ?? decoded?.error ?? String(data: data, encoding: .utf8)
+        ?? "Unknown error",
       errorCode: decoded?.error.map(StorageErrorCode.init(_:)) ?? .unknown,
       statusCode: decoded?.statusCode.flatMap(Int.init) ?? response.statusCode,
       underlyingResponse: response,
