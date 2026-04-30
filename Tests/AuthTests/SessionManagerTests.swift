@@ -28,18 +28,35 @@ final class SessionManagerTests: XCTestCase {
 
     http = HTTPClientMock()
 
-    Dependencies[clientID] = .init(
-      configuration: .init(
-        url: clientURL,
-        localStorage: InMemoryLocalStorage(),
-        autoRefreshToken: false
-      ),
-      http: http,
-      api: APIClient(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: SessionStorage.live(clientID: clientID),
-      sessionManager: SessionManager.live(clientID: clientID)
-    )
+    #if canImport(LocalAuthentication)
+      Dependencies[clientID] = .init(
+        configuration: .init(
+          url: clientURL,
+          localStorage: InMemoryLocalStorage(),
+          autoRefreshToken: false
+        ),
+        http: http,
+        api: APIClient(clientID: clientID),
+        codeVerifierStorage: .mock,
+        sessionStorage: SessionStorage.live(clientID: clientID),
+        sessionManager: SessionManager.live(clientID: clientID),
+        biometricStorage: BiometricStorage.mock,
+        biometricSession: BiometricSession.mock
+      )
+    #else
+      Dependencies[clientID] = .init(
+        configuration: .init(
+          url: clientURL,
+          localStorage: InMemoryLocalStorage(),
+          autoRefreshToken: false
+        ),
+        http: http,
+        api: APIClient(clientID: clientID),
+        codeVerifierStorage: .mock,
+        sessionStorage: SessionStorage.live(clientID: clientID),
+        sessionManager: SessionManager.live(clientID: clientID)
+      )
+    #endif
   }
 
   #if !os(Windows) && !os(Linux) && !os(Android)
