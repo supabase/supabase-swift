@@ -130,7 +130,7 @@ final class SupabaseStorageTests: XCTestCase {
         return (
           """
           {
-            "Id": "tests/file1.txt",
+            "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
             "Key": "tests/file1.txt"
           }
           """.data(using: .utf8)!,
@@ -177,7 +177,7 @@ final class SupabaseStorageTests: XCTestCase {
         return (
           """
           {
-            "Id": "tests/file1.txt",
+            "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
             "Key": "tests/file1.txt"
           }
           """.data(using: .utf8)!,

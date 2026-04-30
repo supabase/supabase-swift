@@ -1,3 +1,4 @@
+import Helpers
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -179,7 +180,9 @@ final class StorageFileAPITests: XCTestCase {
       expiresIn: .seconds(3600)
     )
     XCTAssertEqual(
-      url.absoluteString, "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
+      url.absoluteString,
+      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
+    )
   }
 
   func testCreateSignedURL_download() async throws {
@@ -218,7 +221,8 @@ final class StorageFileAPITests: XCTestCase {
     )
     XCTAssertEqual(
       url.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
+      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download="
+    )
   }
 
   func testCreateSignedURLs() async throws {
@@ -258,10 +262,11 @@ final class StorageFileAPITests: XCTestCase {
     .register()
 
     let paths = ["file.txt", "file2.txt"]
-    let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
-      paths: paths,
-      expiresIn: .seconds(3600)
-    )
+    let results: [SignedURLResult] = try await storage.from("bucket")
+      .createSignedURLs(
+        paths: paths,
+        expiresIn: .seconds(3600)
+      )
     XCTAssertEqual(results.count, 2)
     guard case .success(let path0, let url0) = results[0] else {
       return XCTFail("Expected success for file.txt")
@@ -269,14 +274,16 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(path0, "file.txt")
     XCTAssertEqual(
       url0.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
+      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
+    )
     guard case .success(let path1, let url1) = results[1] else {
       return XCTFail("Expected success for file2.txt")
     }
     XCTAssertEqual(path1, "file2.txt")
     XCTAssertEqual(
       url1.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi")
+      "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi"
+    )
   }
 
   func testCreateSignedURLs_download() async throws {
@@ -316,24 +323,27 @@ final class StorageFileAPITests: XCTestCase {
     .register()
 
     let paths = ["file.txt", "file2.txt"]
-    let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
-      paths: paths,
-      expiresIn: .seconds(3600),
-      download: .download
-    )
+    let results: [SignedURLResult] = try await storage.from("bucket")
+      .createSignedURLs(
+        paths: paths,
+        expiresIn: .seconds(3600),
+        download: .download
+      )
     XCTAssertEqual(results.count, 2)
     guard case .success(_, let url0) = results[0] else {
       return XCTFail("Expected success for file.txt")
     }
     XCTAssertEqual(
       url0.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
+      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download="
+    )
     guard case .success(_, let url1) = results[1] else {
       return XCTFail("Expected success for file2.txt")
     }
     XCTAssertEqual(
       url1.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi&download=")
+      "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi&download="
+    )
   }
 
   func testCreateSignedURLs_withNullSignedURL() async throws {
@@ -360,10 +370,11 @@ final class StorageFileAPITests: XCTestCase {
     )
     .register()
 
-    let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
-      paths: ["file.txt", "missing.txt"],
-      expiresIn: .seconds(3600)
-    )
+    let results: [SignedURLResult] = try await storage.from("bucket")
+      .createSignedURLs(
+        paths: ["file.txt", "missing.txt"],
+        expiresIn: .seconds(3600)
+      )
     XCTAssertEqual(results.count, 2)
     guard case .success(let path0, _) = results[0] else {
       return XCTFail("Expected success for file.txt")
@@ -373,7 +384,10 @@ final class StorageFileAPITests: XCTestCase {
       return XCTFail("Expected failure for missing.txt")
     }
     XCTAssertEqual(path1, "missing.txt")
-    XCTAssertEqual(error1, "Either the object does not exist or you do not have access to it")
+    XCTAssertEqual(
+      error1,
+      "Either the object does not exist or you do not have access to it"
+    )
   }
 
   func testRemove() async throws {
@@ -401,7 +415,8 @@ final class StorageFileAPITests: XCTestCase {
               "metadata": {}
             }
           ]
-          """.utf8)
+          """.utf8
+        )
       ]
     )
     .snapshotRequest {
@@ -554,7 +569,10 @@ final class StorageFileAPITests: XCTestCase {
         )
       )
 
-    XCTAssertEqual(response.id, UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
+    XCTAssertEqual(
+      response.id,
+      UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196")
+    )
     XCTAssertEqual(response.path, "file.txt")
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
@@ -616,7 +634,10 @@ final class StorageFileAPITests: XCTestCase {
         )
       )
 
-    XCTAssertEqual(response.id, UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
+    XCTAssertEqual(
+      response.id,
+      UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196")
+    )
     XCTAssertEqual(response.path, "file.txt")
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
@@ -717,10 +738,16 @@ final class StorageFileAPITests: XCTestCase {
 
   func testDownload_withOptions() async throws {
     let imageData = try! Data(
-      contentsOf: Bundle.module.url(forResource: "sadcat", withExtension: "jpg")!)
+      contentsOf: Bundle.module.url(
+        forResource: "sadcat",
+        withExtension: "jpg"
+      )!
+    )
 
     Mock(
-      url: url.appendingPathComponent("render/image/authenticated/bucket/sadcat.txt"),
+      url: url.appendingPathComponent(
+        "render/image/authenticated/bucket/sadcat.txt"
+      ),
       ignoreQuery: true,
       statusCode: 200,
       data: [
@@ -887,7 +914,8 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(response.token, "abc.def.ghi")
     XCTAssertEqual(
       response.signedURL.absoluteString,
-      "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
+      "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
+    )
   }
 
   func testCreateSignedUploadURL_withUpsert() async throws {
@@ -929,7 +957,8 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(response.token, "abc.def.ghi")
     XCTAssertEqual(
       response.signedURL.absoluteString,
-      "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
+      "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
+    )
   }
 
   func testUploadToSignedURL() async throws {
@@ -943,7 +972,8 @@ final class StorageFileAPITests: XCTestCase {
           {
             "Key": "bucket/file.txt"
           }
-          """.utf8)
+          """.utf8
+        )
       ]
     )
     .snapshotRequest {
@@ -974,7 +1004,11 @@ final class StorageFileAPITests: XCTestCase {
     .register()
 
     let response = try await storage.from("bucket")
-      .uploadToSignedURL("file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
+      .uploadToSignedURL(
+        "file.txt",
+        token: "abc.def.ghi",
+        data: Data("hello world".utf8)
+      )
 
     XCTAssertEqual(response.path, "file.txt")
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
@@ -991,7 +1025,8 @@ final class StorageFileAPITests: XCTestCase {
           {
             "Key": "bucket/file.txt"
           }
-          """.utf8)
+          """.utf8
+        )
       ]
     )
     .snapshotRequest {
@@ -1033,7 +1068,8 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
 
-  func testUploadToSignedURL_fromFileURLWithoutOptionsDerivesMimeTypeFromFileExtension()
+  func
+    testUploadToSignedURL_fromFileURLWithoutOptionsDerivesMimeTypeFromFileExtension()
     async throws
   {
     let fileURL = FileManager.default.temporaryDirectory
@@ -1051,7 +1087,8 @@ final class StorageFileAPITests: XCTestCase {
           {
             "Key": "bucket/file.txt"
           }
-          """.utf8)
+          """.utf8
+        )
       ]
     )
     .snapshotRequest {
@@ -1115,7 +1152,8 @@ final class StorageFileAPITests: XCTestCase {
     )
     XCTAssertEqual(
       url.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&cacheNonce=abc123")
+      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&cacheNonce=abc123"
+    )
   }
 
   func testCreateSignedURLs_cacheNonce() async throws {
@@ -1137,17 +1175,19 @@ final class StorageFileAPITests: XCTestCase {
     )
     .register()
 
-    let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
-      paths: ["file.txt"],
-      expiresIn: .seconds(3600),
-      cacheNonce: "abc123"
-    )
+    let results: [SignedURLResult] = try await storage.from("bucket")
+      .createSignedURLs(
+        paths: ["file.txt"],
+        expiresIn: .seconds(3600),
+        cacheNonce: "abc123"
+      )
     guard case .success(_, let url) = results[0] else {
       return XCTFail("Expected success for file.txt")
     }
     XCTAssertEqual(
       url.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&cacheNonce=abc123")
+      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&cacheNonce=abc123"
+    )
   }
 
   func testGetPublicURL_cacheNonce() throws {
@@ -1157,7 +1197,8 @@ final class StorageFileAPITests: XCTestCase {
     )
     XCTAssertEqual(
       url.absoluteString,
-      "\(self.url)/object/public/bucket/file.txt?cacheNonce=abc123")
+      "\(self.url)/object/public/bucket/file.txt?cacheNonce=abc123"
+    )
   }
 
   func testUploadWithProgressClosure() async throws {
@@ -1184,7 +1225,10 @@ final class StorageFileAPITests: XCTestCase {
       progress: { _ in }
     )
 
-    XCTAssertEqual(response.id, UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
+    XCTAssertEqual(
+      response.id,
+      UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196")
+    )
     XCTAssertEqual(response.path, "file.txt")
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
