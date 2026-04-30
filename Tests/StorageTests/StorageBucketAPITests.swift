@@ -1,7 +1,8 @@
+import Foundation
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Storage
 
@@ -9,20 +10,18 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class StorageBucketAPITests: XCTestCase {
+@Suite(.serialized)
+struct StorageBucketAPITests {
   let url = URL(string: "http://localhost:54321/storage/v1")!
-  var storage: StorageClient!
+  let storage: StorageClient
 
-  override func setUp() {
-    super.setUp()
-
+  init() {
+    Mocker.removeAll()
     let configuration = URLSessionConfiguration.default
     configuration.protocolClasses = [MockingURLProtocol.self]
-
     let session = URLSession(configuration: configuration)
-
     storage = StorageClient(
-      url: url,
+      url: URL(string: "http://localhost:54321/storage/v1")!,
       configuration: StorageClientConfiguration(
         headers: [
           "apikey":
@@ -34,79 +33,46 @@ final class StorageBucketAPITests: XCTestCase {
     )
   }
 
-  override func tearDown() {
-    super.tearDown()
-
-    Mocker.removeAll()
-  }
-
-  func testURLConstruction() {
+  @Test func urlConstruction() {
     let urlTestCases = [
       (
-        "https://blah.supabase.co/storage/v1",
-        "https://blah.storage.supabase.co/storage/v1",
-        "update legacy prod host to new host"
+        input: "https://blah.supabase.co/storage/v1",
+        expected: "https://blah.storage.supabase.co/storage/v1"
       ),
       (
-        "https://blah.supabase.red/storage/v1",
-        "https://blah.storage.supabase.red/storage/v1",
-        "update legacy staging host to new host"
+        input: "https://blah.supabase.red/storage/v1",
+        expected: "https://blah.storage.supabase.red/storage/v1"
       ),
       (
-        "https://blah.storage.supabase.co/storage/v1",
-        "https://blah.storage.supabase.co/storage/v1",
-        "accept new host without modification"
+        input: "https://blah.storage.supabase.co/storage/v1",
+        expected: "https://blah.storage.supabase.co/storage/v1"
       ),
       (
-        "https://blah.supabase.co.example.com/storage/v1",
-        "https://blah.supabase.co.example.com/storage/v1",
-        "not modify non-platform hosts"
+        input: "https://blah.supabase.co.example.com/storage/v1",
+        expected: "https://blah.supabase.co.example.com/storage/v1"
       ),
       (
-        "http://localhost:1234/storage/v1",
-        "http://localhost:1234/storage/v1",
-        "support local host with port without modification"
+        input: "http://localhost:1234/storage/v1",
+        expected: "http://localhost:1234/storage/v1"
       ),
     ]
 
-    for (input, expect, description) in urlTestCases {
-      runActivity(named: "should \(description) if useNewHostname is true") {
-        let storage = StorageClient(
-          url: URL(string: input)!,
-          configuration: StorageClientConfiguration(
-            headers: [:],
-            useNewHostname: true
-          )
-        )
-        XCTAssertEqual(storage.url.absoluteString, expect)
-      }
+    for testCase in urlTestCases {
+      let storageWithNew = StorageClient(
+        url: URL(string: testCase.input)!,
+        configuration: StorageClientConfiguration(headers: [:], useNewHostname: true)
+      )
+      #expect(storageWithNew.url.absoluteString == testCase.expected)
 
-      runActivity(named: "should not modify host if useNewHostname is false") {
-        let storage = StorageClient(
-          url: URL(string: input)!,
-          configuration: StorageClientConfiguration(
-            headers: [:],
-            useNewHostname: false
-          )
-        )
-        XCTAssertEqual(storage.url.absoluteString, input)
-      }
+      let storageWithout = StorageClient(
+        url: URL(string: testCase.input)!,
+        configuration: StorageClientConfiguration(headers: [:], useNewHostname: false)
+      )
+      #expect(storageWithout.url.absoluteString == testCase.input)
     }
   }
 
-  private func runActivity(named name: String, body: @Sendable () -> Void) {
-    #if os(Linux)
-      body()
-    #else
-      MainActor.assumeIsolated {
-        XCTContext.runActivity(named: name) { _ in
-          body()
-        }
-      }
-    #endif
-  }
-
-  func testGetBucket() async throws {
+  @Test func getBucket() async throws {
     Mock(
       url: url.appendingPathComponent("bucket/bucket123"),
       statusCode: 200,
@@ -137,11 +103,11 @@ final class StorageBucketAPITests: XCTestCase {
     .register()
 
     let bucket = try await storage.getBucket("bucket123")
-    XCTAssertEqual(bucket.id, "bucket123")
-    XCTAssertEqual(bucket.name, "test-bucket")
+    #expect(bucket.id == "bucket123")
+    #expect(bucket.name == "test-bucket")
   }
 
-  func testListBuckets() async throws {
+  @Test func listBuckets() async throws {
     Mock(
       url: url.appendingPathComponent("bucket"),
       statusCode: 200,
@@ -174,11 +140,11 @@ final class StorageBucketAPITests: XCTestCase {
     .register()
 
     let buckets = try await storage.listBuckets()
-    XCTAssertEqual(buckets.count, 1)
-    XCTAssertEqual(buckets[0].name, "test-bucket")
+    #expect(buckets.count == 1)
+    #expect(buckets[0].name == "test-bucket")
   }
 
-  func testCreateBucket() async throws {
+  @Test func createBucket() async throws {
     Mock(
       url: url.appendingPathComponent("bucket"),
       statusCode: 200,
@@ -219,7 +185,7 @@ final class StorageBucketAPITests: XCTestCase {
     )
   }
 
-  func testUpdateBucket() async throws {
+  @Test func updateBucket() async throws {
     Mock(
       url: url.appendingPathComponent("bucket/bucket123"),
       statusCode: 200,
@@ -260,7 +226,7 @@ final class StorageBucketAPITests: XCTestCase {
     )
   }
 
-  func testDeleteBucket() async throws {
+  @Test func deleteBucket() async throws {
     Mock(
       url: url.appendingPathComponent("bucket/bucket123"),
       statusCode: 200,
@@ -283,7 +249,7 @@ final class StorageBucketAPITests: XCTestCase {
     try await storage.deleteBucket("bucket123")
   }
 
-  func testEmptyBucket() async throws {
+  @Test func emptyBucket() async throws {
     Mock(
       url: url.appendingPathComponent("bucket/bucket123/empty"),
       statusCode: 200,

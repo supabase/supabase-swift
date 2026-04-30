@@ -1,15 +1,16 @@
-import XCTest
+import Foundation
+import Testing
 
 @testable import Storage
 
-final class MultipartBuilderTests: XCTestCase {
-  func testBuildInMemoryReturnsEmptyDataWhenThereAreNoParts() throws {
+@Suite
+struct MultipartBuilderTests {
+  @Test func buildInMemory_emptyParts() throws {
     let body = try MultipartBuilder(boundary: "empty-boundary").buildInMemory()
-
-    XCTAssertEqual(body, Data())
+    #expect(body == Data())
   }
 
-  func testBuildInMemoryIncludesExactTextAndDataParts() throws {
+  @Test func buildInMemory_exactTextAndDataParts() throws {
     let boundary = "test-boundary"
     let payload = Data("hello world".utf8)
 
@@ -35,17 +36,18 @@ final class MultipartBuilderTests: XCTestCase {
       + "hello world\r\n"
       + "--test-boundary--\r\n"
     let expected = Data(expectedString.utf8)
-    XCTAssertEqual(body, expected)
+    #expect(body == expected)
   }
 
-  func testBuildToTempFileReturnsEmptyFileWhenThereAreNoParts() throws {
+  @Test func buildToTempFile_emptyParts() throws {
     let outputURL = try MultipartBuilder(boundary: "empty-boundary").buildToTempFile()
     defer { try? FileManager.default.removeItem(at: outputURL) }
 
-    XCTAssertEqual(try Data(contentsOf: outputURL), Data())
+    let outputData = try Data(contentsOf: outputURL)
+    #expect(outputData == Data())
   }
 
-  func testBuildToTempFileIncludesExactFilePartWithExplicitFileName() throws {
+  @Test func buildToTempFile_exactFilePartWithExplicitFileName() throws {
     let tempDirectory = FileManager.default.temporaryDirectory
     let sourceURL = tempDirectory.appendingPathComponent("source-\(UUID().uuidString).txt")
     try Data("file body".utf8).write(to: sourceURL)
@@ -69,10 +71,11 @@ final class MultipartBuilderTests: XCTestCase {
       + "file body\r\n"
       + "--file-boundary--\r\n"
     let expected = Data(expectedString.utf8)
-    XCTAssertEqual(try Data(contentsOf: outputURL), expected)
+    let outputData = try Data(contentsOf: outputURL)
+    #expect(outputData == expected)
   }
 
-  func testAddFileDefaultsFileNameToLastPathComponent() throws {
+  @Test func addFile_defaultsFileNameToLastPathComponent() throws {
     let tempDirectory = FileManager.default.temporaryDirectory
     let sourceURL = tempDirectory.appendingPathComponent("default-name.txt")
     try Data("file body".utf8).write(to: sourceURL)
@@ -94,15 +97,11 @@ final class MultipartBuilderTests: XCTestCase {
       + "file body\r\n"
       + "--default-filename-boundary--\r\n"
     let expected = Data(expectedString.utf8)
-    XCTAssertEqual(body, expected)
+    #expect(body == expected)
   }
 
-  func testContentTypeIncludesBoundary() {
+  @Test func contentTypeIncludesBoundary() {
     let builder = MultipartBuilder(boundary: "content-type-boundary")
-
-    XCTAssertEqual(
-      builder.contentType,
-      "multipart/form-data; boundary=content-type-boundary"
-    )
+    #expect(builder.contentType == "multipart/form-data; boundary=content-type-boundary")
   }
 }
