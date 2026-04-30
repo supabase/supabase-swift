@@ -29,7 +29,10 @@ enum FileUpload {
     withPath path: String,
     options: FileOptions
   ) -> MultipartBuilder {
-    var builder = builder.addText(name: "cacheControl", value: options.cacheControl)
+    var builder = builder.addText(
+      name: "cacheControl",
+      value: options.cacheControl
+    )
 
     if let metadata = options.metadata {
       builder = builder.addText(
@@ -63,7 +66,8 @@ enum FileUpload {
     get throws {
       guard case .url(let url) = self else { return false }
 
-      let fileSize = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+      let fileSize =
+        try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
       return fileSize >= 10 * 1024 * 1024
     }
   }
@@ -458,12 +462,19 @@ public struct StorageFileAPI: Sendable {
       "object/sign/\(bucketId)/\(path)",
       body: .data(
         encoder.encode(
-          Body(expiresIn: Int(expiresIn.components.seconds), transform: transform)
+          Body(
+            expiresIn: Int(expiresIn.components.seconds),
+            transform: transform
+          )
         )
       )
     )
 
-    return try makeSignedURL(response.signedURL, download: download, cacheNonce: cacheNonce)
+    return try makeSignedURL(
+      response.signedURL,
+      download: download,
+      cacheNonce: cacheNonce
+    )
   }
 
   /// Creates signed URLs for multiple files in a single request.
@@ -491,13 +502,19 @@ public struct StorageFileAPI: Sendable {
       .post,
       "object/sign/\(bucketId)",
       body: .data(
-        encoder.encode(Params(expiresIn: Int(expiresIn.components.seconds), paths: paths))
+        encoder.encode(
+          Params(expiresIn: Int(expiresIn.components.seconds), paths: paths)
+        )
       )
     )
 
     return try response.map { item in
       if let signedURLString = item.signedURL {
-        let url = try makeSignedURL(signedURLString, download: download, cacheNonce: cacheNonce)
+        let url = try makeSignedURL(
+          signedURLString,
+          download: download,
+          cacheNonce: cacheNonce
+        )
         return .success(path: item.path, signedURL: url)
       } else {
         return .failure(path: item.path, error: item.error ?? "Unknown error")
@@ -511,7 +528,10 @@ public struct StorageFileAPI: Sendable {
     cacheNonce: String? = nil
   ) throws -> URL {
     guard let signedURLComponents = URLComponents(string: signedURL),
-      var baseComponents = URLComponents(url: client.url, resolvingAgainstBaseURL: false)
+      var baseComponents = URLComponents(
+        url: client.url,
+        resolvingAgainstBaseURL: false
+      )
     else {
       throw URLError(.badURL)
     }
@@ -528,12 +548,16 @@ public struct StorageFileAPI: Sendable {
       case .download: value = ""
       case .downloadAs(let name): value = name
       }
-      baseComponents.queryItems!.append(URLQueryItem(name: "download", value: value))
+      baseComponents.queryItems!.append(
+        URLQueryItem(name: "download", value: value)
+      )
     }
 
     if let cacheNonce {
       baseComponents.queryItems = baseComponents.queryItems ?? []
-      baseComponents.queryItems!.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
+      baseComponents.queryItems!.append(
+        URLQueryItem(name: "cacheNonce", value: cacheNonce)
+      )
     }
 
     guard let url = baseComponents.url else {
@@ -746,7 +770,10 @@ public struct StorageFileAPI: Sendable {
     var queryItems: [URLQueryItem] = []
 
     guard
-      var components = URLComponents(url: client.url, resolvingAgainstBaseURL: true)
+      var components = URLComponents(
+        url: client.url,
+        resolvingAgainstBaseURL: true
+      )
     else {
       throw URLError(.badURL)
     }
@@ -768,7 +795,8 @@ public struct StorageFileAPI: Sendable {
       queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
     }
 
-    let renderPath = options.map { !$0.isEmpty } == true ? "render/image" : "object"
+    let renderPath =
+      options.map { !$0.isEmpty } == true ? "render/image" : "object"
     components.path += "/\(renderPath)/public/\(bucketId)/\(path)"
     components.queryItems = !queryItems.isEmpty ? queryItems : nil
 
@@ -983,7 +1011,8 @@ public struct StorageFileAPI: Sendable {
   ) async throws -> Response {
     #if DEBUG
       let builder = MultipartBuilder(
-        boundary: testingBoundary.value ?? "----sb-\(UUID().uuidString)")
+        boundary: testingBoundary.value ?? "----sb-\(UUID().uuidString)"
+      )
     #else
       let builder = MultipartBuilder()
     #endif
@@ -1038,11 +1067,16 @@ public struct StorageFileAPI: Sendable {
 
   private func multipartHeaders(options: FileOptions) -> [String: String] {
     var headers: [String: String] = [:]
-    headers.setIfMissing(Header.cacheControl, value: "max-age=\(options.cacheControl)")
+    headers.setIfMissing(
+      Header.cacheControl,
+      value: "max-age=\(options.cacheControl)"
+    )
     return headers
   }
 
-  private func storageURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
+  private func storageURL(path: String, queryItems: [URLQueryItem] = []) throws
+    -> URL
+  {
     var components = URLComponents(
       url: client.url.appendingPathComponent(path),
       resolvingAgainstBaseURL: false
@@ -1057,11 +1091,15 @@ public struct StorageFileAPI: Sendable {
   }
 
   private func translateStorageError(_ error: any Error) -> any Error {
-    guard case HTTPClientError.responseError(let response, let data) = error else {
+    guard case HTTPClientError.responseError(let response, let data) = error
+    else {
       return error
     }
 
-    if let storageError = try? client.decoder.decode(StorageError.self, from: data) {
+    if let storageError = try? client.decoder.decode(
+      StorageError.self,
+      from: data
+    ) {
       return storageError
     }
 
@@ -1075,7 +1113,9 @@ public struct StorageFileAPI: Sendable {
 
 // MARK: - Upload progress
 
-private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate,
+  @unchecked Sendable
+{
   private let onProgress: @Sendable (UploadProgress) -> Void
 
   init(onProgress: @escaping @Sendable (UploadProgress) -> Void) {
@@ -1110,7 +1150,10 @@ func _removeEmptyFolders(_ path: String) -> String {
 
 extension [String: String] {
   fileprivate mutating func setIfMissing(_ key: String, value: String) {
-    guard keys.first(where: { $0.caseInsensitiveCompare(key) == .orderedSame }) == nil else {
+    guard
+      keys.first(where: { $0.caseInsensitiveCompare(key) == .orderedSame })
+        == nil
+    else {
       return
     }
 

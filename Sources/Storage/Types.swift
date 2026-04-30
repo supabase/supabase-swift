@@ -1,4 +1,5 @@
 import Foundation
+import Helpers
 
 /// Parameters used to filter and paginate results from ``StorageFileAPI/list(path:options:)``.
 ///
@@ -490,8 +491,12 @@ public struct StorageByteCount: Sendable, Hashable {
 
   public static func bytes(_ value: Int64) -> Self { Self(value) }
   public static func kilobytes(_ value: Int64) -> Self { Self(value * 1_024) }
-  public static func megabytes(_ value: Int64) -> Self { Self(value * 1_024 * 1_024) }
-  public static func gigabytes(_ value: Int64) -> Self { Self(value * 1_024 * 1_024 * 1_024) }
+  public static func megabytes(_ value: Int64) -> Self {
+    Self(value * 1_024 * 1_024)
+  }
+  public static func gigabytes(_ value: Int64) -> Self {
+    Self(value * 1_024 * 1_024 * 1_024)
+  }
 }
 
 extension StorageByteCount: ExpressibleByIntegerLiteral {
