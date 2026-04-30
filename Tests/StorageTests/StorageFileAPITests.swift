@@ -17,7 +17,6 @@ struct StorageFileAPITests {
   let storage: StorageClient
 
   init() {
-    Mocker.removeAll()
     testingBoundary.setValue("alamofire.boundary.e56f43407f772505")
     JSONEncoder.unconfiguredEncoder.outputFormatting = [.sortedKeys]
     let configuration = URLSessionConfiguration.default
