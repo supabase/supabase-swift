@@ -1,7 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import InlineSnapshotTesting
-import XCTest
+import Testing
 
 @testable import Storage
 
@@ -9,27 +9,27 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class SupabaseStorageTests: XCTestCase {
+@Suite(.serialized)
+struct SupabaseStorageTests {
   static let supabaseURL = URL(string: "http://localhost:54321/storage/v1")!
   let bucketId = "tests"
+  let session: URLSession
 
-  private lazy var session: URLSession = {
+  init() {
+    StorageURLProtocolMock.requestHandler.setValue(nil)
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [StorageURLProtocolMock.self]
-    return URLSession(configuration: configuration)
-  }()
-
-  override func tearDown() {
-    super.tearDown()
-    StorageURLProtocolMock.requestHandler.setValue(nil)
+    session = URLSession(configuration: configuration)
   }
 
-  func testGetPublicURL() throws {
+  @Test func getPublicURL() throws {
     let sut = makeSUT()
     let path = "README.md"
 
     let baseUrl = try sut.from(bucketId).getPublicURL(path: path)
-    XCTAssertEqual(baseUrl.absoluteString, "\(Self.supabaseURL)/object/public/\(bucketId)/\(path)")
+    #expect(
+      baseUrl.absoluteString == "\(Self.supabaseURL)/object/public/\(bucketId)/\(path)"
+    )
 
     let baseUrlWithDownload = try sut.from(bucketId).getPublicURL(
       path: path,
@@ -61,7 +61,7 @@ final class SupabaseStorageTests: XCTestCase {
     }
   }
 
-  func testCreateSignedURLs() async throws {
+  @Test func createSignedURLs() async throws {
     StorageURLProtocolMock.requestHandler.setValue { _ in
       (
         """
@@ -91,25 +91,29 @@ final class SupabaseStorageTests: XCTestCase {
       expiresIn: .seconds(60)
     )
 
-    XCTAssertEqual(results.count, 2)
+    #expect(results.count == 2)
     guard case .success(let path0, let url0) = results[0] else {
-      return XCTFail("Expected success for file1.txt")
+      Issue.record("Expected success for file1.txt")
+      return
     }
-    XCTAssertEqual(path0, "file1.txt")
-    XCTAssertEqual(
-      url0.absoluteString,
-      "http://localhost:54321/storage/v1/sign/file1.txt?token=abc.def.ghi")
+    #expect(path0 == "file1.txt")
+    #expect(
+      url0.absoluteString
+        == "http://localhost:54321/storage/v1/sign/file1.txt?token=abc.def.ghi"
+    )
     guard case .success(let path1, let url1) = results[1] else {
-      return XCTFail("Expected success for file2.txt")
+      Issue.record("Expected success for file2.txt")
+      return
     }
-    XCTAssertEqual(path1, "file2.txt")
-    XCTAssertEqual(
-      url1.absoluteString,
-      "http://localhost:54321/storage/v1/sign/file2.txt?token=abc.def.ghi")
+    #expect(path1 == "file2.txt")
+    #expect(
+      url1.absoluteString
+        == "http://localhost:54321/storage/v1/sign/file2.txt?token=abc.def.ghi"
+    )
   }
 
   #if !os(Linux) && !os(Android)
-    func testUploadData() async throws {
+    @Test func uploadData() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
       StorageURLProtocolMock.requestHandler.setValue { request in
@@ -156,7 +160,7 @@ final class SupabaseStorageTests: XCTestCase {
         )
     }
 
-    func testUploadFileURL() async throws {
+    @Test func uploadFileURL() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
       StorageURLProtocolMock.requestHandler.setValue { request in
@@ -216,7 +220,6 @@ final class SupabaseStorageTests: XCTestCase {
       .deletingLastPathComponent()
       .appendingPathComponent(fileName)
   }
-
 }
 
 private final class StorageURLProtocolMock: URLProtocol {
