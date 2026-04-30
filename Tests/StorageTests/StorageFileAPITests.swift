@@ -507,9 +507,10 @@ final class StorageFileAPITests: XCTestCase {
       try await storage.from("bucket")
         .move(from: "source", to: "destination")
       XCTFail()
-    } catch let error as HTTPError {
-      XCTAssertEqual(error.data, Data("error".utf8))
-      XCTAssertEqual(error.response.statusCode, 412)
+    } catch let error as StorageError {
+      XCTAssertEqual(error.errorCode, .unknown)
+      XCTAssertEqual(error.statusCode, 412)
+      XCTAssertEqual(error.underlyingData, Data("error".utf8))
     }
   }
 

@@ -731,22 +731,8 @@ public struct StorageFileAPI: Sendable {
     do {
       try await client.fetchData(.head, "object/\(bucketId)/\(path)")
       return true
-    } catch {
-      var statusCode: Int?
-
-      if let error = error as? StorageError {
-        statusCode = error.statusCode.flatMap(Int.init)
-      } else if let error = error as? HTTPError {
-        statusCode = error.response.statusCode
-      } else if case HTTPClientError.responseError(let response, _) = error {
-        statusCode = response.statusCode
-      }
-
-      if let statusCode, [400, 404].contains(statusCode) {
-        return false
-      }
-
-      throw error
+    } catch let error as StorageError where error.isNotFound {
+      return false
     }
   }
 
@@ -869,11 +855,7 @@ public struct StorageFileAPI: Sendable {
       let token = components.queryItems?.first(where: { $0.name == "token" })?
         .value
     else {
-      throw StorageError(
-        statusCode: nil,
-        message: "No token returned by API",
-        error: nil
-      )
+      throw StorageError.noTokenReturned
     }
 
     guard let url = components.url else {
@@ -1061,7 +1043,7 @@ public struct StorageFileAPI: Sendable {
       return try client.decoder.decode(Response.self, from: data)
     } catch {
       client.logFailure(error)
-      throw translateStorageError(error)
+      throw client.translateStorageError(error)
     }
   }
 
@@ -1088,22 +1070,6 @@ public struct StorageFileAPI: Sendable {
     }
 
     return url
-  }
-
-  private func translateStorageError(_ error: any Error) -> any Error {
-    guard case HTTPClientError.responseError(let response, let data) = error
-    else {
-      return error
-    }
-
-    if let storageError = try? client.decoder.decode(
-      StorageError.self,
-      from: data
-    ) {
-      return storageError
-    }
-
-    return HTTPError(data: data, response: response)
   }
 
   private func _getFinalPath(_ path: String) -> String {

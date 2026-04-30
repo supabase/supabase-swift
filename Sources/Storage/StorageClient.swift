@@ -297,16 +297,26 @@ public final class StorageClient: Sendable {
     return try decoder.decode(T.self, from: data)
   }
 
-  private func translateStorageError(_ error: any Error) -> any Error {
+  func translateStorageError(_ error: any Error) -> any Error {
     guard case HTTPClientError.responseError(let response, let data) = error else {
       return error
     }
 
-    if let storageError = try? decoder.decode(StorageError.self, from: data) {
-      return storageError
-    }
+    let decoded = try? decoder.decode(ServerErrorResponse.self, from: data)
+    return StorageError(
+      message: decoded?.message ?? String(data: data, encoding: .utf8) ?? "Unknown error",
+      errorCode: decoded?.error.map(StorageErrorCode.init(_:)) ?? .unknown,
+      statusCode: decoded?.statusCode.flatMap(Int.init) ?? response.statusCode,
+      underlyingResponse: response,
+      underlyingData: data
+    )
+  }
 
-    return HTTPError(data: data, response: response)
+  private struct ServerErrorResponse: Decodable {
+    let message: String
+    let error: String?
+    /// The server sends the status code as a JSON string, e.g. `"404"`.
+    let statusCode: String?
   }
 
   func logRequest(_ method: HTTPMethod, url: URL) {
