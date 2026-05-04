@@ -204,4 +204,18 @@ extension StorageError {
     message: "Transfer was cancelled",
     errorCode: .cancelled
   )
+
+  /// Converts any `Error` to a `StorageError`.
+  ///
+  /// - Returns `self` when `error` is already a `StorageError`.
+  /// - Returns ``StorageError/cancelled`` when `error` is a `CancellationError` or
+  ///   a `URLError` with code `.cancelled`.
+  /// - Otherwise wraps `error` as ``StorageError/networkError(underlying:)``.
+  static func from(_ error: any Error) -> StorageError {
+    if let storageError = error as? StorageError { return storageError }
+    if error is CancellationError || (error as? URLError)?.code == .cancelled {
+      return .cancelled
+    }
+    return .networkError(underlying: error)
+  }
 }

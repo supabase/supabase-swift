@@ -1109,13 +1109,8 @@ public struct StorageFileAPI: Sendable {
         eventsContinuation.finish()
         resultContinuation.yield(.success(response))
         resultContinuation.finish()
-      } catch let error as StorageError {
-        eventsContinuation.yield(.failed(error))
-        eventsContinuation.finish()
-        resultContinuation.yield(.failure(error))
-        resultContinuation.finish()
       } catch {
-        let storageError = StorageError.networkError(underlying: error)
+        let storageError = StorageError.from(error)
         eventsContinuation.yield(.failed(storageError))
         eventsContinuation.finish()
         resultContinuation.yield(.failure(storageError))
