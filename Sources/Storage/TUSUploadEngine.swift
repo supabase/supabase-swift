@@ -110,6 +110,7 @@ actor TUSUploadEngine {
   func resume() {
     switch state {
     case .paused(let url, _):
+      state = .creating  // prevent double-resume
       currentUploadTask = Task { await resumeFromServer(uploadURL: url) }
     default:
       break
@@ -123,6 +124,7 @@ actor TUSUploadEngine {
     eventsContinuation.yield(.failed(error))
     eventsContinuation.finish()
     resultContinuation.yield(.failure(error))
+    resultContinuation.finish()
   }
 
   // MARK: - Private
@@ -135,8 +137,12 @@ actor TUSUploadEngine {
       state = .uploading(uploadURL: uploadURL, offset: 0)
       try await uploadChunks(to: uploadURL, from: 0, totalBytes: totalBytes)
     } catch is CancellationError {
-      if case .cancelled = state { return }
-      cancel()
+      switch state {
+      case .cancelled, .paused:
+        return
+      default:
+        cancel()
+      }
     } catch let error as StorageError {
       finish(with: .failure(error))
     } catch {
@@ -151,8 +157,12 @@ actor TUSUploadEngine {
       state = .uploading(uploadURL: uploadURL, offset: serverOffset)
       try await uploadChunks(to: uploadURL, from: serverOffset, totalBytes: totalBytes)
     } catch is CancellationError {
-      if case .cancelled = state { return }
-      cancel()
+      switch state {
+      case .cancelled, .paused:
+        return
+      default:
+        cancel()
+      }
     } catch let error as StorageError {
       finish(with: .failure(error))
     } catch {
@@ -172,6 +182,7 @@ actor TUSUploadEngine {
     }
     eventsContinuation.finish()
     resultContinuation.yield(result.mapError { $0 })
+    resultContinuation.finish()
   }
 
   // MARK: - TUS protocol
@@ -228,7 +239,12 @@ actor TUSUploadEngine {
       try Task.checkCancellation()
 
       let chunk = try source.readChunk(at: offset, maxSize: tusChunkSize)
-      guard !chunk.isEmpty else { break }
+      guard !chunk.isEmpty else {
+        throw StorageError(
+          message: "Unexpected end of source data at offset \(offset)",
+          errorCode: .fileSystemError
+        )
+      }
 
       var request = makeRequest(url: uploadURL, method: "PATCH")
       request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")

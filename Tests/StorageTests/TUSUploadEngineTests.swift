@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 04/05/26.
 //
 
+import ConcurrencyExtras
 import Foundation
 import Mocker
 import Testing
@@ -36,7 +37,7 @@ import Testing
   }
 
   @Test func postCreatesUploadWithCorrectHeaders() async throws {
-    nonisolated(unsafe) var capturedRequest: URLRequest?
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
 
     var postMock = Mock(
       url: uploadURL,
@@ -46,7 +47,7 @@ import Testing
       additionalHeaders: ["Location": locationURL.absoluteString]
     )
     postMock.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      capturedRequest = request
+      capturedRequest.setValue(request)
     })
     postMock.register()
 
@@ -72,12 +73,13 @@ import Testing
     )
     _ = try await task.result
 
-    let request = try #require(capturedRequest)
+    let request = try #require(capturedRequest.value)
     #expect(request.value(forHTTPHeaderField: "Tus-Resumable") == "1.0.0")
     #expect(request.value(forHTTPHeaderField: "Upload-Length") == "5")
     let metadata = try #require(request.value(forHTTPHeaderField: "Upload-Metadata"))
     #expect(metadata.contains("bucketName"))
     #expect(metadata.contains("objectName"))
     #expect(metadata.contains("contentType"))
+    #expect(metadata.contains("cacheControl"))
   }
 }
