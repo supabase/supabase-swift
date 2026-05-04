@@ -137,7 +137,7 @@ struct SupabaseStorageTests {
       let sut = makeSUT()
 
       try await sut.from(bucketId)
-        .upload(
+        .uploadMultipart(
           "file1.txt",
           data: "test data".data(using: .utf8)!,
           options: FileOptions(
@@ -174,7 +174,7 @@ struct SupabaseStorageTests {
       let sut = makeSUT()
 
       try await sut.from(bucketId)
-        .upload(
+        .uploadMultipart(
           "sadcat.jpg",
           fileURL: uploadFileURL("sadcat.jpg"),
           options: FileOptions(

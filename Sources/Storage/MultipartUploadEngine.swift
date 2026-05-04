@@ -114,11 +114,16 @@ actor MultipartUploadEngine {
       headers: client.mergedHeaders(headers)
     )
 
-    let (data, urlResponse) = try await uploadWithProgress(request: request, multipart: multipart)
-    let httpResponse = try client.http.validateResponse(urlResponse, data: data)
-    client.logResponse(httpResponse, data: data)
-    let serverResponse = try client.decoder.decode(MultipartServerResponse.self, from: data)
-    return FileUploadResponse(id: serverResponse.Id, path: path, fullPath: serverResponse.Key)
+    do {
+      let (data, urlResponse) = try await uploadWithProgress(request: request, multipart: multipart)
+      let httpResponse = try client.http.validateResponse(urlResponse, data: data)
+      client.logResponse(httpResponse, data: data)
+      let serverResponse = try client.decoder.decode(MultipartServerResponse.self, from: data)
+      return FileUploadResponse(id: serverResponse.Id, path: path, fullPath: serverResponse.Key)
+    } catch {
+      client.logFailure(error)
+      throw client.translateStorageError(error)
+    }
   }
 
   private func uploadWithProgress(
