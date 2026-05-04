@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 04/05/26.
 //
 
+import ConcurrencyExtras
 import Foundation
 import Helpers
 
@@ -12,7 +13,7 @@ import Helpers
   import FoundationNetworking
 #endif
 
-package nonisolated(unsafe) var tusChunkSize = 6 * 1024 * 1024  // 6 MB — Supabase/S3 minimum
+package let tusChunkSize = LockIsolated(6 * 1024 * 1024)  // 6 MB — Supabase/S3 minimum
 
 private struct TUSUploadServerResponse: Decodable {
   let Key: String
@@ -36,17 +37,23 @@ enum UploadSource: Sendable {
     }
   }
 
-  func readChunk(at offset: Int64, maxSize: Int) throws -> Data {
+  func openFileHandle() throws -> FileHandle? {
+    guard case .fileURL(let url) = self else { return nil }
+    return try FileHandle(forReadingFrom: url)
+  }
+
+  func readChunk(at offset: Int64, maxSize: Int, fileHandle: FileHandle? = nil) throws -> Data {
     switch self {
     case .data(let d):
       let start = Int(offset)
       let end = min(start + maxSize, d.count)
       return d[start..<end]
-    case .fileURL(let url):
-      let handle = try FileHandle(forReadingFrom: url)
-      defer { try? handle.close() }
-      try handle.seek(toOffset: UInt64(offset))
-      return try handle.read(upToCount: maxSize) ?? Data()
+    case .fileURL:
+      guard let fileHandle else {
+        throw StorageError(message: "FileHandle not open", errorCode: .fileSystemError)
+      }
+      try fileHandle.seek(toOffset: UInt64(offset))
+      return try fileHandle.read(upToCount: maxSize) ?? Data()
     }
   }
 }
@@ -72,6 +79,7 @@ actor TUSUploadEngine {
 
   private var state: State = .idle
   private var currentUploadTask: Task<Void, Never>?
+  private var fileHandle: FileHandle?
 
   init(
     bucketId: String,
@@ -94,6 +102,7 @@ actor TUSUploadEngine {
   func start() {
     guard case .idle = state else { return }
     state = .creating
+    fileHandle = try? source.openFileHandle()
     currentUploadTask = Task { await run() }
   }
 
@@ -120,6 +129,7 @@ actor TUSUploadEngine {
   func cancel() {
     currentUploadTask?.cancel()
     state = .cancelled
+    closeFileHandle()
     let error = StorageError.cancelled
     eventsContinuation.yield(.failed(error))
     eventsContinuation.finish()
@@ -174,7 +184,13 @@ actor TUSUploadEngine {
     }
   }
 
+  private func closeFileHandle() {
+    try? fileHandle?.close()
+    fileHandle = nil
+  }
+
   private func finish(with result: Result<FileUploadResponse, any Error>) {
+    closeFileHandle()
     switch result {
     case .success(let response):
       state = .completed(response)
@@ -192,9 +208,9 @@ actor TUSUploadEngine {
   // MARK: - TUS protocol
 
   private func createUpload(totalBytes: Int64) async throws -> URL {
-    var request = makeRequest(
+    var request = try await makeRequest(
       url: client.url.appendingPathComponent("upload/resumable"),
-      method: "POST"
+      method: .post
     )
     request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
     request.setValue("\(totalBytes)", forHTTPHeaderField: "Upload-Length")
@@ -222,7 +238,7 @@ actor TUSUploadEngine {
   }
 
   private func fetchOffset(uploadURL: URL) async throws -> Int64 {
-    var request = makeRequest(url: uploadURL, method: "HEAD")
+    var request = try await makeRequest(url: uploadURL, method: .head)
     request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
 
     let (_, response) = try await client.http.session.data(for: request)
@@ -242,7 +258,8 @@ actor TUSUploadEngine {
     while offset < totalBytes {
       try Task.checkCancellation()
 
-      let chunk = try source.readChunk(at: offset, maxSize: tusChunkSize)
+      let chunk = try source.readChunk(
+        at: offset, maxSize: tusChunkSize.value, fileHandle: fileHandle)
       guard !chunk.isEmpty else {
         throw StorageError(
           message: "Unexpected end of source data at offset \(offset)",
@@ -250,7 +267,7 @@ actor TUSUploadEngine {
         )
       }
 
-      var request = makeRequest(url: uploadURL, method: "PATCH")
+      var request = try await makeRequest(url: uploadURL, method: .patch)
       request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
       request.setValue("\(offset)", forHTTPHeaderField: "Upload-Offset")
       request.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
@@ -308,13 +325,8 @@ actor TUSUploadEngine {
 
   // MARK: - Helpers
 
-  private func makeRequest(url: URL, method: String) -> URLRequest {
-    var request = URLRequest(url: url)
-    request.httpMethod = method
-    for (key, value) in client.mergedHeaders([:]) {
-      request.setValue(value, forHTTPHeaderField: key)
-    }
-    return request
+  private func makeRequest(url: URL, method: HTTPMethod) async throws -> URLRequest {
+    try await client.http.createRequest(method, url: url, headers: client.mergedHeaders())
   }
 
   private func tusMetadata() -> String {
@@ -375,9 +387,9 @@ extension TUSUploadEngine {
     let task = StorageUploadTask(
       events: eventStream,
       resultTask: resultTask,
-      pause: { Task { await engine.pause() } },
-      resume: { Task { await engine.resume() } },
-      cancel: { Task { await engine.cancel() } }
+      pause: { await engine.pause() },
+      resume: { await engine.resume() },
+      cancel: { await engine.cancel() }
     )
 
     Task { await engine.start() }
