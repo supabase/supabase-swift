@@ -51,6 +51,15 @@ public struct StorageClientConfiguration: Sendable {
   /// Defaults to `false`.
   public let useNewHostname: Bool
 
+  /// When set, downloads use `URLSessionConfiguration.background(withIdentifier:)`,
+  /// allowing transfers to continue while the app is suspended.
+  ///
+  /// Requires wiring `handleBackgroundEvents(forSessionIdentifier:completionHandler:)` in
+  /// your `AppDelegate`.
+  ///
+  /// When `nil` (the default), a standard foreground session is used.
+  public var backgroundDownloadSessionIdentifier: String?
+
   /// Creates a ``StorageClientConfiguration``.
   ///
   /// - Parameters:
@@ -60,16 +69,20 @@ public struct StorageClientConfiguration: Sendable {
   ///   - logger: An optional `SupabaseLogger` for request/response diagnostics. Defaults to `nil`.
   ///   - useNewHostname: When `true`, rewrites the host to the dedicated storage subdomain for
   ///     large-file upload support. Defaults to `false`.
+  ///   - backgroundDownloadSessionIdentifier: When set, downloads use a background
+  ///     `URLSessionConfiguration` with this identifier. Defaults to `nil`.
   public init(
     headers: [String: String],
     session: URLSession = URLSession(configuration: .default),
     logger: (any SupabaseLogger)? = nil,
-    useNewHostname: Bool = false
+    useNewHostname: Bool = false,
+    backgroundDownloadSessionIdentifier: String? = nil
   ) {
     self.headers = headers
     self.session = session
     self.logger = logger
     self.useNewHostname = useNewHostname
+    self.backgroundDownloadSessionIdentifier = backgroundDownloadSessionIdentifier
   }
 }
 
@@ -113,6 +126,9 @@ public final class StorageClient: Sendable {
 
   package let http: _HTTPClient
   private let usesTokenProvider: Bool
+
+  let downloadDelegate: DownloadSessionDelegate
+  let downloadSession: URLSession
 
   let encoder: JSONEncoder = {
     let encoder = JSONEncoder.supabase()
@@ -208,6 +224,19 @@ public final class StorageClient: Sendable {
       host: resolvedURL,
       session: configuration.session,
       tokenProvider: tokenProvider
+    )
+
+    let downloadDelegate = DownloadSessionDelegate()
+    self.downloadDelegate = downloadDelegate
+
+    let downloadSessionConfig: URLSessionConfiguration =
+      configuration.backgroundDownloadSessionIdentifier.map {
+        .background(withIdentifier: $0)
+      } ?? .default
+    self.downloadSession = URLSession(
+      configuration: downloadSessionConfig,
+      delegate: downloadDelegate,
+      delegateQueue: nil
     )
   }
 
@@ -334,6 +363,18 @@ public final class StorageClient: Sendable {
 
   func logFailure(_ error: any Error) {
     configuration.logger?.error("Response: Failure \(error)")
+  }
+
+  /// Forward background URLSession events from your `AppDelegate` to the Storage client.
+  ///
+  /// Call this from `application(_:handleEventsForBackgroundURLSession:completionHandler:)`
+  /// when the `identifier` matches the one configured in ``StorageClientConfiguration/backgroundDownloadSessionIdentifier``.
+  public func handleBackgroundEvents(
+    forSessionIdentifier identifier: String,
+    completionHandler: @escaping @Sendable () -> Void
+  ) {
+    guard identifier == configuration.backgroundDownloadSessionIdentifier else { return }
+    downloadDelegate.setBackgroundCompletionHandler(completionHandler)
   }
 
   /// Returns a ``StorageFileAPI`` scoped to the given bucket.
