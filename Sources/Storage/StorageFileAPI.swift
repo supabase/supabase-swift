@@ -613,10 +613,19 @@ public struct StorageFileAPI: Sendable {
   /// - Parameters:
   ///   - path: Path within the bucket, e.g. `"folder/image.png"`.
   ///   - options: Optional image transform parameters.
+  ///   - query: Additional query items appended to the request URL.
+  ///   - cacheNonce: Cache-busting nonce appended as `cacheNonce=<value>`.
   /// - Returns: A ``StorageDownloadTask`` whose `.completed` value is a `URL` on disk.
   @discardableResult
-  public func download(path: String, options: TransformOptions? = nil) -> StorageDownloadTask {
-    var request = URLRequest(url: _downloadURL(path: path, options: options))
+  public func download(
+    path: String,
+    options: TransformOptions? = nil,
+    query additionalQueryItems: [URLQueryItem]? = nil,
+    cacheNonce: String? = nil
+  ) -> StorageDownloadTask {
+    var request = URLRequest(
+      url: _downloadURL(
+        path: path, options: options, query: additionalQueryItems, cacheNonce: cacheNonce))
     for (key, value) in client.mergedHeaders([:]) {
       request.setValue(value, forHTTPHeaderField: key)
     }
@@ -633,35 +642,51 @@ public struct StorageFileAPI: Sendable {
   /// - Parameters:
   ///   - path: Path within the bucket.
   ///   - options: Optional image transform parameters.
+  ///   - query: Additional query items appended to the request URL.
+  ///   - cacheNonce: Cache-busting nonce appended as `cacheNonce=<value>`.
   /// - Returns: A task whose `.completed` value is the file `Data`.
   @discardableResult
-  public func downloadData(path: String, options: TransformOptions? = nil) -> StorageTransferTask<
-    Data
-  > {
-    download(path: path, options: options).mapResult { url in
-      let data = try Data(contentsOf: url)
-      try? FileManager.default.removeItem(at: url)
-      return data
-    }
+  public func downloadData(
+    path: String,
+    options: TransformOptions? = nil,
+    query additionalQueryItems: [URLQueryItem]? = nil,
+    cacheNonce: String? = nil
+  ) -> StorageTransferTask<Data> {
+    download(path: path, options: options, query: additionalQueryItems, cacheNonce: cacheNonce)
+      .mapResult { url in
+        let data = try Data(contentsOf: url)
+        try? FileManager.default.removeItem(at: url)
+        return data
+      }
   }
 
-  private func _downloadURL(path: String, options: TransformOptions?) -> URL {
+  private func _downloadURL(
+    path: String,
+    options: TransformOptions?,
+    query additionalQueryItems: [URLQueryItem]? = nil,
+    cacheNonce: String? = nil
+  ) -> URL {
     let finalPath = _getFinalPath(_removeEmptyFolders(path))
 
-    if let options, !options.isEmpty {
-      var components = URLComponents(
-        url: client.url.appendingPathComponent(
-          "render/image/authenticated/\(finalPath)"
-        ),
-        resolvingAgainstBaseURL: false
-      )
-      components?.queryItems = options.queryItems
-      return components?.url
-        ?? client.url.appendingPathComponent(
-          "render/image/authenticated/\(finalPath)"
-        )
+    var queryItems = options?.queryItems ?? []
+    if let additionalQueryItems { queryItems.append(contentsOf: additionalQueryItems) }
+    if let cacheNonce { queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce)) }
+
+    let basePath =
+      options.map { !$0.isEmpty } == true
+      ? "render/image/authenticated/\(finalPath)"
+      : "object/authenticated/\(finalPath)"
+
+    if queryItems.isEmpty {
+      return client.url.appendingPathComponent(basePath)
     }
-    return client.url.appendingPathComponent("object/authenticated/\(finalPath)")
+
+    var components = URLComponents(
+      url: client.url.appendingPathComponent(basePath),
+      resolvingAgainstBaseURL: false
+    )
+    components?.queryItems = queryItems
+    return components?.url ?? client.url.appendingPathComponent(basePath)
   }
 
   /// Retrieves extended metadata for a file without downloading its contents.
@@ -949,15 +974,7 @@ public struct StorageFileAPI: Sendable {
       throw StorageError.cancelled
     }
 
-    let transfer = StorageTransferTask<SignedURLUploadResponse>(
-      events: eventStream,
-      resultTask: resultTask,
-      pause: {},
-      resume: {},
-      cancel: {}
-    )
-
-    Task {
+    let uploadTask = Task {
       do {
         let response = try await body()
         eventsContinuation.yield(.completed(response))
@@ -978,7 +995,13 @@ public struct StorageFileAPI: Sendable {
       }
     }
 
-    return transfer
+    return StorageTransferTask<SignedURLUploadResponse>(
+      events: eventStream,
+      resultTask: resultTask,
+      pause: {},
+      resume: {},
+      cancel: { uploadTask.cancel() }
+    )
   }
 
   private func _uploadToSignedURL(
@@ -1011,8 +1034,7 @@ public struct StorageFileAPI: Sendable {
     path: String,
     file: FileUpload,
     options: FileOptions,
-    headers: [String: String],
-    progress: (@Sendable (TransferProgress) -> Void)? = nil
+    headers: [String: String]
   ) async throws -> Response {
     #if DEBUG
       let builder = MultipartBuilder(
@@ -1037,8 +1059,6 @@ public struct StorageFileAPI: Sendable {
       headers: client.mergedHeaders(headers)
     )
 
-    let delegate = progress.map { UploadProgressDelegate(onProgress: $0) }
-
     do {
       client.logRequest(method, url: url)
       let data: Data
@@ -1050,14 +1070,12 @@ public struct StorageFileAPI: Sendable {
 
         (data, response) = try await client.http.session.upload(
           for: request,
-          fromFile: tempFile,
-          delegate: delegate
+          fromFile: tempFile
         )
       } else {
         (data, response) = try await client.http.session.upload(
           for: request,
-          from: try multipart.buildInMemory(),
-          delegate: delegate
+          from: try multipart.buildInMemory()
         )
       }
 
@@ -1097,33 +1115,6 @@ public struct StorageFileAPI: Sendable {
 
   private func _getFinalPath(_ path: String) -> String {
     "\(bucketId)/\(path)"
-  }
-}
-
-// MARK: - Upload progress
-
-private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate,
-  @unchecked Sendable
-{
-  private let onProgress: @Sendable (TransferProgress) -> Void
-
-  init(onProgress: @escaping @Sendable (TransferProgress) -> Void) {
-    self.onProgress = onProgress
-  }
-
-  func urlSession(
-    _ session: URLSession,
-    task: URLSessionTask,
-    didSendBodyData bytesSent: Int64,
-    totalBytesSent: Int64,
-    totalBytesExpectedToSend: Int64
-  ) {
-    onProgress(
-      TransferProgress(
-        bytesTransferred: totalBytesSent,
-        totalBytes: totalBytesExpectedToSend
-      )
-    )
   }
 }
 
