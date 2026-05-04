@@ -114,37 +114,45 @@ struct SupabaseStorageTests {
 
   #if !os(Linux) && !os(Android)
     @Test func uploadData() async throws {
-      testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
+      let locationURL = Self.supabaseURL.appendingPathComponent("upload/resumable/test-id")
+      let requestCount = LockIsolated(0)
+      let capturedCreateRequest = LockIsolated<URLRequest?>(nil)
 
       StorageURLProtocolMock.requestHandler.setValue { request in
-        assertInlineSnapshot(of: request, as: .curl) {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Accept: application/json" \
-          	--header "Apikey: test.api.key" \
-          	--header "Cache-Control: max-age=14400" \
-          	--header "Content-Length: 390" \
-          	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
-          	--header "X-Client-Info: storage-swift/x.y.z" \
-          	--header "x-upsert: false" \
-          	"http://localhost:54321/storage/v1/object/tests/file1.txt"
-          """#
+        let count = requestCount.withValue { v -> Int in
+          let c = v
+          v += 1
+          return c
         }
-        return (
-          """
-          {
-            "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "Key": "tests/file1.txt"
-          }
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: Self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
+        if count == 0 {
+          // TUS POST to create upload
+          capturedCreateRequest.setValue(request)
+          return (
+            Data(),
+            HTTPURLResponse(
+              url: Self.supabaseURL,
+              statusCode: 201,
+              httpVersion: nil,
+              headerFields: ["Location": locationURL.absoluteString]
+            )!
+          )
+        } else {
+          // TUS PATCH to upload chunk
+          let data = Data(
+            """
+            {"Key":"tests/file1.txt","Id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F"}
+            """.utf8
+          )
+          return (
+            data,
+            HTTPURLResponse(
+              url: locationURL,
+              statusCode: 200,
+              httpVersion: nil,
+              headerFields: ["Upload-Offset": "9"]
+            )!
+          )
+        }
       }
 
       let sut = makeSUT()
@@ -157,41 +165,57 @@ struct SupabaseStorageTests {
             cacheControl: "14400",
             metadata: ["key": "value"]
           )
-        )
+        ).result
+
+      let createRequest = try #require(capturedCreateRequest.value)
+      #expect(createRequest.value(forHTTPHeaderField: "Tus-Resumable") == "1.0.0")
     }
 
     @Test func uploadFileURL() async throws {
-      testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
+      let locationURL = Self.supabaseURL.appendingPathComponent("upload/resumable/test-id")
+      let requestCount = LockIsolated(0)
+      let capturedCreateRequest = LockIsolated<URLRequest?>(nil)
 
       StorageURLProtocolMock.requestHandler.setValue { request in
-        assertInlineSnapshot(of: request, as: .curl) {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Accept: application/json" \
-          	--header "Apikey: test.api.key" \
-          	--header "Cache-Control: max-age=3600" \
-          	--header "Content-Length: 29907" \
-          	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
-          	--header "X-Client-Info: storage-swift/x.y.z" \
-          	--header "x-upsert: false" \
-          	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
-          """#
+        let count = requestCount.withValue { v -> Int in
+          let c = v
+          v += 1
+          return c
         }
-        return (
-          """
-          {
-            "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "Key": "tests/file1.txt"
-          }
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: Self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
+        if count == 0 {
+          // TUS POST to create upload
+          capturedCreateRequest.setValue(request)
+          return (
+            Data(),
+            HTTPURLResponse(
+              url: Self.supabaseURL,
+              statusCode: 201,
+              httpVersion: nil,
+              headerFields: ["Location": locationURL.absoluteString]
+            )!
+          )
+        } else {
+          // TUS PATCH to upload chunk(s) — return file size as offset to signal completion
+          let fileURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("sadcat.jpg")
+          let fileSize =
+            (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
+          let data = Data(
+            """
+            {"Key":"tests/sadcat.jpg","Id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F"}
+            """.utf8
+          )
+          return (
+            data,
+            HTTPURLResponse(
+              url: locationURL,
+              statusCode: 200,
+              httpVersion: nil,
+              headerFields: ["Upload-Offset": "\(fileSize)"]
+            )!
+          )
+        }
       }
 
       let sut = makeSUT()
@@ -203,7 +227,10 @@ struct SupabaseStorageTests {
           options: FileOptions(
             metadata: ["key": "value"]
           )
-        )
+        ).result
+
+      let createRequest = try #require(capturedCreateRequest.value)
+      #expect(createRequest.value(forHTTPHeaderField: "Tus-Resumable") == "1.0.0")
     }
   #endif
 
