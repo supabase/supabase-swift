@@ -40,6 +40,11 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
       )
     }
 
+    eventsContinuation.onTermination = { reason in
+      guard case .cancelled = reason else { return }
+      urlTask.cancel()
+    }
+
     let resultTask = Task<URL, any Error> {
       for await r in resultStream { return try r.get() }
       throw StorageError.cancelled
