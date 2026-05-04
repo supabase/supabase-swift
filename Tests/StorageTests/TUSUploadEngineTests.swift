@@ -94,7 +94,7 @@ import Testing
       options: FileOptions(contentType: "text/plain", upsert: false),
       client: client
     )
-    _ = try await task.result
+    _ = try await task.value
 
     let request = try #require(capturedRequest.value)
     #expect(request.value(forHTTPHeaderField: "Tus-Resumable") == "1.0.0")
@@ -130,7 +130,7 @@ import Testing
       options: FileOptions(contentType: "text/plain"),
       client: sc
     )
-    _ = try await task.result
+    _ = try await task.value
 
     // POST + 2 PATCHes = 3 total requests
     #expect(SequentialMockProtocol.callIndex == 3)
@@ -259,7 +259,7 @@ import Testing
     }
 
     do {
-      _ = try await task.result
+      _ = try await task.value
       Issue.record("Expected throw")
     } catch let error as StorageError {
       #expect(error.errorCode == .cancelled)
@@ -308,7 +308,7 @@ import Testing
 
     task.resume()
 
-    let response = try await task.result
+    let response = try await task.value
     #expect(response.path == "r.txt")
     // capturedRequests: POST, PATCH1, hanging-PATCH2 (cancelled), HEAD, PATCH2-real = 5
     // callIndex: POST(0→1) + PATCH1(1→2) + HEAD(2→3) + PATCH2(3→4) = 4
@@ -378,7 +378,7 @@ import Testing
       options: FileOptions(contentType: "text/plain"),
       client: client
     )
-    let response = try await task.result
+    let response = try await task.value
 
     #expect(headCount.value == 1)
     #expect(response.path == "x.txt")
