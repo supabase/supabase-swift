@@ -2,14 +2,7 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - v3
-      - release/*
   pull_request:
-    branches:
-      - "*"
-      - release/*
   workflow_dispatch:
 
 concurrency:
