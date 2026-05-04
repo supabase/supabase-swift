@@ -254,6 +254,173 @@ public struct StorageFileAPI: Sendable {
     )
   }
 
+  // MARK: - Explicit multipart upload
+
+  /// Uploads `Data` using the standard multipart request, regardless of file size.
+  ///
+  /// Use ``upload(_:data:options:)`` if you want the SDK to choose between multipart and TUS
+  /// automatically based on file size.
+  @discardableResult
+  public func uploadMultipart(
+    _ path: String,
+    data: Data,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    MultipartUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .data(data),
+      options: options,
+      client: client
+    )
+  }
+
+  /// Uploads a local file using the standard multipart request, regardless of file size.
+  ///
+  /// Files >= 10 MB are streamed from a temporary file on disk to avoid loading the entire
+  /// payload into memory. Use ``upload(_:fileURL:options:)`` if you want the SDK to choose
+  /// automatically between multipart and TUS.
+  @discardableResult
+  public func uploadMultipart(
+    _ path: String,
+    fileURL: URL,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    MultipartUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .fileURL(fileURL),
+      options: options,
+      client: client
+    )
+  }
+
+  // MARK: - Explicit TUS/resumable upload
+
+  /// Uploads `Data` using the TUS resumable upload protocol, regardless of file size.
+  ///
+  /// Use ``upload(_:data:options:)`` if you want the SDK to choose automatically.
+  @discardableResult
+  public func uploadResumable(
+    _ path: String,
+    data: Data,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    TUSUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .data(data),
+      options: options,
+      client: client
+    )
+  }
+
+  /// Uploads a local file using the TUS resumable upload protocol, regardless of file size.
+  ///
+  /// Use ``upload(_:fileURL:options:)`` if you want the SDK to choose automatically.
+  @discardableResult
+  public func uploadResumable(
+    _ path: String,
+    fileURL: URL,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    TUSUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .fileURL(fileURL),
+      options: options,
+      client: client
+    )
+  }
+
+  // MARK: - Explicit multipart update
+
+  /// Replaces an existing file with `Data` using the standard multipart request.
+  ///
+  /// Always sets `upsert: true`. Use ``update(_:data:options:)`` if you want the SDK to choose
+  /// automatically between multipart and TUS.
+  @discardableResult
+  public func updateMultipart(
+    _ path: String,
+    data: Data,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    return MultipartUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .data(data),
+      options: upsertOptions,
+      client: client
+    )
+  }
+
+  /// Replaces an existing file with the contents of a local URL using the standard multipart
+  /// request.
+  ///
+  /// Always sets `upsert: true`. Files >= 10 MB are streamed from a temp file on disk.
+  @discardableResult
+  public func updateMultipart(
+    _ path: String,
+    fileURL: URL,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    return MultipartUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .fileURL(fileURL),
+      options: upsertOptions,
+      client: client
+    )
+  }
+
+  // MARK: - Explicit TUS/resumable update
+
+  /// Replaces an existing file with `Data` using the TUS resumable upload protocol.
+  ///
+  /// Always sets `upsert: true`. Use ``update(_:data:options:)`` if you want the SDK to choose
+  /// automatically between multipart and TUS.
+  @discardableResult
+  public func updateResumable(
+    _ path: String,
+    data: Data,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    return TUSUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .data(data),
+      options: upsertOptions,
+      client: client
+    )
+  }
+
+  /// Replaces an existing file from a local URL using the TUS resumable upload protocol.
+  ///
+  /// Always sets `upsert: true`. Use ``update(_:fileURL:options:)`` if you want the SDK to choose
+  /// automatically between multipart and TUS.
+  @discardableResult
+  public func updateResumable(
+    _ path: String,
+    fileURL: URL,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    return TUSUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .fileURL(fileURL),
+      options: upsertOptions,
+      client: client
+    )
+  }
+
   /// Moves an existing file to a new path within the same or a different bucket.
   ///
   /// The source file is removed after the move completes. To keep the original, use ``copy(from:to:options:)`` instead.
