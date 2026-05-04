@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 04/05/26.
 //
 
+import ConcurrencyExtras
 import Foundation
 import Testing
 
@@ -87,6 +88,41 @@ import Testing
     } catch {
       Issue.record("Unexpected error type: \(error)")
     }
+  }
+
+  @Test func cancelInvokesCancelClosure() async {
+    let cancelCalled = LockIsolated(false)
+    let (eventStream, _) = AsyncStream<TransferEvent<String>>.makeStream()
+    let (resultStream, _) = AsyncStream<Result<String, any Error>>.makeStream(
+      bufferingPolicy: .bufferingNewest(1))
+    let resultTask = Task<String, any Error> {
+      for await r in resultStream { return try r.get() }
+      throw StorageError.cancelled
+    }
+    let task = StorageTransferTask<String>(
+      events: eventStream,
+      resultTask: resultTask,
+      pause: {},
+      resume: {},
+      cancel: { cancelCalled.setValue(true) }
+    )
+    task.cancel()
+    #expect(cancelCalled.value)
+  }
+
+  @Test func mapResultTransformThrowsPropagatesAsFailure() async {
+    let task = makeTask(success: 42)
+    let mapped = task.mapResult { (_: Int) throws -> String in
+      throw NSError(domain: "test", code: 1)
+    }
+    var gotFailure = false
+    for await event in mapped.events {
+      if case .failed(let error) = event {
+        gotFailure = true
+        #expect(error.errorCode == .fileSystemError)
+      }
+    }
+    #expect(gotFailure)
   }
 }
 
