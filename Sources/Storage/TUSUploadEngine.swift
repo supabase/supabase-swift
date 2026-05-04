@@ -5,15 +5,12 @@
 //  Created by Guilherme Souza on 04/05/26.
 //
 
-import ConcurrencyExtras
 import Foundation
 import Helpers
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
-
-package let tusChunkSize = LockIsolated(6 * 1024 * 1024)  // 6 MB — Supabase/S3 minimum
 
 actor TUSUploadEngine {
   enum State {
@@ -206,7 +203,7 @@ actor TUSUploadEngine {
     while offset < totalBytes {
       try Task.checkCancellation()
 
-      let chunk = try source.readChunk(at: offset, maxSize: tusChunkSize.value)
+      let chunk = try source.readChunk(at: offset, maxSize: client.configuration.tusChunkSize)
       guard !chunk.isEmpty else {
         throw StorageError(
           message: "Unexpected end of source data at offset \(offset)",

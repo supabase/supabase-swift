@@ -60,6 +60,15 @@ public struct StorageClientConfiguration: Sendable {
   /// When `nil` (the default), a standard foreground session is used.
   public var backgroundDownloadSessionIdentifier: String?
 
+  /// The TUS upload chunk size in bytes.
+  ///
+  /// Files uploaded via the TUS resumable protocol are split into chunks of this size.
+  /// The smart-default ``StorageFileAPI/upload(_:data:options:)`` also uses this threshold to
+  /// decide between multipart (≤ chunk size) and TUS (> chunk size).
+  ///
+  /// Defaults to 6 MB, matching the minimum part size for S3 multipart uploads.
+  public let tusChunkSize: Int
+
   /// Creates a ``StorageClientConfiguration``.
   ///
   /// - Parameters:
@@ -71,18 +80,22 @@ public struct StorageClientConfiguration: Sendable {
   ///     large-file upload support. Defaults to `false`.
   ///   - backgroundDownloadSessionIdentifier: When set, downloads use a background
   ///     `URLSessionConfiguration` with this identifier. Defaults to `nil`.
+  ///   - tusChunkSize: TUS upload chunk size in bytes. Also used as the threshold for the smart
+  ///     default `upload()`/`update()` methods. Defaults to 6 MB.
   public init(
     headers: [String: String],
     session: URLSession = URLSession(configuration: .default),
     logger: (any SupabaseLogger)? = nil,
     useNewHostname: Bool = false,
-    backgroundDownloadSessionIdentifier: String? = nil
+    backgroundDownloadSessionIdentifier: String? = nil,
+    tusChunkSize: Int = 6 * 1024 * 1024
   ) {
     self.headers = headers
     self.session = session
     self.logger = logger
     self.useNewHostname = useNewHostname
     self.backgroundDownloadSessionIdentifier = backgroundDownloadSessionIdentifier
+    self.tusChunkSize = tusChunkSize
   }
 }
 

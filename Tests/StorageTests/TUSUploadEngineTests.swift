@@ -37,6 +37,10 @@ import Testing
   }
 
   var sequentialClient: StorageClient {
+    sequentialClientWithChunkSize(6 * 1024 * 1024)
+  }
+
+  func sequentialClientWithChunkSize(_ chunkSize: Int) -> StorageClient {
     SequentialMockProtocol.reset()
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [SequentialMockProtocol.self]
@@ -44,7 +48,8 @@ import Testing
       url: baseURL,
       configuration: StorageClientConfiguration(
         headers: ["Authorization": "Bearer test-token"],
-        session: URLSession(configuration: config)
+        session: URLSession(configuration: config),
+        tusChunkSize: chunkSize
       )
     )
   }
@@ -107,13 +112,10 @@ import Testing
   }
 
   @Test func sendsTwoChunksForDataLargerThanChunkSize() async throws {
-    tusChunkSize.withValue { $0 = 3 }
-    defer { tusChunkSize.withValue { $0 = 6 * 1024 * 1024 } }
-
     let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
     let finalResponse = try makeTUSServerResponseData(path: "f.txt", fullPath: "bucket/f.txt")
 
-    let sc = sequentialClient
+    let sc = sequentialClientWithChunkSize(3)
     SequentialMockProtocol.responses = [
       // POST: 201 + Location header
       (201, ["Location": locationURL.absoluteString], Data()),
@@ -143,13 +145,10 @@ import Testing
   }
 
   @Test func emitsProgressEventsPerChunk() async throws {
-    tusChunkSize.withValue { $0 = 3 }
-    defer { tusChunkSize.withValue { $0 = 6 * 1024 * 1024 } }
-
     let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
     let finalResponse = try makeTUSServerResponseData(path: "f.bin", fullPath: "bucket/f.bin")
 
-    let sc = sequentialClient
+    let sc = sequentialClientWithChunkSize(3)
     SequentialMockProtocol.responses = [
       // POST: 201 + Location header
       (201, ["Location": locationURL.absoluteString], Data()),
@@ -181,8 +180,6 @@ import Testing
 
   @Test func cancelMidUploadEmitsCancelledEvent() async throws {
     HangingMockProtocol.resetHang()
-    tusChunkSize.withValue { $0 = 3 }
-    defer { tusChunkSize.withValue { $0 = 6 * 1024 * 1024 } }
 
     HangingMockProtocol.postResponse = (201, ["Location": locationURL.absoluteString], Data())
     defer { HangingMockProtocol.postResponse = nil }
@@ -193,7 +190,8 @@ import Testing
       url: baseURL,
       configuration: StorageClientConfiguration(
         headers: ["Authorization": "Bearer test-token"],
-        session: URLSession(configuration: config)
+        session: URLSession(configuration: config),
+        tusChunkSize: 3
       )
     )
 
@@ -226,8 +224,6 @@ import Testing
 
   @Test func cancelledTaskResultThrows() async throws {
     HangingMockProtocol.resetHang()
-    tusChunkSize.withValue { $0 = 3 }
-    defer { tusChunkSize.withValue { $0 = 6 * 1024 * 1024 } }
 
     HangingMockProtocol.postResponse = (201, ["Location": locationURL.absoluteString], Data())
     defer { HangingMockProtocol.postResponse = nil }
@@ -238,7 +234,8 @@ import Testing
       url: baseURL,
       configuration: StorageClientConfiguration(
         headers: ["Authorization": "Bearer test-token"],
-        session: URLSession(configuration: config)
+        session: URLSession(configuration: config),
+        tusChunkSize: 3
       )
     )
 
@@ -267,14 +264,11 @@ import Testing
   }
 
   @Test func resumeAfterPauseSyncsOffsetViaHEAD() async throws {
-    tusChunkSize.withValue { $0 = 3 }
-    defer { tusChunkSize.withValue { $0 = 6 * 1024 * 1024 } }
-
     let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
     let finalResponse = try makeTUSServerResponseData(path: "r.txt", fullPath: "bucket/r.txt")
 
     // POST and PATCH 1 respond immediately; PATCH 2 hangs until we resume
-    let sc = sequentialClient
+    let sc = sequentialClientWithChunkSize(3)
     SequentialMockProtocol.responses = [
       (201, ["Location": locationURL.absoluteString], Data()),
       (204, ["Upload-Offset": "3"], Data()),
