@@ -229,10 +229,14 @@ public final class StorageClient: Sendable {
     let downloadDelegate = DownloadSessionDelegate()
     self.downloadDelegate = downloadDelegate
 
-    let downloadSessionConfig: URLSessionConfiguration =
-      configuration.backgroundDownloadSessionIdentifier.map {
-        .background(withIdentifier: $0)
-      } ?? .default
+    #if canImport(Darwin)
+      let downloadSessionConfig: URLSessionConfiguration =
+        configuration.backgroundDownloadSessionIdentifier.map {
+          .background(withIdentifier: $0)
+        } ?? .default
+    #else
+      let downloadSessionConfig: URLSessionConfiguration = .default
+    #endif
     // Propagate any custom protocol classes (e.g. for testing) from the HTTP session.
     if let protocolClasses = configuration.session.configuration.protocolClasses,
       !protocolClasses.isEmpty
