@@ -44,14 +44,14 @@ import Testing
 
   @Test func resultReturnsSuccessValue() async throws {
     let task = makeTask(success: "world")
-    let result = try await task.result
+    let result = try await task.value
     #expect(result == "world")
   }
 
   @Test func resultThrowsOnFailure() async {
     let task: StorageTransferTask<String> = makeFailingTask(StorageError.cancelled)
     do {
-      _ = try await task.result
+      _ = try await task.value
       Issue.record("Expected throw")
     } catch let error as StorageError {
       #expect(error.errorCode == .cancelled)
@@ -63,7 +63,7 @@ import Testing
   @Test func mapResultTransformsSuccess() async throws {
     let task = makeTask(success: 42)
     let mapped = task.mapResult { "\($0)" }
-    let result = try await mapped.result
+    let result = try await mapped.value
     #expect(result == "42")
   }
 
@@ -81,7 +81,7 @@ import Testing
     let task: StorageTransferTask<Int> = makeFailingTask(StorageError.cancelled)
     let mapped = task.mapResult { "\($0)" }
     do {
-      _ = try await mapped.result
+      _ = try await mapped.value
       Issue.record("Expected throw")
     } catch let error as StorageError {
       #expect(error.errorCode == .cancelled)
