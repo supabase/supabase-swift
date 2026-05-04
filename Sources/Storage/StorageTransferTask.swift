@@ -77,16 +77,19 @@ extension StorageTransferTask {
             newContinuation.yield(.completed(mapped))
             newContinuation.finish()
             resultContinuation.yield(.success(mapped))
+            resultContinuation.finish()
           } catch {
             let storageError = StorageError.fileSystemError(underlying: error)
             newContinuation.yield(.failed(storageError))
             newContinuation.finish()
             resultContinuation.yield(.failure(storageError))
+            resultContinuation.finish()
           }
         case .failed(let error):
           newContinuation.yield(.failed(error))
           newContinuation.finish()
           resultContinuation.yield(.failure(error))
+          resultContinuation.finish()
         }
       }
       newContinuation.finish()
