@@ -205,11 +205,17 @@ actor TUSUploadEngine {
   private func uploadChunks(to uploadURL: URL, from startOffset: Int64, totalBytes: Int64)
     async throws
   {
+    // Open the file handle once for the duration of the chunk loop so we don't pay
+    // an open+close syscall on every iteration. nil for .data sources.
+    let fileHandle = try source.openForReading()
+    defer { try? fileHandle?.close() }
+
     var offset = startOffset
     while offset < totalBytes {
       try Task.checkCancellation()
 
-      let chunk = try source.readChunk(at: offset, maxSize: client.configuration.tusChunkSize)
+      let chunk = try source.readChunk(
+        at: offset, maxSize: client.configuration.tusChunkSize, fileHandle: fileHandle)
       guard !chunk.isEmpty else {
         throw StorageError(
           message: "Unexpected end of source data at offset \(offset)",
@@ -221,7 +227,7 @@ actor TUSUploadEngine {
       request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
       request.setValue("\(offset)", forHTTPHeaderField: "Upload-Offset")
       request.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
-      request.setValue("\(chunk.count)", forHTTPHeaderField: "Content-Length")
+      // Content-Length is set automatically by URLSession.upload(for:from:)
 
       let (_, response) = try await client.http.session.upload(for: request, from: chunk)
       guard let httpResponse = response as? HTTPURLResponse else {
