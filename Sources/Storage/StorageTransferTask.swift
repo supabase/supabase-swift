@@ -114,6 +114,10 @@ extension StorageTransferTask {
       cancel: {
         await self._cancel()
         bridgeTask.cancel()
+        // Ensure resultContinuation is finished so newResultTask exits via the stream
+        // (yielding StorageError.cancelled) rather than via Task cancellation
+        // (which would throw CancellationError), keeping the error type deterministic.
+        resultContinuation.finish()
       }
     )
   }
