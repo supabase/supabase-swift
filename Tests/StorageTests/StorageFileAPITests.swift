@@ -1131,4 +1131,91 @@ struct StorageFileAPITests {
     let task = storage.from("bucket").downloadData(path: "file.txt")
     await task.cancel()
   }
+
+  // MARK: - Explicit multipart methods
+
+  @Test func uploadMultipartFromData() async throws {
+    let objectURL = url.appendingPathComponent("object/bucket/file.txt")
+    let responseJSON = """
+      {"Key":"bucket/file.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
+      """
+    Mock(
+      url: objectURL,
+      contentType: .json,
+      statusCode: 200,
+      data: [.post: Data(responseJSON.utf8)]
+    ).register()
+
+    let response = try await storage.from("bucket")
+      .uploadMultipart("file.txt", data: Data("hello world".utf8)).value
+
+    #expect(response.path == "file.txt")
+    #expect(response.fullPath == "bucket/file.txt")
+  }
+
+  @Test func updateMultipartSetsUpsertTrue() async throws {
+    let objectURL = url.appendingPathComponent("object/bucket/file.txt")
+    let responseJSON = """
+      {"Key":"bucket/file.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
+      """
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+    var mock = Mock(
+      url: objectURL, contentType: .json, statusCode: 200,
+      data: [.post: Data(responseJSON.utf8)]
+    )
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { capturedRequest.setValue($0) })
+    mock.register()
+
+    _ = try await storage.from("bucket")
+      .updateMultipart("file.txt", data: Data("hello".utf8)).value
+
+    let req = try #require(capturedRequest.value)
+    #expect(req.value(forHTTPHeaderField: "x-upsert") == "true")
+  }
+
+  @Test func uploadResumableFromData() async throws {
+    let resumableURL = url.appendingPathComponent("upload/resumable")
+    let locationURL = url.appendingPathComponent(
+      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
+
+    Mock(
+      url: resumableURL, contentType: .json, statusCode: 201, data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
+    ).register()
+    Mock(
+      url: locationURL, contentType: .json, statusCode: 204, data: [.patch: Data()],
+      additionalHeaders: ["Upload-Offset": "5"]
+    ).register()
+
+    let response = try await storage.from("bucket")
+      .uploadResumable("file.txt", data: Data("hello".utf8)).value
+
+    #expect(response.path == "file.txt")
+    #expect(response.fullPath == "bucket/file.txt")
+  }
+
+  @Test func updateResumableSetsUpsertTrue() async throws {
+    let resumableURL = url.appendingPathComponent("upload/resumable")
+    let locationURL = url.appendingPathComponent(
+      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
+
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+    var postMock = Mock(
+      url: resumableURL, contentType: .json, statusCode: 201, data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
+    )
+    postMock.onRequestHandler = OnRequestHandler(requestCallback: { capturedRequest.setValue($0) })
+    postMock.register()
+
+    Mock(
+      url: locationURL, contentType: .json, statusCode: 204, data: [.patch: Data()],
+      additionalHeaders: ["Upload-Offset": "5"]
+    ).register()
+
+    _ = try await storage.from("bucket")
+      .updateResumable("file.txt", data: Data("hello".utf8)).value
+
+    let req = try #require(capturedRequest.value)
+    #expect(req.value(forHTTPHeaderField: "x-upsert") == "true")
+  }
 }
