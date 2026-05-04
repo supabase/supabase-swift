@@ -21,71 +21,6 @@ let defaultFileOptions = FileOptions(
   upsert: false
 )
 
-enum FileUpload {
-  case data(Data)
-  case url(URL)
-
-  func append(
-    to builder: MultipartBuilder,
-    withPath path: String,
-    options: FileOptions
-  ) -> MultipartBuilder {
-    var builder = builder.addText(
-      name: "cacheControl",
-      value: options.cacheControl
-    )
-
-    if let metadata = options.metadata {
-      builder = builder.addText(
-        name: "metadata",
-        value: String(data: encodeMetadata(metadata), encoding: .utf8) ?? ""
-      )
-    }
-
-    switch self {
-    case .data(let data):
-      return builder.addData(
-        name: "",
-        data: data,
-        fileName: path.fileName,
-        mimeType: options.contentType
-          ?? mimeType(forPathExtension: path.pathExtension)
-      )
-
-    case .url(let url):
-      return builder.addFile(
-        name: "",
-        fileURL: url,
-        fileName: url.lastPathComponent,
-        mimeType: options.contentType
-          ?? mimeType(forPathExtension: url.pathExtension)
-      )
-    }
-  }
-
-  var usesTempFileUpload: Bool {
-    get throws {
-      guard case .url(let url) = self else { return false }
-
-      let fileSize =
-        try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-      return fileSize >= 10 * 1024 * 1024
-    }
-  }
-
-  func defaultOptions() -> FileOptions {
-    switch self {
-    case .data:
-      return defaultFileOptions
-
-    case .url:
-      var options = defaultFileOptions
-      options.contentType = nil
-      return options
-    }
-  }
-}
-
 #if DEBUG
   import ConcurrencyExtras
   let testingBoundary = LockIsolated<String?>(nil)
@@ -954,7 +889,7 @@ public struct StorageFileAPI: Sendable {
       try await self._uploadToSignedURL(
         path: path,
         token: token,
-        file: .url(fileURL),
+        file: .fileURL(fileURL),
         options: options
       )
     }
@@ -1007,7 +942,7 @@ public struct StorageFileAPI: Sendable {
   private func _uploadToSignedURL(
     path: String,
     token: String,
-    file: FileUpload,
+    file: UploadSource,
     options: FileOptions
   ) async throws -> SignedURLUploadResponse {
     var headers = multipartHeaders(options: options)
@@ -1032,7 +967,7 @@ public struct StorageFileAPI: Sendable {
     _ method: HTTPMethod,
     url: URL,
     path: String,
-    file: FileUpload,
+    file: UploadSource,
     options: FileOptions,
     headers: [String: String]
   ) async throws -> Response {
