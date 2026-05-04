@@ -135,7 +135,7 @@ public struct StorageFileAPI: Sendable {
     data: Data,
     options: FileOptions = FileOptions()
   ) -> StorageUploadTask {
-    if data.count <= tusChunkSize.value {
+    if data.count <= client.configuration.tusChunkSize {
       return MultipartUploadEngine.makeTask(
         bucketId: bucketId, path: path, source: .data(data), options: options, client: client)
     } else {
@@ -178,7 +178,7 @@ public struct StorageFileAPI: Sendable {
   ) -> StorageUploadTask {
     let size =
       (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
-    if size <= tusChunkSize.value {
+    if size <= client.configuration.tusChunkSize {
       return MultipartUploadEngine.makeTask(
         bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options,
         client: client)
@@ -224,7 +224,7 @@ public struct StorageFileAPI: Sendable {
   ) -> StorageUploadTask {
     var upsertOptions = options
     upsertOptions.upsert = true
-    if data.count <= tusChunkSize.value {
+    if data.count <= client.configuration.tusChunkSize {
       return MultipartUploadEngine.makeTask(
         bucketId: bucketId, path: path, source: .data(data), options: upsertOptions, client: client)
     } else {
@@ -269,7 +269,7 @@ public struct StorageFileAPI: Sendable {
     upsertOptions.upsert = true
     let size =
       (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
-    if size <= tusChunkSize.value {
+    if size <= client.configuration.tusChunkSize {
       return MultipartUploadEngine.makeTask(
         bucketId: bucketId, path: path, source: .fileURL(fileURL), options: upsertOptions,
         client: client)
