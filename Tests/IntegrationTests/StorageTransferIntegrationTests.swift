@@ -13,7 +13,7 @@ import Testing
 // Run with: make test-integration
 
 @Suite(.serialized)
-struct StorageTransferIntegrationTests {
+final class StorageTransferIntegrationTests {
 
   let storage = StorageClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
@@ -37,6 +37,15 @@ struct StorageTransferIntegrationTests {
       _ = try await storage.getBucket(bucket)
     } catch {
       try await storage.createBucket(bucket, options: BucketOptions(isPublic: false))
+    }
+  }
+
+  deinit {
+    let storage = storage
+    let bucket = bucket
+    Task {
+      try? await storage.emptyBucket(bucket)
+      try? await storage.deleteBucket(bucket)
     }
   }
 
@@ -68,8 +77,12 @@ struct StorageTransferIntegrationTests {
     }
 
     #expect(!progressValues.isEmpty)
+    #expect(progressValues.count >= 2)
     // Progress values should be ascending
     #expect(progressValues == progressValues.sorted())
+
+    // Verify the upload actually completed successfully
+    _ = try await task.result
 
     try await storage.from(bucket).remove(paths: [path])
   }
@@ -97,8 +110,10 @@ struct StorageTransferIntegrationTests {
     // Wait briefly to let the cancellation propagate
     do {
       _ = try await task.result
-    } catch {
+    } catch let error as StorageError where error.errorCode == .cancelled {
       // Expected: task was cancelled
+    } catch {
+      throw error  // Unexpected error — surface it
     }
 
     let exists = try await storage.from(bucket).exists(path: path)
