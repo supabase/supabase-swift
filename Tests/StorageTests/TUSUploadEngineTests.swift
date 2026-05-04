@@ -180,6 +180,7 @@ import Testing
   }
 
   @Test func cancelMidUploadEmitsCancelledEvent() async throws {
+    HangingMockProtocol.resetHang()
     tusChunkSize = 3
     defer { tusChunkSize = 6 * 1024 * 1024 }
 
@@ -224,6 +225,7 @@ import Testing
   }
 
   @Test func cancelledTaskResultThrows() async throws {
+    HangingMockProtocol.resetHang()
     tusChunkSize = 3
     defer { tusChunkSize = 6 * 1024 * 1024 }
 
@@ -336,6 +338,7 @@ final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
   private static let lock = NSLock()
   nonisolated(unsafe) static var callIndex = 0
   nonisolated(unsafe) static var capturedRequests: [URLRequest] = []
+  private var didFinish = false
 
   static func reset() {
     lock.lock()
@@ -369,10 +372,13 @@ final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
     client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
     client?.urlProtocol(self, didLoad: resp.data)
     client?.urlProtocolDidFinishLoading(self)
+    didFinish = true
   }
 
   override func stopLoading() {
-    client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+    if !didFinish {
+      client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+    }
   }
 }
 
@@ -385,8 +391,14 @@ final class HangingMockProtocol: URLProtocol, @unchecked Sendable {
     (statusCode: Int, headers: [String: String], data: Data)?
 
   // Signals when a PATCH/HEAD request starts hanging
-  private static let (patchHangStream, patchHangContinuation) = AsyncStream<Void>.makeStream()
-  static var nextPatchHang: AsyncStream<Void> { patchHangStream }
+  nonisolated(unsafe) private static var patchHangContinuation: AsyncStream<Void>.Continuation?
+  nonisolated(unsafe) static var nextPatchHang: AsyncStream<Void> = AsyncStream { _ in }
+
+  static func resetHang() {
+    let (stream, continuation) = AsyncStream<Void>.makeStream()
+    nextPatchHang = stream
+    patchHangContinuation = continuation
+  }
 
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -404,7 +416,7 @@ final class HangingMockProtocol: URLProtocol, @unchecked Sendable {
       client?.urlProtocolDidFinishLoading(self)
     } else {
       // Signal that we are hanging
-      Self.patchHangContinuation.yield(())
+      Self.patchHangContinuation?.yield(())
       // Hang — do NOT call any client? methods until stopLoading is called
     }
   }
