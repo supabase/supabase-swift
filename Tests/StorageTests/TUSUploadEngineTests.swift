@@ -317,6 +317,37 @@ import Testing
     #expect(requests[4].httpMethod == "PATCH")  // real PATCH 2 after HEAD
   }
 
+  @Test func resyncReturningTotalBytesOn409CompletesSuccessfully() async throws {
+    // Regression test for: a 409 resync where the server reports offset == totalBytes
+    // (file already fully uploaded) previously caused uploadChunks to exit the while loop
+    // without calling finish(), leaving both continuations open and making task.value hang.
+    let data = Data("hello".utf8)  // 5 bytes
+
+    let sc = sequentialClientWithChunkSize(6 * 1024 * 1024)
+    SequentialMockProtocol.responses = [
+      // POST: 201 + Location
+      (201, ["Location": locationURL.absoluteString], Data()),
+      // PATCH: 409 — triggers HEAD re-sync
+      (409, [:], Data()),
+      // HEAD: Upload-Offset == totalBytes (5) — upload already complete
+      (200, ["Upload-Offset": "5"], Data()),
+    ]
+
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "f.txt",
+      source: .data(data),
+      options: FileOptions(contentType: "text/plain"),
+      client: sc
+    )
+
+    let response = try await task.value
+    #expect(response.path == "f.txt")
+    #expect(response.fullPath == "bucket/f.txt")
+    // POST + PATCH + HEAD = 3 requests; no extra PATCH should be attempted
+    #expect(SequentialMockProtocol.callIndex == 3)
+  }
+
   @Test func resyncesOffsetOn409() async throws {
     let data = Data(repeating: 0x01, count: 100)
     let headCount = LockIsolated(0)

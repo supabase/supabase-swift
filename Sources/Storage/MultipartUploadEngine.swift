@@ -23,6 +23,13 @@ actor MultipartUploadEngine {
     case completed(FileUploadResponse)
     case failed(StorageError)
     case cancelled
+
+    var isTerminal: Bool {
+      switch self {
+      case .completed, .failed, .cancelled: return true
+      default: return false
+      }
+    }
   }
 
   private let bucketId: String
@@ -65,6 +72,7 @@ actor MultipartUploadEngine {
   func resume() {}
 
   func cancel() {
+    guard !state.isTerminal else { return }
     currentUploadTask?.cancel()
     state = .cancelled
     let error = StorageError.cancelled
