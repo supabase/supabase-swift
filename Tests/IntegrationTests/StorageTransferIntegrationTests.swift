@@ -71,7 +71,7 @@ final class StorageTransferIntegrationTests {
       }
 
       #expect(!progressValues.isEmpty)
-      #expect(progressValues.count >= 2)
+      #expect(progressValues.count == 3)
       // Progress values should be ascending
       #expect(progressValues == progressValues.sorted())
 
