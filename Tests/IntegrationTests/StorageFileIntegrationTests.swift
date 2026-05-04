@@ -14,9 +14,9 @@ import XCTest
 #endif
 
 final class StorageFileIntegrationTests: XCTestCase {
-  let storage = SupabaseStorageClient(
+  let storage = StorageClient(
+    url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
     configuration: StorageClientConfiguration(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
       headers: [
         "Authorization": "Bearer \(DotEnv.SUPABASE_SECRET_KEY)"
       ],
@@ -57,7 +57,8 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testGetPublicURLWithDownloadQueryString() throws {
-    let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath, download: true)
+    let publicURL = try storage.from(bucketName).getPublicURL(
+      path: uploadPath, download: .withOriginalName)
     XCTAssertEqual(
       publicURL.absoluteString,
       "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download="
@@ -66,7 +67,7 @@ final class StorageFileIntegrationTests: XCTestCase {
 
   func testGetPublicURLWithCustomDownload() throws {
     let publicURL = try storage.from(bucketName).getPublicURL(
-      path: uploadPath, download: "test.jpg")
+      path: uploadPath, download: .named("test.jpg"))
     XCTAssertEqual(
       publicURL.absoluteString,
       "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download=test.jpg"
@@ -76,7 +77,8 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testSignURL() async throws {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    let url = try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000)
+    let url = try await storage.from(bucketName).createSignedURL(
+      path: uploadPath, expiresIn: .seconds(2000))
     XCTAssertTrue(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -87,7 +89,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: 2000, download: true)
+      path: uploadPath, expiresIn: .seconds(2000), download: .withOriginalName)
     XCTAssertTrue(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -99,7 +101,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: 2000, download: "test.jpg")
+      path: uploadPath, expiresIn: .seconds(2000), download: .named("test.jpg"))
     XCTAssertTrue(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -119,7 +121,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testUploadFileWithinFileSizeLimit() async throws {
     bucketName = try await newBucket(
       prefix: "with-limit",
-      options: BucketOptions(public: true, fileSizeLimit: "1mb")
+      options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1))
     )
 
     try await storage.from(bucketName).upload(uploadPath, data: file)
@@ -128,31 +130,24 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testUploadFileThatExceedFileSizeLimit() async throws {
     bucketName = try await newBucket(
       prefix: "with-limit",
-      options: BucketOptions(public: true, fileSizeLimit: "1kb")
+      options: BucketOptions(isPublic: true, fileSizeLimit: .kilobytes(1))
     )
 
     do {
       try await storage.from(bucketName).upload(uploadPath, data: file)
       XCTFail("Unexpected success")
+    } catch let error as StorageError {
+      XCTAssertEqual(error.statusCode, 413)
+      XCTAssertEqual(error.message, "The object exceeded the maximum allowed size")
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Payload too large"
-          - message: "The object exceeded the maximum allowed size"
-          ▿ statusCode: Optional<String>
-            - some: "413"
-
-        """
-      }
+      XCTFail("Unexpected error type: \(error)")
     }
   }
 
   func testUploadFileWithValidMimeType() async throws {
     bucketName = try await newBucket(
       prefix: "with-mimetype",
-      options: BucketOptions(public: true, allowedMimeTypes: ["image/jpeg"])
+      options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/jpeg"])
     )
 
     try await storage.from(bucketName).upload(
@@ -167,7 +162,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testUploadFileWithInvalidMimeType() async throws {
     bucketName = try await newBucket(
       prefix: "with-mimetype",
-      options: BucketOptions(public: true, allowedMimeTypes: ["image/png"])
+      options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/png"])
     )
 
     do {
@@ -179,18 +174,11 @@ final class StorageFileIntegrationTests: XCTestCase {
         )
       )
       XCTFail("Unexpected success")
+    } catch let error as StorageError {
+      XCTAssertEqual(error.statusCode, 415)
+      XCTAssertEqual(error.message, "mime type image/jpeg is not supported")
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "invalid_mime_type"
-          - message: "mime type image/jpeg is not supported"
-          ▿ statusCode: Optional<String>
-            - some: "415"
-
-        """
-      }
+      XCTFail("Unexpected error type: \(error)")
     }
   }
 
@@ -230,18 +218,11 @@ final class StorageFileIntegrationTests: XCTestCase {
     do {
       try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
       XCTFail("Unexpected success")
+    } catch let error as StorageError {
+      XCTAssertEqual(error.statusCode, 409)
+      XCTAssertEqual(error.message, "The resource already exists")
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Duplicate"
-          - message: "The resource already exists"
-          ▿ statusCode: Optional<String>
-            - some: "409"
-
-        """
-      }
+      XCTFail("Unexpected error type: \(error)")
     }
   }
 
@@ -400,7 +381,7 @@ final class StorageFileIntegrationTests: XCTestCase {
 
   private func newBucket(
     prefix: String = "",
-    options: BucketOptions = BucketOptions(public: true)
+    options: BucketOptions = BucketOptions(isPublic: true)
   ) async throws -> String {
     let bucketName = "\(!prefix.isEmpty ? prefix + "-" : "")bucket-\(UUID().uuidString)"
     return try await findOrCreateBucket(name: bucketName, options: options)
@@ -409,7 +390,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   @discardableResult
   private func findOrCreateBucket(
     name: String,
-    options: BucketOptions = BucketOptions(public: true)
+    options: BucketOptions = BucketOptions(isPublic: true)
   ) async throws -> String {
     do {
       _ = try await storage.getBucket(name)
