@@ -15,38 +15,6 @@ import Helpers
 
 package let tusChunkSize = LockIsolated(6 * 1024 * 1024)  // 6 MB — Supabase/S3 minimum
 
-enum UploadSource: Sendable {
-  case data(Data)
-  case fileURL(URL)
-
-  func totalBytes() throws -> Int64 {
-    switch self {
-    case .data(let d):
-      return Int64(d.count)
-    case .fileURL(let url):
-      let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
-      guard let size = attrs[.size] as? Int64 else {
-        throw StorageError(message: "Cannot determine file size", errorCode: .fileSystemError)
-      }
-      return size
-    }
-  }
-
-  func readChunk(at offset: Int64, maxSize: Int) throws -> Data {
-    switch self {
-    case .data(let d):
-      let start = Int(offset)
-      let end = min(start + maxSize, d.count)
-      return d[start..<end]
-    case .fileURL(let url):
-      let handle = try FileHandle(forReadingFrom: url)
-      defer { try? handle.close() }
-      try handle.seek(toOffset: UInt64(offset))
-      return try handle.read(upToCount: maxSize) ?? Data()
-    }
-  }
-}
-
 actor TUSUploadEngine {
   enum State {
     case idle
