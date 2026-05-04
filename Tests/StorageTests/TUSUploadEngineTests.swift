@@ -184,6 +184,7 @@ import Testing
     defer { tusChunkSize = 6 * 1024 * 1024 }
 
     HangingMockProtocol.postResponse = (201, ["Location": locationURL.absoluteString], Data())
+    defer { HangingMockProtocol.postResponse = nil }
 
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [HangingMockProtocol.self]
@@ -204,21 +205,21 @@ import Testing
       client: hangingClient
     )
 
-    // Cancel after POST completes and first PATCH starts hanging
+    // Wait until the first PATCH is actually hanging, then cancel
     Task {
-      try? await Task.sleep(for: .milliseconds(500))
+      var iter = HangingMockProtocol.nextPatchHang.makeAsyncIterator()
+      _ = await iter.next()
       task.cancel()
     }
 
-    var lastEvent: TransferEvent<FileUploadResponse>?
-    for await event in task.events {
-      lastEvent = event
-    }
-
-    if case .failed(let error) = lastEvent {
+    var events: [TransferEvent<FileUploadResponse>] = []
+    for await event in task.events { events.append(event) }
+    #expect(!events.isEmpty, "stream must emit at least one event before closing")
+    if case .failed(let error) = events.last {
       #expect(error.errorCode == .cancelled)
     } else {
-      Issue.record("Expected .failed(.cancelled), got \(String(describing: lastEvent))")
+      Issue.record(
+        "Expected last event .failed(.cancelled), got \(String(describing: events.last))")
     }
   }
 
@@ -227,6 +228,7 @@ import Testing
     defer { tusChunkSize = 6 * 1024 * 1024 }
 
     HangingMockProtocol.postResponse = (201, ["Location": locationURL.absoluteString], Data())
+    defer { HangingMockProtocol.postResponse = nil }
 
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [HangingMockProtocol.self]
@@ -247,8 +249,10 @@ import Testing
       client: hangingClient
     )
 
+    // Wait until the first PATCH is actually hanging, then cancel
     Task {
-      try? await Task.sleep(for: .milliseconds(500))
+      var iter = HangingMockProtocol.nextPatchHang.makeAsyncIterator()
+      _ = await iter.next()
       task.cancel()
     }
 
@@ -367,7 +371,9 @@ final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
     client?.urlProtocolDidFinishLoading(self)
   }
 
-  override func stopLoading() {}
+  override func stopLoading() {
+    client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+  }
 }
 
 // MARK: - HangingMockProtocol
@@ -378,24 +384,32 @@ final class HangingMockProtocol: URLProtocol, @unchecked Sendable {
   nonisolated(unsafe) static var postResponse:
     (statusCode: Int, headers: [String: String], data: Data)?
 
+  // Signals when a PATCH/HEAD request starts hanging
+  private static let (patchHangStream, patchHangContinuation) = AsyncStream<Void>.makeStream()
+  static var nextPatchHang: AsyncStream<Void> { patchHangStream }
+
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
   override func startLoading() {
-    guard request.httpMethod == "POST", let resp = Self.postResponse else {
-      // For PATCH/HEAD: hang indefinitely until the task is cancelled
-      return
+    if request.httpMethod == "POST", let resp = Self.postResponse {
+      let httpResponse = HTTPURLResponse(
+        url: request.url!,
+        statusCode: resp.statusCode,
+        httpVersion: nil,
+        headerFields: resp.headers
+      )!
+      client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
+      client?.urlProtocol(self, didLoad: resp.data)
+      client?.urlProtocolDidFinishLoading(self)
+    } else {
+      // Signal that we are hanging
+      Self.patchHangContinuation.yield(())
+      // Hang — do NOT call any client? methods until stopLoading is called
     }
-    let httpResponse = HTTPURLResponse(
-      url: request.url!,
-      statusCode: resp.statusCode,
-      httpVersion: nil,
-      headerFields: resp.headers
-    )!
-    client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
-    client?.urlProtocol(self, didLoad: resp.data)
-    client?.urlProtocolDidFinishLoading(self)
   }
 
-  override func stopLoading() {}
+  override func stopLoading() {
+    client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+  }
 }
