@@ -5,10 +5,12 @@
 //  Created by Guilherme Souza on 07/05/24.
 //
 
+import Foundation
 import Storage
-import XCTest
+import Testing
 
-final class StorageClientIntegrationTests: XCTestCase {
+@Suite(.serialized)
+struct StorageClientIntegrationTests {
   let storage = StorageClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
     configuration: StorageClientConfiguration(
@@ -19,67 +21,47 @@ final class StorageClientIntegrationTests: XCTestCase {
     )
   )
 
-  override func setUp() async throws {
-    try await super.setUp()
-
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-
-    // Clean up test-bucket if it exists from a previous failed run
-    // to make tests idempotent
-    let testBucketName = "test-bucket"
-    do {
-      // First empty the bucket (required before deletion)
-      let files = try await storage.from(testBucketName).list()
-      if !files.isEmpty {
-        let filePaths = files.map { $0.name }
-        try await storage.from(testBucketName).remove(paths: filePaths)
-      }
-      try await storage.deleteBucket(testBucketName)
-    } catch {
-      // Ignore errors - bucket may not exist, which is expected
-    }
-  }
-
-  func testBucket_CRUD() async throws {
+  @Test func bucketCRUD() async throws {
     let bucketName = "test-bucket"
 
+    // Clean up any leftover from a previous failed run to make test idempotent.
+    try? await storage.emptyBucket(bucketName)
+    try? await storage.deleteBucket(bucketName)
+
     var buckets = try await storage.listBuckets()
-    XCTAssertFalse(buckets.contains(where: { $0.name == bucketName }))
+    #expect(!buckets.contains(where: { $0.name == bucketName }))
 
     try await storage.createBucket(bucketName, options: .init(isPublic: true))
 
     var bucket = try await storage.getBucket(bucketName)
-    XCTAssertEqual(bucket.name, bucketName)
-    XCTAssertEqual(bucket.id, bucketName)
-    XCTAssertEqual(bucket.isPublic, true)
+    #expect(bucket.name == bucketName)
+    #expect(bucket.id == bucketName)
+    #expect(bucket.isPublic == true)
 
     buckets = try await storage.listBuckets()
-    XCTAssertTrue(buckets.contains { $0.id == bucket.id })
+    #expect(buckets.contains { $0.id == bucket.id })
 
     try await storage.updateBucket(
       bucketName, options: BucketOptions(allowedMimeTypes: ["image/jpeg"]))
 
     bucket = try await storage.getBucket(bucketName)
-    XCTAssertEqual(bucket.allowedMimeTypes, ["image/jpeg"])
+    #expect(bucket.allowedMimeTypes == ["image/jpeg"])
 
     try await storage.deleteBucket(bucketName)
 
     buckets = try await storage.listBuckets()
-    XCTAssertFalse(buckets.contains { $0.id == bucket.id })
+    #expect(!buckets.contains { $0.id == bucket.id })
   }
 
-  func testGetBucketWithWrongId() async {
+  @Test func getBucketWithWrongId() async {
     do {
       _ = try await storage.getBucket("not-exist-id")
-      XCTFail("Unexpected success")
+      Issue.record("Unexpected success")
     } catch let error as StorageError {
-      XCTAssertEqual(error.statusCode, 404)
-      XCTAssertEqual(error.message, "Bucket not found")
+      #expect(error.statusCode == 404)
+      #expect(error.message == "Bucket not found")
     } catch {
-      XCTFail("Unexpected error type: \(error)")
+      Issue.record("Unexpected error type: \(error)")
     }
   }
 }

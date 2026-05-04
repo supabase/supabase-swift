@@ -5,404 +5,432 @@
 //  Created by Guilherme Souza on 07/05/24.
 //
 
+import Foundation
 import InlineSnapshotTesting
 import Storage
-import XCTest
+import Testing
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-final class StorageFileIntegrationTests: XCTestCase {
-  let storage = StorageClient(
-    url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
-    configuration: StorageClientConfiguration(
-      headers: [
-        "Authorization": "Bearer \(DotEnv.SUPABASE_SECRET_KEY)"
-      ],
-      logger: nil
+@Suite(.serialized)
+struct StorageFileIntegrationTests {
+  let storage: StorageClient
+  let file: Data
+
+  init() throws {
+    storage = StorageClient(
+      url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
+      configuration: StorageClientConfiguration(
+        headers: [
+          "Authorization": "Bearer \(DotEnv.SUPABASE_SECRET_KEY)"
+        ],
+        logger: nil
+      )
     )
-  )
-
-  var bucketName = ""
-  var file = Data()
-  var uploadPath = ""
-
-  override func setUp() async throws {
-    try await super.setUp()
-
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-
-    bucketName = try await newBucket()
-    file = try Data(contentsOf: uploadFileURL("sadcat.jpg"))
-    uploadPath = "testpath/file-\(UUID().uuidString).jpg"
+    let fixturesURL = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .appendingPathComponent("Fixtures/Upload")
+    file = try Data(contentsOf: fixturesURL.appendingPathComponent("sadcat.jpg"))
   }
 
-  override func tearDown() async throws {
-    try? await storage.emptyBucket(bucketName)
-    try? await storage.deleteBucket(bucketName)
+  // MARK: - URL construction (no network)
 
-    try await super.tearDown()
-  }
-
-  func testGetPublicURL() throws {
-    let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath)
-    XCTAssertEqual(
-      publicURL.absoluteString,
-      "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)"
+  @Test func getPublicURL() throws {
+    let bucket = "test-bucket"
+    let path = "testpath/file.jpg"
+    let publicURL = try storage.from(bucket).getPublicURL(path: path)
+    #expect(
+      publicURL.absoluteString
+        == "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucket)/\(path)"
     )
   }
 
-  func testGetPublicURLWithDownloadQueryString() throws {
-    let publicURL = try storage.from(bucketName).getPublicURL(
-      path: uploadPath, download: .withOriginalName)
-    XCTAssertEqual(
-      publicURL.absoluteString,
-      "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download="
+  @Test func getPublicURLWithDownloadQueryString() throws {
+    let bucket = "test-bucket"
+    let path = "testpath/file.jpg"
+    let publicURL = try storage.from(bucket).getPublicURL(path: path, download: .withOriginalName)
+    #expect(
+      publicURL.absoluteString
+        == "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucket)/\(path)?download="
     )
   }
 
-  func testGetPublicURLWithCustomDownload() throws {
-    let publicURL = try storage.from(bucketName).getPublicURL(
-      path: uploadPath, download: .named("test.jpg"))
-    XCTAssertEqual(
-      publicURL.absoluteString,
-      "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download=test.jpg"
+  @Test func getPublicURLWithCustomDownload() throws {
+    let bucket = "test-bucket"
+    let path = "testpath/file.jpg"
+    let publicURL = try storage.from(bucket).getPublicURL(path: path, download: .named("test.jpg"))
+    #expect(
+      publicURL.absoluteString
+        == "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucket)/\(path)?download=test.jpg"
     )
   }
 
-  func testSignURL() async throws {
-    _ = try await storage.from(bucketName).upload(uploadPath, data: file).value
-
-    let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: .seconds(2000))
-    XCTAssertTrue(
-      url.absoluteString.contains(
-        "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
+  @Test func getPublicURLWithTransformOptions() throws {
+    let bucket = "test-bucket"
+    let path = "testpath/file.jpg"
+    let res = try storage.from(bucket).getPublicURL(
+      path: path,
+      options: TransformOptions(width: 700, height: 300, quality: 70)
+    )
+    #expect(
+      res.absoluteString
+        == "\(DotEnv.SUPABASE_URL)/storage/v1/render/image/public/\(bucket)/\(path)?width=700&height=300&quality=70"
     )
   }
 
-  func testSignURL_withDownloadQueryString() async throws {
-    _ = try await storage.from(bucketName).upload(uploadPath, data: file).value
+  // MARK: - Network tests
 
-    let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: .seconds(2000), download: .withOriginalName)
-    XCTAssertTrue(
-      url.absoluteString.contains(
-        "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
-    )
-    XCTAssertTrue(url.absoluteString.contains("&download="))
-  }
+  @Test func signURL() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      _ = try await storage.from(bucket).upload(path, data: file).value
 
-  func testSignURL_withCustomFilenameForDownload() async throws {
-    _ = try await storage.from(bucketName).upload(uploadPath, data: file).value
-
-    let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: .seconds(2000), download: .named("test.jpg"))
-    XCTAssertTrue(
-      url.absoluteString.contains(
-        "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
-    )
-    XCTAssertTrue(url.absoluteString.contains("&download=test.jpg"))
-  }
-
-  func testUploadAndUpdateFile() async throws {
-    let file2 = try Data(contentsOf: uploadFileURL("file-2.txt"))
-
-    try await storage.from(bucketName).upload(uploadPath, data: file).value
-
-    let res = try await storage.from(bucketName).update(uploadPath, data: file2).value
-    XCTAssertEqual(res.path, uploadPath)
-  }
-
-  func testUploadFileWithinFileSizeLimit() async throws {
-    bucketName = try await newBucket(
-      prefix: "with-limit",
-      options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1))
-    )
-
-    try await storage.from(bucketName).upload(uploadPath, data: file).value
-  }
-
-  func testUploadFileThatExceedFileSizeLimit() async throws {
-    bucketName = try await newBucket(
-      prefix: "with-limit",
-      options: BucketOptions(isPublic: true, fileSizeLimit: .kilobytes(1))
-    )
-
-    do {
-      try await storage.from(bucketName).upload(uploadPath, data: file).value
-      XCTFail("Unexpected success")
-    } catch let error as StorageError {
-      XCTAssertEqual(error.statusCode, 413)
-      XCTAssertEqual(error.message, "The object exceeded the maximum allowed size")
-    } catch {
-      XCTFail("Unexpected error type: \(error)")
+      let url = try await storage.from(bucket).createSignedURL(
+        path: path, expiresIn: .seconds(2000))
+      #expect(
+        url.absoluteString.contains(
+          "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucket)/\(path)")
+      )
     }
   }
 
-  func testUploadFileWithValidMimeType() async throws {
-    bucketName = try await newBucket(
-      prefix: "with-mimetype",
-      options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/jpeg"])
-    )
+  @Test func signURL_withDownloadQueryString() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      _ = try await storage.from(bucket).upload(path, data: file).value
 
-    try await storage.from(bucketName).upload(
-      uploadPath,
-      data: file,
-      options: FileOptions(
-        contentType: "image/jpeg"
+      let url = try await storage.from(bucket).createSignedURL(
+        path: path, expiresIn: .seconds(2000), download: .withOriginalName)
+      #expect(
+        url.absoluteString.contains(
+          "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucket)/\(path)")
       )
-    ).value
+      #expect(url.absoluteString.contains("&download="))
+    }
   }
 
-  func testUploadFileWithInvalidMimeType() async throws {
-    bucketName = try await newBucket(
-      prefix: "with-mimetype",
-      options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/png"])
-    )
+  @Test func signURL_withCustomFilenameForDownload() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      _ = try await storage.from(bucket).upload(path, data: file).value
 
-    do {
-      try await storage.from(bucketName).upload(
-        uploadPath,
-        data: file,
-        options: FileOptions(
-          contentType: "image/jpeg"
-        )
+      let url = try await storage.from(bucket).createSignedURL(
+        path: path, expiresIn: .seconds(2000), download: .named("test.jpg"))
+      #expect(
+        url.absoluteString.contains(
+          "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucket)/\(path)")
+      )
+      #expect(url.absoluteString.contains("&download=test.jpg"))
+    }
+  }
+
+  @Test func uploadAndUpdateFile() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      let file2 = try Data(contentsOf: uploadFileURL("file-2.txt"))
+
+      try await storage.from(bucket).upload(path, data: file).value
+
+      let res = try await storage.from(bucket).update(path, data: file2).value
+      #expect(res.path == path)
+    }
+  }
+
+  @Test func uploadFileWithinFileSizeLimit() async throws {
+    try await withBucket(options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1))) {
+      bucket in
+      let path = uploadPath()
+      try await storage.from(bucket).upload(path, data: file).value
+    }
+  }
+
+  @Test func uploadFileThatExceedsFileSizeLimit() async throws {
+    try await withBucket(options: BucketOptions(isPublic: true, fileSizeLimit: .kilobytes(1))) {
+      bucket in
+      let path = uploadPath()
+      do {
+        try await storage.from(bucket).upload(path, data: file).value
+        Issue.record("Unexpected success")
+      } catch let error as StorageError {
+        #expect(error.statusCode == 413)
+        #expect(error.message == "The object exceeded the maximum allowed size")
+      } catch {
+        Issue.record("Unexpected error type: \(error)")
+      }
+    }
+  }
+
+  @Test func uploadFileWithValidMimeType() async throws {
+    try await withBucket(options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/jpeg"])) {
+      bucket in
+      let path = uploadPath()
+      try await storage.from(bucket).upload(
+        path, data: file, options: FileOptions(contentType: "image/jpeg")
       ).value
-      XCTFail("Unexpected success")
-    } catch let error as StorageError {
-      XCTAssertEqual(error.statusCode, 415)
-      XCTAssertEqual(error.message, "mime type image/jpeg is not supported")
-    } catch {
-      XCTFail("Unexpected error type: \(error)")
     }
   }
 
-  func testSignedURLForUpload() async throws {
-    let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
-    XCTAssertEqual(res.path, uploadPath)
-    XCTAssertTrue(
-      res.signedURL.absoluteString.contains(
-        "\(DotEnv.SUPABASE_URL)/storage/v1/object/upload/sign/\(bucketName)/\(uploadPath)"
+  @Test func uploadFileWithInvalidMimeType() async throws {
+    try await withBucket(options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/png"])) {
+      bucket in
+      let path = uploadPath()
+      do {
+        try await storage.from(bucket).upload(
+          path, data: file, options: FileOptions(contentType: "image/jpeg")
+        ).value
+        Issue.record("Unexpected success")
+      } catch let error as StorageError {
+        #expect(error.statusCode == 415)
+        #expect(error.message == "mime type image/jpeg is not supported")
+      } catch {
+        Issue.record("Unexpected error type: \(error)")
+      }
+    }
+  }
+
+  @Test func signedURLForUpload() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      let res = try await storage.from(bucket).createSignedUploadURL(path: path)
+      #expect(res.path == path)
+      #expect(
+        res.signedURL.absoluteString.contains(
+          "\(DotEnv.SUPABASE_URL)/storage/v1/object/upload/sign/\(bucket)/\(path)")
       )
-    )
+    }
   }
 
-  func testCanUploadWithSignedURLForUpload() async throws {
-    let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
+  @Test func canUploadWithSignedURLForUpload() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      let res = try await storage.from(bucket).createSignedUploadURL(path: path)
 
-    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(
-      res.path, token: res.token, data: file
-    ).value
-    XCTAssertEqual(uploadRes.path, uploadPath)
+      let uploadRes = try await storage.from(bucket).uploadToSignedURL(
+        res.path, token: res.token, data: file
+      ).value
+      #expect(uploadRes.path == path)
+    }
   }
 
-  func testCanUploadOverwritingFilesWithSignedURL() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file).value
+  @Test func canUploadOverwritingFilesWithSignedURL() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      try await storage.from(bucket).upload(path, data: file).value
 
-    let res = try await storage.from(bucketName).createSignedUploadURL(
-      path: uploadPath, options: CreateSignedUploadURLOptions(upsert: true))
-    let uploadRes = try await storage.from(bucketName).uploadToSignedURL(
-      res.path, token: res.token, data: file
-    ).value
-    XCTAssertEqual(uploadRes.path, uploadPath)
+      let res = try await storage.from(bucket).createSignedUploadURL(
+        path: path, options: CreateSignedUploadURLOptions(upsert: true))
+      let uploadRes = try await storage.from(bucket).uploadToSignedURL(
+        res.path, token: res.token, data: file
+      ).value
+      #expect(uploadRes.path == path)
+    }
   }
 
-  func testCannotUploadToSignedURLTwice() async throws {
-    let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
+  @Test func cannotUploadToSignedURLTwice() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      let res = try await storage.from(bucket).createSignedUploadURL(path: path)
 
-    try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
-      .value
-
-    do {
-      try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
+      try await storage.from(bucket).uploadToSignedURL(res.path, token: res.token, data: file)
         .value
-      XCTFail("Unexpected success")
-    } catch let error as StorageError {
-      XCTAssertEqual(error.statusCode, 409)
-      XCTAssertEqual(error.message, "The resource already exists")
-    } catch {
-      XCTFail("Unexpected error type: \(error)")
+
+      do {
+        try await storage.from(bucket).uploadToSignedURL(res.path, token: res.token, data: file)
+          .value
+        Issue.record("Unexpected success")
+      } catch let error as StorageError {
+        #expect(error.statusCode == 409)
+        #expect(error.message == "The resource already exists")
+      } catch {
+        Issue.record("Unexpected error type: \(error)")
+      }
     }
   }
 
-  func testListObjects() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file).value
-    let res = try await storage.from(bucketName).list(path: "testpath")
+  @Test func listObjects() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      try await storage.from(bucket).upload(path, data: file).value
+      let res = try await storage.from(bucket).list(path: "testpath")
 
-    XCTAssertEqual(res.count, 1)
-    XCTAssertEqual(res[0].name, uploadPath.replacingOccurrences(of: "testpath/", with: ""))
-  }
-
-  func testMoveObjectToDifferentPath() async throws {
-    let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file).value
-
-    try await storage.from(bucketName).move(from: uploadPath, to: newPath)
-  }
-
-  func testMoveObjectsAcrossBucketsInDifferentPath() async throws {
-    let newBucketName = "bucket-move"
-    try await findOrCreateBucket(name: newBucketName)
-
-    let newPath = "testpath/file-to-move-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file).value
-
-    try await storage.from(bucketName).move(
-      from: uploadPath,
-      to: newPath,
-      options: DestinationOptions(destinationBucket: newBucketName)
-    )
-
-    _ = try await storage.from(newBucketName).downloadData(path: newPath).value
-  }
-
-  func testCopyObjectToDifferentPath() async throws {
-    let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file).value
-
-    try await storage.from(bucketName).copy(from: uploadPath, to: newPath)
-  }
-
-  func testCopyObjectsAcrossBucketsInDifferentPath() async throws {
-    let newBucketName = "bucket-copy"
-    try await findOrCreateBucket(name: newBucketName)
-
-    let newPath = "testpath/file-to-copy-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file).value
-
-    try await storage.from(bucketName).copy(
-      from: uploadPath,
-      to: newPath,
-      options: DestinationOptions(destinationBucket: newBucketName)
-    )
-
-    _ = try await storage.from(newBucketName).downloadData(path: newPath).value
-  }
-
-  func testDownloadsAnObject() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file).value
-
-    let res = try await storage.from(bucketName).downloadData(path: uploadPath).value
-    XCTAssertGreaterThan(res.count, 0)
-  }
-
-  func testRemovesAnObject() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file).value
-
-    let res = try await storage.from(bucketName).remove(paths: [uploadPath])
-    XCTAssertEqual(res.count, 1)
-    XCTAssertEqual(res[0].bucketId, bucketName)
-    XCTAssertEqual(res[0].name, uploadPath)
-  }
-
-  func testGetPublishURLWithTransformationOptions() throws {
-    let res = try storage.from(bucketName).getPublicURL(
-      path: uploadPath,
-      options: TransformOptions(
-        width: 700,
-        height: 300,
-        quality: 70
-      )
-    )
-
-    XCTAssertEqual(
-      res.absoluteString,
-      "\(DotEnv.SUPABASE_URL)/storage/v1/render/image/public/\(bucketName)/\(uploadPath)?width=700&height=300&quality=70"
-    )
-  }
-
-  func testCreateAndLoadEmptyFolder() async throws {
-    let path = "empty-folder/.placeholder"
-    try await storage.from(bucketName).upload(path, data: Data()).value
-
-    let files = try await storage.from(bucketName).list()
-    assertInlineSnapshot(of: files, as: .json) {
-      """
-      [
-        {
-          "name" : "empty-folder"
-        }
-      ]
-      """
+      #expect(res.count == 1)
+      #expect(res[0].name == path.replacingOccurrences(of: "testpath/", with: ""))
     }
   }
 
-  func testInfo() async throws {
-    try await storage.from(bucketName).upload(
-      uploadPath,
-      data: file,
-      options: FileOptions(
-        metadata: ["value": 42]
-      )
-    ).value
+  @Test func moveObjectToDifferentPath() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
+      try await storage.from(bucket).upload(path, data: file).value
 
-    let info = try await storage.from(bucketName).info(path: uploadPath)
-    XCTAssertEqual(info.name, uploadPath)
-    XCTAssertEqual(info.metadata, ["value": 42])
+      try await storage.from(bucket).move(from: path, to: newPath)
+    }
   }
 
-  func testExists() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file).value
+  @Test func moveObjectsAcrossBuckets() async throws {
+    try await withBucket { sourceBucket in
+      try await withBucket { destBucket in
+        let path = uploadPath()
+        let newPath = "testpath/file-to-move-\(UUID().uuidString).txt"
+        try await storage.from(sourceBucket).upload(path, data: file).value
 
-    var exists = try await storage.from(bucketName).exists(path: uploadPath)
-    XCTAssertTrue(exists)
+        try await storage.from(sourceBucket).move(
+          from: path,
+          to: newPath,
+          options: DestinationOptions(destinationBucket: destBucket)
+        )
 
-    exists = try await storage.from(bucketName).exists(path: "invalid.jpg")
-    XCTAssertFalse(exists)
+        _ = try await storage.from(destBucket).downloadData(path: newPath).value
+      }
+    }
   }
 
-  func testUploadWithCacheControl() async throws {
-    try await storage.from(bucketName).upload(
-      uploadPath,
-      data: file,
-      options: FileOptions(
-        cacheControl: "14400"
-      )
-    ).value
+  @Test func copyObjectToDifferentPath() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      let newPath = "testpath/file-copied-\(UUID().uuidString).txt"
+      try await storage.from(bucket).upload(path, data: file).value
 
-    let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath)
-
-    let (_, response) = try await URLSession.shared.data(from: publicURL)
-    let httpResponse = try XCTUnwrap(response as? HTTPURLResponse)
-    let cacheControl = try XCTUnwrap(httpResponse.value(forHTTPHeaderField: "cache-control"))
-
-    XCTAssertEqual(cacheControl, "max-age=14400")
+      try await storage.from(bucket).copy(from: path, to: newPath)
+    }
   }
 
-  func testUploadWithFileURL() async throws {
-    try await storage.from(bucketName)
-      .upload(uploadPath, fileURL: uploadFileURL("sadcat.jpg")).value
+  @Test func copyObjectsAcrossBuckets() async throws {
+    try await withBucket { sourceBucket in
+      try await withBucket { destBucket in
+        let path = uploadPath()
+        let newPath = "testpath/file-to-copy-\(UUID().uuidString).txt"
+        try await storage.from(sourceBucket).upload(path, data: file).value
 
-    let uploadedFile = try await storage.from(bucketName).downloadData(path: uploadPath).value
+        try await storage.from(sourceBucket).copy(
+          from: path,
+          to: newPath,
+          options: DestinationOptions(destinationBucket: destBucket)
+        )
 
-    XCTAssertEqual(uploadedFile, file)
+        _ = try await storage.from(destBucket).downloadData(path: newPath).value
+      }
+    }
   }
 
-  private func newBucket(
-    prefix: String = "",
-    options: BucketOptions = BucketOptions(isPublic: true)
-  ) async throws -> String {
-    let bucketName = "\(!prefix.isEmpty ? prefix + "-" : "")bucket-\(UUID().uuidString)"
-    return try await findOrCreateBucket(name: bucketName, options: options)
+  @Test func downloadsAnObject() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      try await storage.from(bucket).upload(path, data: file).value
+
+      let res = try await storage.from(bucket).downloadData(path: path).value
+      #expect(res.count > 0)
+    }
   }
 
-  @discardableResult
-  private func findOrCreateBucket(
-    name: String,
-    options: BucketOptions = BucketOptions(isPublic: true)
-  ) async throws -> String {
+  @Test func removesAnObject() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      try await storage.from(bucket).upload(path, data: file).value
+
+      let res = try await storage.from(bucket).remove(paths: [path])
+      #expect(res.count == 1)
+      #expect(res[0].bucketId == bucket)
+      #expect(res[0].name == path)
+    }
+  }
+
+  @Test func createAndLoadEmptyFolder() async throws {
+    try await withBucket { bucket in
+      let path = "empty-folder/.placeholder"
+      try await storage.from(bucket).upload(path, data: Data()).value
+
+      let files = try await storage.from(bucket).list()
+      assertInlineSnapshot(of: files, as: .json) {
+        """
+        [
+          {
+            "name" : "empty-folder"
+          }
+        ]
+        """
+      }
+    }
+  }
+
+  @Test func info() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      try await storage.from(bucket).upload(
+        path, data: file, options: FileOptions(metadata: ["value": 42])
+      ).value
+
+      let info = try await storage.from(bucket).info(path: path)
+      #expect(info.name == path)
+      #expect(info.metadata == ["value": 42])
+    }
+  }
+
+  @Test func exists() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      try await storage.from(bucket).upload(path, data: file).value
+
+      var exists = try await storage.from(bucket).exists(path: path)
+      #expect(exists)
+
+      exists = try await storage.from(bucket).exists(path: "invalid.jpg")
+      #expect(!exists)
+    }
+  }
+
+  @Test func uploadWithCacheControl() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      try await storage.from(bucket).upload(
+        path, data: file, options: FileOptions(cacheControl: "14400")
+      ).value
+
+      let publicURL = try storage.from(bucket).getPublicURL(path: path)
+
+      let (_, response) = try await URLSession.shared.data(from: publicURL)
+      let httpResponse = try #require(response as? HTTPURLResponse)
+      let cacheControl = try #require(httpResponse.value(forHTTPHeaderField: "cache-control"))
+
+      #expect(cacheControl == "max-age=14400")
+    }
+  }
+
+  @Test func uploadWithFileURL() async throws {
+    try await withBucket { bucket in
+      let path = uploadPath()
+      try await storage.from(bucket).upload(path, fileURL: uploadFileURL("sadcat.jpg")).value
+
+      let uploaded = try await storage.from(bucket).downloadData(path: path).value
+      #expect(uploaded == file)
+    }
+  }
+
+  // MARK: - Helpers
+
+  /// Creates a fresh bucket, runs the test body, then cleans up regardless of success or failure.
+  private func withBucket(
+    options: BucketOptions = BucketOptions(isPublic: true),
+    _ body: (String) async throws -> Void
+  ) async throws {
+    let bucketId = "file-test-\(UUID().uuidString.lowercased())"
+    try await storage.createBucket(bucketId, options: options)
     do {
-      _ = try await storage.getBucket(name)
+      try await body(bucketId)
     } catch {
-      try await storage.createBucket(name, options: options)
+      try? await storage.emptyBucket(bucketId)
+      try? await storage.deleteBucket(bucketId)
+      throw error
     }
+    try? await storage.emptyBucket(bucketId)
+    try? await storage.deleteBucket(bucketId)
+  }
 
-    return name
+  private func uploadPath() -> String {
+    "testpath/file-\(UUID().uuidString).jpg"
   }
 
   private func uploadFileURL(_ fileName: String) -> URL {
