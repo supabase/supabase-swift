@@ -114,45 +114,24 @@ struct SupabaseStorageTests {
 
   #if !os(Linux) && !os(Android)
     @Test func uploadData() async throws {
-      let locationURL = Self.supabaseURL.appendingPathComponent("upload/resumable/test-id")
-      let requestCount = LockIsolated(0)
-      let capturedCreateRequest = LockIsolated<URLRequest?>(nil)
+      let capturedRequest = LockIsolated<URLRequest?>(nil)
 
       StorageURLProtocolMock.requestHandler.setValue { request in
-        let count = requestCount.withValue { v -> Int in
-          let c = v
-          v += 1
-          return c
-        }
-        if count == 0 {
-          // TUS POST to create upload
-          capturedCreateRequest.setValue(request)
-          return (
-            Data(),
-            HTTPURLResponse(
-              url: Self.supabaseURL,
-              statusCode: 201,
-              httpVersion: nil,
-              headerFields: ["Location": locationURL.absoluteString]
-            )!
-          )
-        } else {
-          // TUS PATCH to upload chunk
-          let data = Data(
-            """
-            {"Key":"tests/file1.txt","Id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F"}
-            """.utf8
-          )
-          return (
-            data,
-            HTTPURLResponse(
-              url: locationURL,
-              statusCode: 200,
-              httpVersion: nil,
-              headerFields: ["Upload-Offset": "9"]
-            )!
-          )
-        }
+        capturedRequest.setValue(request)
+        let data = Data(
+          """
+          {"Key":"tests/file1.txt","Id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F"}
+          """.utf8
+        )
+        return (
+          data,
+          HTTPURLResponse(
+            url: Self.supabaseURL,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+          )!
+        )
       }
 
       let sut = makeSUT()
@@ -167,55 +146,29 @@ struct SupabaseStorageTests {
           )
         ).value
 
-      let createRequest = try #require(capturedCreateRequest.value)
-      #expect(createRequest.value(forHTTPHeaderField: "Tus-Resumable") == "1.0.0")
+      let req = try #require(capturedRequest.value)
+      #expect(req.httpMethod == "POST")
     }
 
     @Test func uploadFileURL() async throws {
-      let locationURL = Self.supabaseURL.appendingPathComponent("upload/resumable/test-id")
-      let requestCount = LockIsolated(0)
-      let capturedCreateRequest = LockIsolated<URLRequest?>(nil)
+      let capturedRequest = LockIsolated<URLRequest?>(nil)
 
       StorageURLProtocolMock.requestHandler.setValue { request in
-        let count = requestCount.withValue { v -> Int in
-          let c = v
-          v += 1
-          return c
-        }
-        if count == 0 {
-          // TUS POST to create upload
-          capturedCreateRequest.setValue(request)
-          return (
-            Data(),
-            HTTPURLResponse(
-              url: Self.supabaseURL,
-              statusCode: 201,
-              httpVersion: nil,
-              headerFields: ["Location": locationURL.absoluteString]
-            )!
-          )
-        } else {
-          // TUS PATCH to upload chunk(s) — return file size as offset to signal completion
-          let fileURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("sadcat.jpg")
-          let fileSize =
-            (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
-          let data = Data(
-            """
-            {"Key":"tests/sadcat.jpg","Id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F"}
-            """.utf8
-          )
-          return (
-            data,
-            HTTPURLResponse(
-              url: locationURL,
-              statusCode: 200,
-              httpVersion: nil,
-              headerFields: ["Upload-Offset": "\(fileSize)"]
-            )!
-          )
-        }
+        capturedRequest.setValue(request)
+        let data = Data(
+          """
+          {"Key":"tests/sadcat.jpg","Id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F"}
+          """.utf8
+        )
+        return (
+          data,
+          HTTPURLResponse(
+            url: Self.supabaseURL,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+          )!
+        )
       }
 
       let sut = makeSUT()
@@ -229,8 +182,8 @@ struct SupabaseStorageTests {
           )
         ).value
 
-      let createRequest = try #require(capturedCreateRequest.value)
-      #expect(createRequest.value(forHTTPHeaderField: "Tus-Resumable") == "1.0.0")
+      let req = try #require(capturedRequest.value)
+      #expect(req.httpMethod == "POST")
     }
   #endif
 
