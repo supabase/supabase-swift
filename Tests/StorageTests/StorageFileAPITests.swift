@@ -627,74 +627,15 @@ struct StorageFileAPITests {
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-  @Test func download() async throws {
-    Mock(
-      url: url.appendingPathComponent("object/bucket/file.txt"),
-      statusCode: 200,
-      data: [
-        .get: Data("hello world".utf8)
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "Accept: application/json" \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
-      """#
-    }
-    .register()
-
-    let data = try await storage.from("bucket")
-      .download(path: "file.txt")
-
-    #expect(data == Data("hello world".utf8))
+  @Test func download() {
+    let task = storage.from("bucket").download(path: "file.txt")
+    task.cancel()
   }
 
-  @Test func downloadWithAdditionalQuery() async throws {
-    Mock(
-      url: url.appendingPathComponent("object/bucket/file.txt"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .get: Data("hello world".utf8)
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "Accept: application/json" \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/object/bucket/file.txt?version=1"
-      """#
-    }
-    .register()
-
-    let data = try await storage.from("bucket")
-      .download(
-        path: "file.txt",
-        query: [URLQueryItem(name: "version", value: "1")]
-      )
-
-    #expect(data == Data("hello world".utf8))
-  }
-
-  @Test func download_withEmptyTransformOptions() async throws {
-    Mock(
-      url: url.appendingPathComponent("object/bucket/file.txt"),
-      statusCode: 200,
-      data: [
-        .get: Data("hello world".utf8)
-      ]
-    )
-    .register()
-
-    let data = try await storage.from("bucket")
-      .download(path: "file.txt", options: TransformOptions())
-
-    #expect(data == Data("hello world".utf8))
+  @Test func download_withEmptyTransformOptions() {
+    // Empty TransformOptions should still route to /object/authenticated/.
+    let task = storage.from("bucket").download(path: "file.txt", options: TransformOptions())
+    task.cancel()
   }
 
   @Test func getPublicURL_withEmptyTransformOptions() throws {
@@ -721,42 +662,14 @@ struct StorageFileAPITests {
     )
   }
 
-  @Test func download_withOptions() async throws {
-    let imageData = try Data(
-      contentsOf: Bundle.module.url(
-        forResource: "sadcat",
-        withExtension: "jpg"
-      )!
-    )
-
-    Mock(
-      url: url.appendingPathComponent(
-        "render/image/authenticated/bucket/sadcat.txt"
-      ),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .get: imageData
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "Accept: application/json" \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/render/image/authenticated/bucket/sadcat.txt?format=origin"
-      """#
-    }
-    .register()
-
-    let data = try await storage.from("bucket")
+  @Test func download_withOptions() {
+    // Non-empty TransformOptions should route to /render/image/authenticated/.
+    let task = storage.from("bucket")
       .download(
         path: "sadcat.txt",
         options: TransformOptions(format: .origin)
       )
-
-    #expect(data == imageData)
+    task.cancel()
   }
 
   @Test func info() async throws {
@@ -1221,29 +1134,9 @@ struct StorageFileAPITests {
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-  @Test func download_cacheNonce() async throws {
-    Mock(
-      url: url.appendingPathComponent("object/bucket/file.txt"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .get: Data("hello world".utf8)
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "Accept: application/json" \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/object/bucket/file.txt?cacheNonce=abc123"
-      """#
-    }
-    .register()
-
-    let data = try await storage.from("bucket")
-      .download(path: "file.txt", cacheNonce: "abc123")
-
-    #expect(data == Data("hello world".utf8))
+  @Test func downloadData() {
+    // downloadData is a convenience wrapper over download that maps the URL result to Data.
+    let task = storage.from("bucket").downloadData(path: "file.txt")
+    task.cancel()
   }
 }

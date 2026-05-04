@@ -258,7 +258,7 @@ final class StorageFileIntegrationTests: XCTestCase {
       options: DestinationOptions(destinationBucket: newBucketName)
     )
 
-    _ = try await storage.from(newBucketName).download(path: newPath)
+    _ = try await storage.from(newBucketName).downloadData(path: newPath).result
   }
 
   func testCopyObjectToDifferentPath() async throws {
@@ -281,13 +281,13 @@ final class StorageFileIntegrationTests: XCTestCase {
       options: DestinationOptions(destinationBucket: newBucketName)
     )
 
-    _ = try await storage.from(newBucketName).download(path: newPath)
+    _ = try await storage.from(newBucketName).downloadData(path: newPath).result
   }
 
   func testDownloadsAnObject() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file).result
 
-    let res = try await storage.from(bucketName).download(path: uploadPath)
+    let res = try await storage.from(bucketName).downloadData(path: uploadPath).result
     XCTAssertGreaterThan(res.count, 0)
   }
 
@@ -378,7 +378,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     try await storage.from(bucketName)
       .upload(uploadPath, fileURL: uploadFileURL("sadcat.jpg")).result
 
-    let uploadedFile = try await storage.from(bucketName).download(path: uploadPath)
+    let uploadedFile = try await storage.from(bucketName).downloadData(path: uploadPath).result
 
     XCTAssertEqual(uploadedFile, file)
   }
