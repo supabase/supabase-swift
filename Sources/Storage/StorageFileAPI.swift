@@ -1,5 +1,6 @@
 import Foundation
 import Helpers
+import XCTestDynamicOverlay
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -121,6 +122,18 @@ public struct StorageFileAPI: Sendable {
   /// The bucket id to operate on.
   let bucketId: String
   let client: StorageClient
+
+  /// JSONEncoder with default key strategy used when we want `camelCase` keys instead of the default
+  /// `snake_case` used in Storage services.
+  let originalEncoder: JSONEncoder = {
+    let encoder = JSONEncoder()
+    #if DEBUG
+      if isTesting {
+        encoder.outputFormatting = .sortedKeys
+      }
+    #endif
+    return encoder
+  }()
 
   init(bucketId: String, client: StorageClient) {
     self.bucketId = bucketId
@@ -454,12 +467,11 @@ public struct StorageFileAPI: Sendable {
       let transform: TransformOptions?
     }
 
-    let encoder = JSONEncoder.unconfiguredEncoder
     let response: SignedURLAPIResponse = try await client.fetchDecoded(
       .post,
       "object/sign/\(bucketId)/\(path)",
       body: .data(
-        encoder.encode(
+        originalEncoder.encode(
           Body(
             expiresIn: Int(expiresIn.components.seconds),
             transform: transform
@@ -495,12 +507,11 @@ public struct StorageFileAPI: Sendable {
       let paths: [String]
     }
 
-    let encoder = JSONEncoder.unconfiguredEncoder
     let response: [SignedURLsAPIResponse] = try await client.fetchDecoded(
       .post,
       "object/sign/\(bucketId)",
       body: .data(
-        encoder.encode(
+        originalEncoder.encode(
           Params(expiresIn: Int(expiresIn.components.seconds), paths: paths)
         )
       )
@@ -618,15 +629,13 @@ public struct StorageFileAPI: Sendable {
     path: String? = nil,
     options: SearchOptions? = nil
   ) async throws -> [FileObject] {
-    let encoder = JSONEncoder.unconfiguredEncoder
-
     var options = options ?? defaultSearchOptions
     options.prefix = path ?? ""
 
     return try await client.fetchDecoded(
       .post,
       "object/list/\(bucketId)",
-      body: .data(encoder.encode(options))
+      body: .data(originalEncoder.encode(options))
     )
   }
 
@@ -729,7 +738,9 @@ public struct StorageFileAPI: Sendable {
     do {
       try await client.fetchData(.head, "object/\(bucketId)/\(path)")
       return true
-    } catch let error as StorageError where error.isNotFound || error.statusCode == 400 {
+    } catch let error as StorageError
+      where error.isNotFound || error.statusCode == 400
+    {
       // The Storage server returns 400 (instead of 404) for HEAD requests on non-existent objects.
       return false
     }
