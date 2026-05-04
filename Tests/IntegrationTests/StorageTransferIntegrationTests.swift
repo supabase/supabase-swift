@@ -25,13 +25,6 @@ final class StorageTransferIntegrationTests {
     )
   )
 
-  init() throws {
-    try #require(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-  }
-
   /// Creates a fresh bucket, runs the test body, then cleans up regardless of success or failure.
   private func withBucket(_ body: (String) async throws -> Void) async throws {
     let bucketId = "transfer-test-\(UUID().uuidString.lowercased())"
