@@ -511,38 +511,16 @@ struct StorageFileAPITests {
   }
 
   @Test func updateFromData() async throws {
-    let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent(
-      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
-
+    let objectURL = url.appendingPathComponent("object/bucket/file.txt")
+    let responseJSON = """
+      {"Key":"bucket/file.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
+      """
     Mock(
-      url: resumableURL,
+      url: objectURL,
       contentType: .json,
-      statusCode: 201,
-      data: [.post: Data()],
-      additionalHeaders: ["Location": locationURL.absoluteString]
+      statusCode: 200,
+      data: [.post: Data(responseJSON.utf8)]
     ).register()
-
-    Mock(
-      url: locationURL,
-      contentType: .json,
-      statusCode: 204,
-      data: [.patch: Data()],
-      additionalHeaders: ["Upload-Offset": "11"]
-    ).register()
-
-    let capturedRequest = LockIsolated<URLRequest?>(nil)
-    var postMock = Mock(
-      url: resumableURL,
-      contentType: .json,
-      statusCode: 201,
-      data: [.post: Data()],
-      additionalHeaders: ["Location": locationURL.absoluteString]
-    )
-    postMock.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      capturedRequest.setValue(request)
-    })
-    postMock.register()
 
     let response = try await storage.from("bucket")
       .update(
@@ -555,30 +533,22 @@ struct StorageFileAPITests {
   }
 
   @Test func updateSetsUpsertTrue() async throws {
-    let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent(
-      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
+    let objectURL = url.appendingPathComponent("object/bucket/file.txt")
+    let responseJSON = """
+      {"Key":"bucket/file.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
+      """
     let capturedRequest = LockIsolated<URLRequest?>(nil)
 
-    var postMock = Mock(
-      url: resumableURL,
+    var mock = Mock(
+      url: objectURL,
       contentType: .json,
-      statusCode: 201,
-      data: [.post: Data()],
-      additionalHeaders: ["Location": locationURL.absoluteString]
+      statusCode: 200,
+      data: [.post: Data(responseJSON.utf8)]
     )
-    postMock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
       capturedRequest.setValue(request)
     })
-    postMock.register()
-
-    Mock(
-      url: locationURL,
-      contentType: .json,
-      statusCode: 204,
-      data: [.patch: Data()],
-      additionalHeaders: ["Upload-Offset": "5"]
-    ).register()
+    mock.register()
 
     _ = try await storage.from("bucket")
       .update("file.txt", data: Data("hello".utf8)).value
@@ -588,27 +558,15 @@ struct StorageFileAPITests {
   }
 
   @Test func updateFromURL() async throws {
-    let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent(
-      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
-
+    let objectURL = url.appendingPathComponent("object/bucket/file.txt")
+    let responseJSON = """
+      {"Key":"bucket/file.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
+      """
     Mock(
-      url: resumableURL,
+      url: objectURL,
       contentType: .json,
-      statusCode: 201,
-      data: [.post: Data()],
-      additionalHeaders: ["Location": locationURL.absoluteString]
-    ).register()
-
-    let fileContent = try Data(
-      contentsOf: Bundle.module.url(forResource: "file", withExtension: "txt")!
-    )
-    Mock(
-      url: locationURL,
-      contentType: .json,
-      statusCode: 204,
-      data: [.patch: Data()],
-      additionalHeaders: ["Upload-Offset": "\(fileContent.count)"]
+      statusCode: 200,
+      data: [.post: Data(responseJSON.utf8)]
     ).register()
 
     let response = try await storage.from("bucket")
@@ -1214,6 +1172,46 @@ struct StorageFileAPITests {
 
     _ = try await storage.from("bucket")
       .updateResumable("file.txt", data: Data("hello".utf8)).value
+
+    let req = try #require(capturedRequest.value)
+    #expect(req.value(forHTTPHeaderField: "x-upsert") == "true")
+  }
+
+  // MARK: - Smart default
+
+  @Test func uploadSmallDataUsesMultipart() async throws {
+    // 1 byte — well below 6 MB threshold → should POST to /object/...
+    let objectURL = url.appendingPathComponent("object/bucket/small.txt")
+    let responseJSON = """
+      {"Key":"bucket/small.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
+      """
+    Mock(
+      url: objectURL, contentType: .json, statusCode: 200,
+      data: [.post: Data(responseJSON.utf8)]
+    ).register()
+
+    let response = try await storage.from("bucket")
+      .upload("small.txt", data: Data("x".utf8)).value
+
+    #expect(response.path == "small.txt")
+    #expect(response.fullPath == "bucket/small.txt")
+  }
+
+  @Test func updateSmallDataUsesMultipart() async throws {
+    let objectURL = url.appendingPathComponent("object/bucket/small.txt")
+    let responseJSON = """
+      {"Key":"bucket/small.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
+      """
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+    var mock = Mock(
+      url: objectURL, contentType: .json, statusCode: 200,
+      data: [.post: Data(responseJSON.utf8)]
+    )
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { capturedRequest.setValue($0) })
+    mock.register()
+
+    _ = try await storage.from("bucket")
+      .update("small.txt", data: Data("x".utf8)).value
 
     let req = try #require(capturedRequest.value)
     #expect(req.value(forHTTPHeaderField: "x-upsert") == "true")
