@@ -134,6 +134,12 @@ import Testing
 
     // POST + 2 PATCHes = 3 total requests
     #expect(SequentialMockProtocol.callIndex == 3)
+    let requests = SequentialMockProtocol.capturedRequests
+    #expect(requests.count == 3)
+    let patch1Offset = requests[1].value(forHTTPHeaderField: "Upload-Offset")
+    let patch2Offset = requests[2].value(forHTTPHeaderField: "Upload-Offset")
+    #expect(patch1Offset == "0")
+    #expect(patch2Offset == "3")
   }
 
   @Test func emitsProgressEventsPerChunk() async throws {
@@ -242,19 +248,28 @@ import Testing
 final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
   nonisolated(unsafe) static var responses:
     [(statusCode: Int, headers: [String: String], data: Data)] = []
+  private static let lock = NSLock()
   nonisolated(unsafe) static var callIndex = 0
+  nonisolated(unsafe) static var capturedRequests: [URLRequest] = []
 
   static func reset() {
+    lock.lock()
     callIndex = 0
     responses = []
+    capturedRequests = []
+    lock.unlock()
   }
 
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
   override func startLoading() {
+    Self.lock.lock()
     let index = Self.callIndex
     Self.callIndex += 1
+    Self.capturedRequests.append(request)
+    Self.lock.unlock()
+
     guard index < Self.responses.count else {
       client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
       return
