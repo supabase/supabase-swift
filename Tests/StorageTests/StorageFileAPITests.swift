@@ -550,7 +550,7 @@ struct StorageFileAPITests {
       .update(
         "file.txt",
         data: Data("hello world".utf8)
-      ).result
+      ).value
 
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
@@ -585,7 +585,7 @@ struct StorageFileAPITests {
     ).register()
 
     _ = try await storage.from("bucket")
-      .update("file.txt", data: Data("hello".utf8)).result
+      .update("file.txt", data: Data("hello".utf8)).value
 
     let request = try #require(capturedRequest.value)
     #expect(request.value(forHTTPHeaderField: "x-upsert") == "true")
@@ -621,7 +621,7 @@ struct StorageFileAPITests {
       .update(
         "file.txt",
         fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!
-      ).result
+      ).value
 
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
@@ -906,7 +906,7 @@ struct StorageFileAPITests {
         "file.txt",
         token: "abc.def.ghi",
         data: Data("hello world".utf8)
-      ).result
+      ).value
 
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
@@ -960,7 +960,7 @@ struct StorageFileAPITests {
         "file.txt",
         token: "abc.def.ghi",
         fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!
-      ).result
+      ).value
 
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
@@ -1020,7 +1020,7 @@ struct StorageFileAPITests {
         "file.txt",
         token: "abc.def.ghi",
         fileURL: fileURL
-      ).result
+      ).value
 
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
@@ -1127,7 +1127,7 @@ struct StorageFileAPITests {
       data: Data("hello world".utf8)
     )
 
-    let response = try await task.result
+    let response = try await task.value
 
     #expect(response.id == UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
     #expect(response.path == "file.txt")

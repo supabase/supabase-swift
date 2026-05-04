@@ -107,9 +107,9 @@ enum FileUpload {
 /// let response = try await bucket.upload("user-123/photo.png", data: imageData)
 ///
 /// // Download to disk
-/// let url = try await bucket.download(path: "user-123/photo.png").result
+/// let url = try await bucket.download(path: "user-123/photo.png").value
 /// // Or download into memory
-/// let data = try await bucket.downloadData(path: "user-123/photo.png").result
+/// let data = try await bucket.downloadData(path: "user-123/photo.png").value
 ///
 /// // Public URL (public bucket)
 /// let url = try bucket.getPublicURL(path: "user-123/photo.png")
@@ -187,7 +187,7 @@ public struct StorageFileAPI: Sendable {
   ///   "user-123/photo.jpg",
   ///   data: imageData,
   ///   options: FileOptions(contentType: "image/jpeg", upsert: true)
-  /// ).result
+  /// ).value
   /// print(response.fullPath) // "avatars/user-123/photo.jpg"
   /// ```
   @discardableResult
@@ -223,7 +223,7 @@ public struct StorageFileAPI: Sendable {
   /// let response = try await storage.from("documents").upload(
   ///   "reports/2024/annual.pdf",
   ///   fileURL: fileURL
-  /// ).result
+  /// ).value
   /// ```
   @discardableResult
   public func upload(
@@ -262,7 +262,7 @@ public struct StorageFileAPI: Sendable {
   ///   "user-123/photo.png",
   ///   data: newImageData,
   ///   options: FileOptions(contentType: "image/png")
-  /// ).result
+  /// ).value
   /// ```
   @discardableResult
   public func update(
@@ -300,7 +300,7 @@ public struct StorageFileAPI: Sendable {
   ///
   /// ```swift
   /// let newFileURL = URL(fileURLWithPath: "/tmp/updated-report.pdf")
-  /// try await storage.from("documents").update("reports/2024/annual.pdf", fileURL: newFileURL).result
+  /// try await storage.from("documents").update("reports/2024/annual.pdf", fileURL: newFileURL).value
   /// ```
   @discardableResult
   public func update(
@@ -871,7 +871,7 @@ public struct StorageFileAPI: Sendable {
   ///   token: signed.token,
   ///   data: pdfData,
   ///   options: FileOptions(contentType: "application/pdf")
-  /// ).result
+  /// ).value
   /// print(response.fullPath)
   /// ```
   @discardableResult
@@ -916,7 +916,7 @@ public struct StorageFileAPI: Sendable {
   ///   signed.path,
   ///   token: signed.token,
   ///   fileURL: fileURL
-  /// ).result
+  /// ).value
   /// ```
   @discardableResult
   public func uploadToSignedURL(
@@ -1012,7 +1012,7 @@ public struct StorageFileAPI: Sendable {
     file: FileUpload,
     options: FileOptions,
     headers: [String: String],
-    progress: (@Sendable (UploadProgress) -> Void)? = nil
+    progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> Response {
     #if DEBUG
       let builder = MultipartBuilder(
@@ -1105,9 +1105,9 @@ public struct StorageFileAPI: Sendable {
 private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate,
   @unchecked Sendable
 {
-  private let onProgress: @Sendable (UploadProgress) -> Void
+  private let onProgress: @Sendable (TransferProgress) -> Void
 
-  init(onProgress: @escaping @Sendable (UploadProgress) -> Void) {
+  init(onProgress: @escaping @Sendable (TransferProgress) -> Void) {
     self.onProgress = onProgress
   }
 
@@ -1119,9 +1119,9 @@ private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate,
     totalBytesExpectedToSend: Int64
   ) {
     onProgress(
-      UploadProgress(
-        totalBytesSent: totalBytesSent,
-        totalBytesExpectedToSend: totalBytesExpectedToSend
+      TransferProgress(
+        bytesTransferred: totalBytesSent,
+        totalBytes: totalBytesExpectedToSend
       )
     )
   }

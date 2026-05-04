@@ -52,10 +52,10 @@ final class StorageTransferIntegrationTests {
       let data = Data(repeating: 0xAB, count: 512 * 1024)  // 512 KB (fast, < 6 MB chunk)
       let path = "integration/\(UUID().uuidString).bin"
 
-      let response = try await storage.from(bucket).upload(path, data: data).result
+      let response = try await storage.from(bucket).upload(path, data: data).value
       #expect(response.path == path)
 
-      let downloaded = try await storage.from(bucket).downloadData(path: path).result
+      let downloaded = try await storage.from(bucket).downloadData(path: path).value
       #expect(downloaded == data)
 
       try await storage.from(bucket).remove(paths: [path])
@@ -83,7 +83,7 @@ final class StorageTransferIntegrationTests {
       #expect(progressValues == progressValues.sorted())
 
       // Verify the upload actually completed successfully
-      _ = try await task.result
+      _ = try await task.value
 
       try await storage.from(bucket).remove(paths: [path])
     }
@@ -96,8 +96,8 @@ final class StorageTransferIntegrationTests {
 
       _ = try await storage.from(bucket).upload(
         path, data: original, options: FileOptions(contentType: "text/plain")
-      ).result
-      let downloaded = try await storage.from(bucket).downloadData(path: path).result
+      ).value
+      let downloaded = try await storage.from(bucket).downloadData(path: path).value
 
       #expect(downloaded == original)
       try await storage.from(bucket).remove(paths: [path])
@@ -114,7 +114,7 @@ final class StorageTransferIntegrationTests {
 
       // Wait briefly to let the cancellation propagate
       do {
-        _ = try await task.result
+        _ = try await task.value
       } catch let error as StorageError where error.errorCode == .cancelled {
         // Expected: task was cancelled
       } catch {

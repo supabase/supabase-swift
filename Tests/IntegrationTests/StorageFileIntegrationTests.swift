@@ -75,7 +75,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testSignURL() async throws {
-    _ = try await storage.from(bucketName).upload(uploadPath, data: file).result
+    _ = try await storage.from(bucketName).upload(uploadPath, data: file).value
 
     let url = try await storage.from(bucketName).createSignedURL(
       path: uploadPath, expiresIn: .seconds(2000))
@@ -86,7 +86,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testSignURL_withDownloadQueryString() async throws {
-    _ = try await storage.from(bucketName).upload(uploadPath, data: file).result
+    _ = try await storage.from(bucketName).upload(uploadPath, data: file).value
 
     let url = try await storage.from(bucketName).createSignedURL(
       path: uploadPath, expiresIn: .seconds(2000), download: .withOriginalName)
@@ -98,7 +98,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testSignURL_withCustomFilenameForDownload() async throws {
-    _ = try await storage.from(bucketName).upload(uploadPath, data: file).result
+    _ = try await storage.from(bucketName).upload(uploadPath, data: file).value
 
     let url = try await storage.from(bucketName).createSignedURL(
       path: uploadPath, expiresIn: .seconds(2000), download: .named("test.jpg"))
@@ -112,9 +112,9 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testUploadAndUpdateFile() async throws {
     let file2 = try Data(contentsOf: uploadFileURL("file-2.txt"))
 
-    try await storage.from(bucketName).upload(uploadPath, data: file).result
+    try await storage.from(bucketName).upload(uploadPath, data: file).value
 
-    let res = try await storage.from(bucketName).update(uploadPath, data: file2).result
+    let res = try await storage.from(bucketName).update(uploadPath, data: file2).value
     XCTAssertEqual(res.path, uploadPath)
   }
 
@@ -124,7 +124,7 @@ final class StorageFileIntegrationTests: XCTestCase {
       options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1))
     )
 
-    try await storage.from(bucketName).upload(uploadPath, data: file).result
+    try await storage.from(bucketName).upload(uploadPath, data: file).value
   }
 
   func testUploadFileThatExceedFileSizeLimit() async throws {
@@ -134,7 +134,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     )
 
     do {
-      try await storage.from(bucketName).upload(uploadPath, data: file).result
+      try await storage.from(bucketName).upload(uploadPath, data: file).value
       XCTFail("Unexpected success")
     } catch let error as StorageError {
       XCTAssertEqual(error.statusCode, 413)
@@ -156,7 +156,7 @@ final class StorageFileIntegrationTests: XCTestCase {
       options: FileOptions(
         contentType: "image/jpeg"
       )
-    ).result
+    ).value
   }
 
   func testUploadFileWithInvalidMimeType() async throws {
@@ -172,7 +172,7 @@ final class StorageFileIntegrationTests: XCTestCase {
         options: FileOptions(
           contentType: "image/jpeg"
         )
-      ).result
+      ).value
       XCTFail("Unexpected success")
     } catch let error as StorageError {
       XCTAssertEqual(error.statusCode, 415)
@@ -197,18 +197,18 @@ final class StorageFileIntegrationTests: XCTestCase {
 
     let uploadRes = try await storage.from(bucketName).uploadToSignedURL(
       res.path, token: res.token, data: file
-    ).result
+    ).value
     XCTAssertEqual(uploadRes.path, uploadPath)
   }
 
   func testCanUploadOverwritingFilesWithSignedURL() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file).result
+    try await storage.from(bucketName).upload(uploadPath, data: file).value
 
     let res = try await storage.from(bucketName).createSignedUploadURL(
       path: uploadPath, options: CreateSignedUploadURLOptions(upsert: true))
     let uploadRes = try await storage.from(bucketName).uploadToSignedURL(
       res.path, token: res.token, data: file
-    ).result
+    ).value
     XCTAssertEqual(uploadRes.path, uploadPath)
   }
 
@@ -216,11 +216,11 @@ final class StorageFileIntegrationTests: XCTestCase {
     let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
 
     try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
-      .result
+      .value
 
     do {
       try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
-        .result
+        .value
       XCTFail("Unexpected success")
     } catch let error as StorageError {
       XCTAssertEqual(error.statusCode, 409)
@@ -231,7 +231,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testListObjects() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file).result
+    try await storage.from(bucketName).upload(uploadPath, data: file).value
     let res = try await storage.from(bucketName).list(path: "testpath")
 
     XCTAssertEqual(res.count, 1)
@@ -240,7 +240,7 @@ final class StorageFileIntegrationTests: XCTestCase {
 
   func testMoveObjectToDifferentPath() async throws {
     let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file).result
+    try await storage.from(bucketName).upload(uploadPath, data: file).value
 
     try await storage.from(bucketName).move(from: uploadPath, to: newPath)
   }
@@ -250,7 +250,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     try await findOrCreateBucket(name: newBucketName)
 
     let newPath = "testpath/file-to-move-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file).result
+    try await storage.from(bucketName).upload(uploadPath, data: file).value
 
     try await storage.from(bucketName).move(
       from: uploadPath,
@@ -258,12 +258,12 @@ final class StorageFileIntegrationTests: XCTestCase {
       options: DestinationOptions(destinationBucket: newBucketName)
     )
 
-    _ = try await storage.from(newBucketName).downloadData(path: newPath).result
+    _ = try await storage.from(newBucketName).downloadData(path: newPath).value
   }
 
   func testCopyObjectToDifferentPath() async throws {
     let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file).result
+    try await storage.from(bucketName).upload(uploadPath, data: file).value
 
     try await storage.from(bucketName).copy(from: uploadPath, to: newPath)
   }
@@ -273,7 +273,7 @@ final class StorageFileIntegrationTests: XCTestCase {
     try await findOrCreateBucket(name: newBucketName)
 
     let newPath = "testpath/file-to-copy-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file).result
+    try await storage.from(bucketName).upload(uploadPath, data: file).value
 
     try await storage.from(bucketName).copy(
       from: uploadPath,
@@ -281,18 +281,18 @@ final class StorageFileIntegrationTests: XCTestCase {
       options: DestinationOptions(destinationBucket: newBucketName)
     )
 
-    _ = try await storage.from(newBucketName).downloadData(path: newPath).result
+    _ = try await storage.from(newBucketName).downloadData(path: newPath).value
   }
 
   func testDownloadsAnObject() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file).result
+    try await storage.from(bucketName).upload(uploadPath, data: file).value
 
-    let res = try await storage.from(bucketName).downloadData(path: uploadPath).result
+    let res = try await storage.from(bucketName).downloadData(path: uploadPath).value
     XCTAssertGreaterThan(res.count, 0)
   }
 
   func testRemovesAnObject() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file).result
+    try await storage.from(bucketName).upload(uploadPath, data: file).value
 
     let res = try await storage.from(bucketName).remove(paths: [uploadPath])
     XCTAssertEqual(res.count, 1)
@@ -318,7 +318,7 @@ final class StorageFileIntegrationTests: XCTestCase {
 
   func testCreateAndLoadEmptyFolder() async throws {
     let path = "empty-folder/.placeholder"
-    try await storage.from(bucketName).upload(path, data: Data()).result
+    try await storage.from(bucketName).upload(path, data: Data()).value
 
     let files = try await storage.from(bucketName).list()
     assertInlineSnapshot(of: files, as: .json) {
@@ -339,7 +339,7 @@ final class StorageFileIntegrationTests: XCTestCase {
       options: FileOptions(
         metadata: ["value": 42]
       )
-    ).result
+    ).value
 
     let info = try await storage.from(bucketName).info(path: uploadPath)
     XCTAssertEqual(info.name, uploadPath)
@@ -347,7 +347,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   }
 
   func testExists() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file).result
+    try await storage.from(bucketName).upload(uploadPath, data: file).value
 
     var exists = try await storage.from(bucketName).exists(path: uploadPath)
     XCTAssertTrue(exists)
@@ -363,7 +363,7 @@ final class StorageFileIntegrationTests: XCTestCase {
       options: FileOptions(
         cacheControl: "14400"
       )
-    ).result
+    ).value
 
     let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath)
 
@@ -376,9 +376,9 @@ final class StorageFileIntegrationTests: XCTestCase {
 
   func testUploadWithFileURL() async throws {
     try await storage.from(bucketName)
-      .upload(uploadPath, fileURL: uploadFileURL("sadcat.jpg")).result
+      .upload(uploadPath, fileURL: uploadFileURL("sadcat.jpg")).value
 
-    let uploadedFile = try await storage.from(bucketName).downloadData(path: uploadPath).result
+    let uploadedFile = try await storage.from(bucketName).downloadData(path: uploadPath).value
 
     XCTAssertEqual(uploadedFile, file)
   }
