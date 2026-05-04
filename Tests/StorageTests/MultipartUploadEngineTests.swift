@@ -14,6 +14,23 @@ import Testing
   import FoundationNetworking
 #endif
 
+@Suite struct MultipartUploadEngineStateTests {
+  let dummyResponse = FileUploadResponse(
+    id: UUID(), path: "f.txt", fullPath: "bucket/f.txt")
+  let dummyError = StorageError(message: "oops", errorCode: .unknown)
+
+  @Test func nonTerminalStatesReturnFalse() {
+    #expect(!MultipartUploadEngine.State.idle.isTerminal)
+    #expect(!MultipartUploadEngine.State.uploading.isTerminal)
+  }
+
+  @Test func terminalStatesReturnTrue() {
+    #expect(MultipartUploadEngine.State.completed(dummyResponse).isTerminal)
+    #expect(MultipartUploadEngine.State.failed(dummyError).isTerminal)
+    #expect(MultipartUploadEngine.State.cancelled.isTerminal)
+  }
+}
+
 @Suite(.serialized) struct MultipartUploadEngineTests {
 
   let baseURL = URL(string: "http://localhost:54321/storage/v1")!
