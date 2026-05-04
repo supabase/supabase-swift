@@ -266,6 +266,63 @@ import Testing
     }
   }
 
+  @Test func resumeAfterPauseSyncsOffsetViaHEAD() async throws {
+    tusChunkSize = 3
+    defer { tusChunkSize = 6 * 1024 * 1024 }
+
+    let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
+    let finalResponse = try makeTUSServerResponseData(path: "r.txt", fullPath: "bucket/r.txt")
+
+    // POST and PATCH 1 respond immediately; PATCH 2 hangs until we resume
+    let sc = sequentialClient
+    SequentialMockProtocol.responses = [
+      (201, ["Location": locationURL.absoluteString], Data()),
+      (204, ["Upload-Offset": "3"], Data()),
+    ]
+    SequentialMockProtocol.hangWhenExhausted = true
+
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "r.txt",
+      source: .data(data),
+      options: FileOptions(contentType: "text/plain"),
+      client: sc
+    )
+
+    // Wait until PATCH 2 starts hanging (signals that POST + PATCH 1 are done)
+    var iter = SequentialMockProtocol.nextHang.makeAsyncIterator()
+    _ = await iter.next()
+
+    task.pause()
+
+    // Wait until the hanging request is actually cancelled (stopLoading called),
+    // confirming the pause has fully propagated through the engine actor.
+    var cancelIter = SequentialMockProtocol.hangCancelled.makeAsyncIterator()
+    _ = await cancelIter.next()
+
+    // Add HEAD (re-sync) and PATCH 2 responses, then resume
+    // Disable hang so the engine's new requests are served normally
+    SequentialMockProtocol.hangWhenExhausted = false
+    SequentialMockProtocol.appendResponse((200, ["Upload-Offset": "3"], Data()))  // HEAD
+    SequentialMockProtocol.appendResponse((200, ["Upload-Offset": "5"], finalResponse))  // PATCH 2
+
+    task.resume()
+
+    let response = try await task.result
+    #expect(response.path == "r.txt")
+    // capturedRequests: POST, PATCH1, hanging-PATCH2 (cancelled), HEAD, PATCH2-real = 5
+    // callIndex: POST(0→1) + PATCH1(1→2) + HEAD(2→3) + PATCH2(3→4) = 4
+    // (hanging-PATCH2 does NOT advance callIndex)
+    let requests = SequentialMockProtocol.capturedRequests
+    #expect(requests.count == 5)
+    #expect(SequentialMockProtocol.callIndex == 4)
+    #expect(requests[0].httpMethod == "POST")
+    #expect(requests[1].httpMethod == "PATCH")
+    #expect(requests[2].httpMethod == "PATCH")  // the hanging-then-cancelled PATCH 2
+    #expect(requests[3].httpMethod == "HEAD")  // HEAD re-sync after resume
+    #expect(requests[4].httpMethod == "PATCH")  // real PATCH 2 after HEAD
+  }
+
   @Test func resyncesOffsetOn409() async throws {
     let data = Data(repeating: 0x01, count: 100)
     let headCount = LockIsolated(0)
@@ -340,11 +397,35 @@ final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
   nonisolated(unsafe) static var capturedRequests: [URLRequest] = []
   private var didFinish = false
 
+  /// When `true`, requests that arrive after all responses are consumed hang
+  /// (until cancelled) instead of immediately failing. Use `nextHang` to detect
+  /// when a request has entered the hanging state. Use `hangCancelled` to detect
+  /// when the hanging request's `stopLoading` has been called (i.e., the pause
+  /// has been fully applied by the engine).
+  nonisolated(unsafe) static var hangWhenExhausted = false
+  nonisolated(unsafe) private static var hangContinuation: AsyncStream<Void>.Continuation?
+  nonisolated(unsafe) static var nextHang: AsyncStream<Void> = AsyncStream { _ in }
+  nonisolated(unsafe) private static var hangCancelledContinuation: AsyncStream<Void>.Continuation?
+  nonisolated(unsafe) static var hangCancelled: AsyncStream<Void> = AsyncStream { _ in }
+
   static func reset() {
     lock.lock()
     callIndex = 0
     responses = []
     capturedRequests = []
+    hangWhenExhausted = false
+    let (stream, cont) = AsyncStream<Void>.makeStream()
+    nextHang = stream
+    hangContinuation = cont
+    let (cancelStream, cancelCont) = AsyncStream<Void>.makeStream()
+    hangCancelled = cancelStream
+    hangCancelledContinuation = cancelCont
+    lock.unlock()
+  }
+
+  static func appendResponse(_ response: (statusCode: Int, headers: [String: String], data: Data)) {
+    lock.lock()
+    responses.append(response)
     lock.unlock()
   }
 
@@ -354,9 +435,18 @@ final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
   override func startLoading() {
     Self.lock.lock()
     let index = Self.callIndex
-    Self.callIndex += 1
+    let shouldHang = Self.hangWhenExhausted && index >= Self.responses.count
+    if !shouldHang {
+      Self.callIndex += 1
+    }
     Self.capturedRequests.append(request)
     Self.lock.unlock()
+
+    if shouldHang {
+      Self.hangContinuation?.yield(())
+      // Hang — stopLoading() will cancel
+      return
+    }
 
     guard index < Self.responses.count else {
       client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
@@ -378,6 +468,7 @@ final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
   override func stopLoading() {
     if !didFinish {
       client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+      Self.hangCancelledContinuation?.yield(())
     }
   }
 }

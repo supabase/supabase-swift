@@ -136,17 +136,8 @@ actor TUSUploadEngine {
       let uploadURL = try await createUpload(totalBytes: totalBytes)
       state = .uploading(uploadURL: uploadURL, offset: 0)
       try await uploadChunks(to: uploadURL, from: 0, totalBytes: totalBytes)
-    } catch is CancellationError {
-      switch state {
-      case .cancelled, .paused:
-        return
-      default:
-        cancel()
-      }
-    } catch let error as StorageError {
-      finish(with: .failure(error))
     } catch {
-      finish(with: .failure(StorageError.networkError(underlying: error)))
+      handleRunError(error)
     }
   }
 
@@ -156,16 +147,29 @@ actor TUSUploadEngine {
       let totalBytes = try source.totalBytes()
       state = .uploading(uploadURL: uploadURL, offset: serverOffset)
       try await uploadChunks(to: uploadURL, from: serverOffset, totalBytes: totalBytes)
-    } catch is CancellationError {
-      switch state {
-      case .cancelled, .paused:
-        return
-      default:
-        cancel()
-      }
-    } catch let error as StorageError {
-      finish(with: .failure(error))
     } catch {
+      handleRunError(error)
+    }
+  }
+
+  private func handleRunError(_ error: any Error) {
+    let isCancellation =
+      error is CancellationError
+      || (error as? URLError)?.code == .cancelled
+    if isCancellation {
+      switch state {
+      case .uploading:
+        // Task was externally cancelled while actively uploading — shut down cleanly.
+        cancel()
+      default:
+        // .creating, .paused, .completed, .failed, .cancelled:
+        // Either the engine is transitioning (pause/resume in progress) or already done.
+        // In all these cases the old task's cancellation is expected — do nothing.
+        return
+      }
+    } else if let storageError = error as? StorageError {
+      finish(with: .failure(storageError))
+    } else {
       finish(with: .failure(StorageError.networkError(underlying: error)))
     }
   }
@@ -357,6 +361,11 @@ extension TUSUploadEngine {
       eventsContinuation: eventsContinuation,
       resultContinuation: resultContinuation
     )
+
+    eventsContinuation.onTermination = { reason in
+      guard case .cancelled = reason else { return }
+      Task { await engine.cancel() }
+    }
 
     let resultTask = Task<FileUploadResponse, any Error> {
       for await r in resultStream { return try r.get() }
