@@ -12,7 +12,7 @@ import Helpers
   import FoundationNetworking
 #endif
 
-private let tusChunkSize = 6 * 1024 * 1024  // 6 MB — Supabase/S3 minimum
+package nonisolated(unsafe) var tusChunkSize = 6 * 1024 * 1024  // 6 MB — Supabase/S3 minimum
 
 private struct TUSUploadServerResponse: Decodable {
   let Key: String

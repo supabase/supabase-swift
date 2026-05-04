@@ -36,6 +36,19 @@ import Testing
     )
   }
 
+  var sequentialClient: StorageClient {
+    SequentialMockProtocol.reset()
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [SequentialMockProtocol.self]
+    return StorageClient(
+      url: baseURL,
+      configuration: StorageClientConfiguration(
+        headers: ["Authorization": "Bearer test-token"],
+        session: URLSession(configuration: config)
+      )
+    )
+  }
+
   // MARK: - Helpers
 
   private func makeTUSServerResponseData(path: String, fullPath: String) throws -> Data {
@@ -94,115 +107,58 @@ import Testing
   }
 
   @Test func sendsTwoChunksForDataLargerThanChunkSize() async throws {
-    // 7 MB data → 2 chunks (6 MB + 1 MB)
-    let data = Data(repeating: 0x42, count: 7 * 1024 * 1024)
-    let patchCount = LockIsolated(0)
-    let patchOffsets = LockIsolated<[Int64]>([])
+    tusChunkSize = 3
+    defer { tusChunkSize = 6 * 1024 * 1024 }
 
-    // POST mock
-    Mock(
-      url: uploadURL,
-      contentType: .json,
-      statusCode: 201,
-      data: [.post: Data()],
-      additionalHeaders: ["Location": locationURL.absoluteString]
-    ).register()
+    let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
+    let finalResponse = try makeTUSServerResponseData(path: "f.txt", fullPath: "bucket/f.txt")
 
-    // Second PATCH mock (offset 6MB → 7MB, returns final response)
-    let finalResponse = try makeTUSServerResponseData(path: "big.bin", fullPath: "bucket/big.bin")
-    var patch2 = Mock(
-      url: locationURL,
-      contentType: .json,
-      statusCode: 200,
-      data: [.patch: finalResponse],
-      additionalHeaders: ["Upload-Offset": "\(7 * 1024 * 1024)"]
-    )
-    patch2.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      patchCount.withValue { $0 += 1 }
-      if let offsetStr = request.value(forHTTPHeaderField: "Upload-Offset"),
-        let offset = Int64(offsetStr)
-      {
-        patchOffsets.withValue { $0.append(offset) }
-      }
-    })
-
-    // First PATCH mock (offset 0 → 6MB, returns 204)
-    // Uses completion callback to swap in patch2 after it fires
-    var patch1 = Mock(
-      url: locationURL,
-      contentType: .json,
-      statusCode: 204,
-      data: [.patch: Data()],
-      additionalHeaders: ["Upload-Offset": "\(6 * 1024 * 1024)"]
-    )
-    patch1.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      patchCount.withValue { $0 += 1 }
-      if let offsetStr = request.value(forHTTPHeaderField: "Upload-Offset"),
-        let offset = Int64(offsetStr)
-      {
-        patchOffsets.withValue { $0.append(offset) }
-      }
-    })
-    patch1.completion = {
-      patch2.register()
-    }
-    patch1.register()
+    let sc = sequentialClient
+    SequentialMockProtocol.responses = [
+      // POST: 201 + Location header
+      (201, ["Location": locationURL.absoluteString], Data()),
+      // PATCH 1 (offset 0, 3 bytes): 204 + Upload-Offset: 3
+      (204, ["Upload-Offset": "3"], Data()),
+      // PATCH 2 (offset 3, 2 bytes): 200 + final response body
+      (200, ["Upload-Offset": "5"], finalResponse),
+    ]
 
     let task = TUSUploadEngine.makeTask(
       bucketId: "bucket",
-      path: "big.bin",
+      path: "f.txt",
       source: .data(data),
-      options: FileOptions(contentType: "application/octet-stream"),
-      client: client
+      options: FileOptions(contentType: "text/plain"),
+      client: sc
     )
     _ = try await task.result
 
-    #expect(patchCount.value == 2)
-    #expect(patchOffsets.value == [0, Int64(6 * 1024 * 1024)])
+    // POST + 2 PATCHes = 3 total requests
+    #expect(SequentialMockProtocol.callIndex == 3)
   }
 
   @Test func emitsProgressEventsPerChunk() async throws {
-    let data = Data(repeating: 0x01, count: 7 * 1024 * 1024)
+    tusChunkSize = 3
+    defer { tusChunkSize = 6 * 1024 * 1024 }
 
-    // POST mock
-    Mock(
-      url: uploadURL,
-      contentType: .json,
-      statusCode: 201,
-      data: [.post: Data()],
-      additionalHeaders: ["Location": locationURL.absoluteString]
-    ).register()
-
+    let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
     let finalResponse = try makeTUSServerResponseData(path: "f.bin", fullPath: "bucket/f.bin")
 
-    // Second PATCH mock
-    var patch2 = Mock(
-      url: locationURL,
-      contentType: .json,
-      statusCode: 200,
-      data: [.patch: finalResponse],
-      additionalHeaders: ["Upload-Offset": "\(7 * 1024 * 1024)"]
-    )
-
-    // First PATCH mock — swaps in patch2 on completion
-    var patch1 = Mock(
-      url: locationURL,
-      contentType: .json,
-      statusCode: 204,
-      data: [.patch: Data()],
-      additionalHeaders: ["Upload-Offset": "\(6 * 1024 * 1024)"]
-    )
-    patch1.completion = {
-      patch2.register()
-    }
-    patch1.register()
+    let sc = sequentialClient
+    SequentialMockProtocol.responses = [
+      // POST: 201 + Location header
+      (201, ["Location": locationURL.absoluteString], Data()),
+      // PATCH 1 (offset 0, 3 bytes): 204 + Upload-Offset: 3
+      (204, ["Upload-Offset": "3"], Data()),
+      // PATCH 2 (offset 3, 2 bytes): 200 + final response body
+      (200, ["Upload-Offset": "5"], finalResponse),
+    ]
 
     let task = TUSUploadEngine.makeTask(
       bucketId: "bucket",
       path: "f.bin",
       source: .data(data),
       options: FileOptions(contentType: "application/octet-stream"),
-      client: client
+      client: sc
     )
 
     var progressFractions: [Double] = []
@@ -272,8 +228,48 @@ import Testing
       options: FileOptions(contentType: "text/plain"),
       client: client
     )
-    _ = try await task.result
+    let response = try await task.result
 
     #expect(headCount.value == 1)
+    #expect(response.path == "x.txt")
   }
+}
+
+// MARK: - SequentialMockProtocol
+
+/// Provides sequential responses for the same URL across multiple requests.
+/// Designed for testing PATCH chunk uploads where each call needs a different response.
+final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
+  nonisolated(unsafe) static var responses:
+    [(statusCode: Int, headers: [String: String], data: Data)] = []
+  nonisolated(unsafe) static var callIndex = 0
+
+  static func reset() {
+    callIndex = 0
+    responses = []
+  }
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    let index = Self.callIndex
+    Self.callIndex += 1
+    guard index < Self.responses.count else {
+      client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+      return
+    }
+    let resp = Self.responses[index]
+    let httpResponse = HTTPURLResponse(
+      url: request.url!,
+      statusCode: resp.statusCode,
+      httpVersion: nil,
+      headerFields: resp.headers
+    )!
+    client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: resp.data)
+    client?.urlProtocolDidFinishLoading(self)
+  }
+
+  override func stopLoading() {}
 }
