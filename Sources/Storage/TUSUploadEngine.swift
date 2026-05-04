@@ -15,7 +15,6 @@ import Helpers
 
 package let tusChunkSize = LockIsolated(6 * 1024 * 1024)  // 6 MB — Supabase/S3 minimum
 
-
 enum UploadSource: Sendable {
   case data(Data)
   case fileURL(URL)
@@ -253,7 +252,7 @@ actor TUSUploadEngine {
       request.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
       request.setValue("\(chunk.count)", forHTTPHeaderField: "Content-Length")
 
-      let (data, response) = try await client.http.session.upload(for: request, from: chunk)
+      let (_, response) = try await client.http.session.upload(for: request, from: chunk)
       guard let httpResponse = response as? HTTPURLResponse else {
         throw StorageError(message: "Invalid PATCH response", errorCode: .unknown)
       }

@@ -512,7 +512,8 @@ struct StorageFileAPITests {
 
   @Test func updateFromData() async throws {
     let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent("upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
+    let locationURL = url.appendingPathComponent(
+      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
 
     Mock(
       url: resumableURL,
@@ -555,7 +556,8 @@ struct StorageFileAPITests {
 
   @Test func updateSetsUpsertTrue() async throws {
     let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent("upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
+    let locationURL = url.appendingPathComponent(
+      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
     let capturedRequest = LockIsolated<URLRequest?>(nil)
 
     var postMock = Mock(
@@ -587,7 +589,8 @@ struct StorageFileAPITests {
 
   @Test func updateFromURL() async throws {
     let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent("upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
+    let locationURL = url.appendingPathComponent(
+      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
 
     Mock(
       url: resumableURL,
@@ -1092,7 +1095,8 @@ struct StorageFileAPITests {
 
   @Test func uploadEmitsProgressEvents() async throws {
     let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent("upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
+    let locationURL = url.appendingPathComponent(
+      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
 
     Mock(
       url: resumableURL,
