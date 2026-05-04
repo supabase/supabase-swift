@@ -178,10 +178,8 @@ actor MultipartUploadEngine {
       default:
         return
       }
-    } else if let storageError = error as? StorageError {
-      finish(with: .failure(storageError))
     } else {
-      finish(with: .failure(StorageError.networkError(underlying: error)))
+      finish(with: .failure(StorageError.from(error)))
     }
   }
 
