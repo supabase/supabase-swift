@@ -101,7 +101,11 @@ public struct StorageFileAPI: Sendable {
     let Key: String
   }
 
-  /// Uploads a `Data` value to an existing bucket using the TUS resumable upload protocol.
+  /// Uploads a `Data` value to an existing bucket, automatically choosing the best protocol.
+  ///
+  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
+  /// resumable protocol automatically. Use ``uploadMultipart(_:data:options:)`` or
+  /// ``uploadResumable(_:data:options:)`` to force a specific method.
   ///
   /// If the path already exists and ``FileOptions/upsert`` is `false` (the default), an error
   /// is returned. Set `upsert: true` to overwrite silently instead.
@@ -131,16 +135,22 @@ public struct StorageFileAPI: Sendable {
     data: Data,
     options: FileOptions = FileOptions()
   ) -> StorageUploadTask {
-    TUSUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .data(data),
-      options: options,
-      client: client
-    )
+    if data.count <= tusChunkSize.value {
+      return MultipartUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .data(data), options: options, client: client)
+    } else {
+      return TUSUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .data(data), options: options, client: client)
+    }
   }
 
-  /// Uploads a file from a local `URL` to an existing bucket using the TUS resumable upload protocol.
+  /// Uploads a file from a local `URL` to an existing bucket, automatically choosing the best
+  /// protocol.
+  ///
+  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
+  /// resumable protocol automatically. Use ``uploadMultipart(_:fileURL:options:)`` or
+  /// ``uploadResumable(_:fileURL:options:)`` to force a specific method. If the file size cannot
+  /// be determined, the TUS protocol is used as a safe default.
   ///
   /// - Parameters:
   ///   - path: The destination path within the bucket, e.g. `"folder/image.png"`.
@@ -166,17 +176,24 @@ public struct StorageFileAPI: Sendable {
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) -> StorageUploadTask {
-    TUSUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .fileURL(fileURL),
-      options: options,
-      client: client
-    )
+    let size =
+      (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
+    if size <= tusChunkSize.value {
+      return MultipartUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options,
+        client: client)
+    } else {
+      return TUSUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options, client: client)
+    }
   }
 
-  /// Replaces an existing file at the specified path with new `Data` using the TUS resumable
-  /// upload protocol.
+  /// Replaces an existing file at the specified path with new `Data`, automatically choosing the
+  /// best protocol.
+  ///
+  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
+  /// resumable protocol automatically. Use ``updateMultipart(_:data:options:)`` or
+  /// ``updateResumable(_:data:options:)`` to force a specific method.
   ///
   /// Unlike ``upload(_:data:options:)``, this method always sets `upsert: true` to overwrite the
   /// existing object.
@@ -207,17 +224,22 @@ public struct StorageFileAPI: Sendable {
   ) -> StorageUploadTask {
     var upsertOptions = options
     upsertOptions.upsert = true
-    return TUSUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .data(data),
-      options: upsertOptions,
-      client: client
-    )
+    if data.count <= tusChunkSize.value {
+      return MultipartUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .data(data), options: upsertOptions, client: client)
+    } else {
+      return TUSUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .data(data), options: upsertOptions, client: client)
+    }
   }
 
-  /// Replaces an existing file at the specified path with the contents of a local `URL` using the
-  /// TUS resumable upload protocol.
+  /// Replaces an existing file at the specified path with the contents of a local `URL`,
+  /// automatically choosing the best protocol.
+  ///
+  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
+  /// resumable protocol automatically. Use ``updateMultipart(_:fileURL:options:)`` or
+  /// ``updateResumable(_:fileURL:options:)`` to force a specific method. If the file size cannot
+  /// be determined, the TUS protocol is used as a safe default.
   ///
   /// Unlike ``upload(_:fileURL:options:)``, this method always sets `upsert: true` to overwrite
   /// the existing object.
@@ -245,13 +267,17 @@ public struct StorageFileAPI: Sendable {
   ) -> StorageUploadTask {
     var upsertOptions = options
     upsertOptions.upsert = true
-    return TUSUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .fileURL(fileURL),
-      options: upsertOptions,
-      client: client
-    )
+    let size =
+      (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
+    if size <= tusChunkSize.value {
+      return MultipartUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: upsertOptions,
+        client: client)
+    } else {
+      return TUSUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: upsertOptions,
+        client: client)
+    }
   }
 
   // MARK: - Explicit multipart upload
