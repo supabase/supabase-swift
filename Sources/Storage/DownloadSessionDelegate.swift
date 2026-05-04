@@ -19,8 +19,12 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
     let resultContinuation: AsyncStream<Result<URL, any Error>>.Continuation
   }
 
-  private let tasks = LockIsolated<[Int: DownloadTaskState]>([:])
-  private let backgroundCompletionHandler = LockIsolated<(@Sendable () -> Void)?>(nil)
+  struct MutableState {
+    var tasks: [Int: DownloadTaskState] = [:]
+    var backgroundCompletionHandler: (@Sendable () -> Void)?
+  }
+
+  private let state = LockIsolated(MutableState())
 
   // MARK: - Task creation
 
@@ -33,8 +37,8 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
 
     let urlTask = session.downloadTask(with: request)
 
-    tasks.withValue {
-      $0[urlTask.taskIdentifier] = DownloadTaskState(
+    state.withValue {
+      $0.tasks[urlTask.taskIdentifier] = DownloadTaskState(
         eventsContinuation: eventsContinuation,
         resultContinuation: resultContinuation
       )
@@ -75,8 +79,8 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
     let (resultStream, resultContinuation) = AsyncStream<Result<URL, any Error>>.makeStream(
       bufferingPolicy: .bufferingNewest(1))
     let urlTask = session.downloadTask(with: request)
-    tasks.withValue {
-      $0[urlTask.taskIdentifier] = DownloadTaskState(
+    state.withValue {
+      $0.tasks[urlTask.taskIdentifier] = DownloadTaskState(
         eventsContinuation: eventsContinuation,
         resultContinuation: resultContinuation
       )
@@ -87,7 +91,7 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
   }
 
   func setBackgroundCompletionHandler(_ handler: @escaping @Sendable () -> Void) {
-    backgroundCompletionHandler.setValue(handler)
+    state.withValue { $0.backgroundCompletionHandler = handler }
   }
 
   // MARK: - URLSessionDownloadDelegate
@@ -99,13 +103,15 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
     totalBytesWritten: Int64,
     totalBytesExpectedToWrite: Int64
   ) {
-    guard let state = tasks.value[downloadTask.taskIdentifier] else { return }
-    state.eventsContinuation.yield(
-      .progress(
-        TransferProgress(
-          bytesTransferred: totalBytesWritten,
-          totalBytes: totalBytesExpectedToWrite
-        )))
+    state.withValue {
+      guard let taskState = $0.tasks[downloadTask.taskIdentifier] else { return }
+      taskState.eventsContinuation.yield(
+        .progress(
+          TransferProgress(
+            bytesTransferred: totalBytesWritten,
+            totalBytes: totalBytesExpectedToWrite
+          )))
+    }
   }
 
   func urlSession(
@@ -113,26 +119,27 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
     downloadTask: URLSessionDownloadTask,
     didFinishDownloadingTo location: URL
   ) {
-    guard let state = tasks.value[downloadTask.taskIdentifier] else { return }
+    state.withValue {
+      guard let taskState = $0.tasks[downloadTask.taskIdentifier] else { return }
 
-    let destination = FileManager.default.temporaryDirectory
-      .appendingPathComponent(UUID().uuidString)
+      let destination = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString)
 
-    do {
-      try FileManager.default.moveItem(at: location, to: destination)
-      state.eventsContinuation.yield(.completed(destination))
-      state.eventsContinuation.finish()
-      state.resultContinuation.yield(.success(destination))
-      state.resultContinuation.finish()
-    } catch {
-      let storageError = StorageError.fileSystemError(underlying: error)
-      state.eventsContinuation.yield(.failed(storageError))
-      state.eventsContinuation.finish()
-      state.resultContinuation.yield(.failure(storageError))
-      state.resultContinuation.finish()
+      do {
+        try FileManager.default.moveItem(at: location, to: destination)
+        taskState.eventsContinuation.yield(.completed(destination))
+        taskState.eventsContinuation.finish()
+        taskState.resultContinuation.yield(.success(destination))
+        taskState.resultContinuation.finish()
+      } catch {
+        let storageError = StorageError.fileSystemError(underlying: error)
+        taskState.eventsContinuation.yield(.failed(storageError))
+        taskState.eventsContinuation.finish()
+        taskState.resultContinuation.yield(.failure(storageError))
+        taskState.resultContinuation.finish()
+      }
+      $0.tasks.removeValue(forKey: downloadTask.taskIdentifier)
     }
-
-    tasks.withValue { $0.removeValue(forKey: downloadTask.taskIdentifier) }
   }
 
   func urlSession(
@@ -141,24 +148,29 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
     didCompleteWithError error: (any Error)?
   ) {
     guard let error else { return }
-    guard let state = tasks.value[task.taskIdentifier] else { return }
 
-    let storageError: StorageError
-    if (error as? URLError)?.code == .cancelled {
-      storageError = .cancelled
-    } else {
-      storageError = .networkError(underlying: error)
+    state.withValue {
+      guard let taskState = $0.tasks[task.taskIdentifier] else { return }
+
+      let storageError: StorageError
+      if (error as? URLError)?.code == .cancelled {
+        storageError = .cancelled
+      } else {
+        storageError = .networkError(underlying: error)
+      }
+
+      taskState.eventsContinuation.yield(.failed(storageError))
+      taskState.eventsContinuation.finish()
+      taskState.resultContinuation.yield(.failure(storageError))
+      taskState.resultContinuation.finish()
+      $0.tasks.removeValue(forKey: task.taskIdentifier)
     }
-
-    state.eventsContinuation.yield(.failed(storageError))
-    state.eventsContinuation.finish()
-    state.resultContinuation.yield(.failure(storageError))
-    state.resultContinuation.finish()
-    tasks.withValue { $0.removeValue(forKey: task.taskIdentifier) }
   }
 
   func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-    backgroundCompletionHandler.value?()
-    backgroundCompletionHandler.setValue(nil)
+    state.withValue {
+      $0.backgroundCompletionHandler?()
+      $0.backgroundCompletionHandler = nil
+    }
   }
 }
