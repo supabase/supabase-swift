@@ -63,19 +63,20 @@ The threshold reuses the existing package-level `tusChunkSize: LockIsolated<Int>
 
 ## MultipartUploadEngine
 
-A new `actor MultipartUploadEngine` in `Sources/Storage/MultipartUploadEngine.swift`, structured parallel to `TUSUploadEngine`.
+A new `actor MultipartUploadEngine` in `Sources/Storage/MultipartUploadEngine.swift`.
 
 ### Responsibilities
 
-1. Build a `multipart/form-data` request body with a random `boundary`:
-   - One part: field name `""`  (or the filename), `Content-Disposition: form-data; name=""; filename="{filename}"`, `Content-Type: {contentType}`, body = file bytes
-2. POST to `/object/{bucketId}/{path}` (or `/object/{bucketId}/{path}` with `x-upsert: true` for updates)
-3. Use `URLSession.uploadTask(with:from:completionHandler:)` **or** a streaming upload task with a `URLSessionTaskDelegate` for progress reporting
-4. The delegate method `urlSession(_:task:didSendBodyData:totalBytesSent:totalBytesExpectedToSend:)` yields `.progress(TransferProgress(bytesTransferred:totalBytes:))` events into the events continuation
-5. On success, decode `FileUploadResponse` from the response body and yield `.completed(response)`; on error, yield `.failed(error)`
-6. `cancel()` cancels the underlying `URLSessionTask` and finishes both continuations with `.cancelled`
-7. `pause()` and `resume()` are no-ops (multipart is a single HTTP request; cancellation is the only interruption)
-8. The full source is loaded into memory before the request is sent (`Data(contentsOf:)` for `fileURL` variant). This is acceptable because multipart only fires for files ≤ 6 MB.
+1. Build the multipart/form-data request body using the existing `FileUpload` + `MultipartBuilder` infrastructure already present in `StorageFileAPI.swift`.
+2. POST to `/object/{bucketId}/{path}` (with `x-upsert: true` for update variants).
+3. Memory strategy — mirrors the existing private `uploadMultipart` behaviour:
+   - `FileUpload.data(_)` sources and `FileUpload.url(_)` sources **< 10 MB**: build body in memory via `MultipartBuilder.buildInMemory()`, upload via `session.uploadTask(with:from:delegate:)`
+   - `FileUpload.url(_)` sources **≥ 10 MB**: write multipart body to a temp file via `MultipartBuilder.buildToTempFile()`, upload via `session.uploadTask(with:fromFile:delegate:)`, delete temp file in `defer`
+   - This threshold is the existing `FileUpload.usesTempFileUpload` computed property (≥ 10 MB).
+4. Pass a `URLSessionTaskDelegate` to the upload task. Its `urlSession(_:task:didSendBodyData:totalBytesSent:totalBytesExpectedToSend:)` method yields `.progress(TransferProgress(bytesTransferred:totalBytes:))` events into the events continuation.
+5. On success, decode `FileUploadResponse` from the response body and yield `.completed(response)`; on error, yield `.failed(StorageError)`.
+6. `cancel()` cancels the underlying `URLSessionUploadTask` and finishes both continuations with a `.cancelled` error.
+7. `pause()` and `resume()` are no-ops — multipart is a single HTTP request.
 
 ### State
 
@@ -91,15 +92,26 @@ enum State {
 
 ### Factory
 
-`MultipartUploadEngine.makeTask(bucketId:path:source:options:client:) -> StorageUploadTask` — mirrors `TUSUploadEngine.makeTask`, wires up `AsyncStream` continuations, returns a `StorageUploadTask`.
+`MultipartUploadEngine.makeTask(bucketId:path:file:options:client:) -> StorageUploadTask` — wires up `AsyncStream` continuations and returns a `StorageUploadTask`. Takes a `FileUpload` (not `UploadSource`) as the source parameter, matching the existing multipart infrastructure.
 
 ---
 
-## UploadSource Extraction
+## Internal Source Representations
 
-`UploadSource` (currently defined inside `TUSUploadEngine.swift`) is moved to its own file `Sources/Storage/UploadSource.swift` so both `TUSUploadEngine` and `MultipartUploadEngine` can use it without cross-file internal access issues.
+The two engines use different internal source types — no sharing required:
 
-No changes to `UploadSource`'s interface or behaviour.
+- `TUSUploadEngine` keeps `UploadSource` (defined in `TUSUploadEngine.swift`) — designed for chunked reading.
+- `MultipartUploadEngine` takes a `FileUpload` — the existing abstraction used by `MultipartBuilder`.
+
+The smart default checks source size directly before dispatching, without a shared abstraction:
+
+```swift
+// data variant
+let size = data.count
+
+// fileURL variant
+let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
+```
 
 ---
 
@@ -146,9 +158,8 @@ The `update` variants are identical except `options.upsert` is forced to `true`.
 | Action | File |
 |--------|------|
 | Create | `Sources/Storage/MultipartUploadEngine.swift` |
-| Create | `Sources/Storage/UploadSource.swift` |
-| Modify | `Sources/Storage/TUSUploadEngine.swift` — remove `UploadSource`, import from new file |
-| Modify | `Sources/Storage/StorageFileAPI.swift` — add 8 new methods (`uploadMultipart`, `uploadResumable`, `updateMultipart`, `updateResumable` × 2 variants each), keep existing `upload`/`update` as smart defaults |
+| Modify | `Sources/Storage/StorageFileAPI.swift` — add 8 new methods (`uploadMultipart`, `uploadResumable`, `updateMultipart`, `updateResumable` × 2 variants each), keep existing `upload`/`update` as smart defaults; `FileUpload` and `MultipartBuilder` usage moves from the private `uploadMultipart` method into `MultipartUploadEngine` |
+| No change | `Sources/Storage/TUSUploadEngine.swift` — `UploadSource` stays here |
 
 ---
 
