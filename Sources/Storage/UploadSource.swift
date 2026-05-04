@@ -29,15 +29,35 @@ enum UploadSource: Sendable {
     }
   }
 
-  func readChunk(at offset: Int64, maxSize: Int) throws -> Data {
+  /// Opens a `FileHandle` for reading the file at `.fileURL`, or returns `nil` for `.data`.
+  /// The caller is responsible for closing the handle when done.
+  func openForReading() throws -> FileHandle? {
+    guard case .fileURL(let url) = self else { return nil }
+    return try FileHandle(forReadingFrom: url)
+  }
+
+  /// Reads a chunk from the source.
+  ///
+  /// Pass a pre-opened `fileHandle` (from ``openForReading()``) to avoid re-opening the file
+  /// on every chunk. When `fileHandle` is `nil` and the source is `.fileURL`, a temporary handle
+  /// is opened and closed for this call only.
+  func readChunk(at offset: Int64, maxSize: Int, fileHandle: FileHandle? = nil) throws -> Data {
     switch self {
     case .data(let d):
       let start = Int(offset)
       let end = min(start + maxSize, d.count)
       return d[start..<end]
     case .fileURL(let url):
-      let handle = try FileHandle(forReadingFrom: url)
-      defer { try? handle.close() }
+      let handle: FileHandle
+      let owned: Bool
+      if let fileHandle {
+        handle = fileHandle
+        owned = false
+      } else {
+        handle = try FileHandle(forReadingFrom: url)
+        owned = true
+      }
+      defer { if owned { try? handle.close() } }
       try handle.seek(toOffset: UInt64(offset))
       return try handle.read(upToCount: maxSize) ?? Data()
     }
