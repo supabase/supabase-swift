@@ -89,8 +89,10 @@ struct StorageErrorTests {
   }
 
   @Test func isNotFoundStatus400() {
+    // 400 is intentionally excluded from isNotFound — exists() handles it directly
+    // because the Storage server returns 400 (not 404) for HEAD on non-existent objects.
     let error = StorageError(message: "x", errorCode: .unknown, statusCode: 400)
-    #expect(error.isNotFound)
+    #expect(!error.isNotFound)
   }
 
   @Test func isNotFoundObjectNotFoundCode() {
