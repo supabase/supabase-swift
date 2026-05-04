@@ -106,7 +106,7 @@ import Testing
       resume: {},
       cancel: { cancelCalled.setValue(true) }
     )
-    task.cancel()
+    await task.cancel()
     #expect(cancelCalled.value)
   }
 

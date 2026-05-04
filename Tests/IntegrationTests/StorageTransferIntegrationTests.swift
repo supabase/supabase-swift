@@ -110,7 +110,7 @@ final class StorageTransferIntegrationTests {
       let path = "integration/cancelled-\(UUID().uuidString).bin"
 
       let task = storage.from(bucket).upload(path, data: data)
-      task.cancel()
+      await task.cancel()
 
       // Wait briefly to let the cancellation propagate
       do {
