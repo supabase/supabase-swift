@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 import Foundation
 import Helpers
 import InlineSnapshotTesting
@@ -510,124 +511,118 @@ struct StorageFileAPITests {
   }
 
   @Test func updateFromData() async throws {
+    let resumableURL = url.appendingPathComponent("upload/resumable")
+    let locationURL = url.appendingPathComponent("upload/resumable/test-id")
+
     Mock(
-      url: url.appendingPathComponent("object/bucket/file.txt"),
+      url: resumableURL,
+      contentType: .json,
+      statusCode: 201,
+      data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
+    ).register()
+
+    let patchResponseJSON = """
+      {"Key":"bucket/file.txt","Id":"eaa8bdb5-2e00-4767-b5a9-d2502efe2196"}
+      """
+    Mock(
+      url: locationURL,
+      contentType: .json,
       statusCode: 200,
-      data: [
-        .put: Data(
-          """
-          {
-            "Id": "eaa8bdb5-2e00-4767-b5a9-d2502efe2196",
-            "Key": "bucket/file.txt"
-          }
-          """.utf8
-        )
-      ]
+      data: [.patch: Data(patchResponseJSON.utf8)],
+      additionalHeaders: ["Upload-Offset": "11"]
+    ).register()
+
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+    var postMock = Mock(
+      url: resumableURL,
+      contentType: .json,
+      statusCode: 201,
+      data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
     )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request PUT \
-      	--header "Accept: application/json" \
-      	--header "Cache-Control: max-age=3600" \
-      	--header "Content-Length: 390" \
-      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "--alamofire.boundary.e56f43407f772505\#r
-      Content-Disposition: form-data; name=\"cacheControl\"\#r
-      \#r
-      3600\#r
-      --alamofire.boundary.e56f43407f772505\#r
-      Content-Disposition: form-data; name=\"metadata\"\#r
-      \#r
-      {\"mode\":\"test\"}\#r
-      --alamofire.boundary.e56f43407f772505\#r
-      Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-      Content-Type: text/plain\#r
-      \#r
-      hello world\#r
-      --alamofire.boundary.e56f43407f772505--\#r
-      " \
-      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
-      """#
-    }
-    .register()
+    postMock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedRequest.setValue(request)
+    })
+    postMock.register()
 
     let response = try await storage.from("bucket")
       .update(
         "file.txt",
-        data: Data("hello world".utf8),
-        options: FileOptions(
-          metadata: [
-            "mode": "test"
-          ]
-        )
-      )
+        data: Data("hello world".utf8)
+      ).result
 
-    #expect(response.id == UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-  @Test func updateFromURL() async throws {
-    Mock(
-      url: url.appendingPathComponent("object/bucket/file.txt"),
-      statusCode: 200,
-      data: [
-        .put: Data(
-          """
-          {
-            "Id": "eaa8bdb5-2e00-4767-b5a9-d2502efe2196",
-            "Key": "bucket/file.txt"
-          }
-          """.utf8
-        )
-      ]
+  @Test func updateSetsUpsertTrue() async throws {
+    let resumableURL = url.appendingPathComponent("upload/resumable")
+    let locationURL = url.appendingPathComponent("upload/resumable/test-id")
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+
+    var postMock = Mock(
+      url: resumableURL,
+      contentType: .json,
+      statusCode: 201,
+      data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
     )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request PUT \
-      	--header "Accept: application/json" \
-      	--header "Cache-Control: max-age=3600" \
-      	--header "Content-Length: 392" \
-      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
-      	--header "X-Client-Info: storage-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "--alamofire.boundary.e56f43407f772505\#r
-      Content-Disposition: form-data; name=\"cacheControl\"\#r
-      \#r
-      3600\#r
-      --alamofire.boundary.e56f43407f772505\#r
-      Content-Disposition: form-data; name=\"metadata\"\#r
-      \#r
-      {\"mode\":\"test\"}\#r
-      --alamofire.boundary.e56f43407f772505\#r
-      Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-      Content-Type: text/plain\#r
-      \#r
-      hello world!
-      \#r
-      --alamofire.boundary.e56f43407f772505--\#r
-      " \
-      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
-      """#
-    }
-    .register()
+    postMock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedRequest.setValue(request)
+    })
+    postMock.register()
+
+    let patchResponseJSON = """
+      {"Key":"bucket/file.txt","Id":"eaa8bdb5-2e00-4767-b5a9-d2502efe2196"}
+      """
+    Mock(
+      url: locationURL,
+      contentType: .json,
+      statusCode: 200,
+      data: [.patch: Data(patchResponseJSON.utf8)],
+      additionalHeaders: ["Upload-Offset": "5"]
+    ).register()
+
+    _ = try await storage.from("bucket")
+      .update("file.txt", data: Data("hello".utf8)).result
+
+    let request = try #require(capturedRequest.value)
+    #expect(request.value(forHTTPHeaderField: "x-upsert") == "true")
+  }
+
+  @Test func updateFromURL() async throws {
+    let resumableURL = url.appendingPathComponent("upload/resumable")
+    let locationURL = url.appendingPathComponent("upload/resumable/test-id")
+
+    Mock(
+      url: resumableURL,
+      contentType: .json,
+      statusCode: 201,
+      data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
+    ).register()
+
+    let fileContent = try Data(
+      contentsOf: Bundle.module.url(forResource: "file", withExtension: "txt")!
+    )
+    let patchResponseJSON = """
+      {"Key":"bucket/file.txt","Id":"eaa8bdb5-2e00-4767-b5a9-d2502efe2196"}
+      """
+    Mock(
+      url: locationURL,
+      contentType: .json,
+      statusCode: 200,
+      data: [.patch: Data(patchResponseJSON.utf8)],
+      additionalHeaders: ["Upload-Offset": "\(fileContent.count)"]
+    ).register()
 
     let response = try await storage.from("bucket")
       .update(
         "file.txt",
-        fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
-        options: FileOptions(
-          metadata: [
-            "mode": "test"
-          ]
-        )
-      )
+        fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!
+      ).result
 
-    #expect(response.id == UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
   }
@@ -998,7 +993,7 @@ struct StorageFileAPITests {
         "file.txt",
         token: "abc.def.ghi",
         data: Data("hello world".utf8)
-      )
+      ).result
 
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
@@ -1052,7 +1047,7 @@ struct StorageFileAPITests {
         "file.txt",
         token: "abc.def.ghi",
         fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!
-      )
+      ).result
 
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
@@ -1112,7 +1107,7 @@ struct StorageFileAPITests {
         "file.txt",
         token: "abc.def.ghi",
         fileURL: fileURL
-      )
+      ).result
 
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
@@ -1191,28 +1186,35 @@ struct StorageFileAPITests {
     )
   }
 
-  @Test func uploadWithProgressClosure() async throws {
-    Mock(
-      url: url.appendingPathComponent("object/bucket/file.txt"),
-      statusCode: 200,
-      data: [
-        .post: Data(
-          """
-          {
-            "Id": "eaa8bdb5-2e00-4767-b5a9-d2502efe2196",
-            "Key": "bucket/file.txt"
-          }
-          """.utf8
-        )
-      ]
-    )
-    .register()
+  @Test func uploadEmitsProgressEvents() async throws {
+    let resumableURL = url.appendingPathComponent("upload/resumable")
+    let locationURL = url.appendingPathComponent("upload/resumable/test-id")
 
-    let response = try await storage.from("bucket").upload(
+    Mock(
+      url: resumableURL,
+      contentType: .json,
+      statusCode: 201,
+      data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
+    ).register()
+
+    let patchResponseJSON = """
+      {"Key":"bucket/file.txt","Id":"eaa8bdb5-2e00-4767-b5a9-d2502efe2196"}
+      """
+    Mock(
+      url: locationURL,
+      contentType: .json,
+      statusCode: 200,
+      data: [.patch: Data(patchResponseJSON.utf8)],
+      additionalHeaders: ["Upload-Offset": "11"]
+    ).register()
+
+    let task = storage.from("bucket").upload(
       "file.txt",
-      data: Data("hello world".utf8),
-      progress: { _ in }
+      data: Data("hello world".utf8)
     )
+
+    let response = try await task.result
 
     #expect(response.id == UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
     #expect(response.path == "file.txt")
