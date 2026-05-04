@@ -627,15 +627,15 @@ struct StorageFileAPITests {
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-  @Test func download() {
+  @Test func download() async {
     let task = storage.from("bucket").download(path: "file.txt")
-    task.cancel()
+    await task.cancel()
   }
 
-  @Test func download_withEmptyTransformOptions() {
+  @Test func download_withEmptyTransformOptions() async {
     // Empty TransformOptions should still route to /object/authenticated/.
     let task = storage.from("bucket").download(path: "file.txt", options: TransformOptions())
-    task.cancel()
+    await task.cancel()
   }
 
   @Test func getPublicURL_withEmptyTransformOptions() throws {
@@ -662,14 +662,14 @@ struct StorageFileAPITests {
     )
   }
 
-  @Test func download_withOptions() {
+  @Test func download_withOptions() async {
     // Non-empty TransformOptions should route to /render/image/authenticated/.
     let task = storage.from("bucket")
       .download(
         path: "sadcat.txt",
         options: TransformOptions(format: .origin)
       )
-    task.cancel()
+    await task.cancel()
   }
 
   @Test func info() async throws {
@@ -1134,9 +1134,9 @@ struct StorageFileAPITests {
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-  @Test func downloadData() {
+  @Test func downloadData() async {
     // downloadData is a convenience wrapper over download that maps the URL result to Data.
     let task = storage.from("bucket").downloadData(path: "file.txt")
-    task.cancel()
+    await task.cancel()
   }
 }

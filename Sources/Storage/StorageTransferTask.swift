@@ -19,16 +19,16 @@ public final class StorageTransferTask<Success: Sendable>: Sendable {
   public let events: AsyncStream<TransferEvent<Success>>
 
   private let _resultTask: Task<Success, any Error>
-  private let _pause: @Sendable () -> Void
-  private let _resume: @Sendable () -> Void
-  private let _cancel: @Sendable () -> Void
+  private let _pause: @Sendable () async -> Void
+  private let _resume: @Sendable () async -> Void
+  private let _cancel: @Sendable () async -> Void
 
   init(
     events: AsyncStream<TransferEvent<Success>>,
     resultTask: Task<Success, any Error>,
-    pause: @Sendable @escaping () -> Void,
-    resume: @Sendable @escaping () -> Void,
-    cancel: @Sendable @escaping () -> Void
+    pause: @Sendable @escaping () async -> Void,
+    resume: @Sendable @escaping () async -> Void,
+    cancel: @Sendable @escaping () async -> Void
   ) {
     self.events = events
     self._resultTask = resultTask
@@ -50,14 +50,14 @@ public final class StorageTransferTask<Success: Sendable>: Sendable {
   }
 
   /// Suspends the transfer. For uploads: completes the current in-flight chunk first.
-  public func pause() { _pause() }
+  public func pause() async { await _pause() }
 
   /// Resumes a paused transfer. For uploads: HEADs the server to re-sync offset first.
-  public func resume() { _resume() }
+  public func resume() async { await _resume() }
 
   /// Cancels the transfer immediately.
-  public func cancel() {
-    _cancel()
+  public func cancel() async {
+    await _cancel()
     _resultTask.cancel()
   }
 }
@@ -112,7 +112,7 @@ extension StorageTransferTask {
       pause: self._pause,
       resume: self._resume,
       cancel: {
-        self._cancel()
+        await self._cancel()
         bridgeTask.cancel()
       }
     )
