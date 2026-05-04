@@ -179,3 +179,29 @@ extension StorageError: LocalizedError {
     message
   }
 }
+
+extension StorageErrorCode {
+  // MARK: - Transfer errors (client-side)
+
+  /// A network error occurred during a transfer (transient; retriable on resume).
+  public static let networkError = StorageErrorCode("NetworkError")
+  /// A file system operation (move or read) failed during a transfer.
+  public static let fileSystemError = StorageErrorCode("FileSystemError")
+  /// The transfer was explicitly cancelled or the enclosing Swift Task was cancelled.
+  public static let cancelled = StorageErrorCode("Cancelled")
+}
+
+extension StorageError {
+  static func networkError(underlying: any Error) -> StorageError {
+    StorageError(message: underlying.localizedDescription, errorCode: .networkError)
+  }
+
+  static func fileSystemError(underlying: any Error) -> StorageError {
+    StorageError(message: underlying.localizedDescription, errorCode: .fileSystemError)
+  }
+
+  static let cancelled = StorageError(
+    message: "Transfer was cancelled",
+    errorCode: .cancelled
+  )
+}
