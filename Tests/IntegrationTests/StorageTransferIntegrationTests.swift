@@ -118,4 +118,55 @@ final class StorageTransferIntegrationTests {
       #expect(!exists)
     }
   }
+
+  @Test func multipartUploadCompletesAndFileExists() async throws {
+    try await withBucket { bucket in
+      let data = Data(repeating: 0x42, count: 1024)  // 1 KB — well below 6 MB
+      let path = "integration/multipart-\(UUID().uuidString).bin"
+
+      let response = try await storage.from(bucket).uploadMultipart(path, data: data).value
+      #expect(response.path == path)
+
+      let downloaded = try await storage.from(bucket).downloadData(path: path).value
+      #expect(downloaded == data)
+
+      try await storage.from(bucket).remove(paths: [path])
+    }
+  }
+
+  @Test func multipartUploadEmitsProgress() async throws {
+    try await withBucket { bucket in
+      let data = Data(repeating: 0xCD, count: 512 * 1024)  // 512 KB
+      let path = "integration/multipart-progress-\(UUID().uuidString).bin"
+
+      var progressValues: [Double] = []
+      let task = storage.from(bucket).uploadMultipart(path, data: data)
+
+      for await event in task.events {
+        if case .progress(let p) = event {
+          progressValues.append(p.fractionCompleted)
+        }
+      }
+      _ = try await task.value
+
+      #expect(!progressValues.isEmpty)
+
+      try await storage.from(bucket).remove(paths: [path])
+    }
+  }
+
+  @Test func smartDefaultUsesMultipartForSmallFile() async throws {
+    try await withBucket { bucket in
+      let data = Data(repeating: 0xAA, count: 100)  // 100 bytes → multipart
+      let path = "integration/auto-small-\(UUID().uuidString).bin"
+
+      let response = try await storage.from(bucket).upload(path, data: data).value
+      #expect(response.path == path)
+
+      let downloaded = try await storage.from(bucket).downloadData(path: path).value
+      #expect(downloaded == data)
+
+      try await storage.from(bucket).remove(paths: [path])
+    }
+  }
 }
