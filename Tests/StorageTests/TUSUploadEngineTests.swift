@@ -16,6 +16,26 @@ import Testing
   import FoundationNetworking
 #endif
 
+@Suite struct TUSUploadEngineStateTests {
+  let dummyURL = URL(string: "https://example.supabase.co/upload/1")!
+  let dummyResponse = FileUploadResponse(
+    id: UUID(), path: "f.txt", fullPath: "bucket/f.txt")
+  let dummyError = StorageError(message: "oops", errorCode: .unknown)
+
+  @Test func nonTerminalStatesReturnFalse() {
+    #expect(!TUSUploadEngine.State.idle.isTerminal)
+    #expect(!TUSUploadEngine.State.creating.isTerminal)
+    #expect(!TUSUploadEngine.State.uploading(uploadURL: dummyURL, offset: 0).isTerminal)
+    #expect(!TUSUploadEngine.State.paused(uploadURL: dummyURL, offset: 0).isTerminal)
+  }
+
+  @Test func terminalStatesReturnTrue() {
+    #expect(TUSUploadEngine.State.completed(dummyResponse).isTerminal)
+    #expect(TUSUploadEngine.State.failed(dummyError).isTerminal)
+    #expect(TUSUploadEngine.State.cancelled.isTerminal)
+  }
+}
+
 @Suite(.serialized) struct TUSUploadEngineTests {
 
   let baseURL = URL(string: "https://example.supabase.co/storage/v1")!
