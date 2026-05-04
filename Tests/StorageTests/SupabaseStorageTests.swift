@@ -165,7 +165,7 @@ struct SupabaseStorageTests {
             cacheControl: "14400",
             metadata: ["key": "value"]
           )
-        ).result
+        ).value
 
       let createRequest = try #require(capturedCreateRequest.value)
       #expect(createRequest.value(forHTTPHeaderField: "Tus-Resumable") == "1.0.0")
@@ -227,7 +227,7 @@ struct SupabaseStorageTests {
           options: FileOptions(
             metadata: ["key": "value"]
           )
-        ).result
+        ).value
 
       let createRequest = try #require(capturedCreateRequest.value)
       #expect(createRequest.value(forHTTPHeaderField: "Tus-Resumable") == "1.0.0")

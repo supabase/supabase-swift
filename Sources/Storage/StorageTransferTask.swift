@@ -12,8 +12,8 @@ import Foundation
 /// Tasks start immediately on creation and are `@discardableResult` — fire-and-forget works
 /// without holding a reference. Hold the task to observe progress or control execution.
 ///
-/// Both `.events` and `.result` are independent: consuming one does not affect the other.
-public final class StorageTransferTask<Success: Sendable>: @unchecked Sendable {
+/// Both `.events` and `.value` are independent: consuming one does not affect the other.
+public final class StorageTransferTask<Success: Sendable>: Sendable {
 
   /// A stream of transfer events. Finishes after `.completed` or `.failed`.
   public let events: AsyncStream<TransferEvent<Success>>
@@ -37,10 +37,16 @@ public final class StorageTransferTask<Success: Sendable>: @unchecked Sendable {
     self._cancel = cancel
   }
 
-  /// Awaits the final result. Safe for concurrent callers — backed by `Task.value`.
-  /// Throws `StorageError` on failure or cancellation.
-  public var result: Success {
-    get async throws { try await _resultTask.value }
+  /// The transfer outcome as a `Result`. Never throws — inspect `.success` / `.failure` directly.
+  /// Safe for concurrent callers — backed by `Task.result`.
+  public var result: Result<Success, any Error> {
+    get async { await _resultTask.result }
+  }
+
+  /// Awaits the success value. Throws `StorageError` on failure or cancellation.
+  /// Safe for concurrent callers — backed by `Task.value`.
+  public var value: Success {
+    get async throws { try await result.get() }
   }
 
   /// Suspends the transfer. For uploads: completes the current in-flight chunk first.
