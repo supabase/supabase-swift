@@ -675,7 +675,7 @@ public enum DownloadBehavior: Sendable {
 /// Options for on-the-fly image transformation via the Supabase Storage image transformation API.
 ///
 /// Use `TransformOptions` when calling
-/// ``StorageFileAPI/download(path:options:query:cacheNonce:)`` or
+/// ``StorageFileAPI/download(path:options:)`` or
 /// ``StorageFileAPI/getPublicURL(path:download:options:cacheNonce:)`` to resize, reformat, or
 /// adjust the quality of images before they are served to the client.
 ///

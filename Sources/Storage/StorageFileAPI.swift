@@ -106,8 +106,10 @@ enum FileUpload {
 /// // Upload
 /// let response = try await bucket.upload("user-123/photo.png", data: imageData)
 ///
-/// // Download
-/// let data = try await bucket.download(path: "user-123/photo.png")
+/// // Download to disk
+/// let url = try await bucket.download(path: "user-123/photo.png").result
+/// // Or download into memory
+/// let data = try await bucket.downloadData(path: "user-123/photo.png").result
 ///
 /// // Public URL (public bucket)
 /// let url = try bucket.getPublicURL(path: "user-123/photo.png")
@@ -600,60 +602,66 @@ public struct StorageFileAPI: Sendable {
     )
   }
 
-  /// Downloads a file from the bucket and returns its raw bytes.
+  /// Downloads a file to a temporary location on disk.
   ///
-  /// Use this method for files in private buckets. For public buckets, construct a URL with
-  /// ``getPublicURL(path:download:options:cacheNonce:)`` and fetch it directly instead —
-  /// it avoids routing the bytes through the SDK.
+  /// The `.completed` event delivers a `URL` to a temporary file. Move the file before
+  /// the app exits — it is not guaranteed to persist.
+  ///
+  /// When ``StorageClientConfiguration/backgroundDownloadSessionIdentifier`` is set, the
+  /// transfer continues while the app is suspended.
   ///
   /// - Parameters:
-  ///   - path: The path of the file to download, e.g. `"folder/image.png"`.
-  ///   - options: Optional on-the-fly image transformation applied before the file is served.
-  ///     When non-`nil` and non-empty, the request is routed through the image rendering pipeline.
-  ///   - additionalQueryItems: Extra URL query parameters appended to the download request.
-  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter for cache
-  ///     invalidation.
-  /// - Returns: The raw file data.
-  /// - Throws: ``StorageError`` if the file does not exist or the request fails.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// // Download raw file
-  /// let data = try await storage.from("private-docs").download(path: "user-123/report.pdf")
-  ///
-  /// // Download with image transformation
-  /// let thumbnail = try await storage.from("photos").download(
-  ///   path: "gallery/hero.jpg",
-  ///   options: TransformOptions(width: 100, height: 100, resize: .cover)
-  /// )
-  /// ```
+  ///   - path: Path within the bucket, e.g. `"folder/image.png"`.
+  ///   - options: Optional image transform parameters.
+  /// - Returns: A ``StorageDownloadTask`` whose `.completed` value is a `URL` on disk.
   @discardableResult
-  public func download(
-    path: String,
-    options: TransformOptions? = nil,
-    query additionalQueryItems: [URLQueryItem]? = nil,
-    cacheNonce: String? = nil
-  ) async throws -> Data {
-    var queryItems = options?.queryItems ?? []
-    let renderPath =
-      options.map { !$0.isEmpty } == true
-      ? "render/image/authenticated" : "object"
-    let _path = _getFinalPath(path)
-
-    if let additionalQueryItems {
-      queryItems.append(contentsOf: additionalQueryItems)
+  public func download(path: String, options: TransformOptions? = nil) -> StorageDownloadTask {
+    var request = URLRequest(url: _downloadURL(path: path, options: options))
+    for (key, value) in client.mergedHeaders([:]) {
+      request.setValue(value, forHTTPHeaderField: key)
     }
-
-    if let cacheNonce {
-      queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
-    }
-
-    let (data, _) = try await client.fetchData(
-      .get,
-      url: storageURL(path: "\(renderPath)/\(_path)", queryItems: queryItems)
+    return client.downloadDelegate.makeStorageDownloadTask(
+      in: client.downloadSession,
+      request: request
     )
-    return data
+  }
+
+  /// Downloads a file into memory.
+  ///
+  /// Not background-capable. For large files or background transfers, use ``download(path:options:)``.
+  ///
+  /// - Parameters:
+  ///   - path: Path within the bucket.
+  ///   - options: Optional image transform parameters.
+  /// - Returns: A task whose `.completed` value is the file `Data`.
+  @discardableResult
+  public func downloadData(path: String, options: TransformOptions? = nil) -> StorageTransferTask<
+    Data
+  > {
+    download(path: path, options: options).mapResult { url in
+      let data = try Data(contentsOf: url)
+      try? FileManager.default.removeItem(at: url)
+      return data
+    }
+  }
+
+  private func _downloadURL(path: String, options: TransformOptions?) -> URL {
+    let finalPath = _getFinalPath(_removeEmptyFolders(path))
+
+    if let options, !options.isEmpty {
+      var components = URLComponents(
+        url: client.url.appendingPathComponent(
+          "render/image/authenticated/\(finalPath)"
+        ),
+        resolvingAgainstBaseURL: false
+      )
+      components?.queryItems = options.queryItems
+      return components?.url
+        ?? client.url.appendingPathComponent(
+          "render/image/authenticated/\(finalPath)"
+        )
+    }
+    return client.url.appendingPathComponent("object/authenticated/\(finalPath)")
   }
 
   /// Retrieves extended metadata for a file without downloading its contents.
