@@ -107,8 +107,8 @@ import Testing
   }
 
   @Test func sendsTwoChunksForDataLargerThanChunkSize() async throws {
-    tusChunkSize = 3
-    defer { tusChunkSize = 6 * 1024 * 1024 }
+    tusChunkSize.withValue { $0 = 3 }
+    defer { tusChunkSize.withValue { $0 = 6 * 1024 * 1024 } }
 
     let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
     let finalResponse = try makeTUSServerResponseData(path: "f.txt", fullPath: "bucket/f.txt")
@@ -143,8 +143,8 @@ import Testing
   }
 
   @Test func emitsProgressEventsPerChunk() async throws {
-    tusChunkSize = 3
-    defer { tusChunkSize = 6 * 1024 * 1024 }
+    tusChunkSize.withValue { $0 = 3 }
+    defer { tusChunkSize.withValue { $0 = 6 * 1024 * 1024 } }
 
     let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
     let finalResponse = try makeTUSServerResponseData(path: "f.bin", fullPath: "bucket/f.bin")
@@ -181,8 +181,8 @@ import Testing
 
   @Test func cancelMidUploadEmitsCancelledEvent() async throws {
     HangingMockProtocol.resetHang()
-    tusChunkSize = 3
-    defer { tusChunkSize = 6 * 1024 * 1024 }
+    tusChunkSize.withValue { $0 = 3 }
+    defer { tusChunkSize.withValue { $0 = 6 * 1024 * 1024 } }
 
     HangingMockProtocol.postResponse = (201, ["Location": locationURL.absoluteString], Data())
     defer { HangingMockProtocol.postResponse = nil }
@@ -210,7 +210,7 @@ import Testing
     Task {
       var iter = HangingMockProtocol.nextPatchHang.makeAsyncIterator()
       _ = await iter.next()
-      task.cancel()
+      await task.cancel()
     }
 
     var events: [TransferEvent<FileUploadResponse>] = []
@@ -226,8 +226,8 @@ import Testing
 
   @Test func cancelledTaskResultThrows() async throws {
     HangingMockProtocol.resetHang()
-    tusChunkSize = 3
-    defer { tusChunkSize = 6 * 1024 * 1024 }
+    tusChunkSize.withValue { $0 = 3 }
+    defer { tusChunkSize.withValue { $0 = 6 * 1024 * 1024 } }
 
     HangingMockProtocol.postResponse = (201, ["Location": locationURL.absoluteString], Data())
     defer { HangingMockProtocol.postResponse = nil }
@@ -255,7 +255,7 @@ import Testing
     Task {
       var iter = HangingMockProtocol.nextPatchHang.makeAsyncIterator()
       _ = await iter.next()
-      task.cancel()
+      await task.cancel()
     }
 
     do {
@@ -267,8 +267,8 @@ import Testing
   }
 
   @Test func resumeAfterPauseSyncsOffsetViaHEAD() async throws {
-    tusChunkSize = 3
-    defer { tusChunkSize = 6 * 1024 * 1024 }
+    tusChunkSize.withValue { $0 = 3 }
+    defer { tusChunkSize.withValue { $0 = 6 * 1024 * 1024 } }
 
     let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
     let finalResponse = try makeTUSServerResponseData(path: "r.txt", fullPath: "bucket/r.txt")
@@ -293,7 +293,7 @@ import Testing
     var iter = SequentialMockProtocol.nextHang.makeAsyncIterator()
     _ = await iter.next()
 
-    task.pause()
+    await task.pause()
 
     // Wait until the hanging request is actually cancelled (stopLoading called),
     // confirming the pause has fully propagated through the engine actor.
@@ -306,7 +306,7 @@ import Testing
     SequentialMockProtocol.appendResponse((200, ["Upload-Offset": "3"], Data()))  // HEAD
     SequentialMockProtocol.appendResponse((200, ["Upload-Offset": "5"], finalResponse))  // PATCH 2
 
-    task.resume()
+    await task.resume()
 
     let response = try await task.value
     #expect(response.path == "r.txt")
