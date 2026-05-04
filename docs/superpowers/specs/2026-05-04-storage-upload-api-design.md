@@ -92,26 +92,33 @@ enum State {
 
 ### Factory
 
-`MultipartUploadEngine.makeTask(bucketId:path:file:options:client:) -> StorageUploadTask` — wires up `AsyncStream` continuations and returns a `StorageUploadTask`. Takes a `FileUpload` (not `UploadSource`) as the source parameter, matching the existing multipart infrastructure.
+`MultipartUploadEngine.makeTask(bucketId:path:source:options:client:) -> StorageUploadTask` — wires up `AsyncStream` continuations and returns a `StorageUploadTask`. Takes `UploadSource` as the source parameter.
 
 ---
 
-## Internal Source Representations
+## Unified UploadSource
 
-The two engines use different internal source types — no sharing required:
+`FileUpload` (in `StorageFileAPI.swift`) and `UploadSource` (in `TUSUploadEngine.swift`) serve the same purpose — wrapping a `Data` or `fileURL` source — and are merged into a single `UploadSource` type in a new `Sources/Storage/UploadSource.swift`.
 
-- `TUSUploadEngine` keeps `UploadSource` (defined in `TUSUploadEngine.swift`) — designed for chunked reading.
-- `MultipartUploadEngine` takes a `FileUpload` — the existing abstraction used by `MultipartBuilder`.
-
-The smart default checks source size directly before dispatching, without a shared abstraction:
+The merged type combines all capabilities from both:
 
 ```swift
-// data variant
-let size = data.count
+enum UploadSource: Sendable {
+  case data(Data)
+  case fileURL(URL)
 
-// fileURL variant
-let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
+  // From UploadSource — used by TUSUploadEngine
+  func totalBytes() throws -> Int64
+  func readChunk(at offset: Int64, maxSize: Int) throws -> Data
+
+  // From FileUpload — used by MultipartUploadEngine
+  func append(to builder: MultipartBuilder, withPath path: String, options: FileOptions) -> MultipartBuilder
+  var usesTempFileUpload: Bool { get throws }   // true for fileURL sources ≥ 10 MB
+  func defaultOptions() -> FileOptions
+}
 ```
+
+`FileUpload` is removed entirely. All callers updated to use `UploadSource`. The smart default and both engines all take `UploadSource`.
 
 ---
 
@@ -157,9 +164,10 @@ The `update` variants are identical except `options.upsert` is forced to `true`.
 
 | Action | File |
 |--------|------|
+| Create | `Sources/Storage/UploadSource.swift` — merged `FileUpload` + `UploadSource` type |
 | Create | `Sources/Storage/MultipartUploadEngine.swift` |
-| Modify | `Sources/Storage/StorageFileAPI.swift` — add 8 new methods (`uploadMultipart`, `uploadResumable`, `updateMultipart`, `updateResumable` × 2 variants each), keep existing `upload`/`update` as smart defaults; `FileUpload` and `MultipartBuilder` usage moves from the private `uploadMultipart` method into `MultipartUploadEngine` |
-| No change | `Sources/Storage/TUSUploadEngine.swift` — `UploadSource` stays here |
+| Modify | `Sources/Storage/TUSUploadEngine.swift` — remove `UploadSource` definition, import from new file |
+| Modify | `Sources/Storage/StorageFileAPI.swift` — remove `FileUpload` definition; add 8 new methods; keep `upload`/`update` as smart defaults |
 
 ---
 
