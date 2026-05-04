@@ -197,7 +197,7 @@ struct FileUploadView: View {
 
       let response = try await supabase.storage
         .from(selectedBucket)
-        .upload(filePath, data: imageData, options: options)
+        .upload(filePath, data: imageData, options: options).value
 
       uploadedPath = response.path
       uploadProgress = 1.0
@@ -235,7 +235,7 @@ struct FileUploadView: View {
 
       let response = try await supabase.storage
         .from(selectedBucket)
-        .upload(filePath, fileURL: selectedDocument, options: options)
+        .upload(filePath, fileURL: selectedDocument, options: options).value
 
       uploadedPath = response.path
       uploadProgress = 1.0
@@ -277,7 +277,7 @@ struct FileUploadView: View {
 
       let response = try await supabase.storage
         .from(selectedBucket)
-        .upload(filePath, data: data, options: options)
+        .upload(filePath, data: data, options: options).value
 
       uploadedPath = response.path
       uploadProgress = 1.0
