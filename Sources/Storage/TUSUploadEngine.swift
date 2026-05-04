@@ -37,23 +37,17 @@ enum UploadSource: Sendable {
     }
   }
 
-  func openFileHandle() throws -> FileHandle? {
-    guard case .fileURL(let url) = self else { return nil }
-    return try FileHandle(forReadingFrom: url)
-  }
-
-  func readChunk(at offset: Int64, maxSize: Int, fileHandle: FileHandle? = nil) throws -> Data {
+  func readChunk(at offset: Int64, maxSize: Int) throws -> Data {
     switch self {
     case .data(let d):
       let start = Int(offset)
       let end = min(start + maxSize, d.count)
       return d[start..<end]
-    case .fileURL:
-      guard let fileHandle else {
-        throw StorageError(message: "FileHandle not open", errorCode: .fileSystemError)
-      }
-      try fileHandle.seek(toOffset: UInt64(offset))
-      return try fileHandle.read(upToCount: maxSize) ?? Data()
+    case .fileURL(let url):
+      let handle = try FileHandle(forReadingFrom: url)
+      defer { try? handle.close() }
+      try handle.seek(toOffset: UInt64(offset))
+      return try handle.read(upToCount: maxSize) ?? Data()
     }
   }
 }
@@ -79,7 +73,6 @@ actor TUSUploadEngine {
 
   private var state: State = .idle
   private var currentUploadTask: Task<Void, Never>?
-  private var fileHandle: FileHandle?
 
   init(
     bucketId: String,
@@ -102,7 +95,6 @@ actor TUSUploadEngine {
   func start() {
     guard case .idle = state else { return }
     state = .creating
-    fileHandle = try? source.openFileHandle()
     currentUploadTask = Task { await run() }
   }
 
@@ -129,7 +121,6 @@ actor TUSUploadEngine {
   func cancel() {
     currentUploadTask?.cancel()
     state = .cancelled
-    closeFileHandle()
     let error = StorageError.cancelled
     eventsContinuation.yield(.failed(error))
     eventsContinuation.finish()
@@ -184,13 +175,7 @@ actor TUSUploadEngine {
     }
   }
 
-  private func closeFileHandle() {
-    try? fileHandle?.close()
-    fileHandle = nil
-  }
-
   private func finish(with result: Result<FileUploadResponse, any Error>) {
-    closeFileHandle()
     switch result {
     case .success(let response):
       state = .completed(response)
@@ -258,8 +243,7 @@ actor TUSUploadEngine {
     while offset < totalBytes {
       try Task.checkCancellation()
 
-      let chunk = try source.readChunk(
-        at: offset, maxSize: tusChunkSize.value, fileHandle: fileHandle)
+      let chunk = try source.readChunk(at: offset, maxSize: tusChunkSize.value)
       guard !chunk.isEmpty else {
         throw StorageError(
           message: "Unexpected end of source data at offset \(offset)",
