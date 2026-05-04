@@ -66,7 +66,7 @@ extension StorageTransferTask {
     let (resultStream, resultContinuation) = AsyncStream<Result<NewSuccess, any Error>>.makeStream(
       bufferingPolicy: .bufferingNewest(1))
 
-    Task {
+    let bridgeTask = Task {
       for await event in self.events {
         switch event {
         case .progress(let p):
@@ -102,7 +102,10 @@ extension StorageTransferTask {
       resultTask: newResultTask,
       pause: self._pause,
       resume: self._resume,
-      cancel: self._cancel
+      cancel: {
+        self._cancel()
+        bridgeTask.cancel()
+      }
     )
   }
 }
@@ -110,6 +113,7 @@ extension StorageTransferTask {
 /// An event emitted during a transfer.
 public enum TransferEvent<Success: Sendable>: Sendable {
   case progress(TransferProgress)
+  /// Terminal — the stream ends after this event.
   case completed(Success)
   /// Terminal — the stream ends after this event.
   case failed(StorageError)
