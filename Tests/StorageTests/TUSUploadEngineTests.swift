@@ -179,6 +179,87 @@ import Testing
     #expect(progressFractions[1] == 1.0)
   }
 
+  @Test func cancelMidUploadEmitsCancelledEvent() async throws {
+    tusChunkSize = 3
+    defer { tusChunkSize = 6 * 1024 * 1024 }
+
+    HangingMockProtocol.postResponse = (201, ["Location": locationURL.absoluteString], Data())
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [HangingMockProtocol.self]
+    let hangingClient = StorageClient(
+      url: baseURL,
+      configuration: StorageClientConfiguration(
+        headers: ["Authorization": "Bearer test-token"],
+        session: URLSession(configuration: config)
+      )
+    )
+
+    let data = Data("hello".utf8)  // 5 bytes, 2 chunks
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "big.bin",
+      source: .data(data),
+      options: FileOptions(contentType: "application/octet-stream"),
+      client: hangingClient
+    )
+
+    // Cancel after POST completes and first PATCH starts hanging
+    Task {
+      try? await Task.sleep(for: .milliseconds(500))
+      task.cancel()
+    }
+
+    var lastEvent: TransferEvent<FileUploadResponse>?
+    for await event in task.events {
+      lastEvent = event
+    }
+
+    if case .failed(let error) = lastEvent {
+      #expect(error.errorCode == .cancelled)
+    } else {
+      Issue.record("Expected .failed(.cancelled), got \(String(describing: lastEvent))")
+    }
+  }
+
+  @Test func cancelledTaskResultThrows() async throws {
+    tusChunkSize = 3
+    defer { tusChunkSize = 6 * 1024 * 1024 }
+
+    HangingMockProtocol.postResponse = (201, ["Location": locationURL.absoluteString], Data())
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [HangingMockProtocol.self]
+    let hangingClient = StorageClient(
+      url: baseURL,
+      configuration: StorageClientConfiguration(
+        headers: ["Authorization": "Bearer test-token"],
+        session: URLSession(configuration: config)
+      )
+    )
+
+    let data = Data("hello".utf8)
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "big.bin",
+      source: .data(data),
+      options: FileOptions(contentType: "application/octet-stream"),
+      client: hangingClient
+    )
+
+    Task {
+      try? await Task.sleep(for: .milliseconds(500))
+      task.cancel()
+    }
+
+    do {
+      _ = try await task.result
+      Issue.record("Expected throw")
+    } catch let error as StorageError {
+      #expect(error.errorCode == .cancelled)
+    }
+  }
+
   @Test func resyncesOffsetOn409() async throws {
     let data = Data(repeating: 0x01, count: 100)
     let headCount = LockIsolated(0)
@@ -275,6 +356,36 @@ final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
       return
     }
     let resp = Self.responses[index]
+    let httpResponse = HTTPURLResponse(
+      url: request.url!,
+      statusCode: resp.statusCode,
+      httpVersion: nil,
+      headerFields: resp.headers
+    )!
+    client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: resp.data)
+    client?.urlProtocolDidFinishLoading(self)
+  }
+
+  override func stopLoading() {}
+}
+
+// MARK: - HangingMockProtocol
+
+/// Hangs all PATCH/HEAD requests indefinitely (until cancelled). POST requests respond
+/// immediately with `postResponse`. Use this to test task cancellation mid-upload.
+final class HangingMockProtocol: URLProtocol, @unchecked Sendable {
+  nonisolated(unsafe) static var postResponse:
+    (statusCode: Int, headers: [String: String], data: Data)?
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    guard request.httpMethod == "POST", let resp = Self.postResponse else {
+      // For PATCH/HEAD: hang indefinitely until the task is cancelled
+      return
+    }
     let httpResponse = HTTPURLResponse(
       url: request.url!,
       statusCode: resp.statusCode,
