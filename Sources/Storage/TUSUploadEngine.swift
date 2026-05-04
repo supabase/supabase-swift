@@ -15,10 +15,6 @@ import Helpers
 
 package let tusChunkSize = LockIsolated(6 * 1024 * 1024)  // 6 MB — Supabase/S3 minimum
 
-private struct TUSUploadServerResponse: Decodable {
-  let Key: String
-  let Id: UUID
-}
 
 enum UploadSource: Sendable {
   case data(Data)
@@ -293,11 +289,11 @@ actor TUSUploadEngine {
           )))
 
       if offset == totalBytes {
-        let serverResponse = try JSONDecoder().decode(TUSUploadServerResponse.self, from: data)
+        let id = extractUploadId(from: uploadURL) ?? UUID()
         let uploadResponse = FileUploadResponse(
-          id: serverResponse.Id,
+          id: id,
           path: path,
-          fullPath: serverResponse.Key
+          fullPath: "\(bucketId)/\(path)"
         )
         finish(with: .success(uploadResponse))
         return
@@ -311,6 +307,19 @@ actor TUSUploadEngine {
 
   private func makeRequest(url: URL, method: HTTPMethod) async throws -> URLRequest {
     try await client.http.createRequest(method, url: url, headers: client.mergedHeaders())
+  }
+
+  // The upload URL last path component is base64("{bucket}/{path}/{uuid}").
+  // Extract the UUID so it can be included in the FileUploadResponse.
+  private func extractUploadId(from uploadURL: URL) -> UUID? {
+    guard let encoded = uploadURL.pathComponents.last else { return nil }
+    let padded = encoded + String(repeating: "=", count: (4 - encoded.count % 4) % 4)
+    guard
+      let data = Data(base64Encoded: padded),
+      let decoded = String(data: data, encoding: .utf8),
+      let uuidString = decoded.components(separatedBy: "/").last
+    else { return nil }
+    return UUID(uuidString: uuidString)
   }
 
   private func tusMetadata() -> String {

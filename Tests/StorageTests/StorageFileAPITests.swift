@@ -512,7 +512,7 @@ struct StorageFileAPITests {
 
   @Test func updateFromData() async throws {
     let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent("upload/resumable/test-id")
+    let locationURL = url.appendingPathComponent("upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
 
     Mock(
       url: resumableURL,
@@ -522,14 +522,11 @@ struct StorageFileAPITests {
       additionalHeaders: ["Location": locationURL.absoluteString]
     ).register()
 
-    let patchResponseJSON = """
-      {"Key":"bucket/file.txt","Id":"eaa8bdb5-2e00-4767-b5a9-d2502efe2196"}
-      """
     Mock(
       url: locationURL,
       contentType: .json,
-      statusCode: 200,
-      data: [.patch: Data(patchResponseJSON.utf8)],
+      statusCode: 204,
+      data: [.patch: Data()],
       additionalHeaders: ["Upload-Offset": "11"]
     ).register()
 
@@ -558,7 +555,7 @@ struct StorageFileAPITests {
 
   @Test func updateSetsUpsertTrue() async throws {
     let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent("upload/resumable/test-id")
+    let locationURL = url.appendingPathComponent("upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
     let capturedRequest = LockIsolated<URLRequest?>(nil)
 
     var postMock = Mock(
@@ -573,14 +570,11 @@ struct StorageFileAPITests {
     })
     postMock.register()
 
-    let patchResponseJSON = """
-      {"Key":"bucket/file.txt","Id":"eaa8bdb5-2e00-4767-b5a9-d2502efe2196"}
-      """
     Mock(
       url: locationURL,
       contentType: .json,
-      statusCode: 200,
-      data: [.patch: Data(patchResponseJSON.utf8)],
+      statusCode: 204,
+      data: [.patch: Data()],
       additionalHeaders: ["Upload-Offset": "5"]
     ).register()
 
@@ -593,7 +587,7 @@ struct StorageFileAPITests {
 
   @Test func updateFromURL() async throws {
     let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent("upload/resumable/test-id")
+    let locationURL = url.appendingPathComponent("upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
 
     Mock(
       url: resumableURL,
@@ -606,14 +600,11 @@ struct StorageFileAPITests {
     let fileContent = try Data(
       contentsOf: Bundle.module.url(forResource: "file", withExtension: "txt")!
     )
-    let patchResponseJSON = """
-      {"Key":"bucket/file.txt","Id":"eaa8bdb5-2e00-4767-b5a9-d2502efe2196"}
-      """
     Mock(
       url: locationURL,
       contentType: .json,
-      statusCode: 200,
-      data: [.patch: Data(patchResponseJSON.utf8)],
+      statusCode: 204,
+      data: [.patch: Data()],
       additionalHeaders: ["Upload-Offset": "\(fileContent.count)"]
     ).register()
 
@@ -1101,7 +1092,7 @@ struct StorageFileAPITests {
 
   @Test func uploadEmitsProgressEvents() async throws {
     let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent("upload/resumable/test-id")
+    let locationURL = url.appendingPathComponent("upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
 
     Mock(
       url: resumableURL,
@@ -1111,14 +1102,11 @@ struct StorageFileAPITests {
       additionalHeaders: ["Location": locationURL.absoluteString]
     ).register()
 
-    let patchResponseJSON = """
-      {"Key":"bucket/file.txt","Id":"eaa8bdb5-2e00-4767-b5a9-d2502efe2196"}
-      """
     Mock(
       url: locationURL,
       contentType: .json,
-      statusCode: 200,
-      data: [.patch: Data(patchResponseJSON.utf8)],
+      statusCode: 204,
+      data: [.patch: Data()],
       additionalHeaders: ["Upload-Offset": "11"]
     ).register()
 
