@@ -283,17 +283,61 @@ import Testing
     }
   }
 
+  @Test func cancelDuringCreateEmitsCancelledEvent() async throws {
+    // Regression: cancel() while in .creating (POST in flight) must emit .failed(.cancelled).
+    HangingMockProtocol.resetHang()
+    HangingMockProtocol.hangPostRequests = true  // hang POST so engine stays in .creating
+    defer { HangingMockProtocol.hangPostRequests = false }
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [HangingMockProtocol.self]
+    let hangingClient = StorageClient(
+      url: baseURL,
+      configuration: StorageClientConfiguration(
+        headers: ["Authorization": "Bearer test-token"],
+        session: URLSession(configuration: config)
+      )
+    )
+
+    let data = Data("hello".utf8)
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "creating.bin",
+      source: .data(data),
+      options: FileOptions(contentType: "application/octet-stream"),
+      client: hangingClient
+    )
+
+    Task {
+      var iter = HangingMockProtocol.nextHang.makeAsyncIterator()
+      _ = await iter.next()
+      await task.cancel()
+    }
+
+    var events: [TransferEvent<FileUploadResponse>] = []
+    for await event in task.events { events.append(event) }
+    #expect(!events.isEmpty, "stream must emit at least one event")
+    if case .failed(let error) = events.last {
+      #expect(error.errorCode == .cancelled)
+    } else {
+      Issue.record(
+        "Expected last event .failed(.cancelled), got \(String(describing: events.last))")
+    }
+  }
+
   @Test func resumeAfterPauseSyncsOffsetViaHEAD() async throws {
     let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
     let finalResponse = try makeTUSServerResponseData(path: "r.txt", fullPath: "bucket/r.txt")
 
-    // POST and PATCH 1 respond immediately; PATCH 2 hangs until we resume
+    // POST and PATCH 1 respond immediately; PATCH 2 hangs until we resume.
+    // sequentialClientWithChunkSize calls SequentialMockProtocol.reset(), which clears
+    // hangWhenExhausted. Set it to true immediately after so the ordering is explicit.
     let sc = sequentialClientWithChunkSize(3)
+    SequentialMockProtocol.hangWhenExhausted = true
     SequentialMockProtocol.responses = [
       (201, ["Location": locationURL.absoluteString], Data()),
       (204, ["Upload-Offset": "3"], Data()),
     ]
-    SequentialMockProtocol.hangWhenExhausted = true
 
     let task = TUSUploadEngine.makeTask(
       bucketId: "bucket",
@@ -435,112 +479,141 @@ import Testing
 /// Provides sequential responses for the same URL across multiple requests.
 /// Designed for testing PATCH chunk uploads where each call needs a different response.
 final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
-  nonisolated(unsafe) static var responses:
-    [(statusCode: Int, headers: [String: String], data: Data)] = []
-  private static let lock = NSLock()
-  nonisolated(unsafe) static var callIndex = 0
-  nonisolated(unsafe) static var capturedRequests: [URLRequest] = []
+
+  private struct State {
+    var responses: [(statusCode: Int, headers: [String: String], data: Data)] = []
+    var callIndex: Int = 0
+    var capturedRequests: [URLRequest] = []
+    /// When `true`, requests that arrive after all responses are consumed hang (until cancelled)
+    /// instead of immediately failing. Use `nextHang` / `hangCancelled` to synchronise.
+    var hangWhenExhausted: Bool = false
+    var hangContinuation: AsyncStream<Void>.Continuation?
+    var nextHang: AsyncStream<Void> = AsyncStream { _ in }
+    var hangCancelledContinuation: AsyncStream<Void>.Continuation?
+    var hangCancelled: AsyncStream<Void> = AsyncStream { _ in }
+  }
+
+  private static let _state = LockIsolated(State())
   private var didFinish = false
 
-  /// When `true`, requests that arrive after all responses are consumed hang
-  /// (until cancelled) instead of immediately failing. Use `nextHang` to detect
-  /// when a request has entered the hanging state. Use `hangCancelled` to detect
-  /// when the hanging request's `stopLoading` has been called (i.e., the pause
-  /// has been fully applied by the engine).
-  nonisolated(unsafe) static var hangWhenExhausted = false
-  nonisolated(unsafe) private static var hangContinuation: AsyncStream<Void>.Continuation?
-  nonisolated(unsafe) static var nextHang: AsyncStream<Void> = AsyncStream { _ in }
-  nonisolated(unsafe) private static var hangCancelledContinuation: AsyncStream<Void>.Continuation?
-  nonisolated(unsafe) static var hangCancelled: AsyncStream<Void> = AsyncStream { _ in }
+  // MARK: - External accessors (tests are @Suite(.serialized) so reads are single-threaded)
+
+  static var responses: [(statusCode: Int, headers: [String: String], data: Data)] {
+    get { _state.value.responses }
+    set { _state.withValue { $0.responses = newValue } }
+  }
+  static var callIndex: Int { _state.value.callIndex }
+  static var capturedRequests: [URLRequest] { _state.value.capturedRequests }
+  static var hangWhenExhausted: Bool {
+    get { _state.value.hangWhenExhausted }
+    set { _state.withValue { $0.hangWhenExhausted = newValue } }
+  }
+  static var nextHang: AsyncStream<Void> { _state.value.nextHang }
+  static var hangCancelled: AsyncStream<Void> { _state.value.hangCancelled }
 
   static func reset() {
-    lock.lock()
-    callIndex = 0
-    responses = []
-    capturedRequests = []
-    hangWhenExhausted = false
-    let (stream, cont) = AsyncStream<Void>.makeStream()
-    nextHang = stream
-    hangContinuation = cont
-    let (cancelStream, cancelCont) = AsyncStream<Void>.makeStream()
-    hangCancelled = cancelStream
-    hangCancelledContinuation = cancelCont
-    lock.unlock()
+    _state.withValue { s in
+      s.callIndex = 0
+      s.responses = []
+      s.capturedRequests = []
+      s.hangWhenExhausted = false
+      let (stream, cont) = AsyncStream<Void>.makeStream()
+      s.nextHang = stream
+      s.hangContinuation = cont
+      let (cancelStream, cancelCont) = AsyncStream<Void>.makeStream()
+      s.hangCancelled = cancelStream
+      s.hangCancelledContinuation = cancelCont
+    }
   }
 
   static func appendResponse(_ response: (statusCode: Int, headers: [String: String], data: Data)) {
-    lock.lock()
-    responses.append(response)
-    lock.unlock()
+    _state.withValue { $0.responses.append(response) }
   }
 
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
   override func startLoading() {
-    Self.lock.lock()
-    let index = Self.callIndex
-    let shouldHang = Self.hangWhenExhausted && index >= Self.responses.count
-    if !shouldHang {
-      Self.callIndex += 1
-    }
-    Self.capturedRequests.append(request)
-    Self.lock.unlock()
-
-    if shouldHang {
-      Self.hangContinuation?.yield(())
-      // Hang — stopLoading() will cancel
-      return
+    // Capture all decisions and state changes under the lock, including capturing the
+    // continuation reference so the yield below is free of any race with reset().
+    enum Action {
+      case hang(AsyncStream<Void>.Continuation?)
+      case serve(statusCode: Int, headers: [String: String], data: Data)
+      case fail
     }
 
-    guard index < Self.responses.count else {
+    let req = request  // capture before entering the Sendable closure
+    let action: Action = Self._state.withValue { s in
+      let index = s.callIndex
+      let shouldHang = s.hangWhenExhausted && index >= s.responses.count
+      s.capturedRequests.append(req)
+      if shouldHang {
+        return .hang(s.hangContinuation)
+      }
+      s.callIndex += 1
+      guard index < s.responses.count else { return .fail }
+      let r = s.responses[index]
+      return .serve(statusCode: r.statusCode, headers: r.headers, data: r.data)
+    }
+
+    switch action {
+    case .hang(let cont):
+      cont?.yield(())
+    // Hang — stopLoading() will cancel this request
+    case .serve(let statusCode, let headers, let data):
+      let httpResponse = HTTPURLResponse(
+        url: request.url!, statusCode: statusCode, httpVersion: nil, headerFields: headers)!
+      client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
+      client?.urlProtocol(self, didLoad: data)
+      client?.urlProtocolDidFinishLoading(self)
+      didFinish = true
+    case .fail:
       client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
-      return
     }
-    let resp = Self.responses[index]
-    let httpResponse = HTTPURLResponse(
-      url: request.url!,
-      statusCode: resp.statusCode,
-      httpVersion: nil,
-      headerFields: resp.headers
-    )!
-    client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
-    client?.urlProtocol(self, didLoad: resp.data)
-    client?.urlProtocolDidFinishLoading(self)
-    didFinish = true
   }
 
   override func stopLoading() {
+    let cancelCont = Self._state.value.hangCancelledContinuation
     if !didFinish {
       client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
-      Self.hangCancelledContinuation?.yield(())
+      cancelCont?.yield(())
     }
   }
 }
 
 // MARK: - HangingMockProtocol
 
-/// Hangs all PATCH/HEAD requests indefinitely (until cancelled). POST requests respond
-/// immediately with `postResponse`. Use this to test task cancellation mid-upload.
+/// Hangs requests indefinitely (until cancelled).
+///
+/// By default POST requests respond immediately with `postResponse` and only PATCH/HEAD hang.
+/// Set `hangPostRequests = true` to also hang POST, which keeps the engine in `.creating` state —
+/// useful for testing cancel during upload creation.
 final class HangingMockProtocol: URLProtocol, @unchecked Sendable {
   nonisolated(unsafe) static var postResponse:
     (statusCode: Int, headers: [String: String], data: Data)?
+  /// When `true`, POST requests hang just like PATCH/HEAD requests.
+  nonisolated(unsafe) static var hangPostRequests = false
 
-  // Signals when a PATCH/HEAD request starts hanging
-  nonisolated(unsafe) private static var patchHangContinuation: AsyncStream<Void>.Continuation?
-  nonisolated(unsafe) static var nextPatchHang: AsyncStream<Void> = AsyncStream { _ in }
+  // Signals when any hanging request starts
+  nonisolated(unsafe) private static var hangContinuation: AsyncStream<Void>.Continuation?
+  nonisolated(unsafe) static var nextHang: AsyncStream<Void> = AsyncStream { _ in }
+
+  // Keep the old name as an alias so existing call sites compile unchanged
+  static var nextPatchHang: AsyncStream<Void> { nextHang }
 
   static func resetHang() {
+    hangPostRequests = false
     let (stream, continuation) = AsyncStream<Void>.makeStream()
-    nextPatchHang = stream
-    patchHangContinuation = continuation
+    nextHang = stream
+    hangContinuation = continuation
   }
 
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
   override func startLoading() {
-    if request.httpMethod == "POST", let resp = Self.postResponse {
+    let isPost = request.httpMethod == "POST"
+    if isPost && !Self.hangPostRequests, let resp = Self.postResponse {
       let httpResponse = HTTPURLResponse(
         url: request.url!,
         statusCode: resp.statusCode,
@@ -551,9 +624,8 @@ final class HangingMockProtocol: URLProtocol, @unchecked Sendable {
       client?.urlProtocol(self, didLoad: resp.data)
       client?.urlProtocolDidFinishLoading(self)
     } else {
-      // Signal that we are hanging
-      Self.patchHangContinuation?.yield(())
-      // Hang — do NOT call any client? methods until stopLoading is called
+      Self.hangContinuation?.yield(())
+      // Hang — stopLoading() will cancel this request
     }
   }
 

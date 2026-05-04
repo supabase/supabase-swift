@@ -149,8 +149,11 @@ public struct StorageFileAPI: Sendable {
   ///
   /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
   /// resumable protocol automatically. Use ``uploadMultipart(_:fileURL:options:)`` or
-  /// ``uploadResumable(_:fileURL:options:)`` to force a specific method. If the file size cannot
-  /// be determined, the TUS protocol is used as a safe default.
+  /// ``uploadResumable(_:fileURL:options:)`` to force a specific method.
+  ///
+  /// When the file size cannot be determined (e.g. the URL is a symlink or a network-mounted
+  /// path whose `resourceValues` call fails), TUS is used as a conservative default because it
+  /// handles arbitrarily large transfers safely.
   ///
   /// - Parameters:
   ///   - path: The destination path within the bucket, e.g. `"folder/image.png"`.
@@ -238,8 +241,11 @@ public struct StorageFileAPI: Sendable {
   ///
   /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
   /// resumable protocol automatically. Use ``updateMultipart(_:fileURL:options:)`` or
-  /// ``updateResumable(_:fileURL:options:)`` to force a specific method. If the file size cannot
-  /// be determined, the TUS protocol is used as a safe default.
+  /// ``updateResumable(_:fileURL:options:)`` to force a specific method.
+  ///
+  /// When the file size cannot be determined (e.g. the URL is a symlink or a network-mounted
+  /// path whose `resourceValues` call fails), TUS is used as a conservative default because it
+  /// handles arbitrarily large transfers safely.
   ///
   /// Unlike ``upload(_:fileURL:options:)``, this method always sets `upsert: true` to overwrite
   /// the existing object.
@@ -782,9 +788,8 @@ public struct StorageFileAPI: Sendable {
   ) -> StorageTransferTask<Data> {
     download(path: path, options: options, query: additionalQueryItems, cacheNonce: cacheNonce)
       .mapResult { url in
-        let data = try Data(contentsOf: url)
-        try? FileManager.default.removeItem(at: url)
-        return data
+        defer { try? FileManager.default.removeItem(at: url) }
+        return try Data(contentsOf: url)
       }
   }
 
