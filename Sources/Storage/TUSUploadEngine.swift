@@ -128,10 +128,8 @@ actor TUSUploadEngine {
         // In all these cases the old task's cancellation is expected — do nothing.
         return
       }
-    } else if let storageError = error as? StorageError {
-      finish(with: .failure(storageError))
     } else {
-      finish(with: .failure(StorageError.networkError(underlying: error)))
+      finish(with: .failure(StorageError.from(error)))
     }
   }
 
@@ -225,6 +223,10 @@ actor TUSUploadEngine {
       if httpResponse.statusCode == 409 {
         let serverOffset = try await fetchOffset(uploadURL: uploadURL)
         offset = serverOffset
+        // The server may report offset == totalBytes (file already fully uploaded).
+        // Break so the post-loop completion block handles it instead of re-entering
+        // the loop body with a zero-length chunk.
+        if offset >= totalBytes { break }
         continue
       }
 
@@ -264,6 +266,13 @@ actor TUSUploadEngine {
       }
 
       state = .uploading(uploadURL: uploadURL, offset: offset)
+    }
+
+    // Reached here when a 409 re-sync returned offset >= totalBytes (upload already complete).
+    if offset >= totalBytes {
+      let id = extractUploadId(from: uploadURL) ?? UUID()
+      finish(
+        with: .success(FileUploadResponse(id: id, path: path, fullPath: "\(bucketId)/\(path)")))
     }
   }
 
