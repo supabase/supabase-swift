@@ -1192,7 +1192,7 @@ public struct StorageFileAPI: Sendable {
       let data: Data
       let response: URLResponse
 
-      if try file.usesTempFileUpload {
+      if file.usesTempFileUpload {
         let tempFile = try multipart.buildToTempFile()
         defer { try? FileManager.default.removeItem(at: tempFile) }
 
