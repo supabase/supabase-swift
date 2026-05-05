@@ -207,10 +207,11 @@ actor TUSUploadEngine {
   {
     // Open the file handle once for the duration of the chunk loop so we don't pay
     // an open+close syscall on every iteration. nil for .data sources.
+    // AutoreleasingFileHandle closes the descriptor in deinit — no manual cleanup needed.
     let fileHandle = try source.openForReading()
-    defer { try? fileHandle?.close() }
 
     var offset = startOffset
+    var consecutive409s = 0
     while offset < totalBytes {
       try Task.checkCancellation()
 
@@ -235,6 +236,14 @@ actor TUSUploadEngine {
       }
 
       if httpResponse.statusCode == 409 {
+        consecutive409s += 1
+        // TUS spec does not define a retry limit; guard against a misbehaving server
+        // that permanently rejects our offset by capping consecutive 409 resyncs.
+        guard consecutive409s <= 3 else {
+          throw StorageError(
+            message: "TUS upload stalled: server returned 409 three times in a row",
+            errorCode: .unknown)
+        }
         let serverOffset = try await fetchOffset(uploadURL: uploadURL)
         offset = serverOffset
         // The server may report offset == totalBytes (file already fully uploaded).
@@ -259,6 +268,7 @@ actor TUSUploadEngine {
         throw StorageError(message: "Missing Upload-Offset in PATCH response", errorCode: .unknown)
       }
 
+      consecutive409s = 0
       offset = newOffset
 
       eventsContinuation.yield(

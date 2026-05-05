@@ -472,6 +472,53 @@ import Testing
     #expect(headCount.value == 1)
     #expect(response.path == "x.txt")
   }
+
+  @Test func repeatedConsecutive409sFailWithError() async throws {
+    let data = Data(repeating: 0x01, count: 100)
+
+    Mock(
+      url: uploadURL,
+      contentType: .json,
+      statusCode: 201,
+      data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
+    ).register()
+
+    // Every HEAD re-sync returns offset 0 — server never advances.
+    Mock(
+      url: locationURL,
+      contentType: .json,
+      statusCode: 200,
+      data: [.head: Data()],
+      additionalHeaders: ["Upload-Offset": "0"],
+      requestCount: 10
+    ).register()
+
+    // Every PATCH returns 409 indefinitely.
+    Mock(
+      url: locationURL,
+      contentType: .json,
+      statusCode: 409,
+      data: [.patch: Data()],
+      requestCount: 10
+    ).register()
+
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "x.txt",
+      source: .data(data),
+      options: FileOptions(contentType: "text/plain"),
+      client: client
+    )
+
+    let result = await task.result
+    guard case .failure(let error) = result else {
+      Issue.record("Expected failure, got success")
+      return
+    }
+    let storageError = try #require(error as? StorageError)
+    #expect(storageError.message.contains("409"))
+  }
 }
 
 // MARK: - SequentialMockProtocol
