@@ -262,9 +262,7 @@ extension MultipartUploadEngine {
 
 // MARK: - Progress delegate
 
-private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate,
-  @unchecked Sendable
-{
+private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, Sendable {
   let handler: @Sendable (Int64, Int64) -> Void
 
   init(handler: @Sendable @escaping (Int64, Int64) -> Void) {
