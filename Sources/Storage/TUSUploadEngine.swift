@@ -241,7 +241,7 @@ actor TUSUploadEngine {
         // that permanently rejects our offset by capping consecutive 409 resyncs.
         guard consecutive409s <= 3 else {
           throw StorageError(
-            message: "TUS upload stalled: server returned 409 three times in a row",
+            message: "TUS upload stalled: server returned 409 four times in a row",
             errorCode: .unknown)
         }
         let serverOffset = try await fetchOffset(uploadURL: uploadURL)
