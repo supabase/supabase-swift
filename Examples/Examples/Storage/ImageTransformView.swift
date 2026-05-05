@@ -230,7 +230,7 @@ struct ImageTransformView: View {
 
       let data = try await supabase.storage
         .from(selectedBucket)
-        .download(path: imagePath)
+        .downloadData(path: imagePath).value
 
       if let image = UIImage(data: data) {
         originalImage = image
@@ -258,7 +258,7 @@ struct ImageTransformView: View {
 
       let data = try await supabase.storage
         .from(selectedBucket)
-        .download(path: imagePath, options: options)
+        .downloadData(path: imagePath, options: options).value
 
       if let image = UIImage(data: data) {
         transformedImage = image

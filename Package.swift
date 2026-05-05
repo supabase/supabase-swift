@@ -196,7 +196,11 @@ let package = Package(
     .target(
       name: "Storage",
       dependencies: [
-        "Helpers"
+        "Helpers",
+        .product(
+          name: "ConcurrencyExtras",
+          package: "swift-concurrency-extras"
+        ),
       ]
     ),
     .testTarget(

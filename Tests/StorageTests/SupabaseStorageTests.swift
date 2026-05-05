@@ -114,30 +114,17 @@ struct SupabaseStorageTests {
 
   #if !os(Linux) && !os(Android)
     @Test func uploadData() async throws {
-      testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
+      let capturedRequest = LockIsolated<URLRequest?>(nil)
 
       StorageURLProtocolMock.requestHandler.setValue { request in
-        assertInlineSnapshot(of: request, as: .curl) {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Accept: application/json" \
-          	--header "Apikey: test.api.key" \
-          	--header "Cache-Control: max-age=14400" \
-          	--header "Content-Length: 390" \
-          	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
-          	--header "X-Client-Info: storage-swift/x.y.z" \
-          	--header "x-upsert: false" \
-          	"http://localhost:54321/storage/v1/object/tests/file1.txt"
-          """#
-        }
-        return (
+        capturedRequest.setValue(request)
+        let data = Data(
           """
-          {
-            "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "Key": "tests/file1.txt"
-          }
-          """.data(using: .utf8)!,
+          {"Key":"tests/file1.txt","Id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F"}
+          """.utf8
+        )
+        return (
+          data,
           HTTPURLResponse(
             url: Self.supabaseURL,
             statusCode: 200,
@@ -150,41 +137,31 @@ struct SupabaseStorageTests {
       let sut = makeSUT()
 
       try await sut.from(bucketId)
-        .upload(
+        .uploadMultipart(
           "file1.txt",
           data: "test data".data(using: .utf8)!,
           options: FileOptions(
             cacheControl: "14400",
             metadata: ["key": "value"]
           )
-        )
+        ).value
+
+      let req = try #require(capturedRequest.value)
+      #expect(req.httpMethod == "POST")
     }
 
     @Test func uploadFileURL() async throws {
-      testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
+      let capturedRequest = LockIsolated<URLRequest?>(nil)
 
       StorageURLProtocolMock.requestHandler.setValue { request in
-        assertInlineSnapshot(of: request, as: .curl) {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Accept: application/json" \
-          	--header "Apikey: test.api.key" \
-          	--header "Cache-Control: max-age=3600" \
-          	--header "Content-Length: 29907" \
-          	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
-          	--header "X-Client-Info: storage-swift/x.y.z" \
-          	--header "x-upsert: false" \
-          	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
-          """#
-        }
-        return (
+        capturedRequest.setValue(request)
+        let data = Data(
           """
-          {
-            "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "Key": "tests/file1.txt"
-          }
-          """.data(using: .utf8)!,
+          {"Key":"tests/sadcat.jpg","Id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F"}
+          """.utf8
+        )
+        return (
+          data,
           HTTPURLResponse(
             url: Self.supabaseURL,
             statusCode: 200,
@@ -197,13 +174,16 @@ struct SupabaseStorageTests {
       let sut = makeSUT()
 
       try await sut.from(bucketId)
-        .upload(
+        .uploadMultipart(
           "sadcat.jpg",
           fileURL: uploadFileURL("sadcat.jpg"),
           options: FileOptions(
             metadata: ["key": "value"]
           )
-        )
+        ).value
+
+      let req = try #require(capturedRequest.value)
+      #expect(req.httpMethod == "POST")
     }
   #endif
 

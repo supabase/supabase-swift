@@ -51,6 +51,24 @@ public struct StorageClientConfiguration: Sendable {
   /// Defaults to `false`.
   public let useNewHostname: Bool
 
+  /// When set, downloads use `URLSessionConfiguration.background(withIdentifier:)`,
+  /// allowing transfers to continue while the app is suspended.
+  ///
+  /// Requires wiring `handleBackgroundEvents(forSessionIdentifier:completionHandler:)` in
+  /// your `AppDelegate`.
+  ///
+  /// When `nil` (the default), a standard foreground session is used.
+  public var backgroundDownloadSessionIdentifier: String?
+
+  /// The TUS upload chunk size in bytes.
+  ///
+  /// Files uploaded via the TUS resumable protocol are split into chunks of this size.
+  /// The smart-default ``StorageFileAPI/upload(_:data:options:)`` also uses this threshold to
+  /// decide between multipart (≤ chunk size) and TUS (> chunk size).
+  ///
+  /// Defaults to 6 MB, matching the minimum part size for S3 multipart uploads.
+  public let tusChunkSize: Int
+
   /// Creates a ``StorageClientConfiguration``.
   ///
   /// - Parameters:
@@ -60,16 +78,24 @@ public struct StorageClientConfiguration: Sendable {
   ///   - logger: An optional `SupabaseLogger` for request/response diagnostics. Defaults to `nil`.
   ///   - useNewHostname: When `true`, rewrites the host to the dedicated storage subdomain for
   ///     large-file upload support. Defaults to `false`.
+  ///   - backgroundDownloadSessionIdentifier: When set, downloads use a background
+  ///     `URLSessionConfiguration` with this identifier. Defaults to `nil`.
+  ///   - tusChunkSize: TUS upload chunk size in bytes. Also used as the threshold for the smart
+  ///     default `upload()`/`update()` methods. Defaults to 6 MB.
   public init(
     headers: [String: String],
     session: URLSession = URLSession(configuration: .default),
     logger: (any SupabaseLogger)? = nil,
-    useNewHostname: Bool = false
+    useNewHostname: Bool = false,
+    backgroundDownloadSessionIdentifier: String? = nil,
+    tusChunkSize: Int = 6 * 1024 * 1024
   ) {
     self.headers = headers
     self.session = session
     self.logger = logger
     self.useNewHostname = useNewHostname
+    self.backgroundDownloadSessionIdentifier = backgroundDownloadSessionIdentifier
+    self.tusChunkSize = tusChunkSize
   }
 }
 
@@ -113,6 +139,9 @@ public final class StorageClient: Sendable {
 
   package let http: _HTTPClient
   private let usesTokenProvider: Bool
+
+  let downloadDelegate: DownloadSessionDelegate
+  let downloadSession: URLSession
 
   let encoder: JSONEncoder = {
     let encoder = JSONEncoder.supabase()
@@ -208,6 +237,33 @@ public final class StorageClient: Sendable {
       host: resolvedURL,
       session: configuration.session,
       tokenProvider: tokenProvider
+    )
+
+    let downloadDelegate = DownloadSessionDelegate()
+    self.downloadDelegate = downloadDelegate
+
+    #if canImport(Darwin)
+      let downloadSessionConfig: URLSessionConfiguration =
+        configuration.backgroundDownloadSessionIdentifier.map {
+          .background(withIdentifier: $0)
+        } ?? .default
+    #else
+      // On Linux (swift-corelibs-foundation), URLSessionConfiguration.default is a shared
+      // singleton. Passing it directly to URLSession.init(configuration:delegate:delegateQueue:)
+      // triggers a precondition failure — the initializer requires a non-shared configuration.
+      // Use .ephemeral instead, which always returns a fresh, isolated configuration object.
+      let downloadSessionConfig: URLSessionConfiguration = .ephemeral
+    #endif
+    // Propagate any custom protocol classes (e.g. for testing) from the HTTP session.
+    if let protocolClasses = configuration.session.configuration.protocolClasses,
+      !protocolClasses.isEmpty
+    {
+      downloadSessionConfig.protocolClasses = protocolClasses
+    }
+    self.downloadSession = URLSession(
+      configuration: downloadSessionConfig,
+      delegate: downloadDelegate,
+      delegateQueue: nil
     )
   }
 
@@ -334,6 +390,18 @@ public final class StorageClient: Sendable {
 
   func logFailure(_ error: any Error) {
     configuration.logger?.error("Response: Failure \(error)")
+  }
+
+  /// Forward background URLSession events from your `AppDelegate` to the Storage client.
+  ///
+  /// Call this from `application(_:handleEventsForBackgroundURLSession:completionHandler:)`
+  /// when the `identifier` matches the one configured in ``StorageClientConfiguration/backgroundDownloadSessionIdentifier``.
+  public func handleBackgroundEvents(
+    forSessionIdentifier identifier: String,
+    completionHandler: @escaping @Sendable () -> Void
+  ) {
+    guard identifier == configuration.backgroundDownloadSessionIdentifier else { return }
+    downloadDelegate.setBackgroundCompletionHandler(completionHandler)
   }
 
   /// Returns a ``StorageFileAPI`` scoped to the given bucket.

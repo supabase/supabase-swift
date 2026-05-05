@@ -21,71 +21,6 @@ let defaultFileOptions = FileOptions(
   upsert: false
 )
 
-enum FileUpload {
-  case data(Data)
-  case url(URL)
-
-  func append(
-    to builder: MultipartBuilder,
-    withPath path: String,
-    options: FileOptions
-  ) -> MultipartBuilder {
-    var builder = builder.addText(
-      name: "cacheControl",
-      value: options.cacheControl
-    )
-
-    if let metadata = options.metadata {
-      builder = builder.addText(
-        name: "metadata",
-        value: String(data: encodeMetadata(metadata), encoding: .utf8) ?? ""
-      )
-    }
-
-    switch self {
-    case .data(let data):
-      return builder.addData(
-        name: "",
-        data: data,
-        fileName: path.fileName,
-        mimeType: options.contentType
-          ?? mimeType(forPathExtension: path.pathExtension)
-      )
-
-    case .url(let url):
-      return builder.addFile(
-        name: "",
-        fileURL: url,
-        fileName: url.lastPathComponent,
-        mimeType: options.contentType
-          ?? mimeType(forPathExtension: url.pathExtension)
-      )
-    }
-  }
-
-  var usesTempFileUpload: Bool {
-    get throws {
-      guard case .url(let url) = self else { return false }
-
-      let fileSize =
-        try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-      return fileSize >= 10 * 1024 * 1024
-    }
-  }
-
-  func defaultOptions() -> FileOptions {
-    switch self {
-    case .data:
-      return defaultFileOptions
-
-    case .url:
-      var options = defaultFileOptions
-      options.contentType = nil
-      return options
-    }
-  }
-}
-
 #if DEBUG
   import ConcurrencyExtras
   let testingBoundary = LockIsolated<String?>(nil)
@@ -106,8 +41,10 @@ enum FileUpload {
 /// // Upload
 /// let response = try await bucket.upload("user-123/photo.png", data: imageData)
 ///
-/// // Download
-/// let data = try await bucket.download(path: "user-123/photo.png")
+/// // Download to disk
+/// let url = try await bucket.download(path: "user-123/photo.png").value
+/// // Or download into memory
+/// let data = try await bucket.downloadData(path: "user-123/photo.png").value
 ///
 /// // Public URL (public bucket)
 /// let url = try bucket.getPublicURL(path: "user-123/photo.png")
@@ -160,47 +97,15 @@ public struct StorageFileAPI: Sendable {
     static let xUpsert = "x-upsert"
   }
 
-  private struct UploadResponse: Decodable {
-    let Key: String
-    let Id: UUID
-  }
-
   private struct SignedUploadResponse: Decodable {
     let Key: String
   }
 
-  private func _uploadOrUpdate(
-    method: HTTPMethod,
-    path: String,
-    file: FileUpload,
-    options: FileOptions?,
-    progress: (@Sendable (UploadProgress) -> Void)? = nil
-  ) async throws -> FileUploadResponse {
-    let options = options ?? defaultFileOptions
-    let cleanPath = _removeEmptyFolders(path)
-    let _path = _getFinalPath(cleanPath)
-
-    var headers = multipartHeaders(options: options)
-    headers[Header.xUpsert] = "\(options.upsert)"
-
-    let response: UploadResponse = try await uploadMultipart(
-      method,
-      url: client.url.appendingPathComponent("object/\(_path)"),
-      path: path,
-      file: file,
-      options: options,
-      headers: headers,
-      progress: progress
-    )
-
-    return FileUploadResponse(
-      id: response.Id,
-      path: path,
-      fullPath: response.Key
-    )
-  }
-
-  /// Uploads a `Data` value to an existing bucket.
+  /// Uploads a `Data` value to an existing bucket, automatically choosing the best protocol.
+  ///
+  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
+  /// resumable protocol automatically. Use ``uploadMultipart(_:data:options:)`` or
+  /// ``uploadResumable(_:data:options:)`` to force a specific method.
   ///
   /// If the path already exists and ``FileOptions/upsert`` is `false` (the default), an error
   /// is returned. Set `upsert: true` to overwrite silently instead.
@@ -210,9 +115,8 @@ public struct StorageFileAPI: Sendable {
   ///     The bucket must already exist.
   ///   - data: The raw file bytes to store.
   ///   - options: Upload options such as content type, cache duration, and upsert behaviour.
-  /// - Returns: A ``FileUploadResponse`` containing the assigned storage ID and full path.
-  /// - Throws: ``StorageError`` if the path already exists (when `upsert` is `false`), the
-  ///   bucket does not exist, or the request otherwise fails.
+  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
+  ///   or paused/resumed/cancelled.
   ///
   /// ## Example
   ///
@@ -222,29 +126,34 @@ public struct StorageFileAPI: Sendable {
   ///   "user-123/photo.jpg",
   ///   data: imageData,
   ///   options: FileOptions(contentType: "image/jpeg", upsert: true)
-  /// )
+  /// ).value
   /// print(response.fullPath) // "avatars/user-123/photo.jpg"
   /// ```
   @discardableResult
   public func upload(
     _ path: String,
     data: Data,
-    options: FileOptions = FileOptions(),
-    progress: (@Sendable (UploadProgress) -> Void)? = nil
-  ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
-      method: .post,
-      path: path,
-      file: .data(data),
-      options: options,
-      progress: progress
-    )
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    if data.count <= client.configuration.tusChunkSize {
+      return MultipartUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .data(data), options: options, client: client)
+    } else {
+      return TUSUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .data(data), options: options, client: client)
+    }
   }
 
-  /// Uploads a file from a local `URL` to an existing bucket.
+  /// Uploads a file from a local `URL` to an existing bucket, automatically choosing the best
+  /// protocol.
   ///
-  /// For files ≥ 10 MB the SDK automatically streams from a temporary file on disk to avoid
-  /// loading the entire payload into memory.
+  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
+  /// resumable protocol automatically. Use ``uploadMultipart(_:fileURL:options:)`` or
+  /// ``uploadResumable(_:fileURL:options:)`` to force a specific method.
+  ///
+  /// When the file size cannot be determined (e.g. the URL is a symlink or a network-mounted
+  /// path whose `resourceValues` call fails), TUS is used as a conservative default because it
+  /// handles arbitrarily large transfers safely.
   ///
   /// - Parameters:
   ///   - path: The destination path within the bucket, e.g. `"folder/image.png"`.
@@ -252,9 +161,8 @@ public struct StorageFileAPI: Sendable {
   ///   - fileURL: A local `file://` URL pointing to the file to upload.
   ///   - options: Upload options such as content type, cache duration, and upsert behaviour.
   ///     When `contentType` is `nil`, the MIME type is inferred from the file extension.
-  /// - Returns: A ``FileUploadResponse`` containing the assigned storage ID and full path.
-  /// - Throws: ``StorageError`` if the path already exists (when `upsert` is `false`), the
-  ///   bucket does not exist, or the request otherwise fails.
+  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
+  ///   or paused/resumed/cancelled.
   ///
   /// ## Example
   ///
@@ -263,36 +171,43 @@ public struct StorageFileAPI: Sendable {
   /// let response = try await storage.from("documents").upload(
   ///   "reports/2024/annual.pdf",
   ///   fileURL: fileURL
-  /// )
+  /// ).value
   /// ```
   @discardableResult
   public func upload(
     _ path: String,
     fileURL: URL,
-    options: FileOptions = FileOptions(),
-    progress: (@Sendable (UploadProgress) -> Void)? = nil
-  ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
-      method: .post,
-      path: path,
-      file: .url(fileURL),
-      options: options,
-      progress: progress
-    )
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    let size =
+      (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
+    if size <= client.configuration.tusChunkSize {
+      return MultipartUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options,
+        client: client)
+    } else {
+      return TUSUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options, client: client)
+    }
   }
 
-  /// Replaces an existing file at the specified path with new `Data`.
+  /// Replaces an existing file at the specified path with new `Data`, automatically choosing the
+  /// best protocol.
   ///
-  /// Unlike ``upload(_:data:options:)``, this method always overwrites the existing object and
-  /// returns an error if no object exists at the given path.
+  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
+  /// resumable protocol automatically. Use ``updateMultipart(_:data:options:)`` or
+  /// ``updateResumable(_:data:options:)`` to force a specific method.
+  ///
+  /// Unlike ``upload(_:data:options:)``, this method always sets `upsert: true` to overwrite the
+  /// existing object.
   ///
   /// - Parameters:
   ///   - path: The path of the file to replace, e.g. `"folder/image.png"`.
   ///     The bucket must already exist.
   ///   - data: The new raw file bytes.
   ///   - options: Upload options such as content type and cache duration.
-  /// - Returns: A ``FileUploadResponse`` containing the storage ID and full path of the updated object.
-  /// - Throws: ``StorageError`` if the path does not exist or the request fails.
+  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
+  ///   or paused/resumed/cancelled.
   ///
   /// ## Example
   ///
@@ -302,28 +217,38 @@ public struct StorageFileAPI: Sendable {
   ///   "user-123/photo.png",
   ///   data: newImageData,
   ///   options: FileOptions(contentType: "image/png")
-  /// )
+  /// ).value
   /// ```
   @discardableResult
   public func update(
     _ path: String,
     data: Data,
-    options: FileOptions = FileOptions(),
-    progress: (@Sendable (UploadProgress) -> Void)? = nil
-  ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
-      method: .put,
-      path: path,
-      file: .data(data),
-      options: options,
-      progress: progress
-    )
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    if data.count <= client.configuration.tusChunkSize {
+      return MultipartUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .data(data), options: upsertOptions, client: client)
+    } else {
+      return TUSUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .data(data), options: upsertOptions, client: client)
+    }
   }
 
-  /// Replaces an existing file at the specified path with the contents of a local `URL`.
+  /// Replaces an existing file at the specified path with the contents of a local `URL`,
+  /// automatically choosing the best protocol.
   ///
-  /// Unlike ``upload(_:fileURL:options:)``, this method always overwrites the existing object and
-  /// returns an error if no object exists at the given path.
+  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
+  /// resumable protocol automatically. Use ``updateMultipart(_:fileURL:options:)`` or
+  /// ``updateResumable(_:fileURL:options:)`` to force a specific method.
+  ///
+  /// When the file size cannot be determined (e.g. the URL is a symlink or a network-mounted
+  /// path whose `resourceValues` call fails), TUS is used as a conservative default because it
+  /// handles arbitrarily large transfers safely.
+  ///
+  /// Unlike ``upload(_:fileURL:options:)``, this method always sets `upsert: true` to overwrite
+  /// the existing object.
   ///
   /// - Parameters:
   ///   - path: The path of the file to replace, e.g. `"folder/image.png"`.
@@ -331,28 +256,200 @@ public struct StorageFileAPI: Sendable {
   ///   - fileURL: A local `file://` URL pointing to the replacement file.
   ///   - options: Upload options such as content type and cache duration.
   ///     When `contentType` is `nil`, the MIME type is inferred from the file extension.
-  /// - Returns: A ``FileUploadResponse`` containing the storage ID and full path of the updated object.
-  /// - Throws: ``StorageError`` if the path does not exist or the request fails.
+  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
+  ///   or paused/resumed/cancelled.
   ///
   /// ## Example
   ///
   /// ```swift
   /// let newFileURL = URL(fileURLWithPath: "/tmp/updated-report.pdf")
-  /// try await storage.from("documents").update("reports/2024/annual.pdf", fileURL: newFileURL)
+  /// try await storage.from("documents").update("reports/2024/annual.pdf", fileURL: newFileURL).value
   /// ```
   @discardableResult
   public func update(
     _ path: String,
     fileURL: URL,
-    options: FileOptions = FileOptions(),
-    progress: (@Sendable (UploadProgress) -> Void)? = nil
-  ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
-      method: .put,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    let size =
+      (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
+    if size <= client.configuration.tusChunkSize {
+      return MultipartUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: upsertOptions,
+        client: client)
+    } else {
+      return TUSUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: upsertOptions,
+        client: client)
+    }
+  }
+
+  // MARK: - Explicit multipart upload
+
+  /// Uploads `Data` using the standard multipart request, regardless of file size.
+  ///
+  /// Use ``upload(_:data:options:)`` if you want the SDK to choose between multipart and TUS
+  /// automatically based on file size.
+  @discardableResult
+  public func uploadMultipart(
+    _ path: String,
+    data: Data,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    MultipartUploadEngine.makeTask(
+      bucketId: bucketId,
       path: path,
-      file: .url(fileURL),
+      source: .data(data),
       options: options,
-      progress: progress
+      client: client
+    )
+  }
+
+  /// Uploads a local file using the standard multipart request, regardless of file size.
+  ///
+  /// Files >= 10 MB are streamed from a temporary file on disk to avoid loading the entire
+  /// payload into memory. Use ``upload(_:fileURL:options:)`` if you want the SDK to choose
+  /// automatically between multipart and TUS.
+  @discardableResult
+  public func uploadMultipart(
+    _ path: String,
+    fileURL: URL,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    MultipartUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .fileURL(fileURL),
+      options: options,
+      client: client
+    )
+  }
+
+  // MARK: - Explicit TUS/resumable upload
+
+  /// Uploads `Data` using the TUS resumable upload protocol, regardless of file size.
+  ///
+  /// Use ``upload(_:data:options:)`` if you want the SDK to choose automatically.
+  @discardableResult
+  public func uploadResumable(
+    _ path: String,
+    data: Data,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    TUSUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .data(data),
+      options: options,
+      client: client
+    )
+  }
+
+  /// Uploads a local file using the TUS resumable upload protocol, regardless of file size.
+  ///
+  /// Use ``upload(_:fileURL:options:)`` if you want the SDK to choose automatically.
+  @discardableResult
+  public func uploadResumable(
+    _ path: String,
+    fileURL: URL,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    TUSUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .fileURL(fileURL),
+      options: options,
+      client: client
+    )
+  }
+
+  // MARK: - Explicit multipart update
+
+  /// Replaces an existing file with `Data` using the standard multipart request.
+  ///
+  /// Always sets `upsert: true`. Use ``update(_:data:options:)`` if you want the SDK to choose
+  /// automatically between multipart and TUS.
+  @discardableResult
+  public func updateMultipart(
+    _ path: String,
+    data: Data,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    return MultipartUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .data(data),
+      options: upsertOptions,
+      client: client
+    )
+  }
+
+  /// Replaces an existing file with the contents of a local URL using the standard multipart
+  /// request.
+  ///
+  /// Always sets `upsert: true`. Files >= 10 MB are streamed from a temp file on disk.
+  @discardableResult
+  public func updateMultipart(
+    _ path: String,
+    fileURL: URL,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    return MultipartUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .fileURL(fileURL),
+      options: upsertOptions,
+      client: client
+    )
+  }
+
+  // MARK: - Explicit TUS/resumable update
+
+  /// Replaces an existing file with `Data` using the TUS resumable upload protocol.
+  ///
+  /// Always sets `upsert: true`. Use ``update(_:data:options:)`` if you want the SDK to choose
+  /// automatically between multipart and TUS.
+  @discardableResult
+  public func updateResumable(
+    _ path: String,
+    data: Data,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    return TUSUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .data(data),
+      options: upsertOptions,
+      client: client
+    )
+  }
+
+  /// Replaces an existing file from a local URL using the TUS resumable upload protocol.
+  ///
+  /// Always sets `upsert: true`. Use ``update(_:fileURL:options:)`` if you want the SDK to choose
+  /// automatically between multipart and TUS.
+  @discardableResult
+  public func updateResumable(
+    _ path: String,
+    fileURL: URL,
+    options: FileOptions = FileOptions()
+  ) -> StorageUploadTask {
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    return TUSUploadEngine.makeTask(
+      bucketId: bucketId,
+      path: path,
+      source: .fileURL(fileURL),
+      options: upsertOptions,
+      client: client
     )
   }
 
@@ -639,60 +736,90 @@ public struct StorageFileAPI: Sendable {
     )
   }
 
-  /// Downloads a file from the bucket and returns its raw bytes.
+  /// Downloads a file to a temporary location on disk.
   ///
-  /// Use this method for files in private buckets. For public buckets, construct a URL with
-  /// ``getPublicURL(path:download:options:cacheNonce:)`` and fetch it directly instead —
-  /// it avoids routing the bytes through the SDK.
+  /// The `.completed` event delivers a `URL` to a temporary file. Move the file before
+  /// the app exits — it is not guaranteed to persist.
+  ///
+  /// When ``StorageClientConfiguration/backgroundDownloadSessionIdentifier`` is set, the
+  /// transfer continues while the app is suspended.
   ///
   /// - Parameters:
-  ///   - path: The path of the file to download, e.g. `"folder/image.png"`.
-  ///   - options: Optional on-the-fly image transformation applied before the file is served.
-  ///     When non-`nil` and non-empty, the request is routed through the image rendering pipeline.
-  ///   - additionalQueryItems: Extra URL query parameters appended to the download request.
-  ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter for cache
-  ///     invalidation.
-  /// - Returns: The raw file data.
-  /// - Throws: ``StorageError`` if the file does not exist or the request fails.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// // Download raw file
-  /// let data = try await storage.from("private-docs").download(path: "user-123/report.pdf")
-  ///
-  /// // Download with image transformation
-  /// let thumbnail = try await storage.from("photos").download(
-  ///   path: "gallery/hero.jpg",
-  ///   options: TransformOptions(width: 100, height: 100, resize: .cover)
-  /// )
-  /// ```
+  ///   - path: Path within the bucket, e.g. `"folder/image.png"`.
+  ///   - options: Optional image transform parameters.
+  ///   - query: Additional query items appended to the request URL.
+  ///   - cacheNonce: Cache-busting nonce appended as `cacheNonce=<value>`.
+  /// - Returns: A ``StorageDownloadTask`` whose `.completed` value is a `URL` on disk.
   @discardableResult
   public func download(
     path: String,
     options: TransformOptions? = nil,
     query additionalQueryItems: [URLQueryItem]? = nil,
     cacheNonce: String? = nil
-  ) async throws -> Data {
-    var queryItems = options?.queryItems ?? []
-    let renderPath =
-      options.map { !$0.isEmpty } == true
-      ? "render/image/authenticated" : "object"
-    let _path = _getFinalPath(path)
-
-    if let additionalQueryItems {
-      queryItems.append(contentsOf: additionalQueryItems)
+  ) -> StorageDownloadTask {
+    var request = URLRequest(
+      url: _downloadURL(
+        path: path, options: options, query: additionalQueryItems, cacheNonce: cacheNonce))
+    for (key, value) in client.mergedHeaders([:]) {
+      request.setValue(value, forHTTPHeaderField: key)
     }
-
-    if let cacheNonce {
-      queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
-    }
-
-    let (data, _) = try await client.fetchData(
-      .get,
-      url: storageURL(path: "\(renderPath)/\(_path)", queryItems: queryItems)
+    return client.downloadDelegate.makeStorageDownloadTask(
+      in: client.downloadSession,
+      request: request
     )
-    return data
+  }
+
+  /// Downloads a file into memory.
+  ///
+  /// Not background-capable. For large files or background transfers, use ``download(path:options:)``.
+  ///
+  /// - Parameters:
+  ///   - path: Path within the bucket.
+  ///   - options: Optional image transform parameters.
+  ///   - query: Additional query items appended to the request URL.
+  ///   - cacheNonce: Cache-busting nonce appended as `cacheNonce=<value>`.
+  /// - Returns: A task whose `.completed` value is the file `Data`.
+  @discardableResult
+  public func downloadData(
+    path: String,
+    options: TransformOptions? = nil,
+    query additionalQueryItems: [URLQueryItem]? = nil,
+    cacheNonce: String? = nil
+  ) -> StorageTransferTask<Data> {
+    download(path: path, options: options, query: additionalQueryItems, cacheNonce: cacheNonce)
+      .mapResult { url in
+        defer { try? FileManager.default.removeItem(at: url) }
+        return try Data(contentsOf: url)
+      }
+  }
+
+  private func _downloadURL(
+    path: String,
+    options: TransformOptions?,
+    query additionalQueryItems: [URLQueryItem]? = nil,
+    cacheNonce: String? = nil
+  ) -> URL {
+    let finalPath = _getFinalPath(_removeEmptyFolders(path))
+
+    var queryItems = options?.queryItems ?? []
+    if let additionalQueryItems { queryItems.append(contentsOf: additionalQueryItems) }
+    if let cacheNonce { queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce)) }
+
+    let basePath =
+      options.map { !$0.isEmpty } == true
+      ? "render/image/authenticated/\(finalPath)"
+      : "object/authenticated/\(finalPath)"
+
+    if queryItems.isEmpty {
+      return client.url.appendingPathComponent(basePath)
+    }
+
+    var components = URLComponents(
+      url: client.url.appendingPathComponent(basePath),
+      resolvingAgainstBaseURL: false
+    )
+    components?.queryItems = queryItems
+    return components?.url ?? client.url.appendingPathComponent(basePath)
   }
 
   /// Retrieves extended metadata for a file without downloading its contents.
@@ -890,8 +1017,8 @@ public struct StorageFileAPI: Sendable {
   ///   - token: The upload token from ``SignedUploadURL/token``.
   ///   - data: The raw file bytes to store.
   ///   - options: Upload options such as content type and cache duration.
-  /// - Returns: A ``SignedURLUploadResponse`` containing the path and full storage key.
-  /// - Throws: ``StorageError`` if the token is invalid or expired, or if the request fails.
+  /// - Returns: A ``StorageTransferTask`` that can be awaited for the ``SignedURLUploadResponse``
+  ///   result, or observed for progress.
   ///
   /// ## Example
   ///
@@ -902,7 +1029,7 @@ public struct StorageFileAPI: Sendable {
   ///   token: signed.token,
   ///   data: pdfData,
   ///   options: FileOptions(contentType: "application/pdf")
-  /// )
+  /// ).value
   /// print(response.fullPath)
   /// ```
   @discardableResult
@@ -910,16 +1037,16 @@ public struct StorageFileAPI: Sendable {
     _ path: String,
     token: String,
     data: Data,
-    options: FileOptions = FileOptions(),
-    progress: (@Sendable (UploadProgress) -> Void)? = nil
-  ) async throws -> SignedURLUploadResponse {
-    try await _uploadToSignedURL(
-      path: path,
-      token: token,
-      file: .data(data),
-      options: options,
-      progress: progress
-    )
+    options: FileOptions = FileOptions()
+  ) -> StorageTransferTask<SignedURLUploadResponse> {
+    makeSignedURLUploadTask {
+      try await self._uploadToSignedURL(
+        path: path,
+        token: token,
+        file: .data(data),
+        options: options
+      )
+    }
   }
 
   /// Uploads a file from a local `URL` to a path using a token obtained from
@@ -935,8 +1062,8 @@ public struct StorageFileAPI: Sendable {
   ///   - fileURL: A local `file://` URL pointing to the file to upload.
   ///   - options: Upload options such as content type and cache duration.
   ///     When `contentType` is `nil`, the MIME type is inferred from the file extension.
-  /// - Returns: A ``SignedURLUploadResponse`` containing the path and full storage key.
-  /// - Throws: ``StorageError`` if the token is invalid or expired, or if the request fails.
+  /// - Returns: A ``StorageTransferTask`` that can be awaited for the ``SignedURLUploadResponse``
+  ///   result, or observed for progress.
   ///
   /// ## Example
   ///
@@ -947,31 +1074,69 @@ public struct StorageFileAPI: Sendable {
   ///   signed.path,
   ///   token: signed.token,
   ///   fileURL: fileURL
-  /// )
+  /// ).value
   /// ```
   @discardableResult
   public func uploadToSignedURL(
     _ path: String,
     token: String,
     fileURL: URL,
-    options: FileOptions = FileOptions(),
-    progress: (@Sendable (UploadProgress) -> Void)? = nil
-  ) async throws -> SignedURLUploadResponse {
-    try await _uploadToSignedURL(
-      path: path,
-      token: token,
-      file: .url(fileURL),
-      options: options,
-      progress: progress
+    options: FileOptions = FileOptions()
+  ) -> StorageTransferTask<SignedURLUploadResponse> {
+    makeSignedURLUploadTask {
+      try await self._uploadToSignedURL(
+        path: path,
+        token: token,
+        file: .fileURL(fileURL),
+        options: options
+      )
+    }
+  }
+
+  private func makeSignedURLUploadTask(
+    _ body: @Sendable @escaping () async throws -> SignedURLUploadResponse
+  ) -> StorageTransferTask<SignedURLUploadResponse> {
+    let (eventStream, eventsContinuation) =
+      AsyncStream<TransferEvent<SignedURLUploadResponse>>.makeStream()
+    let (resultStream, resultContinuation) =
+      AsyncStream<Result<SignedURLUploadResponse, any Error>>.makeStream(
+        bufferingPolicy: .bufferingNewest(1))
+
+    let resultTask = Task<SignedURLUploadResponse, any Error> {
+      for await r in resultStream { return try r.get() }
+      throw StorageError.cancelled
+    }
+
+    let uploadTask = Task {
+      do {
+        let response = try await body()
+        eventsContinuation.yield(.completed(response))
+        eventsContinuation.finish()
+        resultContinuation.yield(.success(response))
+        resultContinuation.finish()
+      } catch {
+        let storageError = StorageError.from(error)
+        eventsContinuation.yield(.failed(storageError))
+        eventsContinuation.finish()
+        resultContinuation.yield(.failure(storageError))
+        resultContinuation.finish()
+      }
+    }
+
+    return StorageTransferTask<SignedURLUploadResponse>(
+      events: eventStream,
+      resultTask: resultTask,
+      pause: {},
+      resume: {},
+      cancel: { uploadTask.cancel() }
     )
   }
 
   private func _uploadToSignedURL(
     path: String,
     token: String,
-    file: FileUpload,
-    options: FileOptions,
-    progress: (@Sendable (UploadProgress) -> Void)? = nil
+    file: UploadSource,
+    options: FileOptions
   ) async throws -> SignedURLUploadResponse {
     var headers = multipartHeaders(options: options)
     headers[Header.xUpsert] = "\(options.upsert)"
@@ -985,8 +1150,7 @@ public struct StorageFileAPI: Sendable {
       path: path,
       file: file,
       options: options,
-      headers: headers,
-      progress: progress
+      headers: headers
     )
 
     return SignedURLUploadResponse(path: path, fullPath: response.Key)
@@ -996,10 +1160,9 @@ public struct StorageFileAPI: Sendable {
     _ method: HTTPMethod,
     url: URL,
     path: String,
-    file: FileUpload,
+    file: UploadSource,
     options: FileOptions,
-    headers: [String: String],
-    progress: (@Sendable (UploadProgress) -> Void)? = nil
+    headers: [String: String]
   ) async throws -> Response {
     #if DEBUG
       let builder = MultipartBuilder(
@@ -1024,27 +1187,23 @@ public struct StorageFileAPI: Sendable {
       headers: client.mergedHeaders(headers)
     )
 
-    let delegate = progress.map { UploadProgressDelegate(onProgress: $0) }
-
     do {
       client.logRequest(method, url: url)
       let data: Data
       let response: URLResponse
 
-      if try file.usesTempFileUpload {
+      if file.usesTempFileUpload {
         let tempFile = try multipart.buildToTempFile()
         defer { try? FileManager.default.removeItem(at: tempFile) }
 
         (data, response) = try await client.http.session.upload(
           for: request,
-          fromFile: tempFile,
-          delegate: delegate
+          fromFile: tempFile
         )
       } else {
         (data, response) = try await client.http.session.upload(
           for: request,
-          from: try multipart.buildInMemory(),
-          delegate: delegate
+          from: try multipart.buildInMemory()
         )
       }
 
@@ -1084,33 +1243,6 @@ public struct StorageFileAPI: Sendable {
 
   private func _getFinalPath(_ path: String) -> String {
     "\(bucketId)/\(path)"
-  }
-}
-
-// MARK: - Upload progress
-
-private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate,
-  @unchecked Sendable
-{
-  private let onProgress: @Sendable (UploadProgress) -> Void
-
-  init(onProgress: @escaping @Sendable (UploadProgress) -> Void) {
-    self.onProgress = onProgress
-  }
-
-  func urlSession(
-    _ session: URLSession,
-    task: URLSessionTask,
-    didSendBodyData bytesSent: Int64,
-    totalBytesSent: Int64,
-    totalBytesExpectedToSend: Int64
-  ) {
-    onProgress(
-      UploadProgress(
-        totalBytesSent: totalBytesSent,
-        totalBytesExpectedToSend: totalBytesExpectedToSend
-      )
-    )
   }
 }
 

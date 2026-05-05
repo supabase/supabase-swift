@@ -1,0 +1,677 @@
+//
+//  TUSUploadEngineTests.swift
+//  Storage
+//
+//  Created by Guilherme Souza on 04/05/26.
+//
+
+import ConcurrencyExtras
+import Foundation
+import Mocker
+import Testing
+
+@testable import Storage
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
+@Suite struct TUSUploadEngineStateTests {
+  let dummyURL = URL(string: "https://example.supabase.co/upload/1")!
+  let dummyResponse = FileUploadResponse(
+    id: UUID(), path: "f.txt", fullPath: "bucket/f.txt")
+  let dummyError = StorageError(message: "oops", errorCode: .unknown)
+
+  @Test func nonTerminalStatesReturnFalse() {
+    #expect(!TUSUploadEngine.State.idle.isTerminal)
+    #expect(!TUSUploadEngine.State.creating.isTerminal)
+    #expect(!TUSUploadEngine.State.uploading(uploadURL: dummyURL, offset: 0).isTerminal)
+    #expect(!TUSUploadEngine.State.paused(uploadURL: dummyURL, offset: 0).isTerminal)
+  }
+
+  @Test func terminalStatesReturnTrue() {
+    #expect(TUSUploadEngine.State.completed(dummyResponse).isTerminal)
+    #expect(TUSUploadEngine.State.failed(dummyError).isTerminal)
+    #expect(TUSUploadEngine.State.cancelled.isTerminal)
+  }
+}
+
+@Suite(.serialized) struct TUSUploadEngineTests {
+
+  let baseURL = URL(string: "https://example.supabase.co/storage/v1")!
+  let uploadURL = URL(string: "https://example.supabase.co/storage/v1/upload/resumable")!
+  let locationURL = URL(
+    string: "https://example.supabase.co/storage/v1/upload/resumable/test-id")!
+
+  var client: StorageClient {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [MockingURLProtocol.self]
+    let session = URLSession(configuration: configuration)
+    return StorageClient(
+      url: baseURL,
+      configuration: StorageClientConfiguration(
+        headers: ["Authorization": "Bearer test-token"],
+        session: session
+      )
+    )
+  }
+
+  var sequentialClient: StorageClient {
+    sequentialClientWithChunkSize(6 * 1024 * 1024)
+  }
+
+  func sequentialClientWithChunkSize(_ chunkSize: Int) -> StorageClient {
+    SequentialMockProtocol.reset()
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [SequentialMockProtocol.self]
+    return StorageClient(
+      url: baseURL,
+      configuration: StorageClientConfiguration(
+        headers: ["Authorization": "Bearer test-token"],
+        session: URLSession(configuration: config),
+        tusChunkSize: chunkSize
+      )
+    )
+  }
+
+  // MARK: - Helpers
+
+  private func makeTUSServerResponseData(path: String, fullPath: String) throws -> Data {
+    // TUSUploadServerResponse shape: {"Key": "<fullPath>", "Id": "<uuid>"}
+    let json = "{\"Key\":\"\(fullPath)\",\"Id\":\"E621E1F8-C36C-495A-93FC-0C247A3E6E5F\"}"
+    return Data(json.utf8)
+  }
+
+  // MARK: - Tests
+
+  @Test func postCreatesUploadWithCorrectHeaders() async throws {
+    let capturedRequest = LockIsolated<URLRequest?>(nil)
+
+    var postMock = Mock(
+      url: uploadURL,
+      contentType: .json,
+      statusCode: 201,
+      data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
+    )
+    postMock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedRequest.setValue(request)
+    })
+    postMock.register()
+
+    // Register a PATCH mock so the engine can proceed past POST without error
+    let patchResponseJSON = """
+      {"Key":"bucket/test.txt","Id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F"}
+      """
+    Mock(
+      url: locationURL,
+      contentType: .json,
+      statusCode: 200,
+      data: [.patch: Data(patchResponseJSON.utf8)],
+      additionalHeaders: ["Upload-Offset": "5"]
+    ).register()
+
+    let data = Data("hello".utf8)
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "test.txt",
+      source: .data(data),
+      options: FileOptions(contentType: "text/plain", upsert: false),
+      client: client
+    )
+    _ = try await task.value
+
+    let request = try #require(capturedRequest.value)
+    #expect(request.value(forHTTPHeaderField: "Tus-Resumable") == "1.0.0")
+    #expect(request.value(forHTTPHeaderField: "Upload-Length") == "5")
+    let metadata = try #require(request.value(forHTTPHeaderField: "Upload-Metadata"))
+    #expect(metadata.contains("bucketName"))
+    #expect(metadata.contains("objectName"))
+    #expect(metadata.contains("contentType"))
+    #expect(metadata.contains("cacheControl"))
+  }
+
+  @Test func sendsTwoChunksForDataLargerThanChunkSize() async throws {
+    let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
+    let finalResponse = try makeTUSServerResponseData(path: "f.txt", fullPath: "bucket/f.txt")
+
+    let sc = sequentialClientWithChunkSize(3)
+    SequentialMockProtocol.responses = [
+      // POST: 201 + Location header
+      (201, ["Location": locationURL.absoluteString], Data()),
+      // PATCH 1 (offset 0, 3 bytes): 204 + Upload-Offset: 3
+      (204, ["Upload-Offset": "3"], Data()),
+      // PATCH 2 (offset 3, 2 bytes): 200 + final response body
+      (200, ["Upload-Offset": "5"], finalResponse),
+    ]
+
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "f.txt",
+      source: .data(data),
+      options: FileOptions(contentType: "text/plain"),
+      client: sc
+    )
+    _ = try await task.value
+
+    // POST + 2 PATCHes = 3 total requests
+    #expect(SequentialMockProtocol.callIndex == 3)
+    let requests = SequentialMockProtocol.capturedRequests
+    #expect(requests.count == 3)
+    let patch1Offset = requests[1].value(forHTTPHeaderField: "Upload-Offset")
+    let patch2Offset = requests[2].value(forHTTPHeaderField: "Upload-Offset")
+    #expect(patch1Offset == "0")
+    #expect(patch2Offset == "3")
+  }
+
+  @Test func emitsProgressEventsPerChunk() async throws {
+    let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
+    let finalResponse = try makeTUSServerResponseData(path: "f.bin", fullPath: "bucket/f.bin")
+
+    let sc = sequentialClientWithChunkSize(3)
+    SequentialMockProtocol.responses = [
+      // POST: 201 + Location header
+      (201, ["Location": locationURL.absoluteString], Data()),
+      // PATCH 1 (offset 0, 3 bytes): 204 + Upload-Offset: 3
+      (204, ["Upload-Offset": "3"], Data()),
+      // PATCH 2 (offset 3, 2 bytes): 200 + final response body
+      (200, ["Upload-Offset": "5"], finalResponse),
+    ]
+
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "f.bin",
+      source: .data(data),
+      options: FileOptions(contentType: "application/octet-stream"),
+      client: sc
+    )
+
+    var progressFractions: [Double] = []
+    for await event in task.events {
+      if case .progress(let p) = event {
+        progressFractions.append(p.fractionCompleted)
+      }
+    }
+
+    #expect(progressFractions.count == 2)
+    #expect(progressFractions[0] < progressFractions[1])
+    #expect(progressFractions[1] == 1.0)
+  }
+
+  @Test func cancelMidUploadEmitsCancelledEvent() async throws {
+    HangingMockProtocol.resetHang()
+
+    HangingMockProtocol.postResponse = (201, ["Location": locationURL.absoluteString], Data())
+    defer { HangingMockProtocol.postResponse = nil }
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [HangingMockProtocol.self]
+    let hangingClient = StorageClient(
+      url: baseURL,
+      configuration: StorageClientConfiguration(
+        headers: ["Authorization": "Bearer test-token"],
+        session: URLSession(configuration: config),
+        tusChunkSize: 3
+      )
+    )
+
+    let data = Data("hello".utf8)  // 5 bytes, 2 chunks
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "big.bin",
+      source: .data(data),
+      options: FileOptions(contentType: "application/octet-stream"),
+      client: hangingClient
+    )
+
+    // Wait until the first PATCH is actually hanging, then cancel
+    Task {
+      var iter = HangingMockProtocol.nextPatchHang.makeAsyncIterator()
+      _ = await iter.next()
+      await task.cancel()
+    }
+
+    var events: [TransferEvent<FileUploadResponse>] = []
+    for await event in task.events { events.append(event) }
+    #expect(!events.isEmpty, "stream must emit at least one event before closing")
+    if case .failed(let error) = events.last {
+      #expect(error.errorCode == .cancelled)
+    } else {
+      Issue.record(
+        "Expected last event .failed(.cancelled), got \(String(describing: events.last))")
+    }
+  }
+
+  @Test func cancelledTaskResultThrows() async throws {
+    HangingMockProtocol.resetHang()
+
+    HangingMockProtocol.postResponse = (201, ["Location": locationURL.absoluteString], Data())
+    defer { HangingMockProtocol.postResponse = nil }
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [HangingMockProtocol.self]
+    let hangingClient = StorageClient(
+      url: baseURL,
+      configuration: StorageClientConfiguration(
+        headers: ["Authorization": "Bearer test-token"],
+        session: URLSession(configuration: config),
+        tusChunkSize: 3
+      )
+    )
+
+    let data = Data("hello".utf8)
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "big.bin",
+      source: .data(data),
+      options: FileOptions(contentType: "application/octet-stream"),
+      client: hangingClient
+    )
+
+    // Wait until the first PATCH is actually hanging, then cancel
+    Task {
+      var iter = HangingMockProtocol.nextPatchHang.makeAsyncIterator()
+      _ = await iter.next()
+      await task.cancel()
+    }
+
+    do {
+      _ = try await task.value
+      Issue.record("Expected throw")
+    } catch let error as StorageError {
+      #expect(error.errorCode == .cancelled)
+    }
+  }
+
+  @Test func cancelDuringCreateEmitsCancelledEvent() async throws {
+    // Regression: cancel() while in .creating (POST in flight) must emit .failed(.cancelled).
+    HangingMockProtocol.resetHang()
+    HangingMockProtocol.hangPostRequests = true  // hang POST so engine stays in .creating
+    defer { HangingMockProtocol.hangPostRequests = false }
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [HangingMockProtocol.self]
+    let hangingClient = StorageClient(
+      url: baseURL,
+      configuration: StorageClientConfiguration(
+        headers: ["Authorization": "Bearer test-token"],
+        session: URLSession(configuration: config)
+      )
+    )
+
+    let data = Data("hello".utf8)
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "creating.bin",
+      source: .data(data),
+      options: FileOptions(contentType: "application/octet-stream"),
+      client: hangingClient
+    )
+
+    Task {
+      var iter = HangingMockProtocol.nextHang.makeAsyncIterator()
+      _ = await iter.next()
+      await task.cancel()
+    }
+
+    var events: [TransferEvent<FileUploadResponse>] = []
+    for await event in task.events { events.append(event) }
+    #expect(!events.isEmpty, "stream must emit at least one event")
+    if case .failed(let error) = events.last {
+      #expect(error.errorCode == .cancelled)
+    } else {
+      Issue.record(
+        "Expected last event .failed(.cancelled), got \(String(describing: events.last))")
+    }
+  }
+
+  @Test func resumeAfterPauseSyncsOffsetViaHEAD() async throws {
+    let data = Data("hello".utf8)  // 5 bytes → 2 chunks (3 + 2)
+    let finalResponse = try makeTUSServerResponseData(path: "r.txt", fullPath: "bucket/r.txt")
+
+    // POST and PATCH 1 respond immediately; PATCH 2 hangs until we resume.
+    // sequentialClientWithChunkSize calls SequentialMockProtocol.reset(), which clears
+    // hangWhenExhausted. Set it to true immediately after so the ordering is explicit.
+    let sc = sequentialClientWithChunkSize(3)
+    SequentialMockProtocol.hangWhenExhausted = true
+    SequentialMockProtocol.responses = [
+      (201, ["Location": locationURL.absoluteString], Data()),
+      (204, ["Upload-Offset": "3"], Data()),
+    ]
+
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "r.txt",
+      source: .data(data),
+      options: FileOptions(contentType: "text/plain"),
+      client: sc
+    )
+
+    // Wait until PATCH 2 starts hanging (signals that POST + PATCH 1 are done)
+    var iter = SequentialMockProtocol.nextHang.makeAsyncIterator()
+    _ = await iter.next()
+
+    await task.pause()
+
+    // Wait until the hanging request is actually cancelled (stopLoading called),
+    // confirming the pause has fully propagated through the engine actor.
+    var cancelIter = SequentialMockProtocol.hangCancelled.makeAsyncIterator()
+    _ = await cancelIter.next()
+
+    // Add HEAD (re-sync) and PATCH 2 responses, then resume
+    // Disable hang so the engine's new requests are served normally
+    SequentialMockProtocol.hangWhenExhausted = false
+    SequentialMockProtocol.appendResponse((200, ["Upload-Offset": "3"], Data()))  // HEAD
+    SequentialMockProtocol.appendResponse((200, ["Upload-Offset": "5"], finalResponse))  // PATCH 2
+
+    await task.resume()
+
+    let response = try await task.value
+    #expect(response.path == "r.txt")
+    // capturedRequests: POST, PATCH1, hanging-PATCH2 (cancelled), HEAD, PATCH2-real = 5
+    // callIndex: POST(0→1) + PATCH1(1→2) + HEAD(2→3) + PATCH2(3→4) = 4
+    // (hanging-PATCH2 does NOT advance callIndex)
+    let requests = SequentialMockProtocol.capturedRequests
+    #expect(requests.count == 5)
+    #expect(SequentialMockProtocol.callIndex == 4)
+    #expect(requests[0].httpMethod == "POST")
+    #expect(requests[1].httpMethod == "PATCH")
+    #expect(requests[2].httpMethod == "PATCH")  // the hanging-then-cancelled PATCH 2
+    #expect(requests[3].httpMethod == "HEAD")  // HEAD re-sync after resume
+    #expect(requests[4].httpMethod == "PATCH")  // real PATCH 2 after HEAD
+  }
+
+  @Test func resyncReturningTotalBytesOn409CompletesSuccessfully() async throws {
+    // Regression test for: a 409 resync where the server reports offset == totalBytes
+    // (file already fully uploaded) previously caused uploadChunks to exit the while loop
+    // without calling finish(), leaving both continuations open and making task.value hang.
+    let data = Data("hello".utf8)  // 5 bytes
+
+    let sc = sequentialClientWithChunkSize(6 * 1024 * 1024)
+    SequentialMockProtocol.responses = [
+      // POST: 201 + Location
+      (201, ["Location": locationURL.absoluteString], Data()),
+      // PATCH: 409 — triggers HEAD re-sync
+      (409, [:], Data()),
+      // HEAD: Upload-Offset == totalBytes (5) — upload already complete
+      (200, ["Upload-Offset": "5"], Data()),
+    ]
+
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "f.txt",
+      source: .data(data),
+      options: FileOptions(contentType: "text/plain"),
+      client: sc
+    )
+
+    let response = try await task.value
+    #expect(response.path == "f.txt")
+    #expect(response.fullPath == "bucket/f.txt")
+    // POST + PATCH + HEAD = 3 requests; no extra PATCH should be attempted
+    #expect(SequentialMockProtocol.callIndex == 3)
+  }
+
+  @Test func resyncesOffsetOn409() async throws {
+    let data = Data(repeating: 0x01, count: 100)
+    let headCount = LockIsolated(0)
+
+    // POST mock
+    Mock(
+      url: uploadURL,
+      contentType: .json,
+      statusCode: 201,
+      data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
+    ).register()
+
+    let finalResponse = try makeTUSServerResponseData(path: "x.txt", fullPath: "bucket/x.txt")
+
+    // Second PATCH (retry from offset 0 after re-sync) → success
+    var patch2 = Mock(
+      url: locationURL,
+      contentType: .json,
+      statusCode: 200,
+      data: [.patch: finalResponse],
+      additionalHeaders: ["Upload-Offset": "100"]
+    )
+
+    // HEAD for re-sync — swaps in patch2 on completion
+    var headMock = Mock(
+      url: locationURL,
+      contentType: .json,
+      statusCode: 200,
+      data: [.head: Data()],
+      additionalHeaders: ["Upload-Offset": "0"]
+    )
+    headMock.onRequestHandler = OnRequestHandler(requestCallback: { _ in
+      headCount.withValue { $0 += 1 }
+    })
+    headMock.completion = {
+      patch2.register()
+    }
+    headMock.register()
+
+    // First PATCH → 409 (triggers HEAD re-sync)
+    Mock(
+      url: locationURL,
+      contentType: .json,
+      statusCode: 409,
+      data: [.patch: Data()]
+    ).register()
+
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "x.txt",
+      source: .data(data),
+      options: FileOptions(contentType: "text/plain"),
+      client: client
+    )
+    let response = try await task.value
+
+    #expect(headCount.value == 1)
+    #expect(response.path == "x.txt")
+  }
+
+  @Test func repeatedConsecutive409sFailWithError() async throws {
+    let data = Data(repeating: 0x01, count: 100)
+    // Use chunk size > data so there is exactly one chunk per upload attempt.
+    let seqClient = sequentialClientWithChunkSize(200)
+
+    // POST → create upload
+    SequentialMockProtocol.appendResponse(
+      (
+        statusCode: 201,
+        headers: ["Location": locationURL.absoluteString],
+        data: Data()
+      ))
+    // 3 rounds of PATCH→409 + HEAD→offset-0 (allowed retries), then a 4th PATCH→409 trips
+    // the consecutive-409 guard in the engine (consecutive409s <= 3 fails on the 4th).
+    for _ in 0..<3 {
+      SequentialMockProtocol.appendResponse((statusCode: 409, headers: [:], data: Data()))
+      SequentialMockProtocol.appendResponse(
+        (
+          statusCode: 200,
+          headers: ["Upload-Offset": "0"],
+          data: Data()
+        ))
+    }
+    SequentialMockProtocol.appendResponse((statusCode: 409, headers: [:], data: Data()))
+
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "x.txt",
+      source: .data(data),
+      options: FileOptions(contentType: "text/plain"),
+      client: seqClient
+    )
+
+    let result = await task.result
+    guard case .failure(let error) = result else {
+      Issue.record("Expected failure, got success")
+      return
+    }
+    let storageError = try #require(error as? StorageError)
+    #expect(storageError.message.contains("409"))
+  }
+}
+
+// MARK: - SequentialMockProtocol
+
+/// Provides sequential responses for the same URL across multiple requests.
+/// Designed for testing PATCH chunk uploads where each call needs a different response.
+final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
+
+  private struct State {
+    var responses: [(statusCode: Int, headers: [String: String], data: Data)] = []
+    var callIndex: Int = 0
+    var capturedRequests: [URLRequest] = []
+    /// When `true`, requests that arrive after all responses are consumed hang (until cancelled)
+    /// instead of immediately failing. Use `nextHang` / `hangCancelled` to synchronise.
+    var hangWhenExhausted: Bool = false
+    var hangContinuation: AsyncStream<Void>.Continuation?
+    var nextHang: AsyncStream<Void> = AsyncStream { _ in }
+    var hangCancelledContinuation: AsyncStream<Void>.Continuation?
+    var hangCancelled: AsyncStream<Void> = AsyncStream { _ in }
+  }
+
+  private static let _state = LockIsolated(State())
+  private var didFinish = false
+
+  // MARK: - External accessors (tests are @Suite(.serialized) so reads are single-threaded)
+
+  static var responses: [(statusCode: Int, headers: [String: String], data: Data)] {
+    get { _state.value.responses }
+    set { _state.withValue { $0.responses = newValue } }
+  }
+  static var callIndex: Int { _state.value.callIndex }
+  static var capturedRequests: [URLRequest] { _state.value.capturedRequests }
+  static var hangWhenExhausted: Bool {
+    get { _state.value.hangWhenExhausted }
+    set { _state.withValue { $0.hangWhenExhausted = newValue } }
+  }
+  static var nextHang: AsyncStream<Void> { _state.value.nextHang }
+  static var hangCancelled: AsyncStream<Void> { _state.value.hangCancelled }
+
+  static func reset() {
+    _state.withValue { s in
+      s.callIndex = 0
+      s.responses = []
+      s.capturedRequests = []
+      s.hangWhenExhausted = false
+      let (stream, cont) = AsyncStream<Void>.makeStream()
+      s.nextHang = stream
+      s.hangContinuation = cont
+      let (cancelStream, cancelCont) = AsyncStream<Void>.makeStream()
+      s.hangCancelled = cancelStream
+      s.hangCancelledContinuation = cancelCont
+    }
+  }
+
+  static func appendResponse(_ response: (statusCode: Int, headers: [String: String], data: Data)) {
+    _state.withValue { $0.responses.append(response) }
+  }
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    // Capture all decisions and state changes under the lock, including capturing the
+    // continuation reference so the yield below is free of any race with reset().
+    enum Action {
+      case hang(AsyncStream<Void>.Continuation?)
+      case serve(statusCode: Int, headers: [String: String], data: Data)
+      case fail
+    }
+
+    let req = request  // capture before entering the Sendable closure
+    let action: Action = Self._state.withValue { s in
+      let index = s.callIndex
+      let shouldHang = s.hangWhenExhausted && index >= s.responses.count
+      s.capturedRequests.append(req)
+      if shouldHang {
+        return .hang(s.hangContinuation)
+      }
+      s.callIndex += 1
+      guard index < s.responses.count else { return .fail }
+      let r = s.responses[index]
+      return .serve(statusCode: r.statusCode, headers: r.headers, data: r.data)
+    }
+
+    switch action {
+    case .hang(let cont):
+      cont?.yield(())
+    // Hang — stopLoading() will cancel this request
+    case .serve(let statusCode, let headers, let data):
+      let httpResponse = HTTPURLResponse(
+        url: request.url!, statusCode: statusCode, httpVersion: nil, headerFields: headers)!
+      client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
+      client?.urlProtocol(self, didLoad: data)
+      client?.urlProtocolDidFinishLoading(self)
+      didFinish = true
+    case .fail:
+      client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+    }
+  }
+
+  override func stopLoading() {
+    let cancelCont = Self._state.value.hangCancelledContinuation
+    if !didFinish {
+      client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+      cancelCont?.yield(())
+    }
+  }
+}
+
+// MARK: - HangingMockProtocol
+
+/// Hangs requests indefinitely (until cancelled).
+///
+/// By default POST requests respond immediately with `postResponse` and only PATCH/HEAD hang.
+/// Set `hangPostRequests = true` to also hang POST, which keeps the engine in `.creating` state —
+/// useful for testing cancel during upload creation.
+final class HangingMockProtocol: URLProtocol, @unchecked Sendable {
+  nonisolated(unsafe) static var postResponse:
+    (statusCode: Int, headers: [String: String], data: Data)?
+  /// When `true`, POST requests hang just like PATCH/HEAD requests.
+  nonisolated(unsafe) static var hangPostRequests = false
+
+  // Signals when any hanging request starts
+  nonisolated(unsafe) private static var hangContinuation: AsyncStream<Void>.Continuation?
+  nonisolated(unsafe) static var nextHang: AsyncStream<Void> = AsyncStream { _ in }
+
+  // Keep the old name as an alias so existing call sites compile unchanged
+  static var nextPatchHang: AsyncStream<Void> { nextHang }
+
+  static func resetHang() {
+    hangPostRequests = false
+    let (stream, continuation) = AsyncStream<Void>.makeStream()
+    nextHang = stream
+    hangContinuation = continuation
+  }
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    let isPost = request.httpMethod == "POST"
+    if isPost && !Self.hangPostRequests, let resp = Self.postResponse {
+      let httpResponse = HTTPURLResponse(
+        url: request.url!,
+        statusCode: resp.statusCode,
+        httpVersion: nil,
+        headerFields: resp.headers
+      )!
+      client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
+      client?.urlProtocol(self, didLoad: resp.data)
+      client?.urlProtocolDidFinishLoading(self)
+    } else {
+      Self.hangContinuation?.yield(())
+      // Hang — stopLoading() will cancel this request
+    }
+  }
+
+  override func stopLoading() {
+    client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+  }
+}

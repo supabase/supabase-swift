@@ -204,34 +204,6 @@ public struct FileUploadResponse: Sendable {
   public let fullPath: String
 }
 
-/// Reports upload progress for a file upload operation.
-///
-/// Passed to the `progress` closure on upload methods such as
-/// ``StorageFileAPI/upload(_:data:options:progress:)``.
-///
-/// ## Example
-///
-/// ```swift
-/// try await bucket.upload("video.mp4", fileURL: localURL) { progress in
-///   print("\(Int(progress.fractionCompleted * 100))%")
-/// }
-/// ```
-public struct UploadProgress: Sendable {
-  /// The total number of bytes sent so far.
-  public let totalBytesSent: Int64
-
-  /// The total number of bytes expected to be sent.
-  public let totalBytesExpectedToSend: Int64
-
-  /// Upload completion fraction, from `0.0` to `1.0`.
-  ///
-  /// Returns `0.0` when `totalBytesExpectedToSend` is zero.
-  public var fractionCompleted: Double {
-    guard totalBytesExpectedToSend > 0 else { return 0 }
-    return Double(totalBytesSent) / Double(totalBytesExpectedToSend)
-  }
-}
-
 /// The server's response after a successful upload via a signed upload URL.
 ///
 /// Returned by ``StorageFileAPI/uploadToSignedURL(_:token:data:options:)`` and
@@ -675,7 +647,7 @@ public enum DownloadBehavior: Sendable {
 /// Options for on-the-fly image transformation via the Supabase Storage image transformation API.
 ///
 /// Use `TransformOptions` when calling
-/// ``StorageFileAPI/download(path:options:query:cacheNonce:)`` or
+/// ``StorageFileAPI/download(path:options:)`` or
 /// ``StorageFileAPI/getPublicURL(path:download:options:cacheNonce:)`` to resize, reformat, or
 /// adjust the quality of images before they are served to the client.
 ///
