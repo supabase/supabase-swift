@@ -64,6 +64,12 @@ public final class StorageTransferTask<Success: Sendable>: Sendable {
 
   /// Cancels the transfer immediately.
   public func cancel() async {
+    // Order is load-bearing: _cancel() must run first.
+    // It sets the engine's state to .cancelled and finishes the continuations before
+    // Swift's structured cancellation propagates. If _resultTask.cancel() fired first,
+    // the resulting CancellationError would reach handleRunError while the engine is
+    // still in .uploading/.creating, causing it to call cancel() a second time and
+    // race with this explicit cancellation path.
     await _cancel()
     _resultTask.cancel()
   }
