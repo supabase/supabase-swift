@@ -248,7 +248,11 @@ public final class StorageClient: Sendable {
           .background(withIdentifier: $0)
         } ?? .default
     #else
-      let downloadSessionConfig: URLSessionConfiguration = .default
+      // On Linux (swift-corelibs-foundation), URLSessionConfiguration.default is a shared
+      // singleton. Passing it directly to URLSession.init(configuration:delegate:delegateQueue:)
+      // triggers a precondition failure — the initializer requires a non-shared configuration.
+      // Use .ephemeral instead, which always returns a fresh, isolated configuration object.
+      let downloadSessionConfig: URLSessionConfiguration = .ephemeral
     #endif
     // Propagate any custom protocol classes (e.g. for testing) from the HTTP session.
     if let protocolClasses = configuration.session.configuration.protocolClasses,
