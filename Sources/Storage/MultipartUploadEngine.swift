@@ -67,8 +67,10 @@ actor MultipartUploadEngine {
     currentUploadTask = Task { await run() }
   }
 
+  // Multipart uploads do not support pause/resume — the single-shot request cannot be
+  // interrupted and resumed mid-flight. These are intentional no-ops; callers that need
+  // pause/resume should use the TUS upload path instead.
   func pause() {}
-
   func resume() {}
 
   func cancel() {
