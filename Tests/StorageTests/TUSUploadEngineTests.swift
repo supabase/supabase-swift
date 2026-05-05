@@ -475,40 +475,35 @@ import Testing
 
   @Test func repeatedConsecutive409sFailWithError() async throws {
     let data = Data(repeating: 0x01, count: 100)
+    // Use chunk size > data so there is exactly one chunk per upload attempt.
+    let seqClient = sequentialClientWithChunkSize(200)
 
-    Mock(
-      url: uploadURL,
-      contentType: .json,
-      statusCode: 201,
-      data: [.post: Data()],
-      additionalHeaders: ["Location": locationURL.absoluteString]
-    ).register()
-
-    // Every HEAD re-sync returns offset 0 — server never advances.
-    Mock(
-      url: locationURL,
-      contentType: .json,
-      statusCode: 200,
-      data: [.head: Data()],
-      additionalHeaders: ["Upload-Offset": "0"],
-      requestCount: 10
-    ).register()
-
-    // Every PATCH returns 409 indefinitely.
-    Mock(
-      url: locationURL,
-      contentType: .json,
-      statusCode: 409,
-      data: [.patch: Data()],
-      requestCount: 10
-    ).register()
+    // POST → create upload
+    SequentialMockProtocol.appendResponse(
+      (
+        statusCode: 201,
+        headers: ["Location": locationURL.absoluteString],
+        data: Data()
+      ))
+    // 3 rounds of PATCH→409 + HEAD→offset-0 (allowed retries), then a 4th PATCH→409 trips
+    // the consecutive-409 guard in the engine (consecutive409s <= 3 fails on the 4th).
+    for _ in 0..<3 {
+      SequentialMockProtocol.appendResponse((statusCode: 409, headers: [:], data: Data()))
+      SequentialMockProtocol.appendResponse(
+        (
+          statusCode: 200,
+          headers: ["Upload-Offset": "0"],
+          data: Data()
+        ))
+    }
+    SequentialMockProtocol.appendResponse((statusCode: 409, headers: [:], data: Data()))
 
     let task = TUSUploadEngine.makeTask(
       bucketId: "bucket",
       path: "x.txt",
       source: .data(data),
       options: FileOptions(contentType: "text/plain"),
-      client: client
+      client: seqClient
     )
 
     let result = await task.result
