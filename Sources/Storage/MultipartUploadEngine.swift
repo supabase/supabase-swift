@@ -148,7 +148,7 @@ actor MultipartUploadEngine {
       )
     }
 
-    if try source.usesTempFileUpload {
+    if source.usesTempFileUpload {
       let tempFile = try multipart.buildToTempFile()
       defer { try? FileManager.default.removeItem(at: tempFile) }
       #if canImport(Darwin)
