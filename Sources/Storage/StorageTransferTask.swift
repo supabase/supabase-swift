@@ -147,9 +147,14 @@ public enum TransferEvent<Success: Sendable>: Sendable {
 
 /// Byte-level progress for a transfer.
 public struct TransferProgress: Sendable {
+  /// Number of bytes sent or received so far.
   public let bytesTransferred: Int64
+
+  /// Total size of the transfer in bytes.
   public let totalBytes: Int64
 
+  /// Transfer completion as a value between `0.0` and `1.0`.
+  /// Returns `0` when `totalBytes` is zero.
   public var fractionCompleted: Double {
     guard totalBytes > 0 else { return 0 }
     return Double(bytesTransferred) / Double(totalBytes)
