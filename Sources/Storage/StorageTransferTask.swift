@@ -49,10 +49,17 @@ public final class StorageTransferTask<Success: Sendable>: Sendable {
     get async throws { try await result.get() }
   }
 
-  /// Suspends the transfer. For uploads: completes the current in-flight chunk first.
+  /// Suspends the transfer.
+  ///
+  /// Only supported for TUS (resumable) uploads. For multipart uploads this is a no-op —
+  /// use ``cancel()`` and re-upload from scratch if you need to stop a multipart transfer.
+  /// For TUS uploads the current in-flight chunk is drained before the task suspends.
   public func pause() async { await _pause() }
 
-  /// Resumes a paused transfer. For uploads: HEADs the server to re-sync offset first.
+  /// Resumes a previously paused transfer.
+  ///
+  /// Only supported for TUS (resumable) uploads. For multipart uploads this is a no-op.
+  /// For TUS uploads the server is HEAD-queried to re-sync the byte offset before uploading resumes.
   public func resume() async { await _resume() }
 
   /// Cancels the transfer immediately.
