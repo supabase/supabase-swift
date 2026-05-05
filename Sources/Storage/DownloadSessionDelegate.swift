@@ -12,7 +12,7 @@ import Foundation
   import FoundationNetworking
 #endif
 
-final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, Sendable {
 
   struct DownloadTaskState {
     let eventsContinuation: AsyncStream<TransferEvent<URL>>.Continuation
