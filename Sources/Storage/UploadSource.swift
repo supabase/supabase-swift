@@ -10,6 +10,30 @@ import Helpers
   import FoundationNetworking
 #endif
 
+/// A `FileHandle` wrapper that closes the underlying handle in `deinit`.
+///
+/// Guarantees the file descriptor is released regardless of how the owning scope
+/// exits — normal return, `throw`, or cooperative Task cancellation.
+final class AutoreleasingFileHandle {
+  private let handle: FileHandle
+
+  init(forReadingFrom url: URL) throws {
+    handle = try FileHandle(forReadingFrom: url)
+  }
+
+  func seek(toOffset offset: UInt64) throws {
+    try handle.seek(toOffset: offset)
+  }
+
+  func read(upToCount count: Int) throws -> Data {
+    try handle.read(upToCount: count) ?? Data()
+  }
+
+  deinit {
+    try? handle.close()
+  }
+}
+
 enum UploadSource: Sendable {
   case data(Data)
   case fileURL(URL)
@@ -29,37 +53,30 @@ enum UploadSource: Sendable {
     }
   }
 
-  /// Opens a `FileHandle` for reading the file at `.fileURL`, or returns `nil` for `.data`.
-  /// The caller is responsible for closing the handle when done.
-  func openForReading() throws -> FileHandle? {
+  /// Opens an `AutoreleasingFileHandle` for reading the file at `.fileURL`, or returns `nil` for `.data`.
+  /// The handle closes itself in `deinit` — no manual cleanup required.
+  func openForReading() throws -> AutoreleasingFileHandle? {
     guard case .fileURL(let url) = self else { return nil }
-    return try FileHandle(forReadingFrom: url)
+    return try AutoreleasingFileHandle(forReadingFrom: url)
   }
 
   /// Reads a chunk from the source.
   ///
   /// Pass a pre-opened `fileHandle` (from ``openForReading()``) to avoid re-opening the file
-  /// on every chunk. When `fileHandle` is `nil` and the source is `.fileURL`, a temporary handle
-  /// is opened and closed for this call only.
-  func readChunk(at offset: Int64, maxSize: Int, fileHandle: FileHandle? = nil) throws -> Data {
+  /// on every chunk. When `fileHandle` is `nil` and the source is `.fileURL`, a temporary
+  /// `AutoreleasingFileHandle` is created for this call only and released (closed) on return.
+  func readChunk(at offset: Int64, maxSize: Int, fileHandle: AutoreleasingFileHandle? = nil)
+    throws -> Data
+  {
     switch self {
     case .data(let d):
       let start = Int(offset)
       let end = min(start + maxSize, d.count)
       return d[start..<end]
     case .fileURL(let url):
-      let handle: FileHandle
-      let owned: Bool
-      if let fileHandle {
-        handle = fileHandle
-        owned = false
-      } else {
-        handle = try FileHandle(forReadingFrom: url)
-        owned = true
-      }
-      defer { if owned { try? handle.close() } }
+      let handle = try fileHandle ?? AutoreleasingFileHandle(forReadingFrom: url)
       try handle.seek(toOffset: UInt64(offset))
-      return try handle.read(upToCount: maxSize) ?? Data()
+      return try handle.read(upToCount: maxSize)
     }
   }
 
