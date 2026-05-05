@@ -115,11 +115,13 @@ enum UploadSource: Sendable {
   }
 
   var usesTempFileUpload: Bool {
-    get throws {
-      guard case .fileURL(let url) = self else { return false }
-      let fileSize = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-      return fileSize >= 10 * 1024 * 1024
-    }
+    guard case .fileURL(let url) = self else { return false }
+    // If the file size cannot be determined (symlink, network-mounted path, etc.) fall back
+    // to true — streaming via a temp file is safe regardless of size, and avoids loading an
+    // unknown-size file entirely into memory. Matches the conservative Int.max fallback used
+    // in the smart-default TUS-vs-multipart routing in StorageFileAPI.
+    let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
+    return fileSize >= 10 * 1024 * 1024
   }
 
   func defaultOptions() -> FileOptions {
