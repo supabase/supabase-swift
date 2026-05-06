@@ -233,13 +233,22 @@ struct FileDownloadView: View {
     Section("Downloaded (on disk)") {
       Label("File saved to disk", systemImage: "checkmark.circle.fill")
         .foregroundColor(.green)
-      Text("Temporary URL:")
+      if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+        HStack {
+          Text("Size")
+          Spacer()
+          Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
+            .foregroundColor(.secondary)
+        }
         .font(.caption)
-        .foregroundColor(.secondary)
+      }
       Text(url.path)
         .font(.system(.caption, design: .monospaced))
         .foregroundColor(.secondary)
         .lineLimit(3)
+      Text("Preview skipped — file too large to load into memory.")
+        .font(.caption)
+        .foregroundColor(.secondary)
       downloadModeLabel
     }
   }
@@ -316,16 +325,21 @@ struct FileDownloadView: View {
           downloadProgress = p.fractionCompleted
         case .completed(let url):
           downloadProgress = 1.0
-          downloadedFileURL = url
-          // Try to show a preview even for disk downloads
-          if let data = try? Data(contentsOf: url) {
+          // Only attempt an in-memory preview for small files (≤ 10 MB).
+          // Reading large files with Data(contentsOf:) loads the entire file
+          // into RAM — exactly what To Disk mode is designed to avoid.
+          let fileSize =
+            (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
+          if fileSize <= 10 * 1024 * 1024, let data = try? Data(contentsOf: url) {
             if let image = UIImage(data: data) {
               downloadedImage = image
-              downloadedFileURL = nil
             } else if let text = String(data: data, encoding: .utf8) {
               downloadedText = text
-              downloadedFileURL = nil
+            } else {
+              downloadedFileURL = url
             }
+          } else {
+            downloadedFileURL = url
           }
         case .failed(let storageError):
           self.error = storageError
