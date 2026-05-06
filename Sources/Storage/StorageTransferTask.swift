@@ -9,10 +9,6 @@ import Foundation
 
 /// A handle to an in-flight upload or download.
 ///
-/// Tasks start immediately on creation. They are `@discardableResult` — discard the return value
-/// for fire-and-forget, or hold the handle to observe progress, await the result, or control
-/// execution.
-///
 /// ## Usage patterns
 ///
 /// **Fire and forget**
@@ -57,7 +53,6 @@ public final class StorageTransferTask<Success: Sendable>: Sendable {
   ///
   /// Emits ``TransferEvent/progress(_:)`` events while the transfer is active, then terminates
   /// with either ``TransferEvent/completed(_:)`` or ``TransferEvent/failed(_:)``.
-  /// The stream finishes automatically after the terminal event — no explicit cancellation needed.
   public let events: AsyncStream<TransferEvent<Success>>
 
   private let _resultTask: Task<Success, any Error>
@@ -80,13 +75,11 @@ public final class StorageTransferTask<Success: Sendable>: Sendable {
   }
 
   /// The transfer outcome as a `Result`. Never throws — inspect `.success` / `.failure` directly.
-  /// Safe for concurrent callers — backed by `Task.result`.
   public var result: Result<Success, any Error> {
     get async { await _resultTask.result }
   }
 
   /// Awaits the success value. Throws `StorageError` on failure or cancellation.
-  /// Safe for concurrent callers — backed by `Task.value`.
   public var value: Success {
     get async throws { try await result.get() }
   }
