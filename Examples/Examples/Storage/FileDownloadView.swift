@@ -3,7 +3,7 @@
 //  Examples
 //
 //  Demonstrates both download engines:
-//    - To Memory (downloadData): loads file bytes in-process, previews images and text
+//    - To Memory (downloadData): loads file bytes in-process
 //    - To Disk (download): saves to a temporary file; background-session capable, survives app suspension
 //
 
@@ -23,11 +23,18 @@ struct FileDownloadView: View {
     var description: String {
       switch self {
       case .toMemory:
-        return "Loads the file into memory. Supports image and text preview."
+        return "Loads file bytes into memory via downloadData()."
       case .toDisk:
-        return "Saves to a temporary file. Background-session capable \u{2014} transfer continues while the app is suspended."
+        return "Saves to a temporary file via download(). Background-session capable — transfer continues while the app is suspended."
       }
     }
+  }
+
+  // MARK: - Result
+
+  enum DownloadResult {
+    case inMemory(Data, path: String)
+    case onDisk(URL)
   }
 
   // MARK: - State
@@ -36,18 +43,12 @@ struct FileDownloadView: View {
   @State private var buckets: [Bucket] = []
   @State private var files: [FileObject] = []
   @State private var downloadMode: DownloadMode = .toMemory
-  @State private var selectedPath = ""
 
   // Transfer state
   @State private var isDownloading = false
   @State private var downloadProgress: Double = 0
+  @State private var result: DownloadResult?
   @State private var error: Error?
-
-  // Results
-  @State private var downloadedData: Data?
-  @State private var downloadedImage: UIImage?
-  @State private var downloadedText: String?
-  @State private var downloadedFileURL: URL?
 
   // MARK: - Body
 
@@ -62,14 +63,8 @@ struct FileDownloadView: View {
         transferSection
       }
 
-      if let downloadedImage {
-        imagePreviewSection(downloadedImage)
-      } else if let downloadedText {
-        textPreviewSection(downloadedText)
-      } else if let downloadedData {
-        dataSection(downloadedData)
-      } else if let downloadedFileURL {
-        diskSection(downloadedFileURL)
+      if let result {
+        resultSection(result)
       }
 
       if let error {
@@ -153,7 +148,6 @@ struct FileDownloadView: View {
             Spacer()
 
             Button {
-              selectedPath = file.name
               Task { await downloadFile(path: file.name) }
             } label: {
               Image(systemName: "arrow.down.circle.fill").font(.title3)
@@ -179,84 +173,41 @@ struct FileDownloadView: View {
     }
   }
 
-  private func imagePreviewSection(_ image: UIImage) -> some View {
-    Section("Image Preview") {
-      Image(uiImage: image)
-        .resizable()
-        .scaledToFit()
-        .frame(maxHeight: 300)
-        .cornerRadius(8)
-
-      HStack {
-        Text("Dimensions")
-        Spacer()
-        Text("\(Int(image.size.width)) × \(Int(image.size.height)) px")
-          .foregroundColor(.secondary)
+  @ViewBuilder
+  private func resultSection(_ result: DownloadResult) -> some View {
+    switch result {
+    case .inMemory(let data, let path):
+      Section("Downloaded (in memory)") {
+        Label("File loaded into memory", systemImage: "checkmark.circle.fill")
+          .foregroundColor(.green)
+        row("Size", ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))
+        row("Path", path)
+        row("Mode", downloadMode.rawValue)
       }
-      .font(.caption)
 
-      downloadModeLabel
-
-      Button("Share Image") { shareImage(image) }
-    }
-  }
-
-  private func textPreviewSection(_ text: String) -> some View {
-    Section("Text Preview") {
-      Text(text)
-        .font(.system(.body, design: .monospaced))
-        .padding(8)
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
-
-      downloadModeLabel
-    }
-  }
-
-  private func dataSection(_ data: Data) -> some View {
-    Section("Downloaded (in memory)") {
-      Label("File loaded into memory", systemImage: "checkmark.circle.fill")
-        .foregroundColor(.green)
-      HStack {
-        Text("Size")
-        Spacer()
-        Text(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))
-          .foregroundColor(.secondary)
-      }
-      .font(.caption)
-      Text("Path: \(selectedPath)").font(.caption).foregroundColor(.secondary)
-      downloadModeLabel
-    }
-  }
-
-  private func diskSection(_ url: URL) -> some View {
-    Section("Downloaded (on disk)") {
-      Label("File saved to disk", systemImage: "checkmark.circle.fill")
-        .foregroundColor(.green)
-      if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-        HStack {
-          Text("Size")
-          Spacer()
-          Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
-            .foregroundColor(.secondary)
+    case .onDisk(let url):
+      Section("Downloaded (on disk)") {
+        Label("File saved to disk", systemImage: "checkmark.circle.fill")
+          .foregroundColor(.green)
+        if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+          row("Size", ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
         }
-        .font(.caption)
+        row("Mode", downloadMode.rawValue)
+        Text(url.path)
+          .font(.system(.caption, design: .monospaced))
+          .foregroundColor(.secondary)
+          .lineLimit(4)
       }
-      Text(url.path)
-        .font(.system(.caption, design: .monospaced))
-        .foregroundColor(.secondary)
-        .lineLimit(3)
-      Text("Preview skipped — file too large to load into memory.")
-        .font(.caption)
-        .foregroundColor(.secondary)
-      downloadModeLabel
     }
   }
 
-  private var downloadModeLabel: some View {
-    Text("Mode: \(downloadMode.rawValue)")
-      .font(.caption)
-      .foregroundColor(.secondary)
+  private func row(_ label: String, _ value: String) -> some View {
+    HStack {
+      Text(label)
+      Spacer()
+      Text(value).foregroundColor(.secondary)
+    }
+    .font(.caption)
   }
 
   // MARK: - Actions
@@ -295,7 +246,6 @@ struct FileDownloadView: View {
     switch downloadMode {
 
     case .toMemory:
-      // downloadData returns StorageTransferTask<Data> — drives progress events, loads into memory
       let task = bucket.downloadData(path: path)
       for await event in task.events {
         switch event {
@@ -303,21 +253,13 @@ struct FileDownloadView: View {
           downloadProgress = p.fractionCompleted
         case .completed(let data):
           downloadProgress = 1.0
-          downloadedData = data
-          if let image = UIImage(data: data) {
-            downloadedImage = image
-            downloadedData = nil
-          } else if let text = String(data: data, encoding: .utf8) {
-            downloadedText = text
-            downloadedData = nil
-          }
+          result = .inMemory(data, path: path)
         case .failed(let storageError):
           self.error = storageError
         }
       }
 
     case .toDisk:
-      // download returns StorageDownloadTask (StorageTransferTask<URL>) — background-session capable
       let task = bucket.download(path: path)
       for await event in task.events {
         switch event {
@@ -325,22 +267,7 @@ struct FileDownloadView: View {
           downloadProgress = p.fractionCompleted
         case .completed(let url):
           downloadProgress = 1.0
-          // Only attempt an in-memory preview for small files (≤ 10 MB).
-          // Reading large files with Data(contentsOf:) loads the entire file
-          // into RAM — exactly what To Disk mode is designed to avoid.
-          let fileSize =
-            (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
-          if fileSize <= 10 * 1024 * 1024, let data = try? Data(contentsOf: url) {
-            if let image = UIImage(data: data) {
-              downloadedImage = image
-            } else if let text = String(data: data, encoding: .utf8) {
-              downloadedText = text
-            } else {
-              downloadedFileURL = url
-            }
-          } else {
-            downloadedFileURL = url
-          }
+          result = .onDisk(url)
         case .failed(let storageError):
           self.error = storageError
         }
@@ -351,20 +278,9 @@ struct FileDownloadView: View {
   }
 
   func clearResults() {
-    downloadedData = nil
-    downloadedImage = nil
-    downloadedText = nil
-    downloadedFileURL = nil
+    result = nil
     downloadProgress = 0
-  }
-
-  func shareImage(_ image: UIImage) {
-    let vc = UIActivityViewController(activityItems: [image], applicationActivities: nil)
-    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-      let root = windowScene.windows.first?.rootViewController
-    {
-      root.present(vc, animated: true)
-    }
+    error = nil
   }
 
   func iconForFile(_ file: FileObject) -> String {
