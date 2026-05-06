@@ -2,6 +2,8 @@
 //  FileUploadView.swift
 //  Examples
 //
+//  Created by Guilherme Souza on 06/05/25.
+//
 //  Demonstrates all three upload engines:
 //    - Smart (auto): multipart for files ≤6 MB, TUS for larger files
 //    - Multipart: standard HTTP multipart, always
@@ -222,39 +224,42 @@ struct FileUploadView: View {
 
   private var transferSection: some View {
     Section("Transfer") {
-      VStack(alignment: .leading, spacing: 10) {
-        ProgressView(value: uploadProgress) {
-          HStack {
-            Text(isPaused ? "Paused" : "Uploading…")
-            Spacer()
-            Text("\(Int(uploadProgress * 100))%")
-          }
-          .font(.caption)
-          .foregroundColor(.secondary)
+      // Progress row
+      VStack(spacing: 6) {
+        ProgressView(value: uploadProgress)
+        HStack {
+          Text(isPaused ? "Paused" : "Uploading…")
+          Spacer()
+          Text("\(Int(uploadProgress * 100))%")
         }
+        .font(.caption)
+        .foregroundColor(.secondary)
+      }
+      .padding(.vertical, 4)
 
-        if uploadMode == .resumable {
-          HStack(spacing: 12) {
-            if isPaused {
-              Button("Resume") {
-                Task { await resumeUpload() }
-              }
-              .buttonStyle(.borderedProminent)
-            } else {
-              Button("Pause") {
-                Task { await pauseUpload() }
-              }
-              .buttonStyle(.bordered)
+      // Control row — separate list row so it is never clipped
+      if uploadMode == .resumable {
+        HStack(spacing: 12) {
+          if isPaused {
+            Button("Resume") {
+              Task { await resumeUpload() }
             }
-
-            Button("Cancel", role: .destructive) {
-              Task { await cancelUpload() }
+            .buttonStyle(.borderedProminent)
+          } else {
+            Button("Pause") {
+              Task { await pauseUpload() }
             }
             .buttonStyle(.bordered)
           }
+
+          Spacer()
+
+          Button("Cancel", role: .destructive) {
+            Task { await cancelUpload() }
+          }
+          .buttonStyle(.bordered)
         }
       }
-      .padding(.vertical, 4)
     }
   }
 
@@ -292,8 +297,8 @@ struct FileUploadView: View {
       contentType: contentType,
       upsert: upsertEnabled
     )
-    let bucket = supabase.storage.from(selectedBucket)
-    let task = bucket.upload(filePath, data: data, options: options, method: uploadMode.method)
+    let task = supabase.storage.from(selectedBucket)
+      .upload(filePath, data: data, options: options, method: uploadMode.method)
     await run(task) {
       self.imageData = nil
       self.selectedImage = nil
@@ -303,8 +308,8 @@ struct FileUploadView: View {
   @MainActor
   func uploadFileURL(_ fileURL: URL) async {
     let options = FileOptions(cacheControl: cacheControl, upsert: upsertEnabled)
-    let bucket = supabase.storage.from(selectedBucket)
-    let task = bucket.upload(filePath, fileURL: fileURL, options: options, method: uploadMode.method)
+    let task = supabase.storage.from(selectedBucket)
+      .upload(filePath, fileURL: fileURL, options: options, method: uploadMode.method)
     await run(task) {
       self.selectedDocument = nil
     }
