@@ -32,7 +32,7 @@ final class StorageDownloadIntegrationTests {
   private func withUploadedFile(
     size: Int = 1 * 1024 * 1024,
     byte: UInt8 = 0xAB,
-    _ body: (bucket: String, path: String, data: Data) async throws -> Void
+    _ body: (_ bucket: String, _ path: String, _ data: Data) async throws -> Void
   ) async throws {
     let bucketId = "dl-test-\(UUID().uuidString.lowercased())"
     let path = "files/\(UUID().uuidString).bin"
@@ -42,7 +42,7 @@ final class StorageDownloadIntegrationTests {
 
     do {
       _ = try await storage.from(bucketId).uploadMultipart(path, data: data).value
-      try await body((bucket: bucketId, path: path, data: data))
+      try await body(bucketId, path, data)
     } catch {
       try? await storage.emptyBucket(bucketId)
       try? await storage.deleteBucket(bucketId)
@@ -174,16 +174,25 @@ final class StorageDownloadIntegrationTests {
     try await withUploadedFile(size: 3 * 1024 * 1024) { bucket, path, original in
       let task = storage.from(bucket).download(path: path)
 
-      var pauseCount = 0
-      var progressCount = 0
+      // Actor-based counters avoid data races between the driver Task and the
+      // assertion below without requiring ConcurrencyExtras (not in this target).
+      actor Counters {
+        var pauseCount = 0
+        var progressCount = 0
+        func incrementProgress() -> Int { progressCount += 1; return progressCount }
+        func incrementPause() -> Int { pauseCount += 1; return pauseCount }
+        func getPauseCount() -> Int { pauseCount }
+      }
+      let counters = Counters()
 
       // Drive the download manually: pause on every other progress event.
       Task {
         for await event in task.events {
           if case .progress = event {
-            progressCount += 1
-            if progressCount.isMultiple(of: 2) && pauseCount < 3 {
-              pauseCount += 1
+            let progress = await counters.incrementProgress()
+            let pauses = await counters.getPauseCount()
+            if progress.isMultiple(of: 2) && pauses < 3 {
+              _ = await counters.incrementPause()
               await task.pause()
               // Small delay before resuming to let the pause propagate.
               try? await Task.sleep(nanoseconds: 50_000_000)
@@ -198,7 +207,7 @@ final class StorageDownloadIntegrationTests {
 
       let received = try Data(contentsOf: url)
       #expect(received == original)
-      #expect(pauseCount > 0, "Expected at least one pause/resume cycle")
+      #expect(await counters.getPauseCount() > 0, "Expected at least one pause/resume cycle")
     }
   }
 
@@ -392,10 +401,11 @@ final class StorageDownloadIntegrationTests {
       let path2 = "files/\(UUID().uuidString).bin"
       let data2 = Data(repeating: 0x22, count: 512 * 1024)
       _ = try await storage.from(bucket).uploadMultipart(path2, data: data2).value
-      defer { try? storage.from(bucket).remove(paths: [path2]) }
 
-      async let url1 = storage.from(bucket).download(path: path1).value
-      async let url2 = storage.from(bucket).download(path: path2).value
+      // Capture storage to avoid sending `self` across async-let child tasks.
+      let s = storage
+      async let url1 = s.from(bucket).download(path: path1).value
+      async let url2 = s.from(bucket).download(path: path2).value
 
       let (u1, u2) = try await (url1, url2)
       defer {
@@ -414,7 +424,6 @@ final class StorageDownloadIntegrationTests {
       let path2 = "files/\(UUID().uuidString).bin"
       let data2 = Data(repeating: 0xBB, count: 2 * 1024 * 1024)
       _ = try await storage.from(bucket).uploadMultipart(path2, data: data2).value
-      defer { try? storage.from(bucket).remove(paths: [path2]) }
 
       let task1 = storage.from(bucket).download(path: path1)
       let task2 = storage.from(bucket).download(path: path2)

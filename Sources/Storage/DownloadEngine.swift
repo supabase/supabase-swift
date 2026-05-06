@@ -122,24 +122,29 @@ actor DownloadEngine {
         urlTask = session.downloadTask(with: request)
       }
 
+      // Capture the task identifier so that stale callbacks from a previously
+      // cancelled task (e.g. the one cancelled by pause()) are ignored if they
+      // arrive after a new task has been started by resume().
+      let taskIdentifier = urlTask.taskIdentifier
       delegate.register(
-        taskIdentifier: urlTask.taskIdentifier,
+        taskIdentifier: taskIdentifier,
         callbacks: DownloadTaskCallbacks(
           onProgress: { [weak self] totalBytesWritten, totalBytesExpectedToWrite in
             Task { [weak self] in
               await self?.didWriteData(
                 totalBytesWritten: totalBytesWritten,
-                totalBytesExpectedToWrite: totalBytesExpectedToWrite
+                totalBytesExpectedToWrite: totalBytesExpectedToWrite,
+                forTask: taskIdentifier
               )
             }
           },
           onFinished: { [weak self] result in
             // The delegate has already moved the file synchronously.
             // Notify the engine of the result from a Task so we don't block the delegate queue.
-            Task { [weak self] in await self?.didFinish(result) }
+            Task { [weak self] in await self?.didFinish(result, forTask: taskIdentifier) }
           },
           onCompleteWithError: { [weak self] error in
-            Task { [weak self] in await self?.didCompleteWithError(error) }
+            Task { [weak self] in await self?.didCompleteWithError(error, forTask: taskIdentifier) }
           }
         )
       )
@@ -152,8 +157,14 @@ actor DownloadEngine {
     }
   }
 
-  private func didWriteData(totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-    guard case .downloading = state else { return }
+  private func didWriteData(
+    totalBytesWritten: Int64,
+    totalBytesExpectedToWrite: Int64,
+    forTask taskIdentifier: Int
+  ) {
+    guard case .downloading(let current) = state,
+      current.taskIdentifier == taskIdentifier
+    else { return }
     eventsContinuation.yield(
       .progress(
         TransferProgress(
@@ -167,37 +178,30 @@ actor DownloadEngine {
   /// The file move is performed synchronously by `DownloadSessionDelegate` inside
   /// `urlSession(_:downloadTask:didFinishDownloadingTo:)` — before URLSession reclaims the
   /// original temp file. This method just forwards the result to `finish(with:)`.
-  private func didFinish(_ result: Result<URL, StorageError>) {
-    guard !state.isTerminal else { return }
+  private func didFinish(_ result: Result<URL, StorageError>, forTask taskIdentifier: Int) {
+    guard case .downloading(let current) = state,
+      current.taskIdentifier == taskIdentifier
+    else { return }
     finish(with: result.mapError { $0 as any Error })
   }
 
-  private func didCompleteWithError(_ error: (any Error)?) {
+  private func didCompleteWithError(_ error: (any Error)?, forTask taskIdentifier: Int) {
     guard let error else { return }  // nil means success; handled by didFinishDownloading
 
-    switch state {
-    case .paused:
-      // Intentional: pause() called cancel(byProducingResumeData:), which fires
-      // didCompleteWithError with URLError.cancelled. Ignore it.
-      return
-    case .starting:
-      // resume() set state to .starting for a new download; a stale URLError.cancelled
-      // from the just-cancelled task must not propagate to the new one.
-      return
-    case .cancelled, .completed, .failed:
-      // Already terminal — nothing to do.
-      return
-    case .downloading:
-      if (error as? URLError)?.code == .cancelled {
-        // External cancellation (e.g. system pressure, explicit cancel()) while actively
-        // downloading. cancel() already sets state to .cancelled before this runs, so
-        // reaching here means a third-party or system cancellation — shut down cleanly.
-        cancel()
-      } else {
-        finish(with: .failure(StorageError.networkError(underlying: error)))
-      }
-    case .idle:
-      return
+    // Only act when the error is for the current active download task.
+    // Stale URLError.cancelled from a task cancelled by pause() must not affect
+    // a new task that resume() started — even if that new task is already .downloading.
+    guard case .downloading(let current) = state,
+      current.taskIdentifier == taskIdentifier
+    else { return }
+
+    if (error as? URLError)?.code == .cancelled {
+      // External cancellation (e.g. system pressure, explicit cancel()) while actively
+      // downloading. cancel() already sets state to .cancelled before this runs, so
+      // reaching here means a third-party or system cancellation — shut down cleanly.
+      cancel()
+    } else {
+      finish(with: .failure(StorageError.networkError(underlying: error)))
     }
   }
 

@@ -131,8 +131,25 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, Senda
     downloadTask: URLSessionDownloadTask,
     didFinishDownloadingTo location: URL
   ) {
-    // URLSession deletes `location` as soon as this method returns, so we must move
-    // the file synchronously here — before invoking the callback or doing anything async.
+    // URLSession calls this method even for 4xx/5xx responses — the error body is
+    // what was "downloaded". Check the HTTP status code and deliver a typed error
+    // instead of a file URL when the server signalled failure.
+    if let httpResponse = downloadTask.response as? HTTPURLResponse,
+      httpResponse.statusCode >= 400
+    {
+      let data = (try? Data(contentsOf: location)) ?? Data()
+      let error = StorageError.from(httpResponse: httpResponse, data: data)
+      let callbacks = state.withValue {
+        let cb = $0.callbacks[downloadTask.taskIdentifier]
+        $0.callbacks.removeValue(forKey: downloadTask.taskIdentifier)
+        return cb
+      }
+      callbacks?.onFinished(.failure(error))
+      return
+    }
+
+    // Success path: URLSession deletes `location` as soon as this method returns,
+    // so the file must be moved synchronously — before invoking the callback.
     let destination = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
     let moveResult: Result<URL, StorageError>
