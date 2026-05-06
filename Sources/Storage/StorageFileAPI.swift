@@ -596,6 +596,11 @@ public struct StorageFileAPI: Sendable {
   /// permanent location before the app exits — the file is not guaranteed to persist across
   /// launches.
   ///
+  /// Downloads support pause and resume. Calling ``StorageDownloadTask/pause()`` suspends the
+  /// transfer and captures resume data when the server returns `Accept-Ranges: bytes`. Calling
+  /// ``StorageDownloadTask/resume()`` continues from the last received byte when resume data is
+  /// available, or restarts from the beginning otherwise.
+  ///
   /// When ``StorageClientConfiguration/backgroundDownloadSessionIdentifier`` is set, downloads
   /// continue while the app is suspended. Wire up
   /// ``StorageClient/handleBackgroundEvents(forSessionIdentifier:completionHandler:)`` in your
@@ -611,11 +616,16 @@ public struct StorageFileAPI: Sendable {
   /// ## Example
   ///
   /// ```swift
-  /// let url = try await storage.from("avatars").download(path: "user-123/photo.png").value
+  /// let task = storage.from("videos").download(path: "clip.mp4")
   ///
-  /// // Move to a permanent location before the app exits
+  /// // Pause mid-download and resume later
+  /// await task.pause()
+  /// await task.resume()
+  ///
+  /// // Await the final file URL
+  /// let url = try await task.value
   /// let dest = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-  ///   .appendingPathComponent("photo.png")
+  ///   .appendingPathComponent("clip.mp4")
   /// try FileManager.default.moveItem(at: url, to: dest)
   /// ```
   @discardableResult
