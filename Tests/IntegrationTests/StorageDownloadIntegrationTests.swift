@@ -179,8 +179,14 @@ final class StorageDownloadIntegrationTests {
       actor Counters {
         var pauseCount = 0
         var progressCount = 0
-        func incrementProgress() -> Int { progressCount += 1; return progressCount }
-        func incrementPause() -> Int { pauseCount += 1; return pauseCount }
+        func incrementProgress() -> Int {
+          progressCount += 1
+          return progressCount
+        }
+        func incrementPause() -> Int {
+          pauseCount += 1
+          return pauseCount
+        }
         func getPauseCount() -> Int { pauseCount }
       }
       let counters = Counters()
