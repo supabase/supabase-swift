@@ -127,17 +127,19 @@ actor TUSUploadEngine {
       || (error as? URLError)?.code == .cancelled
     if isCancellation {
       switch state {
-      case .uploading, .creating:
+      case .uploading:
         // Task was externally cancelled (e.g. URLError.cancelled from the network layer)
-        // while actively uploading or during the fetchOffset HEAD request after resume().
-        // In both cases the continuations have not been finished yet — shut down cleanly.
+        // while actively uploading. The continuations have not been finished yet — shut down cleanly.
         cancel()
       default:
-        // .paused, .completed, .failed, .cancelled:
-        // .paused  → the old task was cancelled by pause(); state is already .paused and the
-        //            resume() path will handle re-starting — do nothing.
-        // terminal → cancel() already finished the continuations; the task's CancellationError
-        //            is a side-effect of that — do nothing.
+        // .creating → resume() sets state to .creating before starting the new task; a stale
+        //             cancellation from the previous (paused) task must not cancel the new one.
+        //             Any legitimate cancel goes through engine.cancel() which sets state to
+        //             .cancelled (terminal) before the error propagates — handled below.
+        // .paused   → the old task was cancelled by pause(); state is already .paused and the
+        //             resume() path will handle re-starting — do nothing.
+        // terminal  → cancel() already finished the continuations; the task's CancellationError
+        //             is a side-effect of that — do nothing.
         return
       }
     } else {
