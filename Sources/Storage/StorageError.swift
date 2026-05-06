@@ -205,6 +205,29 @@ extension StorageError {
     errorCode: .cancelled
   )
 
+  /// Parses a Storage server error response from raw HTTP response data.
+  ///
+  /// Tries to decode the Supabase Storage JSON error envelope
+  /// `{ "message": "…", "error": "ErrorCode", "statusCode": "404" }`.
+  /// Falls back to the raw body string and `StorageErrorCode.unknown` when decoding fails.
+  static func from(httpResponse: HTTPURLResponse, data: Data) -> StorageError {
+    struct Body: Decodable {
+      let message: String?
+      let error: String?
+      /// The server sends the status code as a JSON string, e.g. `"404"`.
+      let statusCode: String?
+    }
+    let decoded = try? JSONDecoder().decode(Body.self, from: data)
+    return StorageError(
+      message: decoded?.message ?? decoded?.error ?? String(data: data, encoding: .utf8)
+        ?? "Unknown error",
+      errorCode: decoded?.error.map(StorageErrorCode.init(_:)) ?? .unknown,
+      statusCode: decoded?.statusCode.flatMap(Int.init) ?? httpResponse.statusCode,
+      underlyingResponse: httpResponse,
+      underlyingData: data
+    )
+  }
+
   /// Converts any `Error` to a `StorageError`.
   ///
   /// - Returns `self` when `error` is already a `StorageError`.
