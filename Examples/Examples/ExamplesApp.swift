@@ -38,7 +38,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
   func application(
     _ application: UIApplication,
     handleEventsForBackgroundURLSession identifier: String,
-    completionHandler: @escaping () -> Void
+    completionHandler: @Sendable @escaping () -> Void
   ) {
     supabase.storage.handleBackgroundEvents(
       forSessionIdentifier: identifier,

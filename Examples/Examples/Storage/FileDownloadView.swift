@@ -25,7 +25,8 @@ struct FileDownloadView: View {
       case .toMemory:
         return "Loads file bytes into memory via downloadData()."
       case .toDisk:
-        return "Saves to a temporary file via download(). Background-session capable — transfer continues while the app is suspended."
+        return
+          "Saves to a temporary file via download(). Background-session capable — transfer continues while the app is suspended."
       }
     }
   }
