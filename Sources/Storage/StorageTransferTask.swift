@@ -38,7 +38,7 @@ import Foundation
 /// }
 /// ```
 ///
-/// **Pause, resume, and cancel (TUS uploads only)**
+/// **Pause, resume, and cancel**
 /// ```swift
 /// // TUS (resumable) upload — use method: .resumable to force TUS
 /// let upload = storage.from("videos").upload("clip.mp4", fileURL: fileURL, method: .resumable)
