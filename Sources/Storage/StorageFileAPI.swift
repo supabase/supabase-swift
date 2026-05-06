@@ -288,10 +288,19 @@ public struct StorageFileAPI: Sendable {
 
   // MARK: - Explicit multipart upload
 
-  /// Uploads `Data` using the standard multipart request, regardless of file size.
+  /// Uploads `Data` using a single multipart HTTP request, regardless of file size.
   ///
-  /// Use ``upload(_:data:options:)`` if you want the SDK to choose between multipart and TUS
-  /// automatically based on file size.
+  /// Prefer this over ``upload(_:data:options:)`` when you know the data fits in memory and
+  /// do not need pause/resume support. For files larger than ~6 MB consider
+  /// ``uploadResumable(_:data:options:)`` instead, which can recover from interrupted connections.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let response = try await storage.from("thumbnails")
+  ///   .uploadMultipart("preview.jpg", data: jpegData)
+  ///   .value
+  /// ```
   @discardableResult
   public func uploadMultipart(
     _ path: String,
@@ -307,11 +316,19 @@ public struct StorageFileAPI: Sendable {
     )
   }
 
-  /// Uploads a local file using the standard multipart request, regardless of file size.
+  /// Uploads a local file using a single multipart HTTP request, regardless of file size.
   ///
-  /// Files >= 10 MB are streamed from a temporary file on disk to avoid loading the entire
-  /// payload into memory. Use ``upload(_:fileURL:options:)`` if you want the SDK to choose
-  /// automatically between multipart and TUS.
+  /// Files ≥ 10 MB are streamed from a temporary file on disk to keep memory usage bounded.
+  /// Pause/resume is not supported — use ``uploadResumable(_:fileURL:options:)`` if you need
+  /// to resume interrupted transfers.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let response = try await storage.from("documents")
+  ///   .uploadMultipart("report.pdf", fileURL: pdfURL)
+  ///   .value
+  /// ```
   @discardableResult
   public func uploadMultipart(
     _ path: String,
@@ -331,7 +348,25 @@ public struct StorageFileAPI: Sendable {
 
   /// Uploads `Data` using the TUS resumable upload protocol, regardless of file size.
   ///
-  /// Use ``upload(_:data:options:)`` if you want the SDK to choose automatically.
+  /// TUS splits the upload into chunks and can resume from the last successful chunk if the
+  /// connection drops. Use this instead of ``uploadMultipart(_:data:options:)`` for large payloads
+  /// or unreliable network conditions.
+  ///
+  /// The returned task supports ``StorageTransferTask/pause()``,
+  /// ``StorageTransferTask/resume()``, and ``StorageTransferTask/cancel()``.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let task = storage.from("videos").uploadResumable("clip.mp4", data: videoData)
+  ///
+  /// // Observe progress
+  /// for await event in task.events {
+  ///   if case .progress(let p) = event {
+  ///     print("\(Int(p.fractionCompleted * 100))%")
+  ///   }
+  /// }
+  /// ```
   @discardableResult
   public func uploadResumable(
     _ path: String,
@@ -349,7 +384,20 @@ public struct StorageFileAPI: Sendable {
 
   /// Uploads a local file using the TUS resumable upload protocol, regardless of file size.
   ///
-  /// Use ``upload(_:fileURL:options:)`` if you want the SDK to choose automatically.
+  /// Ideal for large files (videos, archives) where you want progress reporting and the ability
+  /// to pause or resume mid-upload. The file is read in chunks so memory usage stays bounded.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let task = storage.from("videos").uploadResumable("tour.mov", fileURL: movURL)
+  ///
+  /// // Pause when the app backgrounds, resume when it foregrounds
+  /// NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, ...) { _ in
+  ///   Task { await task.pause() }
+  /// }
+  /// let response = try await task.value
+  /// ```
   @discardableResult
   public func uploadResumable(
     _ path: String,
@@ -367,10 +415,16 @@ public struct StorageFileAPI: Sendable {
 
   // MARK: - Explicit multipart update
 
-  /// Replaces an existing file with `Data` using the standard multipart request.
+  /// Replaces an existing file with `Data` using a single multipart HTTP request.
   ///
   /// Always sets `upsert: true`. Use ``update(_:data:options:)`` if you want the SDK to choose
-  /// automatically between multipart and TUS.
+  /// automatically between multipart and TUS based on file size.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// try await storage.from("avatars").updateMultipart("user-123/photo.png", data: newPngData).value
+  /// ```
   @discardableResult
   public func updateMultipart(
     _ path: String,
@@ -388,10 +442,16 @@ public struct StorageFileAPI: Sendable {
     )
   }
 
-  /// Replaces an existing file with the contents of a local URL using the standard multipart
-  /// request.
+  /// Replaces an existing file with the contents of a local file URL using a single multipart
+  /// HTTP request.
   ///
-  /// Always sets `upsert: true`. Files >= 10 MB are streamed from a temp file on disk.
+  /// Always sets `upsert: true`. Files ≥ 10 MB are streamed from a temporary file on disk.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// try await storage.from("documents").updateMultipart("report.pdf", fileURL: newPDFURL).value
+  /// ```
   @discardableResult
   public func updateMultipart(
     _ path: String,
@@ -413,8 +473,15 @@ public struct StorageFileAPI: Sendable {
 
   /// Replaces an existing file with `Data` using the TUS resumable upload protocol.
   ///
-  /// Always sets `upsert: true`. Use ``update(_:data:options:)`` if you want the SDK to choose
-  /// automatically between multipart and TUS.
+  /// Always sets `upsert: true`. Supports pause, resume, and progress observation.
+  /// Use ``update(_:data:options:)`` if you want the SDK to choose automatically.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let task = storage.from("videos").updateResumable("intro.mp4", data: newVideoData)
+  /// let response = try await task.value
+  /// ```
   @discardableResult
   public func updateResumable(
     _ path: String,
@@ -432,10 +499,17 @@ public struct StorageFileAPI: Sendable {
     )
   }
 
-  /// Replaces an existing file from a local URL using the TUS resumable upload protocol.
+  /// Replaces an existing file from a local file URL using the TUS resumable upload protocol.
   ///
-  /// Always sets `upsert: true`. Use ``update(_:fileURL:options:)`` if you want the SDK to choose
-  /// automatically between multipart and TUS.
+  /// Always sets `upsert: true`. Supports pause, resume, and progress observation.
+  /// Ideal for large file replacements over unreliable connections.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let task = storage.from("videos").updateResumable("intro.mp4", fileURL: newMovURL)
+  /// let response = try await task.value
+  /// ```
   @discardableResult
   public func updateResumable(
     _ path: String,
@@ -544,14 +618,33 @@ public struct StorageFileAPI: Sendable {
 
   /// Creates a signed URL that grants time-limited access to a private file.
   ///
+  /// Signed URLs can be shared with unauthenticated users. They expire after `expiresIn` and
+  /// cannot be revoked once issued, so avoid long expiration windows for sensitive files.
+  ///
   /// - Parameters:
   ///   - path: The file path within the bucket, e.g. `"folder/image.png"`.
-  ///   - expiresIn: How long until the signed URL expires, e.g. `.seconds(3600)`.
+  ///   - expiresIn: How long until the signed URL expires, e.g. `.seconds(3600)` for one hour.
   ///   - download: When non-`nil`, the browser treats the URL as a file download.
   ///   - transform: Optional on-the-fly image transformation applied before the file is served.
   ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter.
   /// - Returns: A signed `URL` ready to be shared or embedded.
   /// - Throws: ``StorageError`` if the file does not exist or the request fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // Short-lived link for streaming a private video
+  /// let url = try await storage.from("media")
+  ///   .createSignedURL(path: "user-123/video.mp4", expiresIn: .seconds(3600))
+  ///
+  /// // Signed download link with a custom filename
+  /// let downloadURL = try await storage.from("reports")
+  ///   .createSignedURL(
+  ///     path: "q4-2024.pdf",
+  ///     expiresIn: .seconds(300),
+  ///     download: .named("Q4-2024-Report.pdf")
+  ///   )
+  /// ```
   public func createSignedURL(
     path: String,
     expiresIn: Duration,
@@ -586,6 +679,9 @@ public struct StorageFileAPI: Sendable {
 
   /// Creates signed URLs for multiple files in a single request.
   ///
+  /// More efficient than calling ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
+  /// in a loop. Each result is independent — a failure for one path does not affect the others.
+  ///
   /// - Parameters:
   ///   - paths: The file paths within the bucket.
   ///   - expiresIn: How long until the signed URLs expire.
@@ -593,6 +689,24 @@ public struct StorageFileAPI: Sendable {
   ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter.
   /// - Returns: An array of ``SignedURLResult`` values, one per input path.
   /// - Throws: ``StorageError`` if the batch request itself fails.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let results = try await storage.from("media").createSignedURLs(
+  ///   paths: ["photo1.jpg", "photo2.jpg", "missing.jpg"],
+  ///   expiresIn: .seconds(3600)
+  /// )
+  ///
+  /// for result in results {
+  ///   switch result {
+  ///   case .success(let path, let url):
+  ///     print("\(path) → \(url)")
+  ///   case .failure(let path, let error):
+  ///     print("\(path) failed: \(error)")
+  ///   }
+  /// }
+  /// ```
   public func createSignedURLs(
     paths: [String],
     expiresIn: Duration,
@@ -738,18 +852,32 @@ public struct StorageFileAPI: Sendable {
 
   /// Downloads a file to a temporary location on disk.
   ///
-  /// The `.completed` event delivers a `URL` to a temporary file. Move the file before
-  /// the app exits — it is not guaranteed to persist.
+  /// The task's success value is a `URL` pointing to a temporary file. Move or copy the file to a
+  /// permanent location before the app exits — the file is not guaranteed to persist across
+  /// launches.
   ///
-  /// When ``StorageClientConfiguration/backgroundDownloadSessionIdentifier`` is set, the
-  /// transfer continues while the app is suspended.
+  /// When ``StorageClientConfiguration/backgroundDownloadSessionIdentifier`` is set, downloads
+  /// continue while the app is suspended. Wire up
+  /// ``StorageClient/handleBackgroundEvents(forSessionIdentifier:completionHandler:)`` in your
+  /// `AppDelegate` to support background transfers.
   ///
   /// - Parameters:
   ///   - path: Path within the bucket, e.g. `"folder/image.png"`.
-  ///   - options: Optional image transform parameters.
+  ///   - options: Optional on-the-fly image transformation (resize, reformat, quality).
   ///   - query: Additional query items appended to the request URL.
-  ///   - cacheNonce: Cache-busting nonce appended as `cacheNonce=<value>`.
-  /// - Returns: A ``StorageDownloadTask`` whose `.completed` value is a `URL` on disk.
+  ///   - cacheNonce: An opaque string appended as `cacheNonce=<value>` for cache busting.
+  /// - Returns: A ``StorageDownloadTask`` whose success value is a `URL` to the file on disk.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let url = try await storage.from("avatars").download(path: "user-123/photo.png").value
+  ///
+  /// // Move to a permanent location before the app exits
+  /// let dest = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+  ///   .appendingPathComponent("photo.png")
+  /// try FileManager.default.moveItem(at: url, to: dest)
+  /// ```
   @discardableResult
   public func download(
     path: String,
@@ -767,16 +895,24 @@ public struct StorageFileAPI: Sendable {
     }
   }
 
-  /// Downloads a file into memory.
+  /// Downloads a file into memory as `Data`.
   ///
-  /// Not background-capable. For large files or background transfers, use ``download(path:options:)``.
+  /// The entire file is held in memory, so prefer ``download(path:options:)`` for large files or
+  /// when you need background transfer support.
   ///
   /// - Parameters:
-  ///   - path: Path within the bucket.
-  ///   - options: Optional image transform parameters.
+  ///   - path: Path within the bucket, e.g. `"folder/image.png"`.
+  ///   - options: Optional on-the-fly image transformation.
   ///   - query: Additional query items appended to the request URL.
-  ///   - cacheNonce: Cache-busting nonce appended as `cacheNonce=<value>`.
-  /// - Returns: A task whose `.completed` value is the file `Data`.
+  ///   - cacheNonce: An opaque string appended as `cacheNonce=<value>` for cache busting.
+  /// - Returns: A task whose success value is the raw file bytes.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let data = try await storage.from("avatars").downloadData(path: "user-123/photo.png").value
+  /// let image = UIImage(data: data)
+  /// ```
   @discardableResult
   public func downloadData(
     path: String,
@@ -873,15 +1009,30 @@ public struct StorageFileAPI: Sendable {
 
   /// Returns the public URL for a file in a public bucket.
   ///
-  /// The URL is constructed locally without a network request.
+  /// The URL is constructed locally — no network request is made. The bucket must be configured
+  /// as public; for private buckets use ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
+  /// instead.
   ///
   /// - Parameters:
-  ///   - path: The path of the file within the bucket.
+  ///   - path: The path of the file within the bucket, e.g. `"user-123/avatar.png"`.
   ///   - download: When non-`nil`, the browser treats the URL as a file download.
-  ///   - options: Optional on-the-fly image transformation.
+  ///   - options: Optional on-the-fly image transformation (resize, reformat, quality).
   ///   - cacheNonce: An opaque string appended as a `cacheNonce` query parameter.
   /// - Returns: The public `URL` for the file.
   /// - Throws: `URLError(.badURL)` if the resulting URL cannot be constructed.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // Direct embed URL
+  /// let url = try storage.from("avatars").getPublicURL(path: "user-123/photo.png")
+  ///
+  /// // 200×200 thumbnail in WebP
+  /// let thumbURL = try storage.from("avatars").getPublicURL(
+  ///   path: "user-123/photo.png",
+  ///   options: TransformOptions(width: 200, height: 200, format: .webp)
+  /// )
+  /// ```
   public func getPublicURL(
     path: String,
     download: DownloadBehavior? = nil,

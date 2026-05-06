@@ -9,13 +9,55 @@ import Foundation
 
 /// A handle to an in-flight upload or download.
 ///
-/// Tasks start immediately on creation and are `@discardableResult` — fire-and-forget works
-/// without holding a reference. Hold the task to observe progress or control execution.
+/// Tasks start immediately on creation. They are `@discardableResult` — discard the return value
+/// for fire-and-forget, or hold the handle to observe progress, await the result, or control
+/// execution.
 ///
-/// Both `.events` and `.value` are independent: consuming one does not affect the other.
+/// ## Usage patterns
+///
+/// **Fire and forget**
+/// ```swift
+/// storage.from("avatars").upload("user.jpg", data: imageData)
+/// ```
+///
+/// **Await the result**
+/// ```swift
+/// let response = try await storage.from("avatars")
+///   .upload("user.jpg", data: imageData)
+///   .value
+/// ```
+///
+/// **Observe progress**
+/// ```swift
+/// let task = storage.from("avatars").upload("user.jpg", data: imageData)
+/// for await event in task.events {
+///   switch event {
+///   case .progress(let p):
+///     updateProgressBar(p.fractionCompleted)
+///   case .completed(let response):
+///     print("Uploaded to \(response.fullPath)")
+///   case .failed(let error):
+///     print("Upload failed: \(error.message)")
+///   }
+/// }
+/// ```
+///
+/// **Pause, resume, and cancel (TUS uploads only)**
+/// ```swift
+/// let task = storage.from("videos").uploadResumable("clip.mp4", fileURL: fileURL)
+/// await task.pause()   // suspend mid-upload
+/// await task.resume()  // continue from where it left off
+/// await task.cancel()  // abort entirely
+/// ```
+///
+/// Both ``events`` and ``value`` are independent: consuming one does not affect the other.
 public final class StorageTransferTask<Success: Sendable>: Sendable {
 
-  /// A stream of transfer events. Finishes after `.completed` or `.failed`.
+  /// A stream of transfer lifecycle events.
+  ///
+  /// Emits ``TransferEvent/progress(_:)`` events while the transfer is active, then terminates
+  /// with either ``TransferEvent/completed(_:)`` or ``TransferEvent/failed(_:)``.
+  /// The stream finishes automatically after the terminal event — no explicit cancellation needed.
   public let events: AsyncStream<TransferEvent<Success>>
 
   private let _resultTask: Task<Success, any Error>
@@ -63,6 +105,10 @@ public final class StorageTransferTask<Success: Sendable>: Sendable {
   public func resume() async { await _resume() }
 
   /// Cancels the transfer immediately.
+  ///
+  /// Cancelling a transfer that has already completed or failed is a no-op.
+  /// After cancellation, ``value`` throws a ``StorageError`` with code ``StorageErrorCode/cancelled``,
+  /// and the ``events`` stream ends with a ``TransferEvent/failed(_:)`` event.
   public func cancel() async {
     // Order is load-bearing: _cancel() must run first.
     // It sets the engine's state to .cancelled and finishes the continuations before
@@ -138,10 +184,11 @@ extension StorageTransferTask {
 
 /// An event emitted during a transfer.
 public enum TransferEvent<Success: Sendable>: Sendable {
+  /// Periodic progress update during an active transfer.
   case progress(TransferProgress)
-  /// Terminal — the stream ends after this event.
+  /// The transfer finished successfully. Terminal — the stream ends after this event.
   case completed(Success)
-  /// Terminal — the stream ends after this event.
+  /// The transfer failed or was cancelled. Terminal — the stream ends after this event.
   case failed(StorageError)
 }
 
@@ -161,8 +208,15 @@ public struct TransferProgress: Sendable {
   }
 }
 
-/// A handle for an upload. Success type is ``FileUploadResponse``.
+/// A handle for an upload.
+///
+/// The success value is a ``FileUploadResponse`` containing the storage path and object ID.
+/// TUS uploads support ``StorageTransferTask/pause()``, ``StorageTransferTask/resume()``, and
+/// ``StorageTransferTask/cancel()``; multipart uploads only support cancel.
 public typealias StorageUploadTask = StorageTransferTask<FileUploadResponse>
 
-/// A handle for a download. Success type is `URL` — a path to the downloaded file on disk.
+/// A handle for a download to disk.
+///
+/// The success value is a `URL` pointing to a temporary file on disk.
+/// Move or read the file before the app exits — it is not guaranteed to persist across launches.
 public typealias StorageDownloadTask = StorageTransferTask<URL>
