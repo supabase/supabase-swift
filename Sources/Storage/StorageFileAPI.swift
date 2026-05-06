@@ -679,9 +679,6 @@ public struct StorageFileAPI: Sendable {
 
   /// Creates signed URLs for multiple files in a single request.
   ///
-  /// More efficient than calling ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
-  /// in a loop. Each result is independent — a failure for one path does not affect the others.
-  ///
   /// - Parameters:
   ///   - paths: The file paths within the bucket.
   ///   - expiresIn: How long until the signed URLs expire.
@@ -1009,9 +1006,8 @@ public struct StorageFileAPI: Sendable {
 
   /// Returns the public URL for a file in a public bucket.
   ///
-  /// The URL is constructed locally — no network request is made. The bucket must be configured
-  /// as public; for private buckets use ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
-  /// instead.
+  /// The bucket must be configured as public; for private buckets use
+  /// ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)`` instead.
   ///
   /// - Parameters:
   ///   - path: The path of the file within the bucket, e.g. `"user-123/avatar.png"`.
