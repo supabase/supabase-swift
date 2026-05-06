@@ -127,8 +127,19 @@ public struct SupabaseClientOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let useNewHostname: Bool
 
-    public init(useNewHostname: Bool = false) {
+    /// When set, downloads use `URLSessionConfiguration.background(withIdentifier:)`,
+    /// allowing transfers to continue while the app is suspended.
+    ///
+    /// Requires wiring `StorageClient.handleBackgroundEvents(forSessionIdentifier:completionHandler:)`
+    /// in your `AppDelegate.application(_:handleEventsForBackgroundURLSession:completionHandler:)`.
+    public let backgroundDownloadSessionIdentifier: String?
+
+    public init(
+      useNewHostname: Bool = false,
+      backgroundDownloadSessionIdentifier: String? = nil
+    ) {
       self.useNewHostname = useNewHostname
+      self.backgroundDownloadSessionIdentifier = backgroundDownloadSessionIdentifier
     }
   }
 
