@@ -2,6 +2,8 @@
 //  FileDownloadView.swift
 //  Examples
 //
+//  Created by Guilherme Souza on 06/05/25.
+//
 //  Demonstrates both download engines:
 //    - To Memory (downloadData): loads file bytes in-process
 //    - To Disk (download): saves to a temporary file; background-session capable, survives app suspension
@@ -46,6 +48,7 @@ struct FileDownloadView: View {
   @State private var downloadMode: DownloadMode = .toMemory
 
   // Transfer state
+  @State private var isLoadingFiles = false
   @State private var isDownloading = false
   @State private var downloadProgress: Double = 0
   @State private var result: DownloadResult?
@@ -121,7 +124,7 @@ struct FileDownloadView: View {
       Button("Load Files") {
         Task { await loadFiles() }
       }
-      .disabled(selectedBucket.isEmpty || isDownloading)
+      .disabled(selectedBucket.isEmpty || isLoadingFiles || isDownloading)
     }
   }
 
@@ -227,8 +230,8 @@ struct FileDownloadView: View {
   func loadFiles() async {
     do {
       error = nil
-      isDownloading = true
-      defer { isDownloading = false }
+      isLoadingFiles = true
+      defer { isLoadingFiles = false }
       files = try await supabase.storage.from(selectedBucket).list()
     } catch {
       self.error = error
