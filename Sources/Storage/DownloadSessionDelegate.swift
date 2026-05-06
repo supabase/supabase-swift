@@ -28,42 +28,70 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, Senda
 
   // MARK: - Task creation
 
-  /// Creates a `StorageDownloadTask` backed by this delegate for the given request.
-  /// The underlying `URLSessionDownloadTask` is resumed immediately.
-  func makeStorageDownloadTask(in session: URLSession, request: URLRequest) -> StorageDownloadTask {
+  /// Creates a `StorageDownloadTask` backed by this delegate.
+  ///
+  /// `buildRequest` is called asynchronously before the underlying
+  /// `URLSessionDownloadTask` is created, so callers can fetch an auth token
+  /// (via `_HTTPClient.createRequest`) without blocking.
+  func makeStorageDownloadTask(
+    in session: URLSession,
+    buildRequest: @escaping @Sendable () async throws -> URLRequest
+  ) -> StorageDownloadTask {
     let (eventStream, eventsContinuation) = AsyncStream<TransferEvent<URL>>.makeStream()
     let (resultStream, resultContinuation) = AsyncStream<Result<URL, any Error>>.makeStream(
       bufferingPolicy: .bufferingNewest(1))
 
-    let urlTask = session.downloadTask(with: request)
-
-    state.withValue {
-      $0.tasks[urlTask.taskIdentifier] = DownloadTaskState(
-        eventsContinuation: eventsContinuation,
-        resultContinuation: resultContinuation
-      )
-    }
-
-    eventsContinuation.onTermination = { reason in
-      guard case .cancelled = reason else { return }
-      urlTask.cancel()
-    }
+    let urlTaskRef = LockIsolated<URLSessionDownloadTask?>(nil)
 
     let resultTask = Task<URL, any Error> {
       for await r in resultStream { return try r.get() }
       throw StorageError.cancelled
     }
 
-    let storageTask = StorageDownloadTask(
+    // Bootstrap task: fetch the token, build the request, then start the download.
+    let bootstrapTask = Task {
+      do {
+        let request = try await buildRequest()
+        let urlTask = session.downloadTask(with: request)
+
+        state.withValue {
+          $0.tasks[urlTask.taskIdentifier] = DownloadTaskState(
+            eventsContinuation: eventsContinuation,
+            resultContinuation: resultContinuation
+          )
+        }
+
+        urlTaskRef.setValue(urlTask)
+        urlTask.resume()
+      } catch {
+        let storageError = StorageError.from(error)
+        eventsContinuation.yield(.failed(storageError))
+        eventsContinuation.finish()
+        resultContinuation.yield(.failure(storageError))
+        resultContinuation.finish()
+      }
+    }
+
+    eventsContinuation.onTermination = { [urlTaskRef] reason in
+      guard case .cancelled = reason else { return }
+      urlTaskRef.value?.cancel()
+      bootstrapTask.cancel()
+    }
+
+    return StorageDownloadTask(
       events: eventStream,
       resultTask: resultTask,
-      pause: { urlTask.suspend() },
-      resume: { urlTask.resume() },
-      cancel: { urlTask.cancel() }
+      pause: { urlTaskRef.value?.suspend() },
+      resume: { urlTaskRef.value?.resume() },
+      cancel: {
+        bootstrapTask.cancel()
+        urlTaskRef.value?.cancel()
+        // Finish continuations in case the bootstrap was cancelled before the
+        // URLSessionDownloadTask existed — otherwise observers hang forever.
+        eventsContinuation.finish()
+        resultContinuation.finish()
+      }
     )
-
-    urlTask.resume()
-    return storageTask
   }
 
   /// Package-level access for tests to drive delegate callbacks directly.

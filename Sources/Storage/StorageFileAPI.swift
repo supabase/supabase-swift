@@ -757,16 +757,14 @@ public struct StorageFileAPI: Sendable {
     query additionalQueryItems: [URLQueryItem]? = nil,
     cacheNonce: String? = nil
   ) -> StorageDownloadTask {
-    var request = URLRequest(
-      url: _downloadURL(
-        path: path, options: options, query: additionalQueryItems, cacheNonce: cacheNonce))
-    for (key, value) in client.mergedHeaders([:]) {
-      request.setValue(value, forHTTPHeaderField: key)
+    let url = _downloadURL(
+      path: path, options: options, query: additionalQueryItems, cacheNonce: cacheNonce)
+    // Use http.createRequest so the token provider is called before the
+    // URLSession download task is created — client.mergedHeaders alone strips
+    // the Authorization header when a token provider is configured.
+    return client.downloadDelegate.makeStorageDownloadTask(in: client.downloadSession) {
+      try await client.http.createRequest(.get, url: url, headers: client.mergedHeaders([:]))
     }
-    return client.downloadDelegate.makeStorageDownloadTask(
-      in: client.downloadSession,
-      request: request
-    )
   }
 
   /// Downloads a file into memory.
