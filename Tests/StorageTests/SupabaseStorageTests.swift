@@ -137,13 +137,14 @@ struct SupabaseStorageTests {
       let sut = makeSUT()
 
       try await sut.from(bucketId)
-        .uploadMultipart(
+        .upload(
           "file1.txt",
           data: "test data".data(using: .utf8)!,
           options: FileOptions(
             cacheControl: "14400",
             metadata: ["key": "value"]
-          )
+          ),
+          method: .multipart
         ).value
 
       let req = try #require(capturedRequest.value)
@@ -174,12 +175,13 @@ struct SupabaseStorageTests {
       let sut = makeSUT()
 
       try await sut.from(bucketId)
-        .uploadMultipart(
+        .upload(
           "sadcat.jpg",
           fileURL: uploadFileURL("sadcat.jpg"),
           options: FileOptions(
             metadata: ["key": "value"]
-          )
+          ),
+          method: .multipart
         ).value
 
       let req = try #require(capturedRequest.value)

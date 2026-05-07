@@ -1090,9 +1090,9 @@ struct StorageFileAPITests {
     await task.cancel()
   }
 
-  // MARK: - Explicit multipart methods
+  // MARK: - method: .multipart
 
-  @Test func uploadMultipartFromData() async throws {
+  @Test func uploadMultipartMethodFromData() async throws {
     let objectURL = url.appendingPathComponent("object/bucket/file.txt")
     let responseJSON = """
       {"Key":"bucket/file.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
@@ -1105,13 +1105,13 @@ struct StorageFileAPITests {
     ).register()
 
     let response = try await storage.from("bucket")
-      .uploadMultipart("file.txt", data: Data("hello world".utf8)).value
+      .upload("file.txt", data: Data("hello world".utf8), method: .multipart).value
 
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-  @Test func updateMultipartSetsUpsertTrue() async throws {
+  @Test func updateMultipartMethodSetsUpsertTrue() async throws {
     let objectURL = url.appendingPathComponent("object/bucket/file.txt")
     let responseJSON = """
       {"Key":"bucket/file.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
@@ -1125,13 +1125,15 @@ struct StorageFileAPITests {
     mock.register()
 
     _ = try await storage.from("bucket")
-      .updateMultipart("file.txt", data: Data("hello".utf8)).value
+      .update("file.txt", data: Data("hello".utf8), method: .multipart).value
 
     let req = try #require(capturedRequest.value)
     #expect(req.value(forHTTPHeaderField: "x-upsert") == "true")
   }
 
-  @Test func uploadResumableFromData() async throws {
+  // MARK: - method: .resumable
+
+  @Test func uploadResumableMethodFromData() async throws {
     let resumableURL = url.appendingPathComponent("upload/resumable")
     let locationURL = url.appendingPathComponent(
       "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
@@ -1146,13 +1148,13 @@ struct StorageFileAPITests {
     ).register()
 
     let response = try await storage.from("bucket")
-      .uploadResumable("file.txt", data: Data("hello".utf8)).value
+      .upload("file.txt", data: Data("hello".utf8), method: .resumable).value
 
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-  @Test func updateResumableSetsUpsertTrue() async throws {
+  @Test func updateResumableMethodSetsUpsertTrue() async throws {
     let resumableURL = url.appendingPathComponent("upload/resumable")
     let locationURL = url.appendingPathComponent(
       "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
@@ -1171,7 +1173,7 @@ struct StorageFileAPITests {
     ).register()
 
     _ = try await storage.from("bucket")
-      .updateResumable("file.txt", data: Data("hello".utf8)).value
+      .update("file.txt", data: Data("hello".utf8), method: .resumable).value
 
     let req = try #require(capturedRequest.value)
     #expect(req.value(forHTTPHeaderField: "x-upsert") == "true")
