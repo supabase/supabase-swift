@@ -40,10 +40,17 @@ import Foundation
 ///
 /// **Pause, resume, and cancel (TUS uploads only)**
 /// ```swift
-/// let task = storage.from("videos").uploadResumable("clip.mp4", fileURL: fileURL)
-/// await task.pause()   // suspend mid-upload
-/// await task.resume()  // continue from where it left off
-/// await task.cancel()  // abort entirely
+/// // TUS (resumable) upload — use method: .resumable to force TUS
+/// let upload = storage.from("videos").upload("clip.mp4", fileURL: fileURL, method: .resumable)
+/// await upload.pause()   // suspend mid-upload
+/// await upload.resume()  // continue from where it left off
+/// await upload.cancel()  // abort entirely
+///
+/// // Download
+/// let download = storage.from("videos").download(path: "clip.mp4")
+/// await download.pause()   // suspend; captures resume data if server supports range requests
+/// await download.resume()  // continue from last byte, or restart if no resume data
+/// await download.cancel()  // abort entirely
 /// ```
 ///
 /// Both ``events`` and ``value`` are independent: consuming one does not affect the other.
