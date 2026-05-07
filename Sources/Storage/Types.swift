@@ -1,6 +1,52 @@
 import Foundation
 import Helpers
 
+/// The upload protocol used by ``StorageFileAPI/upload(_:data:options:method:)`` and related methods.
+///
+/// Pass this to ``StorageFileAPI/upload(_:data:options:method:)``,
+/// ``StorageFileAPI/upload(_:fileURL:options:method:)``,
+/// ``StorageFileAPI/update(_:data:options:method:)``, or
+/// ``StorageFileAPI/update(_:fileURL:options:method:)`` to override the default selection logic.
+///
+/// ## Example
+///
+/// ```swift
+/// // Force TUS for a large video regardless of size
+/// let task = storage.from("videos").upload(
+///   "clip.mp4",
+///   fileURL: videoURL,
+///   method: .resumable
+/// )
+/// await task.pause()
+/// await task.resume()
+/// let response = try await task.value
+///
+/// // Force multipart for a small asset you know fits in memory
+/// let response = try await storage.from("thumbnails")
+///   .upload("preview.jpg", data: jpegData, method: .multipart)
+///   .value
+/// ```
+public enum UploadMethod: Sendable {
+  /// Automatically choose the protocol based on file size:
+  /// files ≤ 6 MB use ``multipart``; larger files use ``resumable``.
+  ///
+  /// This is the default and works well for most use-cases.
+  case auto
+
+  /// Force a single multipart HTTP request regardless of file size.
+  ///
+  /// Simpler and slightly faster for small files. Does not support pause/resume —
+  /// use ``resumable`` if you need those capabilities.
+  case multipart
+
+  /// Force the TUS resumable upload protocol regardless of file size.
+  ///
+  /// Splits the upload into chunks and can resume from the last successful chunk
+  /// if the connection drops. Supports ``StorageTransferTask/pause()``,
+  /// ``StorageTransferTask/resume()``, and ``StorageTransferTask/cancel()``.
+  case resumable
+}
+
 /// Parameters used to filter and paginate results from ``StorageFileAPI/list(path:options:)``.
 ///
 /// All fields are optional; omitted fields fall back to server-side defaults (100 items per page,

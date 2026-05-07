@@ -144,6 +144,7 @@ struct SupabaseStorageTests {
             cacheControl: "14400",
             metadata: ["key": "value"]
           ),
+          method: .multipart
         ).value
 
       let req = try #require(capturedRequest.value)
@@ -180,6 +181,7 @@ struct SupabaseStorageTests {
           options: FileOptions(
             metadata: ["key": "value"]
           ),
+          method: .multipart
         ).value
 
       let req = try #require(capturedRequest.value)

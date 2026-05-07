@@ -208,15 +208,16 @@ public struct StorageFileAPI: Sendable {
 
   /// Replaces an existing file at the specified path with new `Data`.
   ///
-  /// Sends a `PUT` request to the storage server — the file must already exist.
-  /// To create a file if it does not exist, use ``upload(_:data:options:method:)`` with
-  /// ``FileOptions/upsert`` set to `true`.
+  /// Always sets `upsert: true` to overwrite the existing object.
   ///
   /// - Parameters:
   ///   - path: The path of the file to replace, e.g. `"folder/image.png"`.
   ///   - data: The new raw file bytes.
   ///   - options: Upload options such as content type and cache duration.
-  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, or observed for progress.
+  ///   - method: The upload protocol to use. Defaults to ``UploadMethod/auto``.
+  ///     See ``upload(_:data:options:method:)`` for details.
+  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
+  ///   or paused/resumed/cancelled (TUS only).
   ///
   /// ## Example
   ///
@@ -231,25 +232,27 @@ public struct StorageFileAPI: Sendable {
   public func update(
     _ path: String,
     data: Data,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    method: UploadMethod = .auto
   ) -> StorageUploadTask {
-    MultipartUploadEngine.makeTask(
-      bucketId: bucketId, path: path, source: .data(data), options: options,
-      httpMethod: .put, client: client)
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    return upload(path, data: data, options: upsertOptions, method: method)
   }
 
   /// Replaces an existing file at the specified path with the contents of a local `URL`.
   ///
-  /// Sends a `PUT` request to the storage server — the file must already exist.
-  /// To create a file if it does not exist, use ``upload(_:fileURL:options:method:)`` with
-  /// ``FileOptions/upsert`` set to `true`.
+  /// Always sets `upsert: true` to overwrite the existing object.
   ///
   /// - Parameters:
   ///   - path: The path of the file to replace, e.g. `"folder/image.png"`.
   ///   - fileURL: A local `file://` URL pointing to the replacement file.
   ///   - options: Upload options such as content type and cache duration.
   ///     When `contentType` is `nil`, the MIME type is inferred from the file extension.
-  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, or observed for progress.
+  ///   - method: The upload protocol to use. Defaults to ``UploadMethod/auto``.
+  ///     See ``upload(_:fileURL:options:method:)`` for details.
+  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
+  ///   or paused/resumed/cancelled (TUS only).
   ///
   /// ## Example
   ///
@@ -263,11 +266,12 @@ public struct StorageFileAPI: Sendable {
   public func update(
     _ path: String,
     fileURL: URL,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    method: UploadMethod = .auto
   ) -> StorageUploadTask {
-    MultipartUploadEngine.makeTask(
-      bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options,
-      httpMethod: .put, client: client)
+    var upsertOptions = options
+    upsertOptions.upsert = true
+    return upload(path, fileURL: fileURL, options: upsertOptions, method: method)
   }
 
   /// Moves an existing file to a new path within the same or a different bucket.
@@ -590,111 +594,6 @@ public struct StorageFileAPI: Sendable {
     )
   }
 
-  /// Downloads a file to a temporary location on disk.
-  ///
-  /// The task's success value is a `URL` pointing to a temporary file. Move or copy the file to a
-  /// permanent location before the app exits — the file is not guaranteed to persist across
-  /// launches.
-  ///
-  /// When ``StorageClientConfiguration/backgroundDownloadSessionIdentifier`` is set, downloads
-  /// continue while the app is suspended. Wire up
-  /// ``StorageClient/handleBackgroundEvents(forSessionIdentifier:completionHandler:)`` in your
-  /// `AppDelegate` to support background transfers.
-  ///
-  /// - Parameters:
-  ///   - path: Path within the bucket, e.g. `"folder/image.png"`.
-  ///   - options: Optional on-the-fly image transformation (resize, reformat, quality).
-  ///   - query: Additional query items appended to the request URL.
-  ///   - cacheNonce: An opaque string appended as `cacheNonce=<value>` for cache busting.
-  /// - Returns: A ``StorageDownloadTask`` whose success value is a `URL` to the file on disk.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let url = try await storage.from("avatars").download(path: "user-123/photo.png").value
-  ///
-  /// // Move to a permanent location before the app exits
-  /// let dest = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-  ///   .appendingPathComponent("photo.png")
-  /// try FileManager.default.moveItem(at: url, to: dest)
-  /// ```
-  @discardableResult
-  public func download(
-    path: String,
-    options: TransformOptions? = nil,
-    query additionalQueryItems: [URLQueryItem]? = nil,
-    cacheNonce: String? = nil
-  ) -> StorageDownloadTask {
-    let url = _downloadURL(
-      path: path, options: options, query: additionalQueryItems, cacheNonce: cacheNonce)
-    // Use http.createRequest so the token provider is called before the
-    // URLSession download task is created — client.mergedHeaders alone strips
-    // the Authorization header when a token provider is configured.
-    return client.downloadDelegate.makeStorageDownloadTask(in: client.downloadSession) {
-      try await client.http.createRequest(.get, url: url, headers: client.mergedHeaders([:]))
-    }
-  }
-
-  /// Downloads a file into memory as `Data`.
-  ///
-  /// The entire file is held in memory, so prefer ``download(path:options:)`` for large files or
-  /// when you need background transfer support.
-  ///
-  /// - Parameters:
-  ///   - path: Path within the bucket, e.g. `"folder/image.png"`.
-  ///   - options: Optional on-the-fly image transformation.
-  ///   - query: Additional query items appended to the request URL.
-  ///   - cacheNonce: An opaque string appended as `cacheNonce=<value>` for cache busting.
-  /// - Returns: A task whose success value is the raw file bytes.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let data = try await storage.from("avatars").downloadData(path: "user-123/photo.png").value
-  /// let image = UIImage(data: data)
-  /// ```
-  @discardableResult
-  public func downloadData(
-    path: String,
-    options: TransformOptions? = nil,
-    query additionalQueryItems: [URLQueryItem]? = nil,
-    cacheNonce: String? = nil
-  ) -> StorageTransferTask<Data> {
-    download(path: path, options: options, query: additionalQueryItems, cacheNonce: cacheNonce)
-      .mapResult { url in
-        defer { try? FileManager.default.removeItem(at: url) }
-        return try Data(contentsOf: url)
-      }
-  }
-
-  private func _downloadURL(
-    path: String,
-    options: TransformOptions?,
-    query additionalQueryItems: [URLQueryItem]? = nil,
-    cacheNonce: String? = nil
-  ) -> URL {
-    let finalPath = _getFinalPath(_removeEmptyFolders(path))
-
-    var queryItems = options?.queryItems ?? []
-    if let additionalQueryItems { queryItems.append(contentsOf: additionalQueryItems) }
-    if let cacheNonce { queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce)) }
-
-    let basePath =
-      options.map { !$0.isEmpty } == true
-      ? "render/image/authenticated/\(finalPath)"
-      : "object/authenticated/\(finalPath)"
-
-    if queryItems.isEmpty {
-      return client.url.appendingPathComponent(basePath)
-    }
-
-    var components = URLComponents(
-      url: client.url.appendingPathComponent(basePath),
-      resolvingAgainstBaseURL: false
-    )
-    components?.queryItems = queryItems
-    return components?.url ?? client.url.appendingPathComponent(basePath)
-  }
 
   /// Retrieves extended metadata for a file without downloading its contents.
   ///

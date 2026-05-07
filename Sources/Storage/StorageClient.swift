@@ -51,6 +51,15 @@ public struct StorageClientConfiguration: Sendable {
   /// Defaults to `false`.
   public let useNewHostname: Bool
 
+  /// The TUS upload chunk size in bytes.
+  ///
+  /// Files uploaded via the TUS resumable protocol are split into chunks of this size.
+  /// The smart-default ``StorageFileAPI/upload(_:data:options:)`` also uses this threshold to
+  /// decide between multipart (≤ chunk size) and TUS (> chunk size).
+  ///
+  /// Defaults to 6 MB, matching the minimum part size for S3 multipart uploads.
+  public let tusChunkSize: Int
+
   /// Creates a ``StorageClientConfiguration``.
   ///
   /// - Parameters:
@@ -60,16 +69,20 @@ public struct StorageClientConfiguration: Sendable {
   ///   - logger: An optional `SupabaseLogger` for request/response diagnostics. Defaults to `nil`.
   ///   - useNewHostname: When `true`, rewrites the host to the dedicated storage subdomain for
   ///     large-file upload support. Defaults to `false`.
+  ///   - tusChunkSize: TUS upload chunk size in bytes. Also used as the threshold for the smart
+  ///     default `upload()`/`update()` methods. Defaults to 6 MB.
   public init(
     headers: [String: String],
     session: URLSession = URLSession(configuration: .default),
     logger: (any SupabaseLogger)? = nil,
-    useNewHostname: Bool = false
+    useNewHostname: Bool = false,
+    tusChunkSize: Int = 6 * 1024 * 1024
   ) {
     self.headers = headers
     self.session = session
     self.logger = logger
     self.useNewHostname = useNewHostname
+    self.tusChunkSize = tusChunkSize
   }
 }
 
@@ -349,7 +362,7 @@ public final class StorageClient: Sendable {
   ///
   /// ```swift
   /// let avatarsBucket = storage.from("avatars")
-  /// let url = try avatarsBucket.getPublicURL(path: "user-123/photo.png")
+  /// let data = try await avatarsBucket.download(path: "user-123/photo.png")
   /// ```
   public func from(_ id: String) -> StorageFileAPI {
     StorageFileAPI(bucketId: id, client: self)
