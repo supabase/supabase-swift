@@ -44,7 +44,7 @@ let sub = try await channel.subscribe()
 
 // Typed broadcast receive.
 Task {
-  for try await msg in sub.broadcasts(of: ChatMessage.self, event: "chat") {
+  for try await msg in sub.broadcasts(of: ChatBroadcast.self, event: "chat") {
     render(msg)
   }
 }
@@ -64,7 +64,8 @@ Task {
 }
 
 // Send (only available on the subscription — Channel has no broadcast method).
-try await sub.broadcast(ChatMessage(text: "hi"), as: "chat")
+let payload = ChatBroadcast(...)   // any Encodable & Sendable
+try await sub.broadcast(payload, as: "chat")
 
 // Explicit release when done.
 try await sub.leave()
@@ -75,7 +76,7 @@ One-shot send without joining:
 ```swift
 try await realtime.httpBroadcast(
   topic: "room:42", event: "chat",
-  payload: ChatMessage(text: "hi")
+  payload: ChatBroadcast(...)
 )
 ```
 
@@ -130,15 +131,33 @@ public struct Configuration: Sendable {
     initial: .seconds(1), max: .seconds(30), jitter: 0.2
   )
   public var disconnectOnEmptyChannelsAfter: Duration = .seconds(50)
-  public var handleAppLifecycle: Bool = .automaticDefault
+  public var lifecycle: LifecyclePolicy = .automaticDefault
   public var protocolVersion: RealtimeProtocolVersion = .v2
-  public var clock: any Clock<Duration> = ContinuousClock()
+  public var clock: any Clock<Duration> & Sendable = ContinuousClock()
   public var headers: HTTPFields = [:]
   public var logger: (any RealtimeLogger)? = nil
-  public var decoder: JSONDecoder = .iso8601
-  public var encoder: JSONEncoder = .iso8601
+  public var decoder: JSONDecoder = .realtimeDefault   // ISO 8601 dates
+  public var encoder: JSONEncoder = .realtimeDefault   // ISO 8601 dates
 
   public static let `default` = Configuration()
+}
+
+extension LifecyclePolicy {
+  /// `.automatic` on iOS/macOS/tvOS/visionOS; `.manual` elsewhere
+  /// (including watchOS and Linux, where lifecycle observation is
+  /// not supported).
+  public static let automaticDefault: LifecyclePolicy
+}
+
+extension JSONDecoder {
+  /// SDK-provided decoder configured with `.iso8601` date strategy.
+  /// Replace via `Configuration.decoder` for custom needs.
+  public static let realtimeDefault: JSONDecoder
+}
+
+extension JSONEncoder {
+  /// SDK-provided encoder configured with `.iso8601` date strategy.
+  public static let realtimeDefault: JSONEncoder
 }
 ```
 
@@ -157,8 +176,8 @@ public extension Realtime {
   /// Returns the `Channel` for `topic`. Shared by topic — two callers asking
   /// for the same topic receive the same underlying actor.
   ///
-  /// The channel joins lazily on the first subscribe. The caller must call
-  /// `leave()` to unsubscribe; `deinit` does NOT unsubscribe.
+  /// The channel does not join the server until `subscribe()` is called. The
+  /// caller must call `leave()` to unsubscribe; `deinit` does NOT unsubscribe.
   func channel(
     _ topic: String,
     configure: (inout ChannelOptions) -> Void = { _ in }
@@ -220,8 +239,10 @@ public struct ChannelSubscription: AsyncSequence, Sendable {
 }
 
 public struct PhoenixMessage: Sendable {
-  /// Phoenix join reference correlating this frame to its `phx_join`. `nil`
-  /// for frames that predate the current join (rare).
+  /// Phoenix join reference correlating this frame to its `phx_join`. Always
+  /// `nil` when the channel is configured for protocol v1 (4-tuple frames
+  /// have no joinRef field). Under v2: `nil` for frames that predate the
+  /// current join (rare).
   public let joinRef: String?
 
   /// Phoenix message reference for request/reply correlation. Set on
@@ -320,8 +341,9 @@ reflects the effective options.
 - `leave()` is **await-to-ack**: it returns only after the server ACKs
   `phx_leave`. On transport failure or timeout, it throws.
 - A **pipelined re-acquire** is safe: if `realtime.channel("x")` is called
-  while a leave for `"x"` is in flight, the caller gets a fresh `Channel`
-  whose join is queued behind the pending leave. Same-topic churn is
+  while a leave for `"x"` is in flight, the caller gets the same `Channel`
+  actor (topic identity, Decision 1) — now in `unsubscribed` state — and the
+  next `subscribe()` is queued behind the pending leave. Same-topic churn is
   transparent.
 
 > **Topic ownership convention.** Because `leave()` is global, coincidental
@@ -343,6 +365,7 @@ public enum ChannelState: Sendable, Equatable {
 
 public enum CloseReason: Sendable, Equatable {
   case userRequested          // someone called leave()
+  case clientDisconnected     // someone called realtime.disconnect()
   case serverClosed(code: Int, message: String?)
   case timeout
   case unauthorized
@@ -461,8 +484,9 @@ public struct Presence: Sendable {
   /// key (Phoenix multi-meta semantics).
   ///
   /// The handle must be explicitly `cancel()`ed to untrack. Dropping the
-  /// handle without cancelling does NOT untrack — but when `channel.leave()`
-  /// is called, all outstanding tracks are implicitly torn down server-side.
+  /// handle without cancelling does NOT untrack — but when `leave()` is
+  /// called on any holder of the topic, all outstanding tracks are
+  /// implicitly torn down server-side.
   ///
   /// Debug warning fires if a handle is deinited without `cancel()` while
   /// the channel is still joined.
@@ -480,6 +504,10 @@ public struct Presence: Sendable {
     _ type: T.Type
   ) -> AsyncStream<PresenceDiff<T>>
 }
+
+/// The presence key string the server attaches to each meta. Comes from
+/// `ChannelOptions.presenceKey` if set, otherwise server-generated.
+public typealias PresenceKey = String
 
 public struct PresenceState<T: Sendable>: Sendable {
   public let active: [PresenceKey: [T]]
@@ -556,7 +584,9 @@ public struct Filter<T: RealtimeTable>: Sendable {
   public static func gte<V>(…) -> Filter<T>
   public static func lt<V>(…)  -> Filter<T>
   public static func lte<V>(…) -> Filter<T>
-  public static func `in`<V>(_ column: KeyPath<T, V>, _ values: [V]) -> Filter<T>
+  public static func `in`<V: RealtimePostgresFilterValue>(
+    _ column: KeyPath<T, V>, _ values: [V]
+  ) -> Filter<T>
 }
 
 /// Untyped filter for cases where the row type cannot or does not conform
@@ -649,6 +679,10 @@ public extension ChannelSubscription {
   /// `E.Element` — `T` for inserts/deletes, `(old: T, new: T)` for updates,
   /// `PostgresChange<T>` for `AnyEvent`. Works identically for typed and
   /// untyped registrations (`T` is `JSONValue` in the untyped case).
+  ///
+  /// Passing a token that was created on a different channel is a
+  /// programmer error: the iterator throws `.unknownToken` on first
+  /// iteration. (`Channel` actor identity is captured in the token.)
   func events<E: ChangeEventVariant>(for token: ChangeRegistration<E>)
     -> AsyncThrowingStream<E.Element, RealtimeError>
 }
@@ -744,14 +778,23 @@ from typed and untyped factories can be mixed freely on the same channel.
 
 ### 6.1 Lazy open
 
+```swift
+public extension Realtime {
+  /// Opens the WebSocket without joining any channel. Useful for pre-warming
+  /// or surfacing auth errors before the first `subscribe()`. Idempotent:
+  /// calling on an already-connected client returns immediately. Concurrent
+  /// calls coalesce around a single in-flight connect.
+  func connect() async throws(RealtimeError)
+}
+```
+
 The WebSocket opens lazily on the first `channel.subscribe()` call. There is
 no iteration-driven lazy-join in v3 — the only path from "no socket" to
 "joined channel" is an explicit `subscribe()`. `httpBroadcast` does not open
 the socket.
 
-Explicit `realtime.connect()` is available for callers who want to pre-warm
-or surface auth errors early without joining a channel. Calls are idempotent
-— a second `connect()` on an already-connected client returns immediately.
+`realtime.connect()` is the explicit pre-warm path; it does not join any
+channel.
 
 ### 6.2 Disconnect
 
@@ -759,15 +802,16 @@ or surface auth errors early without joining a channel. Calls are idempotent
 public extension Realtime {
   /// Closes the socket, awaits close ACK. Does NOT evict the channel cache
   /// or call leave() on any channel. Streams throw
-  /// `.channelClosed(.transportFailure)`; subsequent operations trigger a
+  /// `.channelClosed(.clientDisconnected)`; subsequent operations trigger a
   /// fresh connect + rejoin.
   func disconnect() async
 }
 ```
 
-After a manual `disconnect()`, the `ReconnectionPolicy` does NOT auto-reopen.
-The next channel operation (subscribe, send, or explicit `connect()`)
-triggers a fresh connect.
+After a manual `disconnect()`, the `ReconnectionPolicy` does NOT auto-reopen
+— the policy applies only to *unexpected* closes (transport failure, server
+hangup). The next channel operation (`subscribe()`, send via a re-acquired
+subscription, or explicit `connect()`) triggers a fresh connect.
 
 ### 6.3 Mid-session token rotation
 
@@ -780,8 +824,10 @@ public extension Realtime {
 ```
 
 **Reactive path.** If the server rejects an operation with `token_expired`,
-the SDK calls `APIKeySource.dynamic()` once and retries. If the same token
-comes back, it propagates `.authenticationFailed`.
+the SDK calls `APIKeySource.dynamic()` once and retries. If the returned
+string is byte-equal to the one that was just rejected, the SDK assumes
+the caller has not actually rotated and propagates `.authenticationFailed`
+without retrying.
 
 **If `dynamic()` throws:** propagates as `.authenticationFailed(underlying:)`.
 Connection enters `.closed(.unauthorized)`. The `ReconnectionPolicy` does
@@ -806,8 +852,11 @@ public struct ConnectionStatus: Sendable {
     case closed(CloseReason)
   }
   public let state: State
+  /// When the *current* `state` was entered. Reset on every state transition.
   public let since: Date
-  public let latency: Duration?   // last heartbeat RTT
+  /// Last successful heartbeat round-trip time, if any. `nil` before the
+  /// first heartbeat reply or after the connection drops.
+  public let latency: Duration?
 }
 ```
 
@@ -825,6 +874,7 @@ public enum RealtimeError: Error, Sendable {
   case channelJoinRejected(reason: String)
   case channelClosed(CloseReason)
   case cannotRegisterAfterJoin   // postgres_changes registration after join (§5.3)
+  case unknownToken              // events(for:) called with a token from another channel (§5.3)
 
   case authenticationFailed(reason: String, underlying: (any Error & Sendable)?)
   case tokenExpired
@@ -845,6 +895,19 @@ public enum RealtimeError: Error, Sendable {
 Single flat enum. Swift's `CancellationError` is caught internally and
 re-thrown as `.cancelled` so call sites exhaustively handle one type.
 Underlying errors are preserved as `any Error & Sendable` for debugging.
+
+**`.disconnected` vs `.channelClosed`.** `.disconnected` is thrown by
+*operations attempted while the socket is down* — sends, broadcast acks,
+explicit `connect()` failures during reconnect. The channel itself may
+still be subscribed in the SDK; just not reachable on the wire right now.
+`.channelClosed(reason)` is thrown by *streams whose channel has actually
+terminated* — manual leave, server-initiated close, transport giveup.
+Once a stream throws `.channelClosed`, it ends; `.disconnected` is
+recoverable on reconnect.
+
+**`.cannotRegisterAfterJoin`.** Thrown by `channel.changes(...)`,
+`channel.inserts(...)`, etc. when the channel has already joined. Tokens
+must be registered before the first `subscribe()` returns.
 
 ---
 
@@ -913,7 +976,7 @@ public struct ReconnectionPolicy: Sendable {
   state on rejoin. Observers see the re-synced state naturally.
 - **Postgres change subscriptions are restored.** Filters re-register on
   join.
-- **In-flight sends throw immediately.** `try await channel.broadcast(...)`
+- **In-flight sends throw immediately.** `try await sub.broadcast(...)`
   during an outage throws `.disconnected` — no queuing.
 - **On give-up.** Channel streams throw `.channelClosed(.transportFailure)`,
   the channel cache evicts affected entries, `channel.state` transitions
@@ -1003,8 +1066,8 @@ so implementors don't re-litigate.
 | 9 | `APIKeySource.dynamic(_:)` for fetch; `updateToken(_:)` for push | No JWT parsing in the SDK |
 | 10 | On `token_expired`: retry once, then propagate | Tolerates race between rotation and notify |
 | 11 | `dynamic()` throwing does NOT trigger `ReconnectionPolicy` | Auth recovery is caller-owned |
-| 12 | Single optional `Filter<T>` per postgres_changes subscription | Reflects the Phoenix wire constraint |
-| 13 | `Filter<T>` is a struct with static factories; reads like an enum | Preserves `KeyPath<T, V>` + `V` binding in generics |
+| 12 | Single optional filter per postgres_changes subscription (typed `Filter<T>` or `UntypedFilter`); see Decision 14n for the type split | Reflects the Phoenix wire constraint (one `column=op.value` per entry) |
+| 13 | Both `Filter<T>` and `UntypedFilter` are structs with static factories; read like enums at call site | Typed path preserves `KeyPath<T, V>` + `V` binding; untyped path is a sibling type for raw column strings |
 | 14 | `@RealtimeTable` macro for column-name resolution; manual conformance as escape hatch | Type-safe without forcing macros on every type |
 | 14a | Postgres changes are **register-then-subscribe**: `channel.changes(...)` returns a `ChangeRegistration<E>` token; `channel.subscribe()` triggers the join with all pending tokens; consumption via `sub.events(for: token)` | Phoenix requires postgres_changes filters in the join payload — the API can't pretend lazy join works for them |
 | 14b | Variants are themselves generic over the row type (`Insert<T>`/`Update<T>`/`Delete<T>`/`AnyEvent<T>` conforming to `ChangeEventVariant`); registration is `ChangeRegistration<E>` (single generic, variant carries `T`); single `events(for:)` overload dispatched on the variant | Cleaner type signatures than two-param `<T, E>` and a single overload covers typed and untyped paths |
@@ -1012,7 +1075,7 @@ so implementors don't re-litigate.
 | 14d | `subscribe()` is the **only** join path; no iteration-driven lazy-join | One mental model; no surprises from broadcast iteration silently joining |
 | 14e | `subscribe()` returns `ChannelSubscription` — the post-join surface for consumption, sending, and presence | Type-level gate: ops requiring "joined" can only be reached from a `ChannelSubscription` value |
 | 14f | `ChannelSubscription` conforms to `AsyncSequence` with `Element = PhoenixMessage` | Untyped raw feed available without an extra method; typed methods refine for normal use |
-| 14g | `Channel.broadcast(_:as:)` (sending) is removed; sending lives only on `ChannelSubscription` | Compile-time gate replaces the v3-draft `.channelNotJoined` runtime error |
+| 14g | (merged into Decision 26) | — |
 | 14h | Multiple `subscribe()` calls return equivalent subscriptions sharing one backing state | Topic identity (Decision 1) extends to subscriptions |
 | 14i | Subscription drop without `leave()` does nothing (debug warning); leave is global as in Decision 3 | Consistency with channel rules; no auto-leave footguns under topic sharing |
 | 14j | `Presence` accessor moves to `ChannelSubscription` (was on `Channel` in earlier draft) | Same gate as broadcast send; track/observe require a live join |
@@ -1028,7 +1091,7 @@ so implementors don't re-litigate.
 | 19 | `withChannel` dropped entirely | Dangerous under global-leave semantics; 3-line explicit pattern is clearer |
 | 20 | Flat `RealtimeError` enum; cancellation folded as `.cancelled` | Simpler call sites than grouped or union-throws |
 | 21 | Underlying errors preserved as `any Error & Sendable` | Debug value outweighs Equatable/Codable loss |
-| 22 | Single `broadcast` method; ack at channel-level config | Uniform call site |
+| 22 | Single `broadcast` call site (with a `Data` overload for binary payloads, Decision 25); ack at channel-level config | Uniform call site |
 | 23 | Self-broadcast is channel-level only (wire constraint) | Don't lie about the wire |
 | 24 | Replay via `ChannelOptions.broadcast.replay` | Config at creation; not a separate method |
 | 25 | `Data` payloads bypass encoding; ship as binary frames | Natural Swift affordance |
@@ -1069,6 +1132,13 @@ struct Message: Codable, Sendable, Identifiable {
   var createdAt: Date
 }
 
+/// Wire payload for the "chat" broadcast event — distinct from `Message`,
+/// which is the persisted postgres row consumed via `events(for:)`.
+struct ChatBroadcast: Codable, Sendable {
+  let authorId: UUID
+  let text: String
+}
+
 struct UserPresence: Codable, Sendable {
   let userId: UUID
   let status: Status
@@ -1080,6 +1150,7 @@ final class ChatRoomModel {
   private let realtime: Realtime
   private let channel: Channel
   private let roomId: UUID
+  private let me: UUID
   private var runTask: Task<Void, Never>?
   private var subscription: ChannelSubscription?
   private var trackHandle: PresenceHandle?
@@ -1088,21 +1159,22 @@ final class ChatRoomModel {
   var onlineUsers: [UUID: UserPresence] = [:]
   var connection: ConnectionStatus.State = .idle
 
-  init(realtime: Realtime, roomId: UUID) {
+  init(realtime: Realtime, roomId: UUID, me: UUID) {
     self.realtime = realtime
     self.roomId = roomId
+    self.me = me
     self.channel = realtime.channel("chat:room:\(roomId)") {
-      $0.presenceKey = "user-\(Self.currentUserID)"
+      $0.presenceKey = "user-\(me)"
     }
   }
 
-  func start(me: UUID) {
+  func start() {
     // Register postgres tokens BEFORE subscribe — they bake into phx_join.
     let messageInserts = channel.inserts(
       into: Message.self, where: .eq(\.roomId, roomId)
     )
 
-    runTask = Task { [channel, realtime, messageInserts, weak self] in
+    runTask = Task { [channel, realtime, messageInserts, me, weak self] in
       do {
         // Single explicit join captures the registration above.
         let sub = try await channel.subscribe()
@@ -1151,10 +1223,10 @@ final class ChatRoomModel {
   /// Broadcast through the active subscription. Type-level gate: cannot
   /// be called before `subscription` is set. One server-side subscription;
   /// one round-trip.
-  func send(_ text: String, from author: UUID) async throws(RealtimeError) {
+  func send(_ text: String) async throws(RealtimeError) {
     guard let subscription else { return }
     try await subscription.broadcast(
-      ChatMessage(authorId: author, text: text),
+      ChatBroadcast(authorId: me, text: text),
       as: "chat"
     )
   }
