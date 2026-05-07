@@ -186,15 +186,18 @@ public final actor Channel: Sendable {
   public func leave() async throws(RealtimeError)
 }
 
-/// The post-join surface. Iterating directly yields the untyped Phoenix
-/// message stream; methods refine into typed views for broadcasts, postgres
-/// changes, and presence. Holds the only handle for sending broadcasts.
+/// The post-join surface. Iterating directly yields the raw Phoenix message
+/// stream — every frame received on this channel, with no SDK-side filtering.
+/// Methods refine into typed views for broadcasts, postgres changes, and
+/// presence. Holds the only handle for sending broadcasts.
 public struct ChannelSubscription: AsyncSequence, Sendable {
   public typealias Element = PhoenixMessage
 
-  /// Untyped iteration — every user-visible Phoenix message on this channel.
-  /// Excludes internal frames (`phx_reply`, `phx_close`). Fan-out: each
-  /// iteration is independent; all iterators observe every message.
+  /// Raw iteration — every Phoenix frame on this channel, including
+  /// `broadcast`, `postgres_changes`, `presence_diff`, `presence_state`,
+  /// `system`, `phx_reply`, `phx_close`, and `phx_error`. The SDK still
+  /// consumes these internally (ack correlation, lifecycle); raw consumers
+  /// observe a copy. Fan-out: each iteration is independent.
   public func makeAsyncIterator() -> AsyncIterator
 
   // Typed views (§3, §5, §4) — see the relevant sections for full signatures.
@@ -217,11 +220,22 @@ public struct ChannelSubscription: AsyncSequence, Sendable {
 }
 
 public struct PhoenixMessage: Sendable {
-  /// Server-side event name. Common values: `"broadcast"`, `"postgres_changes"`,
-  /// `"presence_diff"`, `"presence_state"`, `"system"`.
+  /// Phoenix join reference correlating this frame to its `phx_join`. `nil`
+  /// for frames that predate the current join (rare).
+  public let joinRef: String?
+
+  /// Phoenix message reference for request/reply correlation. Set on
+  /// pushes the SDK sent and on the matching `phx_reply`. `nil` for
+  /// server-pushed events (`broadcast`, `postgres_changes`, etc.).
+  public let ref: String?
+
+  /// Server-side event name. Includes user-level events (`"broadcast"`,
+  /// `"postgres_changes"`, `"presence_diff"`, `"presence_state"`, `"system"`)
+  /// and Phoenix internals (`"phx_reply"`, `"phx_close"`, `"phx_error"`).
   public let event: String
 
-  /// Raw payload as received. JSON for text frames, `Data` for binary.
+  /// Raw payload as received. JSON for text frames, `Data` for binary
+  /// (Phoenix v2 broadcast).
   public let payload: PhoenixPayload
 
   /// Local receipt timestamp.
@@ -926,6 +940,8 @@ so implementors don't re-litigate.
 | 14h | Multiple `subscribe()` calls return equivalent subscriptions sharing one backing state | Topic identity (Decision 1) extends to subscriptions |
 | 14i | Subscription drop without `leave()` does nothing (debug warning); leave is global as in Decision 3 | Consistency with channel rules; no auto-leave footguns under topic sharing |
 | 14j | `Presence` accessor moves to `ChannelSubscription` (was on `Channel` in earlier draft) | Same gate as broadcast send; track/observe require a live join |
+| 14k | `PhoenixMessage` is fully raw — exposes `joinRef`, `ref`, `event`, `payload` (JSON or binary). Includes internal `phx_reply`/`phx_close`/`phx_error` frames | Direct iteration is the escape hatch for advanced consumers; SDK consumes the same frames internally for correlation |
+| 14l | `ChannelSubscription.isAlive` / `state` accessor **deferred** | Callers can mirror `realtime.status` or `channel.state`; can be added additively later |
 | 15 | `PresenceHandle` is a regular class; explicit `cancel()`; debug warning on leak | Consistent with `Channel` lifecycle rule |
 | 16 | Multi-track supported (multiple metas per key) | Matches Phoenix; single-track is the trivial subset |
 | 17 | Presence key is channel-level only; server-generated if nil | Simpler; per-track keys confuse more than they help |
