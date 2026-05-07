@@ -631,42 +631,71 @@ final class SequentialMockProtocol: URLProtocol, @unchecked Sendable {
 /// Set `hangPostRequests = true` to also hang POST, which keeps the engine in `.creating` state —
 /// useful for testing cancel during upload creation.
 final class HangingMockProtocol: URLProtocol, @unchecked Sendable {
-  nonisolated(unsafe) static var postResponse:
-    (statusCode: Int, headers: [String: String], data: Data)?
-  /// When `true`, POST requests hang just like PATCH/HEAD requests.
-  nonisolated(unsafe) static var hangPostRequests = false
 
-  // Signals when any hanging request starts
-  nonisolated(unsafe) private static var hangContinuation: AsyncStream<Void>.Continuation?
-  nonisolated(unsafe) static var nextHang: AsyncStream<Void> = AsyncStream { _ in }
+  private struct State {
+    var postResponse: (statusCode: Int, headers: [String: String], data: Data)?
+    var hangPostRequests = false
+    var hangContinuation: AsyncStream<Void>.Continuation?
+    var nextHang: AsyncStream<Void> = AsyncStream { _ in }
+  }
+
+  private static let _state = LockIsolated(State())
+
+  static var postResponse: (statusCode: Int, headers: [String: String], data: Data)? {
+    get { _state.value.postResponse }
+    set { _state.withValue { $0.postResponse = newValue } }
+  }
+
+  static var hangPostRequests: Bool {
+    get { _state.value.hangPostRequests }
+    set { _state.withValue { $0.hangPostRequests = newValue } }
+  }
+
+  static var nextHang: AsyncStream<Void> { _state.value.nextHang }
 
   // Keep the old name as an alias so existing call sites compile unchanged
   static var nextPatchHang: AsyncStream<Void> { nextHang }
 
   static func resetHang() {
-    hangPostRequests = false
-    let (stream, continuation) = AsyncStream<Void>.makeStream()
-    nextHang = stream
-    hangContinuation = continuation
+    _state.withValue { s in
+      s.hangPostRequests = false
+      let (stream, continuation) = AsyncStream<Void>.makeStream()
+      s.nextHang = stream
+      s.hangContinuation = continuation
+    }
   }
 
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
   override func startLoading() {
-    let isPost = request.httpMethod == "POST"
-    if isPost && !Self.hangPostRequests, let resp = Self.postResponse {
+    enum Action {
+      case respond(statusCode: Int, headers: [String: String], data: Data)
+      case hang(AsyncStream<Void>.Continuation?)
+    }
+
+    let req = request
+    let action: Action = Self._state.withValue { s in
+      let isPost = req.httpMethod == "POST"
+      if isPost && !s.hangPostRequests, let resp = s.postResponse {
+        return .respond(statusCode: resp.statusCode, headers: resp.headers, data: resp.data)
+      }
+      return .hang(s.hangContinuation)
+    }
+
+    switch action {
+    case .respond(let statusCode, let headers, let data):
       let httpResponse = HTTPURLResponse(
         url: request.url!,
-        statusCode: resp.statusCode,
+        statusCode: statusCode,
         httpVersion: nil,
-        headerFields: resp.headers
+        headerFields: headers
       )!
       client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
-      client?.urlProtocol(self, didLoad: resp.data)
+      client?.urlProtocol(self, didLoad: data)
       client?.urlProtocolDidFinishLoading(self)
-    } else {
-      Self.hangContinuation?.yield(())
+    case .hang(let cont):
+      cont?.yield(())
       // Hang — stopLoading() will cancel this request
     }
   }
