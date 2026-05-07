@@ -203,7 +203,7 @@ public struct ChannelSubscription: AsyncSequence, Sendable {
   // Typed views (§3, §5, §4) — see the relevant sections for full signatures.
   public func broadcasts<T: Decodable & Sendable>(of type: T.Type, event: String)
     -> AsyncThrowingStream<T, RealtimeError>
-  public func events<T, E>(for token: ChangeRegistration<T, E>)
+  public func events<E: ChangeEventVariant>(for token: ChangeRegistration<E>)
     -> AsyncThrowingStream<E.Element, RealtimeError>
   public var presence: Presence { get }
 
@@ -273,6 +273,15 @@ Key invariants:
 - **Multiple `subscribe()` calls return equivalent subscriptions.** All point
   at the same backing channel state; any subscription's `leave()` ends the
   channel for every holder of the topic.
+- **Subscriptions are invalidated by manual `leave()`.** After
+  `subscription.leave()` returns (or any other holder's `leave()` ACKs), the
+  subscription value is dead. Calling `broadcast`, `events(for:)`,
+  `broadcasts(of:event:)`, or `presence` on it throws
+  `.channelClosed(.userRequested)`; direct iteration terminates. To re-engage,
+  call `channel.subscribe()` again — that returns a *new* subscription value;
+  do not stash subscriptions long-term across leave cycles. Reconnects do
+  *not* invalidate subscriptions (§9.2) — only manual leave or terminal
+  `.transportFailure` does.
 - **Leaked-channel warning.** When `Realtime` deinits with channels that
   have been joined but never left, an `IssueReporting` warning fires in
   debug builds. Release builds silently rely on server-side timeouts.
@@ -528,13 +537,16 @@ extension ExternalType: RealtimeTable {
 }
 ```
 
-### 5.2 Typed filter — single optional clause
+### 5.2 Filters — typed and untyped
 
 Phoenix Realtime supports exactly one `column=op.value` per postgres_changes
-subscription. The SDK reflects this constraint: a single optional `Filter<T>`
-per subscription.
+subscription. The SDK reflects this with a single optional filter per
+registration. Two filter types — same wire encoding, different input shape:
 
 ```swift
+/// Type-checked filter for `RealtimeTable` types. Column is a `KeyPath`; the
+/// value's type must match the keypath's `Value`. `.eq(\.roomId, 42)` against
+/// `var roomId: UUID` fails at compile time.
 public struct Filter<T: RealtimeTable>: Sendable {
   public static func eq<V: RealtimePostgresFilterValue>(
     _ column: KeyPath<T, V>, _ value: V
@@ -546,12 +558,26 @@ public struct Filter<T: RealtimeTable>: Sendable {
   public static func lte<V>(…) -> Filter<T>
   public static func `in`<V>(_ column: KeyPath<T, V>, _ values: [V]) -> Filter<T>
 }
+
+/// Untyped filter for cases where the row type cannot or does not conform
+/// to `RealtimeTable`. Column is a raw string; values are still constrained
+/// to `RealtimePostgresFilterValue` for correct wire encoding.
+public struct UntypedFilter: Sendable {
+  public static func eq(_ column: String,
+                         _ value: any RealtimePostgresFilterValue) -> UntypedFilter
+  public static func neq(…) -> UntypedFilter
+  public static func gt(…)  -> UntypedFilter
+  public static func gte(…) -> UntypedFilter
+  public static func lt(…)  -> UntypedFilter
+  public static func lte(…) -> UntypedFilter
+  public static func `in`(_ column: String,
+                           _ values: [any RealtimePostgresFilterValue]) -> UntypedFilter
+}
 ```
 
-Reads like an enum at call site; implemented as a struct with static
-factories so `KeyPath<T, V>` + `V` type binding is preserved. Passing the
-wrong value type for a column (`.eq(\.roomId, 42)` when `roomId: UUID`) fails
-at compile time.
+Both serialize to the same `column=op.value` wire string. The split is
+purely about call-site ergonomics — typed gets compile-time checking via
+`KeyPath`, untyped pays runtime cost for not requiring conformance.
 
 ### 5.3 Register-then-subscribe
 
@@ -562,33 +588,70 @@ pending tokens; consumption happens through the returned `ChannelSubscription`.
 
 ```swift
 public extension Channel {
-  // Variant-typed factories — token preserves event variant in its type.
+  // Typed factories — require RealtimeTable, return registrations whose
+  // variant carries the row type. Filter is a typed `Filter<T>`.
   func changes<T: RealtimeTable>(
     to type: T.Type, where filter: Filter<T>? = nil
-  ) -> ChangeRegistration<T, AnyEvent>
+  ) -> ChangeRegistration<AnyEvent<T>>
 
   func inserts<T: RealtimeTable>(
     into type: T.Type, where filter: Filter<T>? = nil
-  ) -> ChangeRegistration<T, Insert>
+  ) -> ChangeRegistration<Insert<T>>
 
   func updates<T: RealtimeTable>(
     of type: T.Type, where filter: Filter<T>? = nil
-  ) -> ChangeRegistration<T, Update>
+  ) -> ChangeRegistration<Update<T>>
 
   func deletes<T: RealtimeTable>(
     from type: T.Type, where filter: Filter<T>? = nil
-  ) -> ChangeRegistration<T, Delete>
+  ) -> ChangeRegistration<Delete<T>>
+
+  // Untyped factories — for types without RealtimeTable. Return registrations
+  // whose variant carries `JSONValue`. Filter is `UntypedFilter`.
+  func changes(
+    schema: String, table: String, filter: UntypedFilter? = nil
+  ) -> ChangeRegistration<AnyEvent<JSONValue>>
+
+  func inserts(
+    schema: String, table: String, filter: UntypedFilter? = nil
+  ) -> ChangeRegistration<Insert<JSONValue>>
+
+  func updates(
+    schema: String, table: String, filter: UntypedFilter? = nil
+  ) -> ChangeRegistration<Update<JSONValue>>
+
+  func deletes(
+    schema: String, table: String, filter: UntypedFilter? = nil
+  ) -> ChangeRegistration<Delete<JSONValue>>
 }
 
-public struct ChangeRegistration<T, E: ChangeEventVariant>: Sendable {
-  // Opaque. Holds enough state for the channel to compose the join payload
-  // and route incoming events to consumers.
+/// Variant protocol — each variant is itself generic over the row type and
+/// declares the element type of `events(for:)` for that variant.
+public protocol ChangeEventVariant: Sendable {
+  associatedtype Element: Sendable
 }
 
-public enum AnyEvent: ChangeEventVariant { public typealias Element = PostgresChange<T> }
-public enum Insert:   ChangeEventVariant { public typealias Element = T }
-public enum Update:   ChangeEventVariant { public typealias Element = (old: T, new: T) }
-public enum Delete:   ChangeEventVariant { public typealias Element = T }
+public enum Insert<T: Sendable>:   ChangeEventVariant { public typealias Element = T }
+public enum Update<T: Sendable>:   ChangeEventVariant { public typealias Element = (old: T, new: T) }
+public enum Delete<T: Sendable>:   ChangeEventVariant { public typealias Element = T }
+public enum AnyEvent<T: Sendable>: ChangeEventVariant { public typealias Element = PostgresChange<T> }
+
+/// Single generic over the variant — variant carries `T`, no extra type
+/// parameter on the registration. Same registration type for typed and
+/// untyped paths; only the variant's `T` differs.
+public struct ChangeRegistration<E: ChangeEventVariant>: Sendable {
+  // Opaque. Holds the table descriptor (typed via RealtimeTable, or raw
+  // schema+table strings), optional filter, event mask, and routing state.
+}
+
+public extension ChannelSubscription {
+  /// Single overload, dispatched on the variant. Element type follows from
+  /// `E.Element` — `T` for inserts/deletes, `(old: T, new: T)` for updates,
+  /// `PostgresChange<T>` for `AnyEvent`. Works identically for typed and
+  /// untyped registrations (`T` is `JSONValue` in the untyped case).
+  func events<E: ChangeEventVariant>(for token: ChangeRegistration<E>)
+    -> AsyncThrowingStream<E.Element, RealtimeError>
+}
 
 public enum PostgresChange<T: Sendable>: Sendable {
   case insert(T)
@@ -655,18 +718,25 @@ For types without `@RealtimeTable`, the same register-then-subscribe flow
 applies — only the filter and element types change.
 
 ```swift
-let token = channel.changes(
-  schema: "public", table: "messages", event: .delete,
-  filter: .eq("room_id", id)   // UntypedFilter — string column + any value
+// Use the dedicated untyped factory (per-event variant) — the schema+table
+// arguments are strings; the filter is an `UntypedFilter`.
+let deletes = channel.deletes(
+  schema: "public", table: "messages",
+  filter: .eq("room_id", id)
 )
-// token: ChangeRegistration<JSONValue, Delete>
+// deletes: ChangeRegistration<Delete<JSONValue>>
 
 let sub = try await channel.subscribe()
 
-for try await record in sub.events(for: token) {
+for try await record in sub.events(for: deletes) {
   // record: JSONValue — caller decodes manually
 }
 ```
+
+The untyped path produces the same `ChangeRegistration<E>` type the typed
+factories return — only the variant's `T` differs (`JSONValue` instead of
+your row type). Consumption via `sub.events(for:)` is identical. Tokens
+from typed and untyped factories can be mixed freely on the same channel.
 
 ---
 
@@ -936,8 +1006,8 @@ so implementors don't re-litigate.
 | 12 | Single optional `Filter<T>` per postgres_changes subscription | Reflects the Phoenix wire constraint |
 | 13 | `Filter<T>` is a struct with static factories; reads like an enum | Preserves `KeyPath<T, V>` + `V` binding in generics |
 | 14 | `@RealtimeTable` macro for column-name resolution; manual conformance as escape hatch | Type-safe without forcing macros on every type |
-| 14a | Postgres changes are **register-then-subscribe**: `channel.changes(...)` returns a `ChangeRegistration<T, E>` token; `channel.subscribe()` triggers the join with all pending tokens; consumption via `sub.events(for: token)` | Phoenix requires postgres_changes filters in the join payload — the API can't pretend lazy join works for them |
-| 14b | Tokens carry the event variant in their type (`Insert`/`Update`/`Delete`/`AnyEvent`); element type follows the variant | Compiler enforces the right consumer shape per token kind |
+| 14a | Postgres changes are **register-then-subscribe**: `channel.changes(...)` returns a `ChangeRegistration<E>` token; `channel.subscribe()` triggers the join with all pending tokens; consumption via `sub.events(for: token)` | Phoenix requires postgres_changes filters in the join payload — the API can't pretend lazy join works for them |
+| 14b | Variants are themselves generic over the row type (`Insert<T>`/`Update<T>`/`Delete<T>`/`AnyEvent<T>` conforming to `ChangeEventVariant`); registration is `ChangeRegistration<E>` (single generic, variant carries `T`); single `events(for:)` overload dispatched on the variant | Cleaner type signatures than two-param `<T, E>` and a single overload covers typed and untyped paths |
 | 14c | Registering after join throws `.cannotRegisterAfterJoin`; tokens are reusable across `leave()` + resubscribe cycles | Honest about the wire; ergonomic across reconnects and cycles |
 | 14d | `subscribe()` is the **only** join path; no iteration-driven lazy-join | One mental model; no surprises from broadcast iteration silently joining |
 | 14e | `subscribe()` returns `ChannelSubscription` — the post-join surface for consumption, sending, and presence | Type-level gate: ops requiring "joined" can only be reached from a `ChannelSubscription` value |
@@ -948,6 +1018,9 @@ so implementors don't re-litigate.
 | 14j | `Presence` accessor moves to `ChannelSubscription` (was on `Channel` in earlier draft) | Same gate as broadcast send; track/observe require a live join |
 | 14k | `PhoenixMessage` is fully raw — exposes `joinRef`, `ref`, `event`, `payload` (JSON or binary). Includes internal `phx_reply`/`phx_close`/`phx_error` frames | Direct iteration is the escape hatch for advanced consumers; SDK consumes the same frames internally for correlation |
 | 14l | `ChannelSubscription.isAlive` / `state` accessor **deferred** | Callers can mirror `realtime.status` or `channel.state`; can be added additively later |
+| 14m | After manual `leave()`, the `ChannelSubscription` value is dead — methods throw `.channelClosed(.userRequested)`; iteration terminates. Reconnects do *not* invalidate subscriptions; only manual leave or `.transportFailure` does | Tightens the lifecycle contract; prevents stashed subscriptions from silently no-op-ing across cycles |
+| 14n | Filters split into two types: `Filter<T: RealtimeTable>` (KeyPath-based, compile-time-checked) and `UntypedFilter` (raw column strings + `any RealtimePostgresFilterValue`). Both serialize to the same `column=op.value` wire string | Untyped path needs raw column strings; typed path needs `RealtimeTable` for `columnName(for:)`; one type can't be both |
+| 14o | Untyped factories (`channel.changes(schema:table:filter:)`, `inserts/updates/deletes(schema:table:filter:)`) return `ChangeRegistration<E<JSONValue>>`. Tokens from typed and untyped factories interoperate — same registration type, different variant `T` | Single consumption surface; mix freely on one channel |
 | 15 | `PresenceHandle` is a regular class; explicit `cancel()`; debug warning on leak | Consistent with `Channel` lifecycle rule |
 | 16 | Multi-track supported (multiple metas per key) | Matches Phoenix; single-track is the trivial subset |
 | 17 | Presence key is channel-level only; server-generated if nil | Simpler; per-track keys confuse more than they help |
@@ -959,7 +1032,7 @@ so implementors don't re-litigate.
 | 23 | Self-broadcast is channel-level only (wire constraint) | Don't lie about the wire |
 | 24 | Replay via `ChannelOptions.broadcast.replay` | Config at creation; not a separate method |
 | 25 | `Data` payloads bypass encoding; ship as binary frames | Natural Swift affordance |
-| 26 | `broadcast` throws `.channelNotJoined` if not joined | Joining is a commitment; one-shot sends go via HTTP |
+| 26 | Broadcast send is reachable only from `ChannelSubscription` (compile-time gate); one-shot sends without a subscription go via `realtime.httpBroadcast` | Joining is a commitment; the prior `.channelNotJoined` runtime error is unrepresentable |
 | 27 | `realtime.httpBroadcast(...)` for one-shot sends; shares `APIKeySource` | Clear separation from WS path |
 | 28 | Socket opens lazily on first channel join | Zero ceremony for common paths; explicit `connect()` still exists |
 | 29 | `disconnect()` closes socket, keeps channel cache | Pause/resume, not total teardown |
