@@ -179,3 +179,43 @@ extension StorageError: LocalizedError {
     message
   }
 }
+
+extension StorageErrorCode {
+  // MARK: - Transfer errors (client-side)
+
+  /// A network error occurred during a transfer (transient; retriable on resume).
+  public static let networkError = StorageErrorCode("NetworkError")
+  /// A file system operation (move or read) failed during a transfer.
+  public static let fileSystemError = StorageErrorCode("FileSystemError")
+  /// The transfer was explicitly cancelled or the enclosing Swift Task was cancelled.
+  public static let cancelled = StorageErrorCode("Cancelled")
+}
+
+extension StorageError {
+  static func networkError(underlying: any Error) -> StorageError {
+    StorageError(message: underlying.localizedDescription, errorCode: .networkError)
+  }
+
+  static func fileSystemError(underlying: any Error) -> StorageError {
+    StorageError(message: underlying.localizedDescription, errorCode: .fileSystemError)
+  }
+
+  static let cancelled = StorageError(
+    message: "Transfer was cancelled",
+    errorCode: .cancelled
+  )
+
+  /// Converts any `Error` to a `StorageError`.
+  ///
+  /// - Returns `self` when `error` is already a `StorageError`.
+  /// - Returns ``StorageError/cancelled`` when `error` is a `CancellationError` or
+  ///   a `URLError` with code `.cancelled`.
+  /// - Otherwise wraps `error` as ``StorageError/networkError(underlying:)``.
+  static func from(_ error: any Error) -> StorageError {
+    if let storageError = error as? StorageError { return storageError }
+    if error is CancellationError || (error as? URLError)?.code == .cancelled {
+      return .cancelled
+    }
+    return .networkError(underlying: error)
+  }
+}

@@ -114,6 +114,7 @@ public final class StorageClient: Sendable {
   package let http: _HTTPClient
   private let usesTokenProvider: Bool
 
+
   let encoder: JSONEncoder = {
     let encoder = JSONEncoder.supabase()
     encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -209,6 +210,7 @@ public final class StorageClient: Sendable {
       session: configuration.session,
       tokenProvider: tokenProvider
     )
+
   }
 
   func mergedHeaders(_ headers: [String: String]? = nil) -> [String: String] {
@@ -336,6 +338,7 @@ public final class StorageClient: Sendable {
     configuration.logger?.error("Response: Failure \(error)")
   }
 
+
   /// Returns a ``StorageFileAPI`` scoped to the given bucket.
   ///
   /// All file operations — upload, download, list, delete, signed URLs — are performed through
@@ -348,7 +351,7 @@ public final class StorageClient: Sendable {
   ///
   /// ```swift
   /// let avatarsBucket = storage.from("avatars")
-  /// let data = try await avatarsBucket.download(path: "user-123/photo.png")
+  /// let url = try avatarsBucket.getPublicURL(path: "user-123/photo.png")
   /// ```
   public func from(_ id: String) -> StorageFileAPI {
     StorageFileAPI(bucketId: id, client: self)
