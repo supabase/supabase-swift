@@ -7,6 +7,7 @@
 //  Demonstrates both download engines:
 //    - To Memory (downloadData): loads file bytes in-process
 //    - To Disk (download): saves to a temporary file; background-session capable, survives app suspension
+//  Both engines support pause, resume, and cancel via StorageTransferTask.
 //
 
 import Supabase
@@ -25,10 +26,10 @@ struct FileDownloadView: View {
     var description: String {
       switch self {
       case .toMemory:
-        return "Loads file bytes into memory via downloadData()."
+        return "Loads file bytes into memory via downloadData(). Supports pause and resume."
       case .toDisk:
         return
-          "Saves to a temporary file via download(). Background-session capable — transfer continues while the app is suspended."
+          "Saves to a temporary file via download(). Background-session capable — transfer continues while the app is suspended. Supports pause and resume."
       }
     }
   }
@@ -38,6 +39,14 @@ struct FileDownloadView: View {
   enum DownloadResult {
     case inMemory(Data, path: String)
     case onDisk(URL)
+  }
+
+  // MARK: - Download controller (type-erased pause/resume/cancel)
+
+  struct DownloadController: Sendable {
+    let pause: @Sendable () async -> Void
+    let resume: @Sendable () async -> Void
+    let cancel: @Sendable () async -> Void
   }
 
   // MARK: - State
@@ -50,9 +59,13 @@ struct FileDownloadView: View {
   // Transfer state
   @State private var isLoadingFiles = false
   @State private var isDownloading = false
+  @State private var isPaused = false
   @State private var downloadProgress: Double = 0
   @State private var result: DownloadResult?
   @State private var error: Error?
+
+  // Hold a reference so we can pause / resume / cancel
+  @State private var currentController: DownloadController?
 
   // MARK: - Body
 
@@ -63,7 +76,7 @@ struct FileDownloadView: View {
       bucketSection
       filesSection
 
-      if isDownloading {
+      if isDownloading || isPaused {
         transferSection
       }
 
@@ -86,9 +99,11 @@ struct FileDownloadView: View {
 
   private var descriptionSection: some View {
     Section {
-      Text("Download files to memory or to disk. Disk downloads are background-session capable.")
-        .font(.caption)
-        .foregroundColor(.secondary)
+      Text(
+        "Download files to memory or to disk. Both modes support pause, resume, and cancel. Disk downloads are additionally background-session capable."
+      )
+      .font(.caption)
+      .foregroundColor(.secondary)
     }
   }
 
@@ -124,7 +139,7 @@ struct FileDownloadView: View {
       Button("Load Files") {
         Task { await loadFiles() }
       }
-      .disabled(selectedBucket.isEmpty || isLoadingFiles || isDownloading)
+      .disabled(selectedBucket.isEmpty || isLoadingFiles || isDownloading || isPaused)
     }
   }
 
@@ -156,7 +171,7 @@ struct FileDownloadView: View {
             } label: {
               Image(systemName: "arrow.down.circle.fill").font(.title3)
             }
-            .disabled(isDownloading)
+            .disabled(isDownloading || isPaused)
           }
         }
       }
@@ -165,14 +180,39 @@ struct FileDownloadView: View {
 
   private var transferSection: some View {
     Section("Transfer") {
-      ProgressView(value: downloadProgress) {
+      // Progress row
+      VStack(spacing: 6) {
+        ProgressView(value: downloadProgress)
         HStack {
-          Text("Downloading…")
+          Text(isPaused ? "Paused" : "Downloading…")
           Spacer()
           Text("\(Int(downloadProgress * 100))%")
         }
         .font(.caption)
         .foregroundColor(.secondary)
+      }
+      .padding(.vertical, 4)
+
+      // Control row — separate list row so it is never clipped
+      HStack(spacing: 12) {
+        if isPaused {
+          Button("Resume") {
+            Task { await resumeDownload() }
+          }
+          .buttonStyle(.borderedProminent)
+        } else {
+          Button("Pause") {
+            Task { await pauseDownload() }
+          }
+          .buttonStyle(.bordered)
+        }
+
+        Spacer()
+
+        Button("Cancel", role: .destructive) {
+          Task { await cancelDownload() }
+        }
+        .buttonStyle(.bordered)
       }
     }
   }
@@ -243,6 +283,7 @@ struct FileDownloadView: View {
     clearResults()
     error = nil
     downloadProgress = 0
+    isPaused = false
     isDownloading = true
 
     let bucket = supabase.storage.from(selectedBucket)
@@ -251,10 +292,15 @@ struct FileDownloadView: View {
 
     case .toMemory:
       let task = bucket.downloadData(path: path)
+      currentController = DownloadController(
+        pause: { await task.pause() },
+        resume: { await task.resume() },
+        cancel: { await task.cancel() }
+      )
       for await event in task.events {
         switch event {
         case .progress(let p):
-          downloadProgress = p.fractionCompleted
+          if !isPaused { downloadProgress = p.fractionCompleted }
         case .completed(let data):
           downloadProgress = 1.0
           result = .inMemory(data, path: path)
@@ -265,10 +311,15 @@ struct FileDownloadView: View {
 
     case .toDisk:
       let task = bucket.download(path: path)
+      currentController = DownloadController(
+        pause: { await task.pause() },
+        resume: { await task.resume() },
+        cancel: { await task.cancel() }
+      )
       for await event in task.events {
         switch event {
         case .progress(let p):
-          downloadProgress = p.fractionCompleted
+          if !isPaused { downloadProgress = p.fractionCompleted }
         case .completed(let url):
           downloadProgress = 1.0
           result = .onDisk(url)
@@ -279,6 +330,29 @@ struct FileDownloadView: View {
     }
 
     isDownloading = false
+    isPaused = false
+    currentController = nil
+  }
+
+  @MainActor
+  func pauseDownload() async {
+    await currentController?.pause()
+    isPaused = true
+  }
+
+  @MainActor
+  func resumeDownload() async {
+    await currentController?.resume()
+    isPaused = false
+  }
+
+  @MainActor
+  func cancelDownload() async {
+    await currentController?.cancel()
+    isDownloading = false
+    isPaused = false
+    downloadProgress = 0
+    currentController = nil
   }
 
   func clearResults() {

@@ -48,7 +48,8 @@ struct StorageExamplesView: View {
         NavigationLink(destination: FileDownloadView()) {
           ExampleRow(
             title: "Download Files",
-            description: "To memory or to disk with background-session support",
+            description:
+              "To memory or to disk with pause, resume, cancel, and background-session support",
             icon: "arrow.down.doc.fill"
           )
         }
