@@ -131,7 +131,7 @@ struct StorageFileIntegrationTests {
       let path = uploadPath()
       let file2 = try Data(contentsOf: uploadFileURL("file-2.txt"))
 
-      try await storage.from(bucket).upload(path, data: file).value
+      _ = try await storage.from(bucket).upload(path, data: file).value
 
       let res = try await storage.from(bucket).update(path, data: file2).value
       #expect(res.path == path)
@@ -142,7 +142,7 @@ struct StorageFileIntegrationTests {
     try await withBucket(options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1))) {
       bucket in
       let path = uploadPath()
-      try await storage.from(bucket).upload(path, data: file).value
+      _ = try await storage.from(bucket).upload(path, data: file).value
     }
   }
 
@@ -151,7 +151,7 @@ struct StorageFileIntegrationTests {
       bucket in
       let path = uploadPath()
       do {
-        try await storage.from(bucket).upload(path, data: file).value
+        _ = try await storage.from(bucket).upload(path, data: file).value
         Issue.record("Unexpected success")
       } catch let error as StorageError {
         #expect(error.statusCode == 413)
@@ -166,7 +166,7 @@ struct StorageFileIntegrationTests {
     try await withBucket(options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/jpeg"])) {
       bucket in
       let path = uploadPath()
-      try await storage.from(bucket).upload(
+      _ = try await storage.from(bucket).upload(
         path, data: file, options: FileOptions(contentType: "image/jpeg")
       ).value
     }
@@ -177,7 +177,7 @@ struct StorageFileIntegrationTests {
       bucket in
       let path = uploadPath()
       do {
-        try await storage.from(bucket).upload(
+        _ = try await storage.from(bucket).upload(
           path, data: file, options: FileOptions(contentType: "image/jpeg")
         ).value
         Issue.record("Unexpected success")
@@ -217,7 +217,7 @@ struct StorageFileIntegrationTests {
   @Test func canUploadOverwritingFilesWithSignedURL() async throws {
     try await withBucket { bucket in
       let path = uploadPath()
-      try await storage.from(bucket).upload(path, data: file).value
+      _ = try await storage.from(bucket).upload(path, data: file).value
 
       let res = try await storage.from(bucket).createSignedUploadURL(
         path: path, options: CreateSignedUploadURLOptions(upsert: true))
@@ -233,11 +233,11 @@ struct StorageFileIntegrationTests {
       let path = uploadPath()
       let res = try await storage.from(bucket).createSignedUploadURL(path: path)
 
-      try await storage.from(bucket).uploadToSignedURL(res.path, token: res.token, data: file)
+      _ = try await storage.from(bucket).uploadToSignedURL(res.path, token: res.token, data: file)
         .value
 
       do {
-        try await storage.from(bucket).uploadToSignedURL(res.path, token: res.token, data: file)
+        _ = try await storage.from(bucket).uploadToSignedURL(res.path, token: res.token, data: file)
           .value
         Issue.record("Unexpected success")
       } catch let error as StorageError {
@@ -252,7 +252,7 @@ struct StorageFileIntegrationTests {
   @Test func listObjects() async throws {
     try await withBucket { bucket in
       let path = uploadPath()
-      try await storage.from(bucket).upload(path, data: file).value
+      _ = try await storage.from(bucket).upload(path, data: file).value
       let res = try await storage.from(bucket).list(path: "testpath")
 
       #expect(res.count == 1)
@@ -264,7 +264,7 @@ struct StorageFileIntegrationTests {
     try await withBucket { bucket in
       let path = uploadPath()
       let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
-      try await storage.from(bucket).upload(path, data: file).value
+      _ = try await storage.from(bucket).upload(path, data: file).value
 
       try await storage.from(bucket).move(from: path, to: newPath)
     }
@@ -275,7 +275,7 @@ struct StorageFileIntegrationTests {
       try await withBucket { destBucket in
         let path = uploadPath()
         let newPath = "testpath/file-to-move-\(UUID().uuidString).txt"
-        try await storage.from(sourceBucket).upload(path, data: file).value
+        _ = try await storage.from(sourceBucket).upload(path, data: file).value
 
         try await storage.from(sourceBucket).move(
           from: path,
@@ -292,7 +292,7 @@ struct StorageFileIntegrationTests {
     try await withBucket { bucket in
       let path = uploadPath()
       let newPath = "testpath/file-copied-\(UUID().uuidString).txt"
-      try await storage.from(bucket).upload(path, data: file).value
+      _ = try await storage.from(bucket).upload(path, data: file).value
 
       try await storage.from(bucket).copy(from: path, to: newPath)
     }
@@ -303,7 +303,7 @@ struct StorageFileIntegrationTests {
       try await withBucket { destBucket in
         let path = uploadPath()
         let newPath = "testpath/file-to-copy-\(UUID().uuidString).txt"
-        try await storage.from(sourceBucket).upload(path, data: file).value
+        _ = try await storage.from(sourceBucket).upload(path, data: file).value
 
         try await storage.from(sourceBucket).copy(
           from: path,
@@ -319,7 +319,7 @@ struct StorageFileIntegrationTests {
   @Test func downloadsAnObject() async throws {
     try await withBucket { bucket in
       let path = uploadPath()
-      try await storage.from(bucket).upload(path, data: file).value
+      _ = try await storage.from(bucket).upload(path, data: file).value
 
       let res = try await storage.from(bucket).downloadData(path: path).value
       #expect(res.count > 0)
@@ -329,7 +329,7 @@ struct StorageFileIntegrationTests {
   @Test func removesAnObject() async throws {
     try await withBucket { bucket in
       let path = uploadPath()
-      try await storage.from(bucket).upload(path, data: file).value
+      _ = try await storage.from(bucket).upload(path, data: file).value
 
       let res = try await storage.from(bucket).remove(paths: [path])
       #expect(res.count == 1)
@@ -341,7 +341,7 @@ struct StorageFileIntegrationTests {
   @Test func createAndLoadEmptyFolder() async throws {
     try await withBucket { bucket in
       let path = "empty-folder/.placeholder"
-      try await storage.from(bucket).upload(path, data: Data()).value
+      _ = try await storage.from(bucket).upload(path, data: Data()).value
 
       let files = try await storage.from(bucket).list()
       assertInlineSnapshot(of: files, as: .json) {
@@ -359,7 +359,7 @@ struct StorageFileIntegrationTests {
   @Test func info() async throws {
     try await withBucket { bucket in
       let path = uploadPath()
-      try await storage.from(bucket).upload(
+      _ = try await storage.from(bucket).upload(
         path, data: file, options: FileOptions(metadata: ["value": 42])
       ).value
 
@@ -372,7 +372,7 @@ struct StorageFileIntegrationTests {
   @Test func exists() async throws {
     try await withBucket { bucket in
       let path = uploadPath()
-      try await storage.from(bucket).upload(path, data: file).value
+      _ = try await storage.from(bucket).upload(path, data: file).value
 
       var exists = try await storage.from(bucket).exists(path: path)
       #expect(exists)
@@ -385,7 +385,7 @@ struct StorageFileIntegrationTests {
   @Test func uploadWithCacheControl() async throws {
     try await withBucket { bucket in
       let path = uploadPath()
-      try await storage.from(bucket).upload(
+      _ = try await storage.from(bucket).upload(
         path, data: file, options: FileOptions(cacheControl: "14400")
       ).value
 
@@ -402,7 +402,7 @@ struct StorageFileIntegrationTests {
   @Test func uploadWithFileURL() async throws {
     try await withBucket { bucket in
       let path = uploadPath()
-      try await storage.from(bucket).upload(path, fileURL: uploadFileURL("sadcat.jpg")).value
+      _ = try await storage.from(bucket).upload(path, fileURL: uploadFileURL("sadcat.jpg")).value
 
       let uploaded = try await storage.from(bucket).downloadData(path: path).value
       #expect(uploaded == file)
