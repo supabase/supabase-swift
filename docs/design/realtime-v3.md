@@ -229,6 +229,12 @@ public struct PhoenixMessage: Sendable {
   /// server-pushed events (`broadcast`, `postgres_changes`, etc.).
   public let ref: String?
 
+  /// Channel topic this frame belongs to. Always matches the subscription's
+  /// channel topic for `ChannelSubscription` iterators; included on the
+  /// struct so consumers that hand `PhoenixMessage` values across boundaries
+  /// (logging, debugging, multi-topic aggregation) keep the routing key.
+  public let topic: String
+
   /// Server-side event name. Includes user-level events (`"broadcast"`,
   /// `"postgres_changes"`, `"presence_diff"`, `"presence_state"`, `"system"`)
   /// and Phoenix internals (`"phx_reply"`, `"phx_close"`, `"phx_error"`).
