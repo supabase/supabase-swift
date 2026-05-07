@@ -13,7 +13,7 @@ import Testing
 // Run with: make test-integration
 
 @Suite(.serialized)
-final class StorageTransferIntegrationTests {
+struct StorageTransferIntegrationTests {
 
   let storage = StorageClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
