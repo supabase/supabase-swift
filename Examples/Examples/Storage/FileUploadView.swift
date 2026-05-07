@@ -24,6 +24,7 @@ struct FileUploadView: View {
   @State private var error: Error?
   @State private var upsertEnabled = false
   @State private var cacheControl = "3600"
+  @State private var uploadMethod: UploadMethod = .auto
 
   var body: some View {
     List {
@@ -58,6 +59,12 @@ struct FileUploadView: View {
           TextField("3600", text: $cacheControl)
             .keyboardType(.numberPad)
             .multilineTextAlignment(.trailing)
+        }
+
+        Picker("Upload Method", selection: $uploadMethod) {
+          Text("Auto (size-based)").tag(UploadMethod.auto)
+          Text("Multipart").tag(UploadMethod.multipart)
+          Text("Resumable (TUS)").tag(UploadMethod.resumable)
         }
       }
 
@@ -197,7 +204,7 @@ struct FileUploadView: View {
 
       let response = try await supabase.storage
         .from(selectedBucket)
-        .upload(filePath, data: imageData, options: options)
+        .upload(filePath, data: imageData, options: options, method: uploadMethod).value
 
       uploadedPath = response.path
       uploadProgress = 1.0
@@ -235,7 +242,7 @@ struct FileUploadView: View {
 
       let response = try await supabase.storage
         .from(selectedBucket)
-        .upload(filePath, fileURL: selectedDocument, options: options)
+        .upload(filePath, fileURL: selectedDocument, options: options, method: uploadMethod).value
 
       uploadedPath = response.path
       uploadProgress = 1.0
@@ -277,7 +284,7 @@ struct FileUploadView: View {
 
       let response = try await supabase.storage
         .from(selectedBucket)
-        .upload(filePath, data: data, options: options)
+        .upload(filePath, data: data, options: options, method: uploadMethod).value
 
       uploadedPath = response.path
       uploadProgress = 1.0

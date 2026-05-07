@@ -253,8 +253,14 @@ final class AuthClientIntegrationTests: XCTestCase {
   func testLinkIdentity() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-    try await authClient.linkIdentity(provider: .apple) { url in
-      XCTAssertTrue(url.absoluteString.contains("apple.com"))
+    do {
+      try await authClient.linkIdentity(provider: .apple) { url in
+        XCTAssertTrue(url.absoluteString.contains("apple.com"))
+      }
+    } catch AuthError.api(let message, let errorCode, _, _)
+      where errorCode == .validationFailed && message.contains("missing redirect URI")
+    {
+      throw XCTSkip("Apple provider not configured in this environment: \(message)")
     }
   }
 
