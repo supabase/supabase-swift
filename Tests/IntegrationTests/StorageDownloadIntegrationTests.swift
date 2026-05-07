@@ -174,8 +174,6 @@ final class StorageDownloadIntegrationTests {
     try await withUploadedFile(size: 3 * 1024 * 1024) { bucket, path, original in
       let task = storage.from(bucket).download(path: path)
 
-      // Actor-based counters avoid data races between the driver Task and the
-      // assertion below without requiring ConcurrencyExtras (not in this target).
       actor Counters {
         var pauseCount = 0
         var progressCount = 0
