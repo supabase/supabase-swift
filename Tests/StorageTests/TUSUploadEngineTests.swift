@@ -696,7 +696,7 @@ final class HangingMockProtocol: URLProtocol, @unchecked Sendable {
       client?.urlProtocolDidFinishLoading(self)
     case .hang(let cont):
       cont?.yield(())
-    // Hang — stopLoading() will cancel this request
+      // Hang — stopLoading() will cancel this request
     }
   }
 
