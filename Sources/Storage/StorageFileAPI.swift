@@ -594,7 +594,6 @@ public struct StorageFileAPI: Sendable {
     )
   }
 
-
   /// Retrieves extended metadata for a file without downloading its contents.
   ///
   /// Returns a ``FileInfo`` that includes the file size, ETag, content type, and other
