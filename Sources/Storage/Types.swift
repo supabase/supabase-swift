@@ -1,7 +1,6 @@
 import Foundation
 import Helpers
 
-
 /// Parameters used to filter and paginate results from ``StorageFileAPI/list(path:options:)``.
 ///
 /// All fields are optional; omitted fields fall back to server-side defaults (100 items per page,

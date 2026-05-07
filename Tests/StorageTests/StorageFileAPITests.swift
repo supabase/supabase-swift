@@ -579,7 +579,6 @@ struct StorageFileAPITests {
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-
   @Test func getPublicURL_withEmptyTransformOptions() throws {
     let publicURL = try storage.from("bucket")
       .getPublicURL(path: "image.png", options: TransformOptions())

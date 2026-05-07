@@ -114,7 +114,6 @@ public final class StorageClient: Sendable {
   package let http: _HTTPClient
   private let usesTokenProvider: Bool
 
-
   let encoder: JSONEncoder = {
     let encoder = JSONEncoder.supabase()
     encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -337,7 +336,6 @@ public final class StorageClient: Sendable {
   func logFailure(_ error: any Error) {
     configuration.logger?.error("Response: Failure \(error)")
   }
-
 
   /// Returns a ``StorageFileAPI`` scoped to the given bucket.
   ///

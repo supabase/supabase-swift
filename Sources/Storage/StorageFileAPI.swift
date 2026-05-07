@@ -101,7 +101,6 @@ public struct StorageFileAPI: Sendable {
     let Key: String
   }
 
-
   /// Uploads a `Data` value to an existing bucket.
   ///
   /// - Parameters:
