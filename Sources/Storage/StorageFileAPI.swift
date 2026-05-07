@@ -101,59 +101,61 @@ public struct StorageFileAPI: Sendable {
     let Key: String
   }
 
-  /// Uploads a `Data` value to an existing bucket, automatically choosing the best protocol.
-  ///
-  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
-  /// resumable protocol automatically. Use ``uploadMultipart(_:data:options:)`` or
-  /// ``uploadResumable(_:data:options:)`` to force a specific method.
-  ///
-  /// If the path already exists and ``FileOptions/upsert`` is `false` (the default), an error
-  /// is returned. Set `upsert: true` to overwrite silently instead.
+  /// Uploads a `Data` value to an existing bucket.
   ///
   /// - Parameters:
   ///   - path: The destination path within the bucket, e.g. `"folder/image.png"`.
   ///     The bucket must already exist.
   ///   - data: The raw file bytes to store.
   ///   - options: Upload options such as content type, cache duration, and upsert behaviour.
+  ///   - method: The upload protocol to use. Defaults to ``UploadMethod/auto``, which picks
+  ///     multipart for files ≤ 6 MB and TUS resumable for larger files.
+  ///     Pass ``UploadMethod/multipart`` or ``UploadMethod/resumable`` to override.
   /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
-  ///   or paused/resumed/cancelled.
+  ///   or paused/resumed/cancelled (TUS only).
+  ///
+  /// If the path already exists and ``FileOptions/upsert`` is `false` (the default), an error
+  /// is returned. Set `upsert: true` to overwrite silently instead.
   ///
   /// ## Example
   ///
   /// ```swift
-  /// let imageData = UIImage(named: "photo")!.jpegData(compressionQuality: 0.8)!
+  /// // Auto (default) — picks the right protocol based on size
   /// let response = try await storage.from("avatars").upload(
   ///   "user-123/photo.jpg",
   ///   data: imageData,
-  ///   options: FileOptions(contentType: "image/jpeg", upsert: true)
+  ///   options: FileOptions(contentType: "image/jpeg")
   /// ).value
-  /// print(response.fullPath) // "avatars/user-123/photo.jpg"
+  ///
+  /// // Force TUS for a large video with pause/resume support
+  /// let task = storage.from("videos").upload("clip.mp4", data: videoData, method: .resumable)
+  /// await task.pause()
+  /// await task.resume()
+  /// let response = try await task.value
   /// ```
   @discardableResult
   public func upload(
     _ path: String,
     data: Data,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    method: UploadMethod = .auto
   ) -> StorageUploadTask {
-    if data.count <= client.configuration.tusChunkSize {
-      return MultipartUploadEngine.makeTask(
+    let useResumable: Bool
+    switch method {
+    case .auto: useResumable = data.count > client.configuration.tusChunkSize
+    case .multipart: useResumable = false
+    case .resumable: useResumable = true
+    }
+    if useResumable {
+      return TUSUploadEngine.makeTask(
         bucketId: bucketId, path: path, source: .data(data), options: options, client: client)
     } else {
-      return TUSUploadEngine.makeTask(
+      return MultipartUploadEngine.makeTask(
         bucketId: bucketId, path: path, source: .data(data), options: options, client: client)
     }
   }
 
-  /// Uploads a file from a local `URL` to an existing bucket, automatically choosing the best
-  /// protocol.
-  ///
-  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
-  /// resumable protocol automatically. Use ``uploadMultipart(_:fileURL:options:)`` or
-  /// ``uploadResumable(_:fileURL:options:)`` to force a specific method.
-  ///
-  /// When the file size cannot be determined (e.g. the URL is a symlink or a network-mounted
-  /// path whose `resourceValues` call fails), TUS is used as a conservative default because it
-  /// handles arbitrarily large transfers safely.
+  /// Uploads a file from a local `URL` to an existing bucket.
   ///
   /// - Parameters:
   ///   - path: The destination path within the bucket, e.g. `"folder/image.png"`.
@@ -161,58 +163,65 @@ public struct StorageFileAPI: Sendable {
   ///   - fileURL: A local `file://` URL pointing to the file to upload.
   ///   - options: Upload options such as content type, cache duration, and upsert behaviour.
   ///     When `contentType` is `nil`, the MIME type is inferred from the file extension.
+  ///   - method: The upload protocol to use. Defaults to ``UploadMethod/auto``, which picks
+  ///     multipart for files ≤ 6 MB and TUS resumable for larger files. When the file size
+  ///     cannot be determined, ``UploadMethod/auto`` falls back to TUS as a safe default.
+  ///     Pass ``UploadMethod/multipart`` or ``UploadMethod/resumable`` to override.
   /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
-  ///   or paused/resumed/cancelled.
+  ///   or paused/resumed/cancelled (TUS only).
   ///
   /// ## Example
   ///
   /// ```swift
-  /// let fileURL = URL(fileURLWithPath: "/tmp/report.pdf")
   /// let response = try await storage.from("documents").upload(
   ///   "reports/2024/annual.pdf",
   ///   fileURL: fileURL
   /// ).value
+  ///
+  /// // Explicit TUS for a large video
+  /// let task = storage.from("videos").upload("tour.mov", fileURL: movURL, method: .resumable)
+  /// let response = try await task.value
   /// ```
   @discardableResult
   public func upload(
     _ path: String,
     fileURL: URL,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    method: UploadMethod = .auto
   ) -> StorageUploadTask {
-    let size =
-      (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
-    if size <= client.configuration.tusChunkSize {
-      return MultipartUploadEngine.makeTask(
-        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options,
-        client: client)
-    } else {
+    let useResumable: Bool
+    switch method {
+    case .auto:
+      let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
+      useResumable = size > client.configuration.tusChunkSize
+    case .multipart: useResumable = false
+    case .resumable: useResumable = true
+    }
+    if useResumable {
       return TUSUploadEngine.makeTask(
+        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options, client: client)
+    } else {
+      return MultipartUploadEngine.makeTask(
         bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options, client: client)
     }
   }
 
-  /// Replaces an existing file at the specified path with new `Data`, automatically choosing the
-  /// best protocol.
+  /// Replaces an existing file at the specified path with new `Data`.
   ///
-  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
-  /// resumable protocol automatically. Use ``updateMultipart(_:data:options:)`` or
-  /// ``updateResumable(_:data:options:)`` to force a specific method.
-  ///
-  /// Unlike ``upload(_:data:options:)``, this method always sets `upsert: true` to overwrite the
-  /// existing object.
+  /// Always sets `upsert: true` to overwrite the existing object.
   ///
   /// - Parameters:
   ///   - path: The path of the file to replace, e.g. `"folder/image.png"`.
-  ///     The bucket must already exist.
   ///   - data: The new raw file bytes.
   ///   - options: Upload options such as content type and cache duration.
+  ///   - method: The upload protocol to use. Defaults to ``UploadMethod/auto``.
+  ///     See ``upload(_:data:options:method:)`` for details.
   /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
-  ///   or paused/resumed/cancelled.
+  ///   or paused/resumed/cancelled (TUS only).
   ///
   /// ## Example
   ///
   /// ```swift
-  /// let newImageData = UIImage(named: "updated-photo")!.pngData()!
   /// let response = try await storage.from("avatars").update(
   ///   "user-123/photo.png",
   ///   data: newImageData,
@@ -223,308 +232,46 @@ public struct StorageFileAPI: Sendable {
   public func update(
     _ path: String,
     data: Data,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    method: UploadMethod = .auto
   ) -> StorageUploadTask {
     var upsertOptions = options
     upsertOptions.upsert = true
-    if data.count <= client.configuration.tusChunkSize {
-      return MultipartUploadEngine.makeTask(
-        bucketId: bucketId, path: path, source: .data(data), options: upsertOptions, client: client)
-    } else {
-      return TUSUploadEngine.makeTask(
-        bucketId: bucketId, path: path, source: .data(data), options: upsertOptions, client: client)
-    }
+    return upload(path, data: data, options: upsertOptions, method: method)
   }
 
-  /// Replaces an existing file at the specified path with the contents of a local `URL`,
-  /// automatically choosing the best protocol.
+  /// Replaces an existing file at the specified path with the contents of a local `URL`.
   ///
-  /// Files ≤ 6 MB are uploaded using a standard multipart request; larger files use the TUS
-  /// resumable protocol automatically. Use ``updateMultipart(_:fileURL:options:)`` or
-  /// ``updateResumable(_:fileURL:options:)`` to force a specific method.
-  ///
-  /// When the file size cannot be determined (e.g. the URL is a symlink or a network-mounted
-  /// path whose `resourceValues` call fails), TUS is used as a conservative default because it
-  /// handles arbitrarily large transfers safely.
-  ///
-  /// Unlike ``upload(_:fileURL:options:)``, this method always sets `upsert: true` to overwrite
-  /// the existing object.
+  /// Always sets `upsert: true` to overwrite the existing object.
   ///
   /// - Parameters:
   ///   - path: The path of the file to replace, e.g. `"folder/image.png"`.
-  ///     The bucket must already exist.
   ///   - fileURL: A local `file://` URL pointing to the replacement file.
   ///   - options: Upload options such as content type and cache duration.
   ///     When `contentType` is `nil`, the MIME type is inferred from the file extension.
+  ///   - method: The upload protocol to use. Defaults to ``UploadMethod/auto``.
+  ///     See ``upload(_:fileURL:options:method:)`` for details.
   /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
-  ///   or paused/resumed/cancelled.
+  ///   or paused/resumed/cancelled (TUS only).
   ///
   /// ## Example
   ///
   /// ```swift
-  /// let newFileURL = URL(fileURLWithPath: "/tmp/updated-report.pdf")
-  /// try await storage.from("documents").update("reports/2024/annual.pdf", fileURL: newFileURL).value
+  /// try await storage.from("documents").update(
+  ///   "reports/2024/annual.pdf",
+  ///   fileURL: newFileURL
+  /// ).value
   /// ```
   @discardableResult
   public func update(
     _ path: String,
     fileURL: URL,
-    options: FileOptions = FileOptions()
+    options: FileOptions = FileOptions(),
+    method: UploadMethod = .auto
   ) -> StorageUploadTask {
     var upsertOptions = options
     upsertOptions.upsert = true
-    let size =
-      (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max
-    if size <= client.configuration.tusChunkSize {
-      return MultipartUploadEngine.makeTask(
-        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: upsertOptions,
-        client: client)
-    } else {
-      return TUSUploadEngine.makeTask(
-        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: upsertOptions,
-        client: client)
-    }
-  }
-
-  // MARK: - Explicit multipart upload
-
-  /// Uploads `Data` using a single multipart HTTP request, regardless of file size.
-  ///
-  /// Prefer this over ``upload(_:data:options:)`` when you know the data fits in memory and
-  /// do not need pause/resume support. For files larger than ~6 MB consider
-  /// ``uploadResumable(_:data:options:)`` instead, which can recover from interrupted connections.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let response = try await storage.from("thumbnails")
-  ///   .uploadMultipart("preview.jpg", data: jpegData)
-  ///   .value
-  /// ```
-  @discardableResult
-  public func uploadMultipart(
-    _ path: String,
-    data: Data,
-    options: FileOptions = FileOptions()
-  ) -> StorageUploadTask {
-    MultipartUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .data(data),
-      options: options,
-      client: client
-    )
-  }
-
-  /// Uploads a local file using a single multipart HTTP request, regardless of file size.
-  ///
-  /// Files ≥ 10 MB are streamed from a temporary file on disk to keep memory usage bounded.
-  /// Pause/resume is not supported — use ``uploadResumable(_:fileURL:options:)`` if you need
-  /// to resume interrupted transfers.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let response = try await storage.from("documents")
-  ///   .uploadMultipart("report.pdf", fileURL: pdfURL)
-  ///   .value
-  /// ```
-  @discardableResult
-  public func uploadMultipart(
-    _ path: String,
-    fileURL: URL,
-    options: FileOptions = FileOptions()
-  ) -> StorageUploadTask {
-    MultipartUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .fileURL(fileURL),
-      options: options,
-      client: client
-    )
-  }
-
-  // MARK: - Explicit TUS/resumable upload
-
-  /// Uploads `Data` using the TUS resumable upload protocol, regardless of file size.
-  ///
-  /// TUS splits the upload into chunks and can resume from the last successful chunk if the
-  /// connection drops. Use this instead of ``uploadMultipart(_:data:options:)`` for large payloads
-  /// or unreliable network conditions.
-  ///
-  /// The returned task supports ``StorageTransferTask/pause()``,
-  /// ``StorageTransferTask/resume()``, and ``StorageTransferTask/cancel()``.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let task = storage.from("videos").uploadResumable("clip.mp4", data: videoData)
-  ///
-  /// // Observe progress
-  /// for await event in task.events {
-  ///   if case .progress(let p) = event {
-  ///     print("\(Int(p.fractionCompleted * 100))%")
-  ///   }
-  /// }
-  /// ```
-  @discardableResult
-  public func uploadResumable(
-    _ path: String,
-    data: Data,
-    options: FileOptions = FileOptions()
-  ) -> StorageUploadTask {
-    TUSUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .data(data),
-      options: options,
-      client: client
-    )
-  }
-
-  /// Uploads a local file using the TUS resumable upload protocol, regardless of file size.
-  ///
-  /// Ideal for large files (videos, archives) where you want progress reporting and the ability
-  /// to pause or resume mid-upload. The file is read in chunks so memory usage stays bounded.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let task = storage.from("videos").uploadResumable("tour.mov", fileURL: movURL)
-  ///
-  /// // Pause when the app backgrounds, resume when it foregrounds
-  /// NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, ...) { _ in
-  ///   Task { await task.pause() }
-  /// }
-  /// let response = try await task.value
-  /// ```
-  @discardableResult
-  public func uploadResumable(
-    _ path: String,
-    fileURL: URL,
-    options: FileOptions = FileOptions()
-  ) -> StorageUploadTask {
-    TUSUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .fileURL(fileURL),
-      options: options,
-      client: client
-    )
-  }
-
-  // MARK: - Explicit multipart update
-
-  /// Replaces an existing file with `Data` using a single multipart HTTP request.
-  ///
-  /// Always sets `upsert: true`. Use ``update(_:data:options:)`` if you want the SDK to choose
-  /// automatically between multipart and TUS based on file size.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// try await storage.from("avatars").updateMultipart("user-123/photo.png", data: newPngData).value
-  /// ```
-  @discardableResult
-  public func updateMultipart(
-    _ path: String,
-    data: Data,
-    options: FileOptions = FileOptions()
-  ) -> StorageUploadTask {
-    var upsertOptions = options
-    upsertOptions.upsert = true
-    return MultipartUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .data(data),
-      options: upsertOptions,
-      client: client
-    )
-  }
-
-  /// Replaces an existing file with the contents of a local file URL using a single multipart
-  /// HTTP request.
-  ///
-  /// Always sets `upsert: true`. Files ≥ 10 MB are streamed from a temporary file on disk.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// try await storage.from("documents").updateMultipart("report.pdf", fileURL: newPDFURL).value
-  /// ```
-  @discardableResult
-  public func updateMultipart(
-    _ path: String,
-    fileURL: URL,
-    options: FileOptions = FileOptions()
-  ) -> StorageUploadTask {
-    var upsertOptions = options
-    upsertOptions.upsert = true
-    return MultipartUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .fileURL(fileURL),
-      options: upsertOptions,
-      client: client
-    )
-  }
-
-  // MARK: - Explicit TUS/resumable update
-
-  /// Replaces an existing file with `Data` using the TUS resumable upload protocol.
-  ///
-  /// Always sets `upsert: true`. Supports pause, resume, and progress observation.
-  /// Use ``update(_:data:options:)`` if you want the SDK to choose automatically.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let task = storage.from("videos").updateResumable("intro.mp4", data: newVideoData)
-  /// let response = try await task.value
-  /// ```
-  @discardableResult
-  public func updateResumable(
-    _ path: String,
-    data: Data,
-    options: FileOptions = FileOptions()
-  ) -> StorageUploadTask {
-    var upsertOptions = options
-    upsertOptions.upsert = true
-    return TUSUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .data(data),
-      options: upsertOptions,
-      client: client
-    )
-  }
-
-  /// Replaces an existing file from a local file URL using the TUS resumable upload protocol.
-  ///
-  /// Always sets `upsert: true`. Supports pause, resume, and progress observation.
-  /// Ideal for large file replacements over unreliable connections.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let task = storage.from("videos").updateResumable("intro.mp4", fileURL: newMovURL)
-  /// let response = try await task.value
-  /// ```
-  @discardableResult
-  public func updateResumable(
-    _ path: String,
-    fileURL: URL,
-    options: FileOptions = FileOptions()
-  ) -> StorageUploadTask {
-    var upsertOptions = options
-    upsertOptions.upsert = true
-    return TUSUploadEngine.makeTask(
-      bucketId: bucketId,
-      path: path,
-      source: .fileURL(fileURL),
-      options: upsertOptions,
-      client: client
-    )
+    return upload(path, fileURL: fileURL, options: upsertOptions, method: method)
   }
 
   /// Moves an existing file to a new path within the same or a different bucket.
@@ -1286,7 +1033,7 @@ public struct StorageFileAPI: Sendable {
     var headers = multipartHeaders(options: options)
     headers[Header.xUpsert] = "\(options.upsert)"
 
-    let response: SignedUploadResponse = try await uploadMultipart(
+    let response: SignedUploadResponse = try await _performMultipartRequest(
       .put,
       url: storageURL(
         path: "object/upload/sign/\(bucketId)/\(path)",
@@ -1301,7 +1048,7 @@ public struct StorageFileAPI: Sendable {
     return SignedURLUploadResponse(path: path, fullPath: response.Key)
   }
 
-  private func uploadMultipart<Response: Decodable>(
+  private func _performMultipartRequest<Response: Decodable>(
     _ method: HTTPMethod,
     url: URL,
     path: String,

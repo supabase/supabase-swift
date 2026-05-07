@@ -119,12 +119,13 @@ final class StorageTransferIntegrationTests {
     }
   }
 
-  @Test func multipartUploadCompletesAndFileExists() async throws {
+  @Test func multipartMethodUploadCompletesAndFileExists() async throws {
     try await withBucket { bucket in
       let data = Data(repeating: 0x42, count: 1024)  // 1 KB — well below 6 MB
       let path = "integration/multipart-\(UUID().uuidString).bin"
 
-      let response = try await storage.from(bucket).uploadMultipart(path, data: data).value
+      let response = try await storage.from(bucket).upload(path, data: data, method: .multipart)
+        .value
       #expect(response.path == path)
 
       let downloaded = try await storage.from(bucket).downloadData(path: path).value
@@ -134,13 +135,13 @@ final class StorageTransferIntegrationTests {
     }
   }
 
-  @Test func multipartUploadEmitsProgress() async throws {
+  @Test func multipartMethodUploadEmitsProgress() async throws {
     try await withBucket { bucket in
       let data = Data(repeating: 0xCD, count: 512 * 1024)  // 512 KB
       let path = "integration/multipart-progress-\(UUID().uuidString).bin"
 
       var progressValues: [Double] = []
-      let task = storage.from(bucket).uploadMultipart(path, data: data)
+      let task = storage.from(bucket).upload(path, data: data, method: .multipart)
 
       for await event in task.events {
         if case .progress(let p) = event {
