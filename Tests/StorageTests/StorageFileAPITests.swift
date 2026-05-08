@@ -519,7 +519,7 @@ struct StorageFileAPITests {
       url: objectURL,
       contentType: .json,
       statusCode: 200,
-      data: [.post: Data(responseJSON.utf8)]
+      data: [.put: Data(responseJSON.utf8)]
     ).register()
 
     let response = try await storage.from("bucket")
@@ -532,7 +532,7 @@ struct StorageFileAPITests {
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-  @Test func updateSetsUpsertTrue() async throws {
+  @Test func updateUsesPUTWithNoUpsertHeader() async throws {
     let objectURL = url.appendingPathComponent("object/bucket/file.txt")
     let responseJSON = """
       {"Key":"bucket/file.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
@@ -543,7 +543,7 @@ struct StorageFileAPITests {
       url: objectURL,
       contentType: .json,
       statusCode: 200,
-      data: [.post: Data(responseJSON.utf8)]
+      data: [.put: Data(responseJSON.utf8)]
     )
     mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
       capturedRequest.setValue(request)
@@ -554,7 +554,8 @@ struct StorageFileAPITests {
       .update("file.txt", data: Data("hello".utf8)).value
 
     let request = try #require(capturedRequest.value)
-    #expect(request.value(forHTTPHeaderField: "x-upsert") == "true")
+    #expect(request.httpMethod == "PUT")
+    #expect(request.value(forHTTPHeaderField: "x-upsert") == nil)
   }
 
   @Test func updateFromURL() async throws {
@@ -566,7 +567,7 @@ struct StorageFileAPITests {
       url: objectURL,
       contentType: .json,
       statusCode: 200,
-      data: [.post: Data(responseJSON.utf8)]
+      data: [.put: Data(responseJSON.utf8)]
     ).register()
 
     let response = try await storage.from("bucket")
@@ -577,6 +578,17 @@ struct StorageFileAPITests {
 
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")
+  }
+
+  @Test func download() async {
+    let task = storage.from("bucket").download(path: "file.txt")
+    await task.cancel()
+  }
+
+  @Test func download_withEmptyTransformOptions() async {
+    // Empty TransformOptions should still route to /object/authenticated/.
+    let task = storage.from("bucket").download(path: "file.txt", options: TransformOptions())
+    await task.cancel()
   }
 
   @Test func getPublicURL_withEmptyTransformOptions() throws {
@@ -601,6 +613,16 @@ struct StorageFileAPITests {
       publicURL.absoluteString.contains("/render/image/"),
       "Non-empty transform should use /render/image/ path"
     )
+  }
+
+  @Test func download_withOptions() async {
+    // Non-empty TransformOptions should route to /render/image/authenticated/.
+    let task = storage.from("bucket")
+      .download(
+        path: "sadcat.txt",
+        options: TransformOptions(format: .origin)
+      )
+    await task.cancel()
   }
 
   @Test func info() async throws {
@@ -1030,6 +1052,91 @@ struct StorageFileAPITests {
     )
   }
 
+  @Test func uploadEmitsProgressEvents() async throws {
+    let resumableURL = url.appendingPathComponent("upload/resumable")
+    let locationURL = url.appendingPathComponent(
+      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
+
+    Mock(
+      url: resumableURL,
+      contentType: .json,
+      statusCode: 201,
+      data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
+    ).register()
+
+    Mock(
+      url: locationURL,
+      contentType: .json,
+      statusCode: 204,
+      data: [.patch: Data()],
+      additionalHeaders: ["Upload-Offset": "11"]
+    ).register()
+
+    let task = storage.from("bucket").upload(
+      "file.txt",
+      data: Data("hello world".utf8)
+    )
+
+    let response = try await task.value
+
+    #expect(response.id == UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
+    #expect(response.path == "file.txt")
+    #expect(response.fullPath == "bucket/file.txt")
+  }
+
+  @Test func downloadData() async {
+    // downloadData is a convenience wrapper over download that maps the URL result to Data.
+    let task = storage.from("bucket").downloadData(path: "file.txt")
+    await task.cancel()
+  }
+
+  // MARK: - method: .multipart
+
+  @Test func uploadMultipartMethodFromData() async throws {
+    let objectURL = url.appendingPathComponent("object/bucket/file.txt")
+    let responseJSON = """
+      {"Key":"bucket/file.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
+      """
+    Mock(
+      url: objectURL,
+      contentType: .json,
+      statusCode: 200,
+      data: [.post: Data(responseJSON.utf8)]
+    ).register()
+
+    let response = try await storage.from("bucket")
+      .upload("file.txt", data: Data("hello world".utf8), method: .multipart).value
+
+    #expect(response.path == "file.txt")
+    #expect(response.fullPath == "bucket/file.txt")
+  }
+
+  // MARK: - method: .resumable
+
+  @Test func uploadResumableMethodFromData() async throws {
+    let resumableURL = url.appendingPathComponent("upload/resumable")
+    let locationURL = url.appendingPathComponent(
+      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
+
+    Mock(
+      url: resumableURL, contentType: .json, statusCode: 201, data: [.post: Data()],
+      additionalHeaders: ["Location": locationURL.absoluteString]
+    ).register()
+    Mock(
+      url: locationURL, contentType: .json, statusCode: 204, data: [.patch: Data()],
+      additionalHeaders: ["Upload-Offset": "5"]
+    ).register()
+
+    let response = try await storage.from("bucket")
+      .upload("file.txt", data: Data("hello".utf8), method: .resumable).value
+
+    #expect(response.path == "file.txt")
+    #expect(response.fullPath == "bucket/file.txt")
+  }
+
+  // MARK: - Smart default
+
   @Test func uploadSmallDataUsesMultipart() async throws {
     // 1 byte — well below 6 MB threshold → should POST to /object/...
     let objectURL = url.appendingPathComponent("object/bucket/small.txt")
@@ -1048,7 +1155,7 @@ struct StorageFileAPITests {
     #expect(response.fullPath == "bucket/small.txt")
   }
 
-  @Test func updateSmallDataUsesMultipart() async throws {
+  @Test func updateUsesMultipartPUT() async throws {
     let objectURL = url.appendingPathComponent("object/bucket/small.txt")
     let responseJSON = """
       {"Key":"bucket/small.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
@@ -1056,7 +1163,7 @@ struct StorageFileAPITests {
     let capturedRequest = LockIsolated<URLRequest?>(nil)
     var mock = Mock(
       url: objectURL, contentType: .json, statusCode: 200,
-      data: [.post: Data(responseJSON.utf8)]
+      data: [.put: Data(responseJSON.utf8)]
     )
     mock.onRequestHandler = OnRequestHandler(requestCallback: { capturedRequest.setValue($0) })
     mock.register()
@@ -1065,6 +1172,7 @@ struct StorageFileAPITests {
       .update("small.txt", data: Data("x".utf8)).value
 
     let req = try #require(capturedRequest.value)
-    #expect(req.value(forHTTPHeaderField: "x-upsert") == "true")
+    #expect(req.httpMethod == "PUT")
+    #expect(req.value(forHTTPHeaderField: "x-upsert") == nil)
   }
 }

@@ -36,6 +36,7 @@ actor MultipartUploadEngine {
   private let path: String
   private let source: UploadSource
   private let options: FileOptions
+  private let httpMethod: HTTPMethod
   private let client: StorageClient
   private let eventsContinuation: AsyncStream<TransferEvent<FileUploadResponse>>.Continuation
   private let resultContinuation: AsyncStream<Result<FileUploadResponse, any Error>>.Continuation
@@ -48,6 +49,7 @@ actor MultipartUploadEngine {
     path: String,
     source: UploadSource,
     options: FileOptions,
+    httpMethod: HTTPMethod = .post,
     client: StorageClient,
     eventsContinuation: AsyncStream<TransferEvent<FileUploadResponse>>.Continuation,
     resultContinuation: AsyncStream<Result<FileUploadResponse, any Error>>.Continuation
@@ -56,6 +58,7 @@ actor MultipartUploadEngine {
     self.path = path
     self.source = source
     self.options = options
+    self.httpMethod = httpMethod
     self.client = client
     self.eventsContinuation = eventsContinuation
     self.resultContinuation = resultContinuation
@@ -119,7 +122,7 @@ actor MultipartUploadEngine {
     }
 
     let request = try await client.http.createRequest(
-      .post,
+      httpMethod,
       url: url,
       headers: client.mergedHeaders(headers)
     )
@@ -218,6 +221,7 @@ extension MultipartUploadEngine {
     path: String,
     source: UploadSource,
     options: FileOptions,
+    httpMethod: HTTPMethod = .post,
     client: StorageClient
   ) -> StorageUploadTask {
     let (eventStream, eventsContinuation) =
@@ -231,6 +235,7 @@ extension MultipartUploadEngine {
       path: path,
       source: source,
       options: options,
+      httpMethod: httpMethod,
       client: client,
       eventsContinuation: eventsContinuation,
       resultContinuation: resultContinuation
