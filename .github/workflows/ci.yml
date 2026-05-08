@@ -158,7 +158,7 @@ jobs:
       - name: "Install Docker (Colima)"
         run: |
           brew install colima docker
-          colima start --cpu 4 --memory 8 --disk 50 --vm-type vz --vz-rosetta
+          colima start --cpu 4 --memory 8 --disk 50 --vm-type vz
       - name: "Setup Supabase CLI"
         uses: supabase/setup-cli@df56b21da46c98abb12a9804e4fb1f657773e333 # v2.0.0
         with:
