@@ -208,16 +208,15 @@ public struct StorageFileAPI: Sendable {
 
   /// Replaces an existing file at the specified path with new `Data`.
   ///
-  /// Always sets `upsert: true` to overwrite the existing object.
+  /// Sends a `PUT` request to the storage server — the file must already exist.
+  /// To create a file if it does not exist, use ``upload(_:data:options:method:)`` with
+  /// ``FileOptions/upsert`` set to `true`.
   ///
   /// - Parameters:
   ///   - path: The path of the file to replace, e.g. `"folder/image.png"`.
   ///   - data: The new raw file bytes.
   ///   - options: Upload options such as content type and cache duration.
-  ///   - method: The upload protocol to use. Defaults to ``UploadMethod/auto``.
-  ///     See ``upload(_:data:options:method:)`` for details.
-  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
-  ///   or paused/resumed/cancelled (TUS only).
+  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, or observed for progress.
   ///
   /// ## Example
   ///
@@ -232,27 +231,25 @@ public struct StorageFileAPI: Sendable {
   public func update(
     _ path: String,
     data: Data,
-    options: FileOptions = FileOptions(),
-    method: UploadMethod = .auto
+    options: FileOptions = FileOptions()
   ) -> StorageUploadTask {
-    var upsertOptions = options
-    upsertOptions.upsert = true
-    return upload(path, data: data, options: upsertOptions, method: method)
+    MultipartUploadEngine.makeTask(
+      bucketId: bucketId, path: path, source: .data(data), options: options,
+      httpMethod: .put, client: client)
   }
 
   /// Replaces an existing file at the specified path with the contents of a local `URL`.
   ///
-  /// Always sets `upsert: true` to overwrite the existing object.
+  /// Sends a `PUT` request to the storage server — the file must already exist.
+  /// To create a file if it does not exist, use ``upload(_:fileURL:options:method:)`` with
+  /// ``FileOptions/upsert`` set to `true`.
   ///
   /// - Parameters:
   ///   - path: The path of the file to replace, e.g. `"folder/image.png"`.
   ///   - fileURL: A local `file://` URL pointing to the replacement file.
   ///   - options: Upload options such as content type and cache duration.
   ///     When `contentType` is `nil`, the MIME type is inferred from the file extension.
-  ///   - method: The upload protocol to use. Defaults to ``UploadMethod/auto``.
-  ///     See ``upload(_:fileURL:options:method:)`` for details.
-  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, observed for progress,
-  ///   or paused/resumed/cancelled (TUS only).
+  /// - Returns: A ``StorageUploadTask`` that can be awaited for the result, or observed for progress.
   ///
   /// ## Example
   ///
@@ -266,12 +263,11 @@ public struct StorageFileAPI: Sendable {
   public func update(
     _ path: String,
     fileURL: URL,
-    options: FileOptions = FileOptions(),
-    method: UploadMethod = .auto
+    options: FileOptions = FileOptions()
   ) -> StorageUploadTask {
-    var upsertOptions = options
-    upsertOptions.upsert = true
-    return upload(path, fileURL: fileURL, options: upsertOptions, method: method)
+    MultipartUploadEngine.makeTask(
+      bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options,
+      httpMethod: .put, client: client)
   }
 
   /// Moves an existing file to a new path within the same or a different bucket.
