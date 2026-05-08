@@ -31,11 +31,6 @@ final class StorageFileIntegrationTests: XCTestCase {
   override func setUp() async throws {
     try await super.setUp()
 
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-
     bucketName = try await newBucket()
     file = try Data(contentsOf: uploadFileURL("sadcat.jpg"))
     uploadPath = "testpath/file-\(UUID().uuidString).jpg"

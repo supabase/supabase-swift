@@ -22,11 +22,6 @@ final class StorageClientIntegrationTests: XCTestCase {
   override func setUp() async throws {
     try await super.setUp()
 
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-
     // Clean up test-bucket if it exists from a previous failed run
     // to make tests idempotent
     let testBucketName = "test-bucket"
