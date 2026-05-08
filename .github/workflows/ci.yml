@@ -159,16 +159,7 @@ jobs:
         env:
           HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
-          # Install Lima and Colima from GitHub releases to avoid Homebrew CDN flakiness
-          curl -fsSL \
-            https://github.com/lima-vm/lima/releases/download/v2.1.1/lima-2.1.1-macOS-arm64.tar.gz \
-            | sudo tar xzf - -C /usr/local
-          sudo curl -fsSL \
-            https://github.com/abiosoft/colima/releases/download/v0.10.1/colima-Darwin-arm64 \
-            -o /usr/local/bin/colima
-          sudo chmod +x /usr/local/bin/colima
-          # Docker CLI only (no daemon) — Homebrew token set above reduces rate-limit risk
-          brew install docker
+          brew install colima docker
           colima start --cpu 4 --memory 8 --disk 50 --vm-type vz
       - name: "Setup Supabase CLI"
         uses: supabase/setup-cli@df56b21da46c98abb12a9804e4fb1f657773e333 # v2.0.0
