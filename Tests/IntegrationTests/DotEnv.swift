@@ -1,3 +1,5 @@
+import Foundation
+
 enum DotEnv {
   static let SUPABASE_URL =
     ProcessInfo.processInfo.environment["SUPABASE_URL"] ?? "http://127.0.0.1:54321"
