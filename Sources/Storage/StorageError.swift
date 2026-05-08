@@ -44,8 +44,6 @@ extension StorageErrorCode {
 
   // MARK: - Authentication / authorisation
 
-  /// No API key was supplied with the request.
-  public static let noApiKey = StorageErrorCode("NoApiKeyFound")
   /// The JWT supplied with the request is invalid.
   public static let invalidJWT = StorageErrorCode("InvalidJWT")
   /// The request was rejected because the caller is not authorised.
@@ -53,27 +51,26 @@ extension StorageErrorCode {
 
   // MARK: - Object / bucket
 
-  /// Generic not-found response (no further specificity from the server).
-  public static let notFound = StorageErrorCode("NotFound")
   /// The requested object does not exist.
-  public static let objectNotFound = StorageErrorCode("ObjectNotFound")
+  public static let objectNotFound = StorageErrorCode("not_found")
   /// The requested bucket does not exist.
-  public static let bucketNotFound = StorageErrorCode("BucketNotFound")
+  public static let bucketNotFound = StorageErrorCode("Bucket not found")
   /// An object at the given path already exists and upsert was not requested.
   public static let objectAlreadyExists = StorageErrorCode("Duplicate")
   /// A bucket with the given name already exists.
-  public static let bucketAlreadyExists = StorageErrorCode("BucketAlreadyExists")
+  ///
+  /// The server emits the same `"Duplicate"` wire value for both bucket and object conflicts;
+  /// use the calling context to distinguish them.
+  public static let bucketAlreadyExists = StorageErrorCode("Duplicate")
   /// The bucket name does not meet naming requirements.
-  public static let invalidBucketName = StorageErrorCode("InvalidBucketName")
+  public static let invalidBucketName = StorageErrorCode("Invalid Input")
 
   // MARK: - Upload
 
   /// The uploaded file exceeds the configured size limit.
-  public static let entityTooLarge = StorageErrorCode("EntityTooLarge")
+  public static let entityTooLarge = StorageErrorCode("Payload too large")
   /// The MIME type of the uploaded file is not allowed.
-  public static let invalidMimeType = StorageErrorCode("InvalidMimeType")
-  /// The request did not include a Content-Type header.
-  public static let missingContentType = StorageErrorCode("MissingContentType")
+  public static let invalidMimeType = StorageErrorCode("invalid_mime_type")
 
   // MARK: - Client-side synthetic codes (no HTTP response)
 
@@ -151,13 +148,11 @@ extension StorageError {
   /// `true` when the error indicates that the requested object or bucket does not exist.
   ///
   /// Covers HTTP status code 404 and the explicit error codes
-  /// ``StorageErrorCode/objectNotFound``, ``StorageErrorCode/bucketNotFound``, and
-  /// ``StorageErrorCode/notFound``.
+  /// ``StorageErrorCode/objectNotFound`` and ``StorageErrorCode/bucketNotFound``.
   public var isNotFound: Bool {
     statusCode == 404
       || errorCode == .objectNotFound
       || errorCode == .bucketNotFound
-      || errorCode == .notFound
   }
 
   /// `true` when the error indicates an authentication or authorisation failure (status 401 or 403).

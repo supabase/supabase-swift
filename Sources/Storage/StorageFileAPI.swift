@@ -1083,7 +1083,8 @@ public struct StorageFileAPI: Sendable {
   }
 
   private func _getFinalPath(_ path: String) -> String {
-    "\(bucketId)/\(path)"
+    let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
+    return "\(bucketId)/\(trimmed)"
   }
 }
 
