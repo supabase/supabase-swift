@@ -160,7 +160,8 @@ jobs:
           HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           brew install colima docker
-          colima start --cpu 4 --memory 8 --disk 50 --vm-type vz
+          colima start --cpu 4 --memory 8 --disk 50 --vm-type qemu || \
+            (cat ~/.colima/_lima/colima/ha.stderr.log 2>/dev/null; exit 1)
       - name: "Setup Supabase CLI"
         uses: supabase/setup-cli@df56b21da46c98abb12a9804e4fb1f657773e333 # v2.0.0
         with:
