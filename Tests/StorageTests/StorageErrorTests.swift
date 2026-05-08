@@ -13,18 +13,18 @@ struct StorageErrorTests {
   // MARK: - StorageErrorCode
 
   @Test func errorCodeRawRepresentable() {
-    let code = StorageErrorCode("ObjectNotFound")
-    #expect(code.rawValue == "ObjectNotFound")
+    let code = StorageErrorCode("SomeFutureCode")
+    #expect(code.rawValue == "SomeFutureCode")
   }
 
   @Test func errorCodeInitFromRawValue() {
-    let code = StorageErrorCode(rawValue: "BucketNotFound")
+    let code = StorageErrorCode(rawValue: "Bucket not found")
     #expect(code == .bucketNotFound)
   }
 
   @Test func errorCodeEquality() {
-    #expect(StorageErrorCode("ObjectNotFound") == .objectNotFound)
-    #expect(StorageErrorCode("ObjectNotFound") != .bucketNotFound)
+    #expect(StorageErrorCode("not_found") == .objectNotFound)
+    #expect(StorageErrorCode("not_found") != .bucketNotFound)
   }
 
   @Test func unknownCodeRoundTrips() {
@@ -102,11 +102,6 @@ struct StorageErrorTests {
 
   @Test func isNotFoundBucketNotFoundCode() {
     let error = StorageError(message: "x", errorCode: .bucketNotFound, statusCode: 200)
-    #expect(error.isNotFound)
-  }
-
-  @Test func isNotFoundGenericNotFoundCode() {
-    let error = StorageError(message: "x", errorCode: .notFound, statusCode: 200)
     #expect(error.isNotFound)
   }
 
