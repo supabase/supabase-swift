@@ -178,7 +178,7 @@ public struct AuthAdmin: Sendable {
   /*
    Generate link is commented out temporarily due issues with they Auth's decoding is configured.
    Will revisit it later.
-
+  
   /// Generates email links and OTPs to be sent via a custom email provider.
   ///
   /// - Parameter params: The parameters for the link generation.
