@@ -519,7 +519,7 @@ struct StorageFileAPITests {
       url: objectURL,
       contentType: .json,
       statusCode: 200,
-      data: [.post: Data(responseJSON.utf8)]
+      data: [.put: Data(responseJSON.utf8)]
     ).register()
 
     let response = try await storage.from("bucket")
@@ -532,7 +532,7 @@ struct StorageFileAPITests {
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-  @Test func updateSetsUpsertTrue() async throws {
+  @Test func updateUsesPUTWithNoUpsertHeader() async throws {
     let objectURL = url.appendingPathComponent("object/bucket/file.txt")
     let responseJSON = """
       {"Key":"bucket/file.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
@@ -543,7 +543,7 @@ struct StorageFileAPITests {
       url: objectURL,
       contentType: .json,
       statusCode: 200,
-      data: [.post: Data(responseJSON.utf8)]
+      data: [.put: Data(responseJSON.utf8)]
     )
     mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
       capturedRequest.setValue(request)
@@ -554,7 +554,8 @@ struct StorageFileAPITests {
       .update("file.txt", data: Data("hello".utf8)).value
 
     let request = try #require(capturedRequest.value)
-    #expect(request.value(forHTTPHeaderField: "x-upsert") == "true")
+    #expect(request.httpMethod == "PUT")
+    #expect(request.value(forHTTPHeaderField: "x-upsert") == nil)
   }
 
   @Test func updateFromURL() async throws {
@@ -566,7 +567,7 @@ struct StorageFileAPITests {
       url: objectURL,
       contentType: .json,
       statusCode: 200,
-      data: [.post: Data(responseJSON.utf8)]
+      data: [.put: Data(responseJSON.utf8)]
     ).register()
 
     let response = try await storage.from("bucket")
@@ -1111,26 +1112,6 @@ struct StorageFileAPITests {
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-  @Test func updateMultipartMethodSetsUpsertTrue() async throws {
-    let objectURL = url.appendingPathComponent("object/bucket/file.txt")
-    let responseJSON = """
-      {"Key":"bucket/file.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
-      """
-    let capturedRequest = LockIsolated<URLRequest?>(nil)
-    var mock = Mock(
-      url: objectURL, contentType: .json, statusCode: 200,
-      data: [.post: Data(responseJSON.utf8)]
-    )
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { capturedRequest.setValue($0) })
-    mock.register()
-
-    _ = try await storage.from("bucket")
-      .update("file.txt", data: Data("hello".utf8), method: .multipart).value
-
-    let req = try #require(capturedRequest.value)
-    #expect(req.value(forHTTPHeaderField: "x-upsert") == "true")
-  }
-
   // MARK: - method: .resumable
 
   @Test func uploadResumableMethodFromData() async throws {
@@ -1154,31 +1135,6 @@ struct StorageFileAPITests {
     #expect(response.fullPath == "bucket/file.txt")
   }
 
-  @Test func updateResumableMethodSetsUpsertTrue() async throws {
-    let resumableURL = url.appendingPathComponent("upload/resumable")
-    let locationURL = url.appendingPathComponent(
-      "upload/resumable/YnVja2V0L2ZpbGUudHh0L2VhYThiZGI1LTJlMDAtNDc2Ny1iNWE5LWQyNTAyZWZlMjE5Ng")
-
-    let capturedRequest = LockIsolated<URLRequest?>(nil)
-    var postMock = Mock(
-      url: resumableURL, contentType: .json, statusCode: 201, data: [.post: Data()],
-      additionalHeaders: ["Location": locationURL.absoluteString]
-    )
-    postMock.onRequestHandler = OnRequestHandler(requestCallback: { capturedRequest.setValue($0) })
-    postMock.register()
-
-    Mock(
-      url: locationURL, contentType: .json, statusCode: 204, data: [.patch: Data()],
-      additionalHeaders: ["Upload-Offset": "5"]
-    ).register()
-
-    _ = try await storage.from("bucket")
-      .update("file.txt", data: Data("hello".utf8), method: .resumable).value
-
-    let req = try #require(capturedRequest.value)
-    #expect(req.value(forHTTPHeaderField: "x-upsert") == "true")
-  }
-
   // MARK: - Smart default
 
   @Test func uploadSmallDataUsesMultipart() async throws {
@@ -1199,7 +1155,7 @@ struct StorageFileAPITests {
     #expect(response.fullPath == "bucket/small.txt")
   }
 
-  @Test func updateSmallDataUsesMultipart() async throws {
+  @Test func updateUsesMultipartPUT() async throws {
     let objectURL = url.appendingPathComponent("object/bucket/small.txt")
     let responseJSON = """
       {"Key":"bucket/small.txt","Id":"EAA8BDB5-2E00-4767-B5A9-D2502EFE2196"}
@@ -1207,7 +1163,7 @@ struct StorageFileAPITests {
     let capturedRequest = LockIsolated<URLRequest?>(nil)
     var mock = Mock(
       url: objectURL, contentType: .json, statusCode: 200,
-      data: [.post: Data(responseJSON.utf8)]
+      data: [.put: Data(responseJSON.utf8)]
     )
     mock.onRequestHandler = OnRequestHandler(requestCallback: { capturedRequest.setValue($0) })
     mock.register()
@@ -1216,6 +1172,7 @@ struct StorageFileAPITests {
       .update("small.txt", data: Data("x".utf8)).value
 
     let req = try #require(capturedRequest.value)
-    #expect(req.value(forHTTPHeaderField: "x-upsert") == "true")
+    #expect(req.httpMethod == "PUT")
+    #expect(req.value(forHTTPHeaderField: "x-upsert") == nil)
   }
 }
