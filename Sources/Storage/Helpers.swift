@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Helpers
 
 #if canImport(MobileCoreServices)
   import MobileCoreServices
@@ -23,10 +24,15 @@ import Foundation
           ?? "application/octet-stream"
       } else {
         if let id = UTTypeCreatePreferredIdentifierForTag(
-          kUTTagClassFilenameExtension, pathExtension as CFString, nil
+          kUTTagClassFilenameExtension,
+          pathExtension as CFString,
+          nil
         )?.takeRetainedValue(),
-          let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
-            .takeRetainedValue()
+          let contentType = UTTypeCopyPreferredTagWithClass(
+            id,
+            kUTTagClassMIMEType
+          )?
+          .takeRetainedValue()
         {
           return contentType as String
         }
@@ -39,10 +45,15 @@ import Foundation
           ?? "application/octet-stream"
       } else {
         if let id = UTTypeCreatePreferredIdentifierForTag(
-          kUTTagClassFilenameExtension, pathExtension as CFString, nil
+          kUTTagClassFilenameExtension,
+          pathExtension as CFString,
+          nil
         )?.takeRetainedValue(),
-          let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
-            .takeRetainedValue()
+          let contentType = UTTypeCopyPreferredTagWithClass(
+            id,
+            kUTTagClassMIMEType
+          )?
+          .takeRetainedValue()
         {
           return contentType as String
         }
@@ -58,10 +69,15 @@ import Foundation
   func mimeType(forPathExtension pathExtension: String) -> String {
     #if canImport(CoreServices) || canImport(MobileCoreServices)
       if let id = UTTypeCreatePreferredIdentifierForTag(
-        kUTTagClassFilenameExtension, pathExtension as CFString, nil
+        kUTTagClassFilenameExtension,
+        pathExtension as CFString,
+        nil
       )?.takeRetainedValue(),
-        let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
-          .takeRetainedValue()
+        let contentType = UTTypeCopyPreferredTagWithClass(
+          id,
+          kUTTagClassMIMEType
+        )?
+        .takeRetainedValue()
       {
         return contentType as String
       }

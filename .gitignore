@@ -104,6 +104,9 @@ temp_coverage
 
 .cursor
 .serena/
+.claude/
+.claire/
+docs/superpowers/
 
 # Node.js
 node_modules/

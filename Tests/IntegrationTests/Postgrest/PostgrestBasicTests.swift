@@ -23,11 +23,6 @@ final class PostgrestBasicTests: XCTestCase {
   override func setUp() async throws {
     try await super.setUp()
 
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-
     // Clean up test data before running tests.
     // Delete users with email (test data), preserving seed data (users with username only).
     try await client.from("users").delete().not("email", operator: .is, value: AnyJSON.null)

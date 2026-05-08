@@ -78,9 +78,12 @@ final class SupabaseClientTests: XCTestCase {
     }
     let functionsHeaders = await client.functions.headers
     let functionsRegion = await client.functions.region
+    let expectedStorageHeaders = client.headers.filter {
+      $0.key.caseInsensitiveCompare("Authorization") != .orderedSame
+    }
     expectNoDifference(client.headers, client.auth.configuration.headers)
     expectNoDifference(client.headers, functionsHeaders)
-    expectNoDifference(client.headers, client.storage.configuration.headers)
+    expectNoDifference(expectedStorageHeaders, client.storage.configuration.headers)
     expectNoDifference(client.headers, client.rest.configuration.headers)
 
     XCTAssertEqual(functionsRegion, .apNortheast1)

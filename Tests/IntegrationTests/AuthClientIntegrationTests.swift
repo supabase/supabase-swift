@@ -23,10 +23,6 @@ final class AuthClientIntegrationTests: XCTestCase {
   override func setUp() async throws {
     try await super.setUp()
 
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
   }
 
   static func makeClient(serviceRole: Bool = false) -> AuthClient {

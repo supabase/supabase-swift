@@ -50,17 +50,26 @@ public final class SupabaseClient: Sendable {
   }
 
   /// Supabase Storage allows you to manage user-generated content, such as photos or videos.
-  public var storage: SupabaseStorageClient {
+  public var storage: StorageClient {
     mutableState.withValue {
       if $0.storage == nil {
-        $0.storage = SupabaseStorageClient(
+        var storageHeaders = headers
+        storageHeaders = storageHeaders.filter {
+          $0.key.caseInsensitiveCompare("Authorization") != .orderedSame
+        }
+
+        $0.storage = StorageClient(
+          url: storageURL,
           configuration: StorageClientConfiguration(
-            url: storageURL,
-            headers: headers,
-            session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+            headers: storageHeaders,
+            session: session,
             logger: options.global.logger,
             useNewHostname: options.storage.useNewHostname
-          )
+          ),
+          tokenProvider: { [weak self] in
+            guard let self else { return nil }
+            return (try? await self._getAccessToken()) ?? self.supabaseKey
+          }
         )
       }
 
@@ -105,7 +114,7 @@ public final class SupabaseClient: Sendable {
 
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
-    var storage: SupabaseStorageClient?
+    var storage: StorageClient?
     var rest: PostgrestClient?
     var functions: FunctionsClient?
     var realtime: RealtimeClientV2?
