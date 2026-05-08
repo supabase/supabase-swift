@@ -31,6 +31,7 @@ struct StorageFileIntegrationTests {
     )
     let fixturesURL = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()
+      .deletingLastPathComponent()
       .appendingPathComponent("Fixtures/Upload")
     file = try Data(contentsOf: fixturesURL.appendingPathComponent("sadcat.jpg"))
   }
@@ -435,6 +436,7 @@ struct StorageFileIntegrationTests {
 
   private func uploadFileURL(_ fileName: String) -> URL {
     URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
       .deletingLastPathComponent()
       .appendingPathComponent("Fixtures/Upload")
       .appendingPathComponent(fileName)
