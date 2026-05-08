@@ -166,11 +166,13 @@ jobs:
         working-directory: Tests/IntegrationTests
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_API_URL: https://api.supabase.green
         run: supabase link --project-ref ${{ secrets.INTEGRATION_PROJECT_REF }} --password ${{ secrets.INTEGRATION_DB_PASSWORD }}
       - name: "Reset Database"
         working-directory: Tests/IntegrationTests
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_API_URL: https://api.supabase.green
         run: supabase db reset --linked
       - name: "Run Integration Tests"
         env:
