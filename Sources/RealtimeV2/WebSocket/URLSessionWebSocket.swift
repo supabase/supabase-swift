@@ -59,7 +59,14 @@ final class URLSessionWebSocket: WebSocket {
     to url: URL,
     protocols: [String]? = nil,
     headers: [String: String]? = nil,
-    configuration: URLSessionConfiguration? = nil
+    configuration: URLSessionConfiguration? = nil,
+    serverTrustHandler: (
+      @Sendable (
+        _ session: URLSession,
+        _ challenge: URLAuthenticationChallenge,
+        _ completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+      ) -> Void
+    )? = nil
   ) async throws -> URLSessionWebSocket {
     guard url.scheme == "ws" || url.scheme == "wss" else {
       preconditionFailure("only ws: and wss: schemes are supported")
@@ -74,6 +81,7 @@ final class URLSessionWebSocket: WebSocket {
 
     let session = URLSession.sessionWithConfiguration(
       configuration ?? .default,
+      serverTrustHandler: serverTrustHandler,
       onComplete: { session, task, error in
         mutableState.withValue {
           if let webSocket = $0.webSocket {
@@ -403,6 +411,13 @@ extension URLSession {
   /// - Returns: A configured URLSession instance.
   static func sessionWithConfiguration(
     _ configuration: URLSessionConfiguration,
+    serverTrustHandler: (
+      @Sendable (
+        _ session: URLSession,
+        _ challenge: URLAuthenticationChallenge,
+        _ completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+      ) -> Void
+    )? = nil,
     onComplete: (@Sendable (URLSession, URLSessionTask, (any Error)?) -> Void)? = nil,
     onWebSocketTaskOpened: (@Sendable (URLSession, URLSessionWebSocketTask, String?) -> Void)? =
       nil,
@@ -414,11 +429,13 @@ extension URLSession {
 
     let hasDelegate =
       onComplete != nil || onWebSocketTaskOpened != nil || onWebSocketTaskClosed != nil
+        || serverTrustHandler != nil
 
     if hasDelegate {
       return URLSession(
         configuration: configuration,
         delegate: _Delegate(
+          serverTrustHandler: serverTrustHandler,
           onComplete: onComplete,
           onWebSocketTaskOpened: onWebSocketTaskOpened,
           onWebSocketTaskClosed: onWebSocketTaskClosed
@@ -440,6 +457,14 @@ extension URLSession {
 final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URLSessionTaskDelegate,
   URLSessionWebSocketDelegate
 {
+  /// Callback for server trust authentication challenges (certificate pinning).
+  let serverTrustHandler: (
+    @Sendable (
+      _ session: URLSession,
+      _ challenge: URLAuthenticationChallenge,
+      _ completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) -> Void
+  )?
   /// Callback for task completion events.
   let onComplete: (@Sendable (URLSession, URLSessionTask, (any Error)?) -> Void)?
   /// Callback for WebSocket connection opened events.
@@ -448,6 +473,13 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
   let onWebSocketTaskClosed: (@Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void)?
 
   init(
+    serverTrustHandler: (
+      @Sendable (
+        _ session: URLSession,
+        _ challenge: URLAuthenticationChallenge,
+        _ completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+      ) -> Void
+    )? = nil,
     onComplete: (@Sendable (URLSession, URLSessionTask, (any Error)?) -> Void)?,
     onWebSocketTaskOpened: (
       @Sendable (URLSession, URLSessionWebSocketTask, String?) -> Void
@@ -456,9 +488,23 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
       @Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void
     )?
   ) {
+    self.serverTrustHandler = serverTrustHandler
     self.onComplete = onComplete
     self.onWebSocketTaskOpened = onWebSocketTaskOpened
     self.onWebSocketTaskClosed = onWebSocketTaskClosed
+  }
+
+  /// Called when the session receives an authentication challenge (e.g. server trust / cert pinning).
+  func urlSession(
+    _ session: URLSession,
+    didReceive challenge: URLAuthenticationChallenge,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
+    if let serverTrustHandler {
+      serverTrustHandler(session, challenge, completionHandler)
+    } else {
+      completionHandler(.performDefaultHandling, nil)
+    }
   }
 
   /// Called when a task completes, with or without error.

@@ -96,6 +96,18 @@ public struct RealtimeClientOptions: Sendable {
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: (any SupabaseLogger)?
 
+  /// Optional handler for evaluating server trust on WebSocket connections.
+  /// Use this to implement certificate pinning for Realtime WebSocket connections.
+  /// The handler receives the URLSession, the authentication challenge, and a completion handler
+  /// that must be called with the disposition and optional credential.
+  public var serverTrustHandler: (
+    @Sendable (
+      _ session: URLSession,
+      _ challenge: URLAuthenticationChallenge,
+      _ completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) -> Void
+  )?
+
   /// Default interval, in seconds, between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: TimeInterval = 25
 
@@ -163,7 +175,14 @@ public struct RealtimeClientOptions: Sendable {
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: (any SupabaseLogger)? = nil,
-    handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle
+    handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle,
+    serverTrustHandler: (
+      @Sendable (
+        _ session: URLSession,
+        _ challenge: URLAuthenticationChallenge,
+        _ completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+      ) -> Void
+    )? = nil
   ) {
     self.headers = HTTPFields(headers)
     self.heartbeatInterval = heartbeatInterval
@@ -179,6 +198,7 @@ public struct RealtimeClientOptions: Sendable {
     self.fetch = fetch
     self.accessToken = accessToken
     self.logger = logger
+    self.serverTrustHandler = serverTrustHandler
   }
 
   /// Backward-compatible initializer preserving the pre-`vsn` signature.

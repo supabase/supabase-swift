@@ -223,10 +223,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     self.init(
       url: url,
       options: options,
-      wsTransport: { url, headers in
+      wsTransport: { [serverTrustHandler = options.serverTrustHandler] url, headers in
         return try await URLSessionWebSocket.connect(
           to: url,
-          headers: headers
+          headers: headers,
+          serverTrustHandler: serverTrustHandler
         )
       },
       http: HTTPClient(
