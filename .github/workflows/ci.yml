@@ -164,7 +164,7 @@ jobs:
           version: latest
       - name: "Reset Database"
         working-directory: Tests/IntegrationTests
-        run: supabase db reset --db-url "${{ secrets.INTEGRATION_DB_URL }}" --no-verify
+        run: echo y | supabase db reset --db-url "${{ secrets.INTEGRATION_DB_URL }}"
       - name: "Run Integration Tests"
         env:
           INTEGRATION_TESTS: 1
