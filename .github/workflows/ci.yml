@@ -162,18 +162,9 @@ jobs:
         uses: supabase/setup-cli@df56b21da46c98abb12a9804e4fb1f657773e333 # v2.0.0
         with:
           version: latest
-      - name: "Link Supabase project"
-        working-directory: Tests/IntegrationTests
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_API_URL: https://api.supabase.green
-        run: supabase link --project-ref ${{ secrets.INTEGRATION_PROJECT_REF }} --password ${{ secrets.INTEGRATION_DB_PASSWORD }}
       - name: "Reset Database"
         working-directory: Tests/IntegrationTests
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_API_URL: https://api.supabase.green
-        run: supabase db reset --linked
+        run: supabase db reset --db-url "${{ secrets.INTEGRATION_DB_URL }}"
       - name: "Run Integration Tests"
         env:
           INTEGRATION_TESTS: 1
