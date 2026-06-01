@@ -19,7 +19,10 @@ let defaultHeaders: [String: String] = {
   }
 
   clientInfo += "; runtime=swift"
-  clientInfo += "; runtime-version=\(runtimeVersion)"
+
+  if let runtimeVersion {
+    clientInfo += "; runtime-version=\(runtimeVersion)"
+  }
 
   return ["X-Client-Info": clientInfo]
 }()
