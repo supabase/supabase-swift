@@ -91,7 +91,9 @@ iOSInjectionProject/
 
 .DS_Store
 /.build
-/Packages
+/Packages/*
+!/Packages/_Realtime
+!/Packages/_RealtimeTableMacros
 /*.xcodeproj
 /.swiftpm
 

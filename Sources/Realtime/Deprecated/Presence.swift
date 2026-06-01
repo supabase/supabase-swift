@@ -94,7 +94,8 @@ import Foundation
   *,
   deprecated,
   renamed: "PresenceV2",
-  message: "Presence class is deprecated in favor of PresenceV2. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
+  message:
+    "Presence class is deprecated in favor of PresenceV2. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/RealtimeV2%20Migration%20Guide.md"
 )
 public final class Presence {
   // ----------------------------------------------------------------------
@@ -228,7 +229,7 @@ public final class Presence {
     joinRef = nil
     caller = Caller()
 
-    guard // Do not subscribe to events if they were not provided
+    guard  // Do not subscribe to events if they were not provided
       let stateEvent = opts.events[.state],
       let diffEvent = opts.events[.diff]
     else { return }

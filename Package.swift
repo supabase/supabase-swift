@@ -22,6 +22,7 @@ let package = Package(
     .library(name: "Supabase", targets: ["Supabase"]),
   ],
   dependencies: [
+    .package(path: "Packages/_Realtime"),
     .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),

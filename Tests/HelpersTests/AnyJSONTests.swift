@@ -7,8 +7,8 @@
 
 import CustomDump
 import Foundation
-import XCTest
 import Helpers
+import XCTest
 
 final class AnyJSONTests: XCTestCase {
   let jsonString = """
@@ -112,25 +112,25 @@ final class AnyJSONTests: XCTestCase {
   func testValueProperty() {
     // Test null value
     XCTAssertTrue(AnyJSON.null.value is NSNull)
-    
+
     // Test string value
     XCTAssertEqual(AnyJSON.string("test").value as? String, "test")
-    
+
     // Test integer value
     XCTAssertEqual(AnyJSON.integer(42).value as? Int, 42)
-    
+
     // Test double value
     XCTAssertEqual(AnyJSON.double(3.14).value as? Double, 3.14)
-    
+
     // Test bool value
     XCTAssertEqual(AnyJSON.bool(true).value as? Bool, true)
     XCTAssertEqual(AnyJSON.bool(false).value as? Bool, false)
-    
+
     // Test object value
     let object: AnyJSON = ["key": "value"]
     let objectValue = object.value as? [String: Any]
     XCTAssertEqual(objectValue?["key"] as? String, "value")
-    
+
     // Test array value
     let array: AnyJSON = [1, 2, 3]
     let arrayValue = array.value as? [Any]
@@ -239,7 +239,7 @@ final class AnyJSONTests: XCTestCase {
   func testExpressibleByBooleanLiteral() {
     let json: AnyJSON = true
     XCTAssertEqual(json, .bool(true))
-    
+
     let jsonFalse: AnyJSON = false
     XCTAssertEqual(jsonFalse, .bool(false))
   }
@@ -254,7 +254,7 @@ final class AnyJSONTests: XCTestCase {
     let expected: AnyJSON = .object([
       "key1": .string("value1"),
       "key2": .integer(42),
-      "key3": .bool(true)
+      "key3": .bool(true),
     ])
     XCTAssertEqual(json, expected)
   }
@@ -268,12 +268,12 @@ final class AnyJSONTests: XCTestCase {
     XCTAssertEqual(AnyJSON.double(3.14).description, "3.14")
     XCTAssertEqual(AnyJSON.bool(true).description, "true")
     XCTAssertEqual(AnyJSON.bool(false).description, "false")
-    
+
     // Test object description
     let object: AnyJSON = ["key": "value"]
     XCTAssertTrue(object.description.contains("key"))
     XCTAssertTrue(object.description.contains("value"))
-    
+
     // Test array description
     let array: AnyJSON = [1, 2, 3]
     XCTAssertTrue(array.description.contains("1"))
@@ -291,25 +291,25 @@ final class AnyJSONTests: XCTestCase {
     XCTAssertEqual(AnyJSON.double(3.14), AnyJSON.double(3.14))
     XCTAssertEqual(AnyJSON.bool(true), AnyJSON.bool(true))
     XCTAssertEqual(AnyJSON.bool(false), AnyJSON.bool(false))
-    
+
     // Test different values
     XCTAssertNotEqual(AnyJSON.string("test"), AnyJSON.string("different"))
     XCTAssertNotEqual(AnyJSON.integer(42), AnyJSON.integer(43))
     XCTAssertNotEqual(AnyJSON.double(3.14), AnyJSON.double(3.15))
     XCTAssertNotEqual(AnyJSON.bool(true), AnyJSON.bool(false))
-    
+
     // Test different types
     XCTAssertNotEqual(AnyJSON.string("42"), AnyJSON.integer(42))
     XCTAssertNotEqual(AnyJSON.integer(42), AnyJSON.double(42.0))
     XCTAssertNotEqual(AnyJSON.null, AnyJSON.string(""))
-    
+
     // Test objects
     let object1: AnyJSON = ["key": "value"]
     let object2: AnyJSON = ["key": "value"]
     let object3: AnyJSON = ["key": "different"]
     XCTAssertEqual(object1, object2)
     XCTAssertNotEqual(object1, object3)
-    
+
     // Test arrays
     let array1: AnyJSON = [1, 2, 3]
     let array2: AnyJSON = [1, 2, 3]
@@ -326,9 +326,9 @@ final class AnyJSONTests: XCTestCase {
       .double(3.14),
       .bool(true),
       .object(["key": "value"]),
-      .array([1, 2, 3])
+      .array([1, 2, 3]),
     ]
-    
+
     XCTAssertEqual(set.count, 7)
     XCTAssertTrue(set.contains(.null))
     XCTAssertTrue(set.contains(.string("test")))
@@ -365,7 +365,7 @@ final class AnyJSONTests: XCTestCase {
   func testJSONObjectInitFromCodableFailure() {
     // Test with a simple string, which should fail because it's not an object
     XCTAssertThrowsError(try JSONObject("not an object"))
-    
+
     // Test with an integer, which should also fail
     XCTAssertThrowsError(try JSONObject(42))
   }
@@ -375,14 +375,14 @@ final class AnyJSONTests: XCTestCase {
   func testInvalidJSONDecoding() {
     let invalidJSON = "invalid json"
     let data = invalidJSON.data(using: .utf8)!
-    
+
     XCTAssertThrowsError(try AnyJSON.decoder.decode(AnyJSON.self, from: data))
   }
 
   func testDecodeWithCustomDecoder() throws {
     let customDecoder = JSONDecoder()
     customDecoder.keyDecodingStrategy = .convertFromSnakeCase
-    
+
     let json: AnyJSON = ["user_name": "John", "user_age": 30]
     let decoded: CustomPerson = try json.decode(as: CustomPerson.self, decoder: customDecoder)
     XCTAssertEqual(decoded.userName, "John")
@@ -394,10 +394,10 @@ final class AnyJSONTests: XCTestCase {
   func testEmptyObjectAndArray() {
     let emptyObject: AnyJSON = [:]
     let emptyArray: AnyJSON = []
-    
+
     XCTAssertEqual(emptyObject, .object([:]))
     XCTAssertEqual(emptyArray, .array([]))
-    
+
     XCTAssertTrue(emptyObject.objectValue?.isEmpty == true)
     XCTAssertTrue(emptyArray.arrayValue?.isEmpty == true)
   }
@@ -412,18 +412,18 @@ final class AnyJSONTests: XCTestCase {
         ]
       ]
     ]
-    
+
     let level1 = nested.objectValue?["level1"]
     let level2 = level1?.objectValue?["level2"]
     let level3 = level2?.objectValue?["level3"]
     let deep = level3?.objectValue?["deep"]
-    
+
     XCTAssertEqual(deep, .string("value"))
   }
 
   func testMixedArrayTypes() {
     let mixedArray: AnyJSON = [1, "string", true, nil, ["nested": "value"]]
-    
+
     XCTAssertEqual(mixedArray.arrayValue?[0], .integer(1))
     XCTAssertEqual(mixedArray.arrayValue?[1], .string("string"))
     XCTAssertEqual(mixedArray.arrayValue?[2], .bool(true))
@@ -432,10 +432,10 @@ final class AnyJSONTests: XCTestCase {
   }
 
   func testLargeNumbers() {
-    let largeInt: AnyJSON = 9223372036854775807 // Int.max
-    let largeDouble: AnyJSON = 1.7976931348623157e+308 // Double.max
-    
-    XCTAssertEqual(largeInt.intValue, 9223372036854775807)
+    let largeInt: AnyJSON = 9_223_372_036_854_775_807  // Int.max
+    let largeDouble: AnyJSON = 1.7976931348623157e+308  // Double.max
+
+    XCTAssertEqual(largeInt.intValue, 9_223_372_036_854_775_807)
     XCTAssertEqual(largeDouble.doubleValue, 1.7976931348623157e+308)
   }
 
@@ -443,7 +443,7 @@ final class AnyJSONTests: XCTestCase {
     let emptyString: AnyJSON = ""
     let unicodeString: AnyJSON = "Hello, 世界! 🌍"
     let escapedString: AnyJSON = "Line 1\nLine 2\tTab"
-    
+
     XCTAssertEqual(emptyString.stringValue, "")
     XCTAssertEqual(unicodeString.stringValue, "Hello, 世界! 🌍")
     XCTAssertEqual(escapedString.stringValue, "Line 1\nLine 2\tTab")
