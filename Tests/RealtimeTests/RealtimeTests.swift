@@ -577,6 +577,57 @@ import XCTest
       XCTAssertEqual(heartbeatStatuses.value, [.sent, .timeout])
     }
 
+    // Regression test for SDK-959: a second `handleConnected` on an already
+    // established connection (e.g. `connect()` called while the socket is
+    // already connected, or while an auto-reconnect is in flight) used to
+    // re-read `conn.events`. The first event-stream's `onTermination` would
+    // then race to nil out the live `onEvent`, leaving the socket connected
+    // but deaf — heartbeat and `phx_join` replies were silently dropped,
+    // stalling subscribe for tens of seconds to minutes.
+    func testRedundantConnect_doesNotDropIncomingFrames() async throws {
+      server.onEvent = { @Sendable [server] event in
+        guard let msg = event.realtimeMessage else { return }
+
+        if msg.event == "heartbeat" {
+          server?.send(
+            RealtimeMessageV2(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: "phoenix",
+              event: "phx_reply",
+              payload: [
+                "response": [:],
+                "status": "ok",
+              ]
+            )
+          )
+        }
+      }
+
+      let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
+      let subscription = sut.onHeartbeat { status in
+        heartbeatStatuses.withValue { $0.append(status) }
+      }
+      defer { subscription.cancel() }
+
+      await sut.connect()
+
+      // A redundant connect() — the ConnectionManager is already `.connected`,
+      // so it returns the same connection. The socket must keep receiving
+      // frames afterwards.
+      await sut.connect()
+      await Task.megaYield()
+
+      // Drive a heartbeat; the server replies. If the socket is still
+      // listening, the reply acks the heartbeat (.ok). If `onEvent` was
+      // niled out by the duplicate setup, the reply is dropped and the
+      // heartbeat is never acknowledged.
+      await testClock.advance(by: .seconds(heartbeatInterval))
+      await Task.megaYield()
+
+      XCTAssertEqual(heartbeatStatuses.value, [.sent, .ok])
+    }
+
     func testBroadcastWithHTTP() async throws {
       await http.when {
         $0.url.path.hasSuffix("broadcast")
