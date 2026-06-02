@@ -1,5 +1,5 @@
 {
-  "originHash" : "8ef4a0acd4a4228eca04b86f70fb3f991c48a833b8b5e071fe66e010188bd531",
+  "originHash" : "3e0ec39db7462db772bff31e5dec74e206852e14497dcb8547439d644238bf93",
   "pins" : [
     {
       "identity" : "mocker",
@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-custom-dump",
       "state" : {
-        "revision" : "06c57924455064182d6b217f06ebc05d00cb2990",
-        "version" : "1.5.0"
+        "revision" : "b9b59eb58c946236d6f16305c576ad194c36444e",
+        "version" : "1.6.0"
       }
     },
     {
