@@ -682,7 +682,7 @@ public struct StorageFileAPI: Sendable {
     let basePath =
       options.map { !$0.isEmpty } == true
       ? "render/image/authenticated/\(finalPath)"
-      : "object/authenticated/\(finalPath)"
+      : "object/\(finalPath)"
 
     if queryItems.isEmpty {
       return client.url.appendingPathComponent(basePath)
