@@ -57,7 +57,7 @@
       let fileContents = Data("hello download".utf8)
       let path = "images/photo.png"
       let downloadURL = Self.baseURL
-        .appendingPathComponent("object/authenticated/\(Self.bucketId)/\(path)")
+        .appendingPathComponent("object/\(Self.bucketId)/\(path)")
       Mock(url: downloadURL, statusCode: 200, data: [.get: fileContents]).register()
 
       let url = try await bucket.download(path: path).value
@@ -71,7 +71,7 @@
     @Test func downloadYieldsCompletedEventWithValidURL() async throws {
       let path = "docs/report.pdf"
       let downloadURL = Self.baseURL
-        .appendingPathComponent("object/authenticated/\(Self.bucketId)/\(path)")
+        .appendingPathComponent("object/\(Self.bucketId)/\(path)")
       Mock(url: downloadURL, statusCode: 200, data: [.get: Data("pdf content".utf8)]).register()
 
       let task = bucket.download(path: path)
@@ -88,7 +88,7 @@
     @Test func downloadNetworkFailureYieldsFailedEvent() async throws {
       let path = "missing/file.txt"
       let downloadURL = Self.baseURL
-        .appendingPathComponent("object/authenticated/\(Self.bucketId)/\(path)")
+        .appendingPathComponent("object/\(Self.bucketId)/\(path)")
       Mock(
         url: downloadURL,
         statusCode: 200,
@@ -110,7 +110,7 @@
     @Test func downloadNetworkFailureThrowsFromValue() async throws {
       let path = "missing/file2.txt"
       let downloadURL = Self.baseURL
-        .appendingPathComponent("object/authenticated/\(Self.bucketId)/\(path)")
+        .appendingPathComponent("object/\(Self.bucketId)/\(path)")
       Mock(
         url: downloadURL,
         statusCode: 200,
@@ -132,7 +132,7 @@
       let fileContents = Data("file data contents".utf8)
       let path = "text/readme.txt"
       let downloadURL = Self.baseURL
-        .appendingPathComponent("object/authenticated/\(Self.bucketId)/\(path)")
+        .appendingPathComponent("object/\(Self.bucketId)/\(path)")
       Mock(url: downloadURL, statusCode: 200, data: [.get: fileContents]).register()
 
       let data = try await bucket.downloadData(path: path).value
