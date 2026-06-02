@@ -41,7 +41,7 @@ final class StorageDownloadIntegrationTests {
     try await storage.createBucket(bucketId, options: BucketOptions(isPublic: false))
 
     do {
-      _ = try await storage.from(bucketId).uploadMultipart(path, data: data).value
+      _ = try await storage.from(bucketId).upload(path, data: data).value
       try await body(bucketId, path, data)
     } catch {
       try? await storage.emptyBucket(bucketId)
@@ -404,7 +404,7 @@ final class StorageDownloadIntegrationTests {
       // Upload a second file.
       let path2 = "files/\(UUID().uuidString).bin"
       let data2 = Data(repeating: 0x22, count: 512 * 1024)
-      _ = try await storage.from(bucket).uploadMultipart(path2, data: data2).value
+      _ = try await storage.from(bucket).upload(path2, data: data2).value
 
       // Capture storage to avoid sending `self` across async-let child tasks.
       let s = storage
@@ -427,7 +427,7 @@ final class StorageDownloadIntegrationTests {
     try await withUploadedFile(size: 2 * 1024 * 1024, byte: 0xAA) { bucket, path1, original in
       let path2 = "files/\(UUID().uuidString).bin"
       let data2 = Data(repeating: 0xBB, count: 2 * 1024 * 1024)
-      _ = try await storage.from(bucket).uploadMultipart(path2, data: data2).value
+      _ = try await storage.from(bucket).upload(path2, data: data2).value
 
       let task1 = storage.from(bucket).download(path: path1)
       let task2 = storage.from(bucket).download(path: path2)
