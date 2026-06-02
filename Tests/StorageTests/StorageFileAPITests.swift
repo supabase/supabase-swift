@@ -586,7 +586,7 @@ struct StorageFileAPITests {
   }
 
   @Test func download_withEmptyTransformOptions() async {
-    // Empty TransformOptions should still route to /object/authenticated/.
+    // Empty TransformOptions should still route to /object/ (not /render/image/).
     let task = storage.from("bucket").download(path: "file.txt", options: TransformOptions())
     await task.cancel()
   }
