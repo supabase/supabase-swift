@@ -2,183 +2,265 @@
 //  FileDownloadView.swift
 //  Examples
 //
-//  Demonstrates file download and preview functionality
+//  Created by Guilherme Souza on 06/05/25.
+//
+//  Demonstrates both download engines:
+//    - To Memory (downloadData): loads file bytes in-process
+//    - To Disk (download): saves to a temporary file; background-session capable, survives app suspension
+//  Both engines support pause, resume, and cancel via StorageTransferTask.
 //
 
 import Supabase
 import SwiftUI
 
 struct FileDownloadView: View {
+
+  // MARK: - Download mode
+
+  enum DownloadMode: String, CaseIterable, Identifiable {
+    case toMemory = "To Memory"
+    case toDisk = "To Disk"
+
+    var id: Self { self }
+
+    var description: String {
+      switch self {
+      case .toMemory:
+        return "Loads file bytes into memory via downloadData(). Supports pause and resume."
+      case .toDisk:
+        return
+          "Saves to a temporary file via download(). Background-session capable — transfer continues while the app is suspended. Supports pause and resume."
+      }
+    }
+  }
+
+  // MARK: - Result
+
+  enum DownloadResult {
+    case inMemory(Data, path: String)
+    case onDisk(URL)
+  }
+
+  // MARK: - Download controller (type-erased pause/resume/cancel)
+
+  struct DownloadController: Sendable {
+    let pause: @Sendable () async -> Void
+    let resume: @Sendable () async -> Void
+    let cancel: @Sendable () async -> Void
+  }
+
+  // MARK: - State
+
   @State private var selectedBucket = ""
   @State private var buckets: [Bucket] = []
   @State private var files: [FileObject] = []
-  @State private var downloadedData: Data?
-  @State private var downloadedImage: UIImage?
-  @State private var downloadedText: String?
+  @State private var downloadMode: DownloadMode = .toMemory
+
+  // Transfer state
+  @State private var isLoadingFiles = false
+  @State private var isDownloading = false
+  @State private var isPaused = false
+  @State private var downloadProgress: Double = 0
+  @State private var result: DownloadResult?
   @State private var error: Error?
-  @State private var isLoading = false
-  @State private var selectedPath = ""
+
+  // Hold a reference so we can pause / resume / cancel
+  @State private var currentController: DownloadController?
+
+  // MARK: - Body
 
   var body: some View {
     List {
-      Section {
-        Text("Download and preview files from storage")
-          .font(.caption)
-          .foregroundColor(.secondary)
+      descriptionSection
+      modeSection
+      bucketSection
+      filesSection
+
+      if isDownloading || isPaused {
+        transferSection
       }
 
-      Section("Select Bucket") {
-        if buckets.isEmpty {
-          Text("Loading buckets...")
-            .foregroundColor(.secondary)
-        } else {
-          Picker("Bucket", selection: $selectedBucket) {
-            Text("Select a bucket").tag("")
-            ForEach(buckets) { bucket in
-              Text(bucket.name).tag(bucket.id)
-            }
-          }
-        }
-
-        Button("Load Files") {
-          Task {
-            await loadFiles()
-          }
-        }
-        .disabled(selectedBucket.isEmpty || isLoading)
-      }
-
-      Section("Files in Bucket") {
-        if files.isEmpty {
-          Text("No files found or select a bucket")
-            .font(.caption)
-            .foregroundColor(.secondary)
-        } else {
-          ForEach(files) { file in
-            HStack {
-              Image(systemName: iconForFile(file))
-                .foregroundColor(.accentColor)
-
-              VStack(alignment: .leading, spacing: 2) {
-                Text(file.name)
-                  .font(.subheadline)
-
-                if let metadata = file.metadata, let size = metadata["size"]?.intValue {
-                  Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                }
-              }
-
-              Spacer()
-
-              Button {
-                selectedPath = file.name
-                Task {
-                  await downloadFile(path: file.name)
-                }
-              } label: {
-                Image(systemName: "arrow.down.circle.fill")
-                  .font(.title3)
-              }
-              .disabled(isLoading)
-            }
-          }
-        }
-      }
-
-      if isLoading {
-        Section {
-          ProgressView("Downloading...")
-        }
-      }
-
-      // Preview Section
-      if let downloadedImage {
-        Section("Image Preview") {
-          Image(uiImage: downloadedImage)
-            .resizable()
-            .scaledToFit()
-            .frame(maxHeight: 300)
-            .cornerRadius(8)
-
-          Button("Share Image") {
-            shareImage(downloadedImage)
-          }
-        }
-      }
-
-      if let downloadedText {
-        Section("Text Preview") {
-          Text(downloadedText)
-            .font(.system(.body, design: .monospaced))
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(8)
-        }
-      }
-
-      if let downloadedData, downloadedImage == nil, downloadedText == nil {
-        Section("Downloaded") {
-          VStack(alignment: .leading, spacing: 4) {
-            Text("File downloaded successfully")
-              .foregroundColor(.green)
-            Text(
-              "Size: \(ByteCountFormatter.string(fromByteCount: Int64(downloadedData.count), countStyle: .file))"
-            )
-            .font(.caption)
-            .foregroundColor(.secondary)
-            Text("Path: \(selectedPath)")
-              .font(.caption)
-              .foregroundColor(.secondary)
-          }
-        }
+      if let result {
+        resultSection(result)
       }
 
       if let error {
-        Section {
-          ErrorText(error)
-        }
+        Section { ErrorText(error) }
       }
-
     }
     .navigationTitle("Download Files")
     .gitHubSourceLink()
-    .task {
-      await loadBuckets()
-    }
-    .onChange(of: selectedBucket) { _, _ in
-      files = []
-      downloadedData = nil
-      downloadedImage = nil
-      downloadedText = nil
+    .task { await loadBuckets() }
+    .onChange(of: selectedBucket) { _, _ in clearResults() }
+    .onChange(of: downloadMode) { _, _ in clearResults() }
+  }
+
+  // MARK: - Sections
+
+  private var descriptionSection: some View {
+    Section {
+      Text(
+        "Download files to memory or to disk. Both modes support pause, resume, and cancel. Disk downloads are additionally background-session capable."
+      )
+      .font(.caption)
+      .foregroundColor(.secondary)
     }
   }
 
-  func iconForFile(_ file: FileObject) -> String {
-    let name = file.name.lowercased()
-    if name.hasSuffix(".jpg") || name.hasSuffix(".jpeg") || name.hasSuffix(".png")
-      || name
-        .hasSuffix(".gif")
-    {
-      return "photo"
-    } else if name.hasSuffix(".pdf") {
-      return "doc.fill"
-    } else if name.hasSuffix(".txt") {
-      return "doc.text"
-    } else if name.hasSuffix(".mp4") || name.hasSuffix(".mov") {
-      return "video"
+  private var modeSection: some View {
+    Section("Download Mode") {
+      Picker("Mode", selection: $downloadMode) {
+        ForEach(DownloadMode.allCases) { mode in
+          Text(mode.rawValue).tag(mode)
+        }
+      }
+      .pickerStyle(.segmented)
+
+      Text(downloadMode.description)
+        .font(.caption)
+        .foregroundColor(.secondary)
     }
-    return "doc"
   }
+
+  private var bucketSection: some View {
+    Section("Select Bucket") {
+      if buckets.isEmpty {
+        Text("Loading buckets…")
+          .foregroundColor(.secondary)
+      } else {
+        Picker("Bucket", selection: $selectedBucket) {
+          Text("Select a bucket").tag("")
+          ForEach(buckets) { bucket in
+            Text(bucket.name).tag(bucket.id)
+          }
+        }
+      }
+
+      Button("Load Files") {
+        Task { await loadFiles() }
+      }
+      .disabled(selectedBucket.isEmpty || isLoadingFiles || isDownloading || isPaused)
+    }
+  }
+
+  private var filesSection: some View {
+    Section("Files in Bucket") {
+      if files.isEmpty {
+        Text("No files found — select a bucket and tap \"Load Files\"")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      } else {
+        ForEach(files) { file in
+          HStack {
+            Image(systemName: iconForFile(file))
+              .foregroundColor(.accentColor)
+
+            VStack(alignment: .leading, spacing: 2) {
+              Text(file.name).font(.subheadline)
+              if let size = file.metadata?["size"]?.intValue {
+                Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
+                  .font(.caption)
+                  .foregroundColor(.secondary)
+              }
+            }
+
+            Spacer()
+
+            Button {
+              Task { await downloadFile(path: file.name) }
+            } label: {
+              Image(systemName: "arrow.down.circle.fill").font(.title3)
+            }
+            .disabled(isDownloading || isPaused)
+          }
+        }
+      }
+    }
+  }
+
+  private var transferSection: some View {
+    Section("Transfer") {
+      // Progress row
+      VStack(spacing: 6) {
+        ProgressView(value: downloadProgress)
+        HStack {
+          Text(isPaused ? "Paused" : "Downloading…")
+          Spacer()
+          Text("\(Int(downloadProgress * 100))%")
+        }
+        .font(.caption)
+        .foregroundColor(.secondary)
+      }
+      .padding(.vertical, 4)
+
+      // Control row — separate list row so it is never clipped
+      HStack(spacing: 12) {
+        if isPaused {
+          Button("Resume") {
+            Task { await resumeDownload() }
+          }
+          .buttonStyle(.borderedProminent)
+        } else {
+          Button("Pause") {
+            Task { await pauseDownload() }
+          }
+          .buttonStyle(.bordered)
+        }
+
+        Spacer()
+
+        Button("Cancel", role: .destructive) {
+          Task { await cancelDownload() }
+        }
+        .buttonStyle(.bordered)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func resultSection(_ result: DownloadResult) -> some View {
+    switch result {
+    case .inMemory(let data, let path):
+      Section("Downloaded (in memory)") {
+        Label("File loaded into memory", systemImage: "checkmark.circle.fill")
+          .foregroundColor(.green)
+        row("Size", ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))
+        row("Path", path)
+        row("Mode", downloadMode.rawValue)
+      }
+
+    case .onDisk(let url):
+      Section("Downloaded (on disk)") {
+        Label("File saved to disk", systemImage: "checkmark.circle.fill")
+          .foregroundColor(.green)
+        if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+          row("Size", ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
+        }
+        row("Mode", downloadMode.rawValue)
+        Text(url.path)
+          .font(.system(.caption, design: .monospaced))
+          .foregroundColor(.secondary)
+          .lineLimit(4)
+      }
+    }
+  }
+
+  private func row(_ label: String, _ value: String) -> some View {
+    HStack {
+      Text(label)
+      Spacer()
+      Text(value).foregroundColor(.secondary)
+    }
+    .font(.caption)
+  }
+
+  // MARK: - Actions
 
   @MainActor
   func loadBuckets() async {
     do {
       buckets = try await supabase.storage.listBuckets()
-      if let firstBucket = buckets.first {
-        selectedBucket = firstBucket.id
-      }
+      if let first = buckets.first { selectedBucket = first.id }
     } catch {
       self.error = error
     }
@@ -188,12 +270,9 @@ struct FileDownloadView: View {
   func loadFiles() async {
     do {
       error = nil
-      isLoading = true
-      defer { isLoading = false }
-
-      files = try await supabase.storage
-        .from(selectedBucket)
-        .list()
+      isLoadingFiles = true
+      defer { isLoadingFiles = false }
+      files = try await supabase.storage.from(selectedBucket).list()
     } catch {
       self.error = error
     }
@@ -201,44 +280,100 @@ struct FileDownloadView: View {
 
   @MainActor
   func downloadFile(path: String) async {
-    do {
-      error = nil
-      downloadedData = nil
-      downloadedImage = nil
-      downloadedText = nil
-      isLoading = true
-      defer { isLoading = false }
+    clearResults()
+    error = nil
+    downloadProgress = 0
+    isPaused = false
+    isDownloading = true
 
-      let data = try await supabase.storage
-        .from(selectedBucket)
-        .downloadData(path: path).value
+    let bucket = supabase.storage.from(selectedBucket)
 
-      downloadedData = data
+    switch downloadMode {
 
-      // Try to convert to image
-      if let image = UIImage(data: data) {
-        downloadedImage = image
+    case .toMemory:
+      let task = bucket.downloadData(path: path)
+      currentController = DownloadController(
+        pause: { await task.pause() },
+        resume: { await task.resume() },
+        cancel: { await task.cancel() }
+      )
+      for await event in task.events {
+        switch event {
+        case .progress(let p):
+          if !isPaused { downloadProgress = p.fractionCompleted }
+        case .completed(let data):
+          downloadProgress = 1.0
+          result = .inMemory(data, path: path)
+        case .failed(let storageError):
+          self.error = storageError
+        }
       }
-      // Try to convert to text
-      else if let text = String(data: data, encoding: .utf8) {
-        downloadedText = text
+
+    case .toDisk:
+      let task = bucket.download(path: path)
+      currentController = DownloadController(
+        pause: { await task.pause() },
+        resume: { await task.resume() },
+        cancel: { await task.cancel() }
+      )
+      for await event in task.events {
+        switch event {
+        case .progress(let p):
+          if !isPaused { downloadProgress = p.fractionCompleted }
+        case .completed(let url):
+          downloadProgress = 1.0
+          result = .onDisk(url)
+        case .failed(let storageError):
+          self.error = storageError
+        }
       }
-    } catch {
-      self.error = error
     }
+
+    isDownloading = false
+    isPaused = false
+    currentController = nil
   }
 
-  func shareImage(_ image: UIImage) {
-    let activityController = UIActivityViewController(
-      activityItems: [image],
-      applicationActivities: nil
-    )
+  @MainActor
+  func pauseDownload() async {
+    await currentController?.pause()
+    isPaused = true
+  }
 
-    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-      let window = windowScene.windows.first,
-      let rootViewController = window.rootViewController
+  @MainActor
+  func resumeDownload() async {
+    await currentController?.resume()
+    isPaused = false
+  }
+
+  @MainActor
+  func cancelDownload() async {
+    await currentController?.cancel()
+    isDownloading = false
+    isPaused = false
+    downloadProgress = 0
+    currentController = nil
+  }
+
+  func clearResults() {
+    result = nil
+    downloadProgress = 0
+    error = nil
+  }
+
+  func iconForFile(_ file: FileObject) -> String {
+    let name = file.name.lowercased()
+    if name.hasSuffix(".jpg") || name.hasSuffix(".jpeg") || name.hasSuffix(".png")
+      || name.hasSuffix(".gif") || name.hasSuffix(".webp")
     {
-      rootViewController.present(activityController, animated: true)
+      return "photo"
+    } else if name.hasSuffix(".pdf") {
+      return "doc.fill"
+    } else if name.hasSuffix(".txt") || name.hasSuffix(".md") {
+      return "doc.text"
+    } else if name.hasSuffix(".mp4") || name.hasSuffix(".mov") {
+      return "video"
     }
+    return "doc"
   }
 }

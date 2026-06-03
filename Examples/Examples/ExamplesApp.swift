@@ -34,6 +34,17 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     sceneConfig.delegateClass = SceneDelegate.self
     return sceneConfig
   }
+
+  func application(
+    _ application: UIApplication,
+    handleEventsForBackgroundURLSession identifier: String,
+    completionHandler: @Sendable @escaping () -> Void
+  ) {
+    supabase.storage.handleBackgroundEvents(
+      forSessionIdentifier: identifier,
+      completionHandler: completionHandler
+    )
+  }
 }
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -69,8 +80,9 @@ let supabase = SupabaseClient(
   supabaseKey: (SupabaseConfig["SUPABASE_PUBLISHABLE_KEY"] ?? SupabaseConfig["SUPABASE_ANON_KEY"])!,
   options: .init(
     auth: .init(redirectToURL: Constants.redirectToURL),
-    global: .init(
-      logger: ConsoleLogger()
+    global: .init(logger: ConsoleLogger()),
+    storage: .init(
+      backgroundDownloadSessionIdentifier: "com.supabase.swift-examples.background-downloads"
     )
   )
 )
