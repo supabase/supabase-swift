@@ -42,5 +42,10 @@
     <string>fbapi</string>
     <string>fb-messenger-share-api</string>
   </array>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key>
+    <true/>
+  </dict>
 </dict>
 </plist>
