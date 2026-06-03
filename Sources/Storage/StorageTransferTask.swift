@@ -38,7 +38,7 @@ import Foundation
 /// }
 /// ```
 ///
-/// **Pause, resume, and cancel (TUS uploads only)**
+/// **Pause, resume, and cancel**
 /// ```swift
 /// // TUS (resumable) upload — use method: .resumable to force TUS
 /// let upload = storage.from("videos").upload("clip.mp4", fileURL: fileURL, method: .resumable)
@@ -93,15 +93,18 @@ public final class StorageTransferTask<Success: Sendable>: Sendable {
 
   /// Suspends the transfer.
   ///
-  /// Only supported for TUS (resumable) uploads. For multipart uploads this is a no-op —
-  /// use ``cancel()`` and re-upload from scratch if you need to stop a multipart transfer.
   /// For TUS uploads the current in-flight chunk is drained before the task suspends.
+  /// For downloads, the session captures any available resume data so that ``resume()`` can
+  /// continue from the last byte received (requires `Accept-Ranges` support on the server).
+  /// For multipart uploads this is a no-op — use ``cancel()`` and re-upload from scratch.
   public func pause() async { await _pause() }
 
   /// Resumes a previously paused transfer.
   ///
-  /// Only supported for TUS (resumable) uploads. For multipart uploads this is a no-op.
   /// For TUS uploads the server is HEAD-queried to re-sync the byte offset before uploading resumes.
+  /// For downloads, if resume data was captured during ``pause()`` the download continues from
+  /// the last received byte; otherwise it restarts from the beginning.
+  /// For multipart uploads this is a no-op.
   public func resume() async { await _resume() }
 
   /// Cancels the transfer immediately.
@@ -219,4 +222,8 @@ public typealias StorageUploadTask = StorageTransferTask<FileUploadResponse>
 ///
 /// The success value is a `URL` pointing to a temporary file on disk.
 /// Move or read the file before the app exits — it is not guaranteed to persist across launches.
+///
+/// Downloads support ``StorageTransferTask/pause()``, ``StorageTransferTask/resume()``, and
+/// ``StorageTransferTask/cancel()``. Pausing captures resume data when the server supports
+/// `Accept-Ranges`; resuming then continues from the last received byte.
 public typealias StorageDownloadTask = StorageTransferTask<URL>
