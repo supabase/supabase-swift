@@ -239,9 +239,9 @@ final class StorageErrorCodeIntegrationTests: XCTestCase {
     let data = try jpegData()
     let path = "folder/file-\(UUID().uuidString).jpg"
 
-    try await storage.from(bucketName).upload(path, data: data)
+    _ = try await storage.from(bucketName).upload(path, data: data).value
 
-    let downloaded = try await storage.from(bucketName).download(path: "/\(path)")
+    let downloaded = try await storage.from(bucketName).downloadData(path: "/\(path)").value
     XCTAssertEqual(downloaded, data)
   }
 }
