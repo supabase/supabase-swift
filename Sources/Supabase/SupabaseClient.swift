@@ -64,7 +64,8 @@ public final class SupabaseClient: Sendable {
             headers: storageHeaders,
             session: session,
             logger: options.global.logger,
-            useNewHostname: options.storage.useNewHostname
+            useNewHostname: options.storage.useNewHostname,
+            backgroundDownloadSessionIdentifier: options.storage.backgroundDownloadSessionIdentifier
           ),
           tokenProvider: { [weak self] in
             guard let self else { return nil }

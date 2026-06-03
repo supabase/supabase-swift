@@ -1,6 +1,52 @@
 import Foundation
 import Helpers
 
+/// The upload protocol used by ``StorageFileAPI/upload(_:data:options:method:)`` and related methods.
+///
+/// Pass this to ``StorageFileAPI/upload(_:data:options:method:)``,
+/// ``StorageFileAPI/upload(_:fileURL:options:method:)``,
+/// ``StorageFileAPI/update(_:data:options:method:)``, or
+/// ``StorageFileAPI/update(_:fileURL:options:method:)`` to override the default selection logic.
+///
+/// ## Example
+///
+/// ```swift
+/// // Force TUS for a large video regardless of size
+/// let task = storage.from("videos").upload(
+///   "clip.mp4",
+///   fileURL: videoURL,
+///   method: .resumable
+/// )
+/// await task.pause()
+/// await task.resume()
+/// let response = try await task.value
+///
+/// // Force multipart for a small asset you know fits in memory
+/// let response = try await storage.from("thumbnails")
+///   .upload("preview.jpg", data: jpegData, method: .multipart)
+///   .value
+/// ```
+public enum UploadMethod: Sendable {
+  /// Automatically choose the protocol based on file size:
+  /// files ≤ 6 MB use ``multipart``; larger files use ``resumable``.
+  ///
+  /// This is the default and works well for most use-cases.
+  case auto
+
+  /// Force a single multipart HTTP request regardless of file size.
+  ///
+  /// Simpler and slightly faster for small files. Does not support pause/resume —
+  /// use ``resumable`` if you need those capabilities.
+  case multipart
+
+  /// Force the TUS resumable upload protocol regardless of file size.
+  ///
+  /// Splits the upload into chunks and can resume from the last successful chunk
+  /// if the connection drops. Supports ``StorageTransferTask/pause()``,
+  /// ``StorageTransferTask/resume()``, and ``StorageTransferTask/cancel()``.
+  case resumable
+}
+
 /// Parameters used to filter and paginate results from ``StorageFileAPI/list(path:options:)``.
 ///
 /// All fields are optional; omitted fields fall back to server-side defaults (100 items per page,
@@ -202,34 +248,6 @@ public struct FileUploadResponse: Sendable {
 
   /// The full storage key, including the bucket name prefix, e.g. `"avatars/folder/image.png"`.
   public let fullPath: String
-}
-
-/// Reports upload progress for a file upload operation.
-///
-/// Passed to the `progress` closure on upload methods such as
-/// ``StorageFileAPI/upload(_:data:options:progress:)``.
-///
-/// ## Example
-///
-/// ```swift
-/// try await bucket.upload("video.mp4", fileURL: localURL) { progress in
-///   print("\(Int(progress.fractionCompleted * 100))%")
-/// }
-/// ```
-public struct UploadProgress: Sendable {
-  /// The total number of bytes sent so far.
-  public let totalBytesSent: Int64
-
-  /// The total number of bytes expected to be sent.
-  public let totalBytesExpectedToSend: Int64
-
-  /// Upload completion fraction, from `0.0` to `1.0`.
-  ///
-  /// Returns `0.0` when `totalBytesExpectedToSend` is zero.
-  public var fractionCompleted: Double {
-    guard totalBytesExpectedToSend > 0 else { return 0 }
-    return Double(totalBytesSent) / Double(totalBytesExpectedToSend)
-  }
 }
 
 /// The server's response after a successful upload via a signed upload URL.
@@ -675,7 +693,7 @@ public enum DownloadBehavior: Sendable {
 /// Options for on-the-fly image transformation via the Supabase Storage image transformation API.
 ///
 /// Use `TransformOptions` when calling
-/// ``StorageFileAPI/download(path:options:query:cacheNonce:)`` or
+/// ``StorageFileAPI/download(path:options:)`` or
 /// ``StorageFileAPI/getPublicURL(path:download:options:cacheNonce:)`` to resize, reformat, or
 /// adjust the quality of images before they are served to the client.
 ///
