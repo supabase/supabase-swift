@@ -514,6 +514,72 @@ import Testing
     let storageError = try #require(error as? StorageError)
     #expect(storageError.message.contains("409"))
   }
+
+  @Test func resumeWhenHeadFailsWithURLCancelledTerminatesTask() async throws {
+    // Regression test: when the URL session surfaces URLError.cancelled during the
+    // HEAD request in resumeFromServer() (e.g. network connection reset, not
+    // initiated by engine.cancel()), the engine previously matched its `default:`
+    // branch in handleRunError because state was .creating — silently swallowing
+    // the error and leaving both continuations open, hanging task.result forever.
+    HeadCancelMockProtocol.reset()
+    defer { HeadCancelMockProtocol.reset() }
+    HeadCancelMockProtocol.postResponse = (
+      statusCode: 201,
+      headers: ["Location": locationURL.absoluteString],
+      data: Data()
+    )
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [HeadCancelMockProtocol.self]
+    let testClient = StorageClient(
+      url: baseURL,
+      configuration: StorageClientConfiguration(
+        headers: ["Authorization": "Bearer test-token"],
+        session: URLSession(configuration: config)
+      )
+    )
+
+    let task = TUSUploadEngine.makeTask(
+      bucketId: "bucket",
+      path: "x.txt",
+      source: .data(Data(repeating: 0x01, count: 100)),
+      options: FileOptions(contentType: "text/plain"),
+      client: testClient
+    )
+
+    // Wait until the first PATCH hangs — state has moved to .uploading.
+    var hangIter = HeadCancelMockProtocol.nextHang.makeAsyncIterator()
+    _ = await hangIter.next()
+
+    // Consume events in a separate task and record when a terminating
+    // .failed event is emitted. Without the fix, the events stream never
+    // terminates because handleRunError silently returns in .creating.
+    let failedEvent = LockIsolated<TransferEvent<FileUploadResponse>?>(nil)
+    let watcher = Task {
+      for await event in task.events {
+        if case .failed = event {
+          failedEvent.setValue(event)
+          return
+        }
+      }
+    }
+
+    await task.pause()
+    await task.resume()
+
+    // Poll for up to 3 seconds. With the fix the engine drains its
+    // continuations promptly; with the bug it stays in .creating forever.
+    for _ in 0..<60 {
+      if failedEvent.value != nil { break }
+      try await Task.sleep(for: .milliseconds(50))
+    }
+    watcher.cancel()
+
+    try #require(
+      failedEvent.value != nil,
+      "engine did not emit a terminating .failed event — handleRunError swallowed URLError.cancelled in .creating state"
+    )
+  }
 }
 
 // MARK: - SequentialMockProtocol
@@ -673,5 +739,69 @@ final class HangingMockProtocol: URLProtocol, @unchecked Sendable {
 
   override func stopLoading() {
     client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+  }
+}
+
+// MARK: - HeadCancelMockProtocol
+
+/// Serves POST with `postResponse`, hangs PATCH until cancelled (so `pause()`
+/// can transition the engine from `.uploading` to `.paused`), and fails HEAD
+/// immediately with `URLError(.cancelled)` to simulate the URL session
+/// surfacing a genuine network cancellation during `resumeFromServer()`'s
+/// offset re-sync.
+final class HeadCancelMockProtocol: URLProtocol, @unchecked Sendable {
+  private struct State {
+    var postResponse: (statusCode: Int, headers: [String: String], data: Data)?
+    var hangContinuation: AsyncStream<Void>.Continuation?
+    var nextHang: AsyncStream<Void> = AsyncStream { _ in }
+  }
+
+  private static let _state = LockIsolated(State())
+  private var didFinish = false
+
+  static var postResponse: (statusCode: Int, headers: [String: String], data: Data)? {
+    get { _state.value.postResponse }
+    set { _state.withValue { $0.postResponse = newValue } }
+  }
+  static var nextHang: AsyncStream<Void> { _state.value.nextHang }
+
+  static func reset() {
+    _state.withValue { s in
+      s.postResponse = nil
+      let (stream, cont) = AsyncStream<Void>.makeStream()
+      s.nextHang = stream
+      s.hangContinuation = cont
+    }
+  }
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    let method = request.httpMethod
+    if method == "POST", let resp = Self.postResponse {
+      let httpResponse = HTTPURLResponse(
+        url: request.url!,
+        statusCode: resp.statusCode,
+        httpVersion: nil,
+        headerFields: resp.headers
+      )!
+      client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
+      client?.urlProtocol(self, didLoad: resp.data)
+      client?.urlProtocolDidFinishLoading(self)
+      didFinish = true
+    } else if method == "HEAD" {
+      client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+      didFinish = true
+    } else {
+      Self._state.value.hangContinuation?.yield(())
+      // Hang — stopLoading() will cancel this request
+    }
+  }
+
+  override func stopLoading() {
+    if !didFinish {
+      client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+    }
   }
 }

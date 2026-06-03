@@ -40,6 +40,10 @@ actor TUSUploadEngine {
 
   private var state: State = .idle
   private var currentUploadTask: Task<Void, Never>?
+  /// Bumped each time a fresh upload task is spawned (start/resume). Errors
+  /// from tasks with a stale generation are ignored by `handleRunError` so
+  /// that a previously-cancelled task cannot terminate the current one.
+  private var taskGeneration: Int = 0
 
   init(
     bucketId: String,
@@ -62,7 +66,9 @@ actor TUSUploadEngine {
   func start() {
     guard case .idle = state else { return }
     state = .creating
-    currentUploadTask = Task { await run() }
+    taskGeneration += 1
+    let generation = taskGeneration
+    currentUploadTask = Task { await run(generation: generation) }
   }
 
   func pause() {
@@ -79,7 +85,9 @@ actor TUSUploadEngine {
     switch state {
     case .paused(let url, _):
       state = .creating  // prevent double-resume
-      currentUploadTask = Task { await resumeFromServer(uploadURL: url) }
+      taskGeneration += 1
+      let generation = taskGeneration
+      currentUploadTask = Task { await resumeFromServer(uploadURL: url, generation: generation) }
     default:
       break
     }
@@ -98,7 +106,7 @@ actor TUSUploadEngine {
 
   // MARK: - Private
 
-  private func run() async {
+  private func run(generation: Int) async {
     do {
       try Task.checkCancellation()
       let totalBytes = try source.totalBytes()
@@ -106,40 +114,44 @@ actor TUSUploadEngine {
       state = .uploading(uploadURL: uploadURL, offset: 0)
       try await uploadChunks(to: uploadURL, from: 0, totalBytes: totalBytes)
     } catch {
-      handleRunError(error)
+      handleRunError(error, generation: generation)
     }
   }
 
-  private func resumeFromServer(uploadURL: URL) async {
+  private func resumeFromServer(uploadURL: URL, generation: Int) async {
     do {
       let serverOffset = try await fetchOffset(uploadURL: uploadURL)
       let totalBytes = try source.totalBytes()
       state = .uploading(uploadURL: uploadURL, offset: serverOffset)
       try await uploadChunks(to: uploadURL, from: serverOffset, totalBytes: totalBytes)
     } catch {
-      handleRunError(error)
+      handleRunError(error, generation: generation)
     }
   }
 
-  private func handleRunError(_ error: any Error) {
+  private func handleRunError(_ error: any Error, generation: Int) {
+    // Errors from a superseded task (cancelled by pause/cancel and replaced by
+    // a fresh resume task) must not terminate the current task. Identifying
+    // stale errors by `error is CancellationError` is unreliable because
+    // URLSession surfaces task cancellation as URLError(.cancelled) — the same
+    // shape a genuine network-level cancellation takes on the HEAD request.
+    // A per-task generation is the only way to distinguish the two.
+    guard generation == taskGeneration else { return }
+
     let isCancellation =
       error is CancellationError
       || (error as? URLError)?.code == .cancelled
     if isCancellation {
       switch state {
-      case .uploading:
-        // Task was externally cancelled (e.g. URLError.cancelled from the network layer)
-        // while actively uploading. The continuations have not been finished yet — shut down cleanly.
+      case .uploading, .creating:
+        // The current task was cancelled (Task.cancel() or URLSession surfacing
+        // cancellation on the in-flight request). Drain continuations cleanly.
         cancel()
       default:
-        // .creating → resume() sets state to .creating before starting the new task; a stale
-        //             cancellation from the previous (paused) task must not cancel the new one.
-        //             Any legitimate cancel goes through engine.cancel() which sets state to
-        //             .cancelled (terminal) before the error propagates — handled below.
-        // .paused   → the old task was cancelled by pause(); state is already .paused and the
-        //             resume() path will handle re-starting — do nothing.
-        // terminal  → cancel() already finished the continuations; the task's CancellationError
-        //             is a side-effect of that — do nothing.
+        // .paused   → pause() cancelled the previous task; resume() spawns a new
+        //             one with a fresh generation, so this branch is unreachable
+        //             for the current task.
+        // terminal  → cancel() already finished the continuations.
         return
       }
     } else {
