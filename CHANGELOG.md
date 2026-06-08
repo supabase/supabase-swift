@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.47.0](https://github.com/supabase/supabase-swift/compare/v2.46.0...v2.47.0) (2026-06-08)
+
+
+### Features
+
+* **supabase:** consolidate client metadata into structured X-Client-Info header ([#986](https://github.com/supabase/supabase-swift/issues/986)) ([c62510d](https://github.com/supabase/supabase-swift/commit/c62510da51c93d06e6a22a59a74901b59545f3f0))
+
+
+### Bug Fixes
+
+* **spm:** declare missing direct product dependencies for strict framework linking ([#1004](https://github.com/supabase/supabase-swift/issues/1004)) ([60c56c8](https://github.com/supabase/supabase-swift/commit/60c56c8661014bd89d879ab7f69f9f240b6f590a)), closes [#1000](https://github.com/supabase/supabase-swift/issues/1000)
+
 ## [2.46.0](https://github.com/supabase/supabase-swift/compare/v2.45.0...v2.46.0) (2026-04-28)
 
 
