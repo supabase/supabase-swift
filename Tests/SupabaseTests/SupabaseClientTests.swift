@@ -12,23 +12,41 @@ import XCTest
 // MARK: - Helpers
 
 private final class RequestCapturingProtocol: URLProtocol {
-  static var capturedRequests: [URLRequest] = []
-  static var stubbedData = Data("[]".utf8)
-  static var stubbedStatusCode = 200
+  // NSLock guards the mutable statics — startLoading runs on the URLSession delegate queue.
+  private static let lock = NSLock()
+  private static var _capturedRequests: [URLRequest] = []
+  private static var _stubbedData = Data("[]".utf8)
+  private static var _stubbedStatusCode = 200
+
+  static var capturedRequests: [URLRequest] {
+    get { lock.withLock { _capturedRequests } }
+    set { lock.withLock { _capturedRequests = newValue } }
+  }
+
+  static var stubbedData: Data {
+    get { lock.withLock { _stubbedData } }
+    set { lock.withLock { _stubbedData = newValue } }
+  }
+
+  static var stubbedStatusCode: Int {
+    get { lock.withLock { _stubbedStatusCode } }
+    set { lock.withLock { _stubbedStatusCode = newValue } }
+  }
 
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
   override func startLoading() {
-    Self.capturedRequests.append(request)
+    let captured = request
+    Self.lock.withLock { Self._capturedRequests.append(captured) }
     let response = HTTPURLResponse(
       url: request.url!,
-      statusCode: Self.stubbedStatusCode,
+      statusCode: Self.lock.withLock { Self._stubbedStatusCode },
       httpVersion: "HTTP/1.1",
       headerFields: nil
     )!
     client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-    client?.urlProtocol(self, didLoad: Self.stubbedData)
+    client?.urlProtocol(self, didLoad: Self.lock.withLock { Self._stubbedData })
     client?.urlProtocolDidFinishLoading(self)
   }
 
@@ -242,6 +260,41 @@ final class SupabaseClientTests: XCTestCase {
       RequestCapturingProtocol.capturedRequests.isEmpty, "Expected at least one request")
     let request = try XCTUnwrap(RequestCapturingProtocol.capturedRequests.first)
     XCTAssertNil(request.value(forHTTPHeaderField: "traceparent"))
+  }
+
+  func testTracePropagationInjectsHeaderIntoAuthRequests() async throws {
+    struct MockTraceContextProvider: TraceContextProvider {
+      func traceContext() -> [String: String] {
+        ["traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"]
+      }
+    }
+
+    RequestCapturingProtocol.capturedRequests = []
+
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          session: makeMockSession(),
+          tracePropagation: MockTraceContextProvider()
+        )
+      )
+    )
+
+    _ = try? await client.auth.signUp(email: "test@example.com", password: "password123")
+
+    XCTAssertFalse(
+      RequestCapturingProtocol.capturedRequests.isEmpty, "Expected at least one request")
+    let request = try XCTUnwrap(RequestCapturingProtocol.capturedRequests.first)
+    XCTAssertEqual(
+      request.value(forHTTPHeaderField: "traceparent"),
+      "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+    )
   }
 
   func testClientInitWithCustomAccessToken() async {

@@ -427,8 +427,16 @@ public final class SupabaseClient: Sendable {
     }
 
     if realtimeOptions.fetch == nil {
-      realtimeOptions.fetch = { [session = options.global.session] request in
-        try await session.data(for: request)
+      realtimeOptions.fetch = {
+        [tracePropagation = options.global.tracePropagation, session = options.global.session]
+        request in
+        var request = request
+        if let traceHeaders = tracePropagation?.traceContext() {
+          for (key, value) in traceHeaders {
+            request.setValue(value, forHTTPHeaderField: key)
+          }
+        }
+        return try await session.data(for: request)
       }
     }
 
