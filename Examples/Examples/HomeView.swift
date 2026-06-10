@@ -48,6 +48,14 @@ struct HomeView: View {
         Label("Functions", systemImage: "function")
       }
 
+      // Tracing Tab
+      NavigationStack {
+        TracingExampleView()
+      }
+      .tabItem {
+        Label("Tracing", systemImage: "chart.line.uptrend.xyaxis")
+      }
+
       // Profile Tab
       ProfileView()
         .tabItem {
