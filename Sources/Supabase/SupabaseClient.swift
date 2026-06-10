@@ -188,8 +188,16 @@ public final class SupabaseClient: Sendable {
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
       fetch: {
+        [tracePropagation = options.global.tracePropagation, session = options.global.session]
+        urlRequest in
         // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: $0)
+        var urlRequest = urlRequest
+        if let traceHeaders = tracePropagation?.traceContext() {
+          for (key, value) in traceHeaders {
+            urlRequest.setValue(value, forHTTPHeaderField: key)
+          }
+        }
+        return try await session.data(for: urlRequest)
       },
       autoRefreshToken: options.auth.autoRefreshToken,
       emitLocalSessionAsInitialSession: options.auth.emitLocalSessionAsInitialSession
@@ -358,6 +366,11 @@ public final class SupabaseClient: Sendable {
     var request = request
     if let token {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+    if let traceHeaders = options.global.tracePropagation?.traceContext() {
+      for (key, value) in traceHeaders {
+        request.setValue(value, forHTTPHeaderField: key)
+      }
     }
     return request
   }

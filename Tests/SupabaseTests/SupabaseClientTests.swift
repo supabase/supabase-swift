@@ -9,6 +9,38 @@ import XCTest
 @testable import Realtime
 @testable import Supabase
 
+// MARK: - Helpers
+
+private final class RequestCapturingProtocol: URLProtocol {
+  static var capturedRequests: [URLRequest] = []
+  static var stubbedData = Data("[]".utf8)
+  static var stubbedStatusCode = 200
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    Self.capturedRequests.append(request)
+    let response = HTTPURLResponse(
+      url: request.url!,
+      statusCode: Self.stubbedStatusCode,
+      httpVersion: "HTTP/1.1",
+      headerFields: nil
+    )!
+    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: Self.stubbedData)
+    client?.urlProtocolDidFinishLoading(self)
+  }
+
+  override func stopLoading() {}
+}
+
+private func makeMockSession() -> URLSession {
+  let config = URLSessionConfiguration.ephemeral
+  config.protocolClasses = [RequestCapturingProtocol.self]
+  return URLSession(configuration: config)
+}
+
 final class AuthLocalStorageMock: AuthLocalStorage {
   func store(key _: String, value _: Data) throws {}
 
@@ -150,6 +182,66 @@ final class SupabaseClientTests: XCTestCase {
       client.realtimeV2.options.fetch,
       "user-provided realtime fetch should be preserved"
     )
+  }
+
+  func testTracePropagationInjectsTraceParentHeader() async throws {
+    struct MockTraceContextProvider: TraceContextProvider {
+      func traceContext() -> [String: String] {
+        ["traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"]
+      }
+    }
+
+    RequestCapturingProtocol.capturedRequests = []
+
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          session: makeMockSession(),
+          tracePropagation: MockTraceContextProvider()
+        )
+      )
+    )
+
+    _ = try? await client.from("todos").select().execute()
+
+    XCTAssertFalse(
+      RequestCapturingProtocol.capturedRequests.isEmpty, "Expected at least one request")
+    let request = try XCTUnwrap(RequestCapturingProtocol.capturedRequests.first)
+    XCTAssertEqual(
+      request.value(forHTTPHeaderField: "traceparent"),
+      "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+    )
+  }
+
+  func testTracePropagationIsNoOpWhenNil() async throws {
+    RequestCapturingProtocol.capturedRequests = []
+
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          session: makeMockSession()
+        )
+      )
+    )
+
+    _ = try? await client.from("todos").select().execute()
+
+    XCTAssertFalse(
+      RequestCapturingProtocol.capturedRequests.isEmpty, "Expected at least one request")
+    let request = try XCTUnwrap(RequestCapturingProtocol.capturedRequests.first)
+    XCTAssertNil(request.value(forHTTPHeaderField: "traceparent"))
   }
 
   func testClientInitWithCustomAccessToken() async {

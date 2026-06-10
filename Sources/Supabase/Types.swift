@@ -103,14 +103,23 @@ public struct SupabaseClientOptions: Sendable {
     /// The logger  to use across all Supabase sub-packages.
     public let logger: (any SupabaseLogger)?
 
+    /// An optional provider for W3C trace context headers.
+    ///
+    /// When set, ``TraceContextProvider/traceContext()`` is called once per outgoing request and
+    /// the returned headers (e.g. `traceparent`) are injected before the request is sent.
+    /// Set to `nil` (default) to disable trace propagation.
+    public let tracePropagation: (any TraceContextProvider)?
+
     public init(
       headers: [String: String] = [:],
       session: URLSession = .shared,
-      logger: (any SupabaseLogger)? = nil
+      logger: (any SupabaseLogger)? = nil,
+      tracePropagation: (any TraceContextProvider)? = nil
     ) {
       self.headers = headers
       self.session = session
       self.logger = logger
+      self.tracePropagation = tracePropagation
     }
   }
 
