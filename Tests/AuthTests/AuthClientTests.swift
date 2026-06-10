@@ -986,6 +986,48 @@ final class AuthClientTests: XCTestCase {
     }
   }
 
+  func testSessionWithURL_implicitFlow_errorQueryParam() async throws {
+    let sut = makeSUT(flowType: .implicit)
+
+    let url = URL(
+      string:
+        "https://dummy-url.com/callback?error=access_denied&error_description=User+denied+access"
+    )!
+
+    do {
+      try await sut.session(from: url)
+      XCTFail("Expected implicitGrantRedirect error")
+    } catch let AuthError.implicitGrantRedirect(message) {
+      expectNoDifference(message, "User denied access")
+    }
+  }
+
+  func testSessionWithURL_implicitFlow_errorQueryParamNoDescription() async throws {
+    let sut = makeSUT(flowType: .implicit)
+
+    let url = URL(string: "https://dummy-url.com/callback?error=access_denied")!
+
+    do {
+      try await sut.session(from: url)
+      XCTFail("Expected implicitGrantRedirect error")
+    } catch let AuthError.implicitGrantRedirect(message) {
+      expectNoDifference(message, "access_denied")
+    }
+  }
+
+  func testSessionWithURL_implicitFlow_errorHashFragmentNoDescription() async throws {
+    let sut = makeSUT(flowType: .implicit)
+
+    let url = URL(string: "https://dummy-url.com/callback#error=access_denied")!
+
+    do {
+      try await sut.session(from: url)
+      XCTFail("Expected implicitGrantRedirect error")
+    } catch let AuthError.implicitGrantRedirect(message) {
+      expectNoDifference(message, "access_denied")
+    }
+  }
+
   func testSessionWithURL_implicitFlow_recoveryType() async throws {
     Mock(
       url: clientURL.appendingPathComponent("user"),

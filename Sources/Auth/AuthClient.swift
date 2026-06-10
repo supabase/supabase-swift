@@ -857,9 +857,9 @@ public actor AuthClient {
   private func handleImplicitGrantFlow(params: [String: String]) async throws -> Session {
     precondition(configuration.flowType == .implicit, "Method only allowed for implicit flow.")
 
-    if let errorDescription = params["error_description"] {
+    if let errorMessage = params["error_description"] ?? params["error"] {
       throw AuthError.implicitGrantRedirect(
-        message: errorDescription.replacingOccurrences(of: "+", with: " ")
+        message: errorMessage.replacingOccurrences(of: "+", with: " ")
       )
     }
 
@@ -1454,7 +1454,7 @@ public actor AuthClient {
   }
 
   private func isImplicitGrantFlow(params: [String: String]) -> Bool {
-    params["access_token"] != nil || params["error_description"] != nil
+    params["access_token"] != nil || params["error_description"] != nil || params["error"] != nil
   }
 
   private func isPKCEFlow(params: [String: String]) -> Bool {
