@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.47.1](https://github.com/supabase/supabase-swift/compare/v2.47.0...v2.47.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* **auth:** recognize ?error= query param in implicit grant redirect URLs ([#1009](https://github.com/supabase/supabase-swift/issues/1009)) ([92d7c6f](https://github.com/supabase/supabase-swift/commit/92d7c6f1daac771f1fc7db22a1ef22cda14e6573))
+
 ## [2.47.0](https://github.com/supabase/supabase-swift/compare/v2.46.0...v2.47.0) (2026-06-08)
 
 
