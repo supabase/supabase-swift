@@ -18,6 +18,10 @@ import XCTest
   import FoundationNetworking
 #endif
 
+#if canImport(AuthenticationServices)
+  import AuthenticationServices
+#endif
+
 final class AuthClientTests: XCTestCase {
   var sessionManager: SessionManager!
 
@@ -1764,6 +1768,52 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  func testMFAChallengeWebAuthnReturnsCredentialOptions() async throws {
+    let factorId = "123"
+
+    Mock(
+      url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "id": "challenge-1",
+            "type": "webauthn",
+            "expires_at": 12345678,
+            "webauthn": {
+              "type": "create",
+              "credential_options": {
+                "challenge": "Y2hhbGxlbmdl",
+                "rp": { "id": "example.com", "name": "Example" },
+                "pubKeyCredParams": [{ "alg": -7, "type": "public-key" }]
+              }
+            }
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    let response = try await sut.mfa.challenge(
+      params: .init(factorId: factorId, webAuthn: .init(rpId: "example.com"))
+    )
+
+    expectNoDifference(response.id, "challenge-1")
+    expectNoDifference(response.type, "webauthn")
+    expectNoDifference(response.webauthn?.type, .create)
+
+    // W3C option keys are camelCase and must survive decoding untouched.
+    let options = response.webauthn?.credentialOptions.objectValue
+    expectNoDifference(options?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
+    expectNoDifference(options?["pubKeyCredParams"]?.arrayValue?.count, 1)
+  }
+
   func testMFAVerify() async throws {
     let factorId = "123"
 
@@ -1941,6 +1991,369 @@ final class AuthClientTests: XCTestCase {
     expectNoDifference(factors.totp.map(\.id), ["1"])
     expectNoDifference(factors.phone.map(\.id), ["3"])
   }
+
+  func testMFAListFactorsIncludesWebAuthn() async throws {
+    let sut = makeSUT()
+
+    var session = Session.validSession
+    session.user.factors = [
+      Factor(
+        id: "1",
+        friendlyName: "My Passkey",
+        factorType: "webauthn",
+        status: .verified,
+        createdAt: Date(),
+        updatedAt: Date()
+      ),
+      Factor(
+        id: "2",
+        friendlyName: nil,
+        factorType: "webauthn",
+        status: .unverified,
+        createdAt: Date(),
+        updatedAt: Date()
+      ),
+      Factor(
+        id: "3",
+        friendlyName: nil,
+        factorType: "totp",
+        status: .verified,
+        createdAt: Date(),
+        updatedAt: Date()
+      ),
+    ]
+
+    Dependencies[sut.clientID].sessionStorage.store(session)
+
+    let factors = try await sut.mfa.listFactors()
+    expectNoDifference(factors.webauthn.map(\.id), ["1"])
+    expectNoDifference(factors.totp.map(\.id), ["3"])
+  }
+
+  func testGetPasskeyRegistrationOptionsDecodesOptions() async throws {
+    Mock(
+      url: clientURL.appendingPathComponent("passkeys/registration/options"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "challenge_id": "challenge-1",
+            "expires_at": "2024-01-15T10:00:00.000Z",
+            "options": {
+              "challenge": "Y2hhbGxlbmdl",
+              "rp": { "id": "example.com", "name": "Example" },
+              "user": { "id": "dXNlci1pZA", "name": "user@example.com", "displayName": "User" },
+              "pubKeyCredParams": [{ "alg": -7, "type": "public-key" }]
+            }
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let sut = makeSUT()
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    let options = try await sut.getPasskeyRegistrationOptions()
+
+    expectNoDifference(options.challengeId, "challenge-1")
+    expectNoDifference(options.options.objectValue?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
+    // W3C option keys (camelCase) must survive decoding untouched.
+    expectNoDifference(options.options.objectValue?["pubKeyCredParams"]?.arrayValue?.count, 1)
+  }
+
+  func testListPasskeysReturnsItems() async throws {
+    Mock(
+      url: clientURL.appendingPathComponent("passkeys/"),
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          [
+            {
+              "id": "p1",
+              "friendly_name": "Work Laptop",
+              "created_at": "2024-01-15T10:00:00.000Z",
+              "last_used_at": "2024-02-01T08:30:00.000Z"
+            },
+            {
+              "id": "p2",
+              "friendly_name": null,
+              "created_at": "2024-01-16T10:00:00.000Z",
+              "last_used_at": null
+            }
+          ]
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let sut = makeSUT()
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    let passkeys = try await sut.listPasskeys()
+
+    expectNoDifference(passkeys.map(\.id), ["p1", "p2"])
+    expectNoDifference(passkeys[0].friendlyName, "Work Laptop")
+    expectNoDifference(passkeys[1].friendlyName, nil)
+    expectNoDifference(passkeys[1].lastUsedAt, nil)
+  }
+
+  func testVerifyPasskeyAuthenticationUpdatesSession() async throws {
+    Mock(
+      url: clientURL.appendingPathComponent("passkeys/authentication/verify"),
+      statusCode: 200,
+      data: [.post: MockData.session]
+    )
+    .register()
+
+    let sut = makeSUT()
+
+    let response = try await sut.verifyPasskeyAuthentication(
+      challengeId: "challenge-1",
+      credentialResponse: [
+        "id": "credential-id",
+        "rawId": "cmF3LWlk",
+        "type": "public-key",
+        "response": [
+          "clientDataJSON": "Y2xpZW50LWRhdGE",
+          "authenticatorData": "YXV0aA",
+          "signature": "c2ln",
+        ],
+      ]
+    )
+
+    XCTAssertNotNil(response.session)
+
+    // The returned session is persisted by the SDK (read storage directly to avoid a refresh).
+    let stored = Dependencies[sut.clientID].sessionStorage.get()
+    expectNoDifference(stored?.accessToken, response.session?.accessToken)
+  }
+
+  func testWebAuthnCredentialOptionsParsing() throws {
+    let options: AnyJSON = [
+      "challenge": "Y2hhbGxlbmdl",
+      "user": [
+        "id": "dXNlci1pZA",
+        "name": "user@example.com",
+        "displayName": "User",
+      ],
+    ]
+
+    expectNoDifference(
+      String(data: try options.webAuthnChallengeData(), encoding: .utf8),
+      "challenge"
+    )
+    expectNoDifference(
+      String(data: try options.webAuthnUserID(), encoding: .utf8),
+      "user-id"
+    )
+    expectNoDifference(try options.webAuthnUserName(), "user@example.com")
+  }
+
+  func testWebAuthnChallengeParsingThrowsWhenMissing() {
+    let options: AnyJSON = ["user": ["id": "dXNlci1pZA"]]
+    XCTAssertThrowsError(try options.webAuthnChallengeData())
+  }
+
+  #if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
+    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
+    @MainActor
+    func testSignInWithPasskeyDrivesFullFlow() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("passkeys/authentication/options"),
+        statusCode: 200,
+        data: [
+          .post: Data(
+            #"{"challenge_id":"ch-1","expires_at":"2024-01-15T10:00:00.000Z","options":{"challenge":"Y2hhbGxlbmdl"}}"#
+              .utf8)
+        ]
+      )
+      .register()
+      Mock(
+        url: clientURL.appendingPathComponent("passkeys/authentication/verify"),
+        statusCode: 200,
+        data: [.post: MockData.session]
+      )
+      .register()
+
+      // Capture what the SDK hands to the authenticator to prove it forwards the backend options.
+      let forwardedOptions = LockIsolated<AnyJSON?>(nil)
+      let authenticator = WebAuthnAuthenticator(
+        register: { _, _, _ in [:] },
+        authenticate: { options, _, _ in
+          forwardedOptions.setValue(options)
+          return [
+            "id": "cred", "rawId": "cmF3", "type": "public-key",
+            "response": [
+              "clientDataJSON": "Y2Rh", "authenticatorData": "YXV0aA", "signature": "c2ln",
+            ],
+          ]
+        }
+      )
+
+      let sut = makeSUT()
+
+      let response = try await sut._signInWithPasskey(
+        rpId: "example.com",
+        presentationAnchor: ASPresentationAnchor(),
+        authenticator: authenticator
+      )
+
+      XCTAssertNotNil(response.session)
+      expectNoDifference(
+        forwardedOptions.value?.objectValue?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
+    }
+
+    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
+    @MainActor
+    func testRegisterPasskeyDrivesFullFlow() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("passkeys/registration/options"),
+        statusCode: 200,
+        data: [
+          .post: Data(
+            #"{"challenge_id":"ch-1","expires_at":"2024-01-15T10:00:00.000Z","options":{"challenge":"Y2hhbGxlbmdl","user":{"id":"dXNlci1pZA","name":"u@e.com"}}}"#
+              .utf8)
+        ]
+      )
+      .register()
+      Mock(
+        url: clientURL.appendingPathComponent("passkeys/registration/verify"),
+        statusCode: 200,
+        data: [
+          .post: Data(
+            #"{"id":"p1","friendly_name":"My Passkey","created_at":"2024-01-15T10:00:00.000Z","last_used_at":null}"#
+              .utf8)
+        ]
+      )
+      .register()
+
+      let authenticator = WebAuthnAuthenticator(
+        register: { _, _, _ in
+          [
+            "id": "cred", "rawId": "cmF3", "type": "public-key",
+            "response": ["clientDataJSON": "Y2Rh", "attestationObject": "YXR0"],
+          ]
+        },
+        authenticate: { _, _, _ in [:] }
+      )
+
+      let sut = makeSUT()
+      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+      let passkey = try await sut._registerPasskey(
+        rpId: "example.com",
+        presentationAnchor: ASPresentationAnchor(),
+        authenticator: authenticator
+      )
+
+      expectNoDifference(passkey.id, "p1")
+      expectNoDifference(passkey.friendlyName, "My Passkey")
+    }
+
+    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
+    @MainActor
+    func testEnrollWebAuthnFactorDrivesFullFlow() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("factors"),
+        statusCode: 200,
+        data: [.post: Data(#"{"id":"factor-1","type":"webauthn"}"#.utf8)]
+      )
+      .register()
+      Mock(
+        url: clientURL.appendingPathComponent("factors/factor-1/challenge"),
+        statusCode: 200,
+        data: [
+          .post: Data(
+            #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"challenge":"Y2hhbGxlbmdl"}}}"#
+              .utf8)
+        ]
+      )
+      .register()
+      Mock(
+        url: clientURL.appendingPathComponent("factors/factor-1/verify"),
+        statusCode: 200,
+        data: [.post: MockData.session]
+      )
+      .register()
+
+      let authenticator = WebAuthnAuthenticator(
+        register: { _, _, _ in
+          [
+            "id": "cred", "rawId": "cmF3", "type": "public-key",
+            "response": ["clientDataJSON": "Y2Rh", "attestationObject": "YXR0"],
+          ]
+        },
+        authenticate: { _, _, _ in [:] }
+      )
+
+      let sut = makeSUT()
+      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+      let session = try await sut.mfa._enrollWebAuthnFactor(
+        friendlyName: "My Passkey",
+        rpId: "example.com",
+        rpOrigins: [],
+        presentationAnchor: ASPresentationAnchor(),
+        authenticator: authenticator
+      )
+
+      XCTAssertFalse(session.accessToken.isEmpty)
+    }
+
+    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
+    @MainActor
+    func testVerifyWebAuthnFactorDrivesFullFlow() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("factors/factor-1/challenge"),
+        statusCode: 200,
+        data: [
+          .post: Data(
+            #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"challenge":"Y2hhbGxlbmdl"}}}"#
+              .utf8)
+        ]
+      )
+      .register()
+      Mock(
+        url: clientURL.appendingPathComponent("factors/factor-1/verify"),
+        statusCode: 200,
+        data: [.post: MockData.session]
+      )
+      .register()
+
+      let forwardedRpId = LockIsolated<String?>(nil)
+      let authenticator = WebAuthnAuthenticator(
+        register: { _, _, _ in [:] },
+        authenticate: { _, rpId, _ in
+          forwardedRpId.setValue(rpId)
+          return [
+            "id": "cred", "rawId": "cmF3", "type": "public-key",
+            "response": [
+              "clientDataJSON": "Y2Rh", "authenticatorData": "YXV0aA", "signature": "c2ln",
+            ],
+          ]
+        }
+      )
+
+      let sut = makeSUT()
+      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+      let session = try await sut.mfa._verifyWebAuthnFactor(
+        factorId: "factor-1",
+        rpId: "example.com",
+        rpOrigins: [],
+        presentationAnchor: ASPresentationAnchor(),
+        authenticator: authenticator
+      )
+
+      XCTAssertFalse(session.accessToken.isEmpty)
+      expectNoDifference(forwardedRpId.value, "example.com")
+    }
+  #endif
 
   func testGetAuthenticatorAssuranceLevel_whenAALAndVerifiedFactor_shouldReturnAAL2() async throws {
     var session = Session.validSession
