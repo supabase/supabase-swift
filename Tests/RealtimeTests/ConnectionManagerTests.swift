@@ -236,4 +236,47 @@ final class ConnectionManagerTests: XCTestCase {
       "handleClose should not send an additional close frame since the remote already closed."
     )
   }
+
+  func testHandleCloseFromStaleConnectionIsIgnored() async throws {
+    let (staleWS, _) = FakeWebSocket.fakes()
+    sut = makeSUT()
+    try await sut.connect()
+
+    // A late .close from a previous socket must not mark the current
+    // connection as disconnected.
+    await sut.handleClose(code: 1006, reason: "stale socket closed", from: staleWS)
+
+    let isConnected = await sut.connection != nil
+    XCTAssertTrue(isConnected, "Close from a stale connection should be ignored")
+  }
+
+  func testHandleErrorFromStaleConnectionIsIgnored() async throws {
+    let (staleWS, _) = FakeWebSocket.fakes()
+    sut = makeSUT()
+    try await sut.connect()
+
+    await sut.handleError(TestError.sample, from: staleWS)
+
+    let isConnected = await sut.connection != nil
+    XCTAssertTrue(isConnected, "Error from a stale connection should be ignored")
+    XCTAssertEqual(
+      transportCallCount.value, 1,
+      "Error from a stale connection should not trigger a reconnect"
+    )
+  }
+
+  func testHandleErrorFromCurrentConnectionInitiatesReconnect() async throws {
+    sut = makeSUT(reconnectDelay: 0.01)
+    try await sut.connect()
+
+    await sut.handleError(TestError.sample, from: ws)
+
+    // Wait for the reconnect to complete.
+    try await Task.sleep(nanoseconds: 200_000_000)
+
+    XCTAssertEqual(
+      transportCallCount.value, 2,
+      "Error from the current connection should trigger a reconnect"
+    )
+  }
 }

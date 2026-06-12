@@ -102,22 +102,32 @@ actor ConnectionManager {
 
   /// Handle connection error and initiate reconnect.
   ///
-  /// - Parameter error: The error that caused the connection failure
-  func handleError(_ error: any Error) {
+  /// - Parameters:
+  ///   - error: The error that caused the connection failure
+  ///   - conn: The connection the error originated from. When provided and it
+  ///     isn't the current connection (e.g. a late error surfacing from a
+  ///     socket that has already been replaced by a reconnect), the error is
+  ///     ignored so it can't tear down a healthy connection.
+  func handleError(_ error: any Error, from conn: (any WebSocket)? = nil) {
     guard !(error is CancellationError) else {
       logger?.debug("CancellationError do not trigger reconnects.")
       return
     }
 
-    guard case .connected(let conn) = state else {
+    guard case .connected(let current) = state else {
       logger?.debug("Ignoring error in non-connected state: \(error)")
+      return
+    }
+
+    if let conn, conn !== current {
+      logger?.debug("Ignoring error from stale connection: \(error)")
       return
     }
 
     logger?.debug("Connection error, initiating reconnect: \(error.localizedDescription)")
 
     // Close the connection and update to disconnected before reconnecting
-    conn.close(code: nil, reason: "error: \(error.localizedDescription)")
+    current.close(code: nil, reason: "error: \(error.localizedDescription)")
     updateState(.disconnected)
 
     initiateReconnect(reason: "error: \(error.localizedDescription)")
@@ -130,11 +140,20 @@ actor ConnectionManager {
   /// - Parameters:
   ///   - code: WebSocket close code
   ///   - reason: WebSocket close reason
-  func handleClose(code: Int?, reason: String?) {
+  ///   - conn: The connection the close event originated from. When provided
+  ///     and it isn't the current connection (a `.close` frame from an old
+  ///     socket can arrive after a reconnect already established a new one),
+  ///     the event is ignored so it can't mark a healthy connection as
+  ///     disconnected.
+  func handleClose(code: Int?, reason: String?, from conn: (any WebSocket)? = nil) {
     let closeReason = "code: \(code?.description ?? "none"), reason: \(reason ?? "none")"
     logger?.debug("Connection closed by remote: \(closeReason)")
 
-    if case .connected = state {
+    if case .connected(let current) = state {
+      if let conn, conn !== current {
+        logger?.debug("Ignoring close from stale connection: \(closeReason)")
+        return
+      }
       updateState(.disconnected)
     }
   }
