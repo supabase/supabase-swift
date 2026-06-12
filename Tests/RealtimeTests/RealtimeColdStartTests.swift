@@ -122,6 +122,55 @@ final class RealtimeColdStartTests: XCTestCase {
     }
   }
 
+  /// After a disconnect/reconnect, channels that were already `.subscribed`
+  /// must re-send `phx_join` on the new socket. Before this fix,
+  /// `ChannelStateManager.subscribe()` was a no-op for `.subscribed` channels,
+  /// so `rejoinChannels()` silently skipped them — channels went deaf after
+  /// the first reconnect (reported by rpiacent on PR #1003).
+  func testChannelsRejoinAfterReconnect() async throws {
+    let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
+
+    let sut = RealtimeClientV2(
+      url: url,
+      options: RealtimeClientOptions(
+        headers: ["apikey": apiKey],
+        heartbeatInterval: 10,
+        reconnectDelay: 0.05,
+        timeoutInterval: 5,
+        accessToken: { "token" }
+      ),
+      wsTransport: { _, _ in
+        let socket = AsyncFakeWebSocket()
+        socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
+        sockets.withValue { $0.append(socket) }
+        return socket
+      },
+      http: HTTPClientMock()
+    )
+    defer { sut.disconnect() }
+
+    let channel = sut.channel("room-rejoin")
+
+    try await channel.subscribeWithError()
+    XCTAssertEqual(channel.status, .subscribed)
+    XCTAssertEqual(sockets.value.count, 1)
+
+    // Disconnect socket 1 — triggers reconnect.
+    sockets.value[0].receiveFromServer(.close(code: 1001, reason: "going away"))
+    await waitUntil(timeout: 5) { sockets.value.count >= 2 }
+    guard sockets.value.count >= 2 else {
+      return XCTFail("No reconnect within 5 s")
+    }
+
+    // Channel must re-subscribe on the new socket.
+    await waitUntil(timeout: 5) { channel.status == .subscribed }
+    XCTAssertEqual(channel.status, .subscribed, "Channel did not rejoin after reconnect")
+
+    // Exactly one phx_join sent on socket 2 (index 1).
+    let joinsSentOnNewSocket = sockets.value[1].sentMessages.filter { $0.event == "phx_join" }
+    XCTAssertEqual(joinsSentOnNewSocket.count, 1, "Expected one phx_join on the new socket")
+  }
+
   /// A heartbeat left pending on a connection that errors out must not be
   /// misread as a timeout on the replacement connection. Before the fix,
   /// `pendingHeartbeatRef` survived reconnects, so the new connection's first

@@ -187,6 +187,37 @@ actor ChannelStateManager {
     }
   }
 
+  /// Reset channel state so it can rejoin after a reconnect.
+  ///
+  /// A channel that is already `.subscribed` when the socket reconnects
+  /// must re-send `phx_join` on the new socket. But ``subscribe()`` is a
+  /// no-op for `.subscribed` channels — so `rejoinChannels()` would silently
+  /// skip them without this reset.
+  ///
+  /// For `.subscribing`, the in-flight join task is waiting for a reply that
+  /// will never arrive on the dead socket; cancel it so a fresh `phx_join` is
+  /// sent on the new connection.
+  ///
+  /// For `.unsubscribing`, the wait loop in ``runUnsubscribe`` polls
+  /// `stateSubject.values`. Transitioning to `.unsubscribed` here wakes it up
+  /// immediately — the server's `phx_close` won't arrive on the dead socket
+  /// anyway.
+  func resetForReconnect() {
+    joinRef = nil
+    pushes = [:]
+    switch state {
+    case .subscribed:
+      updateState(.unsubscribed)
+    case .subscribing(let task):
+      task.cancel()
+      updateState(.unsubscribed)
+    case .unsubscribing:
+      updateState(.unsubscribed)
+    case .unsubscribed:
+      break
+    }
+  }
+
   // MARK: - Server signals
 
   /// Called when the server confirms the `phx_join` (system.ok or phx_reply
