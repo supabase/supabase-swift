@@ -140,6 +140,12 @@ struct ProfileView: View {
               showingMFA = true
             }
 
+            NavigationLink {
+              WebAuthnPasskeysView()
+            } label: {
+              Label("WebAuthn & Passkeys", systemImage: "person.badge.key.fill")
+            }
+
             Button {
               Task {
                 await reauthenticate()
