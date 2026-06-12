@@ -155,6 +155,7 @@ actor ConnectionManager {
         return
       }
       updateState(.disconnected)
+      initiateReconnect(reason: closeReason)
     }
   }
 

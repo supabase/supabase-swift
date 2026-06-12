@@ -283,4 +283,41 @@ final class ConnectionManagerTests: XCTestCase {
       "Error from the current connection should trigger a reconnect"
     )
   }
+
+  func testHandleCloseInitiatesReconnectAndEventuallyReconnects() async throws {
+    let reconnectingExpectation = expectation(description: "reconnecting state observed")
+    let secondConnectionExpectation = expectation(description: "second connection attempt")
+
+    let connectionCount = LockIsolated(0)
+
+    sut = makeSUT(
+      reconnectDelay: 0.01,
+      transport: { _, _ in
+        connectionCount.withValue { $0 += 1 }
+        if connectionCount.value == 2 {
+          secondConnectionExpectation.fulfill()
+        }
+        return self.ws!
+      }
+    )
+
+    let stateObserver = Task {
+      for await state in sut.stateChanges {
+        if case .reconnecting(_, let reason) = state, reason.contains("4001") {
+          reconnectingExpectation.fulfill()
+          return
+        }
+      }
+    }
+
+    try await sut.connect()
+    await sut.handleClose(code: 4001, reason: "server restart")
+
+    await fulfillment(of: [reconnectingExpectation, secondConnectionExpectation], timeout: 2)
+    XCTAssertEqual(connectionCount.value, 2, "Remote close should trigger a reconnection attempt")
+    let isConnected = await sut.connection != nil
+    XCTAssertTrue(isConnected)
+
+    stateObserver.cancel()
+  }
 }
