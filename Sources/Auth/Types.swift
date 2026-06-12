@@ -725,8 +725,9 @@ public struct MFAVerifyParams: Encodable, Hashable {
   /// ID of the challenge being verified. Returned in challenge().
   public let challengeId: String
 
-  /// Verification code provided by the user. Used for `totp` and `phone` factors.
-  public let code: String?
+  /// Verification code provided by the user. Used for `totp` and `phone` factors; empty for
+  /// `webauthn` factors (which use ``credentialResponse`` instead).
+  public let code: String
 
   /// The W3C credential (assertion) response produced by the authenticator. Used for `webauthn`
   /// factors. Forwarded verbatim to the backend, preserving the W3C field names.
@@ -745,7 +746,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
   public init(factorId: String, challengeId: String, credentialResponse: AnyJSON) {
     self.factorId = factorId
     self.challengeId = challengeId
-    self.code = nil
+    self.code = ""
     self.credentialResponse = credentialResponse
   }
 }
