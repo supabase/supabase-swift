@@ -126,7 +126,14 @@ final class RealtimeColdStartTests: XCTestCase {
   /// misread as a timeout on the replacement connection. Before the fix,
   /// `pendingHeartbeatRef` survived reconnects, so the new connection's first
   /// heartbeat reported `.timeout` and tore down a healthy socket —
-  /// perpetuating the reconnect cycle.
+  /// perpetuating the reconnect cycle indefinitely.
+  ///
+  /// Detection strategy: instead of asserting on specific heartbeat statuses
+  /// (which are sensitive to whether the reconnect was triggered by the
+  /// malformed frame or by the heartbeat timer itself), we verify that after
+  /// the first reconnect the socket count stabilises. With the bug, socket 2's
+  /// first heartbeat immediately times out → a second reconnect → socket 3 →
+  /// etc. With the fix, socket 2 stays connected.
   func testPendingHeartbeatDoesNotLeakAcrossReconnect() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
@@ -141,8 +148,8 @@ final class RealtimeColdStartTests: XCTestCase {
       ),
       wsTransport: { _, _ in
         let socket = AsyncFakeWebSocket()
-        // The server acks heartbeats only on the second (post-reconnect)
-        // socket; the first socket swallows them so one stays pending.
+        // Every socket after the first acks heartbeats normally so that a
+        // healthy post-reconnect connection never times out on its own.
         if sockets.value.count >= 1 {
           socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
         }
@@ -161,30 +168,35 @@ final class RealtimeColdStartTests: XCTestCase {
 
     await sut.connect()
 
-    // Wait for the first heartbeat to be sent (and stay pending — the first
-    // socket never acks).
+    // Wait for the first heartbeat to be sent (ref stays pending — socket 0
+    // never acks). The reconnect may be triggered by either the malformed frame
+    // or the second heartbeat timeout; both exercise the same code path.
     await waitUntil { heartbeatStatuses.value.contains(.sent) }
-    XCTAssertEqual(heartbeatStatuses.value, [.sent])
 
-    // Error out the first socket: a malformed frame makes the message task
-    // call handleError, which closes the socket and reconnects.
+    // Inject a malformed frame: listenForMessages throws → handleError →
+    // initiates reconnect.
     sockets.value[0].receiveFromServer(.text("not a valid frame"))
 
-    // Wait until the new connection reports its first heartbeat: a second
-    // `.sent` when the pending ref was correctly reset, or a `.timeout` when
-    // the stale ref leaked across the reconnect. (`.disconnected` may
-    // interleave while the reconnect is in flight.)
-    await waitUntil {
-      let statuses = heartbeatStatuses.value
-      return statuses.filter { $0 == .sent }.count >= 2 || statuses.contains(.timeout)
+    // Wait for the first reconnect to complete.
+    await waitUntil(timeout: 5) { sockets.value.count >= 2 }
+    guard sockets.value.count >= 2 else {
+      return XCTFail("No reconnect within 5 s — socket count: \(sockets.value.count)")
     }
 
-    XCTAssertEqual(sockets.value.count, 2, "Expected exactly one reconnect")
-    XCTAssertFalse(
-      heartbeatStatuses.value.contains(.timeout),
+    // Record the count right after the first reconnect. If pendingHeartbeatRef
+    // leaked into socket 2, its first heartbeat (0.2 s away) immediately times
+    // out → another reconnect → socket count grows. Allow 5 heartbeat cycles
+    // plus a buffer for scheduling jitter to observe this.
+    let countAfterFirstReconnect = sockets.value.count
+    await waitUntil(timeout: 0.2 * 5 + 1.0) {
+      sockets.value.count > countAfterFirstReconnect
+    }
+
+    XCTAssertEqual(
+      sockets.value.count, countAfterFirstReconnect,
       """
-      The pending heartbeat from the first connection leaked into the second \
-      and was misread as a timeout: \(heartbeatStatuses.value)
+      Perpetual reconnects detected — pendingHeartbeatRef likely leaked \
+      into the replacement connection: \(heartbeatStatuses.value)
       """
     )
   }
