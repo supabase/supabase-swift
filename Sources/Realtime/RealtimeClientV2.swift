@@ -247,13 +247,37 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   private func handleConnected(conn: any WebSocket, isReconnect: Bool) {
-    mutableState.withValue { $0.connection = conn }
-    listenForMessages(conn: conn)
-    startHeartbeating()
+    // Set up the per-connection machinery exactly once. `handleConnected` is
+    // invoked once per caller of `connect()` plus once by the state-observer
+    // task on reconnects — concurrent subscribes (or a subscribe retry racing
+    // an auto-reconnect) make it run multiple times for the same physical
+    // connection. Reading `conn.events` a second time installs a fresh
+    // `onEvent` and, when the first event-stream's task is torn down, its
+    // `onTermination` nils that live `onEvent` out — leaving the socket
+    // connected but deaf: every server frame (heartbeat acks, phx_join
+    // replies) is silently dropped (SDK-959). Guarding on connection identity
+    // keeps `listenForMessages` (and thus the `conn.events` read) to a single
+    // call per connection.
+    let isNewConnection = mutableState.withValue { state -> Bool in
+      if state.connection === conn { return false }
+      state.connection = conn
+      // A heartbeat awaiting an ack on the previous connection can never be
+      // acknowledged on this one. Clearing the pending ref prevents the new
+      // connection's first heartbeat from misreading it as a timeout and
+      // tearing down a healthy socket.
+      state.pendingHeartbeatRef = nil
+      return true
+    }
+
+    if isNewConnection {
+      listenForMessages(conn: conn)
+      startHeartbeating()
+      flushSendBuffer()
+    }
+
     if isReconnect {
       Task { await rejoinChannels() }
     }
-    flushSendBuffer()
   }
 
   deinit {
@@ -417,6 +441,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   private func rejoinChannels() async {
     for channel in channels.values {
+      await channel.resetForReconnect()
       try? await channel.subscribeWithError()
     }
   }
@@ -463,7 +488,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
                 "WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason)"
               )
 
-              await connectionManager.handleClose(code: code, reason: reason)
+              await connectionManager.handleClose(code: code, reason: reason, from: conn)
             }
           }
         } catch is CancellationError {
@@ -474,7 +499,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             .debug(
               "WebSocket error \(error.localizedDescription). Trying again in \(options.reconnectDelay)"
             )
-          await connectionManager.handleError(error)
+          await connectionManager.handleError(error, from: conn)
         }
       }
     }
@@ -536,7 +561,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       // Clear the pending ref before reconnecting
       mutableState.withValue { $0.pendingHeartbeatRef = nil }
 
-      await connectionManager.handleError(RealtimeError("heartbeat timeout"))
+      // Scope the reconnect to the connection this heartbeat was sent on, so
+      // a timeout that fires after a reconnect has already replaced the
+      // socket can't tear down the healthy new connection.
+      let conn = mutableState.withValue { $0.connection }
+      await connectionManager.handleError(RealtimeError("heartbeat timeout"), from: conn)
     }
   }
 
