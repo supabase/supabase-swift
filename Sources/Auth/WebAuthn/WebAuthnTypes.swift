@@ -9,6 +9,10 @@ import Foundation
 import Helpers
 
 /// Parameters for enrolling a new WebAuthn (passkey) factor as a second factor (MFA).
+///
+/// - Warning: WebAuthn/passkey support is experimental and may change in a future release. Opt in
+///   with `@_spi(Experimental) import Supabase`.
+@_spi(Experimental)
 public struct MFAWebAuthnEnrollParams: MFAEnrollParamsType {
   public let factorType: FactorType = "webauthn"
 
@@ -20,6 +24,7 @@ public struct MFAWebAuthnEnrollParams: MFAEnrollParamsType {
   }
 }
 
+@_spi(Experimental)
 extension MFAEnrollParamsType where Self == MFAWebAuthnEnrollParams {
   /// Creates parameters for enrolling a WebAuthn (passkey) factor.
   ///
@@ -30,6 +35,9 @@ extension MFAEnrollParamsType where Self == MFAWebAuthnEnrollParams {
 }
 
 /// Relying-party options sent when challenging a WebAuthn factor.
+///
+/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+@_spi(Experimental)
 public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
   /// The relying party identifier (typically your app's associated domain, e.g. `example.com`).
   public let rpId: String?
@@ -44,6 +52,9 @@ public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
 }
 
 /// The kind of WebAuthn ceremony a challenge requests.
+///
+/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+@_spi(Experimental)
 public enum WebAuthnChallengeType: String, Codable, Hashable, Sendable {
   /// A registration ceremony (`navigator.credentials.create`).
   case create
@@ -52,6 +63,9 @@ public enum WebAuthnChallengeType: String, Codable, Hashable, Sendable {
 }
 
 /// WebAuthn-specific payload returned by ``AuthMFA/challenge(params:)`` for `webauthn` factors.
+///
+/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+@_spi(Experimental)
 public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
   /// Whether the authenticator should create a new credential or assert an existing one.
   public let type: WebAuthnChallengeType
@@ -64,6 +78,9 @@ public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
 // MARK: - First-factor passkeys
 
 /// A passkey registered for the current user.
+///
+/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+@_spi(Experimental)
 public struct PasskeyListItem: Codable, Identifiable, Hashable, Sendable {
   /// Unique identifier of the passkey.
   public let id: String
@@ -86,6 +103,9 @@ public struct PasskeyListItem: Codable, Identifiable, Hashable, Sendable {
 }
 
 /// Credential creation options for registering a new passkey (first factor).
+///
+/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+@_spi(Experimental)
 public struct PasskeyRegistrationOptions: Decodable, Hashable, Sendable {
   /// ID of the challenge, to be passed back when verifying.
   public let challengeId: String
@@ -98,6 +118,9 @@ public struct PasskeyRegistrationOptions: Decodable, Hashable, Sendable {
 }
 
 /// Assertion options for authenticating with a passkey (first factor).
+///
+/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+@_spi(Experimental)
 public struct PasskeyAuthenticationOptions: Decodable, Hashable, Sendable {
   /// ID of the challenge, to be passed back when verifying.
   public let challengeId: String

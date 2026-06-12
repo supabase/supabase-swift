@@ -25,6 +25,7 @@ import Foundation
     ///   - rpId: The relying party identifier (your app's associated domain, e.g. `example.com`).
     ///   - rpOrigins: Allowed relying party origins.
     ///   - presentationAnchor: The window to present the passkey UI from.
+    @_spi(Experimental)
     @discardableResult
     @MainActor
     public func enrollWebAuthnFactor(
@@ -84,6 +85,7 @@ import Foundation
     ///   - rpId: The relying party identifier (your app's associated domain, e.g. `example.com`).
     ///   - rpOrigins: Allowed relying party origins.
     ///   - presentationAnchor: The window to present the passkey UI from.
+    @_spi(Experimental)
     @discardableResult
     @MainActor
     public func verifyWebAuthnFactor(

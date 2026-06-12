@@ -14,6 +14,9 @@ import Foundation
 extension AuthClient {
   // MARK: - First-factor passkeys (lower-level)
   //
+  // WebAuthn/passkey support is experimental — these methods are exposed under the `Experimental`
+  // SPI. Opt in with `@_spi(Experimental) import Supabase`.
+  //
   // These methods only perform the network exchange. The caller is responsible for driving the
   // platform authenticator (e.g. via `ASAuthorizationController`) between fetching options and
   // submitting the credential response. For an end-to-end flow on iOS 16+/macOS 13+, prefer the
@@ -26,6 +29,7 @@ extension AuthClient {
   /// `PublicKeyCredentialCreationOptions` to forward to the platform authenticator. After running
   /// the authenticator, submit the result with
   /// ``verifyPasskeyRegistration(challengeId:credentialResponse:)``.
+  @_spi(Experimental)
   public func getPasskeyRegistrationOptions() async throws -> PasskeyRegistrationOptions {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
@@ -42,6 +46,7 @@ extension AuthClient {
   ///   - challengeId: The challenge ID returned by ``getPasskeyRegistrationOptions()``.
   ///   - credentialResponse: The W3C credential produced by the authenticator.
   /// - Returns: The stored passkey.
+  @_spi(Experimental)
   @discardableResult
   public func verifyPasskeyRegistration(
     challengeId: String,
@@ -66,6 +71,7 @@ extension AuthClient {
   /// `PublicKeyCredentialRequestOptions` to forward to the platform authenticator. After running
   /// the authenticator, submit the result with
   /// ``verifyPasskeyAuthentication(challengeId:credentialResponse:)``.
+  @_spi(Experimental)
   public func getPasskeyAuthenticationOptions() async throws -> PasskeyAuthenticationOptions {
     try await Dependencies[clientID].api.execute(
       HTTPRequest(
@@ -82,6 +88,7 @@ extension AuthClient {
   ///   - challengeId: The challenge ID returned by ``getPasskeyAuthenticationOptions()``.
   ///   - credentialResponse: The W3C assertion produced by the authenticator.
   /// - Returns: The authentication response containing the new session.
+  @_spi(Experimental)
   @discardableResult
   public func verifyPasskeyAuthentication(
     challengeId: String,
@@ -108,6 +115,7 @@ extension AuthClient {
   }
 
   /// Lists the passkeys registered for the current user.
+  @_spi(Experimental)
   public func listPasskeys() async throws -> [PasskeyListItem] {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
@@ -124,6 +132,7 @@ extension AuthClient {
   ///   - id: The ID of the passkey to rename.
   ///   - friendlyName: The new human readable name.
   /// - Returns: The updated passkey.
+  @_spi(Experimental)
   @discardableResult
   public func renamePasskey(id: String, friendlyName: String) async throws -> PasskeyListItem {
     try await Dependencies[clientID].api.authorizedExecute(
@@ -140,6 +149,7 @@ extension AuthClient {
   /// Removes a passkey.
   ///
   /// - Parameter id: The ID of the passkey to remove.
+  @_spi(Experimental)
   public func deletePasskey(id: String) async throws {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
@@ -162,6 +172,7 @@ extension AuthClient {
     /// - Parameters:
     ///   - rpId: The relying party identifier (your app's associated domain, e.g. `example.com`).
     ///   - presentationAnchor: The window to present the passkey UI from.
+    @_spi(Experimental)
     @discardableResult
     @MainActor
     public func signInWithPasskey(
@@ -197,6 +208,7 @@ extension AuthClient {
     /// - Parameters:
     ///   - rpId: The relying party identifier (your app's associated domain, e.g. `example.com`).
     ///   - presentationAnchor: The window to present the passkey UI from.
+    @_spi(Experimental)
     @discardableResult
     @MainActor
     public func registerPasskey(

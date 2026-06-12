@@ -7,7 +7,7 @@
 
 import XCTest
 
-@testable import Auth
+@_spi(Experimental) @testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
