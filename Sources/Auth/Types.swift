@@ -697,9 +697,24 @@ public struct MFAChallengeParams: Encodable, Hashable {
   /// Messaging channel to use (e.g. `whatsapp` or `sms`). Only relevant for phone factors.
   public let channel: MessagingChannel?
 
+  /// Relying-party options. Only relevant for WebAuthn factors.
+  @_spi(Experimental) public let webAuthn: WebAuthnChallengeOptions?
+
   public init(factorId: String, channel: MessagingChannel? = nil) {
     self.factorId = factorId
     self.channel = channel
+    self.webAuthn = nil
+  }
+
+  @_spi(Experimental)
+  public init(
+    factorId: String,
+    channel: MessagingChannel? = nil,
+    webAuthn: WebAuthnChallengeOptions?
+  ) {
+    self.factorId = factorId
+    self.channel = channel
+    self.webAuthn = webAuthn
   }
 }
 
@@ -710,13 +725,29 @@ public struct MFAVerifyParams: Encodable, Hashable {
   /// ID of the challenge being verified. Returned in challenge().
   public let challengeId: String
 
-  /// Verification code provided by the user.
+  /// Verification code provided by the user. Used for `totp` and `phone` factors; empty for
+  /// `webauthn` factors (which use ``credentialResponse`` instead).
   public let code: String
 
+  /// The W3C credential (assertion) response produced by the authenticator. Used for `webauthn`
+  /// factors. Forwarded verbatim to the backend, preserving the W3C field names.
+  @_spi(Experimental) public let credentialResponse: AnyJSON?
+
+  /// Verifies a `totp` or `phone` factor using a user-provided code.
   public init(factorId: String, challengeId: String, code: String) {
     self.factorId = factorId
     self.challengeId = challengeId
     self.code = code
+    self.credentialResponse = nil
+  }
+
+  /// Verifies a `webauthn` factor using the credential response produced by the authenticator.
+  @_spi(Experimental)
+  public init(factorId: String, challengeId: String, credentialResponse: AnyJSON) {
+    self.factorId = factorId
+    self.challengeId = challengeId
+    self.code = ""
+    self.credentialResponse = credentialResponse
   }
 }
 
@@ -751,6 +782,9 @@ public struct AuthMFAChallengeResponse: Decodable, Hashable, Sendable {
 
   /// Timestamp in UNIX seconds when this challenge will no longer be usable.
   public let expiresAt: TimeInterval
+
+  /// WebAuthn credential options. Present only when ``type`` is `webauthn`.
+  @_spi(Experimental) public var webauthn: WebAuthnChallengeResponseData? = nil
 }
 
 public typealias AuthMFAVerifyResponse = Session
@@ -769,6 +803,9 @@ public struct AuthMFAListFactorsResponse: Decodable, Hashable, Sendable {
 
   /// Only verified phone factors. (A subset of `all`.)
   public let phone: [Factor]
+
+  /// Only verified WebAuthn (passkey) factors. (A subset of `all`.)
+  @_spi(Experimental) public let webauthn: [Factor]
 }
 
 public typealias AuthenticatorAssuranceLevels = String

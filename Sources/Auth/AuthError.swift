@@ -110,6 +110,15 @@ extension ErrorCode {
     "mfa_webauthn_enroll_not_enabled")
   public static let mfaWebAuthnVerifyDisabled = ErrorCode(
     "mfa_webauthn_verify_not_enabled")
+  @_spi(Experimental) public static let webAuthnChallengeNotFound = ErrorCode(
+    "webauthn_challenge_not_found")
+  @_spi(Experimental) public static let webAuthnChallengeExpired = ErrorCode(
+    "webauthn_challenge_expired")
+  @_spi(Experimental) public static let webAuthnVerificationFailed = ErrorCode(
+    "webauthn_verification_failed")
+  @_spi(Experimental) public static let webAuthnCredentialExists = ErrorCode(
+    "webauthn_credential_exists")
+  @_spi(Experimental) public static let tooManyPasskeys = ErrorCode("too_many_passkeys")
   public static let mfaVerifiedFactorExists = ErrorCode("mfa_verified_factor_exists")
   //#nosec G101 -- Not a secret value.
   public static let invalidCredentials = ErrorCode("invalid_credentials")
@@ -268,11 +277,11 @@ public enum AuthError: LocalizedError, Equatable {
   public var message: String {
     switch self {
     case .sessionMissing: "Auth session missing."
-    case let .weakPassword(message, _),
-      let .api(message, _, _, _),
-      let .pkceGrantCodeExchange(message, _, _),
-      let .implicitGrantRedirect(message),
-      let .jwtVerificationFailed(message):
+    case .weakPassword(let message, _),
+      .api(let message, _, _, _),
+      .pkceGrantCodeExchange(let message, _, _),
+      .implicitGrantRedirect(let message),
+      .jwtVerificationFailed(let message):
       message
     // Deprecated cases
     case .missingExpClaim: "Missing expiration claim in the access token."
@@ -286,7 +295,7 @@ public enum AuthError: LocalizedError, Equatable {
     switch self {
     case .sessionMissing: .sessionNotFound
     case .weakPassword: .weakPassword
-    case let .api(_, errorCode, _, _): errorCode
+    case .api(_, let errorCode, _, _): errorCode
     case .pkceGrantCodeExchange, .implicitGrantRedirect: .unknown
     case .jwtVerificationFailed: .invalidJWT
     // Deprecated cases

@@ -10,7 +10,7 @@ import SnapshotTesting
 import TestHelpers
 import XCTest
 
-@testable import Auth
+@_spi(Experimental) @testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -493,6 +493,148 @@ final class RequestsTests: XCTestCase {
 
     await assert {
       _ = try await sut.mfa.unenroll(params: .init(factorId: "123"))
+    }
+  }
+
+  func testMFAEnrollWebAuthn() async throws {
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.mfa.enroll(params: .webAuthn(friendlyName: "My Passkey"))
+    }
+  }
+
+  func testMFAChallengeWebAuthn() async throws {
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.mfa.challenge(
+        params: .init(
+          factorId: "123",
+          webAuthn: .init(rpId: "example.com", rpOrigins: ["https://example.com"])
+        )
+      )
+    }
+  }
+
+  func testMFAVerifyWebAuthn() async throws {
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    // The credential response carries W3C camelCase keys (e.g. `clientDataJSON`)
+    // that MUST survive encoding untouched by the snake_case strategy.
+    await assert {
+      _ = try await sut.mfa.verify(
+        params: .init(
+          factorId: "123",
+          challengeId: "456",
+          credentialResponse: [
+            "id": "credential-id",
+            "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
+            "type": "public-key",
+            "response": [
+              "clientDataJSON": "Y2xpZW50LWRhdGE",
+              "attestationObject": "YXR0ZXN0YXRpb24tb2JqZWN0",
+            ],
+          ]
+        )
+      )
+    }
+  }
+
+  func testGetPasskeyRegistrationOptions() async throws {
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.getPasskeyRegistrationOptions()
+    }
+  }
+
+  func testVerifyPasskeyRegistration() async throws {
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.verifyPasskeyRegistration(
+        challengeId: "challenge-1",
+        credentialResponse: [
+          "id": "credential-id",
+          "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
+          "type": "public-key",
+          "response": [
+            "clientDataJSON": "Y2xpZW50LWRhdGE",
+            "attestationObject": "YXR0ZXN0YXRpb24tb2JqZWN0",
+          ],
+        ]
+      )
+    }
+  }
+
+  func testGetPasskeyAuthenticationOptions() async throws {
+    let sut = makeSUT()
+
+    // No session stored: passkey authentication options must not require auth.
+    await assert {
+      _ = try await sut.getPasskeyAuthenticationOptions()
+    }
+  }
+
+  func testVerifyPasskeyAuthentication() async throws {
+    let sut = makeSUT()
+
+    await assert {
+      _ = try await sut.verifyPasskeyAuthentication(
+        challengeId: "challenge-1",
+        credentialResponse: [
+          "id": "credential-id",
+          "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
+          "type": "public-key",
+          "response": [
+            "clientDataJSON": "Y2xpZW50LWRhdGE",
+            "authenticatorData": "YXV0aGVudGljYXRvci1kYXRh",
+            "signature": "c2lnbmF0dXJl",
+            "userHandle": "dXNlci1oYW5kbGU",
+          ],
+        ]
+      )
+    }
+  }
+
+  func testListPasskeys() async throws {
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.listPasskeys()
+    }
+  }
+
+  func testRenamePasskey() async throws {
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      _ = try await sut.renamePasskey(id: "passkey-1", friendlyName: "Renamed Passkey")
+    }
+  }
+
+  func testDeletePasskey() async throws {
+    let sut = makeSUT()
+
+    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+    await assert {
+      try await sut.deletePasskey(id: "passkey-1")
     }
   }
 
