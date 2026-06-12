@@ -272,7 +272,11 @@ final class ConnectionManagerTests: XCTestCase {
     await sut.handleError(TestError.sample, from: ws)
 
     // Wait for the reconnect to complete.
-    try await Task.sleep(nanoseconds: 200_000_000)
+    let transportCallCount = self.transportCallCount
+    let deadline = Date().addingTimeInterval(5)
+    while transportCallCount.value < 2, Date() < deadline {
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
 
     XCTAssertEqual(
       transportCallCount.value, 2,

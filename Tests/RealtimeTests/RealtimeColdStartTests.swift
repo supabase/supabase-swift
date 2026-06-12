@@ -13,6 +13,7 @@ import XCTest
 /// queue) — instead of the synchronous delivery of `FakeWebSocket`, which
 /// masks the races involved. They run against the real clock with compressed
 /// intervals, deliberately NOT under `withMainSerialExecutor`.
+@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class RealtimeColdStartTests: XCTestCase {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
@@ -27,9 +28,11 @@ final class RealtimeColdStartTests: XCTestCase {
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
-        heartbeatInterval: 0.5,
+        // Long heartbeat so heartbeat machinery can't mask subscribe stalls
+        // by triggering recovery reconnects on slow CI machines.
+        heartbeatInterval: 10,
         reconnectDelay: 0.1,
-        timeoutInterval: 0.5,
+        timeoutInterval: 2,
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -41,8 +44,22 @@ final class RealtimeColdStartTests: XCTestCase {
     )
   }
 
+  /// Polls `condition` until it holds or `timeout` elapses.
+  private func waitUntil(
+    timeout: TimeInterval = 5.0,
+    _ condition: @escaping @Sendable () -> Bool
+  ) async {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if condition() { return }
+      try? await Task.sleep(nanoseconds: 10_000_000)
+    }
+  }
+
   /// Reporter's flow from SDK-959: cold client, one channel, postgresChange
   /// streams consumed in detached tasks, then `subscribeWithError()`.
+  /// With the deaf-socket bug this throws `maxRetryAttemptsReached` because
+  /// the `phx_join` reply is never seen.
   func testColdStartSubscribe_realTimingProfile() async throws {
     for iteration in 1...5 {
       let socket = AsyncFakeWebSocket()
@@ -62,20 +79,14 @@ final class RealtimeColdStartTests: XCTestCase {
         t2.cancel()
       }
 
-      let start = Date()
       do {
         try await channel.subscribeWithError()
       } catch {
         XCTFail("Iteration \(iteration): subscribe failed: \(error)")
         return
       }
-      let elapsed = Date().timeIntervalSince(start)
 
       XCTAssertEqual(channel.status, .subscribed, "Iteration \(iteration)")
-      XCTAssertLessThan(
-        elapsed, 1.0,
-        "Iteration \(iteration): cold subscribe took \(elapsed)s — stall detected"
-      )
     }
   }
 
@@ -84,7 +95,7 @@ final class RealtimeColdStartTests: XCTestCase {
   /// `.connecting` wait path returns the same connection to both callers →
   /// both used to call `handleConnected(conn:)`, reading `conn.events` twice
   /// and leaving the socket deaf (no heartbeat acks, no phx_join replies) —
-  /// the SDK-959 stall.
+  /// the SDK-959 stall, thrown here as `maxRetryAttemptsReached`.
   func testColdStartConcurrentSubscribes_doNotGoDeaf() async throws {
     for iteration in 1...5 {
       let socket = AsyncFakeWebSocket()
@@ -96,7 +107,6 @@ final class RealtimeColdStartTests: XCTestCase {
       let channel1 = sut.channel("room-1")
       let channel2 = sut.channel("room-2")
 
-      let start = Date()
       async let s1: Void = channel1.subscribeWithError()
       async let s2: Void = channel2.subscribeWithError()
 
@@ -106,14 +116,9 @@ final class RealtimeColdStartTests: XCTestCase {
         XCTFail("Iteration \(iteration): subscribe failed: \(error)")
         return
       }
-      let elapsed = Date().timeIntervalSince(start)
 
       XCTAssertEqual(channel1.status, .subscribed, "Iteration \(iteration)")
       XCTAssertEqual(channel2.status, .subscribed, "Iteration \(iteration)")
-      XCTAssertLessThan(
-        elapsed, 1.0,
-        "Iteration \(iteration): cold concurrent subscribe took \(elapsed)s — stall detected"
-      )
     }
   }
 
@@ -131,7 +136,7 @@ final class RealtimeColdStartTests: XCTestCase {
         headers: ["apikey": apiKey],
         heartbeatInterval: 0.2,
         reconnectDelay: 0.05,
-        timeoutInterval: 0.5,
+        timeoutInterval: 5,
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -156,16 +161,23 @@ final class RealtimeColdStartTests: XCTestCase {
 
     await sut.connect()
 
-    // Wait for the first heartbeat to be sent (and stay pending).
-    try await Task.sleep(nanoseconds: 300_000_000)
+    // Wait for the first heartbeat to be sent (and stay pending — the first
+    // socket never acks).
+    await waitUntil { heartbeatStatuses.value.contains(.sent) }
     XCTAssertEqual(heartbeatStatuses.value, [.sent])
 
     // Error out the first socket: a malformed frame makes the message task
     // call handleError, which closes the socket and reconnects.
     sockets.value[0].receiveFromServer(.text("not a valid frame"))
 
-    // Allow reconnect plus one full heartbeat interval on the new socket.
-    try await Task.sleep(nanoseconds: 500_000_000)
+    // Wait until the new connection reports its first heartbeat: a second
+    // `.sent` when the pending ref was correctly reset, or a `.timeout` when
+    // the stale ref leaked across the reconnect. (`.disconnected` may
+    // interleave while the reconnect is in flight.)
+    await waitUntil {
+      let statuses = heartbeatStatuses.value
+      return statuses.filter { $0 == .sent }.count >= 2 || statuses.contains(.timeout)
+    }
 
     XCTAssertEqual(sockets.value.count, 2, "Expected exactly one reconnect")
     XCTAssertFalse(
