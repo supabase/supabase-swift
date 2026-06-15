@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.47.1](https://github.com/supabase/supabase-swift/compare/v2.47.0...v2.47.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* **auth:** recognize ?error= query param in implicit grant redirect URLs ([#1009](https://github.com/supabase/supabase-swift/issues/1009)) ([92d7c6f](https://github.com/supabase/supabase-swift/commit/92d7c6f1daac771f1fc7db22a1ef22cda14e6573))
+* **tests:** grant API access to integration test tables and functions ([#1018](https://github.com/supabase/supabase-swift/issues/1018)) ([8372c18](https://github.com/supabase/supabase-swift/commit/8372c181cb04104d6725b2afb5e8238db086289f))
+
 ## [2.47.0](https://github.com/supabase/supabase-swift/compare/v2.46.0...v2.47.0) (2026-06-08)
 
 
