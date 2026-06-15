@@ -8,14 +8,14 @@
 
 ## Libraries
 
-| Library | Description |
-|---------|-------------|
-| **Supabase** | Full client — includes all libraries below |
-| **Auth** | User authentication and session management |
-| **PostgREST** | Query your Postgres database via REST |
-| **Realtime** | Subscribe to database changes over WebSocket |
-| **Storage** | Manage files and objects |
-| **Functions** | Invoke Supabase Edge Functions |
+| Library        | Description                                  |
+|----------------|----------------------------------------------|
+| **Supabase**   | Full client — includes all libraries below   |
+| **Auth**       | User authentication and session management   |
+| **PostgREST**  | Query your Postgres database via REST        |
+| **Realtime**   | Subscribe to database changes over WebSocket |
+| **Storage**    | Manage files and objects                     |
+| **Functions**  | Invoke Supabase Edge Functions               |
 
 ## Quick Start
 
