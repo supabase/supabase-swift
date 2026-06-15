@@ -17,6 +17,9 @@ actor ConnectionManager {
   private let headers: [String: String]
   private let reconnectDelay: TimeInterval
   private let logger: (any SupabaseLogger)?
+  // Captured at init time so parallel test classes that swap _clock cannot
+  // change the timing of an already-running client.
+  let clock: any _Clock
 
   /// Get current connection if connected, nil otherwise.
   var connection: (any WebSocket)? {
@@ -33,13 +36,15 @@ actor ConnectionManager {
     url: URL,
     headers: [String: String],
     reconnectDelay: TimeInterval,
-    logger: (any SupabaseLogger)?
+    logger: (any SupabaseLogger)?,
+    clock: any _Clock = _clock
   ) {
     self.transport = transport
     self.url = url
     self.headers = headers
     self.reconnectDelay = reconnectDelay
     self.logger = logger
+    self.clock = clock
   }
 
   @discardableResult
@@ -178,7 +183,7 @@ actor ConnectionManager {
 
   private func initiateReconnect(reason: String) {
     let reconnectTask = Task {
-      try await _clock.sleep(for: reconnectDelay)
+      try await clock.sleep(for: reconnectDelay)
       logger?.debug("Attempting to reconnect...")
       try await performConnection()
     }

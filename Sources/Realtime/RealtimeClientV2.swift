@@ -80,6 +80,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let http: any HTTPClientType
   let apikey: String
   let serializer = RealtimeSerializer()
+  // Captured at init time so parallel test classes that swap _clock cannot
+  // change the timing of an already-running client.
+  let clock: any _Clock
 
   let connectionManager: ConnectionManager
 
@@ -164,7 +167,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     url: URL,
     options: RealtimeClientOptions,
     wsTransport: @escaping WebSocketTransport,
-    http: any HTTPClientType
+    http: any HTTPClientType,
+    clock: any _Clock = _clock
   ) {
     var options = options
     if options.headers[.xClientInfo] == nil {
@@ -175,6 +179,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     self.options = options
     self.wsTransport = wsTransport
     self.http = http
+    self.clock = clock
 
     precondition(options.apikey != nil, "API key is required to connect to Realtime")
     apikey = options.apikey!
@@ -195,7 +200,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       ),
       headers: options.headers.dictionary,
       reconnectDelay: options.reconnectDelay,
-      logger: options.logger
+      logger: options.logger,
+      clock: clock
     )
 
     let stateObserverTask = Task { [weak self, connectionManager, statusSubject] in
@@ -396,9 +402,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     let delay = options.disconnectOnEmptyChannelsAfter
     mutableState.withValue { state in
       state.pendingDisconnectTask?.cancel()
-      state.pendingDisconnectTask = Task { [weak self] in
+      state.pendingDisconnectTask = Task { [weak self, clock] in
         do {
-          try await _clock.sleep(for: delay)
+          try await clock.sleep(for: delay)
           self?.disconnect()
         } catch {
           // Cancelled: a new channel was added or disconnect() was called directly.
@@ -509,9 +515,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     mutableState.withValue { state in
       state.heartbeatTask?.cancel()
 
-      state.heartbeatTask = Task { [options] in
+      state.heartbeatTask = Task { [options, clock] in
         while !Task.isCancelled {
-          try? await _clock.sleep(for: options.heartbeatInterval)
+          try? await clock.sleep(for: options.heartbeatInterval)
           if Task.isCancelled {
             break
           }
