@@ -1,28 +1,10 @@
-<p align="center">
-  <a href="https://supabase.io">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/supabase/supabase/master/packages/common/assets/images/supabase-logo-wordmark--dark.svg">
-      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/supabase/supabase/master/packages/common/assets/images/supabase-logo-wordmark--light.svg">
-      <img alt="Supabase Logo" width="300" src="https://raw.githubusercontent.com/supabase/supabase/master/packages/common/assets/images/logo-preview.jpg">
-    </picture>
-  </a>
-
-  <h1 align="center">Supabase Swift SDK</h1>
-
-  <p align="center">
-    <a href="https://supabase.com/docs/guides/getting-started">Guides</a>
-    ·
-    <a href="https://supabase.com/docs/reference/swift/introduction">Reference Docs</a>
-  </p>
-</p>
-
-<div align="center">
+# supabase-swift
 
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fsupabase%2Fsupabase-swift%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/supabase/supabase-swift)
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fsupabase%2Fsupabase-swift%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/supabase/supabase-swift)
 [![Coverage Status](https://coveralls.io/repos/github/supabase/supabase-swift/badge.svg?branch=main)](https://coveralls.io/github/supabase/supabase-swift?branch=main)
 
-</div>
+[Guides](https://supabase.com/docs/guides/getting-started) · [Reference Docs](https://supabase.com/docs/reference/swift/introduction)
 
 ## Libraries
 
