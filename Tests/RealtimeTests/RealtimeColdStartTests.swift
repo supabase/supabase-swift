@@ -164,8 +164,16 @@ final class RealtimeColdStartTests: XCTestCase {
       return XCTFail("No reconnect within 5 s")
     }
 
-    // Channel must re-subscribe on the new socket.
-    await waitUntil(timeout: 5) { channel.status == .subscribed }
+    // Channel must re-subscribe on the new socket. Waiting only for
+    // `channel.status == .subscribed` is racy on Linux: the channel may still
+    // appear subscribed from socket 1 before `rejoinChannels` has had a chance
+    // to reset it. Wait until socket 2 has actually sent a `phx_join` AND the
+    // channel is subscribed — a state that cannot be satisfied by the stale
+    // socket-1 subscription.
+    await waitUntil(timeout: 5) {
+      sockets.value[1].sentMessages.contains { $0.event == "phx_join" }
+        && channel.status == .subscribed
+    }
     XCTAssertEqual(channel.status, .subscribed, "Channel did not rejoin after reconnect")
 
     // Exactly one phx_join sent on socket 2 (index 1).
