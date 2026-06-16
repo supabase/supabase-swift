@@ -159,6 +159,10 @@ final class URLSessionWebSocket: WebSocket {
     var closeCode: Int?
     /// The close reason received when connection was closed.
     var closeReason: String?
+    /// Monotonically increasing counter; incremented each time `events` is called.
+    /// `onTermination` captures its generation at registration time and skips the
+    /// `onEvent = nil` if a newer `events` call has already taken ownership.
+    var eventStreamGeneration = 0
   }
 
   /// Lock-isolated mutable state to ensure thread safety.
@@ -288,6 +292,30 @@ final class URLSessionWebSocket: WebSocket {
         _closeConnectionWithError(error)
       }
     }
+  }
+
+  /// Version-guarded `events` stream: `onTermination` only clears `onEvent` when it
+  /// still owns the handler (same generation). If a second `events` call installs a
+  /// newer handler before the first stream tears down, the stale `onTermination` is a
+  /// no-op instead of silently niling the live handler.
+  var events: AsyncStream<WebSocketEvent> {
+    let generation = mutableState.withValue { state -> Int in
+      state.eventStreamGeneration += 1
+      return state.eventStreamGeneration
+    }
+    let (stream, continuation) = AsyncStream<WebSocketEvent>.makeStream()
+    self.onEvent = { event in
+      continuation.yield(event)
+      if case .close = event { continuation.finish() }
+    }
+    continuation.onTermination = { [weak self] _ in
+      guard let self else { return }
+      self.mutableState.withValue { state in
+        guard state.eventStreamGeneration == generation else { return }
+        state.onEvent = nil
+      }
+    }
+    return stream
   }
 
   /// Callback for handling WebSocket events.

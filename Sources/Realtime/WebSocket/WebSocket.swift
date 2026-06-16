@@ -43,6 +43,14 @@ protocol WebSocket: Sendable, AnyObject {
   /// Listen for event messages in the connection.
   var onEvent: (@Sendable (WebSocketEvent) -> Void)? { get set }
 
+  /// An `AsyncStream` of ``WebSocketEvent`` received from the peer.
+  ///
+  /// Conformers must implement this as a protocol requirement (not just rely on
+  /// the default extension) so that calls through `any WebSocket` dispatch to
+  /// the version-guarded implementation and `onTermination` cannot nil a handler
+  /// it no longer owns.
+  var events: AsyncStream<WebSocketEvent> { get }
+
   /// The WebSocket subprotocol negotiated with the peer.
   ///
   /// Will be the empty string if no subprotocol was negotiated.
@@ -62,26 +70,19 @@ extension WebSocket {
     self.close(code: nil, reason: nil)
   }
 
-  /// An `AsyncStream` of ``WebSocketEvent`` received from the peer.
+  /// Default `events` implementation for test doubles and simple conformers.
   ///
-  /// Data received by the peer will be delivered as a ``WebSocketEvent/text(_:)`` or ``WebSocketEvent/binary(_:)``.
-  ///
-  /// If a ``WebSocketEvent/close(code:reason:)`` event is received then the `AsyncStream` will be closed. A ``WebSocketEvent/close(code:reason:)`` event indicates either that:
-  ///
-  /// - A close frame was received from the peer. `code` and `reason` will be set by the peer.
-  /// - A failure occurred (e.g. the peer disconnected). `code` and `reason` will be a failure code defined by [RFC-6455](https://www.rfc-editor.org/rfc/rfc6455.html#section-7.4.1) (e.g. 1006).
-  ///
-  /// Errors will never appear in this `AsyncStream`.
+  /// Production conformers (e.g. `URLSessionWebSocket`) should override this with
+  /// a version-guarded implementation so that `onTermination` cannot nil an `onEvent`
+  /// handler installed by a later `events` call.
   var events: AsyncStream<WebSocketEvent> {
     let (stream, continuation) = AsyncStream<WebSocketEvent>.makeStream()
     self.onEvent = { event in
       continuation.yield(event)
-
       if case .close = event {
         continuation.finish()
       }
     }
-
     continuation.onTermination = { _ in
       self.onEvent = nil
     }
