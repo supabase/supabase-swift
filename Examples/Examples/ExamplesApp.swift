@@ -67,7 +67,7 @@ struct ExamplesApp: App {
 final class MemoryStorage: AuthLocalStorage, @unchecked Sendable {
   let lock = NSLock()
   private var storage = [String: Data]()
-  
+
   func store(key: String, value: Data) throws {
     lock.withLock { storage[key] = value }
   }
