@@ -51,20 +51,23 @@ final class RealtimeChannelTests: XCTestCase {
       let channel = socket.channel("test-topic")
 
       // Never respond to phx_join, so channel stays in .subscribing
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-        if msg.event == "heartbeat" {
-          server.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
+      let serverTask1 = Task { @Sendable [server] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "heartbeat" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "phoenix",
+                event: "phx_reply",
+                payload: ["response": [:]]
+              )
             )
-          )
+          }
         }
       }
+      defer { serverTask1.cancel() }
 
       await socket.connect()
 
@@ -102,23 +105,26 @@ final class RealtimeChannelTests: XCTestCase {
 
       let channel = socket.channel("test-topic")
 
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-        if msg.event == "phx_join" {
-          server.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "realtime:test-topic",
-              event: "phx_reply",
-              payload: [
-                "response": ["postgres_changes": []],
-                "status": "ok",
-              ]
+      let serverTask2 = Task { @Sendable [server] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "phx_join" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "realtime:test-topic",
+                event: "phx_reply",
+                payload: [
+                  "response": ["postgres_changes": []],
+                  "status": "ok",
+                ]
+              )
             )
-          )
+          }
         }
       }
+      defer { serverTask2.cancel() }
 
       await socket.connect()
       try? await channel.subscribeWithError()
@@ -153,20 +159,23 @@ final class RealtimeChannelTests: XCTestCase {
       let channel = socket.channel("test-topic")
 
       // Never respond to phx_join, so channel stays in .subscribing
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-        if msg.event == "heartbeat" {
-          server.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
+      let serverTask3 = Task { @Sendable [server] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "heartbeat" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "phoenix",
+                event: "phx_reply",
+                payload: ["response": [:]]
+              )
             )
-          )
+          }
         }
       }
+      defer { serverTask3.cancel() }
 
       await socket.connect()
 
@@ -204,23 +213,26 @@ final class RealtimeChannelTests: XCTestCase {
 
       let channel = socket.channel("test-topic")
 
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-        if msg.event == "phx_join" {
-          server.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "realtime:test-topic",
-              event: "phx_reply",
-              payload: [
-                "response": ["postgres_changes": []],
-                "status": "ok",
-              ]
+      let serverTask4 = Task { @Sendable [server] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "phx_join" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "realtime:test-topic",
+                event: "phx_reply",
+                payload: [
+                  "response": ["postgres_changes": []],
+                  "status": "ok",
+                ]
+              )
             )
-          )
+          }
         }
       }
+      defer { serverTask4.cancel() }
 
       await socket.connect()
       try? await channel.subscribeWithError()

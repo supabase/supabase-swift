@@ -236,4 +236,110 @@ final class ConnectionManagerTests: XCTestCase {
       "handleClose should not send an additional close frame since the remote already closed."
     )
   }
+
+  func testHandleCloseFromStaleConnectionIsIgnored() async throws {
+    let (staleWS, _) = FakeWebSocket.fakes()
+    sut = makeSUT()
+    try await sut.connect()
+
+    // A late .close from a previous socket must not mark the current
+    // connection as disconnected.
+    await sut.handleClose(code: 1006, reason: "stale socket closed", from: staleWS)
+
+    let isConnected = await sut.connection != nil
+    XCTAssertTrue(isConnected, "Close from a stale connection should be ignored")
+  }
+
+  func testHandleErrorFromStaleConnectionIsIgnored() async throws {
+    let (staleWS, _) = FakeWebSocket.fakes()
+    sut = makeSUT()
+    try await sut.connect()
+
+    await sut.handleError(TestError.sample, from: staleWS)
+
+    let isConnected = await sut.connection != nil
+    XCTAssertTrue(isConnected, "Error from a stale connection should be ignored")
+    XCTAssertEqual(
+      transportCallCount.value, 1,
+      "Error from a stale connection should not trigger a reconnect"
+    )
+  }
+
+  func testHandleErrorFromCurrentConnectionInitiatesReconnect() async throws {
+    sut = makeSUT(reconnectDelay: 0.01)
+    try await sut.connect()
+
+    await sut.handleError(TestError.sample, from: ws)
+
+    // Wait for the reconnect to complete.
+    let transportCallCount = self.transportCallCount
+    let deadline = Date().addingTimeInterval(5)
+    while transportCallCount.value < 2, Date() < deadline {
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+
+    XCTAssertEqual(
+      transportCallCount.value, 2,
+      "Error from the current connection should trigger a reconnect"
+    )
+  }
+
+  func testHandleCloseInitiatesReconnectAndEventuallyReconnects() async throws {
+    let reconnectingExpectation = expectation(description: "reconnecting state observed")
+    let secondConnectionExpectation = expectation(description: "second connection attempt")
+
+    let connectionCount = LockIsolated(0)
+
+    sut = makeSUT(
+      reconnectDelay: 0.01,
+      transport: { _, _ in
+        connectionCount.withValue { $0 += 1 }
+        if connectionCount.value == 2 {
+          secondConnectionExpectation.fulfill()
+        }
+        return self.ws!
+      }
+    )
+
+    let stateObserver = Task {
+      for await state in sut.stateChanges {
+        if case .reconnecting(_, let reason) = state, reason.contains("1001") {
+          reconnectingExpectation.fulfill()
+          return
+        }
+      }
+    }
+
+    try await sut.connect()
+    // Use a transport-level close code (1001 = going away) to exercise the
+    // reconnect path. Application-level codes (4000–4999) skip reconnect.
+    await sut.handleClose(code: 1001, reason: "server restart")
+
+    await fulfillment(of: [reconnectingExpectation, secondConnectionExpectation], timeout: 2)
+    XCTAssertEqual(connectionCount.value, 2, "Remote close should trigger a reconnection attempt")
+    let isConnected = await sut.connection != nil
+    XCTAssertTrue(isConnected)
+
+    stateObserver.cancel()
+  }
+
+  func testHandleCloseDoesNotReconnectForApplicationCloseCode() async throws {
+    sut = makeSUT(reconnectDelay: 0.01)
+    try await sut.connect()
+
+    // Application-level close codes (4000–4999) must not trigger automatic
+    // reconnect — the caller needs to re-authenticate before reconnecting,
+    // otherwise reconnecting with the same bad token just loops.
+    await sut.handleClose(code: 4001, reason: "jwt expired")
+
+    // Brief wait to confirm the reconnect task does not fire.
+    try await Task.sleep(nanoseconds: 50_000_000)
+
+    XCTAssertEqual(
+      transportCallCount.value, 1,
+      "Application close code (4001) must not trigger reconnect"
+    )
+    let isConnected = await sut.connection != nil
+    XCTAssertFalse(isConnected, "Connection should be disconnected after application close")
+  }
 }

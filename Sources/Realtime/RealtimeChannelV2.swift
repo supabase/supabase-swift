@@ -157,6 +157,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     await stateManager.unsubscribe()
   }
 
+  func resetForReconnect() async {
+    await stateManager.resetForReconnect()
+  }
+
   /// Build the `phx_join` payload from the current config and push it.
   /// Invoked by ``ChannelStateManager`` via the ``ChannelStateManager/JoinOperation``
   /// closure at the moment the state machine is ready to join.
