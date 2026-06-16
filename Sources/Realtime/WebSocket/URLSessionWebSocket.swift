@@ -16,7 +16,7 @@ import Foundation
 ///
 /// ## Connection Management
 /// The connection is established asynchronously using the `connect(to:protocols:configuration:)` method.
-/// Once connected, you can send text/binary messages and listen for events through the `onEvent` callback.
+/// Once connected, you can send text/binary messages and listen for events through the `events` stream.
 ///
 /// ## Error Handling
 /// Network errors are automatically handled and converted to appropriate WebSocket close codes.
@@ -32,6 +32,8 @@ final class URLSessionWebSocket: WebSocket {
   ) {
     self._task = _task
     self._protocol = _protocol
+    
+    (events, eventsContinuation) = AsyncStream.makeStream()
 
     _scheduleReceive()
   }
@@ -151,18 +153,10 @@ final class URLSessionWebSocket: WebSocket {
   struct MutableState {
     /// Whether the connection has been closed.
     var isClosed = false
-    /// Callback for handling WebSocket events.
-    var onEvent: (@Sendable (WebSocketEvent) -> Void)?
-    /// Buffer for events received before onEvent callback is attached.
-    var eventBuffer: [WebSocketEvent] = []
     /// The close code received when connection was closed.
     var closeCode: Int?
     /// The close reason received when connection was closed.
     var closeReason: String?
-    /// Monotonically increasing counter; incremented each time `events` is called.
-    /// `onTermination` captures its generation at registration time and skips the
-    /// `onEvent = nil` if a newer `events` call has already taken ownership.
-    var eventStreamGeneration = 0
   }
 
   /// Lock-isolated mutable state to ensure thread safety.
@@ -182,6 +176,9 @@ final class URLSessionWebSocket: WebSocket {
   var isClosed: Bool {
     mutableState.value.isClosed
   }
+  
+  let events: AsyncStream<WebSocketEvent>
+  let eventsContinuation: AsyncStream<WebSocketEvent>.Continuation
 
   /// Handles incoming WebSocket messages and converts them to events.
   /// - Parameter value: The message received from the WebSocket.
@@ -294,84 +291,17 @@ final class URLSessionWebSocket: WebSocket {
     }
   }
 
-  /// Version-guarded `events` stream: `onTermination` only clears `onEvent` when it
-  /// still owns the handler (same generation). If a second `events` call installs a
-  /// newer handler before the first stream tears down, the stale `onTermination` is a
-  /// no-op instead of silently niling the live handler.
-  var events: AsyncStream<WebSocketEvent> {
-    let generation = mutableState.withValue { state -> Int in
-      state.eventStreamGeneration += 1
-      return state.eventStreamGeneration
-    }
-    let (stream, continuation) = AsyncStream<WebSocketEvent>.makeStream()
-    self.onEvent = { event in
-      continuation.yield(event)
-      if case .close = event { continuation.finish() }
-    }
-    continuation.onTermination = { [weak self] _ in
-      guard let self else { return }
-      self.mutableState.withValue { state in
-        guard state.eventStreamGeneration == generation else { return }
-        state.onEvent = nil
-      }
-    }
-    return stream
-  }
-
-  /// Callback for handling WebSocket events.
-  ///
-  /// Set this property to receive notifications about WebSocket events including:
-  /// - `.text(String)`: Text messages received from the peer
-  /// - `.binary(Data)`: Binary messages received from the peer
-  /// - `.close(code: Int?, reason: String)`: Connection closed events
-  ///
-  /// When setting this callback, any buffered events received before the callback
-  /// was attached will be replayed immediately in the order they were received.
-  ///
-  /// The callback is called on an arbitrary queue and should be thread-safe.
-  var onEvent: (@Sendable (WebSocketEvent) -> Void)? {
-    get { mutableState.value.onEvent }
-    set {
-      mutableState.withValue { state in
-        state.onEvent = newValue
-
-        // Replay buffered events when callback is attached
-        if let onEvent = newValue, !state.eventBuffer.isEmpty {
-          let bufferedEvents = state.eventBuffer
-          state.eventBuffer.removeAll()
-
-          for event in bufferedEvents {
-            onEvent(event)
-          }
-        }
-      }
-    }
-  }
-
   /// Triggers a WebSocket event and updates internal state if needed.
   /// - Parameter event: The event to trigger.
   private func _trigger(_ event: WebSocketEvent) {
     mutableState.withValue {
-      if let onEvent = $0.onEvent {
-        // Deliver event immediately if callback is available
-        onEvent(event)
-      } else {
-        // Buffer event if no callback is attached yet
-        // Limit buffer size to prevent memory issues (keep last 100 events)
-        $0.eventBuffer.append(event)
-        if $0.eventBuffer.count > 100 {
-          $0.eventBuffer.removeFirst()
-        }
-      }
+      eventsContinuation.yield(event)
 
       // Update state when connection closes
       if case .close(let code, let reason) = event {
-        $0.onEvent = nil
         $0.isClosed = true
         $0.closeCode = code
         $0.closeReason = reason
-        // Clear buffer when connection closes
-        $0.eventBuffer.removeAll()
       }
     }
   }

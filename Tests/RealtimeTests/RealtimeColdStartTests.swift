@@ -263,14 +263,12 @@ final class RealtimeColdStartTests: XCTestCase {
 }
 
 /// A `WebSocket` fake whose server side delivers frames asynchronously on a
-/// serial queue, standing in for URLSession's delegate queue. Events received
-/// before `onEvent` is attached are buffered and replayed on attach, exactly
-/// like `URLSessionWebSocket`.
+/// serial queue, standing in for URLSession's delegate queue. The `events`
+/// stream is backed by an `AsyncStream` continuation so frames received before
+/// the consumer starts iterating are buffered by the stream itself.
 final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
   struct MutableState {
     var isClosed: Bool = false
-    var onEvent: (@Sendable (WebSocketEvent) -> Void)?
-    var eventBuffer: [WebSocketEvent] = []
     var sentMessages: [RealtimeMessageV2] = []
     var closeCode: Int?
     var closeReason: String?
@@ -278,6 +276,12 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
 
   let mutableState = LockIsolated(MutableState())
   let deliveryQueue = DispatchQueue(label: "AsyncFakeWebSocket.delivery")
+  let events: AsyncStream<WebSocketEvent>
+  private let eventsContinuation: AsyncStream<WebSocketEvent>.Continuation
+
+  init() {
+    (events, eventsContinuation) = AsyncStream.makeStream()
+  }
 
   /// Server-side autoresponder, invoked off the sender's thread.
   var serverResponder: (@Sendable (RealtimeMessageV2, AsyncFakeWebSocket) -> Void)?
@@ -356,22 +360,20 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
     }
   }
 
-  /// Server pushes an event to the client; delivered through onEvent if
-  /// attached, otherwise buffered and replayed on attach.
+  /// Server pushes an event to the client; delivered through the `events`
+  /// stream. Frames received before the consumer starts iterating are buffered
+  /// by `AsyncStream` itself.
   func receiveFromServer(_ event: WebSocketEvent) {
     mutableState.withValue {
-      if let onEvent = $0.onEvent {
-        onEvent(event)
-      } else {
-        $0.eventBuffer.append(event)
-      }
       if case .close(let code, let reason) = event {
-        $0.onEvent = nil
         $0.isClosed = true
         $0.closeCode = code
         $0.closeReason = reason
-        $0.eventBuffer.removeAll()
       }
+    }
+    eventsContinuation.yield(event)
+    if case .close = event {
+      eventsContinuation.finish()
     }
   }
 
@@ -379,19 +381,5 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
     let serializer = RealtimeSerializer()
     let text = try! serializer.encodeText(message)
     receiveFromServer(.text(text))
-  }
-
-  var onEvent: (@Sendable (WebSocketEvent) -> Void)? {
-    get { mutableState.value.onEvent }
-    set {
-      mutableState.withValue { state in
-        state.onEvent = newValue
-        if let onEvent = newValue, !state.eventBuffer.isEmpty {
-          let buffered = state.eventBuffer
-          state.eventBuffer.removeAll()
-          for event in buffered { onEvent(event) }
-        }
-      }
-    }
   }
 }

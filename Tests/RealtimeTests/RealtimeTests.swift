@@ -113,24 +113,26 @@ import XCTest
       }
       .store(in: &subscriptions)
 
-      // Set up server to respond to heartbeats
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-
-        if msg.event == "heartbeat" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
+      // Set up server to respond to heartbeats and phx_join
+      let serverTask = Task { @Sendable [server = server!] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "heartbeat" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "phoenix",
+                event: "phx_reply",
+                payload: ["response": [:]]
+              )
             )
-          )
-        } else if msg.event == "phx_join" {
-          server?.send(.messagesSubscribed)
+          } else if msg.event == "phx_join" {
+            server.send(.messagesSubscribed)
+          }
         }
       }
+      defer { serverTask.cancel() }
 
       let channelStatuses = LockIsolated([RealtimeChannelStatus]())
       channel.onStatusChange { status in
@@ -211,28 +213,29 @@ import XCTest
       let channel = sut.channel("public:messages")
       let joinEventCount = LockIsolated(0)
 
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-
-        if msg.event == "heartbeat" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
+      let serverTask = Task { @Sendable [server = server!] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "heartbeat" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "phoenix",
+                event: "phx_reply",
+                payload: ["response": [:]]
+              )
             )
-          )
-        } else if msg.event == "phx_join" {
-          joinEventCount.withValue { $0 += 1 }
-
-          // Skip first join.
-          if joinEventCount.value == 2 {
-            server?.send(.messagesSubscribed)
+          } else if msg.event == "phx_join" {
+            joinEventCount.withValue { $0 += 1 }
+            // Skip first join.
+            if joinEventCount.value == 2 {
+              server.send(.messagesSubscribed)
+            }
           }
         }
       }
+      defer { serverTask.cancel() }
 
       await sut.connect()
       await testClock.advance(by: .seconds(heartbeatInterval))
@@ -315,27 +318,29 @@ import XCTest
       let channel = sut.channel("public:messages")
       let joinEventCount = LockIsolated(0)
 
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-
-        if msg.event == "heartbeat" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
+      let serverTask = Task { @Sendable [server = server!] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "heartbeat" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "phoenix",
+                event: "phx_reply",
+                payload: ["response": [:]]
+              )
             )
-          )
-        } else if msg.event == "phx_join" {
-          joinEventCount.withValue { $0 += 1 }
-          // Respond on the 3rd attempt
-          if joinEventCount.value == successAttempt {
-            server?.send(.messagesSubscribed)
+          } else if msg.event == "phx_join" {
+            joinEventCount.withValue { $0 += 1 }
+            // Respond on the 3rd attempt
+            if joinEventCount.value == successAttempt {
+              server.send(.messagesSubscribed)
+            }
           }
         }
       }
+      defer { serverTask.cancel() }
 
       await sut.connect()
       await testClock.advance(by: .seconds(heartbeatInterval))
@@ -366,23 +371,26 @@ import XCTest
       let channel = sut.channel("public:messages")
       let joinEventCount = LockIsolated(0)
 
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-        if msg.event == "heartbeat" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
+      let serverTask = Task { @Sendable [server = server!] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "heartbeat" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "phoenix",
+                event: "phx_reply",
+                payload: ["response": [:]]
+              )
             )
-          )
-        } else if msg.event == "phx_join" {
-          joinEventCount.withValue { $0 += 1 }
-          // Never respond to any join attempts
+          } else if msg.event == "phx_join" {
+            joinEventCount.withValue { $0 += 1 }
+            // Never respond to any join attempts
+          }
         }
       }
+      defer { serverTask.cancel() }
 
       await sut.connect()
       await testClock.advance(by: .seconds(heartbeatInterval))
@@ -418,23 +426,26 @@ import XCTest
       let channel = sut.channel("public:messages")
       let joinEventCount = LockIsolated(0)
 
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-        if msg.event == "heartbeat" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
+      let serverTask = Task { @Sendable [server = server!] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "heartbeat" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "phoenix",
+                event: "phx_reply",
+                payload: ["response": [:]]
+              )
             )
-          )
-        } else if msg.event == "phx_join" {
-          joinEventCount.withValue { $0 += 1 }
-          // Never respond to any join attempts
+          } else if msg.event == "phx_join" {
+            joinEventCount.withValue { $0 += 1 }
+            // Never respond to any join attempts
+          }
         }
       }
+      defer { serverTask.cancel() }
 
       await sut.connect()
       await testClock.advance(by: .seconds(heartbeatInterval))
@@ -468,25 +479,27 @@ import XCTest
       let expectation = expectation(description: "heartbeat")
       expectation.expectedFulfillmentCount = 2
 
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-
-        if msg.event == "heartbeat" {
-          expectation.fulfill()
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: [
-                "response": [:],
-                "status": "ok",
-              ]
+      let serverTask = Task { @Sendable [server = server!] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "heartbeat" {
+            expectation.fulfill()
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "phoenix",
+                event: "phx_reply",
+                payload: [
+                  "response": [:],
+                  "status": "ok",
+                ]
+              )
             )
-          )
+          }
         }
       }
+      defer { serverTask.cancel() }
 
       let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
       let subscription = sut.onHeartbeat { status in
@@ -508,11 +521,15 @@ import XCTest
     func testHeartbeat_whenNoResponse_shouldReconnect() async throws {
       let sentHeartbeatExpectation = expectation(description: "sentHeartbeat")
 
-      server.onEvent = { @Sendable in
-        if $0.realtimeMessage?.event == "heartbeat" {
-          sentHeartbeatExpectation.fulfill()
+      let serverTask = Task { @Sendable [server = server!] in
+        for await event in server.events {
+          if event.realtimeMessage?.event == "heartbeat" {
+            sentHeartbeatExpectation.fulfill()
+          }
+          // Intentionally not replying — trigger timeout/reconnect path.
         }
       }
+      defer { serverTask.cancel() }
 
       let statuses = LockIsolated<[RealtimeClientStatus]>([])
       let subscription = sut.onStatusChange { status in
@@ -558,9 +575,7 @@ import XCTest
       }
       defer { s1.cancel() }
 
-      // Don't respond to any heartbeats
-      server.onEvent = { _ in }
-
+      // Don't respond to any heartbeats — let the timeout fire naturally.
       await sut.connect()
       await testClock.advance(by: .seconds(heartbeatInterval))
 
@@ -585,24 +600,26 @@ import XCTest
     // but deaf — heartbeat and `phx_join` replies were silently dropped,
     // stalling subscribe for tens of seconds to minutes.
     func testRedundantConnect_doesNotDropIncomingFrames() async throws {
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-
-        if msg.event == "heartbeat" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: [
-                "response": [:],
-                "status": "ok",
-              ]
+      let serverTask = Task { @Sendable [server = server!] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "heartbeat" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "phoenix",
+                event: "phx_reply",
+                payload: [
+                  "response": [:],
+                  "status": "ok",
+                ]
+              )
             )
-          )
+          }
         }
       }
+      defer { serverTask.cancel() }
 
       let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
       let subscription = sut.onHeartbeat { status in
@@ -679,22 +696,6 @@ import XCTest
     // MARK: - Task Lifecycle Tests
 
     func testListenForMessagesCancelsExistingTask() async {
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-
-        if msg.event == "heartbeat" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
-            )
-          )
-        }
-      }
-
       await sut.connect()
 
       // Get the first message task
@@ -716,22 +717,6 @@ import XCTest
     }
 
     func testStartHeartbeatingCancelsExistingTask() async {
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-
-        if msg.event == "heartbeat" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
-            )
-          )
-        }
-      }
-
       await sut.connect()
 
       // Get the first heartbeat task
@@ -754,22 +739,6 @@ import XCTest
 
     func testMessageProcessingRespectsCancellation() async {
       let messagesProcessed = LockIsolated(0)
-
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-
-        if msg.event == "heartbeat" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
-            )
-          )
-        }
-      }
 
       await sut.connect()
 
@@ -812,22 +781,6 @@ import XCTest
     }
 
     func testMultipleReconnectionsHandleTaskLifecycleCorrectly() async {
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
-
-        if msg.event == "heartbeat" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
-            )
-          )
-        }
-      }
-
       var previousMessageTasks: [Task<Void, Never>?] = []
       var previousHeartbeatTasks: [Task<Void, Never>?] = []
 

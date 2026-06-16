@@ -7,7 +7,6 @@ final class FakeWebSocket: WebSocket {
   struct MutableState {
     var isClosed: Bool = false
     weak var other: FakeWebSocket?
-    var onEvent: (@Sendable (WebSocketEvent) -> Void)?
 
     var sentEvents: [WebSocketEvent] = []
     var receivedEvents: [WebSocketEvent] = []
@@ -16,9 +15,12 @@ final class FakeWebSocket: WebSocket {
   }
 
   private let mutableState = LockIsolated(MutableState())
+  let events: AsyncStream<WebSocketEvent>
+  private let eventsContinuation: AsyncStream<WebSocketEvent>.Continuation
 
   private init(`protocol`: String) {
     self.`protocol` = `protocol`
+    (events, eventsContinuation) = AsyncStream.makeStream()
   }
 
   /// Events send by this connection.
@@ -78,11 +80,6 @@ final class FakeWebSocket: WebSocket {
     }
   }
 
-  var onEvent: (@Sendable (WebSocketEvent) -> Void)? {
-    get { mutableState.value.onEvent }
-    set { mutableState.withValue { $0.onEvent = newValue } }
-  }
-
   let `protocol`: String
 
   var isClosed: Bool {
@@ -92,14 +89,16 @@ final class FakeWebSocket: WebSocket {
   func _trigger(_ event: WebSocketEvent) {
     mutableState.withValue {
       $0.receivedEvents.append(event)
-      $0.onEvent?(event)
 
       if case .close(let code, let reason) = event {
-        $0.onEvent = nil
         $0.isClosed = true
         $0.closeCode = code
         $0.closeReason = reason
       }
+    }
+    eventsContinuation.yield(event)
+    if case .close = event {
+      eventsContinuation.finish()
     }
   }
 

@@ -48,39 +48,41 @@ import XCTest
         wsTransport: { [servers] _, _ in
           let (client, server) = FakeWebSocket.fakes()
           // Auto-respond to heartbeats and phx_join so subscribe() completes.
-          server.onEvent = { @Sendable [weak server] event in
-            guard let msg = event.realtimeMessage else { return }
-            if msg.event == "heartbeat" {
-              server?.send(
-                RealtimeMessageV2(
-                  joinRef: msg.joinRef,
-                  ref: msg.ref,
-                  topic: "phoenix",
-                  event: "phx_reply",
-                  payload: ["response": [:]]
-                )
-              )
-            } else if msg.event == "phx_join" {
-              // Mirror the incoming ref so the client's pending push resolves,
-              // regardless of reconnect cycles (ref counter resets on disconnect).
-              server?.send(
-                RealtimeMessageV2(
-                  joinRef: msg.joinRef,
-                  ref: msg.ref,
-                  topic: msg.topic,
-                  event: "phx_reply",
-                  payload: [
-                    "response": [
-                      "postgres_changes": []
-                    ],
-                    "status": "ok",
-                  ]
-                )
-              )
-            }
-          }
           // Retain the server so `client.other` (a weak ref) stays valid.
           servers?.withValue { $0.append(server) }
+          Task { [server] in
+            for await event in server.events {
+              guard let msg = event.realtimeMessage else { continue }
+              if msg.event == "heartbeat" {
+                server.send(
+                  RealtimeMessageV2(
+                    joinRef: msg.joinRef,
+                    ref: msg.ref,
+                    topic: "phoenix",
+                    event: "phx_reply",
+                    payload: ["response": [:]]
+                  )
+                )
+              } else if msg.event == "phx_join" {
+                // Mirror the incoming ref so the client's pending push resolves,
+                // regardless of reconnect cycles (ref counter resets on disconnect).
+                server.send(
+                  RealtimeMessageV2(
+                    joinRef: msg.joinRef,
+                    ref: msg.ref,
+                    topic: msg.topic,
+                    event: "phx_reply",
+                    payload: [
+                      "response": [
+                        "postgres_changes": []
+                      ],
+                      "status": "ok",
+                    ]
+                  )
+                )
+              }
+            }
+          }
           return client
         },
         http: http

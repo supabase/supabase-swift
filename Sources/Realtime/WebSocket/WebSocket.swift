@@ -40,15 +40,10 @@ protocol WebSocket: Sendable, AnyObject {
   ///   - reason: The reason for closing the connection.
   func close(code: Int?, reason: String?)
 
-  /// Listen for event messages in the connection.
-  var onEvent: (@Sendable (WebSocketEvent) -> Void)? { get set }
-
   /// An `AsyncStream` of ``WebSocketEvent`` received from the peer.
   ///
-  /// Conformers must implement this as a protocol requirement (not just rely on
-  /// the default extension) so that calls through `any WebSocket` dispatch to
-  /// the version-guarded implementation and `onTermination` cannot nil a handler
-  /// it no longer owns.
+  /// Conformers must store this stream (and its continuation) as a `let` property
+  /// created in `init` — one stream per socket object, not one per read of `events`.
   var events: AsyncStream<WebSocketEvent> { get }
 
   /// The WebSocket subprotocol negotiated with the peer.
@@ -70,24 +65,4 @@ extension WebSocket {
     self.close(code: nil, reason: nil)
   }
 
-  /// Default `events` implementation for test doubles and simple conformers.
-  ///
-  /// WARNING: Not safe for multi-read. If `events` is called a second time on
-  /// the same conformer, the second call overwrites `onEvent` and the first
-  /// call's `onTermination` will later nil out that live handler — silently
-  /// dropping all subsequent frames (SDK-959). Production conformers MUST
-  /// override this with a generation-guarded implementation (see `URLSessionWebSocket`).
-  var events: AsyncStream<WebSocketEvent> {
-    let (stream, continuation) = AsyncStream<WebSocketEvent>.makeStream()
-    self.onEvent = { event in
-      continuation.yield(event)
-      if case .close = event {
-        continuation.finish()
-      }
-    }
-    continuation.onTermination = { _ in
-      self.onEvent = nil
-    }
-    return stream
-  }
 }
