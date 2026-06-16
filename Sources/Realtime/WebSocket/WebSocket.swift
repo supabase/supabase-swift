@@ -41,9 +41,6 @@ protocol WebSocket: Sendable, AnyObject {
   func close(code: Int?, reason: String?)
 
   /// An `AsyncStream` of ``WebSocketEvent`` received from the peer.
-  ///
-  /// Conformers must store this stream (and its continuation) as a `let` property
-  /// created in `init` — one stream per socket object, not one per read of `events`.
   var events: AsyncStream<WebSocketEvent> { get }
 
   /// The WebSocket subprotocol negotiated with the peer.
