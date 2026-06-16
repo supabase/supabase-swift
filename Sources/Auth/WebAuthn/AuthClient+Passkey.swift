@@ -58,7 +58,7 @@ extension AuthClient {
         method: .post,
         body: encodeWebAuthnBody([
           "challenge_id": .string(challengeId),
-          "credential_response": credentialResponse,
+          "credential": credentialResponse,
         ])
       )
     )
@@ -100,7 +100,7 @@ extension AuthClient {
         method: .post,
         body: encodeWebAuthnBody([
           "challenge_id": .string(challengeId),
-          "credential_response": credentialResponse,
+          "credential": credentialResponse,
         ])
       )
     )

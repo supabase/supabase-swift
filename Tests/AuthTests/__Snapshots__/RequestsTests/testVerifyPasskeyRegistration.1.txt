@@ -5,5 +5,5 @@ curl \
 	--header "Content-Type: application/json" \
 	--header "X-Client-Info: gotrue-swift/x.y.z" \
 	--header "X-Supabase-Api-Version: 2024-01-01" \
-	--data "{\"challenge_id\":\"challenge-1\",\"credential_response\":{\"id\":\"credential-id\",\"rawId\":\"cmF3LWNyZWRlbnRpYWwtaWQ\",\"response\":{\"attestationObject\":\"YXR0ZXN0YXRpb24tb2JqZWN0\",\"clientDataJSON\":\"Y2xpZW50LWRhdGE\"},\"type\":\"public-key\"}}" \
+	--data "{\"challenge_id\":\"challenge-1\",\"credential\":{\"id\":\"credential-id\",\"rawId\":\"cmF3LWNyZWRlbnRpYWwtaWQ\",\"response\":{\"attestationObject\":\"YXR0ZXN0YXRpb24tb2JqZWN0\",\"clientDataJSON\":\"Y2xpZW50LWRhdGE\"},\"type\":\"public-key\"}}" \
 	"http://localhost:54321/auth/v1/passkeys/registration/verify"
