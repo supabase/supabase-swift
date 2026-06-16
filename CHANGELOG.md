@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.47.2](https://github.com/supabase/supabase-swift/compare/v2.47.1...v2.47.2) (2026-06-16)
+
+
+### Bug Fixes
+
+* **realtime:** prevent deaf socket from duplicate handleConnected (SDK-959) ([#1003](https://github.com/supabase/supabase-swift/issues/1003)) ([2681ba0](https://github.com/supabase/supabase-swift/commit/2681ba06e5eafd8745ecabe58f6eabdc48589d39))
+
 ## [2.47.1](https://github.com/supabase/supabase-swift/compare/v2.47.0...v2.47.1) (2026-06-15)
 
 
