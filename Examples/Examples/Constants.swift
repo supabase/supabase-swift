@@ -18,7 +18,7 @@ enum Constants {
   ///   2. host an `apple-app-site-association` file granting this app's team+bundle the
   ///      `webcredentials` service.
   /// See: https://developer.apple.com/documentation/xcode/supporting-associated-domains
-  static let webAuthnRPID = "example.com"
+  static let webAuthnRPID = "supabase-aasa.vercel.app"
 }
 
 extension URL {
