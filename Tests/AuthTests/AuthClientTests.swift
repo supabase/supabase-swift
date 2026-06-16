@@ -5,14 +5,13 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
+@_spi(Experimental) @testable import Auth
 import ConcurrencyExtras
 import CustomDump
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
 import XCTest
-
-@_spi(Experimental) @testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -2168,7 +2167,7 @@ final class AuthClientTests: XCTestCase {
         statusCode: 200,
         data: [
           .post: Data(
-            #"{"challenge_id":"ch-1","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl"}}"#
+            #"{"challenge_id":"ch-1","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}"#
               .utf8)
         ]
       )
@@ -2198,7 +2197,6 @@ final class AuthClientTests: XCTestCase {
       let sut = makeSUT()
 
       let response = try await sut._signInWithPasskey(
-        rpId: "example.com",
         presentationAnchor: ASPresentationAnchor(),
         authenticator: authenticator
       )
@@ -2216,7 +2214,7 @@ final class AuthClientTests: XCTestCase {
         statusCode: 200,
         data: [
           .post: Data(
-            #"{"challenge_id":"ch-1","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","user":{"id":"dXNlci1pZA","name":"u@e.com"}}}"#
+            #"{"challenge_id":"ch-1","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"}}}"#
               .utf8)
         ]
       )
@@ -2246,7 +2244,6 @@ final class AuthClientTests: XCTestCase {
       Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
       let passkey = try await sut._registerPasskey(
-        rpId: "example.com",
         presentationAnchor: ASPresentationAnchor(),
         authenticator: authenticator
       )
@@ -2269,7 +2266,7 @@ final class AuthClientTests: XCTestCase {
         statusCode: 200,
         data: [
           .post: Data(
-            #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"challenge":"Y2hhbGxlbmdl"}}}"#
+            #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"}}}}"#
               .utf8)
         ]
       )
@@ -2296,8 +2293,6 @@ final class AuthClientTests: XCTestCase {
 
       let session = try await sut.mfa._enrollWebAuthnFactor(
         friendlyName: "My Passkey",
-        rpId: "example.com",
-        rpOrigins: [],
         presentationAnchor: ASPresentationAnchor(),
         authenticator: authenticator
       )
@@ -2313,7 +2308,7 @@ final class AuthClientTests: XCTestCase {
         statusCode: 200,
         data: [
           .post: Data(
-            #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"challenge":"Y2hhbGxlbmdl"}}}"#
+            #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}"#
               .utf8)
         ]
       )
@@ -2344,13 +2339,12 @@ final class AuthClientTests: XCTestCase {
 
       let session = try await sut.mfa._verifyWebAuthnFactor(
         factorId: "factor-1",
-        rpId: "example.com",
-        rpOrigins: [],
         presentationAnchor: ASPresentationAnchor(),
         authenticator: authenticator
       )
 
       XCTAssertFalse(session.accessToken.isEmpty)
+      // rpId is extracted from the server-returned credential_options, not passed by the caller.
       expectNoDifference(forwardedRpId.value, "example.com")
     }
   #endif

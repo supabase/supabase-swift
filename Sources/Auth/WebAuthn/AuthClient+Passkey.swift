@@ -20,8 +20,7 @@ extension AuthClient {
   // These methods only perform the network exchange. The caller is responsible for driving the
   // platform authenticator (e.g. via `ASAuthorizationController`) between fetching options and
   // submitting the credential response. For an end-to-end flow on iOS 16+/macOS 13+, prefer the
-  // `signInWithPasskey(rpId:presentationAnchor:)` and `registerPasskey(rpId:presentationAnchor:)`
-  // helpers.
+  // `signInWithPasskey(presentationAnchor:)` and `registerPasskey(presentationAnchor:)` helpers.
 
   /// Fetches credential creation options to register a new passkey for the current user.
   ///
@@ -169,18 +168,17 @@ extension AuthClient {
     /// native passkey UI via `AuthenticationServices`, submits the assertion, and returns the new
     /// session.
     ///
-    /// - Parameters:
-    ///   - rpId: The relying party identifier (your app's associated domain, e.g. `example.com`).
-    ///   - presentationAnchor: The window to present the passkey UI from.
+    /// The relying-party identifier is read from the `rpId` field of the W3C assertion options
+    /// returned by the server — no client-side configuration needed.
+    ///
+    /// - Parameter presentationAnchor: The window to present the passkey UI from.
     @_spi(Experimental)
     @discardableResult
     @MainActor
     public func signInWithPasskey(
-      rpId: String,
       presentationAnchor: ASPresentationAnchor
     ) async throws -> AuthResponse {
       try await _signInWithPasskey(
-        rpId: rpId,
         presentationAnchor: presentationAnchor,
         authenticator: .live
       )
@@ -188,11 +186,11 @@ extension AuthClient {
 
     @MainActor
     func _signInWithPasskey(
-      rpId: String,
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
     ) async throws -> AuthResponse {
       let options = try await getPasskeyAuthenticationOptions()
+      let rpId = try options.options.webAuthnAssertionRpId()
       let credentialResponse = try await authenticator.authenticate(
         options.options, rpId, presentationAnchor
       )
@@ -205,18 +203,17 @@ extension AuthClient {
     /// Registers a new passkey for the current user, driving the full ceremony: fetches creation
     /// options, presents the native passkey UI, and stores the resulting passkey.
     ///
-    /// - Parameters:
-    ///   - rpId: The relying party identifier (your app's associated domain, e.g. `example.com`).
-    ///   - presentationAnchor: The window to present the passkey UI from.
+    /// The relying-party identifier is read from the `rp.id` field of the W3C creation options
+    /// returned by the server — no client-side configuration needed.
+    ///
+    /// - Parameter presentationAnchor: The window to present the passkey UI from.
     @_spi(Experimental)
     @discardableResult
     @MainActor
     public func registerPasskey(
-      rpId: String,
       presentationAnchor: ASPresentationAnchor
     ) async throws -> PasskeyListItem {
       try await _registerPasskey(
-        rpId: rpId,
         presentationAnchor: presentationAnchor,
         authenticator: .live
       )
@@ -224,11 +221,11 @@ extension AuthClient {
 
     @MainActor
     func _registerPasskey(
-      rpId: String,
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
     ) async throws -> PasskeyListItem {
       let options = try await getPasskeyRegistrationOptions()
+      let rpId = try options.options.webAuthnCreationRpId()
       let credentialResponse = try await authenticator.register(
         options.options, rpId, presentationAnchor
       )

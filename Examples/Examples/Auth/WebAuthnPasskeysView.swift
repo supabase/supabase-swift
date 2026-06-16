@@ -6,11 +6,12 @@
 //  and WebAuthn as a second factor (MFA). Drives the native AuthenticationServices UI.
 //
 //  Setup required to complete a real ceremony on-device:
-//    1. Set `Constants.webAuthnRPID` to a domain you control.
-//    2. Add that domain under `webcredentials:` in `Examples.entitlements` (Associated Domains)
+//    1. Add your domain under `webcredentials:` in `Examples.entitlements` (Associated Domains)
 //       and enable the capability for your signing team.
-//    3. Host an `apple-app-site-association` file at that domain granting this app the
+//    2. Host an `apple-app-site-association` file at that domain granting this app the
 //       `webcredentials` service.
+//    3. Configure `rp_id` in your Supabase project to match that domain.
+//       The SDK reads rpId from the server response — no client-side configuration needed.
 //
 
 // WebAuthn/passkey APIs are experimental and live behind Auth's `Experimental` SPI.
@@ -41,11 +42,9 @@ private func webAuthnPresentationAnchor() -> ASPresentationAnchor {
 private struct WebAuthnSetupNote: View {
   var body: some View {
     Text(
-      """
-      Passkeys require an Associated Domains entitlement (webcredentials:\(Constants.webAuthnRPID)) \
-      and an apple-app-site-association file hosted at that domain. Update Constants.webAuthnRPID, \
-      Examples.entitlements, and your signing team before running on a device.
-      """
+      "Passkeys require an Associated Domains entitlement (webcredentials:<your-domain>) "
+        + "and an apple-app-site-association file hosted at that domain. "
+        + "The relying-party identifier is read from the server response automatically."
     )
     .font(.caption)
     .foregroundColor(.secondary)
@@ -55,7 +54,6 @@ private struct WebAuthnSetupNote: View {
 // MARK: - First-factor sign-in (signed-out)
 
 struct SignInWithPasskeyView: View {
-  @State private var rpId = Constants.webAuthnRPID
   @State private var error: Error?
   @State private var isLoading = false
 
@@ -68,14 +66,6 @@ struct SignInWithPasskeyView: View {
         )
         .font(.subheadline)
         .foregroundColor(.secondary)
-      }
-
-      Section("Relying Party") {
-        TextField("rpId (e.g. example.com)", text: $rpId)
-          .autocorrectionDisabled()
-          #if !os(macOS)
-            .textInputAutocapitalization(.never)
-          #endif
       }
 
       if isLoading {
@@ -96,7 +86,7 @@ struct SignInWithPasskeyView: View {
         } label: {
           Label("Sign in with a passkey", systemImage: "person.badge.key.fill")
         }
-        .disabled(rpId.isEmpty || isLoading)
+        .disabled(isLoading)
       } footer: {
         WebAuthnSetupNote()
       }
@@ -114,7 +104,6 @@ struct SignInWithPasskeyView: View {
 
         // On success, AuthController observes authStateChanges and RootView switches to HomeView.
         try await supabase.auth.signInWithPasskey(
-          rpId: rpId,
           presentationAnchor: webAuthnPresentationAnchor()
         )
       } catch {
@@ -127,7 +116,6 @@ struct SignInWithPasskeyView: View {
 // MARK: - Management (signed-in)
 
 struct WebAuthnPasskeysView: View {
-  @State private var rpId = Constants.webAuthnRPID
   @State private var passkeys: [PasskeyListItem] = []
   @State private var webAuthnFactors: [Factor] = []
   @State private var newFactorName = "My Passkey"
@@ -145,14 +133,6 @@ struct WebAuthnPasskeysView: View {
         )
         .font(.subheadline)
         .foregroundColor(.secondary)
-      }
-
-      Section("Relying Party") {
-        TextField("rpId (e.g. example.com)", text: $rpId)
-          .autocorrectionDisabled()
-          #if !os(macOS)
-            .textInputAutocapitalization(.never)
-          #endif
       }
 
       if isLoading {
@@ -173,7 +153,7 @@ struct WebAuthnPasskeysView: View {
         } label: {
           Label("Register a passkey", systemImage: "plus.circle.fill")
         }
-        .disabled(rpId.isEmpty || isLoading)
+        .disabled(isLoading)
 
         if passkeys.isEmpty {
           Text("No passkeys registered")
@@ -224,7 +204,7 @@ struct WebAuthnPasskeysView: View {
         } label: {
           Label("Enroll WebAuthn factor", systemImage: "lock.shield.fill")
         }
-        .disabled(newFactorName.isEmpty || rpId.isEmpty || isLoading)
+        .disabled(newFactorName.isEmpty || isLoading)
 
         ForEach(webAuthnFactors) { factor in
           Button {
@@ -288,7 +268,6 @@ struct WebAuthnPasskeysView: View {
         defer { isLoading = false }
 
         _ = try await supabase.auth.registerPasskey(
-          rpId: rpId,
           presentationAnchor: webAuthnPresentationAnchor()
         )
         await refresh()
@@ -335,7 +314,6 @@ struct WebAuthnPasskeysView: View {
 
         _ = try await supabase.auth.mfa.enrollWebAuthnFactor(
           friendlyName: newFactorName,
-          rpId: rpId,
           presentationAnchor: webAuthnPresentationAnchor()
         )
         await refresh()
@@ -355,7 +333,6 @@ struct WebAuthnPasskeysView: View {
 
         _ = try await supabase.auth.mfa.verifyWebAuthnFactor(
           factorId: factor.id,
-          rpId: rpId,
           presentationAnchor: webAuthnPresentationAnchor()
         )
         await refresh()

@@ -20,24 +20,21 @@ import Foundation
     /// requests a challenge, presents the native passkey registration UI via
     /// `AuthenticationServices`, and verifies the credential with the backend.
     ///
+    /// The relying-party identifier is read from the `rp.id` field of the W3C creation options
+    /// returned by the server — no client-side configuration needed.
+    ///
     /// - Parameters:
     ///   - friendlyName: Human readable name assigned to the factor.
-    ///   - rpId: The relying party identifier (your app's associated domain, e.g. `example.com`).
-    ///   - rpOrigins: Allowed relying party origins.
     ///   - presentationAnchor: The window to present the passkey UI from.
     @_spi(Experimental)
     @discardableResult
     @MainActor
     public func enrollWebAuthnFactor(
       friendlyName: String,
-      rpId: String,
-      rpOrigins: [String] = [],
       presentationAnchor: ASPresentationAnchor
     ) async throws -> AuthMFAVerifyResponse {
       try await _enrollWebAuthnFactor(
         friendlyName: friendlyName,
-        rpId: rpId,
-        rpOrigins: rpOrigins,
         presentationAnchor: presentationAnchor,
         authenticator: .live
       )
@@ -46,24 +43,17 @@ import Foundation
     @MainActor
     func _enrollWebAuthnFactor(
       friendlyName: String,
-      rpId: String,
-      rpOrigins: [String],
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
     ) async throws -> AuthMFAVerifyResponse {
       let enrolled = try await enroll(params: .webAuthn(friendlyName: friendlyName))
       let challengeResponse = try await challenge(
-        params: MFAChallengeParams(
-          factorId: enrolled.id,
-          webAuthn: WebAuthnChallengeOptions(
-            rpId: rpId,
-            rpOrigins: rpOrigins.isEmpty ? nil : rpOrigins
-          )
-        )
+        params: MFAChallengeParams(factorId: enrolled.id)
       )
       guard let webauthn = challengeResponse.webauthn else {
         throw WebAuthnError.missingField("webauthn")
       }
+      let rpId = try webauthn.credentialOptions.webAuthnCreationRpId()
       let credentialResponse = try await authenticator.register(
         webauthn.credentialOptions, rpId, presentationAnchor
       )
@@ -80,24 +70,21 @@ import Foundation
     /// challenge, presents the native passkey assertion UI via `AuthenticationServices`, and
     /// verifies the credential with the backend.
     ///
+    /// The relying-party identifier is read from the `rpId` field of the W3C assertion options
+    /// returned by the server — no client-side configuration needed.
+    ///
     /// - Parameters:
     ///   - factorId: The ID of the factor to verify.
-    ///   - rpId: The relying party identifier (your app's associated domain, e.g. `example.com`).
-    ///   - rpOrigins: Allowed relying party origins.
     ///   - presentationAnchor: The window to present the passkey UI from.
     @_spi(Experimental)
     @discardableResult
     @MainActor
     public func verifyWebAuthnFactor(
       factorId: String,
-      rpId: String,
-      rpOrigins: [String] = [],
       presentationAnchor: ASPresentationAnchor
     ) async throws -> AuthMFAVerifyResponse {
       try await _verifyWebAuthnFactor(
         factorId: factorId,
-        rpId: rpId,
-        rpOrigins: rpOrigins,
         presentationAnchor: presentationAnchor,
         authenticator: .live
       )
@@ -106,23 +93,16 @@ import Foundation
     @MainActor
     func _verifyWebAuthnFactor(
       factorId: String,
-      rpId: String,
-      rpOrigins: [String],
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
     ) async throws -> AuthMFAVerifyResponse {
       let challengeResponse = try await challenge(
-        params: MFAChallengeParams(
-          factorId: factorId,
-          webAuthn: WebAuthnChallengeOptions(
-            rpId: rpId,
-            rpOrigins: rpOrigins.isEmpty ? nil : rpOrigins
-          )
-        )
+        params: MFAChallengeParams(factorId: factorId)
       )
       guard let webauthn = challengeResponse.webauthn else {
         throw WebAuthnError.missingField("webauthn")
       }
+      let rpId = try webauthn.credentialOptions.webAuthnAssertionRpId()
       let credentialResponse = try await authenticator.authenticate(
         webauthn.credentialOptions, rpId, presentationAnchor
       )

@@ -42,6 +42,22 @@ extension AnyJSON {
     return name
   }
 
+  /// Reads the `rpId` field of W3C assertion options (`PublicKeyCredentialRequestOptions`).
+  func webAuthnAssertionRpId() throws -> String {
+    guard let id = value(at: ["rpId"])?.stringValue else {
+      throw WebAuthnError.missingField("rpId")
+    }
+    return id
+  }
+
+  /// Reads the `rp.id` field of W3C creation options (`PublicKeyCredentialCreationOptions`).
+  func webAuthnCreationRpId() throws -> String {
+    guard let id = value(at: ["rp", "id"])?.stringValue else {
+      throw WebAuthnError.missingField("rp.id")
+    }
+    return id
+  }
+
   private func value(at path: [String]) -> AnyJSON? {
     var current: AnyJSON? = self
     for key in path {
