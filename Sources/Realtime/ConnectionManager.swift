@@ -160,6 +160,13 @@ actor ConnectionManager {
         return
       }
       updateState(.disconnected)
+      // Application-level close codes (4000–4999) typically signal auth or
+      // protocol errors. Reconnecting with the same bad token would loop;
+      // the caller must re-authenticate before reconnecting.
+      guard code.map({ $0 < 4000 }) ?? true else {
+        logger?.debug("Skipping reconnect for application close code \(code!)")
+        return
+      }
       initiateReconnect(reason: closeReason)
     }
   }

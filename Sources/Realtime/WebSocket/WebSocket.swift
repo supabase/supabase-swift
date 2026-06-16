@@ -72,9 +72,11 @@ extension WebSocket {
 
   /// Default `events` implementation for test doubles and simple conformers.
   ///
-  /// Production conformers (e.g. `URLSessionWebSocket`) should override this with
-  /// a version-guarded implementation so that `onTermination` cannot nil an `onEvent`
-  /// handler installed by a later `events` call.
+  /// WARNING: Not safe for multi-read. If `events` is called a second time on
+  /// the same conformer, the second call overwrites `onEvent` and the first
+  /// call's `onTermination` will later nil out that live handler — silently
+  /// dropping all subsequent frames (SDK-959). Production conformers MUST
+  /// override this with a generation-guarded implementation (see `URLSessionWebSocket`).
   var events: AsyncStream<WebSocketEvent> {
     let (stream, continuation) = AsyncStream<WebSocketEvent>.makeStream()
     self.onEvent = { event in

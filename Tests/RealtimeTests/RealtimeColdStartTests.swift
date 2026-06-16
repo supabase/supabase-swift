@@ -156,8 +156,9 @@ final class RealtimeColdStartTests: XCTestCase {
     XCTAssertEqual(sockets.value.count, 1)
 
     // Inject a malformed frame: listenForMessages throws → handleError →
-    // initiateReconnect. (A remote .close event only disconnects, it does not
-    // trigger an automatic reconnect — that is by design for explicit shutdowns.)
+    // initiateReconnect. A remote .close with a transport-level code would also
+    // reconnect, but application-level codes (4000–4999) skip reconnect by design
+    // (auth errors should not loop with the same token).
     sockets.value[0].receiveFromServer(.text("not a valid frame"))
     await waitUntil(timeout: 5) { sockets.value.count >= 2 }
     guard sockets.value.count >= 2 else {

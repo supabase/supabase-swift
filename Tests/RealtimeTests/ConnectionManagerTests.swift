@@ -303,7 +303,7 @@ final class ConnectionManagerTests: XCTestCase {
 
     let stateObserver = Task {
       for await state in sut.stateChanges {
-        if case .reconnecting(_, let reason) = state, reason.contains("4001") {
+        if case .reconnecting(_, let reason) = state, reason.contains("1001") {
           reconnectingExpectation.fulfill()
           return
         }
@@ -311,7 +311,9 @@ final class ConnectionManagerTests: XCTestCase {
     }
 
     try await sut.connect()
-    await sut.handleClose(code: 4001, reason: "server restart")
+    // Use a transport-level close code (1001 = going away) to exercise the
+    // reconnect path. Application-level codes (4000–4999) skip reconnect.
+    await sut.handleClose(code: 1001, reason: "server restart")
 
     await fulfillment(of: [reconnectingExpectation, secondConnectionExpectation], timeout: 2)
     XCTAssertEqual(connectionCount.value, 2, "Remote close should trigger a reconnection attempt")
@@ -319,5 +321,25 @@ final class ConnectionManagerTests: XCTestCase {
     XCTAssertTrue(isConnected)
 
     stateObserver.cancel()
+  }
+
+  func testHandleCloseDoesNotReconnectForApplicationCloseCode() async throws {
+    sut = makeSUT(reconnectDelay: 0.01)
+    try await sut.connect()
+
+    // Application-level close codes (4000–4999) must not trigger automatic
+    // reconnect — the caller needs to re-authenticate before reconnecting,
+    // otherwise reconnecting with the same bad token just loops.
+    await sut.handleClose(code: 4001, reason: "jwt expired")
+
+    // Brief wait to confirm the reconnect task does not fire.
+    try await Task.sleep(nanoseconds: 50_000_000)
+
+    XCTAssertEqual(
+      transportCallCount.value, 1,
+      "Application close code (4001) must not trigger reconnect"
+    )
+    let isConnected = await sut.connection != nil
+    XCTAssertFalse(isConnected, "Connection should be disconnected after application close")
   }
 }
