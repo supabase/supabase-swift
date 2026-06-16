@@ -113,8 +113,8 @@ public struct PasskeyRegistrationOptions: Decodable, Hashable, Sendable {
   /// W3C `PublicKeyCredentialCreationOptions`, forwarded verbatim to the authenticator.
   public let options: AnyJSON
 
-  /// When the challenge expires.
-  public let expiresAt: Date
+  /// Unix timestamp (seconds since epoch) when the challenge expires.
+  public let expiresAt: TimeInterval
 }
 
 /// Assertion options for authenticating with a passkey (first factor).
@@ -128,8 +128,8 @@ public struct PasskeyAuthenticationOptions: Decodable, Hashable, Sendable {
   /// W3C `PublicKeyCredentialRequestOptions`, forwarded verbatim to the authenticator.
   public let options: AnyJSON
 
-  /// When the challenge expires.
-  public let expiresAt: Date
+  /// Unix timestamp (seconds since epoch) when the challenge expires.
+  public let expiresAt: TimeInterval
 }
 
 /// Encodes a WebAuthn request body without applying the snake_case key strategy, so the embedded

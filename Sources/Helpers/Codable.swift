@@ -15,29 +15,16 @@ extension JSONDecoder {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .custom { decoder in
       let container = try decoder.singleValueContainer()
-      
-      do {
-        let string = try container.decode(String.self)
-        
-        if let date = string.date {
-          return date
-        }
-        
-        throw DecodingError.dataCorruptedError(
-          in: container,
-          debugDescription: "Unexpected date format '\(string)' returned for coding path: \(decoder.codingPath)"
-        )
-      } catch {
-        do {
-          let timeInterval = try container.decode(TimeInterval.self)
-          return Date(timeIntervalSince1970: timeInterval)
-        } catch {
-          throw DecodingError.dataCorruptedError(
-            in: container,
-            debugDescription: "Unexpected date format returned for coding path: \(decoder.codingPath)"
-          )
-        }
+      let string = try container.decode(String.self)
+
+      if let date = string.date {
+        return date
       }
+
+      throw DecodingError.dataCorruptedError(
+        in: container,
+        debugDescription: "Invalid date format: \(string)"
+      )
     }
     return decoder
   }
