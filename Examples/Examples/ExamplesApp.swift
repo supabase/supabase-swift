@@ -64,26 +64,11 @@ struct ExamplesApp: App {
   }
 }
 
-final class MemoryStorage: AuthLocalStorage, @unchecked Sendable {
-  let lock = NSLock()
-  private var storage = [String: Data]()
-
-  func store(key: String, value: Data) throws {
-    lock.withLock { storage[key] = value }
-  }
-  func retrieve(key: String) throws -> Data? {
-    lock.withLock { storage[key] }
-  }
-  func remove(key: String) throws {
-    lock.withLock { _ = storage.removeValue(forKey: key) }
-  }
-}
-
 let supabase = SupabaseClient(
   supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
   supabaseKey: (SupabaseConfig["SUPABASE_PUBLISHABLE_KEY"] ?? SupabaseConfig["SUPABASE_ANON_KEY"])!,
   options: .init(
-    auth: .init(storage: MemoryStorage(), redirectToURL: Constants.redirectToURL),
+    auth: .init(redirectToURL: Constants.redirectToURL),
     global: .init(
       logger: ConsoleLogger()
     )

@@ -110,5 +110,5 @@ enabled = true
 
 [auth.webauthn]
 rp_display_name = "Supabase Swift Examples"
-rp_id = "supabase-aasa.vercel.app"
-rp_origins = ["https://supabase-aasa.vercel.app"]
+rp_id = "example.com"
+rp_origins = ["https://example.com"]
