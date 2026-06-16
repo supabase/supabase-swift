@@ -2039,7 +2039,7 @@ final class AuthClientTests: XCTestCase {
           """
           {
             "challenge_id": "challenge-1",
-            "expires_at": "2024-01-15T10:00:00.000Z",
+            "expires_at": 1705312800,
             "options": {
               "challenge": "Y2hhbGxlbmdl",
               "rp": { "id": "example.com", "name": "Example" },
@@ -2168,7 +2168,7 @@ final class AuthClientTests: XCTestCase {
         statusCode: 200,
         data: [
           .post: Data(
-            #"{"challenge_id":"ch-1","expires_at":"2024-01-15T10:00:00.000Z","options":{"challenge":"Y2hhbGxlbmdl"}}"#
+            #"{"challenge_id":"ch-1","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl"}}"#
               .utf8)
         ]
       )
@@ -2216,7 +2216,7 @@ final class AuthClientTests: XCTestCase {
         statusCode: 200,
         data: [
           .post: Data(
-            #"{"challenge_id":"ch-1","expires_at":"2024-01-15T10:00:00.000Z","options":{"challenge":"Y2hhbGxlbmdl","user":{"id":"dXNlci1pZA","name":"u@e.com"}}}"#
+            #"{"challenge_id":"ch-1","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","user":{"id":"dXNlci1pZA","name":"u@e.com"}}}"#
               .utf8)
         ]
       )
