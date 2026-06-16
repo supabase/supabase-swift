@@ -32,7 +32,7 @@ final class URLSessionWebSocket: WebSocket {
   ) {
     self._task = _task
     self._protocol = _protocol
-    
+
     (events, eventsContinuation) = AsyncStream.makeStream()
 
     _scheduleReceive()
@@ -176,7 +176,7 @@ final class URLSessionWebSocket: WebSocket {
   var isClosed: Bool {
     mutableState.value.isClosed
   }
-  
+
   let events: AsyncStream<WebSocketEvent>
   let eventsContinuation: AsyncStream<WebSocketEvent>.Continuation
 
