@@ -253,17 +253,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   private func handleConnected(conn: any WebSocket, isReconnect: Bool) {
-    // Set up the per-connection machinery exactly once. `handleConnected` is
-    // invoked once per caller of `connect()` plus once by the state-observer
-    // task on reconnects — concurrent subscribes (or a subscribe retry racing
-    // an auto-reconnect) make it run multiple times for the same physical
-    // connection. Reading `conn.events` a second time installs a fresh
-    // `onEvent` and, when the first event-stream's task is torn down, its
-    // `onTermination` nils that live `onEvent` out — leaving the socket
-    // connected but deaf: every server frame (heartbeat acks, phx_join
-    // replies) is silently dropped (SDK-959). Guarding on connection identity
-    // keeps `listenForMessages` (and thus the `conn.events` read) to a single
-    // call per connection.
+    // Set up the per-connection machinery exactly once. `handleConnected` can
+    // run multiple times for the same physical connection (concurrent subscribes,
+    // subscribe retries racing an auto-reconnect). Guarding on connection identity
+    // prevents launching duplicate `listenForMessages` / `startHeartbeating` tasks,
+    // which would cancel-and-restart the stream consumer (potentially losing
+    // in-flight frames) and create a second heartbeat timer.
     let isNewConnection = mutableState.withValue { state -> Bool in
       if state.connection === conn { return false }
       state.connection = conn
