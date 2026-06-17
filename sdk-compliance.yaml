@@ -175,22 +175,14 @@ features:
 
   realtime.client.connect:                 implemented
   realtime.client.disconnect:              implemented
-  realtime.client.endpoint_url:            not_implemented
   realtime.client.get_channels:            implemented
   realtime.client.remove_channel:          implemented
   realtime.client.remove_all_channels:     implemented
   realtime.client.connection_state:        implemented
   realtime.client.listen_heartbeats:       implemented
   realtime.client.set_auth_token:          implemented
-  realtime.client.is_connected:
-    status: partially_implemented
-    note: "No dedicated isConnected property; the current state is exposed via the status enum (check status == .connected)."
-  realtime.client.is_connecting:
-    status: partially_implemented
-    note: "No dedicated isConnecting property; the current state is exposed via the status enum (check status == .connecting)."
-  realtime.client.is_disconnecting:        not_implemented
+  realtime.client.channel:                implemented
 
-  realtime.channel.channel:               implemented
   realtime.channel.subscribe:             implemented
   realtime.channel.unsubscribe:           implemented
   realtime.channel.send:                  implemented
