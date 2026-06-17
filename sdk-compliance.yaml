@@ -7,85 +7,85 @@ features:
 
   # ── Auth ───────────────────────────────────────────────────────────────────
 
-  auth.sign_in.sign_up:                    implemented
-  auth.sign_in.sign_in_with_password:      implemented
-  auth.sign_in.sign_in_with_oauth:         implemented
-  auth.sign_in.sign_in_with_otp:           implemented
-  auth.sign_in.sign_in_with_sso:           implemented
-  auth.sign_in.sign_in_with_id_token:      implemented
-  auth.sign_in.sign_in_anonymously:        implemented
-  auth.sign_in.sign_in_with_web3:          not_implemented
-  auth.sign_in.verify_otp:                 implemented
-  auth.sign_in.resend_confirmation:        implemented
-  auth.sign_in.reset_password:             implemented
-  auth.sign_in.reauthenticate:             implemented
-  auth.sign_in.exchange_code_for_session:  implemented
+  auth.sign_in.sign_up: implemented
+  auth.sign_in.sign_in_with_password: implemented
+  auth.sign_in.sign_in_with_oauth: implemented
+  auth.sign_in.sign_in_with_otp: implemented
+  auth.sign_in.sign_in_with_sso: implemented
+  auth.sign_in.sign_in_with_id_token: implemented
+  auth.sign_in.sign_in_anonymously: implemented
+  auth.sign_in.sign_in_with_web3: not_implemented
+  auth.sign_in.verify_otp: implemented
+  auth.sign_in.resend_confirmation: implemented
+  auth.sign_in.reset_password: implemented
+  auth.sign_in.reauthenticate: implemented
+  auth.sign_in.exchange_code_for_session: implemented
 
-  auth.session.get_session:                implemented
-  auth.session.get_user:                   implemented
-  auth.session.get_claims:                 implemented
-  auth.session.refresh_session:            implemented
-  auth.session.set_session:                implemented
-  auth.session.sign_out:                   implemented
-  auth.session.update_user:                implemented
-  auth.session.subscribe_auth_events:      implemented
-  auth.session.auto_refresh:               implemented
+  auth.session.get_session: implemented
+  auth.session.get_user: implemented
+  auth.session.get_claims: implemented
+  auth.session.refresh_session: implemented
+  auth.session.set_session: implemented
+  auth.session.sign_out: implemented
+  auth.session.update_user: implemented
+  auth.session.subscribe_auth_events: implemented
+  auth.session.auto_refresh: implemented
 
-  auth.identities.link_identity:           implemented
-  auth.identities.unlink_identity:         implemented
-  auth.identities.list_identities:         implemented
+  auth.identities.link_identity: implemented
+  auth.identities.unlink_identity: implemented
+  auth.identities.list_identities: implemented
 
-  auth.mfa.enroll:                         implemented
-  auth.mfa.challenge:                      implemented
-  auth.mfa.verify:                         implemented
-  auth.mfa.unenroll:                       implemented
-  auth.mfa.challenge_and_verify:           implemented
-  auth.mfa.list_factors:                   implemented
+  auth.mfa.enroll: implemented
+  auth.mfa.challenge: implemented
+  auth.mfa.verify: implemented
+  auth.mfa.unenroll: implemented
+  auth.mfa.challenge_and_verify: implemented
+  auth.mfa.list_factors: implemented
   auth.mfa.get_authenticator_assurance_level: implemented
 
-  auth.admin.create_user:                  implemented
-  auth.admin.delete_user:                  implemented
-  auth.admin.update_user:                  implemented
-  auth.admin.get_user:                     implemented
-  auth.admin.list_users:                   implemented
-  auth.admin.invite_user:                  implemented
-  auth.admin.sign_out:                     not_implemented
-  auth.admin.generate_link:                not_implemented
-  auth.admin.list_mfa_factors:             not_implemented
-  auth.admin.delete_mfa_factor:            not_implemented
-  auth.admin.create_provider:              not_implemented
-  auth.admin.delete_provider:              not_implemented
-  auth.admin.update_provider:              not_implemented
-  auth.admin.get_provider:                 not_implemented
-  auth.admin.list_providers:               not_implemented
+  auth.admin.create_user: implemented
+  auth.admin.delete_user: implemented
+  auth.admin.update_user: implemented
+  auth.admin.get_user: implemented
+  auth.admin.list_users: implemented
+  auth.admin.invite_user: implemented
+  auth.admin.sign_out: not_implemented
+  auth.admin.generate_link: not_implemented
+  auth.admin.list_mfa_factors: not_implemented
+  auth.admin.delete_mfa_factor: not_implemented
+  auth.admin.create_provider: not_implemented
+  auth.admin.delete_provider: not_implemented
+  auth.admin.update_provider: not_implemented
+  auth.admin.get_provider: not_implemented
+  auth.admin.list_providers: not_implemented
 
-  auth.passkey.register_passkey:           implemented
-  auth.passkey.sign_in_with_passkey:       implemented
+  auth.passkey.register_passkey: implemented
+  auth.passkey.sign_in_with_passkey: implemented
 
-  auth.passkey_admin.list_passkeys:        not_implemented
-  auth.passkey_admin.delete_passkey:       not_implemented
+  auth.passkey_admin.list_passkeys: not_implemented
+  auth.passkey_admin.delete_passkey: not_implemented
 
-  auth.oauth_server.approve_authorization:     not_implemented
-  auth.oauth_server.deny_authorization:        not_implemented
+  auth.oauth_server.approve_authorization: not_implemented
+  auth.oauth_server.deny_authorization: not_implemented
   auth.oauth_server.get_authorization_details: not_implemented
-  auth.oauth_server.list_grants:               not_implemented
-  auth.oauth_server.revoke_grant:              not_implemented
+  auth.oauth_server.list_grants: not_implemented
+  auth.oauth_server.revoke_grant: not_implemented
 
-  auth.oauth_admin.create_client:          implemented
-  auth.oauth_admin.delete_client:          implemented
-  auth.oauth_admin.get_client:             implemented
-  auth.oauth_admin.list_clients:           implemented
+  auth.oauth_admin.create_client: implemented
+  auth.oauth_admin.delete_client: implemented
+  auth.oauth_admin.get_client: implemented
+  auth.oauth_admin.list_clients: implemented
   auth.oauth_admin.regenerate_client_secret: implemented
-  auth.oauth_admin.update_client:          implemented
+  auth.oauth_admin.update_client: implemented
 
   # ── Client ─────────────────────────────────────────────────────────────────
 
-  client.authentication_integration.third_party_auth:        implemented
+  client.authentication_integration.third_party_auth: implemented
   client.authentication_integration.cross_client_token_sync: implemented
-  client.authentication_integration.oauth_flow_type:         implemented
-  client.authentication_integration.session_url_detection:   implemented
+  client.authentication_integration.oauth_flow_type: implemented
+  client.authentication_integration.session_url_detection: implemented
 
-  client.session_management.custom_storage:  implemented
+  client.session_management.custom_storage: implemented
   client.session_management.persist_session: implemented
 
   client.request_configuration.custom_http_client:
@@ -93,183 +93,175 @@ features:
     note: "A custom URLSession can be supplied; a full HTTP client adapter protocol is not exposed."
   client.request_configuration.global_headers: implemented
 
-  client.observability.trace_propagation:  not_implemented
+  client.observability.trace_propagation: not_implemented
 
   # ── Database ───────────────────────────────────────────────────────────────
 
-  database.query.from_table:                implemented
-  database.query.select:                    implemented
-  database.query.schema_selection:          implemented
-  database.query.rpc:                       implemented
+  database.query.from_table: implemented
+  database.query.select: implemented
+  database.query.schema_selection: implemented
+  database.query.rpc: implemented
 
-  database.mutate.insert:                   implemented
-  database.mutate.update:                   implemented
-  database.mutate.upsert:                   implemented
-  database.mutate.delete:                   implemented
-  database.mutate.select_after_mutation:    implemented
+  database.mutate.insert: implemented
+  database.mutate.update: implemented
+  database.mutate.upsert: implemented
+  database.mutate.delete: implemented
+  database.mutate.select_after_mutation: implemented
 
-  database.using_filters.eq:               implemented
-  database.using_filters.neq:              implemented
-  database.using_filters.gt:               implemented
-  database.using_filters.gte:              implemented
-  database.using_filters.lt:               implemented
-  database.using_filters.lte:              implemented
-  database.using_filters.like:             implemented
-  database.using_filters.ilike:            implemented
-  database.using_filters.is:               implemented
-  database.using_filters.in:               implemented
-  database.using_filters.contains:         implemented
-  database.using_filters.contained_by:     implemented
-  database.using_filters.range_gt:         implemented
-  database.using_filters.range_gte:        implemented
-  database.using_filters.range_lt:         implemented
-  database.using_filters.range_lte:        implemented
-  database.using_filters.range_adjacent:   implemented
-  database.using_filters.overlaps:         implemented
-  database.using_filters.text_search:      implemented
-  database.using_filters.match:            implemented
-  database.using_filters.not:              implemented
-  database.using_filters.or:               implemented
-  database.using_filters.raw:              implemented
-  database.using_filters.regex:            implemented
-  database.using_filters.regex_icase:      implemented
-  database.using_filters.is_distinct:      implemented
-  database.using_filters.not_in:           not_implemented
-  database.using_filters.like_all:         implemented
-  database.using_filters.like_any:         implemented
-  database.using_filters.ilike_all:        implemented
-  database.using_filters.ilike_any:        implemented
+  database.using_filters.eq: implemented
+  database.using_filters.neq: implemented
+  database.using_filters.gt: implemented
+  database.using_filters.gte: implemented
+  database.using_filters.lt: implemented
+  database.using_filters.lte: implemented
+  database.using_filters.like: implemented
+  database.using_filters.ilike: implemented
+  database.using_filters.is: implemented
+  database.using_filters.in: implemented
+  database.using_filters.contains: implemented
+  database.using_filters.contained_by: implemented
+  database.using_filters.range_gt: implemented
+  database.using_filters.range_gte: implemented
+  database.using_filters.range_lt: implemented
+  database.using_filters.range_lte: implemented
+  database.using_filters.range_adjacent: implemented
+  database.using_filters.overlaps: implemented
+  database.using_filters.text_search: implemented
+  database.using_filters.match: implemented
+  database.using_filters.not: implemented
+  database.using_filters.or: implemented
+  database.using_filters.raw: implemented
+  database.using_filters.regex: implemented
+  database.using_filters.regex_icase: implemented
+  database.using_filters.is_distinct: implemented
+  database.using_filters.not_in: not_implemented
+  database.using_filters.like_all: implemented
+  database.using_filters.like_any: implemented
+  database.using_filters.ilike_all: implemented
+  database.using_filters.ilike_any: implemented
 
-  database.using_modifiers.order:          implemented
-  database.using_modifiers.limit:          implemented
-  database.using_modifiers.range:          implemented
-  database.using_modifiers.single_row:     implemented
+  database.using_modifiers.order: implemented
+  database.using_modifiers.limit: implemented
+  database.using_modifiers.range: implemented
+  database.using_modifiers.single_row: implemented
   database.using_modifiers.maybe_single_row: not_implemented
-  database.using_modifiers.strip_nulls:    implemented
-  database.using_modifiers.format_csv:     implemented
+  database.using_modifiers.strip_nulls: implemented
+  database.using_modifiers.format_csv: implemented
   database.using_modifiers.format_geojson: implemented
-  database.using_modifiers.explain:        implemented
+  database.using_modifiers.explain: implemented
   database.using_modifiers.max_affected_rows: implemented
   database.using_modifiers.request_cancellation: implemented
   database.using_modifiers.relationship_embed:
     status: partially_implemented
     note: "Supported via query-string syntax in select() (e.g. 'user(*)'); no dedicated relationship builder API."
-  database.using_modifiers.dry_run:        not_implemented
+  database.using_modifiers.dry_run: not_implemented
 
-  database.configuration.auto_retry:       implemented
-  database.configuration.request_timeout:  not_implemented
+  database.configuration.auto_retry: implemented
+  database.configuration.request_timeout: not_implemented
 
   # ── Functions ──────────────────────────────────────────────────────────────
 
-  functions.invocation.invoke:             implemented
-  functions.invocation.set_auth_token:     implemented
-  functions.invocation.method_override:    implemented
+  functions.invocation.invoke: implemented
+  functions.invocation.set_auth_token: implemented
+  functions.invocation.method_override: implemented
   functions.invocation.streaming_response: implemented
-  functions.invocation.region_selection:   implemented
+  functions.invocation.region_selection: implemented
   functions.invocation.request_cancellation: implemented
   functions.invocation.timeout:
     status: partially_implemented
     note: "Default idle timeout is a hardcoded 150 s constant; no per-invocation override is exposed."
 
-  # ── Realtime ───────────────────────────────────────────────────────────────
+  # ── Realtime — client ──────────────────────────────────────────────────────
 
-  realtime.client.connect:                 implemented
-  realtime.client.disconnect:              implemented
-  realtime.client.endpoint_url:            not_implemented
-  realtime.client.get_channels:            implemented
-  realtime.client.remove_channel:          implemented
-  realtime.client.remove_all_channels:     implemented
-  realtime.client.connection_state:        implemented
-  realtime.client.listen_heartbeats:       implemented
-  realtime.client.set_auth_token:          implemented
-  realtime.client.is_connected:
-    status: partially_implemented
-    note: "No dedicated isConnected property; the current state is exposed via the status enum (check status == .connected)."
-  realtime.client.is_connecting:
-    status: partially_implemented
-    note: "No dedicated isConnecting property; the current state is exposed via the status enum (check status == .connecting)."
-  realtime.client.is_disconnecting:        not_implemented
+  realtime.client.connect: implemented
+  realtime.client.disconnect: implemented
+  realtime.client.get_channels: implemented
+  realtime.client.remove_channel: implemented
+  realtime.client.remove_all_channels: implemented
+  realtime.client.connection_state: implemented
+  realtime.client.listen_heartbeats: implemented
+  realtime.client.set_auth_token: implemented
+  realtime.client.channel: implemented
 
-  realtime.channel.channel:               implemented
-  realtime.channel.subscribe:             implemented
-  realtime.channel.unsubscribe:           implemented
-  realtime.channel.send:                  implemented
-  realtime.channel.broadcast_http:        implemented
+  realtime.channel.subscribe: implemented
+  realtime.channel.unsubscribe: implemented
+  realtime.channel.send: implemented
+  realtime.channel.broadcast_http: implemented
 
-  realtime.subscriptions.broadcast:               implemented
-  realtime.subscriptions.postgres_changes:        implemented
-  realtime.subscriptions.subscribe_presence:      implemented
+  realtime.subscriptions.broadcast: implemented
+  realtime.subscriptions.postgres_changes: implemented
+  realtime.subscriptions.subscribe_presence: implemented
   realtime.subscriptions.postgres_changes_filter: implemented
-  realtime.subscriptions.private_channel:         implemented
-  realtime.subscriptions.broadcast_self:          implemented
-  realtime.subscriptions.broadcast_ack:           implemented
-  realtime.subscriptions.broadcast_replay:        implemented
+  realtime.subscriptions.private_channel: implemented
+  realtime.subscriptions.broadcast_self: implemented
+  realtime.subscriptions.broadcast_ack: implemented
+  realtime.subscriptions.broadcast_replay: implemented
 
-  realtime.presence.track:                implemented
-  realtime.presence.untrack:              implemented
-  realtime.presence.presence_state:       not_implemented
-  realtime.presence.presence_key:         implemented
+  realtime.presence.track: implemented
+  realtime.presence.untrack: implemented
+  realtime.presence.presence_state: not_implemented
+  realtime.presence.presence_key: implemented
 
   realtime.configuration.custom_websocket_transport: implemented
-  realtime.configuration.reconnect_backoff:          implemented
-  realtime.configuration.heartbeat_interval:         implemented
-  realtime.configuration.access_token_callback:      implemented
-  realtime.configuration.deferred_disconnect:        implemented
-  realtime.configuration.custom_logger:              implemented
-  realtime.configuration.binary_protocol:            implemented
+  realtime.configuration.reconnect_backoff: implemented
+  realtime.configuration.heartbeat_interval: implemented
+  realtime.configuration.access_token_callback: implemented
+  realtime.configuration.deferred_disconnect: implemented
+  realtime.configuration.custom_logger: implemented
+  realtime.configuration.binary_protocol: implemented
 
   # ── Storage ────────────────────────────────────────────────────────────────
 
-  storage.file_buckets.create_file_bucket:       implemented
-  storage.file_buckets.get_bucket:               implemented
-  storage.file_buckets.list_file_buckets:        implemented
-  storage.file_buckets.update_bucket:            implemented
-  storage.file_buckets.delete_file_bucket:       implemented
-  storage.file_buckets.empty_bucket:             implemented
-  storage.file_buckets.access_bucket:            implemented
-  storage.file_buckets.upload:                   implemented
-  storage.file_buckets.download:                 implemented
-  storage.file_buckets.list_files:               implemented
-  storage.file_buckets.move:                     implemented
-  storage.file_buckets.copy:                     implemented
-  storage.file_buckets.remove:                   implemented
-  storage.file_buckets.get_public_url:           implemented
-  storage.file_buckets.create_signed_url:        implemented
-  storage.file_buckets.create_signed_urls:       implemented
+  storage.file_buckets.create_file_bucket: implemented
+  storage.file_buckets.get_bucket: implemented
+  storage.file_buckets.list_file_buckets: implemented
+  storage.file_buckets.update_bucket: implemented
+  storage.file_buckets.delete_file_bucket: implemented
+  storage.file_buckets.empty_bucket: implemented
+  storage.file_buckets.access_bucket: implemented
+  storage.file_buckets.upload: implemented
+  storage.file_buckets.download: implemented
+  storage.file_buckets.list_files: implemented
+  storage.file_buckets.move: implemented
+  storage.file_buckets.copy: implemented
+  storage.file_buckets.remove: implemented
+  storage.file_buckets.get_public_url: implemented
+  storage.file_buckets.create_signed_url: implemented
+  storage.file_buckets.create_signed_urls: implemented
   storage.file_buckets.create_signed_upload_url: implemented
-  storage.file_buckets.upload_with_signed_url:   implemented
-  storage.file_buckets.update_file:              implemented
-  storage.file_buckets.file_exists:              implemented
-  storage.file_buckets.file_info:                implemented
-  storage.file_buckets.list_files_paginated:     implemented
-  storage.file_buckets.download_with_transform:  implemented
-  storage.file_buckets.copy_cross_bucket:        implemented
-  storage.file_buckets.move_cross_bucket:        implemented
-  storage.file_buckets.upload_with_metadata:     implemented
-  storage.file_buckets.url_cache_nonce:          implemented
-  storage.file_buckets.download_as_stream:       not_implemented
+  storage.file_buckets.upload_with_signed_url: implemented
+  storage.file_buckets.update_file: implemented
+  storage.file_buckets.file_exists: implemented
+  storage.file_buckets.file_info: implemented
+  storage.file_buckets.list_files_paginated: implemented
+  storage.file_buckets.download_with_transform: implemented
+  storage.file_buckets.copy_cross_bucket: implemented
+  storage.file_buckets.move_cross_bucket: implemented
+  storage.file_buckets.upload_with_metadata: implemented
+  storage.file_buckets.url_cache_nonce: implemented
+  storage.file_buckets.download_as_stream: not_implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 
-  storage.vector_buckets.create_vector_bucket:   not_implemented
-  storage.vector_buckets.list_vector_buckets:    not_implemented
-  storage.vector_buckets.delete_vector_bucket:   not_implemented
-  storage.vector_buckets.access_vector_index:    not_implemented
-  storage.vector_buckets.create_index:           not_implemented
-  storage.vector_buckets.delete_index:           not_implemented
-  storage.vector_buckets.get_index:              not_implemented
-  storage.vector_buckets.list_indexes:           not_implemented
-  storage.vector_buckets.put_vectors:            not_implemented
-  storage.vector_buckets.get_vectors:            not_implemented
-  storage.vector_buckets.delete_vectors:         not_implemented
-  storage.vector_buckets.list_vectors:           not_implemented
-  storage.vector_buckets.query_vectors:          not_implemented
-  storage.vector_buckets.parallel_scan:          not_implemented
+  storage.vector_buckets.create_vector_bucket: not_implemented
+  storage.vector_buckets.list_vector_buckets: not_implemented
+  storage.vector_buckets.delete_vector_bucket: not_implemented
+  storage.vector_buckets.access_vector_index: not_implemented
+  storage.vector_buckets.create_index: not_implemented
+  storage.vector_buckets.delete_index: not_implemented
+  storage.vector_buckets.get_index: not_implemented
+  storage.vector_buckets.list_indexes: not_implemented
+  storage.vector_buckets.put_vectors: not_implemented
+  storage.vector_buckets.get_vectors: not_implemented
+  storage.vector_buckets.delete_vectors: not_implemented
+  storage.vector_buckets.list_vectors: not_implemented
+  storage.vector_buckets.query_vectors: not_implemented
+  storage.vector_buckets.parallel_scan: not_implemented
 
   # ── Storage — Analytics Buckets ────────────────────────────────────────────
 
-  storage.analytics.create_analytics_bucket:    not_implemented
-  storage.analytics.list_analytics_buckets:     not_implemented
-  storage.analytics.delete_analytics_bucket:    not_implemented
-  storage.analytics.iceberg_namespace:          not_implemented
-  storage.analytics.iceberg_table:              not_implemented
+  storage.analytics.create_analytics_bucket: not_implemented
+  storage.analytics.list_analytics_buckets: not_implemented
+  storage.analytics.delete_analytics_bucket: not_implemented
+  storage.analytics.iceberg_namespace: not_implemented
+  storage.analytics.iceberg_table: not_implemented
