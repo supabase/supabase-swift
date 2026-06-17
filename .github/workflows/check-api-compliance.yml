@@ -1,0 +1,11 @@
+name: Check API Compliance
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    uses: supabase/sdk/.github/workflows/check-api-compliance.yml@main
