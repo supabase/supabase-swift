@@ -50,9 +50,7 @@ features:
   auth.admin.list_users:                   implemented
   auth.admin.invite_user:                  implemented
   auth.admin.sign_out:                     not_implemented
-  auth.admin.generate_link:
-    status: partially_implemented
-    note: "Method exists but response decoding is incomplete; returns a placeholder response."
+  auth.admin.generate_link:                not_implemented
   auth.admin.list_mfa_factors:             not_implemented
   auth.admin.delete_mfa_factor:            not_implemented
   auth.admin.create_provider:              not_implemented
