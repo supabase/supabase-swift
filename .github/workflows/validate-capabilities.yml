@@ -1,7 +1,13 @@
+name: Validate SDK Compliance
+
 on:
   pull_request:
     paths:
-      - sdk-compliance.yaml
+      - 'sdk-compliance.yaml'
+      - '.github/workflows/validate-capabilities.yml'
+
+permissions:
+  contents: read
 
 jobs:
   validate:
