@@ -59,8 +59,8 @@ features:
   auth.admin.get_provider:                 not_implemented
   auth.admin.list_providers:               not_implemented
 
-  auth.passkey.register_passkey:           not_implemented
-  auth.passkey.sign_in_with_passkey:       not_implemented
+  auth.passkey.register_passkey:           implemented
+  auth.passkey.sign_in_with_passkey:       implemented
 
   auth.passkey_admin.list_passkeys:        not_implemented
   auth.passkey_admin.delete_passkey:       not_implemented
