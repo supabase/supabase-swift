@@ -39,20 +39,15 @@ extension MFAEnrollParamsType where Self == MFAWebAuthnEnrollParams {
 /// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
 @_spi(Experimental)
 public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
-  private enum CodingKeys: String, CodingKey {
-    case relyingPartyIdentifier = "rp_id"
-    case relyingPartyOrigins = "rp_origins"
-  }
-
   /// The relying party identifier (typically your app's associated domain, e.g. `example.com`).
-  public let relyingPartyIdentifier: String?
+  public let rpId: String?
 
   /// Allowed relying party origins (e.g. `https://example.com`).
-  public let relyingPartyOrigins: [String]?
+  public let rpOrigins: [String]?
 
-  public init(relyingPartyIdentifier: String? = nil, relyingPartyOrigins: [String]? = nil) {
-    self.relyingPartyIdentifier = relyingPartyIdentifier
-    self.relyingPartyOrigins = relyingPartyOrigins
+  public init(rpId: String? = nil, rpOrigins: [String]? = nil) {
+    self.rpId = rpId
+    self.rpOrigins = rpOrigins
   }
 }
 
@@ -137,18 +132,11 @@ public struct PasskeyAuthenticationOptions: Decodable, Hashable, Sendable {
   public let expiresAt: TimeInterval
 }
 
-/// Top-level body for passkey registration and authentication verify endpoints.
-struct PasskeyVerifyBody: Encodable {
-  let challengeId: String
-  let credential: AnyJSON
-}
-
-/// Encodes a passkey verify body using snake_case for the top-level fields while leaving the
-/// nested W3C credential JSON (which uses camelCase such as `clientDataJSON`) verbatim, because
-/// the snake_case strategy converts struct CodingKeys but not AnyJSON dictionary keys.
-func encodeWebAuthnBody(_ body: PasskeyVerifyBody) throws -> Data {
+/// Encodes a WebAuthn request body without applying the snake_case key strategy, so the embedded
+/// W3C credential JSON (which uses camelCase field names such as `clientDataJSON`) reaches the
+/// backend verbatim. All backend field names must be spelled out explicitly by the caller.
+func encodeWebAuthnBody(_ json: AnyJSON) throws -> Data {
   let encoder = JSONEncoder()
-  encoder.keyEncodingStrategy = .convertToSnakeCase
   encoder.outputFormatting = [.sortedKeys]
-  return try encoder.encode(body)
+  return try encoder.encode(json)
 }

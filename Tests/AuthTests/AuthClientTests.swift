@@ -5,13 +5,14 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
-@_spi(Experimental) @testable import Auth
 import ConcurrencyExtras
 import CustomDump
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
 import XCTest
+
+@_spi(Experimental) @testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -1800,7 +1801,7 @@ final class AuthClientTests: XCTestCase {
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
     let response = try await sut.mfa.challenge(
-      params: .init(factorId: factorId, webAuthn: .init(relyingPartyIdentifier: "example.com"))
+      params: .init(factorId: factorId, webAuthn: .init(rpId: "example.com"))
     )
 
     expectNoDifference(response.id, "challenge-1")

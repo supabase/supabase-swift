@@ -55,9 +55,10 @@ extension AuthClient {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("passkeys/registration/verify"),
         method: .post,
-        body: encodeWebAuthnBody(
-          PasskeyVerifyBody(challengeId: challengeId, credential: credentialResponse)
-        )
+        body: encodeWebAuthnBody([
+          "challenge_id": .string(challengeId),
+          "credential": credentialResponse,
+        ])
       )
     )
     .decoded(decoder: configuration.decoder)
@@ -96,9 +97,10 @@ extension AuthClient {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("passkeys/authentication/verify"),
         method: .post,
-        body: encodeWebAuthnBody(
-          PasskeyVerifyBody(challengeId: challengeId, credential: credentialResponse)
-        )
+        body: encodeWebAuthnBody([
+          "challenge_id": .string(challengeId),
+          "credential": credentialResponse,
+        ])
       )
     )
     .decoded(decoder: configuration.decoder)
