@@ -1,6 +1,6 @@
 sdk: swift
 
-# Sparse declaration — only features that differ from the default (not_implemented) are listed.
+# Full declaration of all features from the supabase/sdk capability registry.
 # See https://github.com/supabase/sdk for the canonical feature registry.
 
 features:
@@ -14,6 +14,7 @@ features:
   auth.sign_in.sign_in_with_sso:           implemented
   auth.sign_in.sign_in_with_id_token:      implemented
   auth.sign_in.sign_in_anonymously:        implemented
+  auth.sign_in.sign_in_with_web3:          not_implemented
   auth.sign_in.verify_otp:                 implemented
   auth.sign_in.resend_confirmation:        implemented
   auth.sign_in.reset_password:             implemented
@@ -48,9 +49,29 @@ features:
   auth.admin.get_user:                     implemented
   auth.admin.list_users:                   implemented
   auth.admin.invite_user:                  implemented
+  auth.admin.sign_out:                     not_implemented
   auth.admin.generate_link:
     status: partially_implemented
     note: "Method exists but response decoding is incomplete; returns a placeholder response."
+  auth.admin.list_mfa_factors:             not_implemented
+  auth.admin.delete_mfa_factor:            not_implemented
+  auth.admin.create_provider:              not_implemented
+  auth.admin.delete_provider:              not_implemented
+  auth.admin.update_provider:              not_implemented
+  auth.admin.get_provider:                 not_implemented
+  auth.admin.list_providers:               not_implemented
+
+  auth.passkey.register_passkey:           not_implemented
+  auth.passkey.sign_in_with_passkey:       not_implemented
+
+  auth.passkey_admin.list_passkeys:        not_implemented
+  auth.passkey_admin.delete_passkey:       not_implemented
+
+  auth.oauth_server.approve_authorization:     not_implemented
+  auth.oauth_server.deny_authorization:        not_implemented
+  auth.oauth_server.get_authorization_details: not_implemented
+  auth.oauth_server.list_grants:               not_implemented
+  auth.oauth_server.revoke_grant:              not_implemented
 
   auth.oauth_admin.create_client:          implemented
   auth.oauth_admin.delete_client:          implemented
@@ -73,6 +94,8 @@ features:
     status: partially_implemented
     note: "A custom URLSession can be supplied; a full HTTP client adapter protocol is not exposed."
   client.request_configuration.global_headers: implemented
+
+  client.observability.trace_propagation:  not_implemented
 
   # ── Database ───────────────────────────────────────────────────────────────
 
@@ -113,6 +136,7 @@ features:
   database.using_filters.regex:            implemented
   database.using_filters.regex_icase:      implemented
   database.using_filters.is_distinct:      implemented
+  database.using_filters.not_in:           not_implemented
   database.using_filters.like_all:         implemented
   database.using_filters.like_any:         implemented
   database.using_filters.ilike_all:        implemented
@@ -122,6 +146,7 @@ features:
   database.using_modifiers.limit:          implemented
   database.using_modifiers.range:          implemented
   database.using_modifiers.single_row:     implemented
+  database.using_modifiers.maybe_single_row: not_implemented
   database.using_modifiers.strip_nulls:    implemented
   database.using_modifiers.format_csv:     implemented
   database.using_modifiers.format_geojson: implemented
@@ -131,8 +156,10 @@ features:
   database.using_modifiers.relationship_embed:
     status: partially_implemented
     note: "Supported via query-string syntax in select() (e.g. 'user(*)'); no dedicated relationship builder API."
+  database.using_modifiers.dry_run:        not_implemented
 
   database.configuration.auto_retry:       implemented
+  database.configuration.request_timeout:  not_implemented
 
   # ── Functions ──────────────────────────────────────────────────────────────
 
@@ -150,6 +177,7 @@ features:
 
   realtime.client.connect:                 implemented
   realtime.client.disconnect:              implemented
+  realtime.client.endpoint_url:            not_implemented
   realtime.client.get_channels:            implemented
   realtime.client.remove_channel:          implemented
   realtime.client.remove_all_channels:     implemented
@@ -162,6 +190,7 @@ features:
   realtime.client.is_connecting:
     status: partially_implemented
     note: "No dedicated isConnecting property; the current state is exposed via the status enum (check status == .connecting)."
+  realtime.client.is_disconnecting:        not_implemented
 
   realtime.channel.channel:               implemented
   realtime.channel.subscribe:             implemented
@@ -180,6 +209,7 @@ features:
 
   realtime.presence.track:                implemented
   realtime.presence.untrack:              implemented
+  realtime.presence.presence_state:       not_implemented
   realtime.presence.presence_key:         implemented
 
   realtime.configuration.custom_websocket_transport: implemented
@@ -219,3 +249,29 @@ features:
   storage.file_buckets.move_cross_bucket:        implemented
   storage.file_buckets.upload_with_metadata:     implemented
   storage.file_buckets.url_cache_nonce:          implemented
+  storage.file_buckets.download_as_stream:       not_implemented
+
+  # ── Storage — Vector Buckets ───────────────────────────────────────────────
+
+  storage.vector_buckets.create_vector_bucket:   not_implemented
+  storage.vector_buckets.list_vector_buckets:    not_implemented
+  storage.vector_buckets.delete_vector_bucket:   not_implemented
+  storage.vector_buckets.access_vector_index:    not_implemented
+  storage.vector_buckets.create_index:           not_implemented
+  storage.vector_buckets.delete_index:           not_implemented
+  storage.vector_buckets.get_index:              not_implemented
+  storage.vector_buckets.list_indexes:           not_implemented
+  storage.vector_buckets.put_vectors:            not_implemented
+  storage.vector_buckets.get_vectors:            not_implemented
+  storage.vector_buckets.delete_vectors:         not_implemented
+  storage.vector_buckets.list_vectors:           not_implemented
+  storage.vector_buckets.query_vectors:          not_implemented
+  storage.vector_buckets.parallel_scan:          not_implemented
+
+  # ── Storage — Analytics Buckets ────────────────────────────────────────────
+
+  storage.analytics.create_analytics_bucket:    not_implemented
+  storage.analytics.list_analytics_buckets:     not_implemented
+  storage.analytics.delete_analytics_bucket:    not_implemented
+  storage.analytics.iceberg_namespace:          not_implemented
+  storage.analytics.iceberg_table:              not_implemented
