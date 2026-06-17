@@ -102,5 +102,21 @@ CREATE POLICY "Allow all operations on messages" ON messages FOR ALL USING (true
 CREATE POLICY "Allow all operations on channels" ON channels FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all operations on key_value_storage" ON key_value_storage FOR ALL USING (true) WITH CHECK (true);
 
+-- Grant table-level permissions to anon and authenticated roles.
+-- RLS policies alone don't bypass the need for explicit GRANTs.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE users TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE todos TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE messages TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE channels TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE key_value_storage TO anon, authenticated;
+GRANT SELECT ON updatable_view TO anon, authenticated;
+GRANT USAGE ON SEQUENCE channels_id_seq TO anon, authenticated;
+GRANT USAGE ON SEQUENCE messages_id_seq TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION get_status TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION void_func TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION delete_user TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION get_username_and_status TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION get_array_element TO anon, authenticated;
+
 -- Enable realtime for key_value_storage table
 ALTER PUBLICATION supabase_realtime ADD TABLE key_value_storage;

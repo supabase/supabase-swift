@@ -7,7 +7,7 @@
 
 import XCTest
 
-@testable import Auth
+@_spi(Experimental) @testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -78,7 +78,7 @@ final class AuthErrorTests: XCTestCase {
       .userNotFound,
       .invalidCredentials,
       .emailExists,
-      .overRequestRateLimit
+      .overRequestRateLimit,
     ]
 
     for code in errorCodes {
@@ -97,6 +97,14 @@ final class AuthErrorTests: XCTestCase {
       XCTAssertEqual(error.errorCode, code)
       XCTAssertEqual(error.message, "Test error")
     }
+  }
+
+  func testWebAuthnErrorCodeRawValues() {
+    XCTAssertEqual(ErrorCode.webAuthnChallengeNotFound.rawValue, "webauthn_challenge_not_found")
+    XCTAssertEqual(ErrorCode.webAuthnChallengeExpired.rawValue, "webauthn_challenge_expired")
+    XCTAssertEqual(ErrorCode.webAuthnVerificationFailed.rawValue, "webauthn_verification_failed")
+    XCTAssertEqual(ErrorCode.webAuthnCredentialExists.rawValue, "webauthn_credential_exists")
+    XCTAssertEqual(ErrorCode.tooManyPasskeys.rawValue, "too_many_passkeys")
   }
 
   func testErrorCodeEquality() {

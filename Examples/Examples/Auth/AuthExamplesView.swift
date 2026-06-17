@@ -91,6 +91,16 @@ struct AuthExamplesView: View {
         }
       }
 
+      Section("Passkeys") {
+        NavigationLink(destination: SignInWithPasskeyView()) {
+          ExampleRow(
+            title: "Sign in with a passkey",
+            description: "Passwordless, discoverable WebAuthn sign-in",
+            icon: "person.badge.key.fill"
+          )
+        }
+      }
+
       Section("Guest Access") {
         NavigationLink(destination: SignInAnonymously()) {
           ExampleRow(
