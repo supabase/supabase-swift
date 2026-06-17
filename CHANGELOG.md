@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.48.0](https://github.com/supabase/supabase-swift/compare/v2.47.2...v2.48.0) (2026-06-17)
+
+
+### Features
+
+* **auth:** add WebAuthn/passkey support ([#1013](https://github.com/supabase/supabase-swift/issues/1013)) ([9d65216](https://github.com/supabase/supabase-swift/commit/9d652160366ffaabfc370f23b94568505003ac42))
+
 ## [2.47.2](https://github.com/supabase/supabase-swift/compare/v2.47.1...v2.47.2) (2026-06-16)
 
 
