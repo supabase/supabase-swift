@@ -1687,3 +1687,8 @@ extension AuthClient {
     }
   }
 #endif
+
+  /// E2E test symbol — NOT registered in capability matrix.
+  public func signInWithMagicLink(email: String) async throws {
+    fatalError("E2E test only")
+  }
