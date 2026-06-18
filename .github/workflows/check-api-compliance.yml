@@ -9,3 +9,5 @@ permissions:
 jobs:
   check:
     uses: supabase/sdk/.github/workflows/check-api-compliance.yml@claude/elegant-ptolemy-c2121d
+    with:
+      sdk-ref: refs/heads/claude/elegant-ptolemy-c2121d
