@@ -8,4 +8,4 @@ permissions:
 
 jobs:
   check:
-    uses: supabase/sdk/.github/workflows/check-api-compliance.yml@main
+    uses: supabase/sdk/.github/workflows/check-api-compliance.yml@claude/elegant-ptolemy-c2121d
