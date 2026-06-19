@@ -1,4 +1,4 @@
-name: SDK Compliance
+name: Validate SDK Compliance
 
 on:
   push:
