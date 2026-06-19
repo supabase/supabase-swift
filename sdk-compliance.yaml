@@ -7,48 +7,168 @@ features:
 
   # ── Auth ───────────────────────────────────────────────────────────────────
 
-  auth.sign_in.sign_up: implemented
-  auth.sign_in.sign_in_with_password: implemented
-  auth.sign_in.sign_in_with_oauth: implemented
-  auth.sign_in.sign_in_with_otp: implemented
-  auth.sign_in.sign_in_with_sso: implemented
-  auth.sign_in.sign_in_with_id_token: implemented
-  auth.sign_in.sign_in_anonymously: implemented
+  auth.sign_in.sign_up:
+    status: implemented
+    symbols:
+      - AuthClient.signUp
+  auth.sign_in.sign_in_with_password:
+    status: implemented
+    symbols:
+      - AuthClient.signIn
+  auth.sign_in.sign_in_with_oauth:
+    status: implemented
+    symbols:
+      - AuthClient.signInWithOAuth
+      - AuthClient.getOAuthSignInURL
+  auth.sign_in.sign_in_with_otp:
+    status: implemented
+    symbols:
+      - AuthClient.signInWithOTP
+  auth.sign_in.sign_in_with_sso:
+    status: implemented
+    symbols:
+      - AuthClient.signInWithSSO
+  auth.sign_in.sign_in_with_id_token:
+    status: implemented
+    symbols:
+      - AuthClient.signInWithIdToken
+  auth.sign_in.sign_in_anonymously:
+    status: implemented
+    symbols:
+      - AuthClient.signInAnonymously
   auth.sign_in.sign_in_with_web3: not_implemented
-  auth.sign_in.verify_otp: implemented
-  auth.sign_in.resend_confirmation: implemented
-  auth.sign_in.reset_password: implemented
-  auth.sign_in.reauthenticate: implemented
-  auth.sign_in.exchange_code_for_session: implemented
+  auth.sign_in.verify_otp:
+    status: implemented
+    symbols:
+      - AuthClient.verifyOTP
+  auth.sign_in.resend_confirmation:
+    status: implemented
+    symbols:
+      - AuthClient.resend
+  auth.sign_in.reset_password:
+    status: implemented
+    symbols:
+      - AuthClient.resetPasswordForEmail
+  auth.sign_in.reauthenticate:
+    status: implemented
+    symbols:
+      - AuthClient.reauthenticate
+  auth.sign_in.exchange_code_for_session:
+    status: implemented
+    symbols:
+      - AuthClient.exchangeCodeForSession
 
-  auth.session.get_session: implemented
-  auth.session.get_user: implemented
-  auth.session.get_claims: implemented
-  auth.session.refresh_session: implemented
-  auth.session.set_session: implemented
-  auth.session.sign_out: implemented
-  auth.session.update_user: implemented
-  auth.session.subscribe_auth_events: implemented
-  auth.session.auto_refresh: implemented
+  auth.session.get_session:
+    status: implemented
+    symbols:
+      - AuthClient.session
+      - AuthClient.currentSession
+  auth.session.get_user:
+    status: implemented
+    symbols:
+      - AuthClient.currentUser
+      - AuthClient.user
+  auth.session.get_claims:
+    status: implemented
+    symbols:
+      - AuthClient.getClaims
+  auth.session.refresh_session:
+    status: implemented
+    symbols:
+      - AuthClient.refreshSession
+  auth.session.set_session:
+    status: implemented
+    symbols:
+      - AuthClient.setSession
+  auth.session.sign_out:
+    status: implemented
+    symbols:
+      - AuthClient.signOut
+  auth.session.update_user:
+    status: implemented
+    symbols:
+      - AuthClient.update
+  auth.session.subscribe_auth_events:
+    status: implemented
+    symbols:
+      - AuthClient.authStateChanges
+      - AuthClient.onAuthStateChange
+  auth.session.auto_refresh:
+    status: implemented
+    symbols:
+      - AuthClient.startAutoRefresh
+      - AuthClient.stopAutoRefresh
 
-  auth.identities.link_identity: implemented
-  auth.identities.unlink_identity: implemented
-  auth.identities.list_identities: implemented
+  auth.identities.link_identity:
+    status: implemented
+    symbols:
+      - AuthClient.linkIdentity
+      - AuthClient.getLinkIdentityURL
+      - AuthClient.linkIdentityWithIdToken
+  auth.identities.unlink_identity:
+    status: implemented
+    symbols:
+      - AuthClient.unlinkIdentity
+  auth.identities.list_identities:
+    status: implemented
+    symbols:
+      - AuthClient.userIdentities
 
-  auth.mfa.enroll: implemented
-  auth.mfa.challenge: implemented
-  auth.mfa.verify: implemented
-  auth.mfa.unenroll: implemented
-  auth.mfa.challenge_and_verify: implemented
-  auth.mfa.list_factors: implemented
-  auth.mfa.get_authenticator_assurance_level: implemented
+  auth.mfa.enroll:
+    status: implemented
+    symbols:
+      - AuthMFA.enroll
+      - AuthMFA.enrollWebAuthnFactor
+  auth.mfa.challenge:
+    status: implemented
+    symbols:
+      - AuthMFA.challenge
+  auth.mfa.verify:
+    status: implemented
+    symbols:
+      - AuthMFA.verify
+      - AuthMFA.verifyWebAuthnFactor
+  auth.mfa.unenroll:
+    status: implemented
+    symbols:
+      - AuthMFA.unenroll
+  auth.mfa.challenge_and_verify:
+    status: implemented
+    symbols:
+      - AuthMFA.challengeAndVerify
+  auth.mfa.list_factors:
+    status: implemented
+    symbols:
+      - AuthMFA.listFactors
+  auth.mfa.get_authenticator_assurance_level:
+    status: implemented
+    symbols:
+      - AuthMFA.getAuthenticatorAssuranceLevel
 
-  auth.admin.create_user: implemented
-  auth.admin.delete_user: implemented
-  auth.admin.update_user: implemented
-  auth.admin.get_user: implemented
-  auth.admin.list_users: implemented
-  auth.admin.invite_user: implemented
+  auth.admin.create_user:
+    status: implemented
+    symbols:
+      - AuthAdmin.createUser
+  auth.admin.delete_user:
+    status: implemented
+    symbols:
+      - AuthAdmin.deleteUser
+  auth.admin.update_user:
+    status: implemented
+    symbols:
+      - AuthAdmin.updateUserById
+  auth.admin.get_user:
+    status: implemented
+    symbols:
+      - AuthAdmin.getUserById
+  auth.admin.list_users:
+    status: implemented
+    symbols:
+      - AuthAdmin.listUsers
+  auth.admin.invite_user:
+    status: implemented
+    symbols:
+      - AuthAdmin.inviteUserByEmail
   auth.admin.sign_out: not_implemented
   auth.admin.generate_link: not_implemented
   auth.admin.list_mfa_factors: not_implemented
@@ -59,8 +179,18 @@ features:
   auth.admin.get_provider: not_implemented
   auth.admin.list_providers: not_implemented
 
-  auth.passkey.register_passkey: implemented
-  auth.passkey.sign_in_with_passkey: implemented
+  auth.passkey.register_passkey:
+    status: implemented
+    symbols:
+      - AuthClient.registerPasskey
+      - AuthClient.getPasskeyRegistrationOptions
+      - AuthClient.verifyPasskeyRegistration
+  auth.passkey.sign_in_with_passkey:
+    status: implemented
+    symbols:
+      - AuthClient.signInWithPasskey
+      - AuthClient.getPasskeyAuthenticationOptions
+      - AuthClient.verifyPasskeyAuthentication
 
   auth.passkey_admin.list_passkeys: not_implemented
   auth.passkey_admin.delete_passkey: not_implemented
