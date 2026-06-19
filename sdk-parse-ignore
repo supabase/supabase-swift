@@ -1,0 +1,12 @@
+# Swift Package Manager artifacts
+.build/
+DerivedData/
+
+# Examples and documentation
+Examples/
+docs/
+
+# Tests
+Tests/
+TestHelpers/
+**/*Tests.swift
