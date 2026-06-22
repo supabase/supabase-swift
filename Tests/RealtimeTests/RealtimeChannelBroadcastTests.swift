@@ -29,6 +29,7 @@ import XCTest
     var client: FakeWebSocket!
     var http: HTTPClientMock!
     var sut: RealtimeClientV2!
+    var serverTask: Task<Void, Never>?
 
     override func setUp() {
       super.setUp()
@@ -50,38 +51,42 @@ import XCTest
     }
 
     override func tearDown() {
+      serverTask?.cancel()
+      serverTask = nil
       sut.disconnect()
       super.tearDown()
     }
 
     /// Sets up the server to auto-respond to heartbeats and phx_join events.
     private func setupServerAutoResponder(topic: String = "realtime:test") {
-      server.onEvent = { @Sendable [server] event in
-        guard let msg = event.realtimeMessage else { return }
+      serverTask = Task { @Sendable [server = server!] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
 
-        if msg.event == "heartbeat" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: "phoenix",
-              event: "phx_reply",
-              payload: ["response": [:]]
+          if msg.event == "heartbeat" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "phoenix",
+                event: "phx_reply",
+                payload: ["response": [:]]
+              )
             )
-          )
-        } else if msg.event == "phx_join" {
-          server?.send(
-            RealtimeMessageV2(
-              joinRef: msg.joinRef,
-              ref: msg.ref,
-              topic: topic,
-              event: "phx_reply",
-              payload: [
-                "response": ["postgres_changes": .array([])],
-                "status": "ok",
-              ]
+          } else if msg.event == "phx_join" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: topic,
+                event: "phx_reply",
+                payload: [
+                  "response": ["postgres_changes": .array([])],
+                  "status": "ok",
+                ]
+              )
             )
-          )
+          }
         }
       }
     }

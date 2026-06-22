@@ -1,7 +1,7 @@
 import Foundation
 import XCTestDynamicOverlay
 
-private let _version = "2.45.0"  // {x-release-please-version}
+private let _version = "2.48.0"  // {x-release-please-version}
 
 #if DEBUG
   package let version = isTesting ? "0.0.0" : _version
@@ -65,4 +65,26 @@ private let _platformVersion: String? = {
   package let platformVersion = isTesting ? "0.0.0" : _platformVersion
 #else
   package let platformVersion = _platformVersion
+#endif
+
+private let _runtimeVersion: String? = {
+  #if swift(>=6.3)
+    return "6.3"
+  #elseif swift(>=6.2)
+    return "6.2"
+  #elseif swift(>=6.1)
+    return "6.1"
+  #elseif swift(>=6.0)
+    return "6.0"
+  #elseif swift(>=5.10)
+    return "5.10"
+  #else
+    return nil
+  #endif
+}()
+
+#if DEBUG
+  package let runtimeVersion: String? = isTesting ? "0.0.0" : _runtimeVersion
+#else
+  package let runtimeVersion = _runtimeVersion
 #endif

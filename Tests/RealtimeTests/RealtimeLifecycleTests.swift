@@ -48,39 +48,41 @@ import XCTest
         wsTransport: { [servers] _, _ in
           let (client, server) = FakeWebSocket.fakes()
           // Auto-respond to heartbeats and phx_join so subscribe() completes.
-          server.onEvent = { @Sendable [weak server] event in
-            guard let msg = event.realtimeMessage else { return }
-            if msg.event == "heartbeat" {
-              server?.send(
-                RealtimeMessageV2(
-                  joinRef: msg.joinRef,
-                  ref: msg.ref,
-                  topic: "phoenix",
-                  event: "phx_reply",
-                  payload: ["response": [:]]
-                )
-              )
-            } else if msg.event == "phx_join" {
-              // Mirror the incoming ref so the client's pending push resolves,
-              // regardless of reconnect cycles (ref counter resets on disconnect).
-              server?.send(
-                RealtimeMessageV2(
-                  joinRef: msg.joinRef,
-                  ref: msg.ref,
-                  topic: msg.topic,
-                  event: "phx_reply",
-                  payload: [
-                    "response": [
-                      "postgres_changes": []
-                    ],
-                    "status": "ok",
-                  ]
-                )
-              )
-            }
-          }
           // Retain the server so `client.other` (a weak ref) stays valid.
           servers?.withValue { $0.append(server) }
+          Task { [server] in
+            for await event in server.events {
+              guard let msg = event.realtimeMessage else { continue }
+              if msg.event == "heartbeat" {
+                server.send(
+                  RealtimeMessageV2(
+                    joinRef: msg.joinRef,
+                    ref: msg.ref,
+                    topic: "phoenix",
+                    event: "phx_reply",
+                    payload: ["response": [:]]
+                  )
+                )
+              } else if msg.event == "phx_join" {
+                // Mirror the incoming ref so the client's pending push resolves,
+                // regardless of reconnect cycles (ref counter resets on disconnect).
+                server.send(
+                  RealtimeMessageV2(
+                    joinRef: msg.joinRef,
+                    ref: msg.ref,
+                    topic: msg.topic,
+                    event: "phx_reply",
+                    payload: [
+                      "response": [
+                        "postgres_changes": []
+                      ],
+                      "status": "ok",
+                    ]
+                  )
+                )
+              }
+            }
+          }
           return client
         },
         http: http
@@ -125,13 +127,22 @@ import XCTest
       XCTAssertEqual(sut.status, .connected)
 
       sut.handleAppBackground()
-      // Simulate the OS tearing down the socket while backgrounded (not a user-initiated
-      // disconnect). Closing the server side triggers a .close event on the client without
-      // going through disconnect(), so wasConnectedBeforeBackground remains set.
+      // Subscribe before the OS close so the buffered .disconnected event is
+      // not missed even when .reconnecting follows immediately (PR #1015 made
+      // handleClose call initiateReconnect).
+      let statusUpdates = sut.statusChange
       servers.value.last?.close(code: nil, reason: "OS teardown")
-      _ = await sut.statusChange.first { $0 == .disconnected }
-      XCTAssertEqual(sut.status, .disconnected)
+      // Status sequence: .connected → .disconnected → .connecting (reconnecting).
+      _ = await statusUpdates.first { $0 == .disconnected }
 
+      // Advance the test clock past the 7-second reconnect delay so the
+      // auto-reconnect task wakes and performConnection() runs.
+      await testClock.advance(by: .seconds(8))
+      _ = await statusUpdates.first { $0 == .connected }
+      XCTAssertEqual(sut.status, .connected)
+
+      // handleAppForeground is a no-op: the auto-reconnect already recovered
+      // the connection and the state observer will rejoin channels.
       await sut.handleAppForeground()
       XCTAssertEqual(sut.status, .connected)
     }
@@ -144,11 +155,25 @@ import XCTest
       XCTAssertEqual(channel.status, .subscribed)
 
       sut.handleAppBackground()
-      // Simulate the OS tearing down the socket while backgrounded.
+      let statusUpdates = sut.statusChange
       servers.value.last?.close(code: nil, reason: "OS teardown")
-      _ = await sut.statusChange.first { $0 == .disconnected }
-      XCTAssertEqual(sut.status, .disconnected)
+      _ = await statusUpdates.first { $0 == .disconnected }
 
+      await testClock.advance(by: .seconds(8))
+      _ = await statusUpdates.first { $0 == .connected }
+      XCTAssertEqual(sut.status, .connected)
+
+      // rejoinChannels() is launched as a fire-and-forget Task from the state
+      // observer's handleConnected(isReconnect: true) path. Poll until it
+      // completes (FakeWebSocket delivers phx_reply synchronously but the task
+      // needs scheduler turns to run).
+      let deadline = Date().addingTimeInterval(5)
+      while channel.status != .subscribed, Date() < deadline {
+        try? await Task.sleep(nanoseconds: 10_000_000)  // 10 ms
+      }
+      XCTAssertEqual(channel.status, .subscribed)
+
+      // handleAppForeground is a no-op: already reconnected with channel resubscribed.
       await sut.handleAppForeground()
       XCTAssertEqual(sut.status, .connected)
       XCTAssertEqual(channel.status, .subscribed)

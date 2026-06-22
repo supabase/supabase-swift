@@ -42,10 +42,8 @@ let package = Package(
         ),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Clocks", package: "swift-clocks"),
-        .product(
-          name: "XCTestDynamicOverlay",
-          package: "xctest-dynamic-overlay"
-        ),
+        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
       ]
     ),
     .testTarget(
@@ -63,6 +61,8 @@ let package = Package(
           package: "swift-concurrency-extras"
         ),
         .product(name: "Crypto", package: "swift-crypto"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         "Helpers",
       ]
     ),
@@ -94,7 +94,9 @@ let package = Package(
     .target(
       name: "Functions",
       dependencies: [
-        "Helpers"
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        "Helpers",
       ]
     ),
     .testTarget(
@@ -141,10 +143,8 @@ let package = Package(
     .target(
       name: "PostgREST",
       dependencies: [
-        .product(
-          name: "ConcurrencyExtras",
-          package: "swift-concurrency-extras"
-        ),
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
       ]
     ),
@@ -171,14 +171,9 @@ let package = Package(
     .target(
       name: "Realtime",
       dependencies: [
-        .product(
-          name: "ConcurrencyExtras",
-          package: "swift-concurrency-extras"
-        ),
-        .product(
-          name: "IssueReporting",
-          package: "xctest-dynamic-overlay"
-        ),
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         "Helpers",
       ]
     ),
@@ -196,7 +191,9 @@ let package = Package(
     .target(
       name: "Storage",
       dependencies: [
-        "Helpers"
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        "Helpers",
       ]
     ),
     .testTarget(
@@ -226,14 +223,9 @@ let package = Package(
     .target(
       name: "Supabase",
       dependencies: [
-        .product(
-          name: "ConcurrencyExtras",
-          package: "swift-concurrency-extras"
-        ),
-        .product(
-          name: "IssueReporting",
-          package: "xctest-dynamic-overlay"
-        ),
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         "Auth",
         "Functions",
         "PostgREST",
@@ -268,6 +260,7 @@ let package = Package(
           package: "xctest-dynamic-overlay"
         ),
         "Auth",
+        "Helpers",
         "Mocker",
       ]
     ),

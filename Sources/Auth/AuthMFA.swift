@@ -38,11 +38,20 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for creating a challenge.
   /// - Returns: An authentication response with the challenge information.
   public func challenge(params: MFAChallengeParams) async throws -> AuthMFAChallengeResponse {
-    try await api.authorizedExecute(
+    let body: Data?
+    if let webAuthn = params.webAuthn {
+      body = try encoder.encode(["webauthn": webAuthn])
+    } else if params.channel != nil {
+      body = try encoder.encode(["channel": params.channel])
+    } else {
+      body = nil
+    }
+
+    return try await api.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
         method: .post,
-        body: params.channel == nil ? nil : encoder.encode(["channel": params.channel])
+        body: body
       )
     )
     .decoded(decoder: decoder)
@@ -55,11 +64,24 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response after verifying the factor.
   @discardableResult
   public func verify(params: MFAVerifyParams) async throws -> AuthMFAVerifyResponse {
+    let body: Data
+    if let credentialResponse = params.credentialResponse {
+      // WebAuthn credential responses use W3C camelCase field names (e.g. `clientDataJSON`).
+      // Encode without the snake_case strategy so they reach the backend verbatim.
+      body = try encodeWebAuthnBody([
+        "factor_id": .string(params.factorId),
+        "challenge_id": .string(params.challengeId),
+        "webauthn": ["credential_response": credentialResponse],
+      ])
+    } else {
+      body = try encoder.encode(params)
+    }
+
     let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
         method: .post,
-        body: encoder.encode(params)
+        body: body
       )
     ).decoded(decoder: decoder)
 
@@ -116,7 +138,10 @@ public struct AuthMFA: Sendable {
     let phone = factors.filter {
       $0.factorType == "phone" && $0.status == .verified
     }
-    return AuthMFAListFactorsResponse(all: factors, totp: totp, phone: phone)
+    let webauthn = factors.filter {
+      $0.factorType == "webauthn" && $0.status == .verified
+    }
+    return AuthMFAListFactorsResponse(all: factors, totp: totp, phone: phone, webauthn: webauthn)
   }
 
   /// Returns the Authenticator Assurance Level (AAL) for the active session.

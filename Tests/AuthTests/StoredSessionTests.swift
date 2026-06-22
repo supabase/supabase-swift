@@ -8,6 +8,32 @@ import XCTest
 final class StoredSessionTests: XCTestCase {
   let clientID = AuthClientID()
 
+  func testGet_withCorruptedJSON_returnsNil() throws {
+    let localStorage = InMemoryLocalStorage()
+    try localStorage.store(
+      key: "supabase.auth.token",
+      value: Data("not-valid-json".utf8)
+    )
+
+    let testClientID = AuthClientID()
+    Dependencies[testClientID] = Dependencies(
+      configuration: AuthClient.Configuration(
+        url: URL(string: "http://localhost")!,
+        storageKey: "supabase.auth.token",
+        localStorage: localStorage,
+        logger: nil
+      ),
+      http: HTTPClientMock(),
+      api: .init(clientID: testClientID),
+      codeVerifierStorage: .mock,
+      sessionStorage: .live(clientID: testClientID),
+      sessionManager: .live(clientID: testClientID)
+    )
+
+    let sut = Dependencies[testClientID].sessionStorage
+    XCTAssertNil(sut.get())
+  }
+
   func testStoredSession() throws {
     #if os(Android)
       throw XCTSkip("Disabled for android due to #filePath not existing on emulator")

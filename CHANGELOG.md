@@ -1,5 +1,51 @@
 # Changelog
 
+## [2.48.0](https://github.com/supabase/supabase-swift/compare/v2.47.2...v2.48.0) (2026-06-17)
+
+
+### Features
+
+* **auth:** add WebAuthn/passkey support ([#1013](https://github.com/supabase/supabase-swift/issues/1013)) ([9d65216](https://github.com/supabase/supabase-swift/commit/9d652160366ffaabfc370f23b94568505003ac42))
+
+## [2.47.2](https://github.com/supabase/supabase-swift/compare/v2.47.1...v2.47.2) (2026-06-16)
+
+
+### Bug Fixes
+
+* **realtime:** prevent deaf socket from duplicate handleConnected (SDK-959) ([#1003](https://github.com/supabase/supabase-swift/issues/1003)) ([2681ba0](https://github.com/supabase/supabase-swift/commit/2681ba06e5eafd8745ecabe58f6eabdc48589d39))
+
+## [2.47.1](https://github.com/supabase/supabase-swift/compare/v2.47.0...v2.47.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* **auth:** recognize ?error= query param in implicit grant redirect URLs ([#1009](https://github.com/supabase/supabase-swift/issues/1009)) ([92d7c6f](https://github.com/supabase/supabase-swift/commit/92d7c6f1daac771f1fc7db22a1ef22cda14e6573))
+* **tests:** grant API access to integration test tables and functions ([#1018](https://github.com/supabase/supabase-swift/issues/1018)) ([8372c18](https://github.com/supabase/supabase-swift/commit/8372c181cb04104d6725b2afb5e8238db086289f))
+
+## [2.47.0](https://github.com/supabase/supabase-swift/compare/v2.46.0...v2.47.0) (2026-06-08)
+
+
+### Features
+
+* **supabase:** consolidate client metadata into structured X-Client-Info header ([#986](https://github.com/supabase/supabase-swift/issues/986)) ([c62510d](https://github.com/supabase/supabase-swift/commit/c62510da51c93d06e6a22a59a74901b59545f3f0))
+
+
+### Bug Fixes
+
+* **spm:** declare missing direct product dependencies for strict framework linking ([#1004](https://github.com/supabase/supabase-swift/issues/1004)) ([60c56c8](https://github.com/supabase/supabase-swift/commit/60c56c8661014bd89d879ab7f69f9f240b6f590a)), closes [#1000](https://github.com/supabase/supabase-swift/issues/1000)
+
+## [2.46.0](https://github.com/supabase/supabase-swift/compare/v2.45.0...v2.46.0) (2026-04-28)
+
+
+### Features
+
+* **functions:** support custom JSON encoder and decoder ([#975](https://github.com/supabase/supabase-swift/issues/975)) ([b7e6a63](https://github.com/supabase/supabase-swift/commit/b7e6a63d31b50506c793525aefe2ad7703e7c3a9))
+
+
+### Bug Fixes
+
+* **ci:** remove path filters so CI always runs ([#985](https://github.com/supabase/supabase-swift/issues/985)) ([15aefe5](https://github.com/supabase/supabase-swift/commit/15aefe5bd8de32bd3d434f3d9c748fd11bf32e82))
+
 ## [2.45.0](https://github.com/supabase/supabase-swift/compare/v2.44.1...v2.45.0) (2026-04-24)
 
 
