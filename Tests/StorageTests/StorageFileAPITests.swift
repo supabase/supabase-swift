@@ -585,10 +585,23 @@ struct StorageFileAPITests {
     await task.cancel()
   }
 
-  @Test func download_withEmptyTransformOptions() async {
-    // Empty TransformOptions should still route to /object/ (not /render/image/).
-    let task = storage.from("bucket").download(path: "file.txt", options: TransformOptions())
-    await task.cancel()
+  @Test func download_withEmptyTransformOptions() async throws {
+    // Empty TransformOptions should route to /object/ (not /render/image/).
+    #if canImport(Darwin)
+      Mock(
+        url: url.appendingPathComponent("object/bucket/file.txt"),
+        contentType: .json,
+        statusCode: 200,
+        data: [.get: Data("data".utf8)]
+      ).register()
+      let fileURL = try await storage.from("bucket")
+        .download(path: "file.txt", options: TransformOptions())
+        .value
+      try? FileManager.default.removeItem(at: fileURL)
+    #else
+      let task = storage.from("bucket").download(path: "file.txt", options: TransformOptions())
+      await task.cancel()
+    #endif
   }
 
   @Test func getPublicURL_withEmptyTransformOptions() throws {
@@ -615,14 +628,25 @@ struct StorageFileAPITests {
     )
   }
 
-  @Test func download_withOptions() async {
+  @Test func download_withOptions() async throws {
     // Non-empty TransformOptions should route to /render/image/authenticated/.
-    let task = storage.from("bucket")
-      .download(
-        path: "sadcat.txt",
-        options: TransformOptions(format: .origin)
-      )
-    await task.cancel()
+    #if canImport(Darwin)
+      Mock(
+        url: url.appendingPathComponent("render/image/authenticated/bucket/sadcat.txt"),
+        ignoreQuery: true,
+        contentType: .json,
+        statusCode: 200,
+        data: [.get: Data("data".utf8)]
+      ).register()
+      let fileURL = try await storage.from("bucket")
+        .download(path: "sadcat.txt", options: TransformOptions(format: .origin))
+        .value
+      try? FileManager.default.removeItem(at: fileURL)
+    #else
+      let task = storage.from("bucket")
+        .download(path: "sadcat.txt", options: TransformOptions(format: .origin))
+      await task.cancel()
+    #endif
   }
 
   @Test func info() async throws {
@@ -1078,8 +1102,14 @@ struct StorageFileAPITests {
       data: Data("hello world".utf8)
     )
 
+    var progressSeen = false
+    for await event in task.events {
+      if case .progress = event { progressSeen = true }
+    }
+
     let response = try await task.value
 
+    #expect(progressSeen, "Expected at least one .progress event before completion")
     #expect(response.id == UUID(uuidString: "eaa8bdb5-2e00-4767-b5a9-d2502efe2196"))
     #expect(response.path == "file.txt")
     #expect(response.fullPath == "bucket/file.txt")

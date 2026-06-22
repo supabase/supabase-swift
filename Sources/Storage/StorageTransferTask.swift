@@ -93,7 +93,8 @@ public final class StorageTransferTask<Success: Sendable>: Sendable {
 
   /// Suspends the transfer.
   ///
-  /// For TUS uploads the current in-flight chunk is drained before the task suspends.
+  /// For TUS uploads the in-flight chunk request is cancelled and the byte offset is
+  /// re-synced via a HEAD query when ``resume()`` is called.
   /// For downloads, the session captures any available resume data so that ``resume()`` can
   /// continue from the last byte received (requires `Accept-Ranges` support on the server).
   /// For multipart uploads this is a no-op — use ``cancel()`` and re-upload from scratch.
