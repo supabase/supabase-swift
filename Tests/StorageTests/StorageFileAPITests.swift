@@ -1099,7 +1099,8 @@ struct StorageFileAPITests {
 
     let task = storage.from("bucket").upload(
       "file.txt",
-      data: Data("hello world".utf8)
+      data: Data("hello world".utf8),
+      method: .resumable
     )
 
     var progressSeen = false
