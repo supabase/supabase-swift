@@ -58,7 +58,7 @@ public struct StorageClientConfiguration: Sendable {
   /// your `AppDelegate`.
   ///
   /// When `nil` (the default), a standard foreground session is used.
-  public var backgroundDownloadSessionIdentifier: String?
+  public let backgroundDownloadSessionIdentifier: String?
 
   /// The TUS upload chunk size in bytes.
   ///

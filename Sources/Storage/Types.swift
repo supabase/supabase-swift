@@ -3,10 +3,8 @@ import Helpers
 
 /// The upload protocol used by ``StorageFileAPI/upload(_:data:options:method:)`` and related methods.
 ///
-/// Pass this to ``StorageFileAPI/upload(_:data:options:method:)``,
-/// ``StorageFileAPI/upload(_:fileURL:options:method:)``,
-/// ``StorageFileAPI/update(_:data:options:method:)``, or
-/// ``StorageFileAPI/update(_:fileURL:options:method:)`` to override the default selection logic.
+/// Pass this to ``StorageFileAPI/upload(_:data:options:method:)`` or
+/// ``StorageFileAPI/upload(_:fileURL:options:method:)`` to override the default selection logic.
 ///
 /// ## Example
 ///
@@ -693,7 +691,7 @@ public enum DownloadBehavior: Sendable {
 /// Options for on-the-fly image transformation via the Supabase Storage image transformation API.
 ///
 /// Use `TransformOptions` when calling
-/// ``StorageFileAPI/download(path:options:)`` or
+/// ``StorageFileAPI/download(path:options:query:cacheNonce:)`` or
 /// ``StorageFileAPI/getPublicURL(path:download:options:cacheNonce:)`` to resize, reformat, or
 /// adjust the quality of images before they are served to the client.
 ///
