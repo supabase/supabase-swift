@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   validate:
-    uses: supabase/sdk/.github/workflows/validate-sdk-compliance.yml@main
+    uses: supabase/sdk/.github/workflows/validate-sdk-compliance.yml@claude/vigilant-wilson-62e91c
     with:
       language: swift
+      sdk-ref: claude/vigilant-wilson-62e91c
