@@ -1,6 +1,9 @@
-name: SDK Compliance
+name: Validate SDK Compliance
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
 
 permissions:
