@@ -34,28 +34,41 @@ struct StorageExamplesView: View {
         }
       }
 
-      Section("File Operations") {
+      Section("Upload") {
         NavigationLink(destination: FileUploadView()) {
           ExampleRow(
             title: "Upload Files",
-            description: "Upload images, documents, and files",
+            description: "Smart default, multipart, or TUS resumable with pause/resume/cancel",
             icon: "arrow.up.doc.fill"
           )
         }
+      }
 
+      Section("Download") {
         NavigationLink(destination: FileDownloadView()) {
           ExampleRow(
             title: "Download Files",
-            description: "Download and preview stored files",
+            description:
+              "To memory or to disk with pause, resume, cancel, and background-session support",
             icon: "arrow.down.doc.fill"
           )
         }
+      }
 
+      Section("File Management") {
         NavigationLink(destination: FileManagementView()) {
           ExampleRow(
-            title: "File Management",
-            description: "Move, copy, and delete files",
+            title: "Move, Copy & Delete",
+            description: "Manage files within and across buckets",
             icon: "doc.on.doc.fill"
+          )
+        }
+
+        NavigationLink(destination: FileSearchView()) {
+          ExampleRow(
+            title: "Search & Metadata",
+            description: "Search files and inspect file metadata",
+            icon: "magnifyingglass"
           )
         }
       }
@@ -64,7 +77,7 @@ struct StorageExamplesView: View {
         NavigationLink(destination: ImageTransformView()) {
           ExampleRow(
             title: "Image Transformations",
-            description: "Resize, crop, and optimize images",
+            description: "Resize, crop, and optimize images on-the-fly",
             icon: "photo.fill"
           )
         }
@@ -72,16 +85,8 @@ struct StorageExamplesView: View {
         NavigationLink(destination: SignedURLsView()) {
           ExampleRow(
             title: "Signed URLs",
-            description: "Generate temporary access URLs",
+            description: "Generate time-limited access URLs",
             icon: "link.circle.fill"
-          )
-        }
-
-        NavigationLink(destination: FileSearchView()) {
-          ExampleRow(
-            title: "Search & Metadata",
-            description: "Search files and manage metadata",
-            icon: "magnifyingglass"
           )
         }
       }

@@ -117,7 +117,10 @@ final class StorageErrorCodeIntegrationTests: XCTestCase {
 
   func testErrorCode_objectNotFound() async {
     await assertStorageError(
-      { _ = try await self.storage.from(self.bucketName).download(path: "does-not-exist.jpg") },
+      {
+        _ = try await self.storage.from(self.bucketName).downloadData(path: "does-not-exist.jpg")
+          .value
+      },
       expectedCode: .objectNotFound,
       expectedStatus: 404
     )
@@ -125,7 +128,7 @@ final class StorageErrorCodeIntegrationTests: XCTestCase {
 
   func testErrorCode_objectNotFound_isNotFound() async throws {
     do {
-      _ = try await storage.from(bucketName).download(path: "does-not-exist.jpg")
+      _ = try await storage.from(bucketName).downloadData(path: "does-not-exist.jpg").value
       XCTFail("Expected StorageError")
     } catch let error as StorageError {
       XCTAssertTrue(error.isNotFound)
@@ -154,10 +157,10 @@ final class StorageErrorCodeIntegrationTests: XCTestCase {
   func testErrorCode_objectAlreadyExists() async throws {
     let path = "folder/file-\(UUID().uuidString).jpg"
     let data = try jpegData()
-    try await storage.from(bucketName).upload(path, data: data)
+    _ = try await storage.from(bucketName).upload(path, data: data).value
 
     await assertStorageError(
-      { try await self.storage.from(self.bucketName).upload(path, data: data) },
+      { _ = try await self.storage.from(self.bucketName).upload(path, data: data).value },
       expectedCode: .objectAlreadyExists,
       expectedStatus: 409
     )
@@ -201,8 +204,9 @@ final class StorageErrorCodeIntegrationTests: XCTestCase {
     let data = try jpegData()  // ~28 KB, well above 1 KB limit
     await assertStorageError(
       {
-        try await self.storage.from(tinyBucket).upload(
-          "file.jpg", data: data, options: FileOptions(contentType: "image/jpeg"))
+        _ = try await self.storage.from(tinyBucket).upload(
+          "file.jpg", data: data, options: FileOptions(contentType: "image/jpeg")
+        ).value
       },
       expectedCode: .entityTooLarge,
       expectedStatus: 413
@@ -221,8 +225,9 @@ final class StorageErrorCodeIntegrationTests: XCTestCase {
     let data = try jpegData()
     await assertStorageError(
       {
-        try await self.storage.from(strictBucket).upload(
-          "file.jpg", data: data, options: FileOptions(contentType: "image/jpeg"))
+        _ = try await self.storage.from(strictBucket).upload(
+          "file.jpg", data: data, options: FileOptions(contentType: "image/jpeg")
+        ).value
       },
       expectedCode: .invalidMimeType,
       expectedStatus: 415
@@ -239,9 +244,9 @@ final class StorageErrorCodeIntegrationTests: XCTestCase {
     let data = try jpegData()
     let path = "folder/file-\(UUID().uuidString).jpg"
 
-    try await storage.from(bucketName).upload(path, data: data)
+    _ = try await storage.from(bucketName).upload(path, data: data).value
 
-    let downloaded = try await storage.from(bucketName).download(path: "/\(path)")
+    let downloaded = try await storage.from(bucketName).downloadData(path: "/\(path)").value
     XCTAssertEqual(downloaded, data)
   }
 }
