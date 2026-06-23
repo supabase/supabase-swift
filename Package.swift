@@ -97,7 +97,10 @@ let package = Package(
         "TestHelpers",
       ],
       exclude: [
-        "__Snapshots__"
+        "supabase"
+      ],
+      resources: [
+        .copy("Replays")
       ]
     ),
     .testTarget(
