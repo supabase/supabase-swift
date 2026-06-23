@@ -342,29 +342,186 @@ features:
 
   # ── Storage ────────────────────────────────────────────────────────────────
 
-  storage.file_buckets.create_file_bucket: implemented
-  storage.file_buckets.get_bucket: implemented
-  storage.file_buckets.list_file_buckets: implemented
-  storage.file_buckets.update_bucket: implemented
-  storage.file_buckets.delete_file_bucket: implemented
-  storage.file_buckets.empty_bucket: implemented
-  storage.file_buckets.access_bucket: implemented
-  storage.file_buckets.upload: implemented
-  storage.file_buckets.download: implemented
-  storage.file_buckets.list_files: implemented
-  storage.file_buckets.move: implemented
-  storage.file_buckets.copy: implemented
-  storage.file_buckets.remove: implemented
-  storage.file_buckets.get_public_url: implemented
-  storage.file_buckets.create_signed_url: implemented
-  storage.file_buckets.create_signed_urls: implemented
-  storage.file_buckets.create_signed_upload_url: implemented
-  storage.file_buckets.upload_with_signed_url: implemented
-  storage.file_buckets.update_file: implemented
-  storage.file_buckets.file_exists: implemented
-  storage.file_buckets.file_info: implemented
+  storage.file_buckets.access_bucket:
+    status: implemented
+    symbols:
+      - StorageClient
+      - StorageClient.url
+      - StorageClient.configuration
+      - StorageClient.init
+      - StorageClient.from
+      - StorageClient.handleBackgroundEvents
+      - StorageClientConfiguration.backgroundDownloadSessionIdentifier
+      - StorageClientConfiguration.tusChunkSize
+      - SupabaseClientOptions.StorageOptions.backgroundDownloadSessionIdentifier
+      - StorageFileAPI
+      - StorageErrorCode
+      - StorageErrorCode.rawValue
+      - StorageErrorCode.init
+      - StorageErrorCode.unknown
+      - StorageErrorCode.invalidJWT
+      - StorageErrorCode.unauthorized
+      - StorageErrorCode.objectNotFound
+      - StorageErrorCode.bucketNotFound
+      - StorageErrorCode.objectAlreadyExists
+      - StorageErrorCode.bucketAlreadyExists
+      - StorageErrorCode.invalidBucketName
+      - StorageErrorCode.entityTooLarge
+      - StorageErrorCode.invalidMimeType
+      - StorageErrorCode.noTokenReturned
+      - StorageErrorCode.networkError
+      - StorageErrorCode.fileSystemError
+      - StorageErrorCode.cancelled
+      - StorageError.errorCode
+      - StorageError.underlyingResponse
+      - StorageError.underlyingData
+      - StorageError.isNotFound
+      - StorageError.isUnauthorized
+      - StorageError.noTokenReturned
+  storage.file_buckets.create_file_bucket:
+    status: implemented
+    symbols:
+      - StorageClient.createBucket
+      - BucketOptions.isPublic
+  storage.file_buckets.get_bucket:
+    status: implemented
+    symbols:
+      - StorageClient.getBucket
+  storage.file_buckets.list_file_buckets:
+    status: implemented
+    symbols:
+      - StorageClient.listBuckets
+  storage.file_buckets.update_bucket:
+    status: implemented
+    symbols:
+      - StorageClient.updateBucket
+  storage.file_buckets.delete_file_bucket:
+    status: implemented
+    symbols:
+      - StorageClient.deleteBucket
+  storage.file_buckets.empty_bucket:
+    status: implemented
+    symbols:
+      - StorageClient.emptyBucket
+  storage.file_buckets.upload:
+    status: implemented
+    symbols:
+      - StorageFileAPI.upload
+      - StorageTransferTask
+      - StorageTransferTask.events
+      - StorageTransferTask.result
+      - StorageTransferTask.value
+      - StorageTransferTask.pause
+      - StorageTransferTask.resume
+      - StorageTransferTask.cancel
+      - StorageUploadTask
+      - UploadMethod
+      - TransferEvent
+      - TransferProgress
+      - TransferProgress.bytesTransferred
+      - TransferProgress.totalBytes
+      - TransferProgress.fractionCompleted
+      - StorageByteCount
+      - StorageByteCount.bytes
+      - StorageByteCount.init
+      - StorageByteCount.kilobytes
+      - StorageByteCount.megabytes
+      - StorageByteCount.gigabytes
+      - MultipartBuilderError
+      - MultipartBuilderError.errorDescription
+  storage.file_buckets.download:
+    status: implemented
+    symbols:
+      - StorageFileAPI.download
+      - StorageFileAPI.downloadData
+      - StorageDownloadTask
+      - DownloadBehavior
+  storage.file_buckets.list_files:
+    status: implemented
+    symbols:
+      - StorageFileAPI.list
+      - SortOrder
+      - SortOrder.ascending
+      - SortOrder.descending
+      - SortOrder.encode
+      - SortOrder.init
+      - SortOrder.rawValue
+  storage.file_buckets.move:
+    status: implemented
+    symbols:
+      - StorageFileAPI.move
+  storage.file_buckets.copy:
+    status: implemented
+    symbols:
+      - StorageFileAPI.copy
+  storage.file_buckets.remove:
+    status: implemented
+    symbols:
+      - StorageFileAPI.remove
+  storage.file_buckets.get_public_url:
+    status: implemented
+    symbols:
+      - StorageFileAPI.getPublicURL
+  storage.file_buckets.create_signed_url:
+    status: implemented
+    symbols:
+      - StorageFileAPI.createSignedURL
+  storage.file_buckets.create_signed_urls:
+    status: implemented
+    symbols:
+      - StorageFileAPI.createSignedURLs
+  storage.file_buckets.create_signed_upload_url:
+    status: implemented
+    symbols:
+      - StorageFileAPI.createSignedUploadURL
+  storage.file_buckets.upload_with_signed_url:
+    status: implemented
+    symbols:
+      - StorageFileAPI.uploadToSignedURL
+  storage.file_buckets.update_file:
+    status: implemented
+    symbols:
+      - StorageFileAPI.update
+  storage.file_buckets.file_exists:
+    status: implemented
+    symbols:
+      - StorageFileAPI.exists
+  storage.file_buckets.file_info:
+    status: implemented
+    symbols:
+      - StorageFileAPI.info
+      - FileInfo
+      - FileInfo.id
+      - FileInfo.version
+      - FileInfo.name
+      - FileInfo.bucketId
+      - FileInfo.updatedAt
+      - FileInfo.createdAt
+      - FileInfo.lastAccessedAt
+      - FileInfo.size
+      - FileInfo.cacheControl
+      - FileInfo.contentType
+      - FileInfo.etag
+      - FileInfo.lastModified
+      - FileInfo.metadata
   storage.file_buckets.list_files_paginated: implemented
-  storage.file_buckets.download_with_transform: implemented
+  storage.file_buckets.download_with_transform:
+    status: implemented
+    symbols:
+      - ImageFormat
+      - ImageFormat.avif
+      - ImageFormat.encode
+      - ImageFormat.init
+      - ImageFormat.origin
+      - ImageFormat.rawValue
+      - ImageFormat.webp
+      - ResizeMode
+      - ResizeMode.contain
+      - ResizeMode.cover
+      - ResizeMode.encode
+      - ResizeMode.fill
+      - ResizeMode.init
+      - ResizeMode.rawValue
   storage.file_buckets.copy_cross_bucket: implemented
   storage.file_buckets.move_cross_bucket: implemented
   storage.file_buckets.upload_with_metadata: implemented
