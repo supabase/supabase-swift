@@ -169,6 +169,7 @@ export function transformSymbolGraph(
     const decl: TypeDocDeclaration = {
       id: getId(),
       name: baseName(sym.names.title),
+      variant: "declaration",
       kind,
       kindString: KIND_STRING[kind],
       flags: {},

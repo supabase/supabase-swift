@@ -68,6 +68,7 @@ export interface TypeDocSignature {
 export interface TypeDocDeclaration {
   id: number;
   name: string;
+  variant: "declaration";
   kind: TypeDocKind;
   kindString: string;
   flags: Record<string, unknown>;
