@@ -6,6 +6,7 @@ on:
     paths:
       - "Sources/**"
       - "Package.swift"
+      - "scripts/swift-docs/**"
       - ".github/workflows/generate-swift-docs.yml"
   schedule:
     - cron: "0 3 * * *"
@@ -30,13 +31,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Checkout supabase/sdk (for swift-docs tool)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: supabase/sdk
-          path: supabase-sdk
-          persist-credentials: false
-
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
@@ -44,20 +38,20 @@ jobs:
 
       - name: Install swift-docs dependencies
         run: npm ci
-        working-directory: supabase-sdk/scripts/swift-docs
+        working-directory: scripts/swift-docs
 
       - name: Generate TypeDoc JSON
         run: |
           npx tsx src/index.ts \
-            ../../../ \
+            ../../ \
             spec.json \
             supabase-swift-categories.json
-        working-directory: supabase-sdk/scripts/swift-docs
+        working-directory: scripts/swift-docs
 
       - name: Prepare Pages artifact
         run: |
           mkdir -p site/v2
-          cp supabase-sdk/scripts/swift-docs/spec.json site/v2/spec.json
+          cp scripts/swift-docs/spec.json site/v2/spec.json
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
