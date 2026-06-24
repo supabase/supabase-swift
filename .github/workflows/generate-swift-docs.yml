@@ -2,7 +2,7 @@ name: Generate Swift Docs
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/generate-swift-docs]
     paths:
       - "Sources/**"
       - "Package.swift"
