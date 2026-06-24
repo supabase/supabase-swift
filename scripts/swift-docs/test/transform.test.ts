@@ -56,8 +56,8 @@ describe("parseTypeString", () => {
   it("maps a known generic param to typeParameter", () => {
     expect(parseTypeString("T", new Set(["T"]))).toEqual({ type: "typeParameter", name: "T" });
   });
-  it("maps an unknown named type to reference", () => {
-    expect(parseTypeString("AuthSession")).toEqual({ type: "reference", name: "AuthSession" });
+  it("maps an unknown named type to intrinsic", () => {
+    expect(parseTypeString("AuthSession")).toEqual({ type: "intrinsic", name: "AuthSession" });
   });
 });
 
@@ -117,10 +117,10 @@ describe("transformSymbolGraph", () => {
     expect(sig.parameters![1].type).toEqual({ type: "intrinsic", name: "String" });
   });
 
-  it("maps signIn return type as reference to AuthSession", () => {
+  it("maps signIn return type as intrinsic to AuthSession", () => {
     const cls = result.children.find(c => c.name === "AuthClient")!;
     const sig = cls.children?.find(c => c.name === "signIn")!.signatures![0]!;
-    expect(sig.type).toEqual({ type: "reference", name: "AuthSession" });
+    expect(sig.type).toEqual({ type: "intrinsic", name: "AuthSession" });
   });
 
   it("emits AuthSession as a Class (swift.struct maps to 128)", () => {
@@ -182,7 +182,7 @@ describe("transformSymbolGraph", () => {
     const cls = result.children.find(c => c.name === "AuthClient")!;
     const sig = cls.children?.find(c => c.name === "refresh")!.signatures![0]!;
     expect(sig.parameters).toBeUndefined();
-    expect(sig.type).toEqual({ type: "reference", name: "AuthSession" });
+    expect(sig.type).toEqual({ type: "intrinsic", name: "AuthSession" });
   });
 
   it("assigns unique integer ids to every node", () => {

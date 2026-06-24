@@ -15,12 +15,6 @@ const KIND_MAP: Record<string, TypeDocKind> = {
   "swift.func": 64, "swift.typealias": 2097152, "swift.var": 32,
 };
 
-const INTRINSICS = new Set([
-  "String", "Int", "Int8", "Int16", "Int32", "Int64",
-  "UInt", "UInt8", "UInt16", "UInt32", "UInt64",
-  "Double", "Float", "Bool", "Void", "Never", "Any", "AnyObject",
-]);
-
 export function parseTypeString(text: string, genericParams: Set<string> = new Set()): TypeDocType {
   const t = text.trim();
   if (t.endsWith("?")) {
@@ -53,8 +47,11 @@ export function parseTypeString(text: string, genericParams: Set<string> = new S
     return { type: "array", elementType: parseTypeString(t.slice(6, -1), genericParams) };
   }
   if (genericParams.has(t)) return { type: "typeParameter", name: t };
-  if (INTRINSICS.has(t)) return { type: "intrinsic", name: t };
-  return { type: "reference", name: t };
+  // Emit all simple identifiers as "intrinsic" so the docs renderer displays
+  // them as-is. Using "reference" triggers TypeDoc's id-lookup path which
+  // collapses to "nameOnly" when there is no id to dereference — and the
+  // ReturnTypeDetails component skips nameOnly types entirely.
+  return { type: "intrinsic", name: t };
 }
 
 function findTopLevelColon(s: string): number {
@@ -71,6 +68,14 @@ function findTopLevelColon(s: string): number {
 function parseFragments(frags: DeclarationFragment[] | undefined, gp: Set<string>): TypeDocType {
   if (!frags?.length) return { type: "intrinsic", name: "Void" };
   return parseTypeString(frags.map(f => f.spelling).join("").trim(), gp);
+}
+
+// Strip the external argument label and ": " separator from parameter declaration fragments.
+// Swift parameter fragments have the shape: [label, ": ", ...type fragments].
+// We only want the type part.
+function paramTypeFragments(frags: DeclarationFragment[]): DeclarationFragment[] {
+  const colonIdx = frags.findIndex(f => f.kind === "text" && f.spelling.trimStart().startsWith(":"));
+  return colonIdx >= 0 ? frags.slice(colonIdx + 1) : frags;
 }
 
 function baseName(title: string): string {
@@ -104,7 +109,7 @@ function buildSignature(
       kindString: "Parameter" as const,
       flags: {} as Record<string, never>,
       ...(docText && { comment: { summary: [{ kind: "text" as const, text: docText }] } }),
-      type: parseFragments(p.declarationFragments, genericParams),
+      type: parseFragments(paramTypeFragments(p.declarationFragments ?? []), genericParams),
     };
   });
 
