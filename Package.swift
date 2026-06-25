@@ -20,6 +20,7 @@ let package = Package(
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Supabase", targets: ["Supabase"]),
+    .library(name: "SupabaseSwiftMacros", targets: ["SupabaseSwiftMacros"]),
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0"),
@@ -30,6 +31,8 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
+    .package(url: "https://github.com/swiftlang/swift-syntax", from: "510.0.0"),
+    .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.5.0"),
   ],
   targets: [
     .target(
@@ -119,6 +122,7 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
+        .target(name: "SupabaseSwiftMacros"),
       ]
     ),
     .testTarget(
@@ -191,6 +195,7 @@ let package = Package(
         "PostgREST",
         "Realtime",
         "Storage",
+        .target(name: "SupabaseSwiftMacros"),
       ]
     ),
     .testTarget(
@@ -210,6 +215,27 @@ let package = Package(
         "Auth",
         "Helpers",
         "Mocker",
+      ]
+    ),
+    .target(
+      name: "SupabaseMacros",
+      dependencies: [
+        .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+        .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+      ]
+    ),
+    .target(
+      name: "SupabaseSwiftMacros",
+      dependencies: [
+        .target(name: "SupabaseMacros")
+      ]
+    ),
+    .testTarget(
+      name: "SupabaseMacrosTests",
+      dependencies: [
+        .target(name: "SupabaseMacros"),
+        .target(name: "SupabaseSwiftMacros"),
+        .product(name: "MacroTesting", package: "swift-macro-testing"),
       ]
     ),
   ]
