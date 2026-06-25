@@ -255,6 +255,13 @@ enum SelectionOfDiagnostic: DiagnosticMessage {
       return "Embedded type '\(typeName)' in '@SelectionOf' requires '@Relationship'"
     }
   }
-  var diagnosticID: MessageID { .init(domain: "SupabaseMacros", id: "\(self)") }
+  var diagnosticID: MessageID {
+    switch self {
+    case .notAStruct:
+      return .init(domain: "SupabaseMacros", id: "notAStruct")
+    case .nonPrimitiveRequiresRelationship:
+      return .init(domain: "SupabaseMacros", id: "nonPrimitiveRequiresRelationship")
+    }
+  }
   var severity: DiagnosticSeverity { .error }
 }
