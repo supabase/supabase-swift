@@ -1,25 +1,24 @@
 /// Marks a struct as a PostgREST table.
 ///
 /// Synthesizes:
-/// - `TableRepresentable` or `ReadOnlyTableRepresentable` conformance
 /// - `static let tableName`, `schema`, `selectString = "*"`
 /// - `static func columnName<V>(for:) -> String`
 /// - Nested `Insert` struct (excluded when readOnly: true)
 /// - Nested `Update` struct (excluded when readOnly: true)
 /// - `CodingKeys` enum with snake_case mapping
 ///
+/// **Important:** Due to a Swift compiler limitation, the protocol conformance
+/// (`TableRepresentable` or `ReadOnlyTableRepresentable`) must be declared explicitly
+/// on the struct — the macro provides the required implementations.
+///
 /// - Parameters:
 ///   - tableName: The PostgREST table or view name.
 ///   - schema: The PostgreSQL schema (default: "public").
-///   - readOnly: Pass true for views — omits Insert/Update and conforms to ReadOnlyTableRepresentable.
+///   - readOnly: Pass true for views — omits Insert/Update; conform to ReadOnlyTableRepresentable.
 @attached(
-  member, names: named(Insert), named(Update), named(CodingKeys),
-  named(columnName))
-@attached(
-  extension,
-  conformances: TableRepresentable, ReadOnlyTableRepresentable,
-  SelectionRepresentable,
-  names: named(tableName), named(schema), named(selectString))
+  member,
+  names: named(CodingKeys), named(tableName), named(schema), named(selectString),
+  named(columnName), named(Insert), named(Update))
 public macro Table(
   _ tableName: String,
   schema: String = "public",

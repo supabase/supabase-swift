@@ -71,10 +71,7 @@ struct MessagesView: View {
 
     do {
       let userId = try await supabase.auth.session.user.id
-      try await supabase
-        .from(Message.self)
-        .insert(Message.Insert(message: newMessage, userId: userId, channelId: channel.id))
-        .execute()
+      try await supabase.sendMessage(newMessage, userId: userId, channelId: channel.id)
       newMessage = ""
     } catch {
       dump(error)

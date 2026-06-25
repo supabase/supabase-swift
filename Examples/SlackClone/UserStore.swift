@@ -65,14 +65,7 @@ final class UserStore {
       return user
     }
 
-    let user: User =
-      try await supabase
-      .from(User.self)
-      .select()
-      .eq(\.id, value: id)
-      .single()
-      .execute()
-      .value
+    let user = try await supabase.fetchUser(id: id)
     users[user.id] = user
     return user
   }
