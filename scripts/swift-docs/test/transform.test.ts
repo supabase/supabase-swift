@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { transformSymbolGraph, parseTypeString } from "../src/transform";
+import { transformSymbolGraph, parseTypeString, paramTypeFragments } from "../src/transform";
 import type { SymbolGraph } from "../src/symbol-graph";
 import type { TypeDocDeclaration } from "../src/typedoc-types";
 
@@ -58,6 +58,75 @@ describe("parseTypeString", () => {
   });
   it("maps an unknown named type to intrinsic", () => {
     expect(parseTypeString("AuthSession")).toEqual({ type: "intrinsic", name: "AuthSession" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// paramTypeFragments
+// ---------------------------------------------------------------------------
+
+describe("paramTypeFragments", () => {
+  it("strips external label and colon from a simple parameter", () => {
+    const frags = [
+      { kind: "identifier", spelling: "uid" },
+      { kind: "text", spelling: ": " },
+      { kind: "typeIdentifier", spelling: "UUID" },
+    ];
+    expect(paramTypeFragments(frags)).toEqual([{ kind: "typeIdentifier", spelling: "UUID" }]);
+  });
+
+  it("strips var/name prefix from a property declaration, plain type", () => {
+    // var name: String
+    const frags = [
+      { kind: "keyword", spelling: "var" },
+      { kind: "text", spelling: " " },
+      { kind: "identifier", spelling: "name" },
+      { kind: "text", spelling: ": " },
+      { kind: "typeIdentifier", spelling: "String" },
+    ];
+    expect(paramTypeFragments(frags)).toEqual([{ kind: "typeIdentifier", spelling: "String" }]);
+  });
+
+  it("preserves array bracket when colon and bracket are bundled", () => {
+    // var tags: [String]
+    const frags = [
+      { kind: "keyword", spelling: "var" },
+      { kind: "text", spelling: " " },
+      { kind: "identifier", spelling: "tags" },
+      { kind: "text", spelling: ": [" },
+      { kind: "typeIdentifier", spelling: "String" },
+      { kind: "text", spelling: "]" },
+    ];
+    expect(paramTypeFragments(frags)).toEqual([
+      { kind: "text", spelling: "[" },
+      { kind: "typeIdentifier", spelling: "String" },
+      { kind: "text", spelling: "]" },
+    ]);
+  });
+
+  it("strips accessor block from optional computed property", () => {
+    // nonisolated var currentSession: Session? { get }
+    const frags = [
+      { kind: "attribute", spelling: "nonisolated" },
+      { kind: "text", spelling: " " },
+      { kind: "keyword", spelling: "var" },
+      { kind: "text", spelling: " " },
+      { kind: "identifier", spelling: "currentSession" },
+      { kind: "text", spelling: ": " },
+      { kind: "typeIdentifier", spelling: "Session" },
+      { kind: "text", spelling: "? { " },
+      { kind: "keyword", spelling: "get" },
+      { kind: "text", spelling: " }" },
+    ];
+    expect(paramTypeFragments(frags)).toEqual([
+      { kind: "typeIdentifier", spelling: "Session" },
+      { kind: "text", spelling: "?" },
+    ]);
+  });
+
+  it("returns frags unchanged when no colon separator found", () => {
+    const frags = [{ kind: "typeIdentifier", spelling: "Bool" }];
+    expect(paramTypeFragments(frags)).toEqual(frags);
   });
 });
 

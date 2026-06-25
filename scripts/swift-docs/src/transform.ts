@@ -70,12 +70,45 @@ function parseFragments(frags: DeclarationFragment[] | undefined, gp: Set<string
   return parseTypeString(frags.map(f => f.spelling).join("").trim(), gp);
 }
 
-// Strip the external argument label and ": " separator from parameter declaration fragments.
-// Swift parameter fragments have the shape: [label, ": ", ...type fragments].
-// We only want the type part.
-function paramTypeFragments(frags: DeclarationFragment[]): DeclarationFragment[] {
-  const colonIdx = frags.findIndex(f => f.kind === "text" && f.spelling.trimStart().startsWith(":"));
-  return colonIdx >= 0 ? frags.slice(colonIdx + 1) : frags;
+// Extract only the type portion from Swift declaration fragments.
+// Strips the prefix up to and including the first ": " colon separator, then
+// strips any trailing computed-property accessor block ("{ get }", "{ get set }",
+// "? { get }", etc.).
+//
+// Examples:
+//   param:    [label, ": ", typeId]            → [typeId]
+//   array:    [var, " ", name, ": [", typeId, "]"] → [{text,"["}, typeId, "]"]
+//   optional: [var, " ", name, ": ", typeId, "? { ", get, " }"] → [typeId, "?"]
+export function paramTypeFragments(frags: DeclarationFragment[]): DeclarationFragment[] {
+  // Step 1: find and strip up to the ": " colon separator.
+  let typeFrags: DeclarationFragment[] = frags;
+  for (let i = 0; i < frags.length; i++) {
+    const f = frags[i];
+    if (f.kind === "text" && f.spelling.trimStart().startsWith(":")) {
+      const afterColon = f.spelling.trimStart().replace(/^:\s*/, "");
+      typeFrags = afterColon
+        ? [{ kind: "text", spelling: afterColon }, ...frags.slice(i + 1)]
+        : frags.slice(i + 1);
+      break;
+    }
+  }
+
+  // Step 2: strip trailing computed accessor block starting at "{".
+  const result: DeclarationFragment[] = [];
+  for (const f of typeFrags) {
+    if (f.kind === "text") {
+      const braceIdx = f.spelling.indexOf("{");
+      if (braceIdx >= 0) {
+        const before = f.spelling.slice(0, braceIdx).trimEnd();
+        if (before) result.push({ kind: "text", spelling: before });
+        break;
+      }
+    } else if (f.kind === "keyword" && (f.spelling === "get" || f.spelling === "set")) {
+      break;
+    }
+    result.push(f);
+  }
+  return result.length > 0 ? result : typeFrags;
 }
 
 function baseName(title: string): string {
@@ -199,7 +232,7 @@ export function transformSymbolGraph(
     }
 
     if ((kind === 1024 || kind === 32) && sym.declarationFragments) {
-      decl.type = parseFragments(sym.declarationFragments, genericParams);
+      decl.type = parseFragments(paramTypeFragments(sym.declarationFragments), genericParams);
     }
 
     if (genericParams.size > 0) {
