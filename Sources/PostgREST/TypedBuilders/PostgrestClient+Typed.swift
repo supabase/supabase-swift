@@ -17,14 +17,17 @@ extension PostgrestClient {
   public func from<Table: TableRepresentable>(
     _ table: Table.Type
   ) -> TypedPostgrestQueryBuilder<Table> {
-    let schema = table.schema == "public" ? nil : table.schema
-    let baseURL = schema.map { _ in configuration.url } ?? configuration.url
+    let tableSchema = table.schema == "public" ? nil : table.schema
+    var config = configuration
+    if let tableSchema {
+      config.schema = tableSchema
+    }
     let queryBuilder = PostgrestQueryBuilder(
-      configuration: configuration,
+      configuration: config,
       request: .init(
-        url: baseURL.appendingPathComponent(table.tableName),
+        url: config.url.appendingPathComponent(table.tableName),
         method: .get,
-        headers: HTTPFields(configuration.headers)
+        headers: HTTPFields(config.headers)
       )
     )
     return TypedPostgrestQueryBuilder(underlying: queryBuilder)
@@ -36,13 +39,18 @@ extension PostgrestClient {
   /// - Returns: A `TypedReadOnlyQueryBuilder` for building the query.
   public func from<Table: ReadOnlyTableRepresentable>(
     _ table: Table.Type
-  ) -> TypedReadOnlyQueryBuilder<Table> where Table: ReadOnlyTableRepresentable {
+  ) -> TypedReadOnlyQueryBuilder<Table> {
+    let tableSchema = table.schema == "public" ? nil : table.schema
+    var config = configuration
+    if let tableSchema {
+      config.schema = tableSchema
+    }
     let queryBuilder = PostgrestQueryBuilder(
-      configuration: configuration,
+      configuration: config,
       request: .init(
-        url: configuration.url.appendingPathComponent(table.tableName),
+        url: config.url.appendingPathComponent(table.tableName),
         method: .get,
-        headers: HTTPFields(configuration.headers)
+        headers: HTTPFields(config.headers)
       )
     )
     return TypedReadOnlyQueryBuilder(underlying: queryBuilder)
