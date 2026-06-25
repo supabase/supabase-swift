@@ -1,12 +1,12 @@
 //
 //  TypedSingleResultBuilder.swift
-//  PostgREST
+//  SupabaseSwiftMacros
 //
 //  Created by Guilherme Souza on 24/06/25.
 //
 
 import Foundation
-import SupabaseSwiftMacros
+import PostgREST
 
 /// Wraps a PostgrestTransformBuilder after .single() has been called.
 /// execute() returns a single decoded value rather than an array.

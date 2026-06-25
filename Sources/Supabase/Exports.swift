@@ -12,4 +12,3 @@
 @_exported import PostgREST
 @_exported import Realtime
 @_exported import Storage
-@_exported import SupabaseSwiftMacros

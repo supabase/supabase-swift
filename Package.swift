@@ -32,8 +32,9 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
-    // swift-macro-testing 0.6.5 accepts swift-syntax "509.0.0"..<"605.0.0", so 600.x is safe.
-    .package(url: "https://github.com/swiftlang/swift-syntax", "600.0.0"..<"605.0.0"),
+    // Lower bound matches the package's minimum Swift version (5.10 → 510.x).
+    // Upper bound matches swift-macro-testing 0.6.x compatibility ceiling.
+    .package(url: "https://github.com/swiftlang/swift-syntax", "510.0.0"..<"605.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
   ],
   targets: [
@@ -124,7 +125,6 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
-        .target(name: "SupabaseSwiftMacros"),
       ]
     ),
     .testTarget(
@@ -135,6 +135,7 @@ let package = Package(
         "Helpers",
         "Mocker",
         "PostgREST",
+        "SupabaseSwiftMacros",
         "TestHelpers",
       ],
       exclude: [
@@ -197,7 +198,6 @@ let package = Package(
         "PostgREST",
         "Realtime",
         "Storage",
-        .target(name: "SupabaseSwiftMacros"),
       ]
     ),
     .testTarget(
@@ -229,7 +229,8 @@ let package = Package(
     .target(
       name: "SupabaseSwiftMacros",
       dependencies: [
-        .target(name: "SupabaseMacros")
+        .target(name: "SupabaseMacros"),
+        "PostgREST",
       ]
     ),
     .testTarget(

@@ -1,12 +1,12 @@
 //
 //  TypedPostgrestTransformBuilder.swift
-//  PostgREST
+//  SupabaseSwiftMacros
 //
 //  Created by Guilherme Souza on 24/06/25.
 //
 
 import Foundation
-import SupabaseSwiftMacros
+import PostgREST
 
 /// Wraps PostgrestTransformBuilder with typed column ordering.
 public struct TypedPostgrestTransformBuilder<
