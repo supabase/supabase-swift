@@ -107,21 +107,19 @@ public protocol SelectionRepresentable: Decodable {
   static var selectString: String { get }
 }
 
-// For read-write tables — synthesized by @Table (without readOnly: true)
-public protocol TableRepresentable: SelectionRepresentable {
-  associatedtype Insert: Encodable
-  associatedtype Update: Encodable
+// For views / read-only tables — synthesized by @Table(readOnly: true)
+// Shared base for both protocols so TypedPostgrestFilterBuilder can use a single constraint.
+public protocol ReadOnlyTableRepresentable: SelectionRepresentable {
   static var tableName: String { get }
   static var schema: String { get }
   static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String
 }
 
-// For views / read-only tables — synthesized by @Table(readOnly: true)
-// TypedPostgrestQueryBuilder<T: ReadOnlyTableRepresentable> only exposes .select()
-public protocol ReadOnlyTableRepresentable: SelectionRepresentable {
-  static var tableName: String { get }
-  static var schema: String { get }
-  static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String
+// For read-write tables — synthesized by @Table (without readOnly: true)
+// Refines ReadOnlyTableRepresentable by adding Insert and Update associated types.
+public protocol TableRepresentable: ReadOnlyTableRepresentable {
+  associatedtype Insert: Encodable
+  associatedtype Update: Encodable
 }
 ```
 
