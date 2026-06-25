@@ -66,6 +66,21 @@ public struct TableMacro: MemberMacro, ExtensionMacro {
     }
     if hasRelationshipFields { return [] }
 
+    // @Table requires var bindings — let properties are silently dropped from synthesis
+    var hasLetBindings = false
+    for member in structDecl.memberBlock.members {
+      guard
+        let varDecl = member.decl.as(VariableDeclSyntax.self),
+        varDecl.bindingSpecifier.tokenKind == .keyword(.let),
+        let binding = varDecl.bindings.first,
+        binding.accessorBlock == nil
+      else { continue }
+      context.diagnose(
+        Diagnostic(node: Syntax(varDecl), message: TableMacroDiagnostic.letBindingNotAllowed))
+      hasLetBindings = true
+    }
+    if hasLetBindings { return [] }
+
     let args = try TableArgs(from: node)
     let typeName = structDecl.name.text
     let props = parseStoredProperties(from: structDecl)
@@ -130,6 +145,7 @@ struct TableArgs {
 enum TableMacroDiagnostic: DiagnosticMessage {
   case notAStruct
   case relationshipNotAllowed
+  case letBindingNotAllowed
 
   var message: String {
     switch self {
@@ -138,6 +154,8 @@ enum TableMacroDiagnostic: DiagnosticMessage {
     case .relationshipNotAllowed:
       return
         "'@Relationship' fields are not allowed in '@Table'. Declare a '@SelectionOf' struct to join related tables."
+    case .letBindingNotAllowed:
+      return "@Table requires stored properties to use 'var', not 'let'"
     }
   }
   var diagnosticID: MessageID { .init(domain: "SupabaseMacros", id: "\(self)") }

@@ -154,6 +154,30 @@ final class TableMacroTests: XCTestCase {
     }
   }
 
+  func testLetBindingDiagnostic() {
+    assertMacro {
+      """
+      @Table("todos")
+      public struct Todo {
+        @PrimaryKey public let id: UUID
+        public let title: String
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("todos")
+      public struct Todo {
+        @PrimaryKey public let id: UUID
+        ┬──────────────────────────────
+        ╰─ 🛑 @Table requires stored properties to use 'var', not 'let'
+        public let title: String
+        ┬───────────────────────
+        ╰─ 🛑 @Table requires stored properties to use 'var', not 'let'
+      }
+      """
+    }
+  }
+
   func testNonStructDiagnostic() {
     assertMacro {
       """
