@@ -416,7 +416,13 @@ features:
       - StorageTransferTask.cancel
       - StorageUploadTask
       - UploadMethod
+      - UploadMethod.auto
+      - UploadMethod.multipart
+      - UploadMethod.resumable
       - TransferEvent
+      - TransferEvent.progress
+      - TransferEvent.completed
+      - TransferEvent.failed
       - TransferProgress
       - TransferProgress.bytesTransferred
       - TransferProgress.totalBytes
@@ -429,6 +435,10 @@ features:
       - StorageByteCount.gigabytes
       - MultipartBuilderError
       - MultipartBuilderError.errorDescription
+      - MultipartBuilderError.readInputStreamFailed
+      - MultipartBuilderError.openTempFileFailed
+      - MultipartBuilderError.openInputStreamFailed
+      - MultipartBuilderError.createTempFileFailed
   storage.file_buckets.download:
     status: implemented
     symbols:
@@ -436,6 +446,8 @@ features:
       - StorageFileAPI.downloadData
       - StorageDownloadTask
       - DownloadBehavior
+      - DownloadBehavior.withOriginalName
+      - DownloadBehavior.named
   storage.file_buckets.list_files:
     status: implemented
     symbols:
@@ -504,6 +516,7 @@ features:
       - FileInfo.etag
       - FileInfo.lastModified
       - FileInfo.metadata
+      - FileInfo.init
   storage.file_buckets.list_files_paginated: implemented
   storage.file_buckets.download_with_transform:
     status: implemented
