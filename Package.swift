@@ -3,6 +3,7 @@
 
 import Foundation
 import PackageDescription
+import CompilerPluginSupport
 
 let package = Package(
   name: "Supabase",
@@ -244,7 +245,7 @@ let package = Package(
         "Mocker",
       ]
     ),
-    .target(
+    .macro(
       name: "SupabaseMacros",
       dependencies: [
         .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
