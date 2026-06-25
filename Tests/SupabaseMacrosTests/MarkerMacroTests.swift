@@ -65,17 +65,17 @@ final class MarkerMacroTests: XCTestCase {
 
   func testRelationshipProducesNoPeers() {
     assertMacro {
-      """
+      #"""
       struct Foo {
-        @Relationship("user_id", references: Profile.self) var profile: Profile?
+        @Relationship(\Todo.userId) var profile: Profile?
       }
-      """
+      """#
     } expansion: {
-      """
+      #"""
       struct Foo {
         var profile: Profile?
       }
-      """
+      """#
     }
   }
 }
