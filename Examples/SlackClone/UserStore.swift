@@ -8,6 +8,7 @@
 import Foundation
 import OSLog
 import Supabase
+import SupabaseSwiftMacros
 
 @MainActor
 @Observable
@@ -66,9 +67,9 @@ final class UserStore {
 
     let user: User =
       try await supabase
-      .from("users")
+      .from(User.self)
       .select()
-      .eq("id", value: id)
+      .eq(\.id, value: id)
       .single()
       .execute()
       .value

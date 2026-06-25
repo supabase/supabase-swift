@@ -47,6 +47,7 @@
 		79D884D22B3C18840009EA4A /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79D884D12B3C18840009EA4A /* Preview Assets.xcassets */; };
 		79D884D72B3C18DB0009EA4A /* Supabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884D62B3C18DB0009EA4A /* Supabase.swift */; };
 		79D884D92B3C18E90009EA4A /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79D884D82B3C18E90009EA4A /* Supabase */; };
+		79D884E02B3C19500009EA4A /* SupabaseSwiftMacros in Frameworks */ = {isa = PBXBuildFile; productRef = 79D884E12B3C19500009EA4A /* SupabaseSwiftMacros */; };
 		79D884DB2B3C191F0009EA4A /* ChannelListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884DA2B3C191F0009EA4A /* ChannelListView.swift */; };
 		79D884DD2B3C19320009EA4A /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884DC2B3C19320009EA4A /* MessagesView.swift */; };
 		79E2B5582B97890F0042CD21 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 79E2B5572B97890F0042CD21 /* GoogleSignIn */; };
@@ -234,6 +235,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				79D884D92B3C18E90009EA4A /* Supabase in Frameworks */,
+				79D884E02B3C19500009EA4A /* SupabaseSwiftMacros in Frameworks */,
 				79B8F4242B5FED7C0000E839 /* IdentifiedCollections in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -428,6 +430,7 @@
 			name = SlackClone;
 			packageProductDependencies = (
 				79D884D82B3C18E90009EA4A /* Supabase */,
+				79D884E12B3C19500009EA4A /* SupabaseSwiftMacros */,
 				79B8F4232B5FED7C0000E839 /* IdentifiedCollections */,
 			);
 			productName = SlackClone;
@@ -1102,6 +1105,10 @@
 		79D884D82B3C18E90009EA4A /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Supabase;
+		};
+		79D884E12B3C19500009EA4A /* SupabaseSwiftMacros */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SupabaseSwiftMacros;
 		};
 		79E2B5572B97890F0042CD21 /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;

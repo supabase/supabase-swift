@@ -7,6 +7,7 @@
 
 import Foundation
 import Supabase
+import SupabaseSwiftMacros
 
 @MainActor
 class Dependencies {
@@ -17,34 +18,36 @@ class Dependencies {
   let messages = MessageStore.shared
 }
 
+@Table("users", readOnly: true)
 struct User: Codable, Identifiable, Hashable {
-  var id: UUID
+  @PrimaryKey var id: UUID
   var username: String
 }
 
-struct AddChannel: Encodable {
+@Table("channels")
+struct Channel: Codable, Identifiable, Hashable {
+  @PrimaryKey var id: Int
+  @Default var insertedAt: Date
   var slug: String
   var createdBy: UUID
 }
 
-struct Channel: Identifiable, Codable, Hashable {
-  var id: Int
-  var slug: String
-  var insertedAt: Date
-}
-
-struct Message: Identifiable, Codable, Hashable {
-  var id: Int
-  var insertedAt: Date
-  var message: String
-  var user: User
-  var channel: Channel
-}
-
-struct NewMessage: Codable {
+@Table("messages")
+struct Message: Codable, Identifiable, Hashable {
+  @PrimaryKey var id: Int
+  @Default var insertedAt: Date
   var message: String
   var userId: UUID
-  let channelId: Int
+  var channelId: Int
+}
+
+@SelectionOf(Message.self)
+struct MessageWithDetails: Codable, Identifiable, Hashable {
+  var id: Int
+  var insertedAt: Date
+  var message: String
+  @Relationship(\Message.userId) var user: User
+  @Relationship(\Message.channelId) var channel: Channel
 }
 
 struct UserPresence: Codable, Hashable {

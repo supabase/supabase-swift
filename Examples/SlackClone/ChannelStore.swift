@@ -7,6 +7,7 @@
 
 import Foundation
 import Supabase
+import SupabaseSwiftMacros
 
 @MainActor
 @Observable
@@ -46,10 +47,9 @@ final class ChannelStore {
   func addChannel(_ name: String) async {
     do {
       let userId = try await supabase.auth.session.user.id
-      let channel = AddChannel(slug: name, createdBy: userId)
       try await supabase
-        .from("channels")
-        .insert(channel)
+        .from(Channel.self)
+        .insert(Channel.Insert(slug: name, createdBy: userId))
         .execute()
     } catch {
       dump(error)
@@ -64,9 +64,10 @@ final class ChannelStore {
 
     let channel: Channel =
       try await supabase
-      .from("channels")
+      .from(Channel.self)
       .select()
-      .eq("id", value: id)
+      .eq(\.id, value: id)
+      .single()
       .execute()
       .value
     channels.append(channel)
@@ -91,7 +92,7 @@ final class ChannelStore {
 
   private func fetchChannels() async -> [Channel] {
     do {
-      return try await supabase.from("channels").select().execute().value
+      return try await supabase.from(Channel.self).select().execute().value
     } catch {
       dump(error)
       toast = .init(status: .error, title: "Error", description: error.localizedDescription)
