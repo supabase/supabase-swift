@@ -8,6 +8,7 @@ struct SupabaseMacrosPlugin: CompilerPlugin {
     DefaultMacro.self,
     ColumnMacro.self,
     RelationshipMacro.self,
-    // TableMacro and SelectionOfMacro added in Tasks 4–5
+    TableMacro.self,
+    // SelectionOfMacro added in Task 5
   ]
 }
