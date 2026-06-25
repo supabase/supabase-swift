@@ -1,12 +1,12 @@
 //
 //  TypedPostgrestQueryBuilder.swift
-//  PostgREST
+//  SupabaseSwiftMacros
 //
 //  Created by Guilherme Souza on 24/06/25.
 //
 
 import Foundation
-import SupabaseSwiftMacros
+import PostgREST
 
 /// Entry point returned by PostgrestClient.from(_ table: T.Type).
 /// Mirrors PostgrestQueryBuilder with typed Insert/Update/Delete operations.
