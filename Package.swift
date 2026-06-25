@@ -258,6 +258,7 @@ let package = Package(
       dependencies: [
         .target(name: "SupabaseMacros"),
         "PostgREST",
+        "Supabase",
       ]
     ),
     .testTarget(
