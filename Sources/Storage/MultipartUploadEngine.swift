@@ -173,7 +173,11 @@ actor MultipartUploadEngine {
         return try await client.http.session.upload(
           for: request, from: body, delegate: progressDelegate)
       #else
-        let result = try await client.http.session.upload(for: request, from: body)
+        // FoundationNetworking/libcurl may omit Content-Length for large payloads and fall back
+        // to chunked transfer encoding, which Supabase/Kong rejects. Set it explicitly.
+        var requestWithLength = request
+        requestWithLength.setValue("\(body.count)", forHTTPHeaderField: "Content-Length")
+        let result = try await client.http.session.upload(for: requestWithLength, from: body)
         let totalBytes = Int64(body.count)
         progressContinuation.yield(
           .progress(TransferProgress(bytesTransferred: totalBytes, totalBytes: totalBytes))
