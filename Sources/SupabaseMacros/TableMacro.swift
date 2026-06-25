@@ -15,6 +15,15 @@ public struct TableMacro: MemberMacro, ExtensionMacro {
     conformingTo protocols: [TypeSyntax],
     in context: some MacroExpansionContext
   ) throws -> [ExtensionDeclSyntax] {
+    // Suppress extension when @Relationship fields are present (diagnosed in MemberMacro)
+    if let structDecl = declaration.as(StructDeclSyntax.self) {
+      let hasRelationship = structDecl.memberBlock.members.contains { member in
+        guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { return false }
+        return varDecl.attributes.attribute(named: "Relationship") != nil
+      }
+      if hasRelationship { return [] }
+    }
+
     let args = try TableArgs(from: node)
     let typeName = type.trimmedDescription
     let conformance = args.readOnly ? "ReadOnlyTableRepresentable" : "TableRepresentable"
@@ -44,6 +53,18 @@ public struct TableMacro: MemberMacro, ExtensionMacro {
         ))
       return []
     }
+
+    // @Relationship is not allowed in @Table — emit diagnostic on each offending attribute
+    var hasRelationshipFields = false
+    for member in structDecl.memberBlock.members {
+      guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { continue }
+      if let relAttr = varDecl.attributes.attribute(named: "Relationship") {
+        context.diagnose(
+          Diagnostic(node: relAttr, message: TableMacroDiagnostic.relationshipNotAllowed))
+        hasRelationshipFields = true
+      }
+    }
+    if hasRelationshipFields { return [] }
 
     let args = try TableArgs(from: node)
     let typeName = structDecl.name.text
@@ -108,10 +129,15 @@ struct TableArgs {
 
 enum TableMacroDiagnostic: DiagnosticMessage {
   case notAStruct
+  case relationshipNotAllowed
 
   var message: String {
     switch self {
-    case .notAStruct: return "@Table can only be applied to structs"
+    case .notAStruct:
+      return "@Table can only be applied to structs"
+    case .relationshipNotAllowed:
+      return
+        "'@Relationship' fields are not allowed in '@Table'. Declare a '@SelectionOf' struct to join related tables."
     }
   }
   var diagnosticID: MessageID { .init(domain: "SupabaseMacros", id: "\(self)") }
@@ -126,8 +152,8 @@ struct MacroExpansionError: Error, CustomStringConvertible {
 // MARK: - Member synthesis helpers
 
 private func makeInsert(from props: [StoredPropertyInfo]) -> DeclSyntax {
-  // Exclude @PrimaryKey and @Relationship; @Default fields become Optional with = nil
-  let insertProps = props.filter { !$0.isPrimaryKey && !$0.isRelationship }
+  // Exclude @PrimaryKey; @Default fields become Optional with = nil
+  let insertProps = props.filter { !$0.isPrimaryKey }
 
   var varLines: [String] = []
   var keyLines: [String] = []
@@ -158,7 +184,7 @@ private func makeInsert(from props: [StoredPropertyInfo]) -> DeclSyntax {
 }
 
 private func makeUpdate(from props: [StoredPropertyInfo]) -> DeclSyntax {
-  let updateProps = props.filter { !$0.isPrimaryKey && !$0.isRelationship }
+  let updateProps = props.filter { !$0.isPrimaryKey }
 
   var varLines: [String] = []
   var keyLines: [String] = []
@@ -185,7 +211,6 @@ private func makeUpdate(from props: [StoredPropertyInfo]) -> DeclSyntax {
 }
 
 private func makeCodingKeys(from props: [StoredPropertyInfo]) -> DeclSyntax {
-  // Include all properties (relationships too — needed for embedded response decoding)
   let lines = props.map { codingKeyLine(swiftName: $0.name, columnName: $0.columnName) }
   let keys = lines.joined(separator: "\n")
   return """
@@ -196,8 +221,7 @@ private func makeCodingKeys(from props: [StoredPropertyInfo]) -> DeclSyntax {
 }
 
 private func makeColumnName(typeName: String, from props: [StoredPropertyInfo]) -> DeclSyntax {
-  // Only non-relationship properties map to columns
-  let columns = props.filter { !$0.isRelationship }
+  let columns = props
   let cases = columns.map {
     "  if erased == \\\(typeName).\($0.name) { return \"\($0.columnName)\" }"
   }.joined(separator: "\n")

@@ -25,7 +25,6 @@ final class TableMacroTests: XCTestCase {
         public var title: String
         @Default public var isComplete: Bool
         @Column("user_id") public var userId: UUID
-        @Relationship("user_id", references: Profile.self) public var profile: Profile?
       }
       """
     } expansion: {
@@ -35,7 +34,6 @@ final class TableMacroTests: XCTestCase {
         public var title: String
         public var isComplete: Bool
         public var userId: UUID
-        public var profile: Profile?
 
         public struct Insert: Encodable {
           public var title: String
@@ -64,7 +62,6 @@ final class TableMacroTests: XCTestCase {
             case title
             case isComplete = "is_complete"
             case userId = "user_id"
-            case profile
         }
 
         public static func columnName<V>(for keyPath: KeyPath<Todo, V>) -> String {
@@ -89,6 +86,28 @@ final class TableMacroTests: XCTestCase {
         public static let tableName = "todos"
         public static let schema = "public"
         public static let selectString = "*"
+      }
+      """#
+    }
+  }
+
+  func testRelationshipOnTableDiagnostic() {
+    assertMacro {
+      #"""
+      @Table("todos")
+      public struct Todo {
+        @PrimaryKey public var id: UUID
+        @Relationship(\Profile.userId) public var profile: Profile?
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @Table("todos")
+      public struct Todo {
+        @PrimaryKey public var id: UUID
+        @Relationship(\Profile.userId) public var profile: Profile?
+        ┬─────────────────────────────
+        ╰─ 🛑 '@Relationship' fields are not allowed in '@Table'. Declare a '@SelectionOf' struct to join related tables.
       }
       """#
     }

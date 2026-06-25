@@ -66,12 +66,14 @@ public macro Column(_ name: String) =
   #externalMacro(
     module: "SupabaseMacros", type: "ColumnMacro")
 
-/// Declares a foreign-key relationship. Excluded from Insert and Update.
-/// In @SelectionOf structs, a field typed as the referenced table or a @SelectionOf of it
-/// produces an embedded PostgREST select (e.g. `"profile(*)"` or `"profile(id,name)"`).
-/// - Parameters:
-///   - foreignKey: The FK column name on this table (e.g. `"user_id"`).
-///   - references: The referenced TableRepresentable type (e.g. `Profile.self`).
+/// Declares a foreign-key join in a `@SelectionOf` struct.
+/// Not allowed in `@Table` structs — the table row type has no embedded relationships.
+///
+/// The referenced table type is inferred from the field's type annotation
+/// (Optional and Array wrappers are unwrapped automatically).
+///
+/// - Parameter keyPath: Key path to the FK column on the owning table.
+///   Use the explicit root form `\Message.senderId` to identify which table owns the FK.
 @attached(peer)
-public macro Relationship(_ foreignKey: String, references: Any.Type) =
+public macro Relationship(_ keyPath: AnyKeyPath) =
   #externalMacro(module: "SupabaseMacros", type: "RelationshipMacro")
