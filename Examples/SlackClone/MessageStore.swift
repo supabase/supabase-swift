@@ -179,12 +179,6 @@ final class MessageStore {
 
   /// Fetch all messages joined with their author and channel.
   private func fetchMessages(_ channelId: Channel.ID) async throws -> [MessageWithDetails] {
-    try await supabase
-      .from(Message.self)
-      .select(MessageWithDetails.self)
-      .eq(\.channelId, value: channelId)
-      .order(\.insertedAt, ascending: true)
-      .execute()
-      .value
+    try await supabase.fetchMessages(channelId: channelId)
   }
 }

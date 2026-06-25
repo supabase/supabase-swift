@@ -35,34 +35,11 @@ final class TableMacroTests: XCTestCase {
         public var isComplete: Bool
         public var userId: UUID
 
-        public struct Insert: Encodable {
-          public var title: String
-          public var isComplete: Bool? = nil
-          public var userId: UUID
-          public enum CodingKeys: String, CodingKey {
-            case title
-            case isComplete = "is_complete"
-            case userId = "user_id"
-          }
-        }
+        public static let tableName: String = "todos"
 
-        public struct Update: Encodable {
-          public var title: String? = nil
-          public var isComplete: Bool? = nil
-          public var userId: UUID? = nil
-          public enum CodingKeys: String, CodingKey {
-            case title
-            case isComplete = "is_complete"
-            case userId = "user_id"
-          }
-        }
+        public static let schema: String = "public"
 
-        public enum CodingKeys: String, CodingKey {
-            case id
-            case title
-            case isComplete = "is_complete"
-            case userId = "user_id"
-        }
+        public static let selectString: String = "*"
 
         public static func columnName<V>(for keyPath: KeyPath<Todo, V>) -> String {
           let erased = keyPath as AnyKeyPath
@@ -80,12 +57,35 @@ final class TableMacroTests: XCTestCase {
           }
           preconditionFailure("Unknown column keypath on Todo — macro bug")
         }
-      }
 
-      extension Todo: TableRepresentable {
-        public static let tableName = "todos"
-        public static let schema = "public"
-        public static let selectString = "*"
+        public struct Insert: Encodable {
+          public var title: String
+          public var isComplete: Bool? = nil
+          public var userId: UUID
+          public enum CodingKeys: String, CodingKey {
+              case title
+              case isComplete = "is_complete"
+              case userId = "user_id"
+          }
+        }
+
+        public struct Update: Encodable {
+          public var title: String? = nil
+          public var isComplete: Bool? = nil
+          public var userId: UUID? = nil
+          public enum CodingKeys: String, CodingKey {
+              case title
+              case isComplete = "is_complete"
+              case userId = "user_id"
+          }
+        }
+
+        public enum CodingKeys: String, CodingKey {
+            case id
+            case title
+            case isComplete = "is_complete"
+            case userId = "user_id"
+        }
       }
       """#
     }
@@ -128,10 +128,11 @@ final class TableMacroTests: XCTestCase {
         public var userId: UUID
         public var totalCount: Int
 
-        public enum CodingKeys: String, CodingKey {
-            case userId = "user_id"
-            case totalCount = "total_count"
-        }
+        public static let tableName: String = "todo_stats"
+
+        public static let schema: String = "public"
+
+        public static let selectString: String = "*"
 
         public static func columnName<V>(for keyPath: KeyPath<TodoStats, V>) -> String {
           let erased = keyPath as AnyKeyPath
@@ -143,12 +144,11 @@ final class TableMacroTests: XCTestCase {
           }
           preconditionFailure("Unknown column keypath on TodoStats — macro bug")
         }
-      }
 
-      extension TodoStats: ReadOnlyTableRepresentable {
-        public static let tableName = "todo_stats"
-        public static let schema = "public"
-        public static let selectString = "*"
+        public enum CodingKeys: String, CodingKey {
+            case userId = "user_id"
+            case totalCount = "total_count"
+        }
       }
       """#
     }
