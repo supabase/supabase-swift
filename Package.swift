@@ -1,9 +1,9 @@
 // swift-tools-version:6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import CompilerPluginSupport
 import Foundation
 import PackageDescription
-import CompilerPluginSupport
 
 let package = Package(
   name: "Supabase",
@@ -39,8 +39,9 @@ let package = Package(
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
     .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", from: "0.23.2"),
     .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", from: "1.10.0"),
-    .package(url: "https://github.com/swiftlang/swift-syntax", from: "510.0.0"),
-    .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.5.0"),
+    // swift-macro-testing 0.6.5 accepts swift-syntax "509.0.0"..<"605.0.0", so 600.x is safe.
+    .package(url: "https://github.com/swiftlang/swift-syntax", "600.0.0"..<"605.0.0"),
+    .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
   ],
   targets: [
     .target(
