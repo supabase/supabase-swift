@@ -66,7 +66,7 @@ public struct TableMacro: MemberMacro, ExtensionMacro {
     }
     if hasRelationshipFields { return [] }
 
-    // @Table requires var bindings — let properties are silently dropped from synthesis
+    // @Table requires var bindings — let properties trigger a diagnostic and halt expansion
     var hasLetBindings = false
     for member in structDecl.memberBlock.members {
       guard
