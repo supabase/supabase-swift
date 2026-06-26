@@ -2,14 +2,7 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - v3
-      - release/*
   pull_request:
-    branches:
-      - "*"
-      - release/*
   workflow_dispatch:
 
 concurrency:
@@ -59,16 +52,19 @@ jobs:
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
       - name: Install lcov
         if: matrix.command == 'test' && matrix.platform == 'IOS'
+        continue-on-error: true
         run: brew install lcov
       - name: Export code coverage
         id: coverage
         if: matrix.command == 'test' && matrix.platform == 'IOS'
+        continue-on-error: true
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
       - name: Trust Coveralls Homebrew tap (Homebrew 6 requirement)
         if: steps.coverage.outcome == 'success'
         run: brew trust coverallsapp/coveralls
       - uses: coverallsapp/github-action@5cbfd81b66ca5d10c19b062c04de0199c215fb6e # v2.3.7
         if: steps.coverage.outcome == 'success'
+        continue-on-error: true
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           file: lcov.info

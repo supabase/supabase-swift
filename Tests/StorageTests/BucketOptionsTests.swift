@@ -1,25 +1,33 @@
-import XCTest
+import Testing
 
 @testable import Storage
 
-final class BucketOptionsTests: XCTestCase {
-  func testDefaultInitialization() {
+@Suite
+struct BucketOptionsTests {
+
+  @Test func defaultInitialization() {
     let options = BucketOptions()
 
-    XCTAssertFalse(options.public)
-    XCTAssertNil(options.fileSizeLimit)
-    XCTAssertNil(options.allowedMimeTypes)
+    #expect(!options.isPublic)
+    #expect(options.fileSizeLimit == nil)
+    #expect(options.allowedMimeTypes == nil)
   }
 
-  func testCustomInitialization() {
+  @Test func customInitialization() {
     let options = BucketOptions(
-      public: true,
-      fileSizeLimit: "5242880",
+      isPublic: true,
+      fileSizeLimit: .megabytes(5),
       allowedMimeTypes: ["image/jpeg", "image/png"]
     )
 
-    XCTAssertTrue(options.public)
-    XCTAssertEqual(options.fileSizeLimit, "5242880")
-    XCTAssertEqual(options.allowedMimeTypes, ["image/jpeg", "image/png"])
+    #expect(options.isPublic)
+    #expect(options.fileSizeLimit == .megabytes(5))
+    #expect(options.fileSizeLimit?.bytes == 5_242_880)
+    #expect(options.allowedMimeTypes == ["image/jpeg", "image/png"])
+  }
+
+  @Test func integerLiteralFileSizeLimit() {
+    let options = BucketOptions(isPublic: false, fileSizeLimit: 5_242_880)
+    #expect(options.fileSizeLimit?.bytes == 5_242_880)
   }
 }
