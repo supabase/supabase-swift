@@ -6,6 +6,7 @@
 //
 
 import XCTest
+
 @testable import Realtime
 
 final class RealtimePostgresFilterTests: XCTestCase {

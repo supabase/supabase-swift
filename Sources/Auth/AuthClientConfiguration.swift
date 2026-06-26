@@ -13,9 +13,10 @@ import Foundation
 
 extension AuthClient {
   /// FetchHandler is a type alias for asynchronous network request handling.
-  public typealias FetchHandler = @Sendable (
-    _ request: URLRequest
-  ) async throws -> (Data, URLResponse)
+  public typealias FetchHandler =
+    @Sendable (
+      _ request: URLRequest
+    ) async throws -> (Data, URLResponse)
 
   /// Configuration struct represents the client configuration.
   public struct Configuration: Sendable {

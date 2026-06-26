@@ -56,7 +56,7 @@
       }
 
       guard let foundCredential = credential,
-            let blob = foundCredential.pointee.CredentialBlob
+        let blob = foundCredential.pointee.CredentialBlob
       else {
         throw WinCredLocalStorageError.other(-1)
       }
