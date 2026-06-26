@@ -291,11 +291,30 @@ features:
 
   # ── Functions ──────────────────────────────────────────────────────────────
 
-  functions.invocation.invoke: implemented
+  functions.invocation.invoke:
+    status: implemented
+    symbols:
+      - FunctionsClient.url
+      - FunctionsClient.headers
+      - FunctionsClient.invokeDecodable
+      - FunctionInvokeOptions.headers
+      - FunctionInvokeOptions.body
+      - FunctionInvokeOptions.query
   functions.invocation.set_auth_token: implemented
-  functions.invocation.method_override: implemented
-  functions.invocation.streaming_response: implemented
-  functions.invocation.region_selection: implemented
+  functions.invocation.method_override:
+    status: implemented
+    symbols:
+      - FunctionInvokeOptions.method
+  functions.invocation.streaming_response:
+    status: implemented
+    symbols:
+      - FunctionsClient.invokeStream
+  functions.invocation.region_selection:
+    status: implemented
+    symbols:
+      - FunctionsClient.region
+      - FunctionInvokeOptions.region
+      - FunctionRegion.rawValue
   functions.invocation.request_cancellation: implemented
   functions.invocation.timeout:
     status: partially_implemented
