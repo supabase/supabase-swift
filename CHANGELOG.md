@@ -1,5 +1,28 @@
 # Changelog
 
+## [3.0.0](https://github.com/supabase/supabase-swift/compare/v2.48.0...v3.0.0) (2026-06-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* **storage:** storage v3 ([#987](https://github.com/supabase/supabase-swift/issues/987))
+
+### Features
+
+* add sdk-compliance.yaml for supabase/sdk capability matrix ([#1022](https://github.com/supabase/supabase-swift/issues/1022)) ([df79431](https://github.com/supabase/supabase-swift/commit/df794313d8786ec57ce7b9373470a978b8c71875))
+* **auth:** add WebAuthn/passkey support ([#1013](https://github.com/supabase/supabase-swift/issues/1013)) landed in 2.48.0 and ([df79431](https://github.com/supabase/supabase-swift/commit/df794313d8786ec57ce7b9373470a978b8c71875))
+* **functions:** functions v3 ([#923](https://github.com/supabase/supabase-swift/issues/923)) ([02b4520](https://github.com/supabase/supabase-swift/commit/02b45208991cc1987f79c728b2fd856c205f9913))
+* **helpers:** add _HTTPClient ([#942](https://github.com/supabase/supabase-swift/issues/942)) ([234ada8](https://github.com/supabase/supabase-swift/commit/234ada88991ce25acaa5b5c501043110b8045086))
+* **storage:** storage v3 ([#987](https://github.com/supabase/supabase-swift/issues/987)) ([5ae4925](https://github.com/supabase/supabase-swift/commit/5ae49259348c2c922cee4945a20ca45c7bac537b))
+
+
+### Bug Fixes
+
+* **realtime:** resolve Swift 6.1 strict concurrency errors in v3 ([bdca0f9](https://github.com/supabase/supabase-swift/commit/bdca0f9a9a5bb0c8b5e3873befc244064d9a9b6f))
+* **realtime:** Swift 6 Sendable fixes for RealtimeClientV2 and tests ([2088a21](https://github.com/supabase/supabase-swift/commit/2088a21ad411da40b26568f7005d61829f0276c7))
+* **tests:** add [@unchecked](https://github.com/unchecked) Sendable to test classes with Task closures ([b49037b](https://github.com/supabase/supabase-swift/commit/b49037b487114ca3b99f4673a246d9a26809def9))
+* **tests:** resolve Swift 6.3 Linux strict concurrency errors ([84adf19](https://github.com/supabase/supabase-swift/commit/84adf195d77d7795689b249b5fcb232c0af497b0))
+
 ## [2.48.0](https://github.com/supabase/supabase-swift/compare/v2.47.2...v2.48.0) (2026-06-17)
 
 
