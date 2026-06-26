@@ -201,12 +201,30 @@ features:
   auth.oauth_server.list_grants: not_implemented
   auth.oauth_server.revoke_grant: not_implemented
 
-  auth.oauth_admin.create_client: implemented
-  auth.oauth_admin.delete_client: implemented
-  auth.oauth_admin.get_client: implemented
-  auth.oauth_admin.list_clients: implemented
-  auth.oauth_admin.regenerate_client_secret: implemented
-  auth.oauth_admin.update_client: implemented
+  auth.oauth_admin.create_client:
+    status: implemented
+    symbols:
+      - AuthAdminOAuth.createClient
+  auth.oauth_admin.delete_client:
+    status: implemented
+    symbols:
+      - AuthAdminOAuth.deleteClient
+  auth.oauth_admin.get_client:
+    status: implemented
+    symbols:
+      - AuthAdminOAuth.getClient
+  auth.oauth_admin.list_clients:
+    status: implemented
+    symbols:
+      - AuthAdminOAuth.listClients
+  auth.oauth_admin.regenerate_client_secret:
+    status: implemented
+    symbols:
+      - AuthAdminOAuth.regenerateClientSecret
+  auth.oauth_admin.update_client:
+    status: implemented
+    symbols:
+      - AuthAdminOAuth.updateClient
 
   # ── Client ─────────────────────────────────────────────────────────────────
 
