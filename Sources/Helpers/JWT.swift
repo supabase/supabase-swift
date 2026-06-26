@@ -46,8 +46,10 @@ package enum JWT {
       let headerData = Base64URL.decode(headerString),
       let payloadData = Base64URL.decode(payloadString),
       let signatureData = Base64URL.decode(signatureString),
-      let headerJSON = try? JSONSerialization.jsonObject(with: headerData, options: []) as? [String: Any],
-      let payloadJSON = try? JSONSerialization.jsonObject(with: payloadData, options: []) as? [String: Any]
+      let headerJSON = try? JSONSerialization.jsonObject(with: headerData, options: [])
+        as? [String: Any],
+      let payloadJSON = try? JSONSerialization.jsonObject(with: payloadData, options: [])
+        as? [String: Any]
     else {
       return nil
     }

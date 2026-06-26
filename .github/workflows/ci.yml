@@ -63,6 +63,9 @@ jobs:
         id: coverage
         if: matrix.command == 'test' && matrix.platform == 'IOS'
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
+      - name: Trust Coveralls Homebrew tap (Homebrew 6 requirement)
+        if: steps.coverage.outcome == 'success'
+        run: brew trust coverallsapp/coveralls
       - uses: coverallsapp/github-action@5cbfd81b66ca5d10c19b062c04de0199c215fb6e # v2.3.7
         if: steps.coverage.outcome == 'success'
         with:
