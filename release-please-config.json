@@ -2,6 +2,8 @@
   "packages": {
     ".": {
       "release-type": "simple",
+      "prerelease": true,
+      "prerelease-type": "beta",
       "extra-files": [
         "Sources/Helpers/Version.swift"
       ]
