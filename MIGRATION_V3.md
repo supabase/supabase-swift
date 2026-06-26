@@ -1,6 +1,6 @@
 # Migration Guide: v2.x → v3.0
 
-This guide helps you migrate from supabase-swift v2.x to v3.0. The v3.0 release removes all deprecated code accumulated over the v2.x lifecycle (~4,676 lines), providing a cleaner, more maintainable SDK.
+This guide helps you migrate from supabase-swift v2.x to v3.0. The v3.0 release removes all deprecated code accumulated over the v2.x lifecycle (~4,676 lines) and introduces a fully redesigned Storage module with resumable uploads, pause/resume, progress tracking, and background downloads.
 
 ## Table of Contents
 
@@ -22,6 +22,7 @@ This guide helps you migrate from supabase-swift v2.x to v3.0. The v3.0 release 
 - **Deprecated methods** removed across Auth, PostgREST, Storage
 - **Deprecated type aliases** removed (GoTrue* → Auth*, etc.)
 - **Deprecated properties** removed (`.database`, `.realtime`, etc.)
+- **Storage module rewritten**: class hierarchy replaced with value-type structs; all async operations now return task objects with progress, pause/resume, and cancellation support; TUS resumable uploads and background downloads added
 
 ### Lines Removed
 
@@ -366,138 +367,413 @@ let query = value.rawValue
 
 ## Storage
 
-### Deprecated Constructors Removed
+Storage v3 is a major architectural overhaul. The class-based inheritance hierarchy has been replaced with value-type structs, and all async operations now return task objects that support progress tracking, pause, resume, and cancellation.
 
-**What changed**: Old constructor signature without `logger` parameter removed.
+### Architecture Overhaul
+
+**What changed**: The entire storage module has been rewritten with a struct-based, value-type architecture.
+
+| Before (v2.x) | After (v3.0) |
+|---------------|--------------|
+| `SupabaseStorageClient` (class) | `StorageClient` (struct) |
+| `StorageFileApi` (class) | `StorageFileAPI` (struct) |
+| `StorageHTTPSession` | `URLSession` (standard Foundation type) |
+| URL in `StorageClientConfiguration` | URL in `StorageClient` initializer |
 
 **Migration**:
 
 ```swift
-// ❌ Old (v2.x)
+// ❌ Old (v2.x) - class-based
 let storage = SupabaseStorageClient(
   configuration: StorageClientConfiguration(
-    url: url,
-    headers: headers
+    url: storageURL,
+    headers: ["Authorization": "Bearer \(token)"],
+    logger: logger
   )
 )
 
-// ✅ New (v3.0)
-let storage = SupabaseStorageClient(
+// ✅ New (v3.0) - struct-based, URL moved to initializer
+let storage = StorageClient(
+  url: storageURL,
   configuration: StorageClientConfiguration(
-    url: url,
-    headers: headers,
-    logger: myLogger // or nil
-  )
-)
-
-// For SupabaseClient, this is handled automatically
-let client = SupabaseClient(
-  supabaseURL: url,
-  supabaseKey: key,
-  options: SupabaseClientOptions(
-    global: .init(
-      logger: myLogger // Optional
-    )
+    headers: ["Authorization": "Bearer \(token)"],
+    logger: logger
   )
 )
 ```
 
-### Deprecated Upload Methods Removed
+When using `SupabaseClient`, this is all handled automatically — no changes needed.
 
-#### Methods with String Return Type
+### `StorageClientConfiguration` Changes
 
-**Removed**: Upload methods that returned `String` (the path).
+Several parameters have been added, removed, or moved:
+
+| Parameter | v2.x | v3.0 |
+|-----------|------|-------|
+| `url` | `URL` (in config) | Moved to `StorageClient` initializer |
+| `encoder` | `JSONEncoder?` | **Removed** (internal only) |
+| `decoder` | `JSONDecoder?` | **Removed** (internal only) |
+| `session` | `StorageHTTPSession` | `URLSession` |
+| `backgroundDownloadSessionIdentifier` | — | `String?` **(new)** |
+| `tusChunkSize` | — | `Int` in bytes **(new, default: 6 MB)** |
+
+```swift
+// ❌ Old (v2.x)
+let config = StorageClientConfiguration(
+  url: storageURL,
+  headers: headers,
+  encoder: myEncoder,               // REMOVED
+  decoder: myDecoder,               // REMOVED
+  session: StorageHTTPSession(),    // REPLACED
+  logger: logger
+)
+
+// ✅ New (v3.0)
+let config = StorageClientConfiguration(
+  headers: headers,
+  session: URLSession(configuration: .default),
+  logger: logger,
+  backgroundDownloadSessionIdentifier: "com.example.app.storage",  // optional
+  tusChunkSize: 6 * 1024 * 1024                                     // optional
+)
+let storage = StorageClient(url: storageURL, configuration: config)
+```
+
+### Upload Operations
+
+**What changed**: All upload methods now return `StorageUploadTask` instead of directly returning `FileUploadResponse`. This enables progress tracking, pause/resume, and cancellation.
 
 **Migration**:
 
 ```swift
-// ❌ Old (v2.x) - returns String
-let path = try await storage
-  .from("avatars")
-  .upload(path: "user.jpg", file: data)
-
-// ✅ New (v3.0) - returns FileUploadResponse
+// ❌ Old (v2.x) - direct async return
 let response = try await storage
   .from("avatars")
-  .upload(path: "user.jpg", data: data)
+  .upload("user.jpg", data: imageData)
 
-print(response.path) // Access path from response
-print(response.id)   // Also get file ID
-```
+// ✅ New (v3.0) - await via .value
+let response = try await storage
+  .from("avatars")
+  .upload("user.jpg", data: imageData)
+  .value
 
-#### Methods with Parameter Renames
-
-Several upload methods renamed `file:` parameter to `data:`:
-
-| Removed Method | Use Instead |
-|----------------|-------------|
-| `.upload(path:file:options:)` | `.upload(_:data:options:)` |
-| `.update(path:file:options:)` | `.update(_:data:options:)` |
-| `.uploadToSignedURL(path:token:file:)` | `.updateToSignedURL(_:token:data:options:)` |
-
-**Migration**:
-
-```swift
-// ❌ Old (v2.x)
-try await storage
-  .from("bucket")
-  .upload(path: "file.jpg", file: data)
-
-// ✅ New (v3.0)
-try await storage
-  .from("bucket")
-  .upload("file.jpg", data: data)
-```
-
-### Deprecated Types Removed
-
-#### `File` Struct
-
-**Removed**: Replaced by `FileUploadResponse`.
-
-**Migration**:
-
-```swift
-// ❌ Old (v2.x)
-let file: File = ...
-print(file.Key)
-
-// ✅ New (v3.0)
-let response: FileUploadResponse = ...
 print(response.path)
-print(response.id)
 print(response.fullPath)
 ```
 
-#### `FormData` Class
+#### Upload with Progress Tracking
 
-**Removed**: Use `MultipartFormData` instead.
+```swift
+// ✅ New in v3.0 - observe progress and completion
+let task = storage.from("avatars").upload("user.jpg", data: imageData)
 
-**Migration**: If you were using `FormData` directly (rare), migrate to `MultipartFormData`. Most users won't need to change anything as this is handled internally.
+for await event in task.events {
+  switch event {
+  case .progress(let p):
+    updateProgressBar(p.fractionCompleted)
+    print("\(p.bytesTransferred) / \(p.totalBytes) bytes")
+  case .completed(let response):
+    print("Uploaded to \(response.fullPath)")
+  case .failed(let error):
+    print("Upload failed: \(error)")
+  }
+}
+```
 
-### Deprecated Encoder/Decoder Access Removed
+#### Upload from File URL
 
-**What changed**: Public access to `defaultStorageEncoder` and `defaultStorageDecoder` removed.
+```swift
+// ✅ New in v3.0 - upload directly from a local file URL
+let task = storage.from("videos").upload("user-video.mp4", fileURL: localVideoURL)
+let response = try await task.value
+```
 
-**Migration**: These were internal utilities. If you need custom encoding/decoding, provide your own encoder/decoder to the `SupabaseStorageClient` initializer.
+#### Update (PUT)
 
 ```swift
 // ❌ Old (v2.x)
-JSONEncoder.defaultStorageEncoder.outputFormatting = [.sortedKeys]
+let response = try await storage.from("avatars").update("user.jpg", data: newData)
 
-// ✅ New (v3.0) - provide custom encoder if needed
-let customEncoder = JSONEncoder()
-customEncoder.keyEncodingStrategy = .convertToSnakeCase
-customEncoder.outputFormatting = [.sortedKeys]
+// ✅ New (v3.0) - same pattern as upload, use .value
+let response = try await storage.from("avatars").update("user.jpg", data: newData).value
+```
 
-let storage = SupabaseStorageClient(
-  configuration: StorageClientConfiguration(
-    url: url,
-    headers: headers,
-    encoder: customEncoder // Use custom encoder
-  )
+### Download Operations
+
+**What changed**: `download(path:)` now returns a `StorageDownloadTask` that downloads to a **temporary file on disk**. Use `.value` to get the file URL. To download directly into memory, use the new `downloadData(path:)` method.
+
+**Migration**:
+
+```swift
+// ❌ Old (v2.x) - returned Data directly
+let data = try await storage.from("avatars").download(path: "user.jpg")
+
+// ✅ New (v3.0) Option A - download to temporary file, then read
+let fileURL = try await storage.from("avatars").download(path: "user.jpg").value
+let data = try Data(contentsOf: fileURL)
+
+// ✅ New (v3.0) Option B - downloadData returns Data directly
+let data = try await storage.from("avatars").downloadData(path: "user.jpg").value
+```
+
+> **Note**: The file at the URL returned by `download(path:)` is temporary. Move or read it before the task is released.
+
+#### Download with Progress Tracking
+
+```swift
+// ✅ New in v3.0 - observe download progress
+let task = storage.from("videos").download(path: "clip.mp4")
+
+for await event in task.events {
+  switch event {
+  case .progress(let p):
+    print("\(p.bytesTransferred) / \(p.totalBytes) bytes (\(Int(p.fractionCompleted * 100))%)")
+  case .completed(let fileURL):
+    let dest = documentsDir.appendingPathComponent("clip.mp4")
+    try FileManager.default.moveItem(at: fileURL, to: dest)
+  case .failed(let error):
+    print("Download failed: \(error)")
+  }
+}
+```
+
+### Pause, Resume, and Cancel
+
+All `StorageUploadTask` and `StorageDownloadTask` instances support explicit lifecycle control:
+
+```swift
+let task = storage.from("videos").upload("large.mp4", fileURL: videoURL)
+
+await task.pause()   // Pause the transfer
+await task.resume()  // Resume from where it left off
+await task.cancel()  // Cancel and clean up
+```
+
+> **Note**: Pause/resume is most effective with TUS (resumable) uploads and range-enabled downloads. Multipart uploads and non-range downloads restart from the beginning on resume.
+
+### Resumable Uploads (TUS Protocol)
+
+**New in v3.0**: Files larger than 6 MB are automatically uploaded using the [TUS resumable upload protocol](https://tus.io), which supports pause/resume and better handles unreliable networks. The threshold is configurable.
+
+```swift
+// Auto-detection (default): ≤6 MB → multipart, >6 MB → TUS
+let task = storage.from("videos").upload("large.mp4", fileURL: videoURL)
+
+// Force TUS protocol regardless of file size
+let task = storage.from("videos").upload(
+  "small-but-resumable.mp4",
+  fileURL: videoURL,
+  method: .resumable
+)
+
+// Force multipart regardless of file size
+let task = storage.from("photos").upload(
+  "photo.jpg",
+  data: imageData,
+  method: .multipart
 )
 ```
+
+Configure the chunk size for TUS uploads via `StorageClientConfiguration`:
+
+```swift
+let config = StorageClientConfiguration(
+  headers: headers,
+  tusChunkSize: 10 * 1024 * 1024  // 10 MB chunks (default: 6 MB)
+)
+```
+
+### Background Downloads
+
+**New in v3.0**: Downloads can continue while your app is in the background. Enable by setting `backgroundDownloadSessionIdentifier` in your configuration, then wire up the app delegate callback.
+
+```swift
+// 1. Configure with a background session identifier
+let storage = StorageClient(
+  url: storageURL,
+  configuration: StorageClientConfiguration(
+    headers: headers,
+    backgroundDownloadSessionIdentifier: "com.example.app.storage"
+  )
+)
+
+// 2. In AppDelegate.swift
+func application(
+  _ application: UIApplication,
+  handleEventsForBackgroundURLSession identifier: String,
+  completionHandler: @escaping () -> Void
+) {
+  supabase.storage.handleBackgroundEvents(
+    forSessionIdentifier: identifier,
+    completionHandler: completionHandler
+  )
+}
+```
+
+### Bucket Options Changes
+
+**What changed**: `BucketOptions` uses more Swift-idiomatic naming and a typed byte-count value.
+
+```swift
+// ❌ Old (v2.x)
+try await storage.createBucket("avatars", options: BucketOptions(
+  public: true,
+  fileSizeLimit: "5242880",  // string-based
+  allowedMimeTypes: ["image/*"]
+))
+
+// ✅ New (v3.0)
+try await storage.createBucket("avatars", options: BucketOptions(
+  isPublic: true,
+  fileSizeLimit: .megabytes(5),  // typed
+  allowedMimeTypes: ["image/*"]
+))
+```
+
+| Changed Property | Before | After |
+|-----------------|--------|-------|
+| `public` | `Bool` | `isPublic: Bool` |
+| `fileSizeLimit` | `String?` (e.g. `"5242880"`) | `StorageByteCount?` |
+
+#### `StorageByteCount`
+
+The new `StorageByteCount` type replaces bare string byte counts:
+
+```swift
+let fiveMB = StorageByteCount.megabytes(5)
+let oneGB  = StorageByteCount.gigabytes(1)
+let exact  = StorageByteCount.bytes(5_242_880)
+
+// Also supports integer literals
+let limit: StorageByteCount = 5_242_880
+```
+
+### File Options Changes
+
+**What changed**: `FileOptions.duplex` and `FileOptions.headers` have been removed.
+
+| Removed Property | Migration |
+|-----------------|-----------|
+| `duplex: String?` | Remove entirely — HTTP/2 framing is now handled internally |
+| `headers: [String: String]?` | Move per-client headers to `StorageClientConfiguration.headers` |
+
+```swift
+// ❌ Old (v2.x)
+let options = FileOptions(
+  contentType: "image/jpeg",
+  upsert: false,
+  duplex: "half",                     // REMOVED
+  headers: ["x-custom-header": "v"]  // REMOVED
+)
+
+// ✅ New (v3.0)
+let options = FileOptions(
+  contentType: "image/jpeg",
+  upsert: false
+)
+```
+
+### Signed URL Changes
+
+**What changed**: `expiresIn` now takes a `Duration` instead of `Int` seconds, and the `download` parameter uses the `DownloadBehavior` enum instead of `Bool?` or `String?`.
+
+```swift
+// ❌ Old (v2.x)
+let url = try await storage.from("reports").createSignedURL(
+  path: "q4.pdf",
+  expiresIn: 3600,        // Int (seconds)
+  download: true          // Bool or String
+)
+
+// ✅ New (v3.0)
+let url = try await storage.from("reports").createSignedURL(
+  path: "q4.pdf",
+  expiresIn: .seconds(3600),           // Duration
+  download: .withOriginalName          // DownloadBehavior
+)
+
+// With a custom download filename:
+let url = try await storage.from("reports").createSignedURL(
+  path: "q4.pdf",
+  expiresIn: .seconds(3600),
+  download: .named("annual-2024.pdf")  // DownloadBehavior.named
+)
+```
+
+The same changes apply to `createSignedURLs(paths:expiresIn:download:)` and `getPublicURL(path:download:transform:)`:
+
+```swift
+// ✅ New (v3.0)
+let results = try await storage.from("media").createSignedURLs(
+  paths: ["photo1.jpg", "photo2.jpg"],
+  expiresIn: .seconds(3600)
+)
+
+let publicURL = try storage.from("avatars").getPublicURL(
+  path: "user.jpg",
+  download: .withOriginalName
+)
+```
+
+### Signed Upload URL Changes
+
+**What changed**: `uploadToSignedURL` now returns a task object; use `.value` to await the result.
+
+```swift
+// ❌ Old (v2.x)
+let signed = try await storage.from("uploads").createSignedUploadURL(path: "file.pdf")
+let response = try await storage.from("uploads").uploadToSignedURL(
+  signed.path,
+  token: signed.token,
+  data: pdfData
+)
+
+// ✅ New (v3.0)
+let signed = try await storage.from("uploads").createSignedUploadURL(path: "file.pdf")
+let response = try await storage.from("uploads").uploadToSignedURL(
+  signed.path,
+  token: signed.token,
+  data: pdfData
+).value
+```
+
+### New `FileInfo` Type
+
+**What changed**: `FileObjectV2` has been replaced by `FileInfo`.
+
+```swift
+// ❌ Old (v2.x)
+let info: FileObjectV2 = ...
+
+// ✅ New (v3.0)
+let info: FileInfo = try await storage.from("avatars").info(path: "user.jpg")
+print("Size: \(info.size ?? 0) bytes")
+print("Content type: \(info.contentType ?? "unknown")")
+print("ETag: \(info.etag ?? "")")
+```
+
+### Removed Types and APIs
+
+The following have been removed:
+
+| Removed | Replacement |
+|---------|-------------|
+| `SupabaseStorageClient` (class) | `StorageClient` (struct) |
+| `StorageFileApi` (class) | `StorageFileAPI` (struct) |
+| `StorageHTTPSession` | `URLSession` |
+| `StorageApi` base class | — (architecture removed) |
+| `StorageBucketApi` base class | — (architecture removed) |
+| `File` struct | `FileUploadResponse` |
+| `FileObjectV2` | `FileInfo` |
+| `FormData` | `MultipartFormData` (internal only) |
+| `JSONEncoder.defaultStorageEncoder` | Provide your own `JSONEncoder` if needed |
+| `JSONDecoder.defaultStorageDecoder` | Provide your own `JSONDecoder` if needed |
+| `StorageApi.setHeader(_:forKey:)` | Pass headers at init via `StorageClientConfiguration.headers` |
+| `StorageClientConfiguration.encoder` | — |
+| `StorageClientConfiguration.decoder` | — |
+| `FileOptions.duplex` | — |
+| `FileOptions.headers` | Use `StorageClientConfiguration.headers` |
+| `BucketOptions.public` | `BucketOptions.isPublic` |
 
 ---
 
@@ -583,10 +859,22 @@ Use this checklist to ensure you've covered all breaking changes:
 - [ ] Updated type aliases (URLQueryRepresentable → PostgrestFilterValue)
 
 ### Storage
-- [ ] Added `logger` parameter to custom storage initializers
-- [ ] Updated upload methods to use new signatures and return types
-- [ ] Removed `File` type usage (use `FileUploadResponse`)
-- [ ] Removed direct encoder/decoder access
+- [ ] Replaced `SupabaseStorageClient` with `StorageClient` (struct)
+- [ ] Replaced `StorageFileApi` with `StorageFileAPI` (struct)
+- [ ] Moved `url` from `StorageClientConfiguration` to `StorageClient` initializer
+- [ ] Replaced `StorageHTTPSession` with `URLSession`
+- [ ] Removed `encoder`/`decoder` from `StorageClientConfiguration`
+- [ ] Added `.value` to all `upload()`, `update()`, `uploadToSignedURL()` call sites
+- [ ] Added `.value` to all `download()` call sites, or switched to `downloadData()` for `Data`
+- [ ] Updated `BucketOptions.public` → `isPublic`
+- [ ] Updated `BucketOptions.fileSizeLimit` from `String?` to `StorageByteCount?`
+- [ ] Removed `FileOptions.duplex` usage
+- [ ] Removed `FileOptions.headers` usage (move to `StorageClientConfiguration.headers`)
+- [ ] Updated `expiresIn` in `createSignedURL`/`createSignedURLs` from `Int` to `Duration`
+- [ ] Updated `download` parameter in signed/public URL calls to `DownloadBehavior`
+- [ ] Replaced `FileObjectV2` usage with `FileInfo`
+- [ ] Removed `File` struct usage (use `FileUploadResponse`)
+- [ ] Removed `JSONEncoder.defaultStorageEncoder` / `JSONDecoder.defaultStorageDecoder` usage
 
 ### Supabase Client
 - [ ] Replaced `.database` with `.from()`, `.rpc()`, or `.schema()`
@@ -607,7 +895,7 @@ If you encounter issues during migration:
 
 ## Summary
 
-The v3.0 release removes ~4,676 lines of deprecated code, resulting in a cleaner, more maintainable SDK. While this introduces breaking changes, all removed APIs have clear migration paths, and the effort required for migration is typically straightforward find-and-replace operations.
+The v3.0 release removes ~4,676 lines of deprecated code and fully rewrites the Storage module, resulting in a cleaner, more capable SDK. While this introduces breaking changes, all removed APIs have clear migration paths. Most changes outside Storage are straightforward find-and-replace operations.
 
-Most importantly, this cleanup positions the SDK for future enhancements without the burden of maintaining deprecated code paths.
+The Storage changes are the most significant: the class-based hierarchy is gone, all async operations now return task objects, and TUS resumable uploads and background downloads are available out of the box. Plan for a moderate migration effort in any code that directly initializes storage clients or calls upload/download methods.
 
