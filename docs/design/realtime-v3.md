@@ -36,7 +36,7 @@ let realtime = Realtime(
   accessToken: { try await auth.session.accessToken }
 )
 
-let channel = realtime.channel("room:42")
+let channel = await realtime.channel("room:42")
 
 // Optional: register postgres tokens BEFORE subscribe.
 let inserts = channel.inserts(into: Message.self, where: .eq(\.roomId, 42))
@@ -58,9 +58,9 @@ Task {
   }
 }
 
-// Untyped raw feed (the AsyncSequence conformance).
+// Untyped raw feed.
 Task {
-  for try await frame in channel {
+  for await frame in channel.messages {
     // frame: PhoenixMessage — broadcast / postgres_changes / presence_diff / ...
   }
 }
@@ -102,7 +102,7 @@ Everything below is elaboration.
 ## 1. Client Construction
 
 ```swift
-public final actor Realtime: Sendable {
+public actor Realtime {
   public init(
     url: URL,
     apiKey: String,
@@ -196,18 +196,22 @@ public extension Realtime {
   ///
   /// The channel does not join the server until `subscribe()` is called. The
   /// caller must call `leave()` to unsubscribe; `deinit` does NOT unsubscribe.
+  ///
+  /// Isolated: the topic→channel registry is actor state (Decision 1), so
+  /// lookup/creation reads-modifies-writes it and callers `await`.
   func channel(
     _ topic: String,
     configure: (inout ChannelOptions) -> Void = { _ in }
   ) -> Channel
 }
 
-public final actor Channel: AsyncSequence, Sendable {
-  public typealias Element = PhoenixMessage
+public actor Channel {
+  // Immutable metadata — `nonisolated` so callers read it without `await`.
+  public nonisolated let topic: String
+  public nonisolated let options: ChannelOptions
 
-  public var topic: String { get }
-  public var options: ChannelOptions { get }
-  public var state: AsyncStream<ChannelState> { get }
+  /// Lifecycle stream. `nonisolated`; backed by the channel's Sendable hub.
+  public nonisolated var state: AsyncStream<ChannelState> { get }
 
   /// Explicit join. Idempotent: calling while joined returns immediately;
   /// concurrent calls before join await the same in-flight join.
@@ -228,26 +232,48 @@ public final actor Channel: AsyncSequence, Sendable {
     isPrivate: Bool = false
   ) async throws(RealtimeError)
 
-  /// Raw iteration — every Phoenix frame on this channel, including
-  /// `broadcast`, `postgres_changes`, `presence_diff`, `presence_state`,
-  /// `system`, `phx_reply`, `phx_close`, and `phx_error`. The SDK still
-  /// consumes these internally (ack correlation, lifecycle); raw consumers
-  /// observe a copy. Fan-out: each iteration is independent.
-  public func makeAsyncIterator() -> AsyncIterator
+  /// Raw feed — every Phoenix frame on this channel, including `broadcast`,
+  /// `postgres_changes`, `presence_diff`, `presence_state`, `system`,
+  /// `phx_reply`, `phx_close`, and `phx_error`. The SDK still consumes these
+  /// internally (ack correlation, lifecycle); raw consumers observe a copy.
+  ///
+  /// `nonisolated` and backed by the channel's Sendable hub, so it can be
+  /// iterated without `await` on the property. Per-access fan-out: each
+  /// `for await` over `messages` is an independent stream.
+  public nonisolated var messages: AsyncStream<PhoenixMessage> { get }
 
-  // Typed views (§3, §5, §4) — see the relevant sections for full signatures.
-  public func broadcasts<T: Decodable & Sendable>(of type: T.Type, event: String)
+  // Stream factories (§3, §5, §4). `nonisolated` so a pipeline can be built
+  // without `await`; only iteration suspends. See "Isolation contract" below.
+  public nonisolated func broadcasts<T: Decodable & Sendable>(of type: T.Type, event: String)
     -> AsyncThrowingStream<T, RealtimeError>
-  public func postgresChanges<E: ChangeEventVariant>(for token: ChangeRegistration<E>)
+  public nonisolated func postgresChanges<E: ChangeEventVariant>(for token: ChangeRegistration<E>)
     -> AsyncThrowingStream<E.Element, RealtimeError>
-  public var presence: Presence { get }
+  public nonisolated var presence: Presence { get }
 
-  // Sending (§3.2) — requires a subscribed channel at runtime.
+  // Sending (§3.2) — requires a subscribed channel at runtime; isolated.
   public func broadcast<T: Encodable & Sendable>(_ payload: T, as event: String)
     async throws(RealtimeError)
   public func broadcast(_ data: Data, as event: String) async throws(RealtimeError)
 }
+```
 
+**Isolation contract.** `Channel` is an actor for its *live connection state*
+(join status, the WebSocket, in-flight pushes). Everything that only reads
+immutable metadata or vends a stream is `nonisolated`, backed by a Sendable,
+lock-protected hub:
+
+- `nonisolated` (no `await` at the call site): `topic`, `options`, `state`,
+  `presence`, `messages`, `broadcasts(of:event:)`, `postgresChanges(for:)`,
+  and the registration factories
+  `changes`/`inserts`/`updates`/`deletes` (§5.3). This is why tokens can be
+  registered before `subscribe()` and why building a consumption pipeline
+  needs no `await` — only iterating a stream suspends.
+- **isolated `async`** (suspend at the call site): `realtime.channel(_:)`
+  (reads-modifies-writes the topic registry), `subscribe()`, `leave()`,
+  `broadcast(_:as:)`, `httpBroadcast(...)`, and `presence.track(...)` — all
+  touch actor state or the live connection.
+
+```swift
 public struct PhoenixMessage: Sendable {
   /// Phoenix join reference correlating this frame to its `phx_join`. Always
   /// `nil` when the channel is configured for protocol v1 (4-tuple frames
@@ -421,20 +447,23 @@ one-shot sending, and the untyped iteration over the raw Phoenix feed — live o
 ```swift
 public extension Channel {
   /// Typed event stream — decodes each broadcast message's payload to `T`,
-  /// filtered to a single event name. Fan-out: each call returns an
-  /// independent stream; multiple iterators observe every matching message.
-  func broadcasts<T: Decodable & Sendable>(
+  /// filtered to a single event name. Fan-out is **per call**: each call
+  /// returns an independent stream, and N calls observe every matching
+  /// message N times. A single returned stream still follows
+  /// `AsyncThrowingStream` semantics — one consumer per value; iterating the
+  /// same returned stream from two tasks splits values between them. For two
+  /// consumers, call `broadcasts(of:event:)` twice.
+  nonisolated func broadcasts<T: Decodable & Sendable>(
     of type: T.Type,
     event: String
   ) -> AsyncThrowingStream<T, RealtimeError>
 }
 
-// Untyped iteration is the AsyncSequence conformance on Channel itself (§2.1).
-// Element is `PhoenixMessage`, which spans broadcasts,
-// postgres_changes, presence_diff, and other channel-level events. To filter
-// to broadcasts only, match on `event == "broadcast"` and decode `payload`
-// manually — but the typed `broadcasts(of:event:)` method is the recommended
-// path.
+// Untyped iteration is the `channel.messages` stream (§2.1). Element is
+// `PhoenixMessage`, which spans broadcasts, postgres_changes, presence_diff,
+// and other channel-level events. To filter to broadcasts only, match on
+// `event == "broadcast"` and decode `payload` manually — but the typed
+// `broadcasts(of:event:)` method is the recommended path.
 ```
 
 Streams pause silently during reconnection and resume on rejoin. Gaps are
@@ -535,7 +564,7 @@ emitting after join.
 
 ```swift
 public extension Channel {
-  var presence: Presence { get }
+  nonisolated var presence: Presence { get }
 }
 
 public struct Presence: Sendable {
@@ -718,45 +747,50 @@ them.
 ### 5.3 Register-then-subscribe
 
 Phoenix requires postgres_changes filters in the `phx_join` payload — they
-cannot be added after join. The API reflects this: registration mutates
-channel state and returns a token; `subscribe()` triggers the join with all
-pending tokens; consumption happens through the same `Channel`.
+cannot be added after join. The API reflects this: registration records the
+token in the channel's Sendable hub and returns it synchronously; `subscribe()`
+triggers the join with all pending tokens; consumption happens through the same
+`Channel`.
 
 ```swift
 public extension Channel {
+  // All registration factories are `nonisolated` (see §2.1 "Isolation
+  // contract") — they record into the channel's lock-protected hub and return
+  // synchronously, so callers register tokens without `await`.
+
   // Typed factories — require RealtimeTable, return registrations whose
   // variant carries the row type. Filter is a typed `Filter<T>`.
-  func changes<T: RealtimeTable>(
+  nonisolated func changes<T: RealtimeTable>(
     to type: T.Type, where filter: Filter<T>? = nil
   ) -> ChangeRegistration<AnyEvent<T>>
 
-  func inserts<T: RealtimeTable>(
+  nonisolated func inserts<T: RealtimeTable>(
     into type: T.Type, where filter: Filter<T>? = nil
   ) -> ChangeRegistration<Insert<T>>
 
-  func updates<T: RealtimeTable>(
+  nonisolated func updates<T: RealtimeTable>(
     of type: T.Type, where filter: Filter<T>? = nil
   ) -> ChangeRegistration<Update<T>>
 
-  func deletes<T: RealtimeTable>(
+  nonisolated func deletes<T: RealtimeTable>(
     from type: T.Type, where filter: Filter<T>? = nil
   ) -> ChangeRegistration<Delete<T>>
 
   // Untyped factories — for types without RealtimeTable. Return registrations
   // whose variant carries `JSONValue`. Filter is `UntypedFilter`.
-  func changes(
+  nonisolated func changes(
     schema: String, table: String, filter: UntypedFilter? = nil
   ) -> ChangeRegistration<AnyEvent<JSONValue>>
 
-  func inserts(
+  nonisolated func inserts(
     schema: String, table: String, filter: UntypedFilter? = nil
   ) -> ChangeRegistration<Insert<JSONValue>>
 
-  func updates(
+  nonisolated func updates(
     schema: String, table: String, filter: UntypedFilter? = nil
   ) -> ChangeRegistration<Update<JSONValue>>
 
-  func deletes(
+  nonisolated func deletes(
     schema: String, table: String, filter: UntypedFilter? = nil
   ) -> ChangeRegistration<Delete<JSONValue>>
 }
@@ -806,7 +840,7 @@ public extension Channel {
   /// Passing a token that was created on a different channel is a
   /// programmer error: the iterator throws `.unknownToken` on first
   /// iteration. (`Channel` actor identity is captured in the token.)
-  func postgresChanges<E: ChangeEventVariant>(for token: ChangeRegistration<E>)
+  nonisolated func postgresChanges<E: ChangeEventVariant>(for token: ChangeRegistration<E>)
     -> AsyncThrowingStream<E.Element, RealtimeError>
 }
 
@@ -856,8 +890,12 @@ same tokens replay on the next `channel.subscribe()`. New tokens may also be
 registered between leave and resubscribe. Registering while joined throws
 `.cannotRegisterAfterJoin`.
 
-**Fan-out per token.** Each `channel.postgresChanges(for: token)` call returns a fresh
-stream; multiple iterators of the same token each receive every event.
+**Fan-out per token.** Fan-out is **per call**: each
+`channel.postgresChanges(for: token)` call returns a fresh stream, and N calls
+each receive every event. A single returned stream is single-consumer
+(standard `AsyncThrowingStream` semantics) — for two consumers of the same
+token, call `postgresChanges(for:)` twice rather than iterating one returned
+stream from two tasks.
 
 **Reconnect is transparent.** Channel streams survive silent reconnects (§9.2);
 all tokens are re-registered automatically on rejoin. Streams terminate only on
@@ -984,7 +1022,8 @@ need an access token (private channels, RLS-backed features, or token refresh).
 
 ```swift
 public extension Realtime {
-  var status: AsyncStream<ConnectionStatus> { get }
+  /// `nonisolated` so observers can iterate without awaiting the property.
+  nonisolated var status: AsyncStream<ConnectionStatus> { get }
 }
 
 public struct ConnectionStatus: Sendable {
@@ -1219,7 +1258,8 @@ Kept here for reference so implementors don't re-litigate.
 | 5 | Pipelined re-acquire after `leave()` | Same-topic churn is transparent |
 | 6 | Reconnect is silent in typed streams; `channel.state` is the lifecycle source of truth | Avoids leaky delivery-guarantee abstractions |
 | 7 | Unbounded per-stream buffer (for now) | Simplest; `SlowConsumerPolicy` knob can be added additively |
-| 8 | Fan-out: each `broadcasts(of:event:)` call is independent | Matches pub/sub intuition; slow consumer is local |
+| 8 | Fan-out is **per call**: each `broadcasts(of:event:)` / `postgresChanges(for:)` call is independent. A single returned stream is single-consumer (`AsyncStream` semantics); two consumers = two calls | Matches pub/sub intuition and Swift's stream model; iterating one returned stream twice would split values |
+| 8a | `Realtime` and `Channel` are plain `actor`s (no `final`, no explicit `: Sendable` — both implicit). Immutable metadata (`topic`, `options`), stream factories (`broadcasts`, `postgresChanges`, `messages`, `state`, `presence`, `status`), and postgres registration are `nonisolated` over a Sendable lock-protected hub; `realtime.channel(_:)`, `subscribe`, `leave`, `broadcast`-send, `httpBroadcast`, and `presence.track` are isolated `async` (they touch actor state or the live connection) | Building a consumption pipeline (and registering tokens before join) needs no `await`; only operations touching actor/connection state suspend. Matches the repo's `public actor X` house style |
 | 9 | Literal `apiKey: String` for connect; dynamic `accessToken` provider for JWT authorization; `updateToken(_:)` pushes access tokens to joined channels | Backend uses stable API keys for connect and rotating JWTs for channel/HTTP authorization |
 | 10 | On token expiry/system auth close: refresh access token and resubscribe; do not retry the original push on the same channel | Backend closes the channel instead of ACKing a retryable `token_expired` operation |
 | 11 | Access-token provider throwing does NOT trigger `ReconnectionPolicy` | Auth recovery is caller-owned |
@@ -1231,7 +1271,7 @@ Kept here for reference so implementors don't re-litigate.
 | 14c | Registering after join throws `.cannotRegisterAfterJoin`; tokens are reusable across `leave()` + resubscribe cycles | Honest about the wire; ergonomic across reconnects and cycles |
 | 14d | `subscribe()` is the **only** join path; no iteration-driven lazy-join | One mental model; no surprises from broadcast iteration silently joining |
 | 14e | `subscribe()` returns `Void`; `Channel` remains the single surface for consumption, sending, presence, and leave | A separate subscription value cannot honestly guarantee live connectivity across reconnects or global leave |
-| 14f | `Channel` conforms to `AsyncSequence` with `Element = PhoenixMessage` | Untyped raw feed available without an extra method; typed methods refine for normal use |
+| 14f | Raw feed is a `nonisolated var messages: AsyncStream<PhoenixMessage>` property, not an `AsyncSequence` conformance on `Channel` | A property is more discoverable and avoids a public iterator type + the awkward synchronous `makeAsyncIterator()` requirement on an actor |
 | 14g | (merged into Decision 26) | — |
 | 14h | Multiple `subscribe()` calls coalesce/idempotently join the same backing channel state | Topic identity (Decision 1) extends to joining |
 | 14i | `Channel` drop without `leave()` does nothing (debug warning); leave is global as in Decision 3 | Consistency with channel rules; no auto-leave footguns under topic sharing |
@@ -1305,9 +1345,9 @@ struct UserPresence: Codable, Sendable {
 @MainActor @Observable
 final class ChatRoomModel {
   private let realtime: Realtime
-  private let channel: Channel
   private let roomId: UUID
   private let me: UUID
+  private var channel: Channel?
   private var runTask: Task<Void, Never>?
   private var trackHandle: PresenceHandle?
 
@@ -1319,20 +1359,23 @@ final class ChatRoomModel {
     self.realtime = realtime
     self.roomId = roomId
     self.me = me
-    self.channel = realtime.channel("chat:room:\(roomId)") {
-      $0.presence.enabled = true
-      $0.presence.key = "user-\(me)"
-    }
   }
 
   func start() {
-    // Register postgres tokens BEFORE subscribe — they bake into phx_join.
-    let messageInserts = channel.inserts(
-      into: Message.self, where: .eq(\.roomId, roomId)
-    )
-
-    runTask = Task { [channel, realtime, messageInserts, me, weak self] in
+    runTask = Task { [realtime, roomId, me, weak self] in
       do {
+        // Acquire the channel (isolated: touches the topic registry).
+        let channel = await realtime.channel("chat:room:\(roomId)") {
+          $0.presence.enabled = true
+          $0.presence.key = "user-\(me)"
+        }
+        await MainActor.run { self?.channel = channel }
+
+        // Register postgres tokens BEFORE subscribe — they bake into phx_join.
+        let messageInserts = channel.inserts(
+          into: Message.self, where: .eq(\.roomId, roomId)
+        )
+
         // Single explicit join captures the registration above.
         try await channel.subscribe()
 
@@ -1376,9 +1419,10 @@ final class ChatRoomModel {
     }
   }
 
-  /// Broadcast through the active channel. Throws `.notSubscribed` before
-  /// `start()` has joined.
+  /// Broadcast through the active channel. No-op before the channel exists;
+  /// throws `.notSubscribed` if created but not yet joined.
   func send(_ text: String) async throws(RealtimeError) {
+    guard let channel else { return }
     try await channel.broadcast(
       ChatBroadcast(authorId: me, text: text),
       as: "chat"
@@ -1388,7 +1432,7 @@ final class ChatRoomModel {
   func stop() async {
     runTask?.cancel()
     try? await trackHandle?.cancel()
-    try? await channel.leave()
+    try? await channel?.leave()
   }
 }
 ```
