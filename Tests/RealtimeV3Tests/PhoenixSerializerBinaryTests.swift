@@ -19,6 +19,11 @@ import Testing
       joinRef: "1", ref: "2", topic: "t", event: "e", jsonPayload: ["a": 1]
     )
     #expect(data[data.startIndex] == 3)  // kind = userBroadcastPush
+    #expect(data[data.startIndex + 1] == 1)  // joinRef "1" length
+    #expect(data[data.startIndex + 2] == 1)  // ref "2" length
+    #expect(data[data.startIndex + 3] == 1)  // topic "t" length
+    #expect(data[data.startIndex + 4] == 1)  // event "e" length
+    #expect(data[data.startIndex + 5] == 0)  // metadata empty length
     #expect(data[data.startIndex + 6] == 1)  // encoding = json
   }
 
@@ -29,12 +34,14 @@ import Testing
     frame.append(contentsOf: Array("e".utf8))
     frame.append(contentsOf: [0xDE, 0xAD])
     let msg = try s.decodeBinary(frame, receivedAt: Date(timeIntervalSince1970: 0))
+    #expect(msg.joinRef == nil)
+    #expect(msg.ref == nil)
     #expect(msg.topic == "t")
     #expect(msg.event == "broadcast")
     if case .binary(let d) = msg.payload {
       #expect(Array(d) == [0xDE, 0xAD])
     } else {
-      Issue.record("binary")
+      Issue.record("Expected .binary payload, got \(msg.payload)")
     }
   }
 
