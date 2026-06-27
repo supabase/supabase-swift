@@ -49,6 +49,8 @@ actor InMemoryTransport: RealtimeTransport {
     lastConnectURL = url
     lastConnectHeaders = headers
     connectCallCount += 1
+    // NOTE: All connections from repeated connect() calls share the same server streams
+    // (reconnect support), so the server can keep injecting/observing frames across reconnects.
     return server.makeConnection()
   }
 }
@@ -73,7 +75,7 @@ final class TransportServer: Sendable {
 
   // Wraps serverToClientStream as AsyncThrowingStream for the connection.frames property.
   // We re-create a throwing wrapper each time makeConnection() is called.
-  nonisolated init() {
+  init() {
     let (clientSentStream, clientSentCont) = AsyncStream.makeStream(of: TransportFrame.self)
     let (serverToClientStr, serverToClientCont) = AsyncStream.makeStream(of: TransportFrame.self)
     self.clientSentFrames = clientSentStream
@@ -102,11 +104,6 @@ final class TransportServer: Sendable {
       clientSentContinuation: clientSentContinuation
     )
   }
-
-  /// Yield a frame into clientSentFrames from the connection side.
-  fileprivate func yieldClientSent(_ frame: TransportFrame) {
-    _ = clientSentContinuation.withValue { $0?.yield(frame) }
-  }
 }
 
 // MARK: - InMemoryConnection (private)
@@ -115,21 +112,25 @@ final class TransportServer: Sendable {
 private final class InMemoryConnection: RealtimeConnection, Sendable {
   let frames: AsyncThrowingStream<TransportFrame, any Error & Sendable>
   private let clientSentContinuation: LockIsolated<AsyncStream<TransportFrame>.Continuation?>
+  private let bridgeTask: Task<Void, Never>
 
   init(
     serverToClientStream: AsyncStream<TransportFrame>,
     clientSentContinuation: LockIsolated<AsyncStream<TransportFrame>.Continuation?>
   ) {
     // Wrap the plain AsyncStream in AsyncThrowingStream as required by the protocol.
-    self.frames = AsyncThrowingStream { continuation in
-      Task {
-        for await frame in serverToClientStream {
-          continuation.yield(frame)
-        }
-        continuation.finish()
-      }
-    }
+    // Use makeStream() so the bridging Task can be stored and cancelled on close().
+    let (throwingStream, continuation) = AsyncThrowingStream<
+      TransportFrame, any Error & Sendable
+    >.makeStream()
+    self.frames = throwingStream
     self.clientSentContinuation = clientSentContinuation
+    self.bridgeTask = Task {
+      for await frame in serverToClientStream {
+        continuation.yield(frame)
+      }
+      continuation.finish()
+    }
   }
 
   func send(_ frame: TransportFrame) async throws {
@@ -137,6 +138,6 @@ private final class InMemoryConnection: RealtimeConnection, Sendable {
   }
 
   func close(code: Int, reason: String) async {
-    // No-op for the in-memory transport; closeFromServer handles stream teardown.
+    bridgeTask.cancel()
   }
 }
