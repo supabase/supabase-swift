@@ -3,7 +3,7 @@
 > Status: Design revisited after backend source audit
 > (`realtime-v3-questions-for-backend.md`). Greenfield design — no
 > consideration given to V2 compatibility or other Supabase SDKs. Targets Swift
-> 6.2+. Breaking changes accepted.
+> 6.1+ / iOS 16+. Breaking changes accepted.
 
 ## Design Principles
 
@@ -14,7 +14,9 @@
    Postgres tables are generic. The compiler rejects the wrong payload type.
 3. **`AsyncSequence` is the canonical surface.** Closures appear only where
    they unlock a behavior a sequence cannot express.
-4. **Observation‑native.** Clean integration with `@Observable` and SwiftUI.
+4. **Observation‑friendly.** Streams drop cleanly into SwiftUI view models —
+   `@Observable` on iOS 17+, `ObservableObject`/Perception below that. The SDK
+   surface itself is `AsyncSequence`-based and does not depend on Observation.
 5. **Typed throws throughout.** `throws(RealtimeError)` at every boundary.
 6. **Resilient by default.** Automatic reconnection with pluggable policies;
    transparent re‑joining of channels and presences; token refresh.
@@ -346,7 +348,9 @@ Key invariants:
   streams unless the reconnection policy gives up.
 - **Leaked-channel warning.** When `Realtime` deinits with channels that
   have been joined but never left, an `IssueReporting` warning fires in
-  debug builds. Release builds silently rely on server-side timeouts.
+  debug builds. Release builds silently rely on server-side timeouts. (The
+  joined-but-unleft set is tracked in a nonisolated location so the
+  synchronous `deinit` can read it — no Swift 6.2 isolated deinit required.)
 
 ### 2.2 Channel options are locked at creation
 
@@ -874,7 +878,7 @@ let roomGone = await channel.deletes(from: Room.self,    where: .eq(\.id, id))
 try await channel.subscribe()
 
 // 3. Consume — element type follows the token's variant.
-await withThrowingDiscardingTaskGroup { group in
+try await withThrowingTaskGroup(of: Void.self) { group in
   group.addTask {
     for try await row in await channel.postgresChanges(for: inserts) {
       // row: Message
@@ -893,6 +897,7 @@ await withThrowingDiscardingTaskGroup { group in
   group.addTask {
     for try await _ in await channel.postgresChanges(for: roomGone) { close() }
   }
+  try await group.waitForAll()
 }
 ```
 
@@ -1329,6 +1334,7 @@ Kept here for reference so implementors don't re-litigate.
 ## Appendix A — End-to-end example
 
 ```swift
+import Combine   // for ObservableObject on the iOS 16 floor; not needed with @Observable (iOS 17+)
 import Realtime
 
 @RealtimeTable(schema: "public", table: "messages")
@@ -1353,8 +1359,10 @@ struct UserPresence: Codable, Sendable {
   enum Status: String, Codable, Sendable { case active, idle }
 }
 
-@MainActor @Observable
-final class ChatRoomModel {
+// iOS 16 floor → `ObservableObject`. On iOS 17+ this would be `@Observable`
+// (and the `@Published` annotations would drop away).
+@MainActor
+final class ChatRoomModel: ObservableObject {
   private let realtime: Realtime
   private let roomId: UUID
   private let me: UUID
@@ -1362,9 +1370,9 @@ final class ChatRoomModel {
   private var runTask: Task<Void, Never>?
   private var trackHandle: PresenceHandle?
 
-  var messages: [Message] = []
-  var onlineUsers: [UUID: UserPresence] = [:]
-  var connection: ConnectionStatus.State = .idle
+  @Published var messages: [Message] = []
+  @Published var onlineUsers: [UUID: UserPresence] = [:]
+  @Published var connection: ConnectionStatus.State = .idle
 
   init(realtime: Realtime, roomId: UUID, me: UUID) {
     self.realtime = realtime
@@ -1390,7 +1398,9 @@ final class ChatRoomModel {
         // Single explicit join captures the registration above.
         try await channel.subscribe()
 
-        try await withThrowingDiscardingTaskGroup { group in
+        // `withThrowingTaskGroup` (not the iOS 17 `…DiscardingTaskGroup`) for
+        // the iOS 16 floor; `waitForAll()` rethrows the first child error.
+        try await withThrowingTaskGroup(of: Void.self) { group in
           // Postgres inserts → append
           group.addTask {
             let rows = await channel.postgresChanges(for: messageInserts)
@@ -1422,6 +1432,8 @@ final class ChatRoomModel {
               await MainActor.run { self?.connection = status.state }
             }
           }
+
+          try await group.waitForAll()
         }
       } catch is CancellationError {
         // expected on view teardown
@@ -1460,7 +1472,16 @@ final class ChatRoomModel {
 
 ## Appendix C — Platform requirements
 
-- Swift 6.2+ (typed throws, isolated deinit, macros at the required level)
-- iOS 17+ / macOS 14+ / tvOS 17+ / watchOS 10+ / visionOS 1+ for
-  `@Observable`. A non-Observable compatibility layer could extend support
-  to iOS 13+ at the cost of ergonomic integration.
+- **Swift 6.1+.** Uses typed throws (Swift 6.0), parameterized existentials,
+  and macros. No Swift 6.2-only features are required — in particular, the
+  leaked-channel warning does *not* depend on isolated deinit (it reads a
+  nonisolated flag from the synchronous `deinit`).
+- **iOS 16 / macOS 13 / tvOS 16 / watchOS 9 / visionOS 1.** The floor is set by
+  `Duration` / `Clock` / `ContinuousClock` (used for timeouts, backoff, and
+  heartbeat RTT), which are iOS 16 / macOS 13. Lowering further would mean
+  replacing `Duration` with `TimeInterval` throughout.
+- **`@Observable` requires iOS 17 / macOS 14.** The Appendix A example targets
+  the iOS 16 floor with `ObservableObject`; on iOS 17+ prefer `@Observable`, and
+  the Perception package back-ports it below 17. The SDK's own public surface is
+  `AsyncSequence`-based and does not depend on Observation, so it builds on the
+  full iOS 16 range.
