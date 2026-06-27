@@ -32,8 +32,8 @@ import Realtime
 
 let realtime = Realtime(
   url: URL(string: "wss://project.supabase.co/realtime/v1")!,
-  apiKey: .literal("anon-key"),
-  accessToken: .dynamic { try await auth.session.accessToken }
+  apiKey: "anon-key",
+  accessToken: { try await auth.session.accessToken }
 )
 
 let channel = realtime.channel("room:42")
@@ -42,53 +42,55 @@ let channel = realtime.channel("room:42")
 let inserts = channel.inserts(into: Message.self, where: .eq(\.roomId, 42))
 
 // Single explicit join.
-let sub = try await channel.subscribe()
+try await channel.subscribe()
 
 // Typed broadcast receive.
 Task {
-  for try await msg in sub.broadcasts(of: ChatBroadcast.self, event: "chat") {
+  for try await msg in channel.broadcasts(of: ChatBroadcast.self, event: "chat") {
     render(msg)
   }
 }
 
 // Postgres consumption.
 Task {
-  for try await row in sub.events(for: inserts) {
+  for try await row in channel.postgresChanges(for: inserts) {
     append(row)
   }
 }
 
 // Untyped raw feed (the AsyncSequence conformance).
 Task {
-  for try await frame in sub {
+  for try await frame in channel {
     // frame: PhoenixMessage — broadcast / postgres_changes / presence_diff / ...
   }
 }
 
-// Send (only available on the subscription — Channel has no broadcast method).
+// WebSocket send (requires a subscribed channel).
 let payload = ChatBroadcast(...)   // any Encodable & Sendable
-try await sub.broadcast(payload, as: "chat")
+try await channel.broadcast(payload, as: "chat")
 
 // Explicit release when done.
-try await sub.leave()
+try await channel.leave()
 ```
 
-One-shot send without joining:
+One-shot HTTP send without joining:
 
 ```swift
-try await realtime.httpBroadcast(
-  topic: "room:42", event: "chat",
+try await channel.httpBroadcast(
+  event: "chat",
   payload: ChatBroadcast(...)
 )
 ```
 
 That's the mental model:
 
-- **Channels are factories.** `realtime.channel(topic)` returns a handle for
-  registering postgres tokens and triggering `subscribe()`. Nothing else.
-- **`subscribe()` returns a `ChannelSubscription`.** All consumption (typed and
-  untyped), all sending, and presence live on the subscription. The type
-  system enforces "you must subscribe before doing anything live."
+- **Channels are topic handles.** `realtime.channel(topic)` returns a handle for
+  registering postgres tokens, triggering `subscribe()`, and issuing
+  topic-scoped HTTP broadcasts without joining.
+- **`subscribe()` joins the channel.** After it returns, the same `Channel`
+  handle is used for all consumption (typed and untyped), WebSocket sending,
+  presence, and `leave()`. Runtime state determines whether an operation is
+  currently allowed.
 - **Postgres changes are register-then-subscribe.** The Phoenix wire forces it;
   the API reflects it. Tokens are reusable across `leave()` cycles.
 - **One `phx_join` per topic.** All pending tokens land in that single join.
@@ -103,31 +105,21 @@ Everything below is elaboration.
 public final actor Realtime: Sendable {
   public init(
     url: URL,
-    apiKey: APIKeySource,
-    accessToken: AccessTokenSource? = nil,
+    apiKey: String,
+    accessToken: AccessTokenProvider? = nil,
     configuration: Configuration = .default,
     transport: any RealtimeTransport = URLSessionTransport()
   )
 }
 ```
 
-### 1.1 Credentials separate connect auth from channel auth
+### 1.1 Credentials separate literal API key from dynamic access token
 
 ```swift
-public enum APIKeySource: Sendable {
-  case literal(String)
-  /// Called before opening the socket or making HTTP broadcast requests
-  /// that fall back to API-key auth.
-  case dynamic(@Sendable () async throws -> String)
-}
-
-public enum AccessTokenSource: Sendable {
-  case literal(String)
-  /// Called before joining private/RLS-backed channels, before HTTP private
-  /// broadcasts, and during reconnect/resubscribe. This is a JWT access token,
-  /// not the project API key.
-  case dynamic(@Sendable () async throws -> String)
-}
+/// Called before joining private/RLS-backed channels, before HTTP private
+/// broadcasts, and during reconnect/resubscribe. This is a JWT access token,
+/// not the project API key.
+public typealias AccessTokenProvider = @Sendable () async throws -> String
 ```
 
 The backend uses different credentials in different places:
@@ -140,8 +132,10 @@ The backend uses different credentials in different places:
   `apikey` header fallback. It does not use the WebSocket `x-api-key` header.
 
 The SDK keeps those concepts separate. `apiKey` is required for connecting.
-`accessToken` is optional for public channels but required for private channels
-and RLS-backed operations.
+It is a literal string because project API keys do not rotate per operation in
+the client. `accessToken` is optional for public channels but required for
+private channels and RLS-backed operations. It is always dynamic because JWTs
+expire and can change with auth session state.
 
 ### 1.2 Configuration
 
@@ -208,33 +202,31 @@ public extension Realtime {
   ) -> Channel
 }
 
-public final actor Channel: Sendable {
+public final actor Channel: AsyncSequence, Sendable {
+  public typealias Element = PhoenixMessage
+
   public var topic: String { get }
   public var options: ChannelOptions { get }
   public var state: AsyncStream<ChannelState> { get }
 
-  /// Explicit join. Returns a `ChannelSubscription` — the surface for all
-  /// post-join interaction (consumption, sending, presence). Idempotent:
-  /// calling while joined returns an equivalent subscription value; concurrent
-  /// calls before join await the same in-flight join.
+  /// Explicit join. Idempotent: calling while joined returns immediately;
+  /// concurrent calls before join await the same in-flight join.
   ///
   /// Postgres-change registrations made before this call are baked into the
   /// `phx_join` payload (see §5). After the call returns, registration of
   /// new tokens throws `.cannotRegisterAfterJoin` until the next `leave()`.
-  public func subscribe() async throws(RealtimeError) -> ChannelSubscription
+  public func subscribe() async throws(RealtimeError)
 
-  /// Convenience for callers who don't currently hold a subscription value
-  /// (e.g., a different feature on the same shared topic). Equivalent to
-  /// `subscribe().leave()` but does not require fetching the subscription.
+  /// Explicit unsubscribe. Global (§2.3); awaits server channel close
+  /// confirmation. After leave, live methods throw `.channelClosed`.
   public func leave() async throws(RealtimeError)
-}
 
-/// The post-join surface. Iterating directly yields the raw Phoenix message
-/// stream — every frame received on this channel, with no SDK-side filtering.
-/// Methods refine into typed views for broadcasts, postgres changes, and
-/// presence. Holds the only handle for sending broadcasts.
-public struct ChannelSubscription: AsyncSequence, Sendable {
-  public typealias Element = PhoenixMessage
+  /// One-shot HTTP broadcast to this channel's topic. Does not join the
+  /// channel and does not open the WebSocket.
+  public func httpBroadcast<T: Encodable & Sendable>(
+    event: String, payload: T,
+    isPrivate: Bool = false
+  ) async throws(RealtimeError)
 
   /// Raw iteration — every Phoenix frame on this channel, including
   /// `broadcast`, `postgres_changes`, `presence_diff`, `presence_state`,
@@ -246,21 +238,14 @@ public struct ChannelSubscription: AsyncSequence, Sendable {
   // Typed views (§3, §5, §4) — see the relevant sections for full signatures.
   public func broadcasts<T: Decodable & Sendable>(of type: T.Type, event: String)
     -> AsyncThrowingStream<T, RealtimeError>
-  public func events<E: ChangeEventVariant>(for token: ChangeRegistration<E>)
+  public func postgresChanges<E: ChangeEventVariant>(for token: ChangeRegistration<E>)
     -> AsyncThrowingStream<E.Element, RealtimeError>
   public var presence: Presence { get }
 
-  // Sending (§3.2) — only available post-subscribe; type system enforces it.
+  // Sending (§3.2) — requires a subscribed channel at runtime.
   public func broadcast<T: Encodable & Sendable>(_ payload: T, as event: String)
     async throws(RealtimeError)
   public func broadcast(_ data: Data, as event: String) async throws(RealtimeError)
-
-  /// Explicit unsubscribe. Global (§2.3); awaits server channel close
-  /// confirmation. After leave, this subscription is invalidated — methods
-  /// throw `.channelClosed`.
-  /// Tokens registered on the underlying channel remain reusable for the
-  /// next `subscribe()`.
-  public func leave() async throws(RealtimeError)
 }
 
 public struct PhoenixMessage: Sendable {
@@ -275,10 +260,10 @@ public struct PhoenixMessage: Sendable {
   /// server-pushed events (`broadcast`, `postgres_changes`, etc.).
   public let ref: String?
 
-  /// Channel topic this frame belongs to. Always matches the subscription's
-  /// channel topic for `ChannelSubscription` iterators; included on the
-  /// struct so consumers that hand `PhoenixMessage` values across boundaries
-  /// (logging, debugging, multi-topic aggregation) keep the routing key.
+  /// Channel topic this frame belongs to. Always matches this channel's topic
+  /// for channel iterators; included on the struct so consumers that hand
+  /// `PhoenixMessage` values across boundaries (logging, debugging,
+  /// multi-topic aggregation) keep the routing key.
   public let topic: String
 
   /// Server-side event name. Includes user-level events (`"broadcast"`,
@@ -304,8 +289,8 @@ Key invariants:
 
 - **Topic identity.** `realtime.channel("x")` always returns the same actor.
   One server-side subscription per topic per `Realtime` instance.
-- **No auto-unsubscribe.** Dropping a `Channel` or `ChannelSubscription` does
-  nothing. Explicit `leave()` is the only way.
+- **No auto-unsubscribe.** Dropping a `Channel` does nothing. Explicit
+  `leave()` is the only way.
 - **`subscribe()` is the only join path.** No lazy-join via iteration. The
   WebSocket opens lazily on the first `subscribe()` (§6.1).
 - **Postgres tokens register before join.** `channel.changes(...)`,
@@ -313,21 +298,18 @@ Key invariants:
   these *after* the channel has joined throws `.cannotRegisterAfterJoin`. After
   `leave()`, registration is allowed again — tokens are reusable across
   subscribe cycles. (§5)
-- **Sending is only available on a subscription.** Type-level gate: there is
-  no `Channel.broadcast(...)` method. For one-shot sends without joining, use
-  `realtime.httpBroadcast` (§3.3).
-- **Multiple `subscribe()` calls return equivalent subscriptions.** All point
-  at the same backing channel state; any subscription's `leave()` ends the
-  channel for every holder of the topic.
-- **Subscriptions are invalidated by manual `leave()`.** After
-  `subscription.leave()` returns (or any other holder's `leave()` completes),
-  the subscription value is dead. Calling `broadcast`, `events(for:)`,
-  `broadcasts(of:event:)`, or `presence` on it throws
-  `.channelClosed(.userRequested)`; direct iteration terminates. To re-engage,
-  call `channel.subscribe()` again — that returns a *new* subscription value;
-  do not stash subscriptions long-term across leave cycles. Reconnects do
-  *not* invalidate subscriptions (§9.2) — only manual leave or terminal
-  `.transportFailure` does.
+- **Live mutations and sends are runtime-gated.** `broadcast` and
+  `presence.track` are methods on `Channel`, but they require the channel to be
+  subscribed. Before subscribe they throw `.notSubscribed`; after manual leave
+  or terminal close they throw `.channelClosed(...)`. During reconnect, streams
+  stay open and sends throw `.disconnected`.
+- **`subscribe()` is idempotent.** Multiple callers share the same backing
+  channel state. A single `leave()` ends the channel for every holder of the
+  topic.
+- **Streams belong to the channel.** They can be created before subscribe and
+  will start producing only after the channel joins. Manual `leave()` terminates
+  streams with `.channelClosed(.userRequested)`. Reconnects do not terminate
+  streams unless the reconnection policy gives up.
 - **Leaked-channel warning.** When `Realtime` deinits with channels that
   have been joined but never left, an `IssueReporting` warning fires in
   debug builds. Release builds silently rely on server-side timeouts.
@@ -377,7 +359,7 @@ replay is rejected by the backend. Replay `limit` is clamped server-side to
 
 `PresenceOptions.enabled` should be set when the caller intends to observe
 presence state. Setting `PresenceOptions.key` does not by itself create
-presence; it only controls the key used when this subscription tracks.
+presence; it only controls the key used when this channel tracks.
 
 ### 2.3 `leave()` semantics (shared-handle model)
 
@@ -430,14 +412,14 @@ transport close code.
 
 ## 3. Broadcast
 
-All broadcast surfaces — typed receiving, typed sending, and the untyped
-iteration over the raw Phoenix feed — live on `ChannelSubscription`. The
-type system enforces "you must have subscribed before consuming or sending."
+All broadcast surfaces — typed receiving, typed WebSocket sending, HTTP
+one-shot sending, and the untyped iteration over the raw Phoenix feed — live on
+`Channel`. WebSocket sending requires the channel to be subscribed at runtime.
 
 ### 3.1 Receiving
 
 ```swift
-public extension ChannelSubscription {
+public extension Channel {
   /// Typed event stream — decodes each broadcast message's payload to `T`,
   /// filtered to a single event name. Fan-out: each call returns an
   /// independent stream; multiple iterators observe every matching message.
@@ -447,8 +429,8 @@ public extension ChannelSubscription {
   ) -> AsyncThrowingStream<T, RealtimeError>
 }
 
-// Untyped iteration is the AsyncSequence conformance on ChannelSubscription
-// itself (§2.1). Element is `PhoenixMessage`, which spans broadcasts,
+// Untyped iteration is the AsyncSequence conformance on Channel itself (§2.1).
+// Element is `PhoenixMessage`, which spans broadcasts,
 // postgres_changes, presence_diff, and other channel-level events. To filter
 // to broadcasts only, match on `event == "broadcast"` and decode `payload`
 // manually — but the typed `broadcasts(of:event:)` method is the recommended
@@ -459,7 +441,7 @@ Streams pause silently during reconnection and resume on rejoin. Gaps are
 inherent in fire-and-forget pub/sub and not surfaced — callers who care
 correlate against `channel.state`.
 
-Backpressure: each subscription has an **unbounded** buffer. A slow consumer
+Backpressure: each stream has an **unbounded** buffer. A slow consumer
 will accumulate pending messages and eventually OOM under sustained lag. A
 `SlowConsumerPolicy` knob may be added later without breaking source. The
 backend does not provide a durable per-subscriber queue or a client-visible
@@ -468,16 +450,16 @@ backpressure contract.
 ### 3.2 Sending
 
 ```swift
-public extension ChannelSubscription {
+public extension Channel {
   /// Sends a broadcast. Behavior depends on `ChannelOptions.broadcast.acknowledge`:
   /// - `false` (default): fire-and-forget; returns after the frame is queued.
   /// - `true`: awaits server ack; throws on timeout (`broadcastAckTimeout`).
   ///   The backend can silently drop unauthorized private-channel broadcasts,
   ///   so timeout is also the observable failure mode for that edge.
   ///
-  /// Throws `.channelClosed` if `leave()` has been called on this or any
-  /// other holder of the topic. Throws `.disconnected` if the socket is down
-  /// — no queuing.
+  /// Throws `.notSubscribed` before the channel has joined. Throws
+  /// `.channelClosed` if `leave()` has been called or the channel terminally
+  /// closed. Throws `.disconnected` if the socket is down — no queuing.
   func broadcast<T: Encodable & Sendable>(
     _ payload: T,
     as event: String
@@ -490,28 +472,31 @@ public extension ChannelSubscription {
 }
 ```
 
-Type-level guarantee: there is no `Channel.broadcast(...)`. To send, callers
-must first `await channel.subscribe()`. The previous `.channelNotJoined`
-runtime error is gone — the situation is unrepresentable.
+WebSocket sends are not queued across disconnected periods. A send before
+`subscribe()` fails with `.notSubscribed`; a send during reconnect fails with
+`.disconnected`; a send after leave fails with `.channelClosed(...)`.
 
 ### 3.3 HTTP one-shot broadcast
 
-For senders that don't need a subscription, `realtime.httpBroadcast` POSTs to
-the Realtime HTTP broadcast endpoints. It does not open the WebSocket and does
-not create a `Channel`.
+For senders that don't need to join, `channel.httpBroadcast` POSTs to
+the Realtime HTTP broadcast endpoint for that channel's topic. It does not open
+the WebSocket and does not join the channel.
 
 ```swift
-public extension Realtime {
-  /// Single-message shorthand. Uses
+public extension Channel {
+  /// Single-message HTTP broadcast. Uses
   /// `POST /realtime/v1/api/broadcast/:topic/events/:event`.
   func httpBroadcast<T: Encodable & Sendable>(
-    topic: String, event: String, payload: T,
+    event: String, payload: T,
     isPrivate: Bool = false
   ) async throws(RealtimeError)
+}
 
-  /// Batch form. Uses `POST /realtime/v1/api/broadcast` with
-  /// `{ "messages": [...] }`.
-  func httpBroadcast(_ messages: [HttpBroadcastMessage]) async throws(RealtimeError)
+public extension Realtime {
+  /// Multi-topic batch form. Uses `POST /realtime/v1/api/broadcast` with
+  /// `{ "messages": [...] }`. This remains on `Realtime` because a batch can
+  /// contain messages for multiple topics.
+  func httpBroadcastBatch(_ messages: [HttpBroadcastMessage]) async throws(RealtimeError)
 }
 
 public struct HttpBroadcastMessage: Sendable {
@@ -523,7 +508,7 @@ public struct HttpBroadcastMessage: Sendable {
 ```
 
 HTTP broadcast auth uses `Authorization: Bearer <accessToken>` when an
-`AccessTokenSource` is configured and falls back to the `apikey` header. This is
+`accessToken` provider is configured and falls back to the `apikey` header. This is
 deliberately different from the WebSocket connect path, which uses `apikey` or
 `x-api-key`.
 
@@ -534,27 +519,28 @@ responses expose `x-rate-*` headers but no `Retry-After`, so
 `.rateLimited(retryAfter:)` is normally `nil`.
 
 Batch and single-message private broadcasts have different backend failure
-semantics: single private unauthorized returns forbidden; batch private
-unauthorized messages can be skipped while the request still returns `202` for
-the accepted work. The SDK documents this instead of pretending batch is a
-transaction.
+semantics: `channel.httpBroadcast` private unauthorized returns forbidden; batch
+private unauthorized messages can be skipped while the request still returns
+`202` for the accepted work. The SDK documents this instead of pretending batch
+is a transaction.
 
 ---
 
 ## 4. Presence
 
-Presence — like broadcast consumption — is gated behind `ChannelSubscription`.
-Join-time presence behavior is configured through `ChannelOptions.presence`
-(§2.2); `track`, `observe`, and `diffs` require a live subscription.
+Presence lives on `Channel`. Join-time presence behavior is configured through
+`ChannelOptions.presence` (§2.2); `track` requires a subscribed channel at
+runtime, while observation streams may be created before subscribe and start
+emitting after join.
 
 ```swift
-public extension ChannelSubscription {
+public extension Channel {
   var presence: Presence { get }
 }
 
 public struct Presence: Sendable {
   /// Begin tracking, or update the existing tracked state, for this
-  /// subscription. The backend stores one meta per channel process and presence
+  /// channel process. The backend stores one meta per channel process and presence
   /// key; repeated calls update that meta rather than registering additional
   /// metas.
   ///
@@ -613,7 +599,7 @@ public final class PresenceHandle: Sendable {
 - **Auto re-track on reconnect.** The SDK remembers the last state passed
   to the live presence slot and re-sends it on rejoin. Presence state is
   restored transparently across transport outages, but only the latest state is
-  restored because the backend has one meta per subscription/key.
+  restored because the backend has one meta per channel process/key.
 
 ---
 
@@ -734,7 +720,7 @@ them.
 Phoenix requires postgres_changes filters in the `phx_join` payload — they
 cannot be added after join. The API reflects this: registration mutates
 channel state and returns a token; `subscribe()` triggers the join with all
-pending tokens; consumption happens through the returned `ChannelSubscription`.
+pending tokens; consumption happens through the same `Channel`.
 
 ```swift
 public extension Channel {
@@ -776,7 +762,7 @@ public extension Channel {
 }
 
 /// Variant protocol — each variant is itself generic over the row type and
-/// declares the element type of `events(for:)` for that variant.
+/// declares the element type of `postgresChanges(for:)` for that variant.
 public protocol ChangeEventVariant: Sendable {
   associatedtype Element: Sendable
 }
@@ -810,7 +796,7 @@ public struct ChangeRegistration<E: ChangeEventVariant>: Sendable {
   // schema+table strings), optional filter, event mask, and routing state.
 }
 
-public extension ChannelSubscription {
+public extension Channel {
   /// Single overload, dispatched on the variant. Element type follows from
   /// `E.Element` — `T` for inserts, `PostgresUpdate<T>` for updates,
   /// `PostgresDelete<T>` for deletes, `PostgresChange<T>` for `AnyEvent`.
@@ -820,7 +806,7 @@ public extension ChannelSubscription {
   /// Passing a token that was created on a different channel is a
   /// programmer error: the iterator throws `.unknownToken` on first
   /// iteration. (`Channel` actor identity is captured in the token.)
-  func events<E: ChangeEventVariant>(for token: ChangeRegistration<E>)
+  func postgresChanges<E: ChangeEventVariant>(for token: ChangeRegistration<E>)
     -> AsyncThrowingStream<E.Element, RealtimeError>
 }
 
@@ -840,17 +826,17 @@ let allMsgs  = channel.changes(to: Message.self,   where: .eq(\.roomId, id))
 let roomGone = channel.deletes(from: Room.self,    where: .eq(\.id, id))
 
 // 2. Trigger join. All three tokens land in the same phx_join payload.
-let sub = try await channel.subscribe()
+try await channel.subscribe()
 
 // 3. Consume — element type follows the token's variant.
 await withThrowingDiscardingTaskGroup { group in
   group.addTask {
-    for try await row in sub.events(for: inserts) {
+    for try await row in channel.postgresChanges(for: inserts) {
       // row: Message
     }
   }
   group.addTask {
-    for try await event in sub.events(for: allMsgs) {
+    for try await event in channel.postgresChanges(for: allMsgs) {
       // event: PostgresChange<Message>
       switch event {
       case .insert(let row):         handle(row)
@@ -860,22 +846,22 @@ await withThrowingDiscardingTaskGroup { group in
     }
   }
   group.addTask {
-    for try await _ in sub.events(for: roomGone) { close() }
+    for try await _ in channel.postgresChanges(for: roomGone) { close() }
   }
 }
 ```
 
-**Tokens are reusable across subscribe cycles.** After `sub.leave()`, the
+**Tokens are reusable across subscribe cycles.** After `channel.leave()`, the
 same tokens replay on the next `channel.subscribe()`. New tokens may also be
 registered between leave and resubscribe. Registering while joined throws
 `.cannotRegisterAfterJoin`.
 
-**Fan-out per token.** Each `sub.events(for: token)` call returns a fresh
+**Fan-out per token.** Each `channel.postgresChanges(for: token)` call returns a fresh
 stream; multiple iterators of the same token each receive every event.
 
-**Reconnect is transparent.** `ChannelSubscription` survives silent reconnects
-(§9.2); all tokens are re-registered automatically on rejoin. The subscription
-is invalidated only by explicit `leave()` or terminal `.transportFailure`.
+**Reconnect is transparent.** Channel streams survive silent reconnects (§9.2);
+all tokens are re-registered automatically on rejoin. Streams terminate only on
+explicit `leave()` or terminal `.transportFailure`.
 
 **AND composition is available.** Use `filter.and(...)` or `Filter.all(...)`
 for same-entry conjunction. OR remains a multi-registration pattern: register
@@ -887,7 +873,7 @@ out to each matching token's stream.
 Phoenix join and then push a `system` error for `postgres_changes` setup
 (missing publication/table, invalid column, malformed filter, cast failure).
 The SDK should consume those setup messages before resolving `subscribe()` when
-possible; if an error arrives later, the affected `events(for:)` streams throw
+possible; if an error arrives later, the affected `postgresChanges(for:)` streams throw
 `.postgresSubscriptionFailed(reason:)`.
 
 **Gaps are possible on reconnect.** Tokens are re-registered on rejoin, but
@@ -908,16 +894,16 @@ let deletes = channel.deletes(
 )
 // deletes: ChangeRegistration<Delete<JSONValue>>
 
-let sub = try await channel.subscribe()
+try await channel.subscribe()
 
-for try await record in sub.events(for: deletes) {
+for try await record in channel.postgresChanges(for: deletes) {
   // record: JSONValue — caller decodes manually
 }
 ```
 
 The untyped path produces the same `ChangeRegistration<E>` type the typed
 factories return — only the variant's `T` differs (`JSONValue` instead of
-your row type). Consumption via `sub.events(for:)` is identical. Tokens
+your row type). Consumption via `channel.postgresChanges(for:)` is identical. Tokens
 from typed and untyped factories can be mixed freely on the same channel.
 
 ---
@@ -938,8 +924,8 @@ public extension Realtime {
 
 The WebSocket opens lazily on the first `channel.subscribe()` call. There is
 no iteration-driven lazy-join in v3 — the only path from "no socket" to
-"joined channel" is an explicit `subscribe()`. `httpBroadcast` does not open
-the socket.
+"joined channel" is an explicit `subscribe()`. `channel.httpBroadcast` and
+`realtime.httpBroadcastBatch` do not open the socket.
 
 `realtime.connect()` is the explicit pre-warm path; it does not join any
 channel.
@@ -959,7 +945,7 @@ public extension Realtime {
 After a manual `disconnect()`, the `ReconnectionPolicy` does NOT auto-reopen
 — the policy applies only to *unexpected* closes (transport failure, server
 hangup). The next channel operation (`subscribe()`, send via a re-acquired
-subscription, or explicit `connect()`) triggers a fresh connect.
+channel, or explicit `connect()`) triggers a fresh connect.
 
 ### 6.3 Mid-session token rotation
 
@@ -979,19 +965,20 @@ the affected channel.
 
 **Reactive path.** The backend does not emit a stable `token_expired` event.
 Expiry is observed as a join rejection or `system` error followed by
-`phx_close`. When that happens and `AccessTokenSource.dynamic` is configured,
-the SDK fetches a fresh token and resubscribes affected channels. In-flight
+`phx_close`. When that happens and an `accessToken` provider is configured, the
+SDK fetches a fresh token and resubscribes affected channels. In-flight
 operations are not retried on the same channel; they fail with
 `.channelClosed(.unauthorized)` or `.authenticationFailed(...)` and callers use
-the re-established subscription for new work.
+the re-established channel for new work.
 
-**If `dynamic()` throws:** propagates as `.authenticationFailed(underlying:)`.
-Connection enters `.closed(.unauthorized)`. The `ReconnectionPolicy` does
-NOT apply — auth recovery is caller-owned.
+**If the access-token provider throws:** propagates as
+`.authenticationFailed(underlying:)`. Connection enters
+`.closed(.unauthorized)`. The `ReconnectionPolicy` does NOT apply — auth
+recovery is caller-owned.
 
-**On `connect()`:** blocks on `apiKey.dynamic()` if the API key is dynamic.
-Channel join blocks on `accessToken.dynamic()` only for operations that need an
-access token (private channels, RLS-backed features, or token refresh).
+**On `connect()`:** the socket uses the literal `apiKey` and does not call the
+access-token provider. Channel join calls the provider only for operations that
+need an access token (private channels, RLS-backed features, or token refresh).
 
 ### 6.4 Status
 
@@ -1029,9 +1016,10 @@ public enum RealtimeError: Error, Sendable {
 
   case channelJoinTimeout
   case channelJoinRejected(reason: String)
+  case notSubscribed
   case channelClosed(CloseReason)
   case cannotRegisterAfterJoin   // postgres_changes registration after join (§5.3)
-  case unknownToken              // events(for:) called with a token from another channel (§5.3)
+  case unknownToken              // postgresChanges(for:) called with a token from another channel (§5.3)
 
   case authenticationFailed(reason: String, underlying: (any Error & Sendable)?)
 
@@ -1065,6 +1053,11 @@ recoverable on reconnect.
 **`.cannotRegisterAfterJoin`.** Thrown by `channel.changes(...)`,
 `channel.inserts(...)`, etc. when the channel has already joined. Tokens
 must be registered before the first `subscribe()` returns.
+
+**`.notSubscribed`.** Thrown by live channel mutations and sends such as
+WebSocket `broadcast` and `presence.track` when called before a successful
+`subscribe()`. Stream factories may be created before subscribe and start
+producing after the join succeeds.
 
 **Backend error shapes are mixed.** Join failures usually arrive as
 `phx_reply` errors. Runtime channel failures often arrive as a `system` event
@@ -1140,7 +1133,7 @@ public struct ReconnectionPolicy: Sendable {
   state on rejoin. Observers see the re-synced state naturally.
 - **Postgres change subscriptions are restored.** Filters re-register on
   join.
-- **In-flight sends throw immediately.** `try await sub.broadcast(...)`
+- **In-flight sends throw immediately.** `try await channel.broadcast(...)`
   during an outage throws `.disconnected` — no queuing.
 - **On give-up.** Channel streams throw `.channelClosed(.transportFailure)`,
   the channel cache evicts affected entries, `channel.state` transitions
@@ -1195,16 +1188,16 @@ dependency in the core module.
 | ----------------------------------------------- | --------------------------------------------------------- |
 | `RealtimeClientV2(url:options:)`                | `Realtime(url:apiKey:accessToken:configuration:transport:)` |
 | `client.channel("x")`                           | `realtime.channel("x")` (shared; explicit `leave()`)      |
-| `await channel.subscribe()`                     | `let sub = try await channel.subscribe()` (returns `ChannelSubscription`) |
-| `await channel.unsubscribe()`                   | `try await sub.leave()` (typed throws, global)            |
-| `channel.broadcastStream(event:)`               | `sub.broadcasts(of: T.self, event:)` (typed stream)       |
-| `await channel.broadcast(event:message:)`       | `try await sub.broadcast(payload, as: event)`             |
-| — (no equivalent)                               | `realtime.httpBroadcast(topic:event:payload:)`            |
-| `channel.postgresChange(.all, …)`               | `let token = channel.changes(to: Message.self, …); let sub = try await channel.subscribe(); sub.events(for: token)` |
-| `channel.presenceChange()`                      | `sub.presence.diffs(T.self)` / `.observe(T.self)`         |
-| `channel.track(...)`                            | `try await sub.presence.track(state)` → handle            |
+| `await channel.subscribe()`                     | `try await channel.subscribe()`                           |
+| `await channel.unsubscribe()`                   | `try await channel.leave()` (typed throws, global)        |
+| `channel.broadcastStream(event:)`               | `channel.broadcasts(of: T.self, event:)` (typed stream)   |
+| `await channel.broadcast(event:message:)`       | `try await channel.broadcast(payload, as: event)`         |
+| — (no equivalent)                               | `channel.httpBroadcast(event:payload:)`                   |
+| `channel.postgresChange(.all, …)`               | `let token = channel.changes(to: Message.self, …); try await channel.subscribe(); channel.postgresChanges(for: token)` |
+| `channel.presenceChange()`                      | `channel.presence.diffs(T.self)` / `.observe(T.self)`     |
+| `channel.track(...)`                            | `try await channel.presence.track(state)` → handle        |
 | `ObservationToken` / `subscription.cancel()`    | `AsyncSequence` iteration ends on task cancel             |
-| `accessToken: () async -> String?` closure      | `AccessTokenSource.dynamic(…)` + `realtime.updateToken(…)` |
+| `accessToken: () async -> String?` closure      | `accessToken: { ... }` + `realtime.updateToken(…)` |
 | `any Error`                                     | `RealtimeError` (typed throws everywhere)                 |
 | `RealtimeClientOptions.maxRetryAttempts` etc.   | `Configuration.reconnection: ReconnectionPolicy`          |
 | `options.vsn`                                   | `Configuration.protocolVersion` (default `.v2`)           |
@@ -1225,33 +1218,33 @@ Kept here for reference so implementors don't re-litigate.
 | 4 | `leave()` is `async throws`, awaits server channel close confirmation | Deterministic; consistent with the rest of the API |
 | 5 | Pipelined re-acquire after `leave()` | Same-topic churn is transparent |
 | 6 | Reconnect is silent in typed streams; `channel.state` is the lifecycle source of truth | Avoids leaky delivery-guarantee abstractions |
-| 7 | Unbounded per-subscription buffer (for now) | Simplest; `SlowConsumerPolicy` knob can be added additively |
+| 7 | Unbounded per-stream buffer (for now) | Simplest; `SlowConsumerPolicy` knob can be added additively |
 | 8 | Fan-out: each `broadcasts(of:event:)` call is independent | Matches pub/sub intuition; slow consumer is local |
-| 9 | Separate `APIKeySource` from `AccessTokenSource`; `updateToken(_:)` pushes access tokens to joined channels | Backend uses API keys for connect and JWTs for channel/HTTP authorization |
+| 9 | Literal `apiKey: String` for connect; dynamic `accessToken` provider for JWT authorization; `updateToken(_:)` pushes access tokens to joined channels | Backend uses stable API keys for connect and rotating JWTs for channel/HTTP authorization |
 | 10 | On token expiry/system auth close: refresh access token and resubscribe; do not retry the original push on the same channel | Backend closes the channel instead of ACKing a retryable `token_expired` operation |
-| 11 | `dynamic()` throwing does NOT trigger `ReconnectionPolicy` | Auth recovery is caller-owned |
+| 11 | Access-token provider throwing does NOT trigger `ReconnectionPolicy` | Auth recovery is caller-owned |
 | 12 | Composable AND filters per postgres_changes registration (typed `Filter<T>` or `UntypedFilter`); OR is modeled with multiple registrations | Reflects backend support for comma-separated AND clauses and backend `ids` routing for overlapping registrations |
 | 13 | Both `Filter<T>` and `UntypedFilter` are structs with static factories; read like enums at call site | Typed path preserves `KeyPath<T, V>` + `V` binding; untyped path is a sibling type for raw column strings |
 | 14 | `@RealtimeTable` macro for column-name resolution; manual conformance as escape hatch | Type-safe without forcing macros on every type |
-| 14a | Postgres changes are **register-then-subscribe**: `channel.changes(...)` returns a `ChangeRegistration<E>` token; `channel.subscribe()` triggers the join with all pending tokens; consumption via `sub.events(for: token)` | Phoenix requires postgres_changes filters in the join payload — the API can't pretend lazy join works for them |
-| 14b | Variants are themselves generic over the row type (`Insert<T>`/`Update<T>`/`Delete<T>`/`AnyEvent<T>` conforming to `ChangeEventVariant`); registration is `ChangeRegistration<E>` (single generic, variant carries `T`); single `events(for:)` overload dispatched on the variant | Cleaner type signatures than two-param `<T, E>` and a single overload covers typed and untyped paths |
+| 14a | Postgres changes are **register-then-subscribe**: `channel.changes(...)` returns a `ChangeRegistration<E>` token; `channel.subscribe()` triggers the join with all pending tokens; consumption via `channel.postgresChanges(for: token)` | Phoenix requires postgres_changes filters in the join payload — the API can't pretend lazy join works for them |
+| 14b | Variants are themselves generic over the row type (`Insert<T>`/`Update<T>`/`Delete<T>`/`AnyEvent<T>` conforming to `ChangeEventVariant`); registration is `ChangeRegistration<E>` (single generic, variant carries `T`); single `postgresChanges(for:)` overload dispatched on the variant | Cleaner type signatures than two-param `<T, E>` and a single overload covers typed and untyped paths |
 | 14c | Registering after join throws `.cannotRegisterAfterJoin`; tokens are reusable across `leave()` + resubscribe cycles | Honest about the wire; ergonomic across reconnects and cycles |
 | 14d | `subscribe()` is the **only** join path; no iteration-driven lazy-join | One mental model; no surprises from broadcast iteration silently joining |
-| 14e | `subscribe()` returns `ChannelSubscription` — the post-join surface for consumption, sending, and presence | Type-level gate: ops requiring "joined" can only be reached from a `ChannelSubscription` value |
-| 14f | `ChannelSubscription` conforms to `AsyncSequence` with `Element = PhoenixMessage` | Untyped raw feed available without an extra method; typed methods refine for normal use |
+| 14e | `subscribe()` returns `Void`; `Channel` remains the single surface for consumption, sending, presence, and leave | A separate subscription value cannot honestly guarantee live connectivity across reconnects or global leave |
+| 14f | `Channel` conforms to `AsyncSequence` with `Element = PhoenixMessage` | Untyped raw feed available without an extra method; typed methods refine for normal use |
 | 14g | (merged into Decision 26) | — |
-| 14h | Multiple `subscribe()` calls return equivalent subscriptions sharing one backing state | Topic identity (Decision 1) extends to subscriptions |
-| 14i | Subscription drop without `leave()` does nothing (debug warning); leave is global as in Decision 3 | Consistency with channel rules; no auto-leave footguns under topic sharing |
-| 14j | `Presence` accessor moves to `ChannelSubscription` (was on `Channel` in earlier draft) | Same gate as broadcast send; track/observe require a live join |
+| 14h | Multiple `subscribe()` calls coalesce/idempotently join the same backing channel state | Topic identity (Decision 1) extends to joining |
+| 14i | `Channel` drop without `leave()` does nothing (debug warning); leave is global as in Decision 3 | Consistency with channel rules; no auto-leave footguns under topic sharing |
+| 14j | `Presence` accessor lives on `Channel`; `track` is runtime-gated by joined state | Same single-handle model as broadcast and Postgres changes |
 | 14k | `PhoenixMessage` is fully raw — exposes `joinRef`, `ref`, `event`, `payload` (JSON or binary). Includes internal `phx_reply`/`phx_close`/`phx_error` frames | Direct iteration is the escape hatch for advanced consumers; SDK consumes the same frames internally for correlation |
-| 14l | `ChannelSubscription.isAlive` / `state` accessor **deferred** | Callers can mirror `realtime.status` or `channel.state`; can be added additively later |
-| 14m | After manual `leave()`, the `ChannelSubscription` value is dead — methods throw `.channelClosed(.userRequested)`; iteration terminates. Reconnects do *not* invalidate subscriptions; only manual leave or `.transportFailure` does | Tightens the lifecycle contract; prevents stashed subscriptions from silently no-op-ing across cycles |
+| 14l | Separate liveness accessor **deferred** | `channel.state` is the lifecycle source of truth |
+| 14m | After manual `leave()`, live `Channel` methods throw `.channelClosed(.userRequested)` and iteration terminates. Reconnects keep streams open; `.transportFailure` terminates them | Lifecycle is explicit without creating a stale subscription value |
 | 14n | Filters split into two types: `Filter<T: RealtimeTable>` (KeyPath-based, compile-time-checked) and `UntypedFilter` (raw column strings + `any RealtimePostgresFilterValue`). Both serialize to backend filter clauses and can compose with AND | Untyped path needs raw column strings; typed path needs `RealtimeTable` for `columnName(for:)`; one type can't be both |
 | 14o | Untyped factories (`channel.changes(schema:table:filter:)`, `inserts/updates/deletes(schema:table:filter:)`) return `ChangeRegistration<E<JSONValue>>`. Tokens from typed and untyped factories interoperate — same registration type, different variant `T` | Single consumption surface; mix freely on one channel |
 | 15 | `PresenceHandle` is a regular class; explicit `cancel()`; debug warning on leak | Consistent with `Channel` lifecycle rule |
-| 16 | One presence meta per subscription/key; repeated `track` updates that meta | Matches Realtime backend behavior for the same channel process and presence key |
+| 16 | One presence meta per channel process/key; repeated `track` updates that meta | Matches Realtime backend behavior for the same channel process and presence key |
 | 17 | Presence key is channel-level only; server generates a fresh UUID per join when nil/empty | Simpler; per-track keys confuse more than they help |
-| 18 | Auto re-track latest presence state on reconnect | Presence is a best-effort synced-state abstraction, but backend stores one meta per subscription/key |
+| 18 | Auto re-track latest presence state on reconnect | Presence is a best-effort synced-state abstraction, but backend stores one meta per channel process/key |
 | 19 | `withChannel` dropped entirely | Dangerous under global-leave semantics; 3-line explicit pattern is clearer |
 | 20 | Flat `RealtimeError` enum; cancellation folded as `.cancelled` | Simpler call sites than grouped or union-throws |
 | 21 | Underlying errors preserved as `any Error & Sendable` | Debug value outweighs Equatable/Codable loss |
@@ -1259,8 +1252,8 @@ Kept here for reference so implementors don't re-litigate.
 | 23 | Self-broadcast is channel-level only (wire constraint) | Don't lie about the wire |
 | 24 | Replay via `ChannelOptions.broadcast.replay`, private-channel-only | Backend replay is join-time-only and rejected on public channels |
 | 25 | `Data` payloads bypass encoding; ship as binary frames | Natural Swift affordance |
-| 26 | Broadcast send is reachable only from `ChannelSubscription` (compile-time gate); one-shot sends without a subscription go via `realtime.httpBroadcast` | Joining is a commitment; the prior `.channelNotJoined` runtime error is unrepresentable |
-| 27 | `realtime.httpBroadcast(...)` for one-shot sends; uses HTTP auth semantics (`Authorization`/`apikey`) | Clear separation from WS path and backend header behavior |
+| 26 | WebSocket broadcast send lives on `Channel` and is runtime-gated by subscribed state; one-shot HTTP sends without joining go via `channel.httpBroadcast` | The single-handle model is more honest than a subscription value that cannot guarantee a live connection |
+| 27 | `channel.httpBroadcast(...)` for topic-scoped one-shot sends; `realtime.httpBroadcastBatch(...)` for multi-topic batches; both use HTTP auth semantics (`Authorization`/`apikey`) | The single-message operation belongs to the topic handle; batch remains client-level because it can span topics |
 | 28 | Socket opens lazily on first channel join | Zero ceremony for common paths; explicit `connect()` still exists |
 | 29 | `disconnect()` closes socket, keeps channel cache | Pause/resume, not total teardown |
 | 30 | `disconnect()` is `async`, awaits close completion | Consistent with other terminal operations |
@@ -1297,7 +1290,7 @@ struct Message: Codable, Sendable, Identifiable {
 }
 
 /// Wire payload for the "chat" broadcast event — distinct from `Message`,
-/// which is the persisted postgres row consumed via `events(for:)`.
+/// which is the persisted postgres row consumed via `postgresChanges(for:)`.
 struct ChatBroadcast: Codable, Sendable {
   let authorId: UUID
   let text: String
@@ -1316,7 +1309,6 @@ final class ChatRoomModel {
   private let roomId: UUID
   private let me: UUID
   private var runTask: Task<Void, Never>?
-  private var subscription: ChannelSubscription?
   private var trackHandle: PresenceHandle?
 
   var messages: [Message] = []
@@ -1342,19 +1334,18 @@ final class ChatRoomModel {
     runTask = Task { [channel, realtime, messageInserts, me, weak self] in
       do {
         // Single explicit join captures the registration above.
-        let sub = try await channel.subscribe()
-        await MainActor.run { self?.subscription = sub }
+        try await channel.subscribe()
 
         try await withThrowingDiscardingTaskGroup { group in
           // Postgres inserts → append
           group.addTask {
-            for try await row in sub.events(for: messageInserts) {
+            for try await row in channel.postgresChanges(for: messageInserts) {
               await MainActor.run { self?.messages.append(row) }
             }
           }
           // Presence observers
           group.addTask {
-            for await state in sub.presence.observe(UserPresence.self) {
+            for await state in channel.presence.observe(UserPresence.self) {
               let mapped = Dictionary(
                 uniqueKeysWithValues: state.active.values
                   .flatMap { $0 }
@@ -1365,7 +1356,7 @@ final class ChatRoomModel {
           }
           // Track myself
           group.addTask {
-            let handle = try await sub.presence.track(
+            let handle = try await channel.presence.track(
               UserPresence(userId: me, status: .active)
             )
             await MainActor.run { self?.trackHandle = handle }
@@ -1385,12 +1376,10 @@ final class ChatRoomModel {
     }
   }
 
-  /// Broadcast through the active subscription. Type-level gate: cannot
-  /// be called before `subscription` is set. One server-side subscription;
-  /// one round-trip.
+  /// Broadcast through the active channel. Throws `.notSubscribed` before
+  /// `start()` has joined.
   func send(_ text: String) async throws(RealtimeError) {
-    guard let subscription else { return }
-    try await subscription.broadcast(
+    try await channel.broadcast(
       ChatBroadcast(authorId: me, text: text),
       as: "chat"
     )
@@ -1399,7 +1388,7 @@ final class ChatRoomModel {
   func stop() async {
     runTask?.cancel()
     try? await trackHandle?.cancel()
-    try? await subscription?.leave()
+    try? await channel.leave()
   }
 }
 ```
