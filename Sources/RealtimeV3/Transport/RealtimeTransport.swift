@@ -12,7 +12,7 @@ import HTTPTypes
 ///
 /// A `TransportFrame` represents the low-level unit of communication between the client and server.
 /// It can be either a text frame (containing a UTF-8 encoded string) or a binary frame (containing raw bytes).
-public enum TransportFrame: Sendable {
+public enum TransportFrame: Sendable, Equatable {
   /// A text frame containing a UTF-8 encoded string payload.
   case text(String)
   /// A binary frame containing raw bytes.
