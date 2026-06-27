@@ -7,7 +7,31 @@
 
 import Foundation
 
-public enum RealtimeError: Error, Sendable {
+public enum RealtimeError: Error, Sendable, Equatable {
+  public static func == (lhs: RealtimeError, rhs: RealtimeError) -> Bool {
+    switch (lhs, rhs) {
+    case (.disconnected, .disconnected): true
+    case (.channelJoinTimeout, .channelJoinTimeout): true
+    case (.broadcastAckTimeout, .broadcastAckTimeout): true
+    case (.notSubscribed, .notSubscribed): true
+    case (.cannotRegisterAfterJoin, .cannotRegisterAfterJoin): true
+    case (.unknownToken, .unknownToken): true
+    case (.cancelled, .cancelled): true
+    case (.channelJoinRejected(let a), .channelJoinRejected(let b)): a == b
+    case (.channelClosed(let a), .channelClosed(let b)): a == b
+    case (.broadcastFailed(let a), .broadcastFailed(let b)): a == b
+    case (.postgresSubscriptionFailed(let a), .postgresSubscriptionFailed(let b)): a == b
+    case (.authenticationFailed(let ar, _), .authenticationFailed(let br, _)): ar == br
+    case (.rateLimited(let a), .rateLimited(let b)): a == b
+    case (.serverError(let ac, let am), .serverError(let bc, let bm)): ac == bc && am == bm
+    case (.decoding(let at, _), .decoding(let bt, _)): at == bt
+    case (.transportFailure, .transportFailure): true
+    case (.reconnectionGaveUp, .reconnectionGaveUp): true
+    case (.encoding, .encoding): true
+    default: false
+    }
+  }
+
   case disconnected
   case transportFailure(underlying: any Error & Sendable)
   case reconnectionGaveUp(lastError: any Error & Sendable)
