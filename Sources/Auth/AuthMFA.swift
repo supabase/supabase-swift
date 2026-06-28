@@ -8,7 +8,7 @@ public struct AuthMFA: Sendable {
   var api: APIClient { Dependencies[clientID].api }
   var encoder: JSONEncoder { Dependencies[clientID].encoder }
   var decoder: JSONDecoder { Dependencies[clientID].decoder }
-  var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
+  var sessionMachine: SessionStateMachine { Dependencies[clientID].sessionMachine }
   var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
@@ -85,7 +85,7 @@ public struct AuthMFA: Sendable {
       )
     ).decoded(decoder: decoder)
 
-    await sessionManager.update(response)
+    await sessionMachine.update(response)
 
     eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
 
@@ -130,7 +130,7 @@ public struct AuthMFA: Sendable {
   ///
   /// - Returns: An authentication response with the list of MFA factors.
   public func listFactors() async throws -> AuthMFAListFactorsResponse {
-    let user = try await sessionManager.session().user
+    let user = try await sessionMachine.validSession().user
     let factors = user.factors ?? []
     let totp = factors.filter {
       $0.factorType == "totp" && $0.status == .verified
@@ -151,7 +151,7 @@ public struct AuthMFA: Sendable {
     -> AuthMFAGetAuthenticatorAssuranceLevelResponse
   {
     do {
-      let session = try await sessionManager.session()
+      let session = try await sessionMachine.validSession()
       let payload = JWT.decodePayload(session.accessToken)
 
       var currentLevel: AuthenticatorAssuranceLevels?

@@ -26,7 +26,7 @@ extension Dependencies {
     api: APIClient(clientID: AuthClientID()),
     codeVerifierStorage: CodeVerifierStorage.mock,
     sessionStorage: SessionStorage.live(clientID: AuthClientID()),
-    sessionManager: SessionManager.live(clientID: AuthClientID())
+    sessionMachine: SessionStateMachine(clientID: AuthClientID())
   )
 }
 

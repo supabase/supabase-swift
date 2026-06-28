@@ -50,7 +50,7 @@ final class StoredSessionTests: XCTestCase {
       api: .init(clientID: clientID),
       codeVerifierStorage: .mock,
       sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID)
+      sessionMachine: SessionStateMachine(clientID: clientID)
     )
 
     let sut = Dependencies[clientID].sessionStorage

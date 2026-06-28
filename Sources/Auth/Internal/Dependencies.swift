@@ -7,7 +7,7 @@ struct Dependencies: Sendable {
   var api: APIClient
   var codeVerifierStorage: CodeVerifierStorage
   var sessionStorage: SessionStorage
-  var sessionManager: SessionManager
+  var sessionMachine: SessionStateMachine
 
   var eventEmitter = AuthStateChangeEventEmitter()
   var date: @Sendable () -> Date = { Date() }
