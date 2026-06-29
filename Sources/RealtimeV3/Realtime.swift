@@ -88,6 +88,21 @@ public actor Realtime {
   /// Monotonic ref generator shared across all protocol frames.
   nonisolated let refGenerator = RefGenerator()
 
+  /// Tracks topics of channels that have successfully joined but have not yet been explicitly left.
+  ///
+  /// ## Design: nonisolated + LockIsolated (Task 32)
+  /// Stored as `nonisolated let` backed by a `LockIsolated` value so the synchronous `deinit`
+  /// can read it without an actor hop (no `await`, no Swift 6.2 isolated deinit required).
+  ///
+  /// Topics are added by `_markJoined(_:)` when a channel transitions to `.joined`, and removed
+  /// by `_markLeft(_:)` when the channel is explicitly left or terminally evicted.
+  ///
+  /// ## disconnect() does NOT clear this set
+  /// `disconnect()` is a transport-level operation; it does NOT call `leave()` on any channel
+  /// (Decision 29). A channel that was joined but never left remains in `joinedTopics` through
+  /// a disconnect so the deinit warning fires when the developer forgets to call `leave()`.
+  nonisolated let joinedTopics = LockIsolated<Set<String>>([])
+
   /// Serializer for encoding/decoding Phoenix protocol frames.
   nonisolated let serializer = PhoenixSerializer()
 
@@ -668,6 +683,46 @@ public actor Realtime {
     headers["x-api-key"] = apiKey
 
     return try await transport.connect(to: connectURL, headers: headers)
+  }
+
+  // MARK: - Leaked-channel deinit warning (Task 32)
+
+  deinit {
+    // Synchronous deinit: read joinedTopics WITHOUT an actor hop.
+    // `joinedTopics` is a nonisolated LockIsolated — safe to read from a synchronous deinit
+    // on any thread without isolation (no `await`, no Swift 6.2 isolated deinit).
+    let leaked = joinedTopics.value
+    guard !leaked.isEmpty else { return }
+
+    let sorted = leaked.sorted()
+    let list = sorted.joined(separator: ", ")
+    reportIssue(
+      "Realtime deinited with \(leaked.count) channel(s) still joined and never left: [\(list)]. "
+        + "Call channel.leave() before releasing the Realtime instance to avoid server-side "
+        + "resource leaks. In release builds the server will close the channels after its "
+        + "heartbeat timeout."
+    )
+  }
+
+  // MARK: - Joined-topic registry (nonisolated — readable from synchronous deinit)
+
+  /// Records that `topic` has successfully joined. Called by `Channel` after a successful
+  /// `phx_join` handshake (transition to `.joined`).
+  ///
+  /// Declared `nonisolated` so `Channel` can call it synchronously from its actor-isolated
+  /// `transition(to:)` without an `await`, and so `deinit` can read the same `LockIsolated`
+  /// without an actor hop.
+  nonisolated func _markJoined(_ topic: String) {
+    joinedTopics.withValue { $0.insert(topic) }
+  }
+
+  /// Records that `topic` has been left or terminally evicted. Called by `Channel` when
+  /// it transitions to a terminal state (`.closed(.userRequested)` via `leave()`, or when
+  /// the reconnection policy gives up and the channel is evicted).
+  ///
+  /// Declared `nonisolated` for the same reasons as `_markJoined`.
+  nonisolated func _markLeft(_ topic: String) {
+    joinedTopics.withValue { $0.remove(topic) }
   }
 
   // MARK: - Channel seam (internal API consumed by Channel)

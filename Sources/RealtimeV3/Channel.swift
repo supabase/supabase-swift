@@ -224,11 +224,29 @@ public actor Channel {
   /// Transitions the channel to `newState` and broadcasts to all state observers.
   /// When transitioning to a terminal `.closed` state, all `messages()` streams are
   /// finished so consumers' `for await` loops end cleanly.
+  ///
+  /// ## Joined-topic registry (Task 32)
+  /// - On `.joined`: adds `topic` to `Realtime.joinedTopics` via the nonisolated `_markJoined`.
+  /// - On `.closed`: removes `topic` from `Realtime.joinedTopics` via `_markLeft`.
+  ///   This fires for every close reason (userRequested, unauthorized, transportFailure, etc.)
+  ///   so the deinit warning only fires for channels that are still in `.joined` state.
   func transition(to newState: ChannelState) {
     channelState = newState
     for continuation in stateContinuations.values {
       continuation.yield(newState)
     }
+
+    // Update the nonisolated joinedTopics registry on the owning Realtime actor.
+    // Both _markJoined and _markLeft are nonisolated on Realtime, so no await is needed.
+    switch newState {
+    case .joined:
+      realtime?._markJoined(topic)
+    case .closed:
+      realtime?._markLeft(topic)
+    default:
+      break
+    }
+
     if case .closed(let reason) = newState {
       finishAllMessagesContinuations()
       finishAllBroadcastConsumers(reason: reason)
