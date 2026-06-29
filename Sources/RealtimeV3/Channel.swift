@@ -470,7 +470,12 @@ public actor Channel {
         await _retrackPresence(payload: payload, realtime: realtime)
       }
     } else {
-      // Server rejected the rejoin.
+      // Server rejected the rejoin (e.g. revoked auth). This is terminal: clear
+      // `shouldRejoin` so the channel is NOT re-attempted on every subsequent
+      // reconnect (which would loop indefinitely). The caller must explicitly
+      // `subscribe()` again to re-establish. Transient transport failures above
+      // intentionally keep `shouldRejoin` true so the next reconnect retries.
+      shouldRejoin = false
       transition(to: .closed(.unauthorized))
     }
   }
