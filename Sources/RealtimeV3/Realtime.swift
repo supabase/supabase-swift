@@ -440,11 +440,9 @@ public actor Realtime {
         transition(to: .connected)
         startConnectionTasks(connection: conn)
         return
-      } catch let connectError as any Error & Sendable {
-        // Reconnect attempt failed — record and loop.
-        lastError = connectError
-        attempt += 1
       } catch {
+        // Reconnect attempt failed — record and loop.
+        lastError = error
         attempt += 1
       }
     }

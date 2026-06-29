@@ -23,10 +23,10 @@ import Testing
     // Wait until the push is registered before resolving — otherwise `resolve`
     // can run first, find nothing, and the later-registered continuation would
     // never be resumed (it would hang until the timeout, which never advances).
-    while await registry.pendingCount == 0 {
+    while registry.pendingCount == 0 {
       await Task.yield()
     }
-    await registry.resolve(ref: "1", status: "ok", response: [:])
+    registry.resolve(ref: "1", status: "ok", response: [:])
     let result = try await replyTask.value
     #expect(result.status == "ok")
   }
@@ -35,7 +35,7 @@ import Testing
     // Regression: resolve() called BEFORE awaitReply() registers the continuation.
     let registry = InflightPushRegistry()
     // Resolve before anyone is waiting — reply must be buffered.
-    await registry.resolve(ref: "early-1", status: "ok", response: [:])
+    registry.resolve(ref: "early-1", status: "ok", response: [:])
     // Now register the waiter — should pick up the buffered reply immediately.
     let clock = TestClock()
     let reply = try await registry.awaitReply(
@@ -61,11 +61,11 @@ import Testing
     // hang the test, so we advance-until-fired: keep yielding/advancing (an
     // idempotent operation on a `TestClock`) until the pending entry clears,
     // which means the timeout fired and resumed the continuation.
-    while await registry.pendingCount == 0 {
+    while registry.pendingCount == 0 {
       await Task.yield()
     }
     var attempts = 0
-    while await registry.pendingCount > 0, attempts < 1000 {
+    while registry.pendingCount > 0, attempts < 1000 {
       await clock.advance(by: .seconds(5))
       await Task.yield()
       attempts += 1

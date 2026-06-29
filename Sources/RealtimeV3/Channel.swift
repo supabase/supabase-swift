@@ -337,10 +337,10 @@ public actor Channel {
     // Send the phx_leave frame. On transport failure, close locally and rethrow.
     do {
       try await realtime.sendText(text)
-    } catch let sendError as RealtimeError {
+    } catch {
       transition(to: .closed(.userRequested))
       joinRef = nil
-      throw sendError
+      throw error
     }
 
     // Await the phx_reply. On timeout, close locally and rethrow.
@@ -351,11 +351,11 @@ public actor Channel {
         timeout: realtime.configuration.leaveTimeout,
         timeoutError: .channelJoinTimeout
       )
-    } catch let replyError as RealtimeError {
+    } catch {
       // Local teardown regardless of server confirmation failure.
       transition(to: .closed(.userRequested))
       joinRef = nil
-      throw replyError
+      throw error
     }
 
     // Success: transition to closed and reset joinRef so a future subscribe() gets a fresh ref.
