@@ -26,19 +26,24 @@ extension Realtime {
   /// to `inflightPushRegistry` (for phx_reply) or the matching channel.
   ///
   /// A single malformed frame is logged and skipped; it does not kill the loop.
+  /// When the stream ends (normally or with an error), `handleConnectionLost` is called,
+  /// which drives the reconnection loop (Task 13).
   private func routeFrames(from connection: any RealtimeConnection) async {
+    var streamError: (any Error)?
     do {
       for try await frame in connection.frames {
         await handleFrame(frame)
       }
     } catch {
-      // Stream ended with an error (e.g. network loss). Log and fall through.
-      // Reconnection logic is Task 13.
-      reportIssue("Realtime frame stream ended with error: \(error)")
+      // Stream ended with an error (e.g. network loss).
+      streamError = error
     }
-    // Stream finished (normal or error). Transition to idle so callers know
-    // the connection is gone. Reconnection is Task 13.
-    transition(to: .idle)
+
+    // Stream finished (normal or error) — trigger connection-loss handler.
+    // handleConnectionLost owns the reconnection loop and idempotency guard.
+    await handleConnectionLost(
+      .transportFailure(underlying: streamError ?? RealtimeError.disconnected)
+    )
   }
 
   /// Decodes and dispatches one `TransportFrame`.

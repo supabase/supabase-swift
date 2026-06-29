@@ -59,47 +59,59 @@ actor InMemoryTransport: RealtimeTransport {
 
 /// The server-side handle of an `InMemoryTransport` pair.
 ///
-/// - `clientSentFrames`: yields every frame the Realtime client sends.
-/// - `send(_:)`: injects a frame that the client's `frames` stream will yield.
-/// - `closeFromServer(code:reason:)`: finishes both streams, simulating a
-///   server-initiated close.
+/// - `clientSentFrames`: yields every frame the Realtime client sends (across all connections).
+/// - `send(_:)`: injects a frame that the currently-connected client will receive.
+/// - `closeFromServer(code:reason:)`: finishes the current connection's streams, simulating a
+///   server-initiated close. The next `makeConnection()` call (from a reconnect) establishes
+///   a fresh server→client stream, so the server can keep injecting frames across reconnects.
+///
+/// ## Reconnect behaviour
+/// `closeFromServer` only terminates the *current* connection's server→client stream.
+/// `makeConnection()` always creates a fresh server→client stream pair, so each reconnect
+/// gets a live stream. The client→server `clientSentFrames` stream is shared across all
+/// connections so the test observer sees all frames from every connection attempt.
 final class TransportServer: Sendable {
-  // Frames the Realtime client sent → server observes.
+  // Frames the Realtime client sent → server observes (shared across reconnects).
   private let clientSentContinuation: LockIsolated<AsyncStream<TransportFrame>.Continuation?>
   let clientSentFrames: AsyncStream<TransportFrame>
 
-  // Frames the server injected → client's connection.frames yields.
-  private let serverToClientContinuation: LockIsolated<AsyncStream<TransportFrame>.Continuation?>
-  // Stored so makeConnection() can hand it to each fresh InMemoryConnection.
-  private let serverToClientStream: AsyncStream<TransportFrame>
+  // Active server→client stream continuation. Replaced on each makeConnection().
+  // `closeFromServer` finishes this, and the next makeConnection() installs a new one.
+  private let activeServerToClientContinuation:
+    LockIsolated<
+      AsyncStream<TransportFrame>.Continuation?
+    >
 
-  // Wraps serverToClientStream as AsyncThrowingStream for the connection.frames property.
-  // We re-create a throwing wrapper each time makeConnection() is called.
   init() {
     let (clientSentStream, clientSentCont) = AsyncStream.makeStream(of: TransportFrame.self)
-    let (serverToClientStr, serverToClientCont) = AsyncStream.makeStream(of: TransportFrame.self)
     self.clientSentFrames = clientSentStream
     self.clientSentContinuation = LockIsolated(clientSentCont)
-    self.serverToClientStream = serverToClientStr
-    self.serverToClientContinuation = LockIsolated(serverToClientCont)
+    self.activeServerToClientContinuation = LockIsolated(nil)
   }
 
   /// Inject a frame that the connected client will receive on its `frames` stream.
   func send(_ frame: TransportFrame) {
-    _ = serverToClientContinuation.withValue { $0?.yield(frame) }
+    activeServerToClientContinuation.withValue { $0?.yield(frame) }
   }
 
-  /// Simulate a server-initiated close. Finishes both streams.
+  /// Simulate a server-initiated close. Finishes the current server→client stream.
+  /// The next `connect()` from the client will call `makeConnection()` which installs
+  /// a fresh stream, allowing reconnect tests to work naturally.
   func closeFromServer(code: Int, reason: String) {
-    serverToClientContinuation.withValue { $0?.finish() }
-    _ = clientSentContinuation.withValue { $0?.finish() }
+    activeServerToClientContinuation.withValue { $0?.finish() }
   }
 
-  /// Called by InMemoryTransport on each connect() to produce a fresh connection
-  /// object. All connections share the same underlying streams, so the server
-  /// keeps working across reconnects.
+  /// Called by InMemoryTransport on each connect() to produce a fresh connection object.
+  /// Installs a new server→client continuation, replacing the previous (possibly finished) one.
   fileprivate func makeConnection() -> InMemoryConnection {
-    InMemoryConnection(
+    // Create a fresh server→client stream for this connection.
+    let (serverToClientStream, serverToClientCont) = AsyncStream.makeStream(
+      of: TransportFrame.self
+    )
+    // Replace the active continuation so `send()` targets the new connection.
+    activeServerToClientContinuation.withValue { $0 = serverToClientCont }
+
+    return InMemoryConnection(
       serverToClientStream: serverToClientStream,
       clientSentContinuation: clientSentContinuation
     )

@@ -52,6 +52,17 @@ public actor Realtime {
   /// Background task that sends periodic heartbeat frames and checks replies.
   var heartbeatTask: Task<Void, Never>?
 
+  /// When `true`, a reconnection loop is currently running.
+  /// Set to `true` by `runReconnectionLoop`, reset when it exits.
+  var isReconnecting: Bool = false
+
+  /// The running reconnection loop task. Stored so it can be cancelled on intentional disconnect.
+  var reconnectTask: Task<Void, Never>?
+
+  /// When `true`, connection loss should NOT trigger auto-reconnect.
+  /// Set by disconnect() in Task 14.
+  var intentionalDisconnect: Bool = false
+
   /// Registry tracking in-flight pushes awaiting a `phx_reply`.
   let inflightPushRegistry = InflightPushRegistry()
 
@@ -216,40 +227,32 @@ public actor Realtime {
     }
   }
 
-  /// Builds the connect URL (apikey query param), connect headers, and calls transport.connect.
+  /// Signals connecting, opens the transport, stores the connection, signals connected,
+  /// and starts the connection tasks.
   private func _performConnect() async throws {
-    // Build connect URL: append apikey= query item to base URL.
-    var components =
-      URLComponents(url: url, resolvingAgainstBaseURL: false)
-      ?? URLComponents()
-    var queryItems = components.queryItems ?? []
-    queryItems.append(URLQueryItem(name: "apikey", value: apiKey))
-    components.queryItems = queryItems
-    guard let connectURL = components.url else {
-      throw RealtimeError.transportFailure(
-        underlying: URLError(.badURL)
-      )
-    }
-
-    // Build connect headers: merge configuration headers + x-api-key.
-    var headers = configuration.headers
-    headers["x-api-key"] = apiKey
-
     // Signal connecting.
     transition(to: .connecting(attempt: 1))
 
-    // Open the transport.
-    let conn = try await transport.connect(to: connectURL, headers: headers)
+    // Open the transport (shared helper also used during reconnection).
+    let conn = try await _openConnection()
     connection = conn
 
     // Signal connected.
     transition(to: .connected)
 
-    // Start the background frame routing loop.
-    startFrameRouting(connection: conn)
+    // Start the background frame routing and heartbeat loops bound to this connection.
+    startConnectionTasks(connection: conn)
+  }
 
-    // Start the periodic heartbeat loop.
-    startHeartbeat(connection: conn)
+  // MARK: - Connection tasks
+
+  /// Starts (or restarts) the frame routing task and heartbeat loop for `connection`.
+  ///
+  /// Call this after every successful connect — both initial and after a reconnect.
+  /// Cancels any pre-existing tasks first so they are never duplicated.
+  func startConnectionTasks(connection: any RealtimeConnection) {
+    startFrameRouting(connection: connection)
+    startHeartbeat(connection: connection)
   }
 
   // MARK: - Heartbeat
@@ -303,12 +306,24 @@ public actor Realtime {
 
   // MARK: - Connection loss
 
-  /// Minimal connection-loss handler. Cancels heartbeat + routing tasks, clears the
-  /// connection, and transitions status to `.idle`.
+  /// Connection-loss handler with automatic reconnection.
   ///
-  /// Expanded in Task 13 (reconnection).
+  /// When `intentionalDisconnect` is false (the default), this drives the reconnection
+  /// loop: it consults `configuration.reconnection.nextDelay`, sleeps on
+  /// `configuration.clock`, and retries `transport.connect` until success or the
+  /// policy returns `nil` (give up).
+  ///
+  /// Idempotency: if a reconnection loop is already running (`isReconnecting == true`),
+  /// a second call is a no-op — this avoids overlapping loops when both the frame-routing
+  /// stream and the heartbeat fire almost simultaneously.
   func handleConnectionLost(_ error: RealtimeError) async {
-    guard connection != nil else { return }
+    // Atomically claim and clear the connection reference before any suspension point.
+    // This is the single-ownership guard: any concurrent or re-entrant call will see
+    // connection == nil and return immediately, preventing overlapping cleanup or
+    // reconnection loops.
+    guard let lostConnection = connection else { return }
+    connection = nil
+
     // Cancel background tasks.
     heartbeatTask?.cancel()
     heartbeatTask = nil
@@ -318,12 +333,90 @@ public actor Realtime {
     // Fail all pending pushes so callers don't hang indefinitely.
     await inflightPushRegistry.failAll(error)
 
-    // Close and clear the connection.
-    await connection?.close(code: 1001, reason: "connection lost")
-    connection = nil
+    // Close the connection we captured above.
+    await lostConnection.close(code: 1001, reason: "connection lost")
 
-    // Transition to idle so status stream consumers know the socket is gone.
-    transition(to: .idle)
+    // If the disconnect was intentional (set by disconnect() in Task 14), stay closed.
+    if intentionalDisconnect {
+      transition(to: .closed(.transportFailure))
+      return
+    }
+
+    // Spawn reconnection as an unstructured Task so it runs independently of the routing
+    // task (which may be the caller and may be cancelled). The reconnection loop must NOT
+    // inherit cancellation from the routing task — it needs to outlive it.
+    reconnectTask = Task {
+      await runReconnectionLoop(initialError: error)
+    }
+  }
+
+  /// Reconnection loop. Runs in its own unstructured Task so it is not affected by the
+  /// cancellation of the routing task that detected the connection loss.
+  private func runReconnectionLoop(initialError: RealtimeError) async {
+    isReconnecting = true
+    defer { isReconnecting = false }
+
+    var attempt = 1
+    var lastError: any Error & Sendable = initialError
+
+    while true {
+      // Consult the policy for the delay before this attempt.
+      guard let delay = configuration.reconnection.nextDelay(attempt, lastError) else {
+        // Policy says give up: fail all (in case new pushes arrived), go to closed.
+        await inflightPushRegistry.failAll(initialError)
+        transition(to: .closed(.transportFailure))
+        return
+      }
+
+      // Signal reconnecting.
+      transition(to: .reconnecting(attempt: attempt, lastError: lastError))
+
+      // Wait the backoff delay on the configured clock.
+      do {
+        try await configuration.clock.sleep(for: delay)
+      } catch {
+        // CancellationError: actor is being torn down — exit silently.
+        return
+      }
+
+      // Attempt to reconnect.
+      do {
+        let conn = try await _openConnection()
+        // Successfully reconnected: bind fresh tasks to the new connection.
+        connection = conn
+        reconnectTask = nil
+        transition(to: .connected)
+        startConnectionTasks(connection: conn)
+        return
+      } catch let connectError as any Error & Sendable {
+        // Reconnect attempt failed — record and loop.
+        lastError = connectError
+        attempt += 1
+      } catch {
+        attempt += 1
+      }
+    }
+  }
+
+  /// Builds the connect URL and headers, then calls transport.connect.
+  /// Used by both initial connect and reconnect.
+  private func _openConnection() async throws -> any RealtimeConnection {
+    var components =
+      URLComponents(url: url, resolvingAgainstBaseURL: false)
+      ?? URLComponents()
+    var queryItems = components.queryItems ?? []
+    // Remove any pre-existing apikey entry to avoid duplication.
+    queryItems.removeAll { $0.name == "apikey" }
+    queryItems.append(URLQueryItem(name: "apikey", value: apiKey))
+    components.queryItems = queryItems
+    guard let connectURL = components.url else {
+      throw RealtimeError.transportFailure(underlying: URLError(.badURL))
+    }
+
+    var headers = configuration.headers
+    headers["x-api-key"] = apiKey
+
+    return try await transport.connect(to: connectURL, headers: headers)
   }
 
   // MARK: - Test shims

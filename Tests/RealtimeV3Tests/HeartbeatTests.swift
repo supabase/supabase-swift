@@ -280,12 +280,15 @@ import Testing
     // Now advance past the heartbeat timeout WITHOUT sending a reply — the registry
     // timeout task also sleeps on `configuration.heartbeat`. Advance until
     // connection transitions away from .connected.
-    let sawClosed = LockIsolated(false)
+    // Note: with Task 13 reconnection, the state transitions to .reconnecting (not .idle/.closed)
+    // unless the policy gives up immediately. The default policy retries, so we accept
+    // .reconnecting, .idle, or .closed as evidence that the heartbeat timeout was detected.
+    let sawDisconnected = LockIsolated(false)
     let statusCheckTask = Task {
       for await s in statusStream {
         switch s.state {
-        case .idle, .closed:
-          sawClosed.setValue(true)
+        case .idle, .closed, .reconnecting:
+          sawDisconnected.setValue(true)
           return
         default:
           break
@@ -294,11 +297,12 @@ import Testing
     }
 
     await advanceUntil(clock: clock, step: .seconds(1), maxAttempts: 300) {
-      sawClosed.value
+      sawDisconnected.value
     }
     statusCheckTask.cancel()
 
     #expect(
-      sawClosed.value, "Expected connection to transition to idle/closed after heartbeat timeout")
+      sawDisconnected.value,
+      "Expected connection to transition away from .connected after heartbeat timeout")
   }
 }
