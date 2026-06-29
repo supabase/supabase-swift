@@ -207,124 +207,133 @@ extension Channel {
       return stream
     }
 
-    let id = UUID()
-    let (stream, continuation) = AsyncThrowingStream<E.Element, any Error>.makeStream()
-
-    // Capture the variantKind at registration time.
+    // Capture the variantKind + registration id at registration time.
     let variantKind = config.variantKind
     let registrationID = config.id
 
-    // Type-erased handler. Called by _routePostgresChange for each matching server id.
-    // We switch on variantKind — safe `as!` because the variant kind is immutably tied
-    // to the generic parameter E at factory call time.
-    //
-    // Decode failures finish THIS stream with `.decoding`. Cleanup is automatic:
-    // `continuation.finish(throwing:)` triggers `onTermination`, which calls
-    // `removePostgresConsumer` via the Task registered below.
-    let handler: @Sendable (PhoenixMessage) -> Void = { message in
-      guard case .json(let jsonValue) = message.payload,
-        let obj = jsonValue.objectValue,
-        let dataValue = obj["data"],
-        let dataObj = dataValue.objectValue
-      else { return }
+    // Subscribe to the channel's event feed synchronously (on-actor).
+    let base = _subscribeEvents()
 
-      let type_ = dataObj["type"]?.stringValue ?? ""
+    return AsyncThrowingStream<E.Element, any Error> { continuation in
+      let task = Task { [weak self] in
+        for await channelEvent in base {
+          switch channelEvent {
+          case .terminated(let reason):
+            // Terminal close: throws .channelClosed(reason) into the stream.
+            continuation.finish(throwing: RealtimeError.channelClosed(reason))
+            return
 
-      // Finish this stream with a decode error. Consumer cleanup is handled by
-      // the `onTermination` callback registered below, so no explicit cleanup needed here.
-      let finishWithDecodeError: @Sendable (String) -> Void = { typeDescription in
-        let underlying = PostgresDecodeError(description: "malformed postgres_changes data")
-        continuation.finish(
-          throwing: RealtimeError.decoding(type: typeDescription, underlying: underlying))
+          case .message(let message):
+            switch message.event {
+            case .system:
+              // postgres_changes subscription error (H6) → fail this stream with
+              // .postgresSubscriptionFailed. Other system events are ignored here.
+              guard case .json(let jsonValue) = message.payload,
+                let obj = jsonValue.objectValue,
+                obj["extension"]?.stringValue == "postgres_changes",
+                obj["status"]?.stringValue == "error"
+              else { continue }
+              let reason = obj["message"]?.stringValue ?? "Unknown postgres subscription error"
+              continuation.finish(
+                throwing: RealtimeError.postgresSubscriptionFailed(reason: reason))
+              return
+
+            case .postgresChanges:
+              // Does this frame target our registration? Match the frame's `ids` against
+              // the server ids currently mapped to our registration (read live, since the
+              // mapping is rebuilt on every rejoin).
+              guard case .json(let jsonValue) = message.payload,
+                let obj = jsonValue.objectValue,
+                let idsArray = obj["ids"]?.arrayValue,
+                let dataObj = obj["data"]?.objectValue
+              else { continue }
+
+              let frameIDs = Set(idsArray.compactMap { $0.intValue })
+              guard !frameIDs.isEmpty else { continue }
+
+              let myServerIDs = await self?.postgresServerIDs(for: registrationID) ?? []
+              guard !myServerIDs.isDisjoint(with: frameIDs) else { continue }
+
+              // Decode E.Element from the data object. Safe `as!`: the variant kind is
+              // immutably tied to the generic parameter E at factory call time. A malformed
+              // frame finishes THIS stream with `.decoding`.
+              let type_ = dataObj["type"]?.stringValue ?? ""
+              let element: E.Element
+              switch variantKind {
+              case .insert:
+                // E == Insert<JSONValue>, E.Element == JSONValue
+                guard let record = dataObj["record"] else {
+                  continuation.finish(throwing: decodeError("Insert<JSONValue>: missing record"))
+                  return
+                }
+                element = record as! E.Element
+
+              case .update:
+                // E == Update<JSONValue>, E.Element == PostgresUpdate<JSONValue>
+                guard let record = dataObj["record"] else {
+                  continuation.finish(throwing: decodeError("Update<JSONValue>: missing record"))
+                  return
+                }
+                let oldRecord: JSONValue? = dataObj["old_record"]
+                let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
+                element = update as! E.Element
+
+              case .delete:
+                // E == Delete<JSONValue>, E.Element == PostgresDelete<JSONValue>
+                // old_record is NON-optional for DELETE; absence is a decode failure.
+                guard let oldRecord = dataObj["old_record"] else {
+                  continuation.finish(
+                    throwing: decodeError("Delete<JSONValue>: missing old_record"))
+                  return
+                }
+                let del = PostgresDelete<JSONValue>(oldRecord: oldRecord)
+                element = del as! E.Element
+
+              case .anyEvent:
+                // E == AnyEvent<JSONValue>, E.Element == PostgresChange<JSONValue>
+                let change: PostgresChange<JSONValue>
+                switch type_ {
+                case "INSERT":
+                  let record: JSONValue = dataObj["record"] ?? .object([:])
+                  change = .insert(record)
+                case "UPDATE":
+                  let record: JSONValue = dataObj["record"] ?? .object([:])
+                  let oldRecord: JSONValue? = dataObj["old_record"]
+                  let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
+                  change = .update(update)
+                case "DELETE":
+                  let oldRecord: JSONValue = dataObj["old_record"] ?? .object([:])
+                  let del = PostgresDelete<JSONValue>(oldRecord: oldRecord)
+                  change = .delete(del)
+                default:
+                  // Unrecognized event type is a decode failure for this stream.
+                  continuation.finish(
+                    throwing: decodeError("AnyEvent<JSONValue>: unknown type '\(type_)'"))
+                  return
+                }
+                element = change as! E.Element
+              }
+              continuation.yield(element)
+
+            default:
+              continue
+            }
+          }
+        }
+        // Feed ended without an explicit terminal event (e.g. channel deallocated).
+        continuation.finish()
       }
-
-      let element: E.Element
-      switch variantKind {
-      case .insert:
-        // E == Insert<JSONValue>, E.Element == JSONValue
-        guard let record = dataObj["record"] else {
-          finishWithDecodeError("Insert<JSONValue>: missing record")
-          return
-        }
-        element = record as! E.Element
-
-      case .update:
-        // E == Update<JSONValue>, E.Element == PostgresUpdate<JSONValue>
-        guard let record = dataObj["record"] else {
-          finishWithDecodeError("Update<JSONValue>: missing record")
-          return
-        }
-        let oldRecord: JSONValue? = dataObj["old_record"]
-        let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
-        element = update as! E.Element
-
-      case .delete:
-        // E == Delete<JSONValue>, E.Element == PostgresDelete<JSONValue>
-        // old_record is NON-optional for DELETE; absence is a decode failure.
-        guard let oldRecord = dataObj["old_record"] else {
-          finishWithDecodeError("Delete<JSONValue>: missing old_record")
-          return
-        }
-        let del = PostgresDelete<JSONValue>(oldRecord: oldRecord)
-        element = del as! E.Element
-
-      case .anyEvent:
-        // E == AnyEvent<JSONValue>, E.Element == PostgresChange<JSONValue>
-        let change: PostgresChange<JSONValue>
-        switch type_ {
-        case "INSERT":
-          let record: JSONValue = dataObj["record"] ?? .object([:])
-          change = .insert(record)
-        case "UPDATE":
-          let record: JSONValue = dataObj["record"] ?? .object([:])
-          let oldRecord: JSONValue? = dataObj["old_record"]
-          let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
-          change = .update(update)
-        case "DELETE":
-          let oldRecord: JSONValue = dataObj["old_record"] ?? .object([:])
-          let del = PostgresDelete<JSONValue>(oldRecord: oldRecord)
-          change = .delete(del)
-        default:
-          // Unrecognized event type is a decode failure for this stream.
-          finishWithDecodeError("AnyEvent<JSONValue>: unknown type '\(type_)'")
-          return
-        }
-        element = change as! E.Element
-      }
-      continuation.yield(element)
+      continuation.onTermination = { _ in task.cancel() }
     }
-
-    // Channel-close finisher: throws .channelClosed(reason) into the stream.
-    let finisher: @Sendable (CloseReason) -> Void = { reason in
-      continuation.finish(throwing: RealtimeError.channelClosed(reason))
-    }
-
-    // System postgres error finisher: throws .postgresSubscriptionFailed(reason:).
-    let errorFinisher: @Sendable (String) -> Void = { reason in
-      continuation.finish(throwing: RealtimeError.postgresSubscriptionFailed(reason: reason))
-    }
-
-    // Register all three in the actor's fan-out tables.
-    postgresConsumers[id] = handler
-    postgresFinishers[id] = finisher
-    postgresErrorFinishers[id] = errorFinisher
-
-    // Register this consumer UUID in the indirection map: registrationID → [consumerIDs].
-    if registrationConsumers[registrationID] == nil {
-      registrationConsumers[registrationID] = [id]
-    } else {
-      registrationConsumers[registrationID]?.append(id)
-    }
-
-    // On stream termination (cancellation or normal finish), deregister from the actor.
-    continuation.onTermination = { [weak self] _ in
-      Task { [weak self] in
-        await self?.removePostgresConsumer(id: id, registrationID: registrationID)
-      }
-    }
-
-    return stream
   }
+}
+
+/// Builds a `.decoding` error for a malformed `postgres_changes` frame.
+private func decodeError(_ typeDescription: String) -> RealtimeError {
+  RealtimeError.decoding(
+    type: typeDescription,
+    underlying: PostgresDecodeError(description: "malformed postgres_changes data")
+  )
 }
 
 // MARK: - State guard (internal)

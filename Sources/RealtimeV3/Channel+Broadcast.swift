@@ -193,72 +193,65 @@ extension Channel {
     of type: T.Type,
     event: String
   ) -> AsyncThrowingStream<T, any Error> {
-    let id = UUID()
-
     // Capture the decoder from realtime configuration, falling back to the default if
     // realtime has already been deallocated (e.g. stream registered after client teardown).
     let decoder = realtime?.configuration.decoder ?? .realtimeDefault
 
+    // Subscribe to the channel's event feed synchronously (on-actor) so no frame is
+    // missed between this call and the transform task starting.
+    let base = _subscribeEvents()
+
     // AsyncThrowingStream with a typed non-Error Failure requires iOS 17+.
     // On iOS 16 / Swift 6.1 we use the standard `Failure == any Error` form.
-    let (stream, continuation) = AsyncThrowingStream<T, any Error>.makeStream()
+    return AsyncThrowingStream<T, any Error> { continuation in
+      let task = Task {
+        for await channelEvent in base {
+          switch channelEvent {
+          case .terminated(let reason):
+            // Terminal close: surface the reason to the caller (spec: throws on close).
+            continuation.finish(throwing: RealtimeError.channelClosed(reason))
+            return
 
-    // Type-erased message handler registered in the actor's fan-out registry.
-    let handler: @Sendable (PhoenixMessage) -> Void = { [weak self] message in
-      // Only handle broadcast Phoenix events.
-      guard message.event == .broadcast else { return }
+          case .message(let message):
+            // Only handle broadcast Phoenix events matching the requested inner event.
+            guard message.event == .broadcast,
+              case .json(let jsonValue) = message.payload,
+              let obj = jsonValue.objectValue,
+              let innerEvent = obj["event"]?.stringValue, innerEvent == event
+            else { continue }
 
-      // Extract the JSON object from the payload.
-      guard case .json(let jsonValue) = message.payload,
-        let obj = jsonValue.objectValue
-      else { return }
+            // Extract the inner "payload" value.
+            guard let innerPayload = obj["payload"] else {
+              // No payload key — decode failure terminates the stream.
+              continuation.finish(
+                throwing: RealtimeError.decoding(
+                  type: String(describing: T.self),
+                  underlying: MissingPayloadError()
+                ))
+              return
+            }
 
-      // Match the inner "event" field against the requested event name.
-      guard let innerEvent = obj["event"]?.stringValue, innerEvent == event else { return }
-
-      // Extract the inner "payload" value.
-      guard let innerPayload = obj["payload"] else {
-        // No payload key — decode failure terminates the stream.
-        continuation.finish(
-          throwing: RealtimeError.decoding(
-            type: String(describing: T.self),
-            underlying: MissingPayloadError()
-          ))
-        Task { [weak self] in await self?.removeBroadcastConsumer(id: id) }
-        return
+            // Re-encode the JSONValue to Data, then decode T using the configured decoder.
+            do {
+              let data = try JSONEncoder().encode(innerPayload)
+              let decoded = try decoder.decode(T.self, from: data)
+              continuation.yield(decoded)
+            } catch {
+              // Decode failure terminates this stream (spec: decode failure throws).
+              continuation.finish(
+                throwing: RealtimeError.decoding(
+                  type: String(describing: T.self),
+                  underlying: error
+                ))
+              return
+            }
+          }
+        }
+        // Feed ended without an explicit terminal event (e.g. channel deallocated).
+        continuation.finish()
       }
-
-      // Re-encode the JSONValue to Data, then decode T using the configured decoder.
-      do {
-        let data = try JSONEncoder().encode(innerPayload)
-        let decoded = try decoder.decode(T.self, from: data)
-        continuation.yield(decoded)
-      } catch {
-        // Decode failure terminates this stream (spec: decode failure throws).
-        continuation.finish(
-          throwing: RealtimeError.decoding(
-            type: String(describing: T.self),
-            underlying: error
-          ))
-        Task { [weak self] in await self?.removeBroadcastConsumer(id: id) }
-      }
+      continuation.onTermination = { _ in task.cancel() }
     }
-
-    // Channel-close finisher: throws .channelClosed into the stream.
-    let finisher: @Sendable (CloseReason) -> Void = { reason in
-      continuation.finish(throwing: RealtimeError.channelClosed(reason))
-    }
-
-    // Register both in the actor's fan-out tables.
-    broadcastConsumers[id] = handler
-    broadcastFinishers[id] = finisher
-
-    // On stream termination (cancellation or normal finish), deregister from the actor.
-    continuation.onTermination = { [weak self] _ in
-      Task { [weak self] in await self?.removeBroadcastConsumer(id: id) }
-    }
-
-    return stream
   }
 }
 

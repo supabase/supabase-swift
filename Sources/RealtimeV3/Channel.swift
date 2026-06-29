@@ -8,6 +8,18 @@
 import Foundation
 import Helpers
 
+/// An item delivered by a channel's internal event feed (`_subscribeEvents()`).
+///
+/// Every per-call stream (`messages()`, `broadcasts`, presence, postgres) is a
+/// transform over this feed. `.message` carries a routed frame; `.terminated`
+/// carries the close reason once, immediately before the feed finishes, so a
+/// throwing stream can finish with `.channelClosed(reason)` without racing a read
+/// of `channelState`.
+enum ChannelEvent: Sendable {
+  case message(PhoenixMessage)
+  case terminated(CloseReason)
+}
+
 /// A Realtime channel that represents a named topic on the server.
 ///
 /// Obtain a `Channel` by calling `Realtime.channel(_:configure:)`. The channel's
@@ -39,54 +51,17 @@ public actor Channel {
   /// Mirrors the pattern used by `Realtime.statusContinuations`.
   private var stateContinuations: [UUID: AsyncStream<ChannelState>.Continuation] = [:]
 
-  /// Per-call fan-out table for `messages()` streams.
-  /// Each `messages()` call registers a fresh continuation here; `receive(_:)` yields
-  /// every incoming frame to all registered continuations.
-  private var messagesContinuations: [UUID: AsyncStream<PhoenixMessage>.Continuation] = [:]
-
-  /// Per-call fan-out table for `broadcasts(of:event:)` typed streams.
-  /// Each call registers a type-erased closure that filters, decodes, and yields
-  /// the message into its owning `AsyncThrowingStream` continuation.
-  /// Closures are stored as `@Sendable (PhoenixMessage) -> Void` so the registry
-  /// itself is type-erased; the concrete `T` is captured in the closure.
-  var broadcastConsumers: [UUID: @Sendable (PhoenixMessage) -> Void] = [:]
-
-  /// Per-call fan-out table of closures called when the channel closes.
-  /// Each `broadcasts(of:event:)` call registers a closure that finishes its
-  /// stream with the given `CloseReason`.
-  var broadcastFinishers: [UUID: @Sendable (CloseReason) -> Void] = [:]
-
-  /// Per-call fan-out table for `observe(_:)` and `diffs(_:)` presence streams.
-  /// Each call registers a type-erased closure that decodes and yields the
-  /// message into its owning `AsyncStream` continuation.
-  /// Closures are stored as `@Sendable (PhoenixMessage) -> Void` so the registry
-  /// itself is type-erased; the concrete `T` and per-consumer state are captured in the closure.
-  var presenceConsumers: [UUID: @Sendable (PhoenixMessage) -> Void] = [:]
-
-  /// Per-call fan-out table of closures called when the channel closes (presence streams).
-  /// Each `observe`/`diffs` call registers a closure that finishes its `AsyncStream` cleanly.
-  var presenceFinishers: [UUID: @Sendable () -> Void] = [:]
-
-  /// Per-call fan-out table for `postgresChanges(for:)` streams (Task 28).
-  /// Keyed by the per-stream consumer UUID (a fresh UUID minted per `postgresChanges(for:)` call).
-  /// Each call registers a type-erased closure that decodes and yields the payload.
-  var postgresConsumers: [UUID: @Sendable (PhoenixMessage) -> Void] = [:]
-
-  /// Per-call fan-out table of closures called when the channel closes (postgres streams).
-  /// Each `postgresChanges(for:)` call registers a closure that finishes its stream.
-  var postgresFinishers: [UUID: @Sendable (CloseReason) -> Void] = [:]
-
-  /// Per-call fan-out table of closures called when a system postgres_changes error arrives
-  /// (Finding H6). Keyed by stream consumer UUID.
-  var postgresErrorFinishers: [UUID: @Sendable (String) -> Void] = [:]
-
-  /// Indirection map: registration UUID (from `ChangeRegistrationConfig.id`) → [consumer UUIDs].
+  /// The single fan-out table backing every per-call stream on this channel.
   ///
-  /// When `postgresChanges(for:)` is called, the consumer is registered in `postgresConsumers`
-  /// keyed by a fresh consumer UUID. This map links a registration's stable UUID to the set of
-  /// consumer UUIDs currently subscribed to it. `_routePostgresChange` uses
-  /// `serverIDRouting[serverID]` → registration UUIDs → this map → consumer UUIDs → handlers.
-  var registrationConsumers: [UUID: [UUID]] = [:]
+  /// `messages()`, `broadcasts(of:event:)`, `presence.observe`/`diffs`, and
+  /// `postgresChanges(for:)` are all transforms over a fresh subscription to this
+  /// feed (see `_subscribeEvents()`): each filters and decodes the frames it cares
+  /// about. `receive(_:)` yields `.message(_)` to every subscriber; a terminal close
+  /// yields `.terminated(reason)` and then finishes them.
+  ///
+  /// Carrying the close reason in-band lets throwing streams finish with
+  /// `.channelClosed(reason)` race-free, without reading `channelState` after the loop.
+  private var eventContinuations: [UUID: AsyncStream<ChannelEvent>.Continuation] = [:]
 
   // MARK: - Postgres change registrations (Task 27)
 
@@ -179,11 +154,52 @@ public actor Channel {
   /// The stream finishes automatically when `leave()` (or any terminal close) is called.
   /// Consumers' `for await` loops will end cleanly without an error.
   public func messages() -> AsyncStream<PhoenixMessage> {
+    // Register the base subscription synchronously (on-actor) so a frame can never be
+    // missed between this call and the transform task starting.
+    let base = _subscribeEvents()
+    return AsyncStream { continuation in
+      let task = Task {
+        for await event in base {
+          switch event {
+          case .message(let message):
+            continuation.yield(message)
+          case .terminated:
+            // messages() finishes cleanly on close (no error) — public contract.
+            continuation.finish()
+            return
+          }
+        }
+        continuation.finish()
+      }
+      continuation.onTermination = { _ in task.cancel() }
+    }
+  }
+
+  // MARK: - Event feed (internal)
+
+  /// Registers a fresh subscriber to this channel's event feed and returns its stream.
+  ///
+  /// Every per-call stream is built on top of this. The returned stream yields
+  /// `.message(_)` for each routed frame and a final `.terminated(reason)` when the
+  /// channel closes. If the channel is already `.closed`, the stream is seeded with the
+  /// terminal event immediately so late subscribers don't hang.
+  ///
+  /// The subscription removes itself from the fan-out table when the returned stream is
+  /// finished or its consumer is cancelled (via `onTermination`).
+  func _subscribeEvents() -> AsyncStream<ChannelEvent> {
+    let (stream, continuation) = AsyncStream<ChannelEvent>.makeStream()
+
+    // Late subscriber after a terminal close: deliver the reason and finish immediately.
+    if case .closed(let reason) = channelState {
+      continuation.yield(.terminated(reason))
+      continuation.finish()
+      return stream
+    }
+
     let id = UUID()
-    let (stream, continuation) = AsyncStream<PhoenixMessage>.makeStream()
-    messagesContinuations[id] = continuation
+    eventContinuations[id] = continuation
     continuation.onTermination = { [weak self] _ in
-      Task { [weak self] in await self?.removeMessagesContinuation(id: id) }
+      Task { [weak self] in await self?.removeEventContinuation(id: id) }
     }
     return stream
   }
@@ -194,31 +210,8 @@ public actor Channel {
     stateContinuations.removeValue(forKey: id)
   }
 
-  private func removeMessagesContinuation(id: UUID) {
-    messagesContinuations.removeValue(forKey: id)
-  }
-
-  func removeBroadcastConsumer(id: UUID) {
-    broadcastConsumers.removeValue(forKey: id)
-    broadcastFinishers.removeValue(forKey: id)
-  }
-
-  func removePresenceConsumer(id: UUID) {
-    presenceConsumers.removeValue(forKey: id)
-    presenceFinishers.removeValue(forKey: id)
-  }
-
-  func removePostgresConsumer(id consumerID: UUID, registrationID: UUID? = nil) {
-    postgresConsumers.removeValue(forKey: consumerID)
-    postgresFinishers.removeValue(forKey: consumerID)
-    postgresErrorFinishers.removeValue(forKey: consumerID)
-    // Remove this consumer UUID from the registrationConsumers indirection map.
-    if let regID = registrationID {
-      registrationConsumers[regID]?.removeAll { $0 == consumerID }
-      if registrationConsumers[regID]?.isEmpty == true {
-        registrationConsumers.removeValue(forKey: regID)
-      }
-    }
+  private func removeEventContinuation(id: UUID) {
+    eventContinuations.removeValue(forKey: id)
   }
 
   /// Transitions the channel to `newState` and broadcasts to all state observers.
@@ -248,10 +241,14 @@ public actor Channel {
     }
 
     if case .closed(let reason) = newState {
-      finishAllMessagesContinuations()
-      finishAllBroadcastConsumers(reason: reason)
-      finishAllPresenceConsumers()
-      finishAllPostgresConsumers(reason: reason)
+      // Deliver the close reason in-band to every subscriber, then finish the feed.
+      // Each transform decides what this means for its stream: messages()/presence
+      // finish cleanly, broadcasts()/postgres finish throwing `.channelClosed(reason)`.
+      for continuation in eventContinuations.values {
+        continuation.yield(.terminated(reason))
+        continuation.finish()
+      }
+      eventContinuations.removeAll()
     }
   }
 
@@ -892,9 +889,9 @@ public actor Channel {
   // MARK: - Frame router entry point
 
   /// Called by the frame router when a message arrives for this channel's topic.
-  /// Fans the message out to all registered `messages()` consumers, all
-  /// type-erased `broadcasts(of:event:)` consumers, presence consumers, and
-  /// postgres_changes consumers (Task 28).
+  ///
+  /// Yields the frame to every event-feed subscriber; each per-call stream
+  /// (`messages()`, `broadcasts`, presence, postgres) filters and decodes from there.
   ///
   /// Also handles server-initiated terminal events (`phx_close`, `phx_error`,
   /// and non-postgres `system` error frames) by transitioning to the appropriate
@@ -902,19 +899,13 @@ public actor Channel {
   /// trailing `phx_close` from the server after our own `leave()` does NOT
   /// overwrite the already-set `.closed(.userRequested)` reason (idempotent).
   func receive(_ message: PhoenixMessage) {
-    for continuation in messagesContinuations.values {
-      continuation.yield(message)
+    for continuation in eventContinuations.values {
+      continuation.yield(.message(message))
     }
-    for handler in broadcastConsumers.values {
-      handler(message)
-    }
-    for handler in presenceConsumers.values {
-      handler(message)
-    }
-    // Postgres fan-out (Task 28).
+    // Channel-level reactions. `postgres_changes` frames and `system`
+    // postgres-subscription errors are handled by the postgres transforms
+    // themselves (they self-filter the feed), so they are not routed here.
     switch message.event {
-    case .postgresChanges:
-      _routePostgresChange(message)
     case .system:
       _routeSystemEvent(message)
     case .close:
@@ -995,44 +986,26 @@ public actor Channel {
 
   // MARK: - Postgres routing (Task 28)
 
-  /// Routes an incoming `postgres_changes` frame to all consumers whose registration id
-  /// maps to one of the server ids listed in the frame's `ids` array.
+  /// Returns the set of server-assigned subscription ids currently mapped to the given
+  /// client registration UUID.
   ///
-  /// Wire shape: `{ "ids": [0, 2, ...], "data": { "type": "INSERT"|"UPDATE"|"DELETE",
-  /// "record": {...}, "old_record": {...}, "columns": [...], "commit_timestamp": "..." } }`
-  private func _routePostgresChange(_ message: PhoenixMessage) {
-    guard case .json(let jsonValue) = message.payload,
-      let obj = jsonValue.objectValue
-    else { return }
-
-    // Extract ids array.
-    guard let idsValue = obj["ids"],
-      let idsArray = idsValue.arrayValue
-    else { return }
-
-    let serverIDs: [Int] = idsArray.compactMap { $0.intValue }
-    guard !serverIDs.isEmpty else { return }
-
-    // Verify data object exists before dispatching; avoids handlers processing malformed frames.
-    guard obj["data"]?.objectValue != nil else { return }
-
-    // For each server id, find all mapped registration UUIDs, then all consumer UUIDs for
-    // each registration, and dispatch to the corresponding handler.
-    for serverID in serverIDs {
-      guard let registrationUUIDs = serverIDRouting[serverID] else { continue }
-      for registrationUUID in registrationUUIDs {
-        guard let consumerUUIDs = registrationConsumers[registrationUUID] else { continue }
-        for consumerUUID in consumerUUIDs {
-          postgresConsumers[consumerUUID]?(message)
-        }
-      }
+  /// Built from `serverIDRouting`, which is (re)built on every successful join/rejoin.
+  /// A `postgresChanges(for:)` transform reads this live (per frame) to decide whether an
+  /// incoming `postgres_changes` frame's `ids` array targets its registration.
+  func postgresServerIDs(for registrationID: UUID) -> Set<Int> {
+    var ids: Set<Int> = []
+    for (serverID, registrationUUIDs) in serverIDRouting
+    where registrationUUIDs.contains(registrationID) {
+      ids.insert(serverID)
     }
+    return ids
   }
 
   /// Routes an incoming `system` event.
   ///
-  /// - If `extension == "postgres_changes"` and `status == "error"`: all postgres streams
-  ///   are finished throwing `.postgresSubscriptionFailed(reason:)` (existing behaviour).
+  /// - If `extension == "postgres_changes"` and `status == "error"`: ignored here — the
+  ///   postgres transforms self-filter this frame off the event feed and finish their own
+  ///   streams with `.postgresSubscriptionFailed(reason:)`. The channel stays open.
   /// - Otherwise, if `status == "error"` and the message indicates an auth/token failure:
   ///   transitions the channel to `.closed(.unauthorized)` (server-initiated auth failure).
   /// - Otherwise, if `status == "error"` for any other reason:
@@ -1040,11 +1013,6 @@ public actor Channel {
   ///
   /// The channel-close path guards on the current state so it is idempotent when the
   /// channel is already `.closed` or `.leaving`.
-  ///
-  /// Design note: postgres_changes errors are kept in `_failAllPostgresConsumers` because
-  /// the system event does not include enough information to identify which specific
-  /// subscription failed — the whole postgres fan-out is torn down while the channel itself
-  /// stays open. Non-postgres system errors are treated as channel-level errors.
   private func _routeSystemEvent(_ message: PhoenixMessage) {
     guard case .json(let jsonValue) = message.payload,
       let obj = jsonValue.objectValue
@@ -1054,11 +1022,10 @@ public actor Channel {
     let status = obj["status"]?.stringValue
     let msgText = obj["message"]?.stringValue
 
-    // Existing behaviour: postgres_changes subscription error → fail postgres streams only.
+    // postgres_changes subscription error → handled by the postgres transforms; channel stays open.
     if ext == "postgres_changes", status == "error" {
       let reason = msgText ?? "Unknown postgres subscription error"
       log(.error, .postgres, "Postgres subscription error: \(reason)", metadata: ["topic": topic])
-      _failAllPostgresConsumers(reason: reason)
       return
     }
 
@@ -1137,57 +1104,4 @@ public actor Channel {
     realtime?.log(level, category, message, metadata: metadata)
   }
 
-  // MARK: - Messages stream teardown
-
-  /// Finishes all open `messages()` continuations so consumers' `for await` loops end.
-  /// Called from `leave()` and any terminal close transition.
-  private func finishAllMessagesContinuations() {
-    for continuation in messagesContinuations.values {
-      continuation.finish()
-    }
-    messagesContinuations.removeAll()
-  }
-
-  /// Finishes all open `broadcasts(of:event:)` streams by invoking each finisher closure.
-  /// The finisher throws `.channelClosed(reason)` into the stream so callers receive the error.
-  private func finishAllBroadcastConsumers(reason: CloseReason) {
-    for finisher in broadcastFinishers.values {
-      finisher(reason)
-    }
-    broadcastConsumers.removeAll()
-    broadcastFinishers.removeAll()
-  }
-
-  /// Finishes all open presence `observe`/`diffs` streams cleanly (no throw — non-throwing streams).
-  private func finishAllPresenceConsumers() {
-    for finisher in presenceFinishers.values {
-      finisher()
-    }
-    presenceConsumers.removeAll()
-    presenceFinishers.removeAll()
-  }
-
-  /// Finishes all open `postgresChanges(for:)` streams by invoking each finisher closure.
-  /// The finisher throws `.channelClosed(reason)` into the stream.
-  private func finishAllPostgresConsumers(reason: CloseReason) {
-    for finisher in postgresFinishers.values {
-      finisher(reason)
-    }
-    postgresConsumers.removeAll()
-    postgresFinishers.removeAll()
-    postgresErrorFinishers.removeAll()
-    registrationConsumers.removeAll()
-  }
-
-  /// Fails all postgres streams with `.postgresSubscriptionFailed(reason:)`.
-  /// Used when a system event signals a postgres subscription error (Finding H6).
-  private func _failAllPostgresConsumers(reason: String) {
-    for finisher in postgresErrorFinishers.values {
-      finisher(reason)
-    }
-    postgresConsumers.removeAll()
-    postgresFinishers.removeAll()
-    postgresErrorFinishers.removeAll()
-    registrationConsumers.removeAll()
-  }
 }
