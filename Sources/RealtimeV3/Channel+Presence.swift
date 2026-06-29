@@ -71,9 +71,12 @@ public final class PresenceHandle: Sendable {
 /// Obtain via `Channel.presence`. Methods `track`, `observe`, and `diffs` are
 /// implemented in Tasks 24/25. Only the decoder utilities are live in this task.
 public struct Presence: Sendable {
-  /// Unowned reference to the owning channel. Presence is always created by
-  /// a live `Channel` and does not outlive it.
-  unowned let channel: Channel
+  /// Strong reference to the owning channel. `Presence` is a lightweight value
+  /// wrapper handed out by `Channel.presence`; holding the channel strongly is
+  /// safe (no retain cycle — `Channel` never references `Presence`, and `Channel`
+  /// itself holds `Realtime` weakly) and avoids a use-after-free if a `Presence`
+  /// value outlives the `Channel`'s entry in the registry.
+  let channel: Channel
 
   /// Begin tracking, or update the existing tracked state, for this channel process.
   ///
@@ -116,7 +119,7 @@ extension Channel {
   /// The presence interface for this channel.
   ///
   /// `nonisolated` — creating a `Presence` shell is always safe; it only stores
-  /// an `unowned` back-reference to `self` with no actor-isolated state access.
+  /// a back-reference to `self` with no actor-isolated state access.
   public nonisolated var presence: Presence {
     Presence(channel: self)
   }

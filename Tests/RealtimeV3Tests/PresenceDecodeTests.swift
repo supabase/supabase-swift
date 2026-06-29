@@ -111,4 +111,26 @@ private struct UserPresence: Codable, Sendable, Equatable {
     let u1Index = leftKeys.firstIndex(of: "u1")!
     #expect(leftValues[u1Index] == UserPresence(userId: "u1", status: "active"))
   }
+
+  @Test func malformedMetaThrowsDecoding() {
+    // A meta missing the required `userId` field cannot decode as UserPresence.
+    let json: JSONValue = .object([
+      "u1": .object([
+        "metas": .array([
+          .object(["phx_ref": .string("r1"), "status": .string("active")])
+        ])
+      ])
+    ])
+    do {
+      _ = try decodePresenceState(json, as: UserPresence.self)
+      Issue.record("Expected a decoding error for the malformed meta")
+    } catch let error as RealtimeError {
+      guard case .decoding = error else {
+        Issue.record("Expected .decoding, got \(error)")
+        return
+      }
+    } catch {
+      Issue.record("Expected RealtimeError.decoding, got \(error)")
+    }
+  }
 }
