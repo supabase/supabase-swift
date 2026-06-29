@@ -40,6 +40,27 @@ enum IntegrationEnv {
       ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
   }
 
+  /// Standard local service-role JWT. Required for the HTTP broadcast API endpoint
+  /// (`/realtime/v1/api/broadcast`), which rejects anon-key requests with HTTP 500.
+  ///
+  /// Override via SUPABASE_SERVICE_ROLE_KEY for non-standard instances.
+  static var serviceRoleKey: String {
+    ProcessInfo.processInfo.environment["SUPABASE_SERVICE_ROLE_KEY"]
+      ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU"
+  }
+
+  /// Builds a `Realtime` client configured with the service-role key as the access token
+  /// provider. Use this for HTTP broadcast tests — the `/api/broadcast` endpoint requires
+  /// a service-role or user JWT (Bearer auth), not just the anon `apikey` header.
+  static func makeRealtimeWithServiceRole() -> Realtime {
+    let key = serviceRoleKey
+    return Realtime(
+      url: realtimeURL,
+      apiKey: anonKey,
+      accessToken: { key }
+    )
+  }
+
   /// Builds a fresh `Realtime` client pointed at the local instance.
   static func makeRealtime(configuration: Configuration = .default) -> Realtime {
     Realtime(url: realtimeURL, apiKey: anonKey, configuration: configuration)
