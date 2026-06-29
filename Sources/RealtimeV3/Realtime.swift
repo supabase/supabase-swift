@@ -70,6 +70,15 @@ public actor Realtime {
   /// Registry tracking in-flight pushes awaiting a `phx_reply`.
   let inflightPushRegistry = InflightPushRegistry()
 
+  /// The lifecycle event source injected at init time. `nonisolated let` so it can be
+  /// stored during the actor initializer before isolation is established.
+  /// `nil` when `lifecycle == .manual` or on unsupported platforms.
+  nonisolated let lifecycleSource: (any LifecycleEventSource)?
+
+  /// The active lifecycle observer. Created lazily on the first `connect()` call and
+  /// cancelled on `disconnect()`.
+  private var lifecycleObserverHandle: LifecycleObserver?
+
   /// Monotonic ref generator shared across all protocol frames.
   nonisolated let refGenerator = RefGenerator()
 
@@ -125,6 +134,28 @@ public actor Realtime {
     transport: any RealtimeTransport = URLSessionTransport(),
     urlSession: URLSession = .shared
   ) {
+    self.init(
+      url: url,
+      apiKey: apiKey,
+      accessToken: accessToken,
+      configuration: configuration,
+      transport: transport,
+      urlSession: urlSession,
+      lifecycleSource: nil
+    )
+  }
+
+  /// Designated initializer. The `lifecycleSource` parameter is `internal` so tests can
+  /// inject a `TestLifecycleEventSource` without exposing it in the public API.
+  init(
+    url: URL,
+    apiKey: String,
+    accessToken: AccessTokenProvider? = nil,
+    configuration: Configuration = .default,
+    transport: any RealtimeTransport = URLSessionTransport(),
+    urlSession: URLSession = .shared,
+    lifecycleSource: (any LifecycleEventSource)?
+  ) {
     self.url = url
     self.apiKey = apiKey
     self.accessTokenProvider = accessToken
@@ -139,6 +170,27 @@ public actor Realtime {
     // not via the tokenProvider closure, because we need access to the actor-isolated
     // _overrideToken at the time of each call.
     self.httpClient = _HTTPClient(host: httpBaseURL, session: urlSession)
+
+    // Resolve the effective lifecycle source:
+    // - Use the injected source if provided (test overrides).
+    // - Otherwise, when lifecycle == .automatic, create the platform NotificationCenter source.
+    // - .manual (or unsupported platform) → no source, no observation.
+    if let injected = lifecycleSource {
+      self.lifecycleSource = injected
+    } else {
+      switch configuration.lifecycle {
+      case .automatic:
+        #if os(iOS) || os(macOS) || os(tvOS) || os(visionOS)
+          self.lifecycleSource = NotificationCenterLifecycleEventSource()
+        #else
+          self.lifecycleSource = nil
+        #endif
+      case .manual:
+        self.lifecycleSource = nil
+      }
+    }
+    // The lifecycle observer is started lazily in connect() to avoid capturing
+    // `self` before the actor is fully initialized.
   }
 
   /// Converts a WebSocket URL to its HTTP equivalent for use with ``_HTTPClient``.
@@ -210,6 +262,10 @@ public actor Realtime {
     // We still set intentionalDisconnect=true to block any in-flight handleConnectionLost.
     intentionalDisconnect = true
 
+    // Cancel the lifecycle observer so foreground events no longer trigger reconnect.
+    lifecycleObserverHandle?.cancel()
+    lifecycleObserverHandle = nil
+
     // Cancel a running reconnection loop if any.
     reconnectTask?.cancel()
     reconnectTask = nil
@@ -233,6 +289,30 @@ public actor Realtime {
     transition(to: .closed(.clientDisconnected))
   }
 
+  // MARK: - App lifecycle foreground handler
+
+  /// Called by `LifecycleObserver` when the app returns to the foreground.
+  ///
+  /// Reconnects if all of the following are true:
+  /// - `intentionalDisconnect` is false (the user did not call `disconnect()`).
+  /// - The socket is not currently connected.
+  ///
+  /// If the connection is already live, this is a no-op.
+  func handleAppForeground() async {
+    // Do nothing if the caller explicitly disconnected.
+    guard !intentionalDisconnect else { return }
+
+    // Already connected — no-op.
+    if case .connected = currentStatus.state { return }
+
+    // Already reconnecting — no-op (the running loop will recover).
+    if isReconnecting { return }
+
+    // Trigger a fresh connect attempt (the same path as connect(), which clears
+    // intentionalDisconnect and coalesces concurrent callers).
+    try? await connect()
+  }
+
   // MARK: - Connect
 
   /// Establishes the WebSocket connection to the Realtime server.
@@ -248,6 +328,9 @@ public actor Realtime {
   public func connect() async throws(RealtimeError) {
     // Clear the intentional-disconnect flag so reconnection works for the new session.
     intentionalDisconnect = false
+
+    // Start the lifecycle observer lazily (idempotent — skipped if already running).
+    _startLifecycleObserverIfNeeded()
 
     // Already connected — no-op.
     if case .connected = currentStatus.state {
@@ -672,6 +755,15 @@ public actor Realtime {
       // Channel.pushAccessToken is a no-op unless the channel is .joined.
       await channel.pushAccessToken(newToken)
     }
+  }
+
+  // MARK: - Lifecycle observer
+
+  /// Starts the lifecycle observer if a source is available and no observer is running yet.
+  /// Idempotent: a second call while the observer is already active is a no-op.
+  private func _startLifecycleObserverIfNeeded() {
+    guard lifecycleObserverHandle == nil, let source = lifecycleSource else { return }
+    lifecycleObserverHandle = LifecycleObserver(source: source, client: self)
   }
 
   // MARK: - Test shims
