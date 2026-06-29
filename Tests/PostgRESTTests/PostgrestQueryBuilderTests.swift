@@ -13,7 +13,6 @@ import XCTest
 
 final class PostgrestQueryBuilderTests: PostgrestQueryTests {
 
-
   func testSetAuth() {
     XCTAssertNil(sut.configuration.headers["Authorization"])
     sut.setAuth("token")

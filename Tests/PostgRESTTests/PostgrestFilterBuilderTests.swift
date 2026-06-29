@@ -12,8 +12,6 @@ import XCTest
 
 final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
-
-
   func testNotFilter() async throws {
     Mock(
       url: url.appendingPathComponent("users"),

@@ -38,8 +38,6 @@ final class FunctionsClientTests: XCTestCase {
     sessionConfiguration: sessionConfiguration
   )
 
-
-
   func testInit() async {
     let client = FunctionsClient(
       url: url,
