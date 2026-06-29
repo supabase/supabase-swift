@@ -20,6 +20,27 @@ enum ChannelEvent: Sendable {
   case terminated(CloseReason)
 }
 
+/// The wire form of an outgoing channel push, consumed by `Channel._push`.
+///
+/// `text` is a JSON text frame (join, leave, presence, access_token); the two
+/// `broadcast*` cases are Phoenix binary broadcast frames (kind `0x03`) carrying
+/// either a JSON envelope or raw bytes.
+enum PushBody: Sendable {
+  case text(JSONObject)
+  case broadcastJSON(JSONObject)
+  case broadcastData(Data)
+}
+
+/// Whether an outgoing push awaits a `phx_reply`.
+///
+/// `require` suspends until the matching reply arrives or `timeout` elapses, throwing
+/// `error` on timeout. Best-effort sends (re-track, access_token) use `none` and/or a
+/// `try?` at the call site.
+enum AckPolicy: Sendable {
+  case none
+  case require(timeout: Duration, error: RealtimeError)
+}
+
 /// A Realtime channel that represents a named topic on the server.
 ///
 /// Obtain a `Channel` by calling `Realtime.channel(_:configure:)`. The channel's
@@ -311,6 +332,99 @@ public actor Channel {
     }
   }
 
+  // MARK: - Outgoing push (internal)
+
+  /// Encodes and sends a single Phoenix frame for this channel, optionally awaiting its
+  /// `phx_reply`.
+  ///
+  /// Centralizes the wire mechanics shared by every send path: ref generation, text/binary
+  /// encoding (mapping encode failures to `.encoding`), lazy-connect send, and — when
+  /// `ack == .require` — reply correlation via the in-flight registry. Send failures
+  /// (`.transportFailure`/`.disconnected`) propagate unchanged.
+  ///
+  /// Because the registry buffers early replies, awaiting *after* sending is race-free, so
+  /// every ack site uses this one flow (no manual pre-register task needed).
+  ///
+  /// - Parameters:
+  ///   - event: The Phoenix event for the frame.
+  ///   - body: The wire payload (text JSON, or a binary broadcast frame).
+  ///   - ref: The push ref. Defaults to a fresh `nextRef()`; `join` passes its own ref so
+  ///     `ref == joinRef`.
+  ///   - joinRef: The join ref stamped on the frame. Defaults to the channel's current `joinRef`.
+  ///   - ack: Whether to await a reply.
+  /// - Returns: The `phx_reply` when `ack == .require`, otherwise `nil`.
+  @discardableResult
+  func _push(
+    _ event: PhoenixEvent,
+    _ body: PushBody,
+    ref: String? = nil,
+    joinRef: String? = nil,
+    ack: AckPolicy = .none
+  ) async throws(RealtimeError) -> PushReply? {
+    guard let realtime else { throw .channelClosed(.clientDisconnected) }
+    let ref = ref ?? realtime.nextRef()
+    let jr = joinRef ?? self.joinRef
+    let serializer = realtime.serializer
+
+    do {
+      switch body {
+      case .text(let payload):
+        let text = try serializer.encodeText(
+          joinRef: jr, ref: ref, topic: topic, event: event.rawValue, payload: payload)
+        try await realtime.sendText(text)
+      case .broadcastJSON(let payload):
+        let data = try serializer.encodeBroadcastPush(
+          joinRef: jr, ref: ref, topic: topic, event: event.rawValue, jsonPayload: payload)
+        try await realtime.sendBinary(data)
+      case .broadcastData(let payload):
+        let data = try serializer.encodeBroadcastPush(
+          joinRef: jr, ref: ref, topic: topic, event: event.rawValue, binaryPayload: payload)
+        try await realtime.sendBinary(data)
+      }
+    } catch let error as RealtimeError {
+      // Send-side failures (transport/disconnect) propagate unchanged.
+      throw error
+    } catch {
+      // Encode failures map to `.encoding`.
+      throw .encoding(underlying: error)
+    }
+
+    switch ack {
+    case .none:
+      return nil
+    case .require(let timeout, let error):
+      return try await realtime.awaitReply(ref: ref, timeout: timeout, timeoutError: error)
+    }
+  }
+
+  /// Gates a send on the channel being `.joined`, mapping other states to the
+  /// appropriate error: `.notSubscribed` while pre-join, `.channelClosed(reason)` once
+  /// leaving or closed.
+  func _requireJoinedForSend() throws(RealtimeError) {
+    switch channelState {
+    case .joined:
+      return
+    case .unsubscribed, .joining:
+      throw .notSubscribed
+    case .leaving:
+      throw .channelClosed(.userRequested)
+    case .closed(let reason):
+      throw .channelClosed(reason)
+    }
+  }
+
+  /// Encodes an `Encodable` value to `AnyJSON` using the configured encoder, mapping any
+  /// failure to `.encoding`. Used to embed user payloads in broadcast/presence frames.
+  func _encodeToJSON<T: Encodable & Sendable>(_ value: T) throws(RealtimeError) -> AnyJSON {
+    guard let realtime else { throw .channelClosed(.clientDisconnected) }
+    do {
+      let data = try realtime.configuration.encoder.encode(value)
+      return try JSONDecoder().decode(AnyJSON.self, from: data)
+    } catch {
+      throw .encoding(underlying: error)
+    }
+  }
+
   // MARK: - Subscribe
 
   /// Subscribes the channel to its topic on the server by performing the `phx_join` handshake.
@@ -400,30 +514,11 @@ public actor Channel {
       throw .encoding(underlying: error)
     }
 
-    // Encode the phx_join text frame. `serializer` is nonisolated — no actor hop needed.
-    let text: String
-    do {
-      text = try realtime.serializer.encodeText(
-        joinRef: ref,
-        ref: ref,
-        topic: topic,
-        event: PhoenixEvent.join.rawValue,
-        payload: payloadObject
-      )
-    } catch {
-      throw error as? RealtimeError ?? .encoding(underlying: error)
-    }
-
-    // Lazy-connect + send. `sendText` calls `connect()` if not already connected.
-    try await realtime.sendText(text)
-
-    // Await the phx_reply. Read configuration via actor isolation.
-    let joinTimeout = realtime.configuration.joinTimeout
-    let reply = try await realtime.awaitReply(
-      ref: ref,
-      timeout: joinTimeout,
-      timeoutError: .channelJoinTimeout
-    )
+    // Encode + send the phx_join (ref == joinRef) and await the reply.
+    let reply = try await _push(
+      .join, .text(payloadObject), ref: ref, joinRef: ref,
+      ack: .require(timeout: realtime.configuration.joinTimeout, error: .channelJoinTimeout)
+    )!
 
     if reply.status == "ok" {
       // Build the server-id routing map from the join reply's postgres_changes array.
@@ -503,35 +598,14 @@ public actor Channel {
       return
     }
 
-    let text: String
-    do {
-      text = try realtime.serializer.encodeText(
-        joinRef: ref,
-        ref: ref,
-        topic: topic,
-        event: PhoenixEvent.join.rawValue,
-        payload: payloadObject
-      )
-    } catch {
-      transition(to: .closed(.transportFailure))
-      return
-    }
-
-    do {
-      try await realtime.sendText(text)
-    } catch {
-      transition(to: .closed(.transportFailure))
-      return
-    }
-
-    let joinTimeout = realtime.configuration.joinTimeout
+    // Encode + send the phx_join (ref == joinRef) and await the reply. Encode, transport,
+    // and timeout failures are all treated as a recoverable transport drop here.
     let reply: PushReply
     do {
-      reply = try await realtime.awaitReply(
-        ref: ref,
-        timeout: joinTimeout,
-        timeoutError: .channelJoinTimeout
-      )
+      reply = try await _push(
+        .join, .text(payloadObject), ref: ref, joinRef: ref,
+        ack: .require(timeout: realtime.configuration.joinTimeout, error: .channelJoinTimeout)
+      )!
     } catch {
       transition(to: .closed(.transportFailure))
       return
@@ -562,44 +636,13 @@ public actor Channel {
   ///
   /// Failures are swallowed — the presence state will be stale but the channel stays open.
   private func _retrackPresence(payload: JSONObject, realtime: Realtime) async {
-    let ref = realtime.nextRef()
-    let currentJoinRef = joinRef
-
-    let text: String
-    do {
-      text = try realtime.serializer.encodeText(
-        joinRef: currentJoinRef,
-        ref: ref,
-        topic: topic,
-        event: PhoenixEvent.presence.rawValue,
-        payload: payload
-      )
-    } catch {
-      // Encoding failure — swallow; presence state is stale but channel is still open.
-      return
-    }
-
-    let broadcastAckTimeout = realtime.configuration.broadcastAckTimeout
-    let registry = realtime.inflightPushRegistry
-    let clock = realtime.configuration.clock
-    let replyTask = Task<PushReply, any Error> {
-      try await registry.awaitReply(
-        ref: ref,
-        timeout: broadcastAckTimeout,
-        clock: clock,
-        timeoutError: RealtimeError.broadcastAckTimeout
-      )
-    }
-
-    do {
-      try await realtime.sendText(text)
-    } catch {
-      replyTask.cancel()
-      return
-    }
-
-    // Await the ACK best-effort; swallow failure.
-    _ = try? await replyTask.value
+    // Best-effort: encode/send/ack failures are swallowed — the presence state will be
+    // stale but the channel stays open.
+    _ = try? await _push(
+      .presence, .text(payload),
+      ack: .require(
+        timeout: realtime.configuration.broadcastAckTimeout, error: .broadcastAckTimeout)
+    )
   }
 
   // MARK: - Leave
@@ -666,48 +709,15 @@ public actor Channel {
     // Transition to .leaving to signal in-progress leave.
     transition(to: .leaving)
 
-    // Generate a ref for the phx_leave push.
-    let ref = realtime.nextRef()
-
-    // Use the stored joinRef (set during subscribe). If somehow nil, use the ref as fallback.
-    let currentJoinRef = joinRef ?? ref
-
-    // Encode the phx_leave text frame.
-    let text: String
+    // Encode + send the phx_leave frame and await its reply. On any failure (encode,
+    // transport, or timeout) tear down locally and rethrow so the caller knows the server
+    // may not have confirmed.
     do {
-      text = try realtime.serializer.encodeText(
-        joinRef: currentJoinRef,
-        ref: ref,
-        topic: topic,
-        event: PhoenixEvent.leave.rawValue,
-        payload: [:]
+      _ = try await _push(
+        .leave, .text([:]),
+        ack: .require(timeout: realtime.configuration.leaveTimeout, error: .channelJoinTimeout)
       )
     } catch {
-      // Encoding failed: close locally and rethrow.
-      transition(to: .closed(.userRequested))
-      joinRef = nil
-      throw error as? RealtimeError ?? .encoding(underlying: error)
-    }
-
-    // Send the phx_leave frame. On transport failure, close locally and rethrow.
-    do {
-      try await realtime.sendText(text)
-    } catch {
-      transition(to: .closed(.userRequested))
-      joinRef = nil
-      throw error
-    }
-
-    // Await the phx_reply. On timeout, close locally and rethrow.
-    // Phoenix replies to phx_leave with a phx_reply; awaiting that is sufficient.
-    do {
-      _ = try await realtime.awaitReply(
-        ref: ref,
-        timeout: realtime.configuration.leaveTimeout,
-        timeoutError: .channelJoinTimeout
-      )
-    } catch {
-      // Local teardown regardless of server confirmation failure.
       transition(to: .closed(.userRequested))
       joinRef = nil
       throw error
@@ -735,27 +745,12 @@ public actor Channel {
   /// Transport failures from `sendText` are swallowed — the token is already stored
   /// on the `Realtime` actor for the next reconnect/rejoin.
   func pushAccessToken(_ newToken: String) async {
-    guard channelState == .joined, let currentJoinRef = joinRef, let realtime else {
-      return
-    }
+    guard channelState == .joined, joinRef != nil else { return }
 
-    let ref = realtime.nextRef()
-    let text: String
-    do {
-      text = try realtime.serializer.encodeText(
-        joinRef: currentJoinRef,
-        ref: ref,
-        topic: topic,
-        event: PhoenixEvent.accessToken.rawValue,
-        payload: ["access_token": .string(newToken)]
-      )
-    } catch {
-      // Encoding failure: swallow and return — token is already stored for future joins.
-      return
-    }
-
-    // Best-effort send: swallow transport errors (token is stored for future joins).
-    try? await realtime.sendText(text)
+    // Best-effort, no ACK (the backend does not reply to access_token): swallow encode and
+    // transport errors — the token is already stored on Realtime for future joins.
+    _ = try? await _push(
+      .accessToken, .text(["access_token": .string(newToken)]), ack: .none)
   }
 
   // MARK: - Presence seam (Task 24)
@@ -776,88 +771,20 @@ public actor Channel {
   /// Uses `broadcastAckTimeout` — presence track semantics are analogous to an acked push.
   func sendPresenceTrack<T: Codable & Sendable>(_ state: T) async throws(RealtimeError) {
     guard let realtime else { throw .channelClosed(.clientDisconnected) }
+    try _requireJoinedForSend()
 
-    // State gating.
-    switch channelState {
-    case .joined:
-      break
-    case .unsubscribed, .joining:
-      throw .notSubscribed
-    case .leaving:
-      throw .channelClosed(.userRequested)
-    case .closed(let reason):
-      throw .channelClosed(reason)
-    }
-
-    // Encode the user state to JSON.
-    // Use Configuration.encoder so custom date/key strategies are honoured.
-    let encodedPayload: AnyJSON
-    do {
-      let data = try realtime.configuration.encoder.encode(state)
-      encodedPayload = try JSONDecoder().decode(AnyJSON.self, from: data)
-    } catch {
-      throw .encoding(underlying: error)
-    }
-
-    // Build the presence track outer payload.
+    // Build the presence track outer payload (user state encoded via Configuration.encoder).
     let outerPayload: JSONObject = [
       "event": .string("track"),
-      "payload": encodedPayload,
+      "payload": try _encodeToJSON(state),
     ]
 
-    // Generate a ref for ACK correlation.
-    let ref = realtime.nextRef()
-    let currentJoinRef = joinRef
-
-    // Encode the text frame.
-    let text: String
-    do {
-      text = try realtime.serializer.encodeText(
-        joinRef: currentJoinRef,
-        ref: ref,
-        topic: topic,
-        event: PhoenixEvent.presence.rawValue,
-        payload: outerPayload
-      )
-    } catch {
-      throw error as? RealtimeError ?? .encoding(underlying: error)
-    }
-
-    // Register ref with the in-flight registry BEFORE sending so early replies are not missed.
-    // The registry buffers the reply if it arrives before we call awaitReply.
-    // We do NOT use async let here because typed throws + async let has a known Swift 6.1
-    // limitation where the awaited error is widened to `any Error`.
-    let broadcastAckTimeout = realtime.configuration.broadcastAckTimeout
-    let registry = realtime.inflightPushRegistry
-    let clock = realtime.configuration.clock
-    // Register the pending entry (non-async; just adds to the dictionary).
-    // awaitReply registers the entry and suspends; send it first into the registry
-    // by starting the await as a Task so the entry is buffered before we send.
-    let replyTask = Task<PushReply, any Error> {
-      try await registry.awaitReply(
-        ref: ref,
-        timeout: broadcastAckTimeout,
-        clock: clock,
-        timeoutError: RealtimeError.broadcastAckTimeout
-      )
-    }
-
-    // Send the frame.
-    do {
-      try await realtime.sendText(text)
-    } catch {
-      replyTask.cancel()
-      throw error
-    }
-
-    // Await the ACK.
-    do {
-      _ = try await replyTask.value
-    } catch let error as RealtimeError {
-      throw error
-    } catch {
-      throw .broadcastAckTimeout
-    }
+    // Send and await the server ACK.
+    _ = try await _push(
+      .presence, .text(outerPayload),
+      ack: .require(
+        timeout: realtime.configuration.broadcastAckTimeout, error: .broadcastAckTimeout)
+    )
 
     // Store state for Task 25 re-track on reconnect.
     log(.debug, .presence, "Presence tracked", metadata: ["topic": topic])
@@ -873,71 +800,14 @@ public actor Channel {
     guard isPresenceTracked else { return }
 
     guard let realtime else { throw .channelClosed(.clientDisconnected) }
+    try _requireJoinedForSend()
 
-    // State gating: must be joined to untrack.
-    switch channelState {
-    case .joined:
-      break
-    case .unsubscribed, .joining:
-      throw .notSubscribed
-    case .leaving:
-      throw .channelClosed(.userRequested)
-    case .closed(let reason):
-      throw .channelClosed(reason)
-    }
-
-    // Build the presence untrack outer payload.
-    let outerPayload: JSONObject = [
-      "event": .string("untrack")
-    ]
-
-    // Generate a ref for ACK correlation.
-    let ref = realtime.nextRef()
-    let currentJoinRef = joinRef
-
-    // Encode the text frame.
-    let text: String
-    do {
-      text = try realtime.serializer.encodeText(
-        joinRef: currentJoinRef,
-        ref: ref,
-        topic: topic,
-        event: PhoenixEvent.presence.rawValue,
-        payload: outerPayload
-      )
-    } catch {
-      throw error as? RealtimeError ?? .encoding(underlying: error)
-    }
-
-    // Register ref BEFORE sending (same pattern as sendPresenceTrack).
-    let broadcastAckTimeout = realtime.configuration.broadcastAckTimeout
-    let registry = realtime.inflightPushRegistry
-    let clock = realtime.configuration.clock
-    let replyTask = Task<PushReply, any Error> {
-      try await registry.awaitReply(
-        ref: ref,
-        timeout: broadcastAckTimeout,
-        clock: clock,
-        timeoutError: RealtimeError.broadcastAckTimeout
-      )
-    }
-
-    // Send the frame.
-    do {
-      try await realtime.sendText(text)
-    } catch {
-      replyTask.cancel()
-      throw error
-    }
-
-    // Await the ACK.
-    do {
-      _ = try await replyTask.value
-    } catch let error as RealtimeError {
-      throw error
-    } catch {
-      throw .broadcastAckTimeout
-    }
+    // Send the presence untrack frame and await the server ACK.
+    _ = try await _push(
+      .presence, .text(["event": .string("untrack")]),
+      ack: .require(
+        timeout: realtime.configuration.broadcastAckTimeout, error: .broadcastAckTimeout)
+    )
 
     // Clear tracked state.
     log(.debug, .presence, "Presence untracked", metadata: ["topic": topic])

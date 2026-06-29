@@ -40,69 +40,23 @@ extension Channel {
   public func broadcast<T: Encodable & Sendable>(_ payload: T, as event: String)
     async throws(RealtimeError)
   {
-    // Guard: ensure the owning Realtime is still alive.
+    // Guard: ensure the owning Realtime is still alive (needed for the ack timeout below).
     guard let realtime else { throw .channelClosed(.clientDisconnected) }
+    try _requireJoinedForSend()
 
-    // State gating.
-    switch channelState {
-    case .joined:
-      break
-    case .unsubscribed, .joining:
-      throw .notSubscribed
-    case .leaving:
-      throw .channelClosed(.userRequested)
-    case .closed(let reason):
-      throw .channelClosed(reason)
-    }
-
-    // Encode the payload to AnyJSON for embedding in the broadcast envelope.
-    // AnyJSON.init(_:) requires Codable, but T is only Encodable, so encode to Data first
-    // then decode back to AnyJSON via the standard JSON round-trip.
-    // Use Configuration.encoder so custom date/key strategies are honoured.
-    let encodedPayload: AnyJSON
-    do {
-      let data = try realtime.configuration.encoder.encode(payload)
-      encodedPayload = try JSONDecoder().decode(AnyJSON.self, from: data)
-    } catch {
-      throw .encoding(underlying: error)
-    }
-
-    // Build the inner broadcast envelope.
-    let innerPayload: JSONObject = [
+    // Build the inner broadcast envelope (user payload encoded via Configuration.encoder).
+    let envelope: JSONObject = [
       "type": .string("broadcast"),
       "event": .string(event),
-      "payload": encodedPayload,
+      "payload": try _encodeToJSON(payload),
     ]
 
-    // Generate a ref (needed for ack mode; always generated for protocol correctness).
-    let ref = realtime.nextRef()
-    let currentJoinRef = joinRef
-
-    // Encode the binary broadcast frame.
-    let frameData: Data
-    do {
-      frameData = try realtime.serializer.encodeBroadcastPush(
-        joinRef: currentJoinRef,
-        ref: ref,
-        topic: topic,
-        event: PhoenixEvent.broadcast.rawValue,
-        jsonPayload: innerPayload
-      )
-    } catch {
-      throw error as? RealtimeError ?? .encoding(underlying: error)
-    }
-
-    // Send the binary frame (lazy-connects if needed).
-    try await realtime.sendBinary(frameData)
-
-    // Ack mode: await the server reply.
-    if options.broadcast.acknowledge {
-      _ = try await realtime.awaitReply(
-        ref: ref,
-        timeout: realtime.configuration.broadcastAckTimeout,
-        timeoutError: .broadcastAckTimeout
-      )
-    }
+    try await _push(
+      .broadcast, .broadcastJSON(envelope),
+      ack: options.broadcast.acknowledge
+        ? .require(timeout: realtime.configuration.broadcastAckTimeout, error: .broadcastAckTimeout)
+        : .none
+    )
   }
 
   /// Sends a broadcast message with a raw binary payload.
@@ -116,46 +70,16 @@ extension Channel {
   ///   - event: The broadcast event name.
   /// - Throws: `RealtimeError`
   public func broadcast(_ data: Data, as event: String) async throws(RealtimeError) {
-    // Guard: ensure the owning Realtime is still alive.
+    // Guard: ensure the owning Realtime is still alive (needed for the ack timeout below).
     guard let realtime else { throw .channelClosed(.clientDisconnected) }
+    try _requireJoinedForSend()
 
-    // State gating.
-    switch channelState {
-    case .joined:
-      break
-    case .unsubscribed, .joining:
-      throw .notSubscribed
-    case .leaving:
-      throw .channelClosed(.userRequested)
-    case .closed(let reason):
-      throw .channelClosed(reason)
-    }
-
-    let ref = realtime.nextRef()
-    let currentJoinRef = joinRef
-
-    let frameData: Data
-    do {
-      frameData = try realtime.serializer.encodeBroadcastPush(
-        joinRef: currentJoinRef,
-        ref: ref,
-        topic: topic,
-        event: PhoenixEvent.broadcast.rawValue,
-        binaryPayload: data
-      )
-    } catch {
-      throw error as? RealtimeError ?? .encoding(underlying: error)
-    }
-
-    try await realtime.sendBinary(frameData)
-
-    if options.broadcast.acknowledge {
-      _ = try await realtime.awaitReply(
-        ref: ref,
-        timeout: realtime.configuration.broadcastAckTimeout,
-        timeoutError: .broadcastAckTimeout
-      )
-    }
+    try await _push(
+      .broadcast, .broadcastData(data),
+      ack: options.broadcast.acknowledge
+        ? .require(timeout: realtime.configuration.broadcastAckTimeout, error: .broadcastAckTimeout)
+        : .none
+    )
   }
 }
 
