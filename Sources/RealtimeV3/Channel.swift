@@ -34,7 +34,7 @@ enum PushBody: Sendable {
 /// Whether an outgoing push awaits a `phx_reply`.
 ///
 /// `require` suspends until the matching reply arrives or `timeout` elapses, throwing
-/// `error` on timeout. Best-effort sends (re-track, access_token) use `none` and/or a
+/// `error` on timeout. Best-effort sends (e.g. access_token) use `none` and/or a
 /// `try?` at the call site.
 enum AckPolicy: Sendable {
   case none
@@ -126,12 +126,9 @@ public actor Channel {
 
   // MARK: - Presence tracking state (Task 24)
 
-  /// The last encoded presence state sent via `sendPresenceTrack`. Stored for re-track on
-  /// reconnect (Task 25 consumes this to re-send presence after channel rejoin).
-  var lastTrackedPresencePayload: JSONObject?
-
   /// Whether presence is currently being tracked on this channel. Set to `true` by
-  /// `sendPresenceTrack` and `false` by `sendPresenceUntrack` / channel close.
+  /// `sendPresenceTrack` and `false` by `sendPresenceUntrack`; used to make untrack
+  /// idempotent.
   var isPresenceTracked: Bool = false
 
   // MARK: - Init
@@ -555,7 +552,6 @@ public actor Channel {
   /// - Does NOT guard on `.joined` idempotency (the channel may still appear `.joined`
   ///   from the previous connection's state, so we always re-send).
   /// - Does NOT terminate any open streams (Decision 6 — streams survive the transport gap).
-  /// - Re-tracks presence if `isPresenceTracked` is true (Decision 18).
   ///
   /// On success, the channel remains / transitions to `.joined`.
   /// On failure (timeout or rejection), the channel transitions to `.closed(...)`.
@@ -615,11 +611,6 @@ public actor Channel {
       _buildServerIDRouting(from: reply.response)
       // shouldRejoin stays true — still eligible for future reconnects.
       transition(to: .joined)
-
-      // Re-track presence if it was active before the disconnect (Decision 18).
-      if isPresenceTracked, let payload = lastTrackedPresencePayload {
-        await _retrackPresence(payload: payload, realtime: realtime)
-      }
     } else {
       // Server rejected the rejoin (e.g. revoked auth). This is terminal: clear
       // `shouldRejoin` so the channel is NOT re-attempted on every subsequent
@@ -629,20 +620,6 @@ public actor Channel {
       shouldRejoin = false
       transition(to: .closed(.unauthorized))
     }
-  }
-
-  /// Re-sends a presence track frame using the last stored payload. Called after a successful
-  /// rejoin when `isPresenceTracked` is true (Decision 18).
-  ///
-  /// Failures are swallowed — the presence state will be stale but the channel stays open.
-  private func _retrackPresence(payload: JSONObject, realtime: Realtime) async {
-    // Best-effort: encode/send/ack failures are swallowed — the presence state will be
-    // stale but the channel stays open.
-    _ = try? await _push(
-      .presence, .text(payload),
-      ack: .require(
-        timeout: realtime.configuration.broadcastAckTimeout, error: .broadcastAckTimeout)
-    )
   }
 
   // MARK: - Leave
@@ -763,9 +740,8 @@ public actor Channel {
   /// - `.joined` → encodes `state` as `{ "event": "track", "payload": <encodedState> }`,
   ///   sends as a `"presence"` channel event (text frame), and awaits the phx_reply.
   ///
-  /// ## Stored state
-  /// The encoded payload is stored in `lastTrackedPresencePayload` for re-track on
-  /// reconnect (Task 25). `isPresenceTracked` is set to `true`.
+  /// ## Tracked flag
+  /// `isPresenceTracked` is set to `true` so a later `untrack` is not a no-op.
   ///
   /// ## Ack timeout
   /// Uses `broadcastAckTimeout` — presence track semantics are analogous to an acked push.
@@ -786,9 +762,7 @@ public actor Channel {
         timeout: realtime.configuration.broadcastAckTimeout, error: .broadcastAckTimeout)
     )
 
-    // Store state for Task 25 re-track on reconnect.
     log(.debug, .presence, "Presence tracked", metadata: ["topic": topic])
-    lastTrackedPresencePayload = outerPayload
     isPresenceTracked = true
   }
 
@@ -811,7 +785,6 @@ public actor Channel {
 
     // Clear tracked state.
     log(.debug, .presence, "Presence untracked", metadata: ["topic": topic])
-    lastTrackedPresencePayload = nil
     isPresenceTracked = false
   }
 
