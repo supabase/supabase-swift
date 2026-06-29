@@ -34,7 +34,7 @@ public actor Realtime {
   private let url: URL
   private let apiKey: String
   private let accessTokenProvider: AccessTokenProvider?
-  private let configuration: Configuration
+  let configuration: Configuration
   private let transport: any RealtimeTransport
 
   /// Active connection returned by the transport after `connect()`.
@@ -67,10 +67,10 @@ public actor Realtime {
   let inflightPushRegistry = InflightPushRegistry()
 
   /// Monotonic ref generator shared across all protocol frames.
-  let refGenerator = RefGenerator()
+  nonisolated let refGenerator = RefGenerator()
 
   /// Serializer for encoding/decoding Phoenix protocol frames.
-  let serializer = PhoenixSerializer()
+  nonisolated let serializer = PhoenixSerializer()
 
   /// Topic → Channel registry. First-call-wins (Decision 33).
   var channels: [String: Channel] = [:]
@@ -469,6 +469,60 @@ public actor Realtime {
     headers["x-api-key"] = apiKey
 
     return try await transport.connect(to: connectURL, headers: headers)
+  }
+
+  // MARK: - Channel seam (internal API consumed by Channel)
+
+  /// Returns the next monotonic ref string from the shared generator.
+  nonisolated func nextRef() -> String {
+    refGenerator.next()
+  }
+
+  /// Ensures the socket is connected (lazy open per spec §6.1), then sends a text frame.
+  ///
+  /// Throws `.disconnected` if no connection is available after the connect attempt.
+  func sendText(_ text: String) async throws(RealtimeError) {
+    // Lazy connect: establish the socket if not already connected.
+    // `connect()` is idempotent — a no-op if already connected.
+    try await connect()
+
+    guard let conn = connection else {
+      throw .disconnected
+    }
+
+    do {
+      try await conn.send(.text(text))
+    } catch {
+      throw .transportFailure(underlying: error)
+    }
+  }
+
+  /// Registers `ref` with the in-flight registry and suspends until the matching
+  /// `phx_reply` arrives or `timeout` elapses on `configuration.clock`.
+  func awaitReply(
+    ref: String,
+    timeout: Duration,
+    timeoutError: RealtimeError
+  ) async throws(RealtimeError) -> PushReply {
+    try await inflightPushRegistry.awaitReply(
+      ref: ref,
+      timeout: timeout,
+      clock: configuration.clock,
+      timeoutError: timeoutError
+    )
+  }
+
+  /// Returns the current access token, calling the provider if one is configured.
+  ///
+  /// Returns `nil` if no provider is set (anonymous / public channels).
+  func accessTokenForJoin() async throws(RealtimeError) -> String? {
+    guard let provider = accessTokenProvider else { return nil }
+    do {
+      return try await provider()
+    } catch {
+      throw .authenticationFailed(
+        reason: "Access token provider threw an error.", underlying: error)
+    }
   }
 
   // MARK: - Test shims

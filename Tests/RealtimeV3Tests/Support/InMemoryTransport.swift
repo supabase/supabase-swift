@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
+import Helpers
 
 @testable import RealtimeV3
 
@@ -105,6 +106,57 @@ final class TransportServer: Sendable {
     activeServerToClientContinuation.withValue { $0?.finish() }
   }
 
+  // MARK: - autoReplyToJoins
+
+  /// Spawns a background task that watches `clientSentFrames` for `phx_join` text frames and
+  /// automatically replies with a `phx_reply` carrying the same `ref` and the supplied `status`
+  /// / `response`. The task is detached and runs until the test ends or the stream is cancelled.
+  ///
+  /// - Parameters:
+  ///   - status: The reply status — `"ok"` by default, use `"error"` to test rejection.
+  ///   - response: Payload nested inside `{"status": ..., "response": ...}`.
+  ///   - onJoin: Optional callback invoked each time a join frame is detected (before replying).
+  func autoReplyToJoins(
+    status: String = "ok",
+    response: [String: AnyJSON] = [:],
+    onJoin: (@Sendable () -> Void)? = nil
+  ) {
+    // Build the response JSON fragment once.
+    let responseParts: [String] = response.map { key, value in
+      let valueString: String
+      switch value {
+      case .string(let s): valueString = "\"\(s)\""
+      case .integer(let i): valueString = "\(i)"
+      case .bool(let b): valueString = b ? "true" : "false"
+      case .null: valueString = "null"
+      default: valueString = "\"\(value)\""
+      }
+      return "\"\(key)\":\(valueString)"
+    }
+    let responseJSON = "{\(responseParts.joined(separator: ","))}"
+
+    let server = self
+    Task.detached {
+      for await frame in server.clientSentFrames {
+        guard case .text(let text) = frame else { continue }
+        // Only process phx_join frames.
+        guard text.contains("phx_join") else { continue }
+
+        // Parse the ref from the JSON array: [joinRef, ref, topic, event, payload]
+        // The ref is the second element (index 1).
+        guard let ref = parseRef(from: text) else { continue }
+        guard let topic = parseTopic(from: text) else { continue }
+
+        onJoin?()
+
+        // Inject the reply with the same ref so the in-flight registry resolves it.
+        let reply =
+          "[null,\"\(ref)\",\"\(topic)\",\"phx_reply\",{\"status\":\"\(status)\",\"response\":\(responseJSON)}]"
+        server.send(.text(reply))
+      }
+    }
+  }
+
   /// Called by InMemoryTransport on each connect() to produce a fresh connection object.
   /// Installs a new server→client continuation, replacing the previous (possibly finished) one.
   fileprivate func makeConnection() -> InMemoryConnection {
@@ -120,6 +172,30 @@ final class TransportServer: Sendable {
       clientSentContinuation: clientSentContinuation
     )
   }
+}
+
+// MARK: - JSON parsing helpers (file-private)
+
+/// Extracts the `ref` (second element) from a Phoenix JSON array frame string.
+/// Expected format: `[joinRef, ref, topic, event, payload]`
+private func parseRef(from text: String) -> String? {
+  // Use Foundation JSON decoding for correctness.
+  guard let data = text.data(using: .utf8),
+    let array = try? JSONDecoder().decode([AnyJSON].self, from: data),
+    array.count >= 2,
+    let ref = array[1].stringValue
+  else { return nil }
+  return ref
+}
+
+/// Extracts the `topic` (third element) from a Phoenix JSON array frame string.
+private func parseTopic(from text: String) -> String? {
+  guard let data = text.data(using: .utf8),
+    let array = try? JSONDecoder().decode([AnyJSON].self, from: data),
+    array.count >= 3,
+    let topic = array[2].stringValue
+  else { return nil }
+  return topic
 }
 
 // MARK: - InMemoryConnection (private)
