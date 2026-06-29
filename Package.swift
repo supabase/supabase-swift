@@ -181,6 +181,19 @@ let package = Package(
         "TestHelpers",
       ]
     ),
+    .testTarget(
+      name: "RealtimeV3IntegrationTests",
+      dependencies: [
+        .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        "RealtimeV3",
+        "PostgREST",
+        "Helpers",
+      ],
+      exclude: [
+        "supabase",
+      ]
+    ),
     .target(
       name: "Storage",
       dependencies: [
