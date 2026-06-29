@@ -37,7 +37,7 @@ import Testing
     #expect(msg.joinRef == nil)
     #expect(msg.ref == nil)
     #expect(msg.topic == "t")
-    #expect(msg.event == "broadcast")
+    #expect(msg.event == .broadcast)
     if case .binary(let d) = msg.payload {
       #expect(Array(d) == [0xDE, 0xAD])
     } else {

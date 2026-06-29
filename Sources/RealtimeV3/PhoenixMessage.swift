@@ -7,6 +7,32 @@
 
 import Foundation
 
+// MARK: - PhoenixEvent
+
+/// A Phoenix event name. An open `RawRepresentable` wrapper so server-sent
+/// events unknown to the client still round-trip. Known events are provided
+/// as static constants.
+public struct PhoenixEvent: RawRepresentable, Sendable, Hashable, ExpressibleByStringLiteral {
+  public let rawValue: String
+  public init(rawValue: String) { self.rawValue = rawValue }
+  public init(stringLiteral value: String) { self.rawValue = value }
+
+  public static let broadcast = PhoenixEvent(rawValue: "broadcast")
+  public static let postgresChanges = PhoenixEvent(rawValue: "postgres_changes")
+  public static let presenceState = PhoenixEvent(rawValue: "presence_state")
+  public static let presenceDiff = PhoenixEvent(rawValue: "presence_diff")
+  public static let system = PhoenixEvent(rawValue: "system")
+  public static let reply = PhoenixEvent(rawValue: "phx_reply")
+  public static let close = PhoenixEvent(rawValue: "phx_close")
+  public static let error = PhoenixEvent(rawValue: "phx_error")
+  public static let join = PhoenixEvent(rawValue: "phx_join")
+  public static let leave = PhoenixEvent(rawValue: "phx_leave")
+  public static let heartbeat = PhoenixEvent(rawValue: "heartbeat")
+  public static let accessToken = PhoenixEvent(rawValue: "access_token")
+}
+
+// MARK: - PhoenixMessage
+
 /// A Phoenix protocol message received from the WebSocket connection.
 public struct PhoenixMessage: Sendable {
   /// Phoenix join reference correlating this frame to its `phx_join`. Always
@@ -29,7 +55,7 @@ public struct PhoenixMessage: Sendable {
   /// Server-side event name. Includes user-level events (`"broadcast"`,
   /// `"postgres_changes"`, `"presence_diff"`, `"presence_state"`, `"system"`)
   /// and Phoenix internals (`"phx_reply"`, `"phx_close"`, `"phx_error"`).
-  public let event: String
+  public let event: PhoenixEvent
 
   /// Raw payload as received. JSON for text frames, `Data` for binary
   /// (Phoenix v2 broadcast).
@@ -43,7 +69,7 @@ public struct PhoenixMessage: Sendable {
     joinRef: String?,
     ref: String?,
     topic: String,
-    event: String,
+    event: PhoenixEvent,
     payload: PhoenixPayload,
     receivedAt: Date
   ) {

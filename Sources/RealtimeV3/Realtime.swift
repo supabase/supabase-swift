@@ -7,7 +7,6 @@
 
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 import IssueReporting
 
 /// The top-level Realtime client. Manages the WebSocket connection, channel registry,
@@ -103,11 +102,16 @@ public actor Realtime {
     configure: (inout ChannelOptions) -> Void = { _ in }
   ) -> Channel {
     if let existing = channels[topic] {
-      // Decision 33: first-call-wins — warn but return the pre-existing channel.
-      reportIssue(
-        "Realtime.channel(\"\(topic)\") called more than once. The options from the first call "
-          + "are in effect. To change options, deinit the previous channel first."
-      )
+      // Decision 33: first-call-wins — warn only if the caller requested different options.
+      var requested = ChannelOptions()
+      configure(&requested)
+      if requested != existing.options {
+        reportIssue(
+          "Realtime.channel(\"\(topic)\") called more than once with different options. "
+            + "The options from the first call are in effect. "
+            + "To change options, deinit the previous channel first."
+        )
+      }
       return existing
     }
 
@@ -147,14 +151,14 @@ public actor Realtime {
     }
 
     // Build and store the connect task.
-    let task = Task<Void, any Error> { [weak self] in
-      guard let self else { return }
+    let task = Task<Void, any Error> {
       try await self._performConnect()
     }
     connectTask = task
 
     do {
       try await task.value
+      connectTask = nil
     } catch {
       connectTask = nil
       throw RealtimeError.transportFailure(underlying: error)
@@ -210,7 +214,7 @@ public actor Realtime {
 
     // Build connect headers: merge configuration headers + x-api-key.
     var headers = configuration.headers
-    headers[.init("x-api-key")!] = apiKey
+    headers["x-api-key"] = apiKey
 
     // Signal connecting.
     transition(to: .connecting(attempt: 1))

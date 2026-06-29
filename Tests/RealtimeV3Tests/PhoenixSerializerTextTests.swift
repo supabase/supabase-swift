@@ -31,7 +31,7 @@ import Testing
     let msg = try serializer.decodeText(frame, receivedAt: Date(timeIntervalSince1970: 0))
     #expect(msg.joinRef == nil)
     #expect(msg.ref == "7")
-    #expect(msg.event == "phx_reply")
+    #expect(msg.event == .reply)
     if case .json(let v) = msg.payload {
       #expect(v.objectValue?["status"] == "ok")
     } else {

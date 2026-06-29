@@ -250,7 +250,7 @@ struct PhoenixSerializer: Sendable {
       joinRef: nil,
       ref: nil,
       topic: topic,
-      event: "broadcast",
+      event: .broadcast,
       payload: payload,
       receivedAt: receivedAt
     )
@@ -290,7 +290,7 @@ struct PhoenixSerializer: Sendable {
         underlying: StructuralError(message: "Expected string for topic at index 2.")
       )
     }
-    guard let event = array[3].stringValue else {
+    guard let eventString = array[3].stringValue else {
       throw RealtimeError.decoding(
         type: "PhoenixMessage",
         underlying: StructuralError(message: "Expected string for event at index 3.")
@@ -307,7 +307,7 @@ struct PhoenixSerializer: Sendable {
       joinRef: joinRef,
       ref: ref,
       topic: topic,
-      event: event,
+      event: PhoenixEvent(rawValue: eventString),
       payload: .json(.object(payloadObject)),
       receivedAt: receivedAt
     )

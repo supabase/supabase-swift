@@ -7,7 +7,6 @@
 
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 
 @testable import RealtimeV3
 
@@ -24,7 +23,7 @@ import HTTPTypes
 actor InMemoryTransport: RealtimeTransport {
   // Expose connection metadata for assertion in later tasks.
   private(set) var lastConnectURL: URL?
-  private(set) var lastConnectHeaders: HTTPFields?
+  private(set) var lastConnectHeaders: [String: String]?
   private(set) var connectCallCount: Int = 0
 
   private let server: TransportServer
@@ -40,12 +39,13 @@ actor InMemoryTransport: RealtimeTransport {
     return (transport, server)
   }
 
-  nonisolated func connect(to url: URL, headers: HTTPFields) async throws -> any RealtimeConnection
+  nonisolated func connect(to url: URL, headers: [String: String]) async throws
+    -> any RealtimeConnection
   {
     await _connect(to: url, headers: headers)
   }
 
-  private func _connect(to url: URL, headers: HTTPFields) -> any RealtimeConnection {
+  private func _connect(to url: URL, headers: [String: String]) -> any RealtimeConnection {
     lastConnectURL = url
     lastConnectHeaders = headers
     connectCallCount += 1

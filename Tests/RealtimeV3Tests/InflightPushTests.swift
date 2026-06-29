@@ -62,7 +62,10 @@ import Testing
       _ = try await replyTask.value
       Issue.record("Expected broadcastAckTimeout but the push succeeded")
     } catch let error as RealtimeError {
-      #expect(error == .broadcastAckTimeout)
+      guard case .broadcastAckTimeout = error else {
+        Issue.record("Expected .broadcastAckTimeout, got \(error)")
+        return
+      }
     } catch {
       Issue.record("Unexpected non-RealtimeError: \(error)")
     }

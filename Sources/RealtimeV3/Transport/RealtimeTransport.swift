@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import HTTPTypes
 
 /// A frame sent or received over a Realtime transport connection.
 ///
@@ -40,7 +39,7 @@ public protocol RealtimeTransport: Sendable {
   ///
   /// - Throws: An error if the connection fails (e.g., network error, authentication failure,
   ///   or if the server closes the connection during handshake).
-  func connect(to url: URL, headers: HTTPFields) async throws -> any RealtimeConnection
+  func connect(to url: URL, headers: [String: String]) async throws -> any RealtimeConnection
 }
 
 /// A protocol representing an active connection to a Realtime endpoint.

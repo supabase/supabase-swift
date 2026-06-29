@@ -12,7 +12,7 @@ import Foundation
 /// Options applied at channel creation time. Options are locked on the first `channel(_:configure:)`
 /// call — subsequent calls for the same topic with different options are ignored and a debug warning
 /// is emitted (Decision 33: first-call-wins).
-public struct ChannelOptions: Sendable {
+public struct ChannelOptions: Sendable, Equatable {
   /// Whether the channel is a private channel. Private channels require a valid JWT and support
   /// backend replay.
   public var isPrivate: Bool = false
@@ -29,7 +29,7 @@ public struct ChannelOptions: Sendable {
 // MARK: - BroadcastOptions
 
 /// Options controlling broadcast behaviour for a channel.
-public struct BroadcastOptions: Sendable {
+public struct BroadcastOptions: Sendable, Equatable {
   /// When `true`, `broadcast()` calls wait for a server acknowledgement before returning.
   /// Default: `false` (fire-and-forget).
   public var acknowledge: Bool = false
@@ -47,7 +47,7 @@ public struct BroadcastOptions: Sendable {
 // MARK: - ReplayOption
 
 /// Configures backend replay for a private broadcast channel.
-public struct ReplayOption: Sendable {
+public struct ReplayOption: Sendable, Equatable {
   /// Replay messages sent at or after this date.
   public var since: Date
 
@@ -64,7 +64,7 @@ public struct ReplayOption: Sendable {
 // MARK: - PresenceOptions
 
 /// Options controlling presence behaviour for a channel.
-public struct PresenceOptions: Sendable {
+public struct PresenceOptions: Sendable, Equatable {
   /// Sends `presence.enabled = true` in the join config. Required for an initial
   /// `presence_state` snapshot on join. If `false`, `track` can still create/update presence
   /// later, but observers cannot retroactively get the initial snapshot.

@@ -7,7 +7,6 @@
 
 import Clocks
 import Foundation
-import HTTPTypes
 import Helpers
 
 // MARK: - RealtimeProtocolVersion
@@ -55,7 +54,7 @@ public struct Configuration: Sendable {
   public var clock: any Clock<Duration> & Sendable = ContinuousClock()
 
   /// Additional HTTP headers sent with the WebSocket upgrade request.
-  public var headers: HTTPFields = [:]
+  public var headers: [String: String] = [:]
 
   // TODO(Task 31): add logger once RealtimeLogger is defined.
   // public var logger: (any RealtimeLogger)? = nil
