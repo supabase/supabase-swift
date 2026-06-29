@@ -154,24 +154,8 @@ public actor Channel {
   /// The stream finishes automatically when `leave()` (or any terminal close) is called.
   /// Consumers' `for await` loops will end cleanly without an error.
   public func messages() -> AsyncStream<PhoenixMessage> {
-    // Register the base subscription synchronously (on-actor) so a frame can never be
-    // missed between this call and the transform task starting.
-    let base = _subscribeEvents()
-    return AsyncStream { continuation in
-      let task = Task {
-        for await event in base {
-          switch event {
-          case .message(let message):
-            continuation.yield(message)
-          case .terminated:
-            // messages() finishes cleanly on close (no error) — public contract.
-            continuation.finish()
-            return
-          }
-        }
-        continuation.finish()
-      }
-      continuation.onTermination = { _ in task.cancel() }
+    _makeStream(initialState: ()) { _, message, continuation in
+      continuation.yield(message)
     }
   }
 
@@ -202,6 +186,81 @@ public actor Channel {
       Task { [weak self] in await self?.removeEventContinuation(id: id) }
     }
     return stream
+  }
+
+  // MARK: - Stream-transform helpers (internal)
+  //
+  // Every per-call stream is a transform over a fresh `_subscribeEvents()` subscription.
+  // These two helpers centralize the boilerplate that would otherwise repeat in each
+  // factory: subscribing on-actor, draining the feed in a task, finishing the output on
+  // terminal close, and cancelling the task when the consumer goes away.
+  //
+  // The `body` only ever sees `.message` frames — the `.terminated` event is handled
+  // here (clean finish for non-throwing streams, `.channelClosed(reason)` for throwing
+  // streams). `State` is a per-subscription value threaded `inout` through every call so
+  // stateful transforms (presence's running roster) need no external storage or lock.
+
+  /// Builds a non-throwing `AsyncStream<T>` transform over the channel event feed.
+  ///
+  /// `body` is invoked for each `.message` frame with the running `state` and the output
+  /// continuation; it may yield zero or more values. The stream finishes cleanly when the
+  /// channel closes. Pass `initialState: ()` for stateless transforms.
+  func _makeStream<T: Sendable, State: Sendable>(
+    initialState: State,
+    _ body: @escaping @Sendable (inout State, PhoenixMessage, AsyncStream<T>.Continuation) -> Void
+  ) -> AsyncStream<T> {
+    let base = _subscribeEvents()
+    return AsyncStream<T> { continuation in
+      let task = Task {
+        var state = initialState
+        for await event in base {
+          switch event {
+          case .terminated:
+            continuation.finish()
+            return
+          case .message(let message):
+            body(&state, message, continuation)
+          }
+        }
+        continuation.finish()
+      }
+      continuation.onTermination = { _ in task.cancel() }
+    }
+  }
+
+  /// Builds an `AsyncThrowingStream<T, any Error>` transform over the channel event feed.
+  ///
+  /// `body` is invoked (with `await`) for each `.message` frame; it may yield values or
+  /// `throw` to terminate the stream (e.g. a decode failure or a postgres subscription
+  /// error). A terminal channel close finishes the stream throwing
+  /// `RealtimeError.channelClosed(reason)`. Pass `initialState: ()` for stateless transforms.
+  func _makeThrowingStream<T: Sendable, State: Sendable>(
+    initialState: State,
+    _ body:
+      @escaping @Sendable (
+        inout State, PhoenixMessage, AsyncThrowingStream<T, any Error>.Continuation
+      ) async throws -> Void
+  ) -> AsyncThrowingStream<T, any Error> {
+    let base = _subscribeEvents()
+    return AsyncThrowingStream<T, any Error> { continuation in
+      let task = Task {
+        var state = initialState
+        do {
+          for await event in base {
+            switch event {
+            case .terminated(let reason):
+              throw RealtimeError.channelClosed(reason)
+            case .message(let message):
+              try await body(&state, message, continuation)
+            }
+          }
+          continuation.finish()
+        } catch {
+          continuation.finish(throwing: error)
+        }
+      }
+      continuation.onTermination = { _ in task.cancel() }
+    }
   }
 
   // MARK: - Private helpers

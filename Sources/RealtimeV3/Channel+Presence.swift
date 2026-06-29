@@ -206,82 +206,62 @@ extension Channel {
 extension Channel {
   /// Registers a per-call presence observe stream.
   ///
-  /// Each consumer maintains its own running `active` map (captured in the closure via
-  /// `LockIsolated` for `@Sendable` closure compatibility). On each `presence_state` frame
-  /// the map is replaced; on each `presence_diff` frame the map is updated incrementally
-  /// using phx_ref matching to identify leaving metas. Decode failures are swallowed to
-  /// keep the stream open.
+  /// Each consumer maintains its own running `active` roster, threaded as the helper's
+  /// per-subscription `State` (task-local, no lock). On each `presence_state` frame the
+  /// roster is replaced; on each `presence_diff` frame it is updated incrementally using
+  /// phx_ref matching to identify leaving metas. Decode failures are swallowed to keep the
+  /// stream open; the stream finishes cleanly on channel close.
   func registerPresenceObserver<T: Decodable & Sendable>(
     _ type: T.Type
   ) -> AsyncStream<PresenceState<T>> {
-    let base = _subscribeEvents()
-    return AsyncStream<PresenceState<T>> { continuation in
-      let task = Task {
-        // Per-consumer accumulated active map. Task-local — only this task touches it,
-        // so no lock is needed. Value: list of (phx_ref, decoded T) pairs to allow
-        // phx_ref-based leave matching.
-        var active: [PresenceKey: [(phxRef: String?, value: T)]] = [:]
+    // Per-consumer accumulated active map. Value: list of (phx_ref, decoded T) pairs to
+    // allow phx_ref-based leave matching.
+    let initial: [PresenceKey: [(phxRef: String?, value: T)]] = [:]
+    return _makeStream(initialState: initial) { active, message, continuation in
+      guard case .json(let jsonValue) = message.payload else { return }
 
-        for await channelEvent in base {
-          switch channelEvent {
-          case .terminated:
-            // Presence streams finish cleanly (no throw) on channel close.
-            continuation.finish()
-            return
+      if message.event == .presenceState {
+        // Full snapshot: decode with raw refs and replace the accumulated map.
+        guard let rawMap = try? decodePresenceStateWithRefs(jsonValue, as: T.self) else { return }
+        active = rawMap
+        let snapshot = active.mapValues { $0.map(\.value) }
+        continuation.yield(PresenceState(active: snapshot, lastDiff: nil))
 
-          case .message(let message):
-            guard case .json(let jsonValue) = message.payload else { continue }
+      } else if message.event == .presenceDiff {
+        // Incremental diff: decode once (ref-aware) and derive the public `PresenceDiff<T>`
+        // by stripping the phx_refs, avoiding a redundant second decode pass.
+        guard let rawDiff = try? decodePresenceDiffWithRefs(jsonValue, as: T.self) else { return }
+        let diff = PresenceDiff<T>(
+          joined: rawDiff.joined.flatMap { key, pairs in pairs.map { (key, $0.value) } },
+          left: rawDiff.left.flatMap { key, pairs in pairs.map { (key, $0.value) } }
+        )
 
-            if message.event == .presenceState {
-              // Full snapshot: decode with raw refs and replace the accumulated map.
-              guard let rawMap = try? decodePresenceStateWithRefs(jsonValue, as: T.self)
-              else { continue }
-              active = rawMap
-              let snapshot = active.mapValues { $0.map(\.value) }
-              continuation.yield(PresenceState(active: snapshot, lastDiff: nil))
-
-            } else if message.event == .presenceDiff {
-              // Incremental diff: decode once (ref-aware) and derive the public
-              // `PresenceDiff<T>` by stripping the phx_refs, avoiding a redundant
-              // second decode pass on the same payload.
-              guard let rawDiff = try? decodePresenceDiffWithRefs(jsonValue, as: T.self)
-              else { continue }
-              let diff = PresenceDiff<T>(
-                joined: rawDiff.joined.flatMap { key, pairs in pairs.map { (key, $0.value) } },
-                left: rawDiff.left.flatMap { key, pairs in pairs.map { (key, $0.value) } }
-              )
-
-              // Apply leaves: remove metas matching by phx_ref.
-              for (key, leftPairs) in rawDiff.left {
-                guard var existing = active[key] else { continue }
-                for (leftRef, _) in leftPairs {
-                  if let ref = leftRef, let idx = existing.firstIndex(where: { $0.phxRef == ref }) {
-                    existing.remove(at: idx)
-                  } else if leftRef == nil, !existing.isEmpty {
-                    // No phx_ref: fall back to removing the first entry.
-                    existing.removeFirst()
-                  }
-                }
-                if existing.isEmpty {
-                  active.removeValue(forKey: key)
-                } else {
-                  active[key] = existing
-                }
-              }
-
-              // Apply joins: add new metas.
-              for (key, joinPairs) in rawDiff.joined {
-                active[key, default: []].append(contentsOf: joinPairs)
-              }
-
-              let snapshot = active.mapValues { $0.map(\.value) }
-              continuation.yield(PresenceState(active: snapshot, lastDiff: diff))
+        // Apply leaves: remove metas matching by phx_ref.
+        for (key, leftPairs) in rawDiff.left {
+          guard var existing = active[key] else { continue }
+          for (leftRef, _) in leftPairs {
+            if let ref = leftRef, let idx = existing.firstIndex(where: { $0.phxRef == ref }) {
+              existing.remove(at: idx)
+            } else if leftRef == nil, !existing.isEmpty {
+              // No phx_ref: fall back to removing the first entry.
+              existing.removeFirst()
             }
           }
+          if existing.isEmpty {
+            active.removeValue(forKey: key)
+          } else {
+            active[key] = existing
+          }
         }
-        continuation.finish()
+
+        // Apply joins: add new metas.
+        for (key, joinPairs) in rawDiff.joined {
+          active[key, default: []].append(contentsOf: joinPairs)
+        }
+
+        let snapshot = active.mapValues { $0.map(\.value) }
+        continuation.yield(PresenceState(active: snapshot, lastDiff: diff))
       }
-      continuation.onTermination = { _ in task.cancel() }
     }
   }
 
@@ -292,25 +272,12 @@ extension Channel {
   func registerPresenceDiffs<T: Decodable & Sendable>(
     _ type: T.Type
   ) -> AsyncStream<PresenceDiff<T>> {
-    let base = _subscribeEvents()
-    return AsyncStream<PresenceDiff<T>> { continuation in
-      let task = Task {
-        for await channelEvent in base {
-          switch channelEvent {
-          case .terminated:
-            continuation.finish()
-            return
-          case .message(let message):
-            guard message.event == .presenceDiff,
-              case .json(let jsonValue) = message.payload,
-              let diff = try? decodePresenceDiff(jsonValue, as: T.self)
-            else { continue }
-            continuation.yield(diff)
-          }
-        }
-        continuation.finish()
-      }
-      continuation.onTermination = { _ in task.cancel() }
+    _makeStream(initialState: ()) { _, message, continuation in
+      guard message.event == .presenceDiff,
+        case .json(let jsonValue) = message.payload,
+        let diff = try? decodePresenceDiff(jsonValue, as: T.self)
+      else { return }
+      continuation.yield(diff)
     }
   }
 }

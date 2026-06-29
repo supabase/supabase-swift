@@ -197,60 +197,33 @@ extension Channel {
     // realtime has already been deallocated (e.g. stream registered after client teardown).
     let decoder = realtime?.configuration.decoder ?? .realtimeDefault
 
-    // Subscribe to the channel's event feed synchronously (on-actor) so no frame is
-    // missed between this call and the transform task starting.
-    let base = _subscribeEvents()
+    // The helper handles terminal close (→ `.channelClosed`) and task lifecycle; the body
+    // filters for the requested broadcast event and decodes, throwing on decode failure.
+    return _makeThrowingStream(initialState: ()) { _, message, continuation in
+      // Only handle broadcast Phoenix events matching the requested inner event.
+      guard message.event == .broadcast,
+        case .json(let jsonValue) = message.payload,
+        let obj = jsonValue.objectValue,
+        let innerEvent = obj["event"]?.stringValue, innerEvent == event
+      else { return }
 
-    // AsyncThrowingStream with a typed non-Error Failure requires iOS 17+.
-    // On iOS 16 / Swift 6.1 we use the standard `Failure == any Error` form.
-    return AsyncThrowingStream<T, any Error> { continuation in
-      let task = Task {
-        for await channelEvent in base {
-          switch channelEvent {
-          case .terminated(let reason):
-            // Terminal close: surface the reason to the caller (spec: throws on close).
-            continuation.finish(throwing: RealtimeError.channelClosed(reason))
-            return
-
-          case .message(let message):
-            // Only handle broadcast Phoenix events matching the requested inner event.
-            guard message.event == .broadcast,
-              case .json(let jsonValue) = message.payload,
-              let obj = jsonValue.objectValue,
-              let innerEvent = obj["event"]?.stringValue, innerEvent == event
-            else { continue }
-
-            // Extract the inner "payload" value.
-            guard let innerPayload = obj["payload"] else {
-              // No payload key — decode failure terminates the stream.
-              continuation.finish(
-                throwing: RealtimeError.decoding(
-                  type: String(describing: T.self),
-                  underlying: MissingPayloadError()
-                ))
-              return
-            }
-
-            // Re-encode the JSONValue to Data, then decode T using the configured decoder.
-            do {
-              let data = try JSONEncoder().encode(innerPayload)
-              let decoded = try decoder.decode(T.self, from: data)
-              continuation.yield(decoded)
-            } catch {
-              // Decode failure terminates this stream (spec: decode failure throws).
-              continuation.finish(
-                throwing: RealtimeError.decoding(
-                  type: String(describing: T.self),
-                  underlying: error
-                ))
-              return
-            }
-          }
-        }
-        // Feed ended without an explicit terminal event (e.g. channel deallocated).
-        continuation.finish()
+      // Extract the inner "payload" value.
+      guard let innerPayload = obj["payload"] else {
+        // No payload key — decode failure terminates the stream.
+        throw RealtimeError.decoding(
+          type: String(describing: T.self),
+          underlying: MissingPayloadError()
+        )
       }
-      continuation.onTermination = { _ in task.cancel() }
+
+      // Re-encode the JSONValue to Data, then decode T using the configured decoder.
+      // A decode failure throws and terminates the stream (spec: decode failure throws).
+      do {
+        let data = try JSONEncoder().encode(innerPayload)
+        continuation.yield(try decoder.decode(T.self, from: data))
+      } catch {
+        throw RealtimeError.decoding(type: String(describing: T.self), underlying: error)
+      }
     }
   }
 }

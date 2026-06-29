@@ -211,119 +211,94 @@ extension Channel {
     let variantKind = config.variantKind
     let registrationID = config.id
 
-    // Subscribe to the channel's event feed synchronously (on-actor).
-    let base = _subscribeEvents()
+    // The helper handles terminal close (→ `.channelClosed`) and task lifecycle. The body
+    // self-filters the feed: a `system` postgres error fails the stream (H6); a matching
+    // `postgres_changes` frame is decoded and yielded; a malformed frame throws `.decoding`.
+    return _makeThrowingStream(initialState: ()) { [weak self] _, message, continuation in
+      switch message.event {
+      case .system:
+        // postgres_changes subscription error (H6) → fail this stream.
+        guard case .json(let jsonValue) = message.payload,
+          let obj = jsonValue.objectValue,
+          obj["extension"]?.stringValue == "postgres_changes",
+          obj["status"]?.stringValue == "error"
+        else { return }
+        let reason = obj["message"]?.stringValue ?? "Unknown postgres subscription error"
+        throw RealtimeError.postgresSubscriptionFailed(reason: reason)
 
-    return AsyncThrowingStream<E.Element, any Error> { continuation in
-      let task = Task { [weak self] in
-        for await channelEvent in base {
-          switch channelEvent {
-          case .terminated(let reason):
-            // Terminal close: throws .channelClosed(reason) into the stream.
-            continuation.finish(throwing: RealtimeError.channelClosed(reason))
-            return
+      case .postgresChanges:
+        // Does this frame target our registration? Match the frame's `ids` against the
+        // server ids currently mapped to our registration (read live, since the mapping
+        // is rebuilt on every rejoin).
+        guard case .json(let jsonValue) = message.payload,
+          let obj = jsonValue.objectValue,
+          let idsArray = obj["ids"]?.arrayValue,
+          let dataObj = obj["data"]?.objectValue
+        else { return }
 
-          case .message(let message):
-            switch message.event {
-            case .system:
-              // postgres_changes subscription error (H6) → fail this stream with
-              // .postgresSubscriptionFailed. Other system events are ignored here.
-              guard case .json(let jsonValue) = message.payload,
-                let obj = jsonValue.objectValue,
-                obj["extension"]?.stringValue == "postgres_changes",
-                obj["status"]?.stringValue == "error"
-              else { continue }
-              let reason = obj["message"]?.stringValue ?? "Unknown postgres subscription error"
-              continuation.finish(
-                throwing: RealtimeError.postgresSubscriptionFailed(reason: reason))
-              return
+        let frameIDs = Set(idsArray.compactMap { $0.intValue })
+        guard !frameIDs.isEmpty else { return }
 
-            case .postgresChanges:
-              // Does this frame target our registration? Match the frame's `ids` against
-              // the server ids currently mapped to our registration (read live, since the
-              // mapping is rebuilt on every rejoin).
-              guard case .json(let jsonValue) = message.payload,
-                let obj = jsonValue.objectValue,
-                let idsArray = obj["ids"]?.arrayValue,
-                let dataObj = obj["data"]?.objectValue
-              else { continue }
+        let myServerIDs = await self?.postgresServerIDs(for: registrationID) ?? []
+        guard !myServerIDs.isDisjoint(with: frameIDs) else { return }
 
-              let frameIDs = Set(idsArray.compactMap { $0.intValue })
-              guard !frameIDs.isEmpty else { continue }
-
-              let myServerIDs = await self?.postgresServerIDs(for: registrationID) ?? []
-              guard !myServerIDs.isDisjoint(with: frameIDs) else { continue }
-
-              // Decode E.Element from the data object. Safe `as!`: the variant kind is
-              // immutably tied to the generic parameter E at factory call time. A malformed
-              // frame finishes THIS stream with `.decoding`.
-              let type_ = dataObj["type"]?.stringValue ?? ""
-              let element: E.Element
-              switch variantKind {
-              case .insert:
-                // E == Insert<JSONValue>, E.Element == JSONValue
-                guard let record = dataObj["record"] else {
-                  continuation.finish(throwing: decodeError("Insert<JSONValue>: missing record"))
-                  return
-                }
-                element = record as! E.Element
-
-              case .update:
-                // E == Update<JSONValue>, E.Element == PostgresUpdate<JSONValue>
-                guard let record = dataObj["record"] else {
-                  continuation.finish(throwing: decodeError("Update<JSONValue>: missing record"))
-                  return
-                }
-                let oldRecord: JSONValue? = dataObj["old_record"]
-                let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
-                element = update as! E.Element
-
-              case .delete:
-                // E == Delete<JSONValue>, E.Element == PostgresDelete<JSONValue>
-                // old_record is NON-optional for DELETE; absence is a decode failure.
-                guard let oldRecord = dataObj["old_record"] else {
-                  continuation.finish(
-                    throwing: decodeError("Delete<JSONValue>: missing old_record"))
-                  return
-                }
-                let del = PostgresDelete<JSONValue>(oldRecord: oldRecord)
-                element = del as! E.Element
-
-              case .anyEvent:
-                // E == AnyEvent<JSONValue>, E.Element == PostgresChange<JSONValue>
-                let change: PostgresChange<JSONValue>
-                switch type_ {
-                case "INSERT":
-                  let record: JSONValue = dataObj["record"] ?? .object([:])
-                  change = .insert(record)
-                case "UPDATE":
-                  let record: JSONValue = dataObj["record"] ?? .object([:])
-                  let oldRecord: JSONValue? = dataObj["old_record"]
-                  let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
-                  change = .update(update)
-                case "DELETE":
-                  let oldRecord: JSONValue = dataObj["old_record"] ?? .object([:])
-                  let del = PostgresDelete<JSONValue>(oldRecord: oldRecord)
-                  change = .delete(del)
-                default:
-                  // Unrecognized event type is a decode failure for this stream.
-                  continuation.finish(
-                    throwing: decodeError("AnyEvent<JSONValue>: unknown type '\(type_)'"))
-                  return
-                }
-                element = change as! E.Element
-              }
-              continuation.yield(element)
-
-            default:
-              continue
-            }
+        // Decode E.Element from the data object. Safe `as!`: the variant kind is immutably
+        // tied to the generic parameter E at factory call time. A malformed frame throws.
+        let type_ = dataObj["type"]?.stringValue ?? ""
+        let element: E.Element
+        switch variantKind {
+        case .insert:
+          // E == Insert<JSONValue>, E.Element == JSONValue
+          guard let record = dataObj["record"] else {
+            throw decodeError("Insert<JSONValue>: missing record")
           }
+          element = record as! E.Element
+
+        case .update:
+          // E == Update<JSONValue>, E.Element == PostgresUpdate<JSONValue>
+          guard let record = dataObj["record"] else {
+            throw decodeError("Update<JSONValue>: missing record")
+          }
+          let oldRecord: JSONValue? = dataObj["old_record"]
+          let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
+          element = update as! E.Element
+
+        case .delete:
+          // E == Delete<JSONValue>, E.Element == PostgresDelete<JSONValue>
+          // old_record is NON-optional for DELETE; absence is a decode failure.
+          guard let oldRecord = dataObj["old_record"] else {
+            throw decodeError("Delete<JSONValue>: missing old_record")
+          }
+          let del = PostgresDelete<JSONValue>(oldRecord: oldRecord)
+          element = del as! E.Element
+
+        case .anyEvent:
+          // E == AnyEvent<JSONValue>, E.Element == PostgresChange<JSONValue>
+          let change: PostgresChange<JSONValue>
+          switch type_ {
+          case "INSERT":
+            let record: JSONValue = dataObj["record"] ?? .object([:])
+            change = .insert(record)
+          case "UPDATE":
+            let record: JSONValue = dataObj["record"] ?? .object([:])
+            let oldRecord: JSONValue? = dataObj["old_record"]
+            let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
+            change = .update(update)
+          case "DELETE":
+            let oldRecord: JSONValue = dataObj["old_record"] ?? .object([:])
+            let del = PostgresDelete<JSONValue>(oldRecord: oldRecord)
+            change = .delete(del)
+          default:
+            // Unrecognized event type is a decode failure for this stream.
+            throw decodeError("AnyEvent<JSONValue>: unknown type '\(type_)'")
+          }
+          element = change as! E.Element
         }
-        // Feed ended without an explicit terminal event (e.g. channel deallocated).
-        continuation.finish()
+        continuation.yield(element)
+
+      default:
+        return
       }
-      continuation.onTermination = { _ in task.cancel() }
     }
   }
 }
