@@ -43,6 +43,18 @@ public actor Channel {
   /// every incoming frame to all registered continuations.
   private var messagesContinuations: [UUID: AsyncStream<PhoenixMessage>.Continuation] = [:]
 
+  /// Per-call fan-out table for `broadcasts(of:event:)` typed streams.
+  /// Each call registers a type-erased closure that filters, decodes, and yields
+  /// the message into its owning `AsyncThrowingStream` continuation.
+  /// Closures are stored as `@Sendable (PhoenixMessage) -> Void` so the registry
+  /// itself is type-erased; the concrete `T` is captured in the closure.
+  var broadcastConsumers: [UUID: @Sendable (PhoenixMessage) -> Void] = [:]
+
+  /// Per-call fan-out table of closures called when the channel closes.
+  /// Each `broadcasts(of:event:)` call registers a closure that finishes its
+  /// stream with the given `CloseReason`.
+  var broadcastFinishers: [UUID: @Sendable (CloseReason) -> Void] = [:]
+
   /// The joinRef assigned during the most recent successful (or in-progress) `subscribe()`.
   /// Stored so subsequent frames for this channel (which carry the joinRef) can be validated.
   private(set) var joinRef: String?
@@ -110,6 +122,11 @@ public actor Channel {
     messagesContinuations.removeValue(forKey: id)
   }
 
+  func removeBroadcastConsumer(id: UUID) {
+    broadcastConsumers.removeValue(forKey: id)
+    broadcastFinishers.removeValue(forKey: id)
+  }
+
   /// Transitions the channel to `newState` and broadcasts to all state observers.
   /// When transitioning to a terminal `.closed` state, all `messages()` streams are
   /// finished so consumers' `for await` loops end cleanly.
@@ -118,8 +135,9 @@ public actor Channel {
     for continuation in stateContinuations.values {
       continuation.yield(newState)
     }
-    if case .closed = newState {
+    if case .closed(let reason) = newState {
       finishAllMessagesContinuations()
+      finishAllBroadcastConsumers(reason: reason)
     }
   }
 
@@ -405,10 +423,14 @@ public actor Channel {
   // MARK: - Frame router entry point
 
   /// Called by the frame router when a message arrives for this channel's topic.
-  /// Fans the message out to all registered `messages()` consumers.
+  /// Fans the message out to all registered `messages()` consumers and all
+  /// type-erased `broadcasts(of:event:)` consumers.
   func receive(_ message: PhoenixMessage) {
     for continuation in messagesContinuations.values {
       continuation.yield(message)
+    }
+    for handler in broadcastConsumers.values {
+      handler(message)
     }
   }
 
@@ -421,5 +443,15 @@ public actor Channel {
       continuation.finish()
     }
     messagesContinuations.removeAll()
+  }
+
+  /// Finishes all open `broadcasts(of:event:)` streams by invoking each finisher closure.
+  /// The finisher throws `.channelClosed(reason)` into the stream so callers receive the error.
+  private func finishAllBroadcastConsumers(reason: CloseReason) {
+    for finisher in broadcastFinishers.values {
+      finisher(reason)
+    }
+    broadcastConsumers.removeAll()
+    broadcastFinishers.removeAll()
   }
 }
