@@ -121,19 +121,16 @@ final class TransportServer: Sendable {
     response: [String: AnyJSON] = [:],
     onJoin: (@Sendable () -> Void)? = nil
   ) {
-    // Build the response JSON fragment once.
-    let responseParts: [String] = response.map { key, value in
-      let valueString: String
-      switch value {
-      case .string(let s): valueString = "\"\(s)\""
-      case .integer(let i): valueString = "\(i)"
-      case .bool(let b): valueString = b ? "true" : "false"
-      case .null: valueString = "null"
-      default: valueString = "\"\(value)\""
-      }
-      return "\"\(key)\":\(valueString)"
+    // Encode the response object once using JSONEncoder so nested/array values
+    // produce valid JSON rather than relying on manual string interpolation.
+    let responseJSON: String
+    if let data = try? JSONEncoder().encode(response),
+      let str = String(data: data, encoding: .utf8)
+    {
+      responseJSON = str
+    } else {
+      responseJSON = "{}"
     }
-    let responseJSON = "{\(responseParts.joined(separator: ","))}"
 
     let server = self
     Task.detached {

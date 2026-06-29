@@ -56,10 +56,10 @@ import Testing
     #expect(currentState == .joined)
 
     // Second subscribe — should be a no-op (no second join frame sent, returns immediately).
+    // Because the channel is already .joined, subscribe() returns synchronously on the
+    // actor without sending any frame. No sleep needed: actor-sequential execution
+    // guarantees that when subscribe() returns, no extra join was sent.
     try await channel.subscribe()
-
-    // Give time for any spurious second join to arrive.
-    try await Task.sleep(nanoseconds: 10_000_000)
 
     #expect(joinsSeen.value == 1)
   }

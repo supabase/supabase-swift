@@ -142,10 +142,24 @@ public actor Channel {
 
   /// Performs the actual `phx_join` wire handshake. Called exclusively from `subscribe()`.
   private func _performJoin(realtime: Realtime) async throws(RealtimeError) {
+    // Guard: only start a fresh join from a quiescent state.
+    // (.joining / .leaving with no in-flight task should not happen given the
+    // coalescing in subscribe(), but guard defensively to avoid duplicate
+    // .joining emissions and state-machine confusion.)
+    switch channelState {
+    case .unsubscribed: break
+    case .closed: break
+    default: return
+    }
+
     // Generate a joinRef (Phoenix uses ref == joinRef for the join push).
     // `nextRef()` is nonisolated — no actor hop needed.
     let ref = realtime.nextRef()
     joinRef = ref
+
+    // Transition to .joining BEFORE awaiting the access token so the channel
+    // reflects the correct state during the entire join handshake.
+    transition(to: .joining)
 
     // Build the join payload.
     let accessToken = try await realtime.accessTokenForJoin()
@@ -171,9 +185,6 @@ public actor Channel {
     } catch {
       throw error as? RealtimeError ?? .encoding(underlying: error)
     }
-
-    // Transition to joining before sending (so observers see the state change).
-    transition(to: .joining)
 
     // Lazy-connect + send. `sendText` calls `connect()` if not already connected.
     try await realtime.sendText(text)

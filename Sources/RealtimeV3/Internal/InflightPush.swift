@@ -29,20 +29,36 @@ typealias PushReply = (status: String, response: JSONValue)
 ///
 /// Double-resume is prevented by removing the entry from the map at the moment
 /// the continuation is resumed in all three paths (resolve, timeout, failAll).
+///
+/// ## Early-reply buffering
+///
+/// `resolve` can be called before `awaitReply` has registered the continuation
+/// (e.g. a very fast server response arriving before the caller has reached the
+/// `withCheckedThrowingContinuation` setup closure). Without buffering the reply
+/// would be silently dropped and the caller would hang until the timeout.
+///
+/// Both `pendingEntries` and `earlyReplies` live in the same `LockIsolated`
+/// state struct so all three paths — resolve-before-register, timeout, and
+/// register-before-resolve — are mutually exclusive under the same lock.
 actor InflightPushRegistry {
   private struct Entry: @unchecked Sendable {
     let continuation: CheckedContinuation<PushReply, any Error>
     let timeoutError: RealtimeError
   }
 
-  /// Continuations stored under a lock so the nonisolated setup closure of
-  /// `withCheckedThrowingContinuation` can write to the map synchronously.
-  private let pendingLock = LockIsolated([String: Entry]())
+  private struct State {
+    var pendingEntries: [String: Entry] = [:]
+    var earlyReplies: [String: PushReply] = [:]
+  }
+
+  /// All mutable state held under a single lock so `resolve` and the
+  /// `withCheckedThrowingContinuation` setup closure are mutually exclusive.
+  private let stateLock = LockIsolated(State())
 
   /// Number of pushes currently awaiting a reply. Used by tests to
   /// deterministically observe registration before advancing a test clock.
   nonisolated var pendingCount: Int {
-    pendingLock.withValue { $0.count }
+    stateLock.withValue { $0.pendingEntries.count }
   }
 
   /// Suspends until the `phx_reply` for `ref` arrives, or until `timeout` elapses
@@ -71,7 +87,7 @@ actor InflightPushRegistry {
   ) async throws -> PushReply {
     // Spawn a timeout task before registering the continuation, so the timer
     // starts as close to the send moment as possible.
-    let timeoutTask = Task { [pendingLock] in
+    let timeoutTask = Task { [stateLock] in
       do {
         try await clock.sleep(for: timeout)
       } catch {
@@ -79,8 +95,8 @@ actor InflightPushRegistry {
         return
       }
       // Timeout fired: remove and resume the continuation if it's still pending.
-      pendingLock.withValue { dict in
-        guard let entry = dict.removeValue(forKey: ref) else { return }
+      stateLock.withValue { state in
+        guard let entry = state.pendingEntries.removeValue(forKey: ref) else { return }
         entry.continuation.resume(throwing: entry.timeoutError)
       }
     }
@@ -90,11 +106,20 @@ actor InflightPushRegistry {
         (continuation: CheckedContinuation<PushReply, any Error>) in
         // This closure runs synchronously before the outer function suspends.
         // LockIsolated.withValue is safe to call from nonisolated context.
-        pendingLock.withValue { dict in
+        stateLock.withValue { state in
           if Task.isCancelled {
             continuation.resume(throwing: CancellationError())
+            return
+          }
+          // Check whether a reply arrived before we registered — if so, resolve
+          // immediately without storing a pending entry. The timeout task will
+          // be cancelled in the code path after `withCheckedThrowingContinuation`
+          // returns.
+          if let early = state.earlyReplies.removeValue(forKey: ref) {
+            continuation.resume(returning: early)
           } else {
-            dict[ref] = Entry(continuation: continuation, timeoutError: timeoutError)
+            state.pendingEntries[ref] = Entry(
+              continuation: continuation, timeoutError: timeoutError)
           }
         }
       }
@@ -108,18 +133,26 @@ actor InflightPushRegistry {
 
   /// Called by the frame router when a `phx_reply` frame arrives.
   /// Resolving an unknown ref is a no-op (double-resolve guard).
+  /// If no continuation is registered yet, the reply is buffered in
+  /// `earlyReplies` so `awaitReply` can pick it up when it registers.
   nonisolated func resolve(ref: String, status: String, response: JSONValue) {
-    pendingLock.withValue { dict in
-      guard let entry = dict.removeValue(forKey: ref) else { return }
-      entry.continuation.resume(returning: (status: status, response: response))
+    stateLock.withValue { state in
+      if let entry = state.pendingEntries.removeValue(forKey: ref) {
+        entry.continuation.resume(returning: (status: status, response: response))
+      } else {
+        // Buffer the reply; awaitReply will consume it when it registers.
+        state.earlyReplies[ref] = (status: status, response: response)
+      }
     }
   }
 
   /// Fails all outstanding pushes immediately with `error`.
+  /// Also clears any buffered early replies that have not yet been consumed.
   func failAll(_ error: RealtimeError) {
-    let entries = pendingLock.withValue { dict -> [Entry] in
-      let all = Array(dict.values)
-      dict.removeAll()
+    let entries = stateLock.withValue { state -> [Entry] in
+      let all = Array(state.pendingEntries.values)
+      state.pendingEntries.removeAll()
+      state.earlyReplies.removeAll()
       return all
     }
     for entry in entries {

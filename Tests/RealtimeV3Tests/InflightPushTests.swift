@@ -31,6 +31,19 @@ import Testing
     #expect(result.status == "ok")
   }
 
+  @Test func resolvesEarlyReply() async throws {
+    // Regression: resolve() called BEFORE awaitReply() registers the continuation.
+    let registry = InflightPushRegistry()
+    // Resolve before anyone is waiting — reply must be buffered.
+    await registry.resolve(ref: "early-1", status: "ok", response: [:])
+    // Now register the waiter — should pick up the buffered reply immediately.
+    let clock = TestClock()
+    let reply = try await registry.awaitReply(
+      ref: "early-1", timeout: .seconds(10), clock: clock, timeoutError: .channelJoinTimeout
+    )
+    #expect(reply.status == "ok")
+  }
+
   @Test func timesOutWhenNoReply() async throws {
     let registry = InflightPushRegistry()
     let clock = TestClock()
