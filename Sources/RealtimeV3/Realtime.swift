@@ -713,7 +713,7 @@ public actor Realtime {
   /// `transition(to:)` without an `await`, and so `deinit` can read the same `LockIsolated`
   /// without an actor hop.
   nonisolated func _markJoined(_ topic: String) {
-    joinedTopics.withValue { $0.insert(topic) }
+    joinedTopics.withValue { _ = $0.insert(topic) }
   }
 
   /// Records that `topic` has been left or terminally evicted. Called by `Channel` when
@@ -722,7 +722,7 @@ public actor Realtime {
   ///
   /// Declared `nonisolated` for the same reasons as `_markJoined`.
   nonisolated func _markLeft(_ topic: String) {
-    joinedTopics.withValue { $0.remove(topic) }
+    joinedTopics.withValue { _ = $0.remove(topic) }
   }
 
   // MARK: - Channel seam (internal API consumed by Channel)
