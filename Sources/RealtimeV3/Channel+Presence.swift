@@ -5,8 +5,10 @@
 //  Created by Guilherme Souza on 29/06/26.
 //
 
+import ConcurrencyExtras
 import Foundation
 import Helpers
+import IssueReporting
 
 // MARK: - PresenceKey
 
@@ -45,22 +47,75 @@ public struct PresenceDiff<T: Sendable>: Sendable {
 /// - `update(_:)` replaces the meta for this slot without creating an additional meta.
 /// - `cancel()` untracks and awaits server ACK.
 ///
-/// The handle must be explicitly cancelled to untrack. Dropping it without cancelling does
-/// NOT untrack — but when `leave()` is called on any holder of the topic, the slot is
-/// implicitly torn down server-side.
+/// The handle should be explicitly cancelled when done to cleanly untrack from the server.
+/// If a handle is deinited without cancelling while the channel is still joined, a debug
+/// warning is emitted via `IssueReporting.reportIssue`.
+///
+/// ## Leak Warning (Decision 15)
+/// A `LockIsolated<Bool>` `cancelled` flag is used to track whether `cancel()` was called.
+/// In `deinit` (which is nonisolated/synchronous), we cannot reliably hop to the `Channel`
+/// actor to check its state. The simplest correct approach is: fire the warning whenever a
+/// non-cancelled handle deinits. This may fire after `leave()` tears down the server slot
+/// implicitly, but it is always safe (never a crash) and correctly catches genuine leaks.
+///
+/// ## Sendable
+/// `PresenceHandle` is `Sendable` because all mutable state is wrapped in `LockIsolated`.
+/// The `channel` reference is to the actor-isolated `Channel`, which is itself `Sendable`.
 public final class PresenceHandle: Sendable {
-  /// Update the current presence meta for this slot.
-  ///
-  /// - Note: Implemented in Task 24.
-  public func update<T: Codable & Sendable>(_ state: T) async throws(RealtimeError) {
-    // Implemented in Task 24.
+  /// The owning channel. Strong ref is intentional (Channel does not hold handles → no cycle).
+  let channel: Channel
+
+  /// Whether `cancel()` has been called. Protected by `LockIsolated` for nonisolated deinit.
+  let cancelled: LockIsolated<Bool>
+
+  init(channel: Channel) {
+    self.channel = channel
+    self.cancelled = LockIsolated(false)
   }
 
-  /// Idempotent; awaits server ACK of the untrack.
+  deinit {
+    let alreadyCancelled = cancelled.value
+    if !alreadyCancelled {
+      reportIssue(
+        "PresenceHandle deinited without cancel() being called. "
+          + "Call handle.cancel() when done tracking to cleanly untrack from the server. "
+          + "If the channel was left via channel.leave(), the server slot is implicitly "
+          + "torn down, but the handle should still be cancelled to suppress this warning."
+      )
+    }
+  }
+
+  /// Update the current presence meta for this slot.
   ///
-  /// - Note: Implemented in Task 24.
+  /// Sends a fresh presence track frame with the new state. This replaces the existing
+  /// meta on the server without creating an additional meta entry (Decision 16).
+  ///
+  /// - Throws: `RealtimeError.notSubscribed` if the channel is not yet subscribed.
+  /// - Throws: `RealtimeError.channelClosed` if the channel has been closed.
+  /// - Throws: `RealtimeError.broadcastAckTimeout` if the server does not acknowledge
+  ///   within `configuration.broadcastAckTimeout`.
+  public func update<T: Codable & Sendable>(_ state: T) async throws(RealtimeError) {
+    try await channel.sendPresenceTrack(state)
+  }
+
+  /// Untracks presence for this slot; awaits server ACK.
+  ///
+  /// Idempotent: a second call is a no-op and returns immediately without sending any frame.
+  /// After a successful cancel, the deinit leak-warning will not fire.
+  ///
+  /// - Throws: `RealtimeError.notSubscribed` if the channel is not yet subscribed.
+  /// - Throws: `RealtimeError.channelClosed` if the channel has been closed.
+  /// - Throws: `RealtimeError.broadcastAckTimeout` if the server does not acknowledge.
   public func cancel() async throws(RealtimeError) {
-    // Implemented in Task 24.
+    // Idempotent: return immediately if already cancelled.
+    let alreadyCancelled = cancelled.withValue { val -> Bool in
+      if val { return true }
+      val = true
+      return false
+    }
+    guard !alreadyCancelled else { return }
+
+    try await channel.sendPresenceUntrack()
   }
 }
 
@@ -80,12 +135,26 @@ public struct Presence: Sendable {
 
   /// Begin tracking, or update the existing tracked state, for this channel process.
   ///
-  /// - Note: Implemented in Task 24.
+  /// Sends a `presence` channel event with payload `{ "event": "track", "payload": <state> }`
+  /// and awaits the server ACK. Returns a `PresenceHandle` that can be used to update or cancel
+  /// the presence tracking.
+  ///
+  /// One meta per channel process (Decision 16): repeated `track` calls update the same slot,
+  /// not create additional entries.
+  ///
+  /// - Parameter state: The presence meta to track. Must be `Codable & Sendable`.
+  /// - Returns: A `PresenceHandle` bound to this channel.
+  /// - Throws: `RealtimeError.notSubscribed` if the channel is not yet subscribed (`.unsubscribed`
+  ///   or `.joining` state).
+  /// - Throws: `RealtimeError.channelClosed` if the channel is leaving or closed.
+  /// - Throws: `RealtimeError.broadcastAckTimeout` if the server does not ACK in time.
   public func track<T: Codable & Sendable>(
     _ state: T
   ) async throws(RealtimeError) -> PresenceHandle {
-    // Implemented in Task 24.
-    throw RealtimeError.notSubscribed
+    // Delegate gating + wire send to the actor-isolated Channel seam.
+    try await channel.sendPresenceTrack(state)
+    // Return a handle bound to the owning channel.
+    return PresenceHandle(channel: channel)
   }
 
   /// Snapshot + diff stream of all presences, keyed by presence key.

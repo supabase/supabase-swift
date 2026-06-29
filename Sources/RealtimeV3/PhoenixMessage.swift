@@ -18,6 +18,7 @@ public struct PhoenixEvent: RawRepresentable, Sendable, Hashable, ExpressibleByS
   public init(stringLiteral value: String) { self.rawValue = value }
 
   public static let broadcast = PhoenixEvent(rawValue: "broadcast")
+  public static let presence = PhoenixEvent(rawValue: "presence")
   public static let postgresChanges = PhoenixEvent(rawValue: "postgres_changes")
   public static let presenceState = PhoenixEvent(rawValue: "presence_state")
   public static let presenceDiff = PhoenixEvent(rawValue: "presence_diff")

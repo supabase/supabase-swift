@@ -278,6 +278,38 @@ final class TransportServer: Sendable {
     }
   }
 
+  // MARK: - autoReplyToPresence
+
+  /// Spawns a background task that watches client→server text frames for presence event frames
+  /// (`"presence"`) and automatically replies with a `phx_reply` carrying the same `ref` and
+  /// the supplied `status`.
+  ///
+  /// Uses `subscribeToClientFrames()` so it can coexist with `autoReplyToJoins()` and other
+  /// helpers without competing for frames — each helper gets its own broadcast copy of every frame.
+  ///
+  /// - Parameter status: The reply status — `"ok"` by default.
+  func autoReplyToPresence(status: String = "ok") {
+    let server = self
+    let frames = subscribeToClientFrames()
+    Task.detached {
+      for await frame in frames {
+        guard case .text(let text) = frame else { continue }
+        // Only process presence frames (channel event is "presence").
+        guard text.contains("\"presence\"") else { continue }
+        // Filter out phx_reply frames to avoid feedback loops.
+        guard !text.contains("phx_reply") else { continue }
+
+        guard let ref = parseRef(from: text) else { continue }
+        guard let topic = parseTopic(from: text) else { continue }
+
+        // Inject the reply with the same ref so the in-flight registry resolves it.
+        let reply =
+          "[null,\"\(ref)\",\"\(topic)\",\"phx_reply\",{\"status\":\"\(status)\",\"response\":{}}]"
+        server.send(.text(reply))
+      }
+    }
+  }
+
   /// Called by InMemoryTransport on each connect() to produce a fresh connection object.
   /// Installs a new server→client continuation, replacing the previous (possibly finished) one.
   fileprivate func makeConnection() -> InMemoryConnection {

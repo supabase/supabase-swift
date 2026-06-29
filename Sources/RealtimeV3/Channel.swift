@@ -63,6 +63,16 @@ public actor Channel {
   /// In-flight join task — coalesces concurrent `subscribe()` callers (Decision 14h).
   private var joinTask: Task<Void, any Error>?
 
+  // MARK: - Presence tracking state (Task 24)
+
+  /// The last encoded presence state sent via `sendPresenceTrack`. Stored for re-track on
+  /// reconnect (Task 25 consumes this to re-send presence after channel rejoin).
+  var lastTrackedPresencePayload: JSONObject?
+
+  /// Whether presence is currently being tracked on this channel. Set to `true` by
+  /// `sendPresenceTrack` and `false` by `sendPresenceUntrack` / channel close.
+  var isPresenceTracked: Bool = false
+
   // MARK: - Init
 
   init(topic: String, options: ChannelOptions, realtime: Realtime) {
@@ -419,6 +429,190 @@ public actor Channel {
 
     // Best-effort send: swallow transport errors (token is stored for future joins).
     try? await realtime.sendText(text)
+  }
+
+  // MARK: - Presence seam (Task 24)
+
+  /// Encodes and sends a presence track frame, then awaits the server ACK.
+  ///
+  /// ## State gating
+  /// - `.unsubscribed` / `.joining` → throws `.notSubscribed`
+  /// - `.leaving` / `.closed` → throws `.channelClosed(reason)`
+  /// - `.joined` → encodes `state` as `{ "event": "track", "payload": <encodedState> }`,
+  ///   sends as a `"presence"` channel event (text frame), and awaits the phx_reply.
+  ///
+  /// ## Stored state
+  /// The encoded payload is stored in `lastTrackedPresencePayload` for re-track on
+  /// reconnect (Task 25). `isPresenceTracked` is set to `true`.
+  ///
+  /// ## Ack timeout
+  /// Uses `broadcastAckTimeout` — presence track semantics are analogous to an acked push.
+  func sendPresenceTrack<T: Codable & Sendable>(_ state: T) async throws(RealtimeError) {
+    guard let realtime else { throw .channelClosed(.clientDisconnected) }
+
+    // State gating.
+    switch channelState {
+    case .joined:
+      break
+    case .unsubscribed, .joining:
+      throw .notSubscribed
+    case .leaving:
+      throw .channelClosed(.userRequested)
+    case .closed(let reason):
+      throw .channelClosed(reason)
+    }
+
+    // Encode the user state to JSON.
+    let encodedPayload: AnyJSON
+    do {
+      let data = try JSONEncoder().encode(state)
+      encodedPayload = try JSONDecoder().decode(AnyJSON.self, from: data)
+    } catch {
+      throw .encoding(underlying: error)
+    }
+
+    // Build the presence track outer payload.
+    let outerPayload: JSONObject = [
+      "event": .string("track"),
+      "payload": encodedPayload,
+    ]
+
+    // Generate a ref for ACK correlation.
+    let ref = realtime.nextRef()
+    let currentJoinRef = joinRef
+
+    // Encode the text frame.
+    let text: String
+    do {
+      text = try realtime.serializer.encodeText(
+        joinRef: currentJoinRef,
+        ref: ref,
+        topic: topic,
+        event: PhoenixEvent.presence.rawValue,
+        payload: outerPayload
+      )
+    } catch {
+      throw error as? RealtimeError ?? .encoding(underlying: error)
+    }
+
+    // Register ref with the in-flight registry BEFORE sending so early replies are not missed.
+    // The registry buffers the reply if it arrives before we call awaitReply.
+    // We do NOT use async let here because typed throws + async let has a known Swift 6.1
+    // limitation where the awaited error is widened to `any Error`.
+    let broadcastAckTimeout = realtime.configuration.broadcastAckTimeout
+    let registry = realtime.inflightPushRegistry
+    let clock = realtime.configuration.clock
+    // Register the pending entry (non-async; just adds to the dictionary).
+    // awaitReply registers the entry and suspends; send it first into the registry
+    // by starting the await as a Task so the entry is buffered before we send.
+    let replyTask = Task<PushReply, any Error> {
+      try await registry.awaitReply(
+        ref: ref,
+        timeout: broadcastAckTimeout,
+        clock: clock,
+        timeoutError: RealtimeError.broadcastAckTimeout
+      )
+    }
+
+    // Send the frame.
+    do {
+      try await realtime.sendText(text)
+    } catch {
+      replyTask.cancel()
+      throw error
+    }
+
+    // Await the ACK.
+    do {
+      _ = try await replyTask.value
+    } catch let error as RealtimeError {
+      throw error
+    } catch {
+      throw .broadcastAckTimeout
+    }
+
+    // Store state for Task 25 re-track on reconnect.
+    lastTrackedPresencePayload = outerPayload
+    isPresenceTracked = true
+  }
+
+  /// Sends a presence untrack frame, awaits the server ACK, and clears tracked state.
+  ///
+  /// Idempotent: if `isPresenceTracked` is already `false`, returns immediately (no-op).
+  func sendPresenceUntrack() async throws(RealtimeError) {
+    // Idempotent guard.
+    guard isPresenceTracked else { return }
+
+    guard let realtime else { throw .channelClosed(.clientDisconnected) }
+
+    // State gating: must be joined to untrack.
+    switch channelState {
+    case .joined:
+      break
+    case .unsubscribed, .joining:
+      throw .notSubscribed
+    case .leaving:
+      throw .channelClosed(.userRequested)
+    case .closed(let reason):
+      throw .channelClosed(reason)
+    }
+
+    // Build the presence untrack outer payload.
+    let outerPayload: JSONObject = [
+      "event": .string("untrack")
+    ]
+
+    // Generate a ref for ACK correlation.
+    let ref = realtime.nextRef()
+    let currentJoinRef = joinRef
+
+    // Encode the text frame.
+    let text: String
+    do {
+      text = try realtime.serializer.encodeText(
+        joinRef: currentJoinRef,
+        ref: ref,
+        topic: topic,
+        event: PhoenixEvent.presence.rawValue,
+        payload: outerPayload
+      )
+    } catch {
+      throw error as? RealtimeError ?? .encoding(underlying: error)
+    }
+
+    // Register ref BEFORE sending (same pattern as sendPresenceTrack).
+    let broadcastAckTimeout = realtime.configuration.broadcastAckTimeout
+    let registry = realtime.inflightPushRegistry
+    let clock = realtime.configuration.clock
+    let replyTask = Task<PushReply, any Error> {
+      try await registry.awaitReply(
+        ref: ref,
+        timeout: broadcastAckTimeout,
+        clock: clock,
+        timeoutError: RealtimeError.broadcastAckTimeout
+      )
+    }
+
+    // Send the frame.
+    do {
+      try await realtime.sendText(text)
+    } catch {
+      replyTask.cancel()
+      throw error
+    }
+
+    // Await the ACK.
+    do {
+      _ = try await replyTask.value
+    } catch let error as RealtimeError {
+      throw error
+    } catch {
+      throw .broadcastAckTimeout
+    }
+
+    // Clear tracked state.
+    lastTrackedPresencePayload = nil
+    isPresenceTracked = false
   }
 
   // MARK: - Frame router entry point
