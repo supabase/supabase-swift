@@ -84,18 +84,13 @@ struct BroadcastE2ETests {
 
   // MARK: - IE-3b: HTTP broadcast received by WS subscriber
 
-  // SDK GAP (tracked concern): `Channel.httpBroadcast` uses the SDK-internal full topic
-  // string (e.g. "realtime:room:foo") in the HTTP broadcast request body. However, the
-  // Realtime server's `/api/broadcast` endpoint expects the SHORT topic (without the
-  // "realtime:" prefix) to match against WebSocket subscribers. Using the full topic
-  // causes the server to accept the request (HTTP 202) but NOT deliver to subscribers.
-  //
-  // Workaround in this test: bypass `Channel.httpBroadcast` and call
-  // `Realtime.httpBroadcastBatch` directly with the correct short topic. This lets us
-  // verify that the delivery path works while documenting the SDK gap.
+  // `Channel.httpBroadcast` strips the SDK-internal `realtime:` topic prefix for the
+  // HTTP `/api/broadcast` body (the endpoint matches WS subscribers on the short topic);
+  // the endpoint also requires a service-role Bearer token (anon → HTTP 500). This test
+  // exercises the real `Channel.httpBroadcast` path end-to-end against the live server.
 
   @Test(
-    "HTTP broadcast (via Realtime.httpBroadcastBatch with short topic) is delivered to a WS subscriber"
+    "HTTP broadcast via Channel.httpBroadcast is delivered to a WS subscriber"
   )
   func httpBroadcastReceivedByWSSubscriber() async throws {
     let rtB = IntegrationEnv.makeRealtime()
@@ -109,15 +104,14 @@ struct BroadcastE2ETests {
       $0 == .joined
     }
 
-    // Use the service-role client with the SHORT topic (without "realtime:" prefix).
-    // The Realtime HTTP broadcast API requires:
-    //   1. A service-role Bearer token (anon key → HTTP 500)
-    //   2. The short topic string (the "realtime:" prefix is stripped on the server side)
+    // Exercise the real `Channel.httpBroadcast` path. The SDK now strips the
+    // `realtime:` prefix from the channel topic for the HTTP body (the endpoint
+    // expects the short topic). The Realtime HTTP broadcast API still requires a
+    // service-role Bearer token (an anon key → HTTP 500), so the sender uses a
+    // service-role-authenticated client.
     let rtSender = IntegrationEnv.makeRealtimeWithServiceRole()
-    let shortTopic = "room:e2e-http-broadcast"  // without "realtime:" prefix
-    let msg = HttpBroadcastMessage(
-      topic: shortTopic, event: "chat", payload: ChatMsg(text: "http-hello"))
-    try await rtSender.httpBroadcastBatch([msg])
+    let senderChannel = await rtSender.channel("room:e2e-http-broadcast")
+    try await senderChannel.httpBroadcast(event: "chat", payload: ChatMsg(text: "http-hello"))
 
     // B should receive the message over its WS subscription.
     var receivedMsg: ChatMsg?

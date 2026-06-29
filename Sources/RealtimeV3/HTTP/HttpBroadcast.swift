@@ -158,8 +158,13 @@ extension Channel {
     isPrivate: Bool = false
   ) async throws(RealtimeError) {
     guard let realtime else { throw .channelClosed(.clientDisconnected) }
+    // `topic` is the WS channel topic, which is `realtime:`-prefixed. The HTTP
+    // `/api/broadcast` endpoint expects the SHORT topic (no `realtime:` prefix) —
+    // otherwise the message is accepted (202) but never delivered to subscribers.
+    let shortTopic =
+      topic.hasPrefix("realtime:") ? String(topic.dropFirst("realtime:".count)) : topic
     let msg = HttpBroadcastMessage(
-      topic: topic,
+      topic: shortTopic,
       event: event,
       payload: payload,
       isPrivate: isPrivate
