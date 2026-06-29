@@ -149,7 +149,10 @@ public struct StdoutLogger: RealtimeLogger {
   private static func formatDate(_ date: Date) -> String {
     // Use a thread-local formatter to avoid Sendable issues with ISO8601DateFormatter.
     // The format is ISO 8601 with fractional seconds.
-    let calendar = Calendar(identifier: .gregorian)
+    var calendar = Calendar(identifier: .gregorian)
+    // The format string emits a "Z" suffix, so decompose in UTC — otherwise the
+    // printed components would be local time mislabeled as UTC.
+    calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
     let comps = calendar.dateComponents(
       [.year, .month, .day, .hour, .minute, .second],
       from: date

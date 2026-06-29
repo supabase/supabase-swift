@@ -987,7 +987,7 @@ public actor Channel {
 
   /// Emits a log event via the owning `Realtime` actor's logger.
   /// No-ops if the `Realtime` reference has been deallocated.
-  func log(
+  private func log(
     _ level: LogLevel,
     _ category: Category,
     _ message: String,
