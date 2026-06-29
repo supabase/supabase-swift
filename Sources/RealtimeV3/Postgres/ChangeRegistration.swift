@@ -77,6 +77,26 @@ enum PostgresEventMask: String, Sendable {
   case all = "*"
 }
 
+// MARK: - VariantKind
+
+/// Discriminator for the variant type at the `ChangeRegistrationConfig` level.
+///
+/// Stored in `ChangeRegistrationConfig` so `Channel.postgresChanges(for:)` can switch on the
+/// known variant kind and build the type-erased decode+yield closure without needing to
+/// keep the generic type parameter `E` in the registry (which would require existential boxing).
+///
+/// The mapping is:
+/// - `.insert`  → `Insert<JSONValue>`, `E.Element == JSONValue`
+/// - `.update`  → `Update<JSONValue>`, `E.Element == PostgresUpdate<JSONValue>`
+/// - `.delete`  → `Delete<JSONValue>`, `E.Element == PostgresDelete<JSONValue>`
+/// - `.anyEvent`→ `AnyEvent<JSONValue>`, `E.Element == PostgresChange<JSONValue>`
+enum VariantKind: Sendable {
+  case insert
+  case update
+  case delete
+  case anyEvent
+}
+
 // MARK: - ChangeRegistrationConfig
 
 /// Internal descriptor of a postgres-changes registration. Captured in
@@ -91,6 +111,8 @@ struct ChangeRegistrationConfig: Sendable {
   let id: UUID
   /// Identity of the owning channel — used by Task 28 to detect `.unknownToken`.
   let channelID: ObjectIdentifier
+  /// The variant kind — used by Task 28 to build the type-erased decode/yield closure.
+  let variantKind: VariantKind
 }
 
 // MARK: - ChangeRegistration

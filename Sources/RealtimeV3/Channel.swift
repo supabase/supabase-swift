@@ -67,6 +67,27 @@ public actor Channel {
   /// Each `observe`/`diffs` call registers a closure that finishes its `AsyncStream` cleanly.
   var presenceFinishers: [UUID: @Sendable () -> Void] = [:]
 
+  /// Per-call fan-out table for `postgresChanges(for:)` streams (Task 28).
+  /// Keyed by the per-stream consumer UUID (a fresh UUID minted per `postgresChanges(for:)` call).
+  /// Each call registers a type-erased closure that decodes and yields the payload.
+  var postgresConsumers: [UUID: @Sendable (PhoenixMessage) -> Void] = [:]
+
+  /// Per-call fan-out table of closures called when the channel closes (postgres streams).
+  /// Each `postgresChanges(for:)` call registers a closure that finishes its stream.
+  var postgresFinishers: [UUID: @Sendable (CloseReason) -> Void] = [:]
+
+  /// Per-call fan-out table of closures called when a system postgres_changes error arrives
+  /// (Finding H6). Keyed by stream consumer UUID.
+  var postgresErrorFinishers: [UUID: @Sendable (String) -> Void] = [:]
+
+  /// Indirection map: registration UUID (from `ChangeRegistrationConfig.id`) → [consumer UUIDs].
+  ///
+  /// When `postgresChanges(for:)` is called, the consumer is registered in `postgresConsumers`
+  /// keyed by a fresh consumer UUID. This map links a registration's stable UUID to the set of
+  /// consumer UUIDs currently subscribed to it. `_routePostgresChange` uses
+  /// `serverIDRouting[serverID]` → registration UUIDs → this map → consumer UUIDs → handlers.
+  var registrationConsumers: [UUID: [UUID]] = [:]
+
   // MARK: - Postgres change registrations (Task 27)
 
   /// Ordered list of pending postgres-changes registrations.
@@ -79,6 +100,15 @@ public actor Channel {
   /// they persist and replay on the next `subscribe()`. New registrations may be
   /// added between `leave()` and resubscribe as long as the state is `.closed`.
   var pendingRegistrations: [ChangeRegistrationConfig] = []
+
+  /// Routing map from server-assigned postgres subscription ID (integer, from the phx_reply
+  /// `postgres_changes` array) to the set of client registration UUIDs that share that id.
+  ///
+  /// Built (or rebuilt) in `_performJoin` after each successful ok reply. The server assigns
+  /// one integer id per entry in the join's `postgres_changes` array, in the same order.
+  /// Multiple client registrations may share the same server id (identical subscriptions).
+  /// An incoming `postgres_changes` frame with `ids:[0,2]` fans out to all UUIDs in those slots.
+  var serverIDRouting: [Int: [UUID]] = [:]
 
   /// The joinRef assigned during the most recent successful (or in-progress) `subscribe()`.
   /// Stored so subsequent frames for this channel (which carry the joinRef) can be validated.
@@ -167,6 +197,19 @@ public actor Channel {
     presenceFinishers.removeValue(forKey: id)
   }
 
+  func removePostgresConsumer(id consumerID: UUID, registrationID: UUID? = nil) {
+    postgresConsumers.removeValue(forKey: consumerID)
+    postgresFinishers.removeValue(forKey: consumerID)
+    postgresErrorFinishers.removeValue(forKey: consumerID)
+    // Remove this consumer UUID from the registrationConsumers indirection map.
+    if let regID = registrationID {
+      registrationConsumers[regID]?.removeAll { $0 == consumerID }
+      if registrationConsumers[regID]?.isEmpty == true {
+        registrationConsumers.removeValue(forKey: regID)
+      }
+    }
+  }
+
   /// Transitions the channel to `newState` and broadcasts to all state observers.
   /// When transitioning to a terminal `.closed` state, all `messages()` streams are
   /// finished so consumers' `for await` loops end cleanly.
@@ -179,6 +222,7 @@ public actor Channel {
       finishAllMessagesContinuations()
       finishAllBroadcastConsumers(reason: reason)
       finishAllPresenceConsumers()
+      finishAllPostgresConsumers(reason: reason)
     }
   }
 
@@ -296,6 +340,10 @@ public actor Channel {
     )
 
     if reply.status == "ok" {
+      // Build the server-id routing map from the join reply's postgres_changes array.
+      // The server assigns integer ids in the same order as the client's postgres_changes
+      // entries. Map each server id → set of client registration UUIDs.
+      _buildServerIDRouting(from: reply.response)
       transition(to: .joined)
     } else {
       // Extract a human-readable reason from the response if available.
@@ -651,7 +699,8 @@ public actor Channel {
 
   /// Called by the frame router when a message arrives for this channel's topic.
   /// Fans the message out to all registered `messages()` consumers, all
-  /// type-erased `broadcasts(of:event:)` consumers, and all presence consumers.
+  /// type-erased `broadcasts(of:event:)` consumers, presence consumers, and
+  /// postgres_changes consumers (Task 28).
   func receive(_ message: PhoenixMessage) {
     for continuation in messagesContinuations.values {
       continuation.yield(message)
@@ -662,6 +711,100 @@ public actor Channel {
     for handler in presenceConsumers.values {
       handler(message)
     }
+    // Postgres fan-out (Task 28).
+    switch message.event {
+    case .postgresChanges:
+      _routePostgresChange(message)
+    case .system:
+      _routeSystemEvent(message)
+    default:
+      break
+    }
+  }
+
+  // MARK: - Postgres routing (Task 28)
+
+  /// Routes an incoming `postgres_changes` frame to all consumers whose registration id
+  /// maps to one of the server ids listed in the frame's `ids` array.
+  ///
+  /// Wire shape: `{ "ids": [0, 2, ...], "data": { "type": "INSERT"|"UPDATE"|"DELETE",
+  /// "record": {...}, "old_record": {...}, "columns": [...], "commit_timestamp": "..." } }`
+  private func _routePostgresChange(_ message: PhoenixMessage) {
+    guard case .json(let jsonValue) = message.payload,
+      let obj = jsonValue.objectValue
+    else { return }
+
+    // Extract ids array.
+    guard let idsValue = obj["ids"],
+      let idsArray = idsValue.arrayValue
+    else { return }
+
+    let serverIDs: [Int] = idsArray.compactMap { $0.intValue }
+    guard !serverIDs.isEmpty else { return }
+
+    // Verify data object exists before dispatching; avoids handlers processing malformed frames.
+    guard obj["data"]?.objectValue != nil else { return }
+
+    // For each server id, find all mapped registration UUIDs, then all consumer UUIDs for
+    // each registration, and dispatch to the corresponding handler.
+    for serverID in serverIDs {
+      guard let registrationUUIDs = serverIDRouting[serverID] else { continue }
+      for registrationUUID in registrationUUIDs {
+        guard let consumerUUIDs = registrationConsumers[registrationUUID] else { continue }
+        for consumerUUID in consumerUUIDs {
+          postgresConsumers[consumerUUID]?(message)
+        }
+      }
+    }
+  }
+
+  /// Routes an incoming `system` event. If it signals a postgres_changes subscription
+  /// failure (extension == "postgres_changes", status == "error"), all postgres streams
+  /// are finished throwing `.postgresSubscriptionFailed(reason:)`.
+  ///
+  /// Design note: we fail ALL postgres streams because the system event does not include
+  /// enough information to identify which specific subscription failed.
+  private func _routeSystemEvent(_ message: PhoenixMessage) {
+    guard case .json(let jsonValue) = message.payload,
+      let obj = jsonValue.objectValue
+    else { return }
+
+    guard let ext = obj["extension"]?.stringValue, ext == "postgres_changes",
+      let status = obj["status"]?.stringValue, status == "error"
+    else { return }
+
+    let reason = obj["message"]?.stringValue ?? "Unknown postgres subscription error"
+    _failAllPostgresConsumers(reason: reason)
+  }
+
+  /// Builds the server-id routing map from the join reply's `postgres_changes` response array.
+  ///
+  /// The server returns an array of objects in the same order as the client's `postgres_changes`
+  /// entries. Each object has an `id` integer key. Multiple entries may share the same integer id
+  /// (identical subscriptions collapse). We map `serverID -> [registrationUUID]`.
+  private func _buildServerIDRouting(from response: JSONValue) {
+    var routing: [Int: [UUID]] = [:]
+    guard let responseObj = response.objectValue,
+      let changesArray = responseObj["postgres_changes"]?.arrayValue
+    else {
+      serverIDRouting = [:]
+      return
+    }
+
+    // The changesArray indices correspond to pendingRegistrations indices.
+    for (index, entry) in changesArray.enumerated() {
+      guard let serverID = entry.objectValue?["id"]?.intValue,
+        index < pendingRegistrations.count
+      else { continue }
+      let regUUID = pendingRegistrations[index].id
+      if routing[serverID] == nil {
+        routing[serverID] = [regUUID]
+      } else {
+        routing[serverID]?.append(regUUID)
+      }
+    }
+
+    serverIDRouting = routing
   }
 
   // MARK: - Messages stream teardown
@@ -692,5 +835,29 @@ public actor Channel {
     }
     presenceConsumers.removeAll()
     presenceFinishers.removeAll()
+  }
+
+  /// Finishes all open `postgresChanges(for:)` streams by invoking each finisher closure.
+  /// The finisher throws `.channelClosed(reason)` into the stream.
+  private func finishAllPostgresConsumers(reason: CloseReason) {
+    for finisher in postgresFinishers.values {
+      finisher(reason)
+    }
+    postgresConsumers.removeAll()
+    postgresFinishers.removeAll()
+    postgresErrorFinishers.removeAll()
+    registrationConsumers.removeAll()
+  }
+
+  /// Fails all postgres streams with `.postgresSubscriptionFailed(reason:)`.
+  /// Used when a system event signals a postgres subscription error (Finding H6).
+  private func _failAllPostgresConsumers(reason: String) {
+    for finisher in postgresErrorFinishers.values {
+      finisher(reason)
+    }
+    postgresConsumers.removeAll()
+    postgresFinishers.removeAll()
+    postgresErrorFinishers.removeAll()
+    registrationConsumers.removeAll()
   }
 }

@@ -58,7 +58,8 @@ extension Channel {
       table: table,
       filter: filter?.serialized,
       id: UUID(),
-      channelID: ObjectIdentifier(self)
+      channelID: ObjectIdentifier(self),
+      variantKind: .anyEvent
     )
     _appendRegistration(config)
     return ChangeRegistration(config: config)
@@ -86,7 +87,8 @@ extension Channel {
       table: table,
       filter: filter?.serialized,
       id: UUID(),
-      channelID: ObjectIdentifier(self)
+      channelID: ObjectIdentifier(self),
+      variantKind: .insert
     )
     _appendRegistration(config)
     return ChangeRegistration(config: config)
@@ -114,7 +116,8 @@ extension Channel {
       table: table,
       filter: filter?.serialized,
       id: UUID(),
-      channelID: ObjectIdentifier(self)
+      channelID: ObjectIdentifier(self),
+      variantKind: .update
     )
     _appendRegistration(config)
     return ChangeRegistration(config: config)
@@ -142,10 +145,152 @@ extension Channel {
       table: table,
       filter: filter?.serialized,
       id: UUID(),
-      channelID: ObjectIdentifier(self)
+      channelID: ObjectIdentifier(self),
+      variantKind: .delete
     )
     _appendRegistration(config)
     return ChangeRegistration(config: config)
+  }
+}
+
+// MARK: - postgresChanges(for:) (Task 28)
+
+extension Channel {
+  /// Returns an `AsyncThrowingStream` that yields every postgres change event that
+  /// matches the given registration token.
+  ///
+  /// ## Server-id routing
+  /// The server assigns integer ids to each `postgres_changes` entry in the join reply
+  /// (in the same order as the client's `postgres_changes` array). An incoming
+  /// `postgres_changes` frame carries an `ids` array; this method routes the frame to
+  /// all tokens whose registration UUID is mapped to one of those server ids.
+  ///
+  /// ## Per-call fan-out (Decision 12 OR semantics)
+  /// Multiple `postgresChanges(for:)` calls for tokens sharing a server id each receive
+  /// a copy of every matching frame.
+  ///
+  /// ## `.unknownToken`
+  /// If `token` was created on a different channel, the returned stream immediately
+  /// finishes throwing `.unknownToken`.
+  ///
+  /// ## Decode failure
+  /// If the frame cannot be decoded into `E.Element`, the stream terminates by
+  /// throwing `RealtimeError.decoding(type:underlying:)`.
+  ///
+  /// ## Terminal close
+  /// When the channel transitions to `.closed(reason)`, the stream terminates by
+  /// throwing `RealtimeError.channelClosed(reason)`.
+  ///
+  /// ## Async setup errors (H6)
+  /// When a `system` event signals a postgres_changes failure, the stream terminates
+  /// by throwing `RealtimeError.postgresSubscriptionFailed(reason:)`.
+  ///
+  /// - Note: The thrown error is always a `RealtimeError`. The stream's `Failure` is
+  ///   `any Error` (not `RealtimeError`) because `AsyncThrowingStream<_, RealtimeError>`
+  ///   requires iOS 17+; on the iOS 16 deployment target, only `Failure == any Error` is
+  ///   available. Cast with `as? RealtimeError` or use `if case` matching.
+  public func postgresChanges<E: ChangeEventVariant>(
+    for token: ChangeRegistration<E>
+  ) -> AsyncThrowingStream<E.Element, any Error> {
+    let config = token.config
+
+    // Guard: token must belong to this channel.
+    guard config.channelID == ObjectIdentifier(self) else {
+      let (stream, continuation) = AsyncThrowingStream<E.Element, any Error>.makeStream()
+      continuation.finish(throwing: RealtimeError.unknownToken)
+      return stream
+    }
+
+    let id = UUID()
+    let (stream, continuation) = AsyncThrowingStream<E.Element, any Error>.makeStream()
+
+    // Capture the variantKind at registration time.
+    let variantKind = config.variantKind
+    let registrationID = config.id
+
+    // Type-erased handler. Called by _routePostgresChange for each matching server id.
+    // We switch on variantKind — safe `as!` because the variant kind is immutably tied
+    // to the generic parameter E at factory call time.
+    let handler: @Sendable (PhoenixMessage) -> Void = { message in
+      guard case .json(let jsonValue) = message.payload,
+        let obj = jsonValue.objectValue,
+        let dataValue = obj["data"],
+        let dataObj = dataValue.objectValue
+      else { return }
+
+      let type_ = dataObj["type"]?.stringValue ?? ""
+      let record: JSONValue = dataObj["record"] ?? .object([:])
+      let oldRecord: JSONValue? = dataObj["old_record"]
+
+      let element: E.Element
+      switch variantKind {
+      case .insert:
+        // E == Insert<JSONValue>, E.Element == JSONValue
+        element = record as! E.Element
+
+      case .update:
+        // E == Update<JSONValue>, E.Element == PostgresUpdate<JSONValue>
+        let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
+        element = update as! E.Element
+
+      case .delete:
+        // E == Delete<JSONValue>, E.Element == PostgresDelete<JSONValue>
+        let oldRec = oldRecord ?? .object([:])
+        let del = PostgresDelete<JSONValue>(oldRecord: oldRec)
+        element = del as! E.Element
+
+      case .anyEvent:
+        // E == AnyEvent<JSONValue>, E.Element == PostgresChange<JSONValue>
+        let change: PostgresChange<JSONValue>
+        switch type_ {
+        case "INSERT":
+          change = .insert(record)
+        case "UPDATE":
+          let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
+          change = .update(update)
+        case "DELETE":
+          let oldRec = oldRecord ?? .object([:])
+          let del = PostgresDelete<JSONValue>(oldRecord: oldRec)
+          change = .delete(del)
+        default:
+          // Unknown event type — treat as insert with the raw data value.
+          change = .insert(record)
+        }
+        element = change as! E.Element
+      }
+      continuation.yield(element)
+    }
+
+    // Channel-close finisher: throws .channelClosed(reason) into the stream.
+    let finisher: @Sendable (CloseReason) -> Void = { reason in
+      continuation.finish(throwing: RealtimeError.channelClosed(reason))
+    }
+
+    // System postgres error finisher: throws .postgresSubscriptionFailed(reason:).
+    let errorFinisher: @Sendable (String) -> Void = { reason in
+      continuation.finish(throwing: RealtimeError.postgresSubscriptionFailed(reason: reason))
+    }
+
+    // Register all three in the actor's fan-out tables.
+    postgresConsumers[id] = handler
+    postgresFinishers[id] = finisher
+    postgresErrorFinishers[id] = errorFinisher
+
+    // Register this consumer UUID in the indirection map: registrationID → [consumerIDs].
+    if registrationConsumers[registrationID] == nil {
+      registrationConsumers[registrationID] = [id]
+    } else {
+      registrationConsumers[registrationID]?.append(id)
+    }
+
+    // On stream termination (cancellation or normal finish), deregister from the actor.
+    continuation.onTermination = { [weak self] _ in
+      Task { [weak self] in
+        await self?.removePostgresConsumer(id: id, registrationID: registrationID)
+      }
+    }
+
+    return stream
   }
 }
 
