@@ -223,6 +223,61 @@ final class TransportServer: Sendable {
     }
   }
 
+  // MARK: - autoReplyToBroadcasts
+
+  /// Spawns a background task that watches client→server frames for binary broadcast push
+  /// frames (kind byte `0x03`) and automatically replies with a `phx_reply` carrying the
+  /// same `ref` and the supplied `status`.
+  ///
+  /// Uses `subscribeToClientFrames()` so it can coexist with `autoReplyToJoins()` and
+  /// other helpers without competing for frames — each helper gets its own broadcast copy.
+  ///
+  /// - Parameter status: The reply status — `"ok"` by default.
+  func autoReplyToBroadcasts(status: String = "ok") {
+    let server = self
+    let frames = subscribeToClientFrames()
+    Task.detached {
+      for await frame in frames {
+        // Only handle binary frames.
+        guard case .binary(let data) = frame else { continue }
+        // Kind byte must be 0x03 (client → server broadcast push).
+        guard data.count >= 7, data[data.startIndex] == 3 else { continue }
+
+        // Parse header lengths.
+        // Layout: [kind:1][joinRefLen:1][refLen:1][topicLen:1][eventLen:1][metaLen:1][encoding:1]
+        //         [joinRef...][ref...][topic...][event...][meta...][payload...]
+        let joinRefLen = Int(data[data.startIndex + 1])
+        let refLen = Int(data[data.startIndex + 2])
+        let topicLen = Int(data[data.startIndex + 3])
+
+        let headerSize = 7
+        let minRequired = headerSize + joinRefLen + refLen + topicLen
+        guard data.count >= minRequired else { continue }
+
+        var offset = data.startIndex + headerSize
+        // Skip joinRef bytes.
+        offset += joinRefLen
+        // Extract ref bytes.
+        let refEnd = offset + refLen
+        guard data.count >= refEnd - data.startIndex else { continue }
+        let refData = data[offset..<(offset + refLen)]
+        offset += refLen
+        // Extract topic bytes.
+        let topicData = data[offset..<(offset + topicLen)]
+
+        guard let ref = String(data: Data(refData), encoding: .utf8),
+          let topic = String(data: Data(topicData), encoding: .utf8),
+          !ref.isEmpty
+        else { continue }
+
+        // Inject a text phx_reply so the in-flight registry resolves the push.
+        let reply =
+          "[null,\"\(ref)\",\"\(topic)\",\"phx_reply\",{\"status\":\"\(status)\",\"response\":{}}]"
+        server.send(.text(reply))
+      }
+    }
+  }
+
   /// Called by InMemoryTransport on each connect() to produce a fresh connection object.
   /// Installs a new server→client continuation, replacing the previous (possibly finished) one.
   fileprivate func makeConnection() -> InMemoryConnection {

@@ -32,7 +32,8 @@ public actor Channel {
   // MARK: - Channel state
 
   /// The current channel state. Drives `state` stream emissions.
-  private var channelState: ChannelState = .unsubscribed
+  /// Internal (not private) so Channel+Broadcast.swift (same module, separate file) can read it.
+  var channelState: ChannelState = .unsubscribed
 
   /// Broadcast list of `state` stream continuations.
   /// Mirrors the pattern used by `Realtime.statusContinuations`.

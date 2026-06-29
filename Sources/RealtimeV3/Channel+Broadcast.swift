@@ -8,6 +8,156 @@
 import Foundation
 import Helpers
 
+// MARK: - Channel + broadcast send
+
+extension Channel {
+
+  /// Sends a broadcast message with an `Encodable` payload.
+  ///
+  /// ## State gating
+  /// - `.unsubscribed` / `.joining` → throws `.notSubscribed`
+  /// - `.leaving` / `.closed` → throws `.channelClosed(reason)`
+  /// - `.joined` → encodes payload and sends the binary push frame
+  ///
+  /// ## Ack mode
+  /// When `options.broadcast.acknowledge == true`, the call suspends until the server
+  /// sends a `phx_reply` for this push, or `configuration.broadcastAckTimeout` elapses
+  /// (throws `.broadcastAckTimeout`). When `acknowledge == false` the frame is sent
+  /// fire-and-forget.
+  ///
+  /// ## Wire format
+  /// The binary frame is a Phoenix 2.0.0 broadcast push (kind byte `0x03`). The JSON
+  /// payload inside the frame is:
+  /// ```json
+  /// {"type": "broadcast", "event": "<event>", "payload": <encodedT>}
+  /// ```
+  /// This is symmetric with the receive side (`broadcasts(of:event:)`).
+  ///
+  /// - Parameters:
+  ///   - payload: The message payload. Encoded to JSON before sending.
+  ///   - event: The broadcast event name (e.g. `"chat"`).
+  /// - Throws: `RealtimeError`
+  public func broadcast<T: Encodable & Sendable>(_ payload: T, as event: String)
+    async throws(RealtimeError)
+  {
+    // Guard: ensure the owning Realtime is still alive.
+    guard let realtime else { throw .channelClosed(.clientDisconnected) }
+
+    // State gating.
+    switch channelState {
+    case .joined:
+      break
+    case .unsubscribed, .joining:
+      throw .notSubscribed
+    case .leaving:
+      throw .channelClosed(.userRequested)
+    case .closed(let reason):
+      throw .channelClosed(reason)
+    }
+
+    // Encode the payload to AnyJSON for embedding in the broadcast envelope.
+    // AnyJSON.init(_:) requires Codable, but T is only Encodable, so encode to Data first
+    // then decode back to AnyJSON via the standard JSON round-trip.
+    let encodedPayload: AnyJSON
+    do {
+      let data = try JSONEncoder().encode(payload)
+      encodedPayload = try JSONDecoder().decode(AnyJSON.self, from: data)
+    } catch {
+      throw .encoding(underlying: error)
+    }
+
+    // Build the inner broadcast envelope.
+    let innerPayload: JSONObject = [
+      "type": .string("broadcast"),
+      "event": .string(event),
+      "payload": encodedPayload,
+    ]
+
+    // Generate a ref (needed for ack mode; always generated for protocol correctness).
+    let ref = realtime.nextRef()
+    let currentJoinRef = joinRef
+
+    // Encode the binary broadcast frame.
+    let frameData: Data
+    do {
+      frameData = try realtime.serializer.encodeBroadcastPush(
+        joinRef: currentJoinRef,
+        ref: ref,
+        topic: topic,
+        event: PhoenixEvent.broadcast.rawValue,
+        jsonPayload: innerPayload
+      )
+    } catch {
+      throw error as? RealtimeError ?? .encoding(underlying: error)
+    }
+
+    // Send the binary frame (lazy-connects if needed).
+    try await realtime.sendBinary(frameData)
+
+    // Ack mode: await the server reply.
+    if options.broadcast.acknowledge {
+      _ = try await realtime.awaitReply(
+        ref: ref,
+        timeout: realtime.configuration.broadcastAckTimeout,
+        timeoutError: .broadcastAckTimeout
+      )
+    }
+  }
+
+  /// Sends a broadcast message with a raw binary payload.
+  ///
+  /// The binary data is shipped as-is inside the Phoenix 2.0.0 broadcast push frame
+  /// (kind byte `0x03`, encoding byte `0x00`). Ack semantics are identical to the
+  /// `Encodable` overload.
+  ///
+  /// - Parameters:
+  ///   - data: The raw binary payload.
+  ///   - event: The broadcast event name.
+  /// - Throws: `RealtimeError`
+  public func broadcast(_ data: Data, as event: String) async throws(RealtimeError) {
+    // Guard: ensure the owning Realtime is still alive.
+    guard let realtime else { throw .channelClosed(.clientDisconnected) }
+
+    // State gating.
+    switch channelState {
+    case .joined:
+      break
+    case .unsubscribed, .joining:
+      throw .notSubscribed
+    case .leaving:
+      throw .channelClosed(.userRequested)
+    case .closed(let reason):
+      throw .channelClosed(reason)
+    }
+
+    let ref = realtime.nextRef()
+    let currentJoinRef = joinRef
+
+    let frameData: Data
+    do {
+      frameData = try realtime.serializer.encodeBroadcastPush(
+        joinRef: currentJoinRef,
+        ref: ref,
+        topic: topic,
+        event: PhoenixEvent.broadcast.rawValue,
+        binaryPayload: data
+      )
+    } catch {
+      throw error as? RealtimeError ?? .encoding(underlying: error)
+    }
+
+    try await realtime.sendBinary(frameData)
+
+    if options.broadcast.acknowledge {
+      _ = try await realtime.awaitReply(
+        ref: ref,
+        timeout: realtime.configuration.broadcastAckTimeout,
+        timeoutError: .broadcastAckTimeout
+      )
+    }
+  }
+}
+
 // MARK: - Channel + broadcasts(of:event:)
 
 extension Channel {

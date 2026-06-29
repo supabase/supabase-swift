@@ -508,6 +508,25 @@ public actor Realtime {
     }
   }
 
+  /// Ensures the socket is connected (lazy open per spec §6.1), then sends a binary frame.
+  ///
+  /// Used by `Channel.broadcast(_:as:)` which always sends the Phoenix binary push format
+  /// (kind byte `0x03`). Throws `.disconnected` if no connection is available.
+  func sendBinary(_ data: Data) async throws(RealtimeError) {
+    // Lazy connect: establish the socket if not already connected.
+    try await connect()
+
+    guard let conn = connection else {
+      throw .disconnected
+    }
+
+    do {
+      try await conn.send(.binary(data))
+    } catch {
+      throw .transportFailure(underlying: error)
+    }
+  }
+
   /// Registers `ref` with the in-flight registry and suspends until the matching
   /// `phx_reply` arrives or `timeout` elapses on `configuration.clock`.
   func awaitReply(
