@@ -41,7 +41,7 @@ actor InflightPushRegistry {
 
   /// Number of pushes currently awaiting a reply. Used by tests to
   /// deterministically observe registration before advancing a test clock.
-  var pendingCount: Int {
+  nonisolated var pendingCount: Int {
     pendingLock.withValue { $0.count }
   }
 
@@ -108,7 +108,7 @@ actor InflightPushRegistry {
 
   /// Called by the frame router when a `phx_reply` frame arrives.
   /// Resolving an unknown ref is a no-op (double-resolve guard).
-  func resolve(ref: String, status: String, response: JSONValue) {
+  nonisolated func resolve(ref: String, status: String, response: JSONValue) {
     pendingLock.withValue { dict in
       guard let entry = dict.removeValue(forKey: ref) else { return }
       entry.continuation.resume(returning: (status: status, response: response))

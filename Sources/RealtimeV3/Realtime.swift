@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 29/06/26.
 //
 
+import Clocks
 import ConcurrencyExtras
 import Foundation
 import IssueReporting
@@ -20,8 +21,8 @@ import IssueReporting
 /// in-flight connect task. Once connected, repeated `connect()` calls are no-ops.
 ///
 /// ## Transport
-/// The `transport` parameter is required for now (no default).
-/// TODO(Task 11): default transport: URLSessionTransport()
+/// Defaults to `URLSessionTransport()` (production WebSocket). Pass a custom
+/// transport in tests via the `InMemoryTransport` test double.
 public actor Realtime {
   // MARK: - Public typealiases
 
@@ -43,8 +44,17 @@ public actor Realtime {
   /// and for idempotency once connected.
   private var connectTask: Task<Void, any Error>?
 
+  /// Background task that consumes `connection.frames` and routes messages.
+  var routingTask: Task<Void, Never>?
+
+  /// Registry tracking in-flight pushes awaiting a `phx_reply`.
+  let inflightPushRegistry = InflightPushRegistry()
+
+  /// Serializer for encoding/decoding Phoenix protocol frames.
+  let serializer = PhoenixSerializer()
+
   /// Topic → Channel registry. First-call-wins (Decision 33).
-  private var channels: [String: Channel] = [:]
+  var channels: [String: Channel] = [:]
 
   /// Current connection status.
   private var currentStatus: ConnectionStatus = ConnectionStatus(
@@ -69,13 +79,14 @@ public actor Realtime {
   ///     Used for channel join, **not** for the WebSocket handshake (spec §6.3).
   ///   - configuration: Tuning knobs — heartbeat, reconnection, etc. Defaults to `.default`.
   ///   - transport: The transport to use for the WebSocket connection.
-  ///     TODO(Task 11): default transport: URLSessionTransport()
+  ///     Defaults to `URLSessionTransport()` (production). Pass `InMemoryTransport`
+  ///     in tests.
   public init(
     url: URL,
     apiKey: String,
     accessToken: AccessTokenProvider? = nil,
     configuration: Configuration = .default,
-    transport: any RealtimeTransport
+    transport: any RealtimeTransport = URLSessionTransport()
   ) {
     self.url = url
     self.apiKey = apiKey
@@ -190,7 +201,7 @@ public actor Realtime {
     statusContinuations.removeValue(forKey: id)
   }
 
-  private func transition(to state: ConnectionStatus.State) {
+  func transition(to state: ConnectionStatus.State) {
     currentStatus = ConnectionStatus(state: state, since: Date(), latency: nil)
     for continuation in statusContinuations.values {
       continuation.yield(currentStatus)
@@ -225,5 +236,30 @@ public actor Realtime {
 
     // Signal connected.
     transition(to: .connected)
+
+    // Start the background frame routing loop.
+    startFrameRouting(connection: conn)
+  }
+
+  // MARK: - Test shims
+
+  /// Registers a pending push with the in-flight registry and suspends until the
+  /// matching `phx_reply` arrives or the timeout fires.
+  ///
+  /// - Note: **Test-only**. Named with a leading underscore to discourage production use.
+  func _test_awaitReply(ref: String, timeoutError: RealtimeError) async throws -> PushReply {
+    try await inflightPushRegistry.awaitReply(
+      ref: ref,
+      timeout: configuration.joinTimeout,
+      clock: configuration.clock,
+      timeoutError: timeoutError
+    )
+  }
+
+  /// The number of pushes currently registered with the in-flight registry.
+  ///
+  /// - Note: **Test-only**. Used to synchronize tests before injecting reply frames.
+  var _test_pendingCount: Int {
+    inflightPushRegistry.pendingCount
   }
 }

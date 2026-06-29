@@ -28,4 +28,11 @@ public actor Channel {
     self.options = options
     self.realtime = realtime
   }
+
+  /// Called by the frame router when a message arrives for this channel's topic.
+  /// Expanded in Task 19.
+  func receive(_ message: PhoenixMessage) {
+    // Expanded in Task 19: fan-out to messages() consumers.
+    _ = message
+  }
 }
