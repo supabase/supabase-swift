@@ -266,7 +266,11 @@ public actor Realtime {
     _ topic: String,
     configure: (inout ChannelOptions) -> Void = { _ in }
   ) -> Channel {
-    if let existing = channels[topic] {
+    // Prepend the "realtime:" namespace once. Guard against double-prefix if the caller
+    // already passes the fully-qualified form (e.g. "realtime:room:1").
+    let fullTopic = topic.hasPrefix("realtime:") ? topic : "realtime:\(topic)"
+
+    if let existing = channels[fullTopic] {
       // Decision 33: first-call-wins — warn only if the caller requested different options.
       var requested = ChannelOptions()
       configure(&requested)
@@ -282,8 +286,8 @@ public actor Realtime {
 
     var options = ChannelOptions()
     configure(&options)
-    let ch = Channel(topic: topic, options: options, realtime: self)
-    channels[topic] = ch
+    let ch = Channel(topic: fullTopic, options: options, realtime: self)
+    channels[fullTopic] = ch
     return ch
   }
 
@@ -705,6 +709,15 @@ public actor Realtime {
     var components =
       URLComponents(url: url, resolvingAgainstBaseURL: false)
       ?? URLComponents()
+    // Append the Phoenix WebSocket endpoint path component if not already present.
+    // Supabase Realtime routes WebSocket upgrades at `.../websocket`.
+    // Guard against double-append in case the caller already included `/websocket`.
+    let existingPath = components.path
+    if !existingPath.hasSuffix("/websocket") {
+      components.path = existingPath.hasSuffix("/")
+        ? existingPath + "websocket"
+        : existingPath + "/websocket"
+    }
     var queryItems = components.queryItems ?? []
     // Remove any pre-existing apikey / vsn entries to avoid duplication.
     queryItems.removeAll { $0.name == "apikey" || $0.name == "vsn" }

@@ -41,7 +41,7 @@ private struct UserPresence: Codable, Sendable, Equatable {
     // Inject a presence_state frame.
     server.send(
       .text(
-        #"["1",null,"room:1","presence_state",{"u1":{"metas":[{"phx_ref":"r1","userId":"u1","status":"active"}]}}]"#
+        #"["1",null,"realtime:room:1","presence_state",{"u1":{"metas":[{"phx_ref":"r1","userId":"u1","status":"active"}]}}]"#
       ))
 
     // Read first value: initial snapshot.
@@ -55,7 +55,7 @@ private struct UserPresence: Codable, Sendable, Equatable {
     // Inject a presence_diff frame adding u2.
     server.send(
       .text(
-        #"["2",null,"room:1","presence_diff",{"joins":{"u2":{"metas":[{"phx_ref":"r2","userId":"u2","status":"idle"}]}},"leaves":{}}]"#
+        #"["2",null,"realtime:room:1","presence_diff",{"joins":{"u2":{"metas":[{"phx_ref":"r2","userId":"u2","status":"idle"}]}},"leaves":{}}]"#
       ))
 
     // Read second value: accumulated snapshot with diff.
@@ -91,13 +91,13 @@ private struct UserPresence: Codable, Sendable, Equatable {
     // Inject presence_state — should NOT emit on diffs stream.
     server.send(
       .text(
-        #"["1",null,"room:1","presence_state",{"u1":{"metas":[{"phx_ref":"r1","userId":"u1","status":"active"}]}}]"#
+        #"["1",null,"realtime:room:1","presence_state",{"u1":{"metas":[{"phx_ref":"r1","userId":"u1","status":"active"}]}}]"#
       ))
 
     // Inject presence_diff adding u2 — SHOULD emit on diffs stream.
     server.send(
       .text(
-        #"["2",null,"room:1","presence_diff",{"joins":{"u2":{"metas":[{"phx_ref":"r2","userId":"u2","status":"idle"}]}},"leaves":{}}]"#
+        #"["2",null,"realtime:room:1","presence_diff",{"joins":{"u2":{"metas":[{"phx_ref":"r2","userId":"u2","status":"idle"}]}},"leaves":{}}]"#
       ))
 
     // The FIRST value from diffs() must be the presence_diff (not presence_state).

@@ -57,7 +57,7 @@ import Testing
         if iterations > 20 { break }
         continue
       }
-      guard let topic = array[2].stringValue, topic == "room:1" else {
+      guard let topic = array[2].stringValue, topic == "realtime:room:1" else {
         if iterations > 20 { break }
         continue
       }

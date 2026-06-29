@@ -24,9 +24,8 @@ struct SubscribeLeaveE2ETests {
   func subscribeAndLeavePublicChannel() async throws {
     let rt = IntegrationEnv.makeRealtime()
 
-    // The local Supabase realtime server only accepts topics prefixed with "realtime:".
-    // A bare "room:1" topic is rejected with "unmatched topic".
-    let channel = await rt.channel("realtime:room:1")
+    // channel() automatically prepends "realtime:" — pass the short topic here.
+    let channel = await rt.channel("room:1")
     let stateStream = await channel.state
 
     // subscribe() auto-connects the socket and joins the channel
@@ -60,13 +59,13 @@ struct SubscribeLeaveE2ETests {
 
   // MARK: - IE-2b: subscribe to a realtime:public:messages topic
 
-  @Test("subscribes to a realtime:public:messages topic")
+  @Test("subscribes to a public:messages topic (SDK adds realtime: prefix)")
   func subscribeToRealtimeTopic() async throws {
     let rt = IntegrationEnv.makeRealtime()
 
     // The canonical Supabase realtime topic for postgres-changes on a table.
-    // Even without registering postgres_changes filters, the server accepts the topic.
-    let channel = await rt.channel("realtime:public:messages")
+    // channel() prepends "realtime:" — pass the short form "public:messages".
+    let channel = await rt.channel("public:messages")
     let stateStream = await channel.state
 
     try await channel.subscribe()
@@ -100,8 +99,8 @@ struct SubscribeLeaveE2ETests {
   func subscribeToSameTopicIsIdempotent() async throws {
     let rt = IntegrationEnv.makeRealtime()
 
-    let ch1 = await rt.channel("realtime:room:idempotent")
-    let ch2 = await rt.channel("realtime:room:idempotent")
+    let ch1 = await rt.channel("room:idempotent")
+    let ch2 = await rt.channel("room:idempotent")
 
     // Both references must point to the same actor identity
     #expect(ch1 === ch2)

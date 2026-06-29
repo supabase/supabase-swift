@@ -46,7 +46,7 @@ import Testing
     defer { collectTask.cancel() }
 
     // Inject an unsolicited phx_close for the channel topic.
-    server.send(.text(#"["1",null,"room:1","phx_close",{}]"#))
+    server.send(.text(#"["1",null,"realtime:room:1","phx_close",{}]"#))
 
     // Wait for the state to reach .closed — bounded loop.
     var stateIter = await channel.state.makeAsyncIterator()
@@ -115,7 +115,7 @@ import Testing
     // Inject a non-postgres system error with "token" in the message.
     server.send(
       .text(
-        #"[null,null,"room:1","system",{"status":"error","message":"Invalid JWT token"}]"#
+        #"[null,null,"realtime:room:1","system",{"status":"error","message":"Invalid JWT token"}]"#
       ))
 
     var stateIter = await channel.state.makeAsyncIterator()
@@ -167,7 +167,7 @@ import Testing
     }
 
     // Inject a trailing phx_close from the server (simulating race between leave ACK and server close).
-    server.send(.text(#"["1",null,"room:1","phx_close",{}]"#))
+    server.send(.text(#"["1",null,"realtime:room:1","phx_close",{}]"#))
 
     // Yield briefly so the frame can be processed.
     await Task.yield()
@@ -193,7 +193,7 @@ import Testing
     server.autoReplyToJoins()
     try await channel.subscribe()
 
-    server.send(.text(#"[null,null,"room:1","phx_error",{}]"#))
+    server.send(.text(#"[null,null,"realtime:room:1","phx_error",{}]"#))
 
     var stateIter = await channel.state.makeAsyncIterator()
     var reachedClosed = false

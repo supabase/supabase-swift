@@ -31,7 +31,7 @@ import Testing
 
     // Inject a broadcast frame for the channel topic.
     server.send(
-      .text(#"["1",null,"room:1","broadcast",{"event":"chat","payload":{"x":1}}]"#))
+      .text(#"["1",null,"realtime:room:1","broadcast",{"event":"chat","payload":{"x":1}}]"#))
 
     // Each stream should yield exactly one message with event == .broadcast.
     var iter1 = stream1.makeAsyncIterator()
@@ -61,7 +61,7 @@ import Testing
 
     // Inject frame A — first consumer receives it.
     server.send(
-      .text(#"["1",null,"room:1","broadcast",{"event":"frameA","payload":{}}]"#))
+      .text(#"["1",null,"realtime:room:1","broadcast",{"event":"frameA","payload":{}}]"#))
     let msgA = await iter1.next()
     #expect(msgA?.event == .broadcast)
 
@@ -71,7 +71,7 @@ import Testing
 
     // Inject frame B — second consumer should receive it.
     server.send(
-      .text(#"["2",null,"room:1","broadcast",{"event":"frameB","payload":{}}]"#))
+      .text(#"["2",null,"realtime:room:1","broadcast",{"event":"frameB","payload":{}}]"#))
     let msgB = await iter2.next()
     #expect(msgB?.event == .broadcast)
   }
@@ -104,7 +104,7 @@ import Testing
 
     // Inject one frame to confirm the stream is live.
     server.send(
-      .text(#"["1",null,"room:1","broadcast",{"event":"alive","payload":{}}]"#))
+      .text(#"["1",null,"realtime:room:1","broadcast",{"event":"alive","payload":{}}]"#))
 
     // Give the collection task a moment to consume the frame.
     var waitIterations = 0

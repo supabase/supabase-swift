@@ -32,7 +32,7 @@ import Testing
     }
 
     // Inject a phx_reply frame from the server.
-    server.send(.text(#"[null,"1","room:1","phx_reply",{"status":"ok","response":{}}]"#))
+    server.send(.text(#"[null,"1","realtime:room:1","phx_reply",{"status":"ok","response":{}}]"#))
 
     let result = try await pendingReply
     #expect(result.status == "ok")

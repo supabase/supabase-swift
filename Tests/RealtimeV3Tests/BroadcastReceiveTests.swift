@@ -39,7 +39,7 @@ private struct ChatMsg: Codable, Sendable, Equatable {
     // Inject a broadcast frame with inner event "chat".
     server.send(
       .text(
-        #"["1",null,"room:1","broadcast",{"type":"broadcast","event":"chat","payload":{"text":"hi"}}]"#
+        #"["1",null,"realtime:room:1","broadcast",{"type":"broadcast","event":"chat","payload":{"text":"hi"}}]"#
       ))
 
     // Read first value — bounded by task timeout.
@@ -66,13 +66,13 @@ private struct ChatMsg: Codable, Sendable, Equatable {
     // Inject "other" event — should be ignored by the "chat" stream.
     server.send(
       .text(
-        #"["1",null,"room:1","broadcast",{"type":"broadcast","event":"other","payload":{"text":"ignored"}}]"#
+        #"["1",null,"realtime:room:1","broadcast",{"type":"broadcast","event":"other","payload":{"text":"ignored"}}]"#
       ))
 
     // Inject "chat" event — should be the FIRST thing yielded.
     server.send(
       .text(
-        #"["2",null,"room:1","broadcast",{"type":"broadcast","event":"chat","payload":{"text":"hello"}}]"#
+        #"["2",null,"realtime:room:1","broadcast",{"type":"broadcast","event":"chat","payload":{"text":"hello"}}]"#
       ))
 
     // Only the "chat" message arrives; if "other" were yielded, it would arrive first.

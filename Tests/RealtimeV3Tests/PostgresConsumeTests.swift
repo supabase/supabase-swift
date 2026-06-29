@@ -46,7 +46,7 @@ import Testing
     // Inject a postgres_changes frame with ids:[0].
     server.send(
       .text(
-        #"["1",null,"room:1","postgres_changes",{"ids":[0],"data":{"type":"INSERT","record":{"id":1,"text":"hi"},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+        #"["1",null,"realtime:room:1","postgres_changes",{"ids":[0],"data":{"type":"INSERT","record":{"id":1,"text":"hi"},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
       ))
 
     // Read first value — decoded record must be the JSONValue object.
@@ -95,7 +95,7 @@ import Testing
     // Inject one frame — both streams should receive it.
     server.send(
       .text(
-        #"["1",null,"room:2","postgres_changes",{"ids":[0],"data":{"type":"INSERT","record":{"id":42},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+        #"["1",null,"realtime:room:2","postgres_changes",{"ids":[0],"data":{"type":"INSERT","record":{"id":42},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
       ))
 
     let valueA = try await iterA.next()
@@ -177,7 +177,7 @@ import Testing
     // Inject a system event indicating a postgres subscription failure.
     server.send(
       .text(
-        #"[null,null,"room:3","system",{"extension":"postgres_changes","status":"error","message":"subscription failed"}]"#
+        #"[null,null,"realtime:room:3","system",{"extension":"postgres_changes","status":"error","message":"subscription failed"}]"#
       ))
 
     // Wait for the error (bounded).
@@ -228,7 +228,7 @@ import Testing
 
     server.send(
       .text(
-        #"["1",null,"room:4","postgres_changes",{"ids":[0],"data":{"type":"UPDATE","record":{"id":1,"text":"new"},"old_record":{"id":1,"text":"old"},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+        #"["1",null,"realtime:room:4","postgres_changes",{"ids":[0],"data":{"type":"UPDATE","record":{"id":1,"text":"new"},"old_record":{"id":1,"text":"old"},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
       ))
 
     let value = try await iter.next()
@@ -261,7 +261,7 @@ import Testing
 
     server.send(
       .text(
-        #"["1",null,"room:5","postgres_changes",{"ids":[0],"data":{"type":"DELETE","old_record":{"id":1,"text":"deleted"},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+        #"["1",null,"realtime:room:5","postgres_changes",{"ids":[0],"data":{"type":"DELETE","old_record":{"id":1,"text":"deleted"},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
       ))
 
     let value = try await iter.next()
@@ -294,7 +294,7 @@ import Testing
     // Inject a frame with ids:[0] but missing the `record` key — malformed INSERT.
     server.send(
       .text(
-        #"["1",null,"room:mal1","postgres_changes",{"ids":[0],"data":{"type":"INSERT","columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+        #"["1",null,"realtime:room:mal1","postgres_changes",{"ids":[0],"data":{"type":"INSERT","columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
       ))
 
     do {
@@ -334,7 +334,7 @@ import Testing
     // Inject a frame with ids:[0] but an unknown type string.
     server.send(
       .text(
-        #"["1",null,"room:mal2","postgres_changes",{"ids":[0],"data":{"type":"BOGUS","record":{},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+        #"["1",null,"realtime:room:mal2","postgres_changes",{"ids":[0],"data":{"type":"BOGUS","record":{},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
       ))
 
     do {
@@ -375,7 +375,7 @@ import Testing
     // DELETE frame with no old_record.
     server.send(
       .text(
-        #"["1",null,"room:mal3","postgres_changes",{"ids":[0],"data":{"type":"DELETE","columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+        #"["1",null,"realtime:room:mal3","postgres_changes",{"ids":[0],"data":{"type":"DELETE","columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
       ))
 
     do {
@@ -416,13 +416,13 @@ import Testing
     // First: inject a frame whose ids do NOT include 0 — must be silently skipped.
     server.send(
       .text(
-        #"["1",null,"room:skip1","postgres_changes",{"ids":[99],"data":{"type":"INSERT","record":{"id":99},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+        #"["1",null,"realtime:room:skip1","postgres_changes",{"ids":[99],"data":{"type":"INSERT","record":{"id":99},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
       ))
 
     // Then: inject a valid frame with ids:[0] — stream must still deliver this.
     server.send(
       .text(
-        #"["1",null,"room:skip1","postgres_changes",{"ids":[0],"data":{"type":"INSERT","record":{"id":1},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+        #"["1",null,"realtime:room:skip1","postgres_changes",{"ids":[0],"data":{"type":"INSERT","record":{"id":1},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
       ))
 
     // The first next() must be from the valid frame (id:1), not terminated by the skipped one.
@@ -455,7 +455,7 @@ import Testing
 
     server.send(
       .text(
-        #"["1",null,"room:6","postgres_changes",{"ids":[0],"data":{"type":"INSERT","record":{"id":99},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+        #"["1",null,"realtime:room:6","postgres_changes",{"ids":[0],"data":{"type":"INSERT","record":{"id":99},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
       ))
 
     let value = try await iter.next()

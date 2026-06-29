@@ -14,16 +14,16 @@ import RealtimeV3
 /// and can be overridden via environment variables for CI or remote instances.
 enum IntegrationEnv {
 
-  /// WebSocket endpoint for RealtimeV3.
+  /// Base WebSocket URL for RealtimeV3 (no `/websocket` suffix).
   ///
-  /// The path must include `/websocket` so that Kong (the local API gateway) routes the
-  /// upgrade to the Realtime server at `ws://realtime-dev:4000/socket/websocket`. Kong
-  /// strips the `/realtime/v1/` prefix and forwards the remainder (`websocket`) to the
-  /// Phoenix endpoint, which handles the WebSocket handshake at `/websocket`.
+  /// The SDK appends `/websocket` automatically in `_openConnection()` before dialling
+  /// the transport, so callers should supply only the base path
+  /// (e.g. `ws://127.0.0.1:54321/realtime/v1`). Kong routes the WebSocket upgrade
+  /// to the Realtime server; the SDK appends the Phoenix endpoint path `/websocket`.
   static var realtimeURL: URL {
     ProcessInfo.processInfo.environment["SUPABASE_REALTIME_URL"]
       .flatMap(URL.init(string:))
-      ?? URL(string: "ws://127.0.0.1:54321/realtime/v1/websocket")!
+      ?? URL(string: "ws://127.0.0.1:54321/realtime/v1")!
   }
 
   /// PostgREST REST endpoint for direct DB writes in postgres-change e2e tests.
