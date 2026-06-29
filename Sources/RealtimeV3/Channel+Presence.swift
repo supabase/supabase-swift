@@ -159,26 +159,33 @@ public struct Presence: Sendable {
 
   /// Snapshot + diff stream of all presences, keyed by presence key.
   ///
-  /// - Note: Implemented in Task 25.
+  /// Each call mints an independent `AsyncStream`. The consumer receives:
+  /// - A `PresenceState` with `lastDiff == nil` on each `presence_state` frame (full snapshot).
+  /// - A `PresenceState` with `lastDiff != nil` on each `presence_diff` frame (incremental update).
+  ///
+  /// The consumer's `active` map accumulates state per-consumer: `presence_state` replaces the
+  /// map; `presence_diff` applies joins/leaves on top. Decode failures are swallowed so the
+  /// stream stays open.
+  ///
+  /// The stream finishes cleanly (no throw) when the channel closes.
   public func observe<T: Decodable & Sendable>(
     _ type: T.Type
-  ) -> AsyncStream<PresenceState<T>> {
-    // Implemented in Task 25.
-    let (stream, continuation) = AsyncStream<PresenceState<T>>.makeStream()
-    continuation.finish()
-    return stream
+  ) async -> AsyncStream<PresenceState<T>> {
+    await channel.registerPresenceObserver(T.self)
   }
 
   /// Incremental diffs only.
   ///
-  /// - Note: Implemented in Task 25.
+  /// Each call mints an independent `AsyncStream`. The consumer receives a `PresenceDiff<T>` only
+  /// on `presence_diff` frames. `presence_state` frames are ignored.
+  ///
+  /// Decode failures are swallowed so the stream stays open.
+  ///
+  /// The stream finishes cleanly (no throw) when the channel closes.
   public func diffs<T: Decodable & Sendable>(
     _ type: T.Type
-  ) -> AsyncStream<PresenceDiff<T>> {
-    // Implemented in Task 25.
-    let (stream, continuation) = AsyncStream<PresenceDiff<T>>.makeStream()
-    continuation.finish()
-    return stream
+  ) async -> AsyncStream<PresenceDiff<T>> {
+    await channel.registerPresenceDiffs(T.self)
   }
 }
 
@@ -191,6 +198,120 @@ extension Channel {
   /// a back-reference to `self` with no actor-isolated state access.
   public nonisolated var presence: Presence {
     Presence(channel: self)
+  }
+}
+
+// MARK: - Channel + presence stream registration
+
+extension Channel {
+  /// Registers a per-call presence observe stream.
+  ///
+  /// Each consumer maintains its own running `active` map (captured in the closure via
+  /// `LockIsolated` for `@Sendable` closure compatibility). On each `presence_state` frame
+  /// the map is replaced; on each `presence_diff` frame the map is updated incrementally
+  /// using phx_ref matching to identify leaving metas. Decode failures are swallowed to
+  /// keep the stream open.
+  func registerPresenceObserver<T: Decodable & Sendable>(
+    _ type: T.Type
+  ) -> AsyncStream<PresenceState<T>> {
+    let id = UUID()
+    let (stream, continuation) = AsyncStream<PresenceState<T>>.makeStream()
+
+    // Per-consumer accumulated active map. LockIsolated makes the mutation @Sendable.
+    // Value: list of (phx_ref, decoded T) pairs to allow phx_ref-based leave matching.
+    let active = LockIsolated<[PresenceKey: [(phxRef: String?, value: T)]]>([:])
+
+    let handler: @Sendable (PhoenixMessage) -> Void = { message in
+      guard case .json(let jsonValue) = message.payload else { return }
+
+      if message.event == .presenceState {
+        // Full snapshot: decode with raw refs and replace the accumulated active map.
+        guard let rawMap = try? decodePresenceStateWithRefs(jsonValue, as: T.self) else { return }
+        active.withValue { $0 = rawMap }
+        let snapshot = active.value.mapValues { $0.map(\.value) }
+        continuation.yield(PresenceState(active: snapshot, lastDiff: nil))
+
+      } else if message.event == .presenceDiff {
+        // Incremental diff: decode and apply.
+        guard let diff = try? decodePresenceDiff(jsonValue, as: T.self) else { return }
+        guard let rawDiff = try? decodePresenceDiffWithRefs(jsonValue, as: T.self)
+        else { return }
+
+        // Apply the diff to the accumulated active map.
+        active.withValue { map in
+          // Apply leaves: remove metas matching by phx_ref.
+          for (key, leftPairs) in rawDiff.left {
+            guard var existing = map[key] else { continue }
+            for (leftRef, _) in leftPairs {
+              if let ref = leftRef, let idx = existing.firstIndex(where: { $0.phxRef == ref }) {
+                existing.remove(at: idx)
+              } else if leftRef == nil, !existing.isEmpty {
+                // No phx_ref: fall back to removing the first entry.
+                existing.removeFirst()
+              }
+            }
+            if existing.isEmpty {
+              map.removeValue(forKey: key)
+            } else {
+              map[key] = existing
+            }
+          }
+
+          // Apply joins: add new metas.
+          for (key, joinPairs) in rawDiff.joined {
+            map[key, default: []].append(contentsOf: joinPairs)
+          }
+        }
+
+        let snapshot = active.value.mapValues { $0.map(\.value) }
+        continuation.yield(PresenceState(active: snapshot, lastDiff: diff))
+      }
+    }
+
+    // Finisher: finish the stream cleanly (non-throwing) on channel close.
+    let finisher: @Sendable () -> Void = {
+      continuation.finish()
+    }
+
+    presenceConsumers[id] = handler
+    presenceFinishers[id] = finisher
+
+    continuation.onTermination = { [weak self] _ in
+      Task { [weak self] in await self?.removePresenceConsumer(id: id) }
+    }
+
+    return stream
+  }
+
+  /// Registers a per-call presence diffs-only stream.
+  ///
+  /// Emits only on `presence_diff` frames. `presence_state` frames are ignored.
+  /// Decode failures are swallowed to keep the stream open.
+  func registerPresenceDiffs<T: Decodable & Sendable>(
+    _ type: T.Type
+  ) -> AsyncStream<PresenceDiff<T>> {
+    let id = UUID()
+    let (stream, continuation) = AsyncStream<PresenceDiff<T>>.makeStream()
+
+    let handler: @Sendable (PhoenixMessage) -> Void = { message in
+      guard message.event == .presenceDiff else { return }
+      guard case .json(let jsonValue) = message.payload else { return }
+      guard let diff = try? decodePresenceDiff(jsonValue, as: T.self) else { return }
+      continuation.yield(diff)
+    }
+
+    let finisher: @Sendable () -> Void = {
+      continuation.finish()
+    }
+
+    presenceConsumers[id] = handler
+    presenceFinishers[id] = finisher
+
+    continuation.onTermination = { [weak self] _ in
+      Task { [weak self] in await self?.removePresenceConsumer(id: id) }
+    }
+
+    return stream
   }
 }
 
@@ -308,6 +429,83 @@ func decodePresenceDiff<T: Decodable>(
   }
 
   return PresenceDiff(joined: joined, left: left)
+}
+
+// MARK: - Internal ref-aware decoders
+
+/// Decodes a `presence_state` payload retaining the `phx_ref` of each meta.
+///
+/// Returns a map from presence key → list of `(phxRef: String?, value: T)` pairs.
+/// Used by `registerPresenceObserver` for leave-matching.
+func decodePresenceStateWithRefs<T: Decodable>(
+  _ json: JSONValue,
+  as type: T.Type
+) throws -> [PresenceKey: [(phxRef: String?, value: T)]] {
+  guard let topObject = json.objectValue else {
+    throw RealtimeError.decoding(
+      type: String(describing: T.self),
+      underlying: PresenceDecodeError.invalidShape(
+        "presence_state root must be a JSON object"
+      )
+    )
+  }
+
+  var result: [PresenceKey: [(phxRef: String?, value: T)]] = [:]
+
+  for (key, keyValue) in topObject {
+    guard let keyObject = keyValue.objectValue,
+      let metasArray = keyObject["metas"]?.arrayValue
+    else {
+      throw RealtimeError.decoding(
+        type: String(describing: T.self),
+        underlying: PresenceDecodeError.invalidShape(
+          "presence_state entry '\(key)' must have a 'metas' array"
+        )
+      )
+    }
+
+    var pairs: [(phxRef: String?, value: T)] = []
+    for meta in metasArray {
+      // Extract phx_ref (if present) before decoding T.
+      let phxRef = meta.objectValue?["phx_ref"]?.stringValue
+      let data = try JSONEncoder().encode(meta)
+      let value = try JSONDecoder().decode(T.self, from: data)
+      pairs.append((phxRef: phxRef, value: value))
+    }
+
+    result[key] = pairs
+  }
+
+  return result
+}
+
+/// Decoded presence diff with raw phx_ref information retained.
+struct PresenceDiffWithRefs<T: Sendable>: Sendable {
+  let joined: [PresenceKey: [(phxRef: String?, value: T)]]
+  let left: [PresenceKey: [(phxRef: String?, value: T)]]
+}
+
+/// Decodes a `presence_diff` payload retaining phx_ref for each meta.
+func decodePresenceDiffWithRefs<T: Decodable>(
+  _ json: JSONValue,
+  as type: T.Type
+) throws -> PresenceDiffWithRefs<T> {
+  guard let topObject = json.objectValue else {
+    throw RealtimeError.decoding(
+      type: String(describing: T.self),
+      underlying: PresenceDecodeError.invalidShape(
+        "presence_diff root must be a JSON object"
+      )
+    )
+  }
+
+  let joinsValue = topObject["joins"] ?? .object([:])
+  let leavesValue = topObject["leaves"] ?? .object([:])
+
+  let joinsMap = try decodePresenceStateWithRefs(joinsValue, as: T.self)
+  let leavesMap = try decodePresenceStateWithRefs(leavesValue, as: T.self)
+
+  return PresenceDiffWithRefs(joined: joinsMap, left: leavesMap)
 }
 
 // MARK: - PresenceDecodeError

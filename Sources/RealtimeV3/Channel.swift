@@ -56,6 +56,17 @@ public actor Channel {
   /// stream with the given `CloseReason`.
   var broadcastFinishers: [UUID: @Sendable (CloseReason) -> Void] = [:]
 
+  /// Per-call fan-out table for `observe(_:)` and `diffs(_:)` presence streams.
+  /// Each call registers a type-erased closure that decodes and yields the
+  /// message into its owning `AsyncStream` continuation.
+  /// Closures are stored as `@Sendable (PhoenixMessage) -> Void` so the registry
+  /// itself is type-erased; the concrete `T` and per-consumer state are captured in the closure.
+  var presenceConsumers: [UUID: @Sendable (PhoenixMessage) -> Void] = [:]
+
+  /// Per-call fan-out table of closures called when the channel closes (presence streams).
+  /// Each `observe`/`diffs` call registers a closure that finishes its `AsyncStream` cleanly.
+  var presenceFinishers: [UUID: @Sendable () -> Void] = [:]
+
   /// The joinRef assigned during the most recent successful (or in-progress) `subscribe()`.
   /// Stored so subsequent frames for this channel (which carry the joinRef) can be validated.
   private(set) var joinRef: String?
@@ -138,6 +149,11 @@ public actor Channel {
     broadcastFinishers.removeValue(forKey: id)
   }
 
+  func removePresenceConsumer(id: UUID) {
+    presenceConsumers.removeValue(forKey: id)
+    presenceFinishers.removeValue(forKey: id)
+  }
+
   /// Transitions the channel to `newState` and broadcasts to all state observers.
   /// When transitioning to a terminal `.closed` state, all `messages()` streams are
   /// finished so consumers' `for await` loops end cleanly.
@@ -149,6 +165,7 @@ public actor Channel {
     if case .closed(let reason) = newState {
       finishAllMessagesContinuations()
       finishAllBroadcastConsumers(reason: reason)
+      finishAllPresenceConsumers()
     }
   }
 
@@ -618,13 +635,16 @@ public actor Channel {
   // MARK: - Frame router entry point
 
   /// Called by the frame router when a message arrives for this channel's topic.
-  /// Fans the message out to all registered `messages()` consumers and all
-  /// type-erased `broadcasts(of:event:)` consumers.
+  /// Fans the message out to all registered `messages()` consumers, all
+  /// type-erased `broadcasts(of:event:)` consumers, and all presence consumers.
   func receive(_ message: PhoenixMessage) {
     for continuation in messagesContinuations.values {
       continuation.yield(message)
     }
     for handler in broadcastConsumers.values {
+      handler(message)
+    }
+    for handler in presenceConsumers.values {
       handler(message)
     }
   }
@@ -648,5 +668,14 @@ public actor Channel {
     }
     broadcastConsumers.removeAll()
     broadcastFinishers.removeAll()
+  }
+
+  /// Finishes all open presence `observe`/`diffs` streams cleanly (no throw — non-throwing streams).
+  private func finishAllPresenceConsumers() {
+    for finisher in presenceFinishers.values {
+      finisher()
+    }
+    presenceConsumers.removeAll()
+    presenceFinishers.removeAll()
   }
 }
