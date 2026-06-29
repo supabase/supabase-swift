@@ -268,6 +268,168 @@ import Testing
     #expect(value?.oldRecord.objectValue?["text"]?.stringValue == "deleted")
   }
 
+  // MARK: - malformedFrameFinishesStreamWithDecoding
+
+  /// An INSERT frame that is targeted at this token (ids:[0]) but has no `record` field
+  /// must finish the stream throwing `.decoding`, not silently return.
+  @Test func malformedFrameFinishesStreamWithDecoding() async throws {
+    let (transport, server) = InMemoryTransport.pair()
+    let rt = Realtime(url: URL(string: "wss://x")!, apiKey: "k", transport: transport)
+    let channel = await rt.channel("room:mal1")
+
+    let token = try await channel.inserts(schema: "public", table: "messages")
+    server.autoReplyToJoinsWithPostgres(
+      postgresChanges: [
+        [
+          "id": .integer(0), "event": .string("INSERT"), "schema": .string("public"),
+          "table": .string("messages"),
+        ]
+      ]
+    )
+    try await channel.subscribe()
+
+    let stream = await channel.postgresChanges(for: token)
+    var iter = stream.makeAsyncIterator()
+
+    // Inject a frame with ids:[0] but missing the `record` key — malformed INSERT.
+    server.send(
+      .text(
+        #"["1",null,"room:mal1","postgres_changes",{"ids":[0],"data":{"type":"INSERT","columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+      ))
+
+    do {
+      _ = try await iter.next()
+      Issue.record("Expected .decoding error but stream yielded a value or finished cleanly")
+    } catch {
+      if case .decoding = error as? RealtimeError {
+        // Expected — test passes.
+      } else {
+        Issue.record("Expected .decoding, got: \(error)")
+      }
+    }
+  }
+
+  // MARK: - bogusTypeFinishesStreamWithDecoding
+
+  /// An anyEvent frame with an unknown `type` string must finish the stream throwing `.decoding`.
+  @Test func bogusTypeFinishesStreamWithDecoding() async throws {
+    let (transport, server) = InMemoryTransport.pair()
+    let rt = Realtime(url: URL(string: "wss://x")!, apiKey: "k", transport: transport)
+    let channel = await rt.channel("room:mal2")
+
+    let token = try await channel.changes(schema: "public", table: "messages")
+    server.autoReplyToJoinsWithPostgres(
+      postgresChanges: [
+        [
+          "id": .integer(0), "event": .string("*"), "schema": .string("public"),
+          "table": .string("messages"),
+        ]
+      ]
+    )
+    try await channel.subscribe()
+
+    let stream = await channel.postgresChanges(for: token)
+    var iter = stream.makeAsyncIterator()
+
+    // Inject a frame with ids:[0] but an unknown type string.
+    server.send(
+      .text(
+        #"["1",null,"room:mal2","postgres_changes",{"ids":[0],"data":{"type":"BOGUS","record":{},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+      ))
+
+    do {
+      _ = try await iter.next()
+      Issue.record("Expected .decoding error but stream yielded a value or finished cleanly")
+    } catch {
+      if case .decoding = error as? RealtimeError {
+        // Expected — test passes.
+      } else {
+        Issue.record("Expected .decoding, got: \(error)")
+      }
+    }
+  }
+
+  // MARK: - deleteWithoutOldRecordThrowsDecoding
+
+  /// A DELETE frame targeted at this token but with no `old_record` must finish the stream
+  /// throwing `.decoding` (PostgresDelete.oldRecord is non-optional).
+  @Test func deleteWithoutOldRecordThrowsDecoding() async throws {
+    let (transport, server) = InMemoryTransport.pair()
+    let rt = Realtime(url: URL(string: "wss://x")!, apiKey: "k", transport: transport)
+    let channel = await rt.channel("room:mal3")
+
+    let token = try await channel.deletes(schema: "public", table: "messages")
+    server.autoReplyToJoinsWithPostgres(
+      postgresChanges: [
+        [
+          "id": .integer(0), "event": .string("DELETE"), "schema": .string("public"),
+          "table": .string("messages"),
+        ]
+      ]
+    )
+    try await channel.subscribe()
+
+    let stream = await channel.postgresChanges(for: token)
+    var iter = stream.makeAsyncIterator()
+
+    // DELETE frame with no old_record.
+    server.send(
+      .text(
+        #"["1",null,"room:mal3","postgres_changes",{"ids":[0],"data":{"type":"DELETE","columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+      ))
+
+    do {
+      _ = try await iter.next()
+      Issue.record("Expected .decoding error but stream yielded a value or finished cleanly")
+    } catch {
+      if case .decoding = error as? RealtimeError {
+        // Expected — test passes.
+      } else {
+        Issue.record("Expected .decoding, got: \(error)")
+      }
+    }
+  }
+
+  // MARK: - nonMatchingFrameDoesNotTerminateStream
+
+  /// A frame with ids that do NOT include this token's server id must be silently skipped
+  /// (SKIP behavior). The stream must remain open and deliver subsequent matching frames.
+  @Test func nonMatchingFrameDoesNotTerminateStream() async throws {
+    let (transport, server) = InMemoryTransport.pair()
+    let rt = Realtime(url: URL(string: "wss://x")!, apiKey: "k", transport: transport)
+    let channel = await rt.channel("room:skip1")
+
+    let token = try await channel.inserts(schema: "public", table: "messages")
+    server.autoReplyToJoinsWithPostgres(
+      postgresChanges: [
+        [
+          "id": .integer(0), "event": .string("INSERT"), "schema": .string("public"),
+          "table": .string("messages"),
+        ]
+      ]
+    )
+    try await channel.subscribe()
+
+    let stream = await channel.postgresChanges(for: token)
+    var iter = stream.makeAsyncIterator()
+
+    // First: inject a frame whose ids do NOT include 0 — must be silently skipped.
+    server.send(
+      .text(
+        #"["1",null,"room:skip1","postgres_changes",{"ids":[99],"data":{"type":"INSERT","record":{"id":99},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+      ))
+
+    // Then: inject a valid frame with ids:[0] — stream must still deliver this.
+    server.send(
+      .text(
+        #"["1",null,"room:skip1","postgres_changes",{"ids":[0],"data":{"type":"INSERT","record":{"id":1},"columns":[],"commit_timestamp":"2024-01-01T00:00:00Z"}}]"#
+      ))
+
+    // The first next() must be from the valid frame (id:1), not terminated by the skipped one.
+    let value = try await iter.next()
+    #expect(value?.objectValue?["id"]?.intValue == 1)
+  }
+
   // MARK: - anyEventYieldsPostgresChange
 
   /// Verifies that an AnyEvent token yields a PostgresChange<JSONValue> with the right tag.

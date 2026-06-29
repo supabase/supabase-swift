@@ -155,6 +155,12 @@ extension Channel {
 
 // MARK: - postgresChanges(for:) (Task 28)
 
+// Small sendable error carrying a plain string description, used as the `underlying`
+// value in `RealtimeError.decoding` when no root-cause `Error` is available.
+struct PostgresDecodeError: Error, Sendable, CustomStringConvertible {
+  let description: String
+}
+
 extension Channel {
   /// Returns an `AsyncThrowingStream` that yields every postgres change event that
   /// matches the given registration token.
@@ -211,6 +217,10 @@ extension Channel {
     // Type-erased handler. Called by _routePostgresChange for each matching server id.
     // We switch on variantKind — safe `as!` because the variant kind is immutably tied
     // to the generic parameter E at factory call time.
+    //
+    // Decode failures finish THIS stream with `.decoding`. Cleanup is automatic:
+    // `continuation.finish(throwing:)` triggers `onTermination`, which calls
+    // `removePostgresConsumer` via the Task registered below.
     let handler: @Sendable (PhoenixMessage) -> Void = { message in
       guard case .json(let jsonValue) = message.payload,
         let obj = jsonValue.objectValue,
@@ -219,24 +229,43 @@ extension Channel {
       else { return }
 
       let type_ = dataObj["type"]?.stringValue ?? ""
-      let record: JSONValue = dataObj["record"] ?? .object([:])
-      let oldRecord: JSONValue? = dataObj["old_record"]
+
+      // Finish this stream with a decode error. Consumer cleanup is handled by
+      // the `onTermination` callback registered below, so no explicit cleanup needed here.
+      let finishWithDecodeError: @Sendable (String) -> Void = { typeDescription in
+        let underlying = PostgresDecodeError(description: "malformed postgres_changes data")
+        continuation.finish(
+          throwing: RealtimeError.decoding(type: typeDescription, underlying: underlying))
+      }
 
       let element: E.Element
       switch variantKind {
       case .insert:
         // E == Insert<JSONValue>, E.Element == JSONValue
+        guard let record = dataObj["record"] else {
+          finishWithDecodeError("Insert<JSONValue>: missing record")
+          return
+        }
         element = record as! E.Element
 
       case .update:
         // E == Update<JSONValue>, E.Element == PostgresUpdate<JSONValue>
+        guard let record = dataObj["record"] else {
+          finishWithDecodeError("Update<JSONValue>: missing record")
+          return
+        }
+        let oldRecord: JSONValue? = dataObj["old_record"]
         let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
         element = update as! E.Element
 
       case .delete:
         // E == Delete<JSONValue>, E.Element == PostgresDelete<JSONValue>
-        let oldRec = oldRecord ?? .object([:])
-        let del = PostgresDelete<JSONValue>(oldRecord: oldRec)
+        // old_record is NON-optional for DELETE; absence is a decode failure.
+        guard let oldRecord = dataObj["old_record"] else {
+          finishWithDecodeError("Delete<JSONValue>: missing old_record")
+          return
+        }
+        let del = PostgresDelete<JSONValue>(oldRecord: oldRecord)
         element = del as! E.Element
 
       case .anyEvent:
@@ -244,17 +273,21 @@ extension Channel {
         let change: PostgresChange<JSONValue>
         switch type_ {
         case "INSERT":
+          let record: JSONValue = dataObj["record"] ?? .object([:])
           change = .insert(record)
         case "UPDATE":
+          let record: JSONValue = dataObj["record"] ?? .object([:])
+          let oldRecord: JSONValue? = dataObj["old_record"]
           let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
           change = .update(update)
         case "DELETE":
-          let oldRec = oldRecord ?? .object([:])
-          let del = PostgresDelete<JSONValue>(oldRecord: oldRec)
+          let oldRecord: JSONValue = dataObj["old_record"] ?? .object([:])
+          let del = PostgresDelete<JSONValue>(oldRecord: oldRecord)
           change = .delete(del)
         default:
-          // Unknown event type — treat as insert with the raw data value.
-          change = .insert(record)
+          // Unrecognized event type is a decode failure for this stream.
+          finishWithDecodeError("AnyEvent<JSONValue>: unknown type '\(type_)'")
+          return
         }
         element = change as! E.Element
       }
