@@ -36,6 +36,12 @@ public actor Realtime {
   let apiKey: String
   let accessTokenProvider: AccessTokenProvider?
   let configuration: Configuration
+
+  /// The logger extracted from `configuration` at init time.
+  /// Stored as `nonisolated let` so `log(...)` can be called from synchronous
+  /// actor-isolated contexts (including from Channel's `log` helper) without an `await`.
+  nonisolated let logger: (any RealtimeLogger)?
+
   private let transport: any RealtimeTransport
 
   /// HTTP client for broadcast API calls. Uses the HTTP-scheme version of `url`.
@@ -160,6 +166,7 @@ public actor Realtime {
     self.apiKey = apiKey
     self.accessTokenProvider = accessToken
     self.configuration = configuration
+    self.logger = configuration.logger
     self.transport = transport
 
     // Build the HTTP base URL from the WebSocket URL by converting the scheme.
@@ -260,6 +267,7 @@ public actor Realtime {
   public func disconnect() async {
     // Guard: if there is no active connection AND no reconnect in progress, nothing to do.
     // We still set intentionalDisconnect=true to block any in-flight handleConnectionLost.
+    log(.info, .connection, "Disconnecting from Realtime server")
     intentionalDisconnect = true
 
     // Cancel the lifecycle observer so foreground events no longer trigger reconnect.
@@ -398,6 +406,7 @@ public actor Realtime {
   /// and starts the connection tasks.
   private func _performConnect() async throws {
     // Signal connecting.
+    log(.info, .connection, "Connecting to Realtime server")
     transition(to: .connecting(attempt: 1))
 
     // Open the transport (shared helper also used during reconnection).
@@ -405,6 +414,7 @@ public actor Realtime {
     connection = conn
 
     // Signal connected.
+    log(.info, .connection, "Connected to Realtime server")
     transition(to: .connected)
 
     // Start the background frame routing and heartbeat loops bound to this connection.
@@ -469,6 +479,13 @@ public actor Realtime {
     for continuation in statusContinuations.values {
       continuation.yield(currentStatus)
     }
+    // Emit heartbeat RTT metric as a log event (spec §10 metrics-as-logs).
+    let ms =
+      latency.components.seconds * 1000 + latency.components.attoseconds / 1_000_000_000_000_000
+    log(
+      .debug, .connection, "Heartbeat round-trip complete",
+      metadata: ["heartbeat.rtt_ms": "\(ms)"]
+    )
   }
 
   // MARK: - Connection loss
@@ -548,6 +565,10 @@ public actor Realtime {
       }
 
       // Signal reconnecting.
+      log(
+        .info, .connection, "Reconnecting to Realtime server",
+        metadata: ["reconnect.attempt": "\(attempt)"]
+      )
       transition(to: .reconnecting(attempt: attempt, lastError: lastError))
 
       // Wait the backoff delay on the configured clock.
@@ -564,6 +585,7 @@ public actor Realtime {
         // Successfully reconnected: bind fresh tasks to the new connection.
         // (reconnectTask is cleared by the defer at the top of this function.)
         connection = conn
+        log(.info, .connection, "Reconnected to Realtime server")
         transition(to: .connected)
         startConnectionTasks(connection: conn)
         // Re-join eligible channels (Task 29).
@@ -571,6 +593,7 @@ public actor Realtime {
         return
       } catch {
         // Reconnect attempt failed — record and loop.
+        log(.warn, .connection, "Reconnect attempt \(attempt) failed: \(error)")
         lastError = error
         attempt += 1
       }
@@ -786,5 +809,28 @@ public actor Realtime {
   /// - Note: **Test-only**. Used to synchronize tests before injecting reply frames.
   var _test_pendingCount: Int {
     inflightPushRegistry.pendingCount
+  }
+
+  // MARK: - Logging helper
+
+  /// Emits a structured `LogEvent` to the configured logger.
+  ///
+  /// No-ops when no logger is configured. Never throws and never affects control flow.
+  /// Declared `nonisolated` so it can be called from Channel's synchronous `log` helper
+  /// without requiring an `await`.
+  nonisolated func log(
+    _ level: LogLevel,
+    _ category: Category,
+    _ message: String,
+    metadata: [String: String] = [:]
+  ) {
+    logger?.log(
+      LogEvent(
+        level: level,
+        category: category,
+        message: message,
+        metadata: metadata
+      )
+    )
   }
 }

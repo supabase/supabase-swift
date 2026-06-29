@@ -56,8 +56,11 @@ public struct Configuration: Sendable {
   /// Additional HTTP headers sent with the WebSocket upgrade request.
   public var headers: [String: String] = [:]
 
-  // TODO(Task 31): add logger once RealtimeLogger is defined.
-  // public var logger: (any RealtimeLogger)? = nil
+  /// Optional logger that receives structured `LogEvent`s from the SDK.
+  ///
+  /// Set to `nil` (the default) to disable logging entirely. Provide an `OSLogLogger`,
+  /// `StdoutLogger`, or any custom `RealtimeLogger` implementation to receive events.
+  public var logger: (any RealtimeLogger)? = nil
 
   /// JSON decoder used to decode messages from the server. Default: ISO 8601 date strategy.
   public var decoder: JSONDecoder = .realtimeDefault

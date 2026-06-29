@@ -310,6 +310,7 @@ public actor Channel {
 
     // Transition to .joining BEFORE awaiting the access token so the channel
     // reflects the correct state during the entire join handshake.
+    log(.info, .channel, "Joining channel", metadata: ["topic": topic])
     transition(to: .joining)
 
     // Build the join payload, baking in any pending postgres-changes registrations.
@@ -357,6 +358,7 @@ public actor Channel {
       _buildServerIDRouting(from: reply.response)
       // Mark this channel as eligible for transparent re-join on reconnect (Task 29).
       shouldRejoin = true
+      log(.info, .channel, "Channel joined", metadata: ["topic": topic])
       transition(to: .joined)
     } else {
       // Extract a human-readable reason from the response if available.
@@ -368,6 +370,7 @@ public actor Channel {
       } else {
         reason = "Server rejected the channel join (status: \(reply.status))."
       }
+      log(.warn, .channel, "Channel join rejected: \(reason)", metadata: ["topic": topic])
       transition(to: .closed(.unauthorized))
       throw RealtimeError.channelJoinRejected(reason: reason)
     }
@@ -585,6 +588,7 @@ public actor Channel {
     // Clear the rejoin flag: a user-initiated leave must NOT trigger transparent re-join (Task 29).
     shouldRejoin = false
 
+    log(.info, .channel, "Leaving channel", metadata: ["topic": topic])
     // Transition to .leaving to signal in-progress leave.
     transition(to: .leaving)
 
@@ -636,6 +640,7 @@ public actor Channel {
     }
 
     // Success: transition to closed and reset joinRef so a future subscribe() gets a fresh ref.
+    log(.info, .channel, "Channel left", metadata: ["topic": topic])
     transition(to: .closed(.userRequested))
     joinRef = nil
   }
@@ -780,6 +785,7 @@ public actor Channel {
     }
 
     // Store state for Task 25 re-track on reconnect.
+    log(.debug, .presence, "Presence tracked", metadata: ["topic": topic])
     lastTrackedPresencePayload = outerPayload
     isPresenceTracked = true
   }
@@ -859,6 +865,7 @@ public actor Channel {
     }
 
     // Clear tracked state.
+    log(.debug, .presence, "Presence untracked", metadata: ["topic": topic])
     lastTrackedPresencePayload = nil
     isPresenceTracked = false
   }
@@ -942,6 +949,7 @@ public actor Channel {
     else { return }
 
     let reason = obj["message"]?.stringValue ?? "Unknown postgres subscription error"
+    log(.error, .postgres, "Postgres subscription error: \(reason)", metadata: ["topic": topic])
     _failAllPostgresConsumers(reason: reason)
   }
 
@@ -973,6 +981,19 @@ public actor Channel {
     }
 
     serverIDRouting = routing
+  }
+
+  // MARK: - Logging helper
+
+  /// Emits a log event via the owning `Realtime` actor's logger.
+  /// No-ops if the `Realtime` reference has been deallocated.
+  func log(
+    _ level: LogLevel,
+    _ category: Category,
+    _ message: String,
+    metadata: [String: String] = [:]
+  ) {
+    realtime?.log(level, category, message, metadata: metadata)
   }
 
   // MARK: - Messages stream teardown
