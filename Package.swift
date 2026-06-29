@@ -1,6 +1,7 @@
 // swift-tools-version:5.10
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
@@ -20,6 +21,7 @@ let package = Package(
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Supabase", targets: ["Supabase"]),
+    .library(name: "SupabaseSwiftMacros", targets: ["SupabaseSwiftMacros"]),
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0"),
@@ -30,6 +32,10 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
+    // Lower bound matches the package's minimum Swift version (5.10 → 510.x).
+    // Upper bound matches swift-macro-testing 0.6.x compatibility ceiling.
+    .package(url: "https://github.com/swiftlang/swift-syntax", "510.0.0"..<"605.0.0"),
+    .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
   ],
   targets: [
     .target(
@@ -129,6 +135,7 @@ let package = Package(
         "Helpers",
         "Mocker",
         "PostgREST",
+        "SupabaseSwiftMacros",
         "TestHelpers",
       ],
       exclude: [
@@ -210,6 +217,29 @@ let package = Package(
         "Auth",
         "Helpers",
         "Mocker",
+      ]
+    ),
+    .macro(
+      name: "SupabaseMacros",
+      dependencies: [
+        .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+        .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+      ]
+    ),
+    .target(
+      name: "SupabaseSwiftMacros",
+      dependencies: [
+        .target(name: "SupabaseMacros"),
+        "PostgREST",
+        "Supabase",
+      ]
+    ),
+    .testTarget(
+      name: "SupabaseMacrosTests",
+      dependencies: [
+        .target(name: "SupabaseMacros"),
+        .target(name: "SupabaseSwiftMacros"),
+        .product(name: "MacroTesting", package: "swift-macro-testing"),
       ]
     ),
   ]

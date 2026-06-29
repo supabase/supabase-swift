@@ -7,6 +7,7 @@
 
 import Realtime
 import Supabase
+import SupabaseSwiftMacros
 import SwiftUI
 
 struct MessagesView: View {
@@ -69,13 +70,8 @@ struct MessagesView: View {
     guard !newMessage.isEmpty else { return }
 
     do {
-      let message = try await NewMessage(
-        message: newMessage,
-        userId: supabase.auth.session.user.id,
-        channelId: channel.id
-      )
-
-      try await supabase.from("messages").insert(message).execute()
+      let userId = try await supabase.auth.session.user.id
+      try await supabase.sendMessage(newMessage, userId: userId, channelId: channel.id)
       newMessage = ""
     } catch {
       dump(error)
