@@ -73,6 +73,25 @@ public actor Realtime {
   /// Set by disconnect() in Task 14.
   var intentionalDisconnect: Bool = false
 
+  /// When `true`, the socket was closed by the idle-close timer (no live channels for
+  /// `disconnectOnEmptyChannelsAfter`). The idle close is intentional and must NOT trigger
+  /// the auto-reconnect loop, but it IS recoverable: the next `connect()` (from a new
+  /// `subscribe()`) clears this flag and re-opens the socket.
+  ///
+  /// Distinct from `intentionalDisconnect` (which is set by an explicit `disconnect()` call
+  /// and represents a permanent user intent). Using a separate flag preserves the semantics
+  /// of both: `intentionalDisconnect` keeps existing behaviour, and `idleClosed` adds the
+  /// new "idle, but reconnectable" state.
+  var idleClosed: Bool = false
+
+  /// The pending idle-close timer task. Armed when the last live channel leaves (live count
+  /// transitions to 0). Cancelled when a channel joins (live count rises above 0) or when
+  /// `disconnect()` is called (to avoid double teardown).
+  ///
+  /// `nonisolated` call sites (`_markJoined` / `_markLeft`) arm / cancel via actor-isolated
+  /// async tasks spawned from those nonisolated methods — see their implementations.
+  var idleCloseTask: Task<Void, Never>?
+
   /// Registry tracking in-flight pushes awaiting a `phx_reply`.
   let inflightPushRegistry = InflightPushRegistry()
 
@@ -285,6 +304,10 @@ public actor Realtime {
     log(.info, .connection, "Disconnecting from Realtime server")
     intentionalDisconnect = true
 
+    // Cancel any pending idle-close timer so there is no double teardown.
+    idleCloseTask?.cancel()
+    idleCloseTask = nil
+
     // Cancel the lifecycle observer so foreground events no longer trigger reconnect.
     lifecycleObserverHandle?.cancel()
     lifecycleObserverHandle = nil
@@ -351,6 +374,11 @@ public actor Realtime {
   public func connect() async throws(RealtimeError) {
     // Clear the intentional-disconnect flag so reconnection works for the new session.
     intentionalDisconnect = false
+    // Clear the idle-closed flag so a subscribe() after an idle close re-opens the socket.
+    idleClosed = false
+    // Cancel any pending idle-close timer (it would be stale after a new connect).
+    idleCloseTask?.cancel()
+    idleCloseTask = nil
 
     // Start the lifecycle observer lazily (idempotent — skipped if already running).
     _startLifecycleObserverIfNeeded()
@@ -546,6 +574,13 @@ public actor Realtime {
       return
     }
 
+    // If the socket was closed by the idle-close timer, suppress reconnection.
+    // The idle close already transitioned status to .idle and cleared the connection.
+    // A future connect() call (from subscribe()) will re-open the socket.
+    if idleClosed {
+      return
+    }
+
     // Spawn reconnection as an unstructured Task so it runs independently of the routing
     // task (which may be the caller and may be cancelled). The reconnection loop must NOT
     // inherit cancellation from the routing task — it needs to outlive it.
@@ -717,8 +752,18 @@ public actor Realtime {
   /// Declared `nonisolated` so `Channel` can call it synchronously from its actor-isolated
   /// `transition(to:)` without an `await`, and so `deinit` can read the same `LockIsolated`
   /// without an actor hop.
+  ///
+  /// ## Idle-close interaction
+  /// When the live-channel count rises above zero (i.e. the first channel joins), any pending
+  /// idle-close timer is cancelled. The actor-isolated cancellation is performed by spawning
+  /// an unstructured `Task` that hops back onto the actor. This is safe because:
+  /// - The task only writes actor-isolated state (`idleCloseTask`).
+  /// - Any ordering race (timer fires just before cancel) is benign: the timer performs its
+  ///   own final liveness check before closing, so a concurrent join wins.
   nonisolated func _markJoined(_ topic: String) {
     joinedTopics.withValue { _ = $0.insert(topic) }
+    // Cancel any pending idle-close timer: live count is now > 0.
+    Task { await _cancelIdleCloseTimer() }
   }
 
   /// Records that `topic` has been left or terminally evicted. Called by `Channel` when
@@ -726,8 +771,97 @@ public actor Realtime {
   /// the reconnection policy gives up and the channel is evicted).
   ///
   /// Declared `nonisolated` for the same reasons as `_markJoined`.
+  ///
+  /// ## Idle-close interaction
+  /// When the live-channel count drops to zero (the last channel left), the idle-close timer
+  /// is armed. The actor-isolated arming is performed by spawning an unstructured `Task`.
   nonisolated func _markLeft(_ topic: String) {
     joinedTopics.withValue { _ = $0.remove(topic) }
+    // Arm the idle-close timer if live count just reached zero.
+    // The actual liveness check (is socket open? is count still 0?) happens inside the actor.
+    Task { await _armIdleCloseTimerIfNeeded() }
+  }
+
+  // MARK: - Idle-close timer (Decision 39)
+
+  /// Arms the idle-close timer if the socket is connected and no channels are live.
+  ///
+  /// Called from `_markLeft` (via an unstructured Task) whenever a channel leaves.
+  /// The timer fires after `configuration.disconnectOnEmptyChannelsAfter`; if the live
+  /// count is still zero and the socket is still open at that point, the socket is closed
+  /// with status `.idle` (NOT `.closed(.clientDisconnected)` — this is an optimization).
+  ///
+  /// ## Re-arm behaviour
+  /// Each call supersedes the previous timer. This handles rapid leave/join/leave cycles
+  /// correctly: only the last arming matters. Cancellation via `_cancelIdleCloseTimer`
+  /// prevents the close when a new channel joins before the timer fires.
+  private func _armIdleCloseTimerIfNeeded() {
+    // Only arm when the socket is connected and no live channels remain.
+    guard connection != nil else { return }
+    guard joinedTopics.value.isEmpty else { return }
+
+    // Cancel any previously-armed timer (supersede it).
+    idleCloseTask?.cancel()
+
+    let idleDuration = configuration.disconnectOnEmptyChannelsAfter
+    let clock = configuration.clock
+
+    idleCloseTask = Task {
+      do {
+        try await clock.sleep(for: idleDuration)
+      } catch {
+        // Cancelled (a channel joined or disconnect() was called) — do nothing.
+        return
+      }
+
+      // Re-check conditions after the sleep: connection still open, no live channels.
+      guard connection != nil else { return }
+      guard joinedTopics.value.isEmpty else { return }
+
+      // Perform the idle close.
+      await _performIdleClose()
+    }
+  }
+
+  /// Cancels the pending idle-close timer. Called from `_markJoined` when a channel joins.
+  private func _cancelIdleCloseTimer() {
+    idleCloseTask?.cancel()
+    idleCloseTask = nil
+  }
+
+  /// Closes the socket as an idle-optimization (no live channels for the configured duration).
+  ///
+  /// - Status transitions to `.idle` (NOT `.closed(.clientDisconnected)`).
+  /// - Sets `idleClosed = true` to suppress the auto-reconnect loop in `handleConnectionLost`.
+  /// - Does NOT set `intentionalDisconnect` — the next `connect()` clears `idleClosed` and
+  ///   fully re-opens the socket.
+  private func _performIdleClose() async {
+    guard let conn = connection else { return }
+    connection = nil
+
+    log(
+      .info, .connection,
+      "Idle-closing socket (no live channels for disconnectOnEmptyChannelsAfter)")
+
+    // Mark as idle-closed so handleConnectionLost (triggered by the frame stream ending)
+    // does NOT start the auto-reconnect loop.
+    idleClosed = true
+    idleCloseTask = nil
+
+    // Cancel background tasks.
+    heartbeatTask?.cancel()
+    heartbeatTask = nil
+    routingTask?.cancel()
+    routingTask = nil
+
+    // Fail in-flight pushes so callers don't hang.
+    await inflightPushRegistry.failAll(.disconnected)
+
+    // Close the underlying connection.
+    await conn.close(code: 1000, reason: "idle close")
+
+    // Transition to .idle (recoverable — next connect() re-opens the socket).
+    transition(to: .idle)
   }
 
   // MARK: - Channel seam (internal API consumed by Channel)
