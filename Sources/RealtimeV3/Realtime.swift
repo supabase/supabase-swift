@@ -271,9 +271,8 @@ public actor Realtime {
         // If it has been cleared the send is a no-op.
         try await connection.send(.text(text))
       },
-      awaitReply: { [weak self] ref in
-        guard self != nil else { throw RealtimeError.disconnected }
-        return try await registry.awaitReply(
+      awaitReply: { ref in
+        try await registry.awaitReply(
           ref: ref,
           timeout: heartbeatDuration,
           clock: clock,
@@ -309,6 +308,7 @@ public actor Realtime {
   ///
   /// Expanded in Task 13 (reconnection).
   func handleConnectionLost(_ error: RealtimeError) async {
+    guard connection != nil else { return }
     // Cancel background tasks.
     heartbeatTask?.cancel()
     heartbeatTask = nil

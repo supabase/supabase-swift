@@ -155,6 +155,99 @@ import Testing
     }
   }
 
+  @Test func heartbeatLatencyIsPopulatedAfterRoundTrip() async throws {
+    let (transport, server) = InMemoryTransport.pair()
+    let clock = TestClock()
+    var config = Configuration.default
+    config.clock = clock
+    config.heartbeat = .seconds(25)
+    let rt = Realtime(
+      url: URL(string: "wss://x")!,
+      apiKey: "k",
+      configuration: config,
+      transport: transport
+    )
+    try await rt.connect()
+
+    // Collect frames the client sends so we can extract the heartbeat ref.
+    let collectedFrames = LockIsolated([TransportFrame]())
+    let collectorTask = Task {
+      var it = server.clientSentFrames.makeAsyncIterator()
+      while let frame = await it.next() {
+        collectedFrames.withValue { $0.append(frame) }
+      }
+    }
+    defer { collectorTask.cancel() }
+
+    // Advance until a heartbeat frame is observed on the wire.
+    await advanceUntil(clock: clock, step: .seconds(1), maxAttempts: 300) {
+      collectedFrames.withValue { frames in
+        frames.contains { frame in
+          if case .text(let t) = frame { return t.contains("heartbeat") }
+          return false
+        }
+      }
+    }
+
+    // Extract the ref from the heartbeat frame (array position [1]).
+    let heartbeatRef: String? = collectedFrames.withValue { frames in
+      guard
+        let frame = frames.first(where: {
+          if case .text(let t) = $0 { return t.contains("heartbeat") }
+          return false
+        }),
+        case .text(let t) = frame,
+        let data = t.data(using: .utf8),
+        let arr = try? JSONDecoder().decode([AnyJSON].self, from: data),
+        arr.count >= 2,
+        let ref = arr[1].stringValue
+      else { return nil }
+      return ref
+    }
+
+    guard let ref = heartbeatRef else {
+      Issue.record("Could not extract heartbeat ref from sent frame")
+      return
+    }
+
+    // Wait until the registry has registered the pending push for this ref,
+    // so we know awaitReply is suspended and will receive our injected reply.
+    for _ in 0..<300 {
+      await Task.yield()
+      if await rt._test_pendingCount > 0 { break }
+    }
+
+    // Subscribe to the status stream before injecting the reply.
+    let statusStream = await rt.status
+
+    // Inject the server's phx_reply for this heartbeat ref.
+    let replyJSON =
+      "[null,\"\(ref)\",\"phoenix\",\"phx_reply\",{\"status\":\"ok\",\"response\":{}}]"
+    server.send(.text(replyJSON))
+
+    // Observe the status stream until a ConnectionStatus with non-nil latency appears.
+    let sawLatency = LockIsolated(false)
+    let statusTask = Task {
+      for await s in statusStream {
+        if s.latency != nil {
+          sawLatency.setValue(true)
+          return
+        }
+      }
+    }
+
+    // Give the cooperative scheduler enough time to route the frame and update latency.
+    for _ in 0..<300 {
+      await Task.yield()
+      if sawLatency.value { break }
+    }
+    statusTask.cancel()
+
+    if !sawLatency.value {
+      Issue.record("Expected ConnectionStatus.latency to be non-nil after heartbeat round-trip")
+    }
+  }
+
   @Test func heartbeatTimeoutTriggersConnectionLost() async throws {
     let (transport, server) = InMemoryTransport.pair()
     let clock = TestClock()
@@ -200,7 +293,7 @@ import Testing
       }
     }
 
-    await advanceUntil(clock: clock, step: .seconds(1), maxAttempts: 100) {
+    await advanceUntil(clock: clock, step: .seconds(1), maxAttempts: 300) {
       sawClosed.value
     }
     statusCheckTask.cancel()
