@@ -313,9 +313,14 @@ public actor Realtime {
   /// `configuration.clock`, and retries `transport.connect` until success or the
   /// policy returns `nil` (give up).
   ///
-  /// Idempotency: if a reconnection loop is already running (`isReconnecting == true`),
-  /// a second call is a no-op — this avoids overlapping loops when both the frame-routing
-  /// stream and the heartbeat fire almost simultaneously.
+  /// Idempotency: re-entry is prevented by the `connection == nil` guard at the top of
+  /// this function. The guard atomically claims and clears the connection reference before
+  /// any suspension point, so a concurrent or re-entrant call (e.g. both the frame-routing
+  /// stream and the heartbeat firing almost simultaneously) will see `connection == nil`
+  /// and return immediately, preventing overlapping cleanup or reconnection loops.
+  ///
+  /// `isReconnecting` is reserved for Task 14 (disconnect()/state introspection) and is
+  /// NOT the idempotency mechanism.
   func handleConnectionLost(_ error: RealtimeError) async {
     // Atomically claim and clear the connection reference before any suspension point.
     // This is the single-ownership guard: any concurrent or re-entrant call will see
@@ -354,7 +359,12 @@ public actor Realtime {
   /// cancellation of the routing task that detected the connection loss.
   private func runReconnectionLoop(initialError: RealtimeError) async {
     isReconnecting = true
-    defer { isReconnecting = false }
+    // Clear reconnectTask on ALL exit paths (success, give-up, cancellation) so Task 14
+    // can reliably check `reconnectTask == nil` to determine whether reconnection is in progress.
+    defer {
+      isReconnecting = false
+      reconnectTask = nil
+    }
 
     var attempt = 1
     var lastError: any Error & Sendable = initialError
@@ -383,8 +393,8 @@ public actor Realtime {
       do {
         let conn = try await _openConnection()
         // Successfully reconnected: bind fresh tasks to the new connection.
+        // (reconnectTask is cleared by the defer at the top of this function.)
         connection = conn
-        reconnectTask = nil
         transition(to: .connected)
         startConnectionTasks(connection: conn)
         return

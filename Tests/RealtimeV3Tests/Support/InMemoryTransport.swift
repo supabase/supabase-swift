@@ -72,6 +72,10 @@ actor InMemoryTransport: RealtimeTransport {
 /// connections so the test observer sees all frames from every connection attempt.
 final class TransportServer: Sendable {
   // Frames the Realtime client sent → server observes (shared across reconnects).
+  // NOTE: `closeFromServer` intentionally does NOT finish this stream so it survives
+  // reconnects (the client→server channel is shared across all connection instances).
+  // Consumers must iterate with `break` or task cancellation rather than awaiting
+  // stream completion.
   private let clientSentContinuation: LockIsolated<AsyncStream<TransportFrame>.Continuation?>
   let clientSentFrames: AsyncStream<TransportFrame>
 
@@ -91,7 +95,7 @@ final class TransportServer: Sendable {
 
   /// Inject a frame that the connected client will receive on its `frames` stream.
   func send(_ frame: TransportFrame) {
-    activeServerToClientContinuation.withValue { $0?.yield(frame) }
+    _ = activeServerToClientContinuation.withValue { $0?.yield(frame) }
   }
 
   /// Simulate a server-initiated close. Finishes the current server→client stream.
@@ -138,10 +142,13 @@ private final class InMemoryConnection: RealtimeConnection, Sendable {
     self.frames = throwingStream
     self.clientSentContinuation = clientSentContinuation
     self.bridgeTask = Task {
+      // defer ensures the throwing-stream continuation is always finished, whether the
+      // forwarding loop exits normally (end-of-stream) or because the task was cancelled
+      // (by close()). Without this, a consumer awaiting `frames` could hang indefinitely.
+      defer { continuation.finish() }
       for await frame in serverToClientStream {
         continuation.yield(frame)
       }
-      continuation.finish()
     }
   }
 
