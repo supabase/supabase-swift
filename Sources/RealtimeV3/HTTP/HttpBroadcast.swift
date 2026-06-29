@@ -68,11 +68,12 @@ extension Realtime {
   /// Internal workhorse called by both `httpBroadcastBatch` and `Channel.httpBroadcast`.
   func _httpBroadcastBatch(_ messages: [HttpBroadcastMessage]) async throws(RealtimeError) {
     // Build the wire-format message array by encoding each payload.
+    // Use Configuration.encoder so custom date/key strategies are honoured.
     var bodyMessages: [BroadcastMessageBody] = []
     for msg in messages {
       let anyJSON: AnyJSON
       do {
-        let data = try JSONEncoder().encode(msg.payload)
+        let data = try configuration.encoder.encode(msg.payload)
         anyJSON = try JSONDecoder().decode(AnyJSON.self, from: data)
       } catch {
         throw .encoding(underlying: error)

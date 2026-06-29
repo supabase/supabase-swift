@@ -58,9 +58,10 @@ extension Channel {
     // Encode the payload to AnyJSON for embedding in the broadcast envelope.
     // AnyJSON.init(_:) requires Codable, but T is only Encodable, so encode to Data first
     // then decode back to AnyJSON via the standard JSON round-trip.
+    // Use Configuration.encoder so custom date/key strategies are honoured.
     let encodedPayload: AnyJSON
     do {
-      let data = try JSONEncoder().encode(payload)
+      let data = try realtime.configuration.encoder.encode(payload)
       encodedPayload = try JSONDecoder().decode(AnyJSON.self, from: data)
     } catch {
       throw .encoding(underlying: error)

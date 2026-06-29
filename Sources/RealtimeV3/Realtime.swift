@@ -671,9 +671,14 @@ public actor Realtime {
       URLComponents(url: url, resolvingAgainstBaseURL: false)
       ?? URLComponents()
     var queryItems = components.queryItems ?? []
-    // Remove any pre-existing apikey entry to avoid duplication.
-    queryItems.removeAll { $0.name == "apikey" }
+    // Remove any pre-existing apikey / vsn entries to avoid duplication.
+    queryItems.removeAll { $0.name == "apikey" || $0.name == "vsn" }
     queryItems.append(URLQueryItem(name: "apikey", value: apiKey))
+    // Send vsn so the backend can negotiate the binary serializer format.
+    // Configuration.protocolVersion carries the negotiated version (default: v2 = "2.0.0").
+    queryItems.append(
+      URLQueryItem(name: "vsn", value: configuration.protocolVersion.rawValue)
+    )
     components.queryItems = queryItems
     guard let connectURL = components.url else {
       throw RealtimeError.transportFailure(underlying: URLError(.badURL))

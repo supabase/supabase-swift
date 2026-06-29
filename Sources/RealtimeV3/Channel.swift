@@ -734,9 +734,10 @@ public actor Channel {
     }
 
     // Encode the user state to JSON.
+    // Use Configuration.encoder so custom date/key strategies are honoured.
     let encodedPayload: AnyJSON
     do {
-      let data = try JSONEncoder().encode(state)
+      let data = try realtime.configuration.encoder.encode(state)
       encodedPayload = try JSONDecoder().decode(AnyJSON.self, from: data)
     } catch {
       throw .encoding(underlying: error)
@@ -894,6 +895,12 @@ public actor Channel {
   /// Fans the message out to all registered `messages()` consumers, all
   /// type-erased `broadcasts(of:event:)` consumers, presence consumers, and
   /// postgres_changes consumers (Task 28).
+  ///
+  /// Also handles server-initiated terminal events (`phx_close`, `phx_error`,
+  /// and non-postgres `system` error frames) by transitioning to the appropriate
+  /// `.closed` state. These routes guard on the current channel state so that a
+  /// trailing `phx_close` from the server after our own `leave()` does NOT
+  /// overwrite the already-set `.closed(.userRequested)` reason (idempotent).
   func receive(_ message: PhoenixMessage) {
     for continuation in messagesContinuations.values {
       continuation.yield(message)
@@ -910,9 +917,80 @@ public actor Channel {
       _routePostgresChange(message)
     case .system:
       _routeSystemEvent(message)
+    case .close:
+      _handleServerClose(message)
+    case .error:
+      _handleServerError(message)
     default:
       break
     }
+  }
+
+  // MARK: - Server-initiated terminal event handlers
+
+  /// Handles an unsolicited `phx_close` frame from the server.
+  ///
+  /// If the channel is already `.closed` (e.g. from our own `leave()`) or `.leaving`
+  /// (our own leave is in progress), the frame is ignored so we never overwrite a
+  /// user-requested close reason. Only unsolicited closes trigger a state transition.
+  private func _handleServerClose(_ message: PhoenixMessage) {
+    // Idempotency guard: ignore if already terminal or our own leave is in progress.
+    switch channelState {
+    case .closed, .leaving:
+      return
+    default:
+      break
+    }
+
+    // Extract an optional message from the payload.
+    let closeMessage: String?
+    if case .json(let jsonValue) = message.payload,
+      let obj = jsonValue.objectValue
+    {
+      closeMessage = obj["message"]?.stringValue
+    } else {
+      closeMessage = nil
+    }
+
+    log(
+      .warn, .channel,
+      "Server closed channel: \(closeMessage ?? "(no message)")",
+      metadata: ["topic": topic]
+    )
+
+    // Clear shouldRejoin — a server-closed channel must not be auto-rejoined.
+    shouldRejoin = false
+    transition(to: .closed(.serverClosed(code: nil, message: closeMessage)))
+  }
+
+  /// Handles a `phx_error` frame from the server.
+  ///
+  /// Same idempotency guard as `_handleServerClose`: ignored when already terminal.
+  private func _handleServerError(_ message: PhoenixMessage) {
+    switch channelState {
+    case .closed, .leaving:
+      return
+    default:
+      break
+    }
+
+    let reason: String?
+    if case .json(let jsonValue) = message.payload,
+      let obj = jsonValue.objectValue
+    {
+      reason = obj["reason"]?.stringValue ?? obj["message"]?.stringValue
+    } else {
+      reason = nil
+    }
+
+    log(
+      .error, .channel,
+      "Server sent phx_error: \(reason ?? "(no reason)")",
+      metadata: ["topic": topic]
+    )
+
+    shouldRejoin = false
+    transition(to: .closed(.serverClosed(code: nil, message: reason)))
   }
 
   // MARK: - Postgres routing (Task 28)
@@ -951,24 +1029,69 @@ public actor Channel {
     }
   }
 
-  /// Routes an incoming `system` event. If it signals a postgres_changes subscription
-  /// failure (extension == "postgres_changes", status == "error"), all postgres streams
-  /// are finished throwing `.postgresSubscriptionFailed(reason:)`.
+  /// Routes an incoming `system` event.
   ///
-  /// Design note: we fail ALL postgres streams because the system event does not include
-  /// enough information to identify which specific subscription failed.
+  /// - If `extension == "postgres_changes"` and `status == "error"`: all postgres streams
+  ///   are finished throwing `.postgresSubscriptionFailed(reason:)` (existing behaviour).
+  /// - Otherwise, if `status == "error"` and the message indicates an auth/token failure:
+  ///   transitions the channel to `.closed(.unauthorized)` (server-initiated auth failure).
+  /// - Otherwise, if `status == "error"` for any other reason:
+  ///   transitions to `.closed(.serverClosed(code:message:))`.
+  ///
+  /// The channel-close path guards on the current state so it is idempotent when the
+  /// channel is already `.closed` or `.leaving`.
+  ///
+  /// Design note: postgres_changes errors are kept in `_failAllPostgresConsumers` because
+  /// the system event does not include enough information to identify which specific
+  /// subscription failed — the whole postgres fan-out is torn down while the channel itself
+  /// stays open. Non-postgres system errors are treated as channel-level errors.
   private func _routeSystemEvent(_ message: PhoenixMessage) {
     guard case .json(let jsonValue) = message.payload,
       let obj = jsonValue.objectValue
     else { return }
 
-    guard let ext = obj["extension"]?.stringValue, ext == "postgres_changes",
-      let status = obj["status"]?.stringValue, status == "error"
-    else { return }
+    let ext = obj["extension"]?.stringValue
+    let status = obj["status"]?.stringValue
+    let msgText = obj["message"]?.stringValue
 
-    let reason = obj["message"]?.stringValue ?? "Unknown postgres subscription error"
-    log(.error, .postgres, "Postgres subscription error: \(reason)", metadata: ["topic": topic])
-    _failAllPostgresConsumers(reason: reason)
+    // Existing behaviour: postgres_changes subscription error → fail postgres streams only.
+    if ext == "postgres_changes", status == "error" {
+      let reason = msgText ?? "Unknown postgres subscription error"
+      log(.error, .postgres, "Postgres subscription error: \(reason)", metadata: ["topic": topic])
+      _failAllPostgresConsumers(reason: reason)
+      return
+    }
+
+    // Non-postgres system error → close the whole channel.
+    guard status == "error" else { return }
+
+    // Idempotency guard: if already terminal/leaving, do nothing.
+    switch channelState {
+    case .closed, .leaving:
+      return
+    default:
+      break
+    }
+
+    let reason = msgText ?? "Unknown system error"
+    log(.error, .channel, "System error: \(reason)", metadata: ["topic": topic])
+
+    // Detect auth/token failures by looking for common keywords in the message.
+    let lowerReason = reason.lowercased()
+    let isAuthError =
+      lowerReason.contains("token")
+      || lowerReason.contains("auth")
+      || lowerReason.contains("unauthorized")
+      || lowerReason.contains("unauthenticated")
+      || lowerReason.contains("forbidden")
+      || lowerReason.contains("jwt")
+
+    shouldRejoin = false
+    if isAuthError {
+      transition(to: .closed(.unauthorized))
+    } else {
+      transition(to: .closed(.serverClosed(code: nil, message: msgText)))
+    }
   }
 
   /// Builds the server-id routing map from the join reply's `postgres_changes` response array.

@@ -11,6 +11,16 @@ import Helpers
 /// Handles encoding/decoding between `PhoenixMessage` and the Phoenix protocol 2.0.0 wire format.
 ///
 /// Text frames use a JSON array format: `[joinRef, ref, topic, event, payload]`.
+///
+/// ## Encoder note
+/// This type uses bare `JSONEncoder()` / `JSONDecoder()` throughout. That is intentional:
+/// these encoders operate on the **protocol frame structure** (arrays of strings,
+/// `JSONObject`, `JSONValue`) rather than on user-supplied `Codable` types. Applying
+/// `Configuration.encoder` (which may carry custom date or key strategies) to protocol
+/// internals would corrupt the wire format. User payloads are encoded with
+/// `Configuration.encoder` at the call sites in `Channel+Broadcast.swift`,
+/// `Channel.sendPresenceTrack`, and `HttpBroadcast.swift` *before* they arrive here as
+/// `JSONObject` / `Data`.
 struct PhoenixSerializer: Sendable {
 
   // MARK: - Text encoding (JSON array format)
