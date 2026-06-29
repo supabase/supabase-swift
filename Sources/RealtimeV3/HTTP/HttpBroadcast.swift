@@ -1,0 +1,188 @@
+//
+//  HttpBroadcast.swift
+//  RealtimeV3
+//
+//  Created by Guilherme Souza on 29/06/26.
+//
+
+import Foundation
+import Helpers
+
+// MARK: - HttpBroadcastMessage
+
+/// A broadcast message for use with ``Realtime/httpBroadcastBatch(_:)``.
+///
+/// Each message carries a `topic`, an `event`, an `Encodable` payload,
+/// and an optional `isPrivate` flag. Multiple messages may span different topics
+/// in a single batch POST to the broadcast endpoint.
+public struct HttpBroadcastMessage: Sendable {
+  public let topic: String
+  public let event: String
+  public let payload: any Encodable & Sendable
+  public let isPrivate: Bool
+
+  public init(
+    topic: String,
+    event: String,
+    payload: any Encodable & Sendable,
+    isPrivate: Bool = false
+  ) {
+    self.topic = topic
+    self.event = event
+    self.payload = payload
+    self.isPrivate = false
+  }
+}
+
+// MARK: - Wire-format helpers (internal)
+
+/// A single message element in the broadcast request body.
+/// Encodable so the whole array can be serialized by `JSONEncoder`.
+private struct BroadcastMessageBody: Encodable {
+  let topic: String
+  let event: String
+  let payload: AnyJSON
+  let `private`: Bool
+}
+
+/// Top-level request body: `{ "messages": [...] }`.
+private struct BroadcastRequestBody: Encodable {
+  let messages: [BroadcastMessageBody]
+}
+
+// MARK: - Realtime + httpBroadcastBatch
+
+extension Realtime {
+
+  /// Sends multiple broadcast messages across one or more topics in a single HTTP POST.
+  ///
+  /// Does **not** require an open WebSocket connection. Auth is injected via the
+  /// `_HTTPClient` token provider when available; otherwise the `apikey` header is set.
+  ///
+  /// - Parameter messages: One or more ``HttpBroadcastMessage`` values.
+  /// - Throws: ``RealtimeError``
+  public func httpBroadcastBatch(_ messages: [HttpBroadcastMessage]) async throws(RealtimeError) {
+    try await _httpBroadcastBatch(messages)
+  }
+
+  /// Internal workhorse called by both `httpBroadcastBatch` and `Channel.httpBroadcast`.
+  func _httpBroadcastBatch(_ messages: [HttpBroadcastMessage]) async throws(RealtimeError) {
+    // Build the wire-format message array by encoding each payload.
+    var bodyMessages: [BroadcastMessageBody] = []
+    for msg in messages {
+      let anyJSON: AnyJSON
+      do {
+        let data = try JSONEncoder().encode(msg.payload)
+        anyJSON = try JSONDecoder().decode(AnyJSON.self, from: data)
+      } catch {
+        throw .encoding(underlying: error)
+      }
+      bodyMessages.append(
+        BroadcastMessageBody(
+          topic: msg.topic,
+          event: msg.event,
+          payload: anyJSON,
+          private: msg.isPrivate
+        )
+      )
+    }
+
+    let requestBody = BroadcastRequestBody(messages: bodyMessages)
+
+    // Determine whether a token is available for this call.
+    // We can't call the actor-isolated accessTokenForJoin here because we are already
+    // on the actor. Call the token logic directly (inline, actor-isolated).
+    let currentToken: String?
+    if let override = _overrideToken {
+      currentToken = override
+    } else if let provider = accessTokenProvider {
+      do {
+        currentToken = try await provider()
+      } catch {
+        throw .authenticationFailed(
+          reason: "Access token provider threw an error.", underlying: error)
+      }
+    } else {
+      currentToken = nil
+    }
+
+    // When no token is available, inject the apikey header explicitly.
+    let headers: [String: String]? = currentToken == nil ? ["apikey": apiKey] : nil
+
+    // Build the absolute URL by appending "api/broadcast" to the HTTP base URL.
+    // We use the absolute-URL overload of fetchData to preserve the full path prefix
+    // (e.g. /realtime/v1) — the path-string overload replaces the path entirely.
+    let broadcastURL = httpClient.host.appendingPathComponent("api/broadcast")
+
+    do {
+      _ = try await httpClient.fetchData(
+        .post,
+        url: broadcastURL,
+        body: .encodable(requestBody),
+        headers: headers
+      )
+    } catch let clientError as HTTPClientError {
+      throw mapHTTPClientError(clientError)
+    } catch {
+      throw .transportFailure(underlying: error)
+    }
+  }
+}
+
+// MARK: - Channel + httpBroadcast
+
+extension Channel {
+
+  /// Sends a single broadcast message via HTTP POST (no WebSocket required).
+  ///
+  /// Delegates to ``Realtime/httpBroadcastBatch(_:)`` with a single-element batch
+  /// whose topic is this channel's topic.
+  ///
+  /// - Parameters:
+  ///   - event: The broadcast event name.
+  ///   - payload: An `Encodable & Sendable` payload.
+  ///   - isPrivate: When `true`, the message is restricted to authenticated subscribers.
+  /// - Throws: ``RealtimeError``
+  public func httpBroadcast<T: Encodable & Sendable>(
+    event: String,
+    payload: T,
+    isPrivate: Bool = false
+  ) async throws(RealtimeError) {
+    guard let realtime else { throw .channelClosed(.clientDisconnected) }
+    let msg = HttpBroadcastMessage(
+      topic: topic,
+      event: event,
+      payload: payload,
+      isPrivate: isPrivate
+    )
+    try await realtime._httpBroadcastBatch([msg])
+  }
+}
+
+// MARK: - Error mapping
+
+/// Maps an ``HTTPClientError`` returned by the broadcast endpoint to a ``RealtimeError``.
+private func mapHTTPClientError(_ error: HTTPClientError) -> RealtimeError {
+  switch error {
+  case .responseError(let response, let data):
+    let body = String(decoding: data, as: UTF8.self)
+    switch response.statusCode {
+    case 401, 403:
+      return .authenticationFailed(reason: body, underlying: nil)
+    case 429:
+      return .rateLimited(retryAfter: nil)
+    case 500...599:
+      return .serverError(code: response.statusCode, message: body)
+    default:
+      return .broadcastFailed(reason: "HTTP \(response.statusCode): \(body)")
+    }
+  case .decodingError(_, let detail):
+    return .broadcastFailed(reason: detail)
+  case .unexpectedError(let msg):
+    return .transportFailure(
+      underlying: URLError(
+        .cannotConnectToHost,
+        userInfo: [NSLocalizedDescriptionKey: msg]
+      ))
+  }
+}

@@ -8,6 +8,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import IssueReporting
 
 /// The top-level Realtime client. Manages the WebSocket connection, channel registry,
@@ -31,11 +32,14 @@ public actor Realtime {
 
   // MARK: - Stored properties
 
-  private let url: URL
-  private let apiKey: String
-  private let accessTokenProvider: AccessTokenProvider?
+  let url: URL
+  let apiKey: String
+  let accessTokenProvider: AccessTokenProvider?
   let configuration: Configuration
   private let transport: any RealtimeTransport
+
+  /// HTTP client for broadcast API calls. Uses the HTTP-scheme version of `url`.
+  let httpClient: _HTTPClient
 
   /// Active connection returned by the transport after `connect()`.
   private var connection: (any RealtimeConnection)?
@@ -86,7 +90,7 @@ public actor Realtime {
   ///   1. `_overrideToken` — set by `updateToken(_:)`
   ///   2. `accessTokenProvider` — closure supplied at init
   ///   3. `nil` (anonymous / public channels)
-  private var _overrideToken: String?
+  var _overrideToken: String?
 
   /// Current connection status.
   private var currentStatus: ConnectionStatus = ConnectionStatus(
@@ -118,13 +122,38 @@ public actor Realtime {
     apiKey: String,
     accessToken: AccessTokenProvider? = nil,
     configuration: Configuration = .default,
-    transport: any RealtimeTransport = URLSessionTransport()
+    transport: any RealtimeTransport = URLSessionTransport(),
+    urlSession: URLSession = .shared
   ) {
     self.url = url
     self.apiKey = apiKey
     self.accessTokenProvider = accessToken
     self.configuration = configuration
     self.transport = transport
+
+    // Build the HTTP base URL from the WebSocket URL by converting the scheme.
+    // wss → https, ws → http. The path prefix (/realtime/v1) is preserved.
+    let httpBaseURL = Self._httpBaseURL(from: url)
+
+    // Build the _HTTPClient. Token injection is handled at call time via actor isolation,
+    // not via the tokenProvider closure, because we need access to the actor-isolated
+    // _overrideToken at the time of each call.
+    self.httpClient = _HTTPClient(host: httpBaseURL, session: urlSession)
+  }
+
+  /// Converts a WebSocket URL to its HTTP equivalent for use with ``_HTTPClient``.
+  ///
+  /// - `wss://` → `https://`
+  /// - `ws://` → `http://`
+  /// - Other schemes are left unchanged.
+  private static func _httpBaseURL(from wsURL: URL) -> URL {
+    var components = URLComponents(url: wsURL, resolvingAgainstBaseURL: false) ?? URLComponents()
+    switch components.scheme {
+    case "wss": components.scheme = "https"
+    case "ws": components.scheme = "http"
+    default: break
+    }
+    return components.url ?? wsURL
   }
 
   // MARK: - Channel registry
