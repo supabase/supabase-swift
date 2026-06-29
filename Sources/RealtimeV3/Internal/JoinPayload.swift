@@ -66,8 +66,17 @@ struct PresenceJoinConfig: Codable {
 // MARK: - Factory
 
 extension JoinPayload {
-  /// Builds a `JoinPayload` from `ChannelOptions` and an optional access token.
-  static func make(from options: ChannelOptions, accessToken: String?) -> JoinPayload {
+  /// Builds a `JoinPayload` from `ChannelOptions`, an optional access token, and
+  /// the channel's pending postgres-changes registrations.
+  ///
+  /// Each `ChangeRegistrationConfig` in `registrations` is serialised to a
+  /// `JSONObject` with keys `event`, `schema`, `table`, and (if non-nil) `filter`,
+  /// matching the wire shape Phoenix expects.
+  static func make(
+    from options: ChannelOptions,
+    accessToken: String?,
+    registrations: [ChangeRegistrationConfig] = []
+  ) -> JoinPayload {
     let replayConfig: BroadcastReplayConfig?
     if let replay = options.broadcast.replay {
       replayConfig = BroadcastReplayConfig(
@@ -89,10 +98,23 @@ extension JoinPayload {
       enabled: options.presence.enabled
     )
 
+    // Serialise each registration into a JSONObject entry.
+    let postgresChanges: [JSONObject] = registrations.map { reg in
+      var entry: JSONObject = [
+        "event": .string(reg.event.rawValue),
+        "schema": .string(reg.schema),
+        "table": .string(reg.table),
+      ]
+      if let filter = reg.filter {
+        entry["filter"] = .string(filter)
+      }
+      return entry
+    }
+
     let config = JoinConfig(
       broadcast: broadcastConfig,
       presence: presenceConfig,
-      postgresChanges: [],
+      postgresChanges: postgresChanges,
       isPrivate: options.isPrivate
     )
 

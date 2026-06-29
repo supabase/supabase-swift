@@ -67,6 +67,19 @@ public actor Channel {
   /// Each `observe`/`diffs` call registers a closure that finishes its `AsyncStream` cleanly.
   var presenceFinishers: [UUID: @Sendable () -> Void] = [:]
 
+  // MARK: - Postgres change registrations (Task 27)
+
+  /// Ordered list of pending postgres-changes registrations.
+  ///
+  /// Populated by the `inserts`/`updates`/`deletes`/`changes` factories in
+  /// `Channel+Postgres.swift` before `subscribe()` is called. Each entry is
+  /// baked into `config.postgres_changes` during `_performJoin`.
+  ///
+  /// **Reusability (Decision 14c):** registrations are NOT cleared on `leave()`;
+  /// they persist and replay on the next `subscribe()`. New registrations may be
+  /// added between `leave()` and resubscribe as long as the state is `.closed`.
+  var pendingRegistrations: [ChangeRegistrationConfig] = []
+
   /// The joinRef assigned during the most recent successful (or in-progress) `subscribe()`.
   /// Stored so subsequent frames for this channel (which carry the joinRef) can be validated.
   private(set) var joinRef: String?
@@ -244,9 +257,11 @@ public actor Channel {
     // reflects the correct state during the entire join handshake.
     transition(to: .joining)
 
-    // Build the join payload.
+    // Build the join payload, baking in any pending postgres-changes registrations.
     let accessToken = try await realtime.accessTokenForJoin()
-    let joinPayload = JoinPayload.make(from: options, accessToken: accessToken)
+    let joinPayload = JoinPayload.make(
+      from: options, accessToken: accessToken, registrations: pendingRegistrations
+    )
 
     let payloadObject: JSONObject
     do {
