@@ -44,6 +44,9 @@ public protocol LifecycleEventSource: Sendable {
 
     private let backgroundContinuation: AsyncStream<Void>.Continuation
     private let foregroundContinuation: AsyncStream<Void>.Continuation
+    // `@unchecked Sendable` safety: assigned exactly once at the end of `init`
+    // (the self-capturing observer closures preclude a stored `let`) and only read
+    // in `deinit` — no post-init mutation, no concurrent access.
     private var observers: [any NSObjectProtocol] = []
 
     init() {

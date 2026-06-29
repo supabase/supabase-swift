@@ -115,7 +115,14 @@ import Testing
     try await rt.connect()
     #expect(await transport.connectCallCount == 1)
 
-    // Emit foreground while already connected — should be a no-op.
+    // Background, then foreground WITHOUT dropping the socket. This exercises the
+    // real no-op guard in handleAppForeground() (the `.connected` check): the
+    // observer's "did background" gate is satisfied by the background event, but
+    // because the connection is still alive, foreground must NOT reconnect.
+    lifecycleSource.sendBackground()
+    for _ in 0..<20 {
+      await Task.yield()
+    }
     lifecycleSource.sendForeground()
 
     // Let any potential spurious connects happen.
