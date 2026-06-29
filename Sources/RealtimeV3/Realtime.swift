@@ -301,6 +301,10 @@ public actor Realtime {
   /// The reconnection policy does NOT auto-reopen after a manual disconnect; the
   /// next `connect()` starts a fresh session.
   ///
+  /// - Note: Channels retain their `.joined` state across a manual disconnect — this
+  ///   is by design, so a subsequent `connect()` transparently re-joins them. Call
+  ///   ``Channel/leave()`` first if you want a channel to settle to `.closed`.
+  ///
   /// Idempotent: if already disconnected, this is a no-op.
   public func disconnect() async {
     // Guard: if there is no active connection AND no reconnect in progress, nothing to do.
@@ -714,7 +718,8 @@ public actor Realtime {
     // Guard against double-append in case the caller already included `/websocket`.
     let existingPath = components.path
     if !existingPath.hasSuffix("/websocket") {
-      components.path = existingPath.hasSuffix("/")
+      components.path =
+        existingPath.hasSuffix("/")
         ? existingPath + "websocket"
         : existingPath + "/websocket"
     }

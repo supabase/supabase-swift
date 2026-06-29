@@ -59,7 +59,12 @@ extension Realtime {
   /// Does **not** require an open WebSocket connection. Auth is injected via the
   /// `_HTTPClient` token provider when available; otherwise the `apikey` header is set.
   ///
-  /// - Parameter messages: One or more ``HttpBroadcastMessage`` values.
+  /// - Important: The `/api/broadcast` endpoint requires a **service-role** Bearer token
+  ///   (or an access token with broadcast privileges). An anon JWT is rejected by the
+  ///   server with HTTP 500 — surfaced here as ``RealtimeError/serverError(code:message:)``.
+  ///
+  /// - Parameter messages: One or more ``HttpBroadcastMessage`` values. Each `topic`
+  ///   must be the **short** topic (without the `realtime:` prefix).
   /// - Throws: ``RealtimeError``
   public func httpBroadcastBatch(_ messages: [HttpBroadcastMessage]) async throws(RealtimeError) {
     try await _httpBroadcastBatch(messages)
@@ -145,7 +150,12 @@ extension Channel {
   /// Sends a single broadcast message via HTTP POST (no WebSocket required).
   ///
   /// Delegates to ``Realtime/httpBroadcastBatch(_:)`` with a single-element batch
-  /// whose topic is this channel's topic.
+  /// whose topic is this channel's topic. The SDK-internal `realtime:` prefix is
+  /// stripped before building the HTTP body (the endpoint matches WebSocket
+  /// subscribers on the short topic).
+  ///
+  /// - Important: Like ``Realtime/httpBroadcastBatch(_:)``, the `/api/broadcast`
+  ///   endpoint requires a **service-role** Bearer token; an anon JWT yields HTTP 500.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
