@@ -111,6 +111,10 @@ final class TransportServer: Sendable {
   func subscribeToClientFrames() -> AsyncStream<TransportFrame> {
     let id = UUID()
     let (stream, continuation) = AsyncStream<TransportFrame>.makeStream()
+    let subscribers = broadcastSubscribers
+    continuation.onTermination = { _ in
+      _ = subscribers.withValue { $0.removeValue(forKey: id) }
+    }
     broadcastSubscribers.withValue { $0[id] = continuation }
     return stream
   }
