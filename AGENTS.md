@@ -75,6 +75,27 @@ make format
 
 This uses `swift-format` to automatically format code. All code should be formatted before committing.
 
+### Linting
+
+```bash
+# Lint Sources and Tests (fails on any new violation)
+make lint
+
+# Autocorrect violations that SwiftLint can fix
+make lint-fix
+```
+
+This uses [SwiftLint](https://github.com/realm/SwiftLint) for code-smell and
+correctness rules; `swift-format` remains the source of truth for formatting,
+so the SwiftLint config (`.swiftlint.yml`) disables the purely stylistic rules
+that overlap with it.
+
+Existing violations are grandfathered in `.swiftlint-baseline`, so `make lint`
+only fails on *new* violations. The baseline should shrink over time — when you
+fix violations in a file, regenerate it with
+`swiftlint lint --write-baseline .swiftlint-baseline`. Install SwiftLint locally
+with `brew install swiftlint`.
+
 ### Documentation
 
 ```bash
@@ -286,6 +307,7 @@ supabase stop
 ## Important Notes for AI Coding Agents
 
 - Always run `make format` before committing Swift code
+- Run `make lint` before committing; it must not report new violations
 - Ensure new public APIs have DocC documentation comments
 - Add tests for all new functionality
 - Keep changes minimal and focused

@@ -81,7 +81,13 @@ format:
 		-not -path '*/.*' -print0 \
 		| xargs -0 xcrun swift-format --ignore-unparsable-files --in-place
 
-.PHONY: build-for-library-evolution format warm-simulator xcodebuild test-docs test-integration
+lint:
+	swiftlint lint --baseline .swiftlint-baseline --strict
+
+lint-fix:
+	swiftlint lint --fix
+
+.PHONY: build-for-library-evolution format lint lint-fix warm-simulator xcodebuild test-docs test-integration
 
 .PHONY: coverage
 coverage:

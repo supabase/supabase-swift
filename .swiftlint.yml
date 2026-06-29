@@ -1,0 +1,49 @@
+# SwiftLint configuration for supabase-swift
+# https://github.com/realm/SwiftLint
+#
+# Pinned version: 0.65.0
+# Install locally: brew install swiftlint@0.65.0 || brew install swiftlint
+# CI pins the exact binary via portable_swiftlint.zip from GitHub releases.
+#
+# This project uses Apple's swift-format for formatting/whitespace/layout
+# (run via `make format`). SwiftLint is therefore scoped to code-smell and
+# correctness rules, and all purely stylistic rules that swift-format already
+# governs are disabled to avoid the two tools fighting each other.
+#
+# Run locally with `make lint` (or `make lint-fix` to autocorrect).
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - Tests/IntegrationTests/supabase
+  - "**/__Snapshots__"
+
+identifier_name:
+  min_length:
+    warning: 2
+  excluded:
+    - id
+    - db
+    - to
+    - vs
+  # The codebase intentionally prefixes internal/underscored helpers
+  # (e.g. `_getAccessToken`, `_remove`) — don't flag those.
+  validates_start_with_lowercase: false
+
+# These are owned by swift-format; let it be the single source of truth.
+disabled_rules:
+  - trailing_whitespace
+  - trailing_comma
+  - opening_brace
+  - comment_spacing
+  - vertical_whitespace
+  - trailing_newline
+  - closure_parameter_position
+  - line_length
+
+opt_in_rules:
+  - empty_count
+  - empty_string
