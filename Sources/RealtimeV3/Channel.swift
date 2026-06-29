@@ -363,6 +363,45 @@ public actor Channel {
     joinRef = nil
   }
 
+  // MARK: - Token push
+
+  /// Sends an `access_token` Phoenix event for this channel if it is currently `.joined`.
+  ///
+  /// Called by `Realtime.updateToken(_:)` for every channel in the registry.
+  ///
+  /// ## No-ACK (Finding I1)
+  /// The backend does not reply to `access_token` events, so this method does NOT
+  /// register the frame in the in-flight registry and does NOT await a reply.
+  /// It returns immediately after queueing the send.
+  ///
+  /// ## Failure semantics
+  /// If the channel is not `.joined` or has no `joinRef`, this is a no-op.
+  /// Transport failures from `sendText` are swallowed — the token is already stored
+  /// on the `Realtime` actor for the next reconnect/rejoin.
+  func pushAccessToken(_ newToken: String) async {
+    guard channelState == .joined, let currentJoinRef = joinRef, let realtime else {
+      return
+    }
+
+    let ref = realtime.nextRef()
+    let text: String
+    do {
+      text = try realtime.serializer.encodeText(
+        joinRef: currentJoinRef,
+        ref: ref,
+        topic: topic,
+        event: PhoenixEvent.accessToken.rawValue,
+        payload: ["access_token": .string(newToken)]
+      )
+    } catch {
+      // Encoding failure: swallow and return — token is already stored for future joins.
+      return
+    }
+
+    // Best-effort send: swallow transport errors (token is stored for future joins).
+    try? await realtime.sendText(text)
+  }
+
   // MARK: - Frame router entry point
 
   /// Called by the frame router when a message arrives for this channel's topic.

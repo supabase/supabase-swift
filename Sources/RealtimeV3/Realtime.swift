@@ -75,6 +75,19 @@ public actor Realtime {
   /// Topic → Channel registry. First-call-wins (Decision 33).
   var channels: [String: Channel] = [:]
 
+  /// Explicitly-set access token, stored by `updateToken(_:)`.
+  ///
+  /// ## Token precedence (spec §6.3)
+  /// `accessTokenForJoin()` checks this field first. When non-nil it is returned
+  /// directly, bypassing the `accessTokenProvider` closure. This allows callers to
+  /// push a concrete token (e.g. after a token refresh) without replacing the provider.
+  ///
+  /// Precedence order (highest → lowest):
+  ///   1. `_overrideToken` — set by `updateToken(_:)`
+  ///   2. `accessTokenProvider` — closure supplied at init
+  ///   3. `nil` (anonymous / public channels)
+  private var _overrideToken: String?
+
   /// Current connection status.
   private var currentStatus: ConnectionStatus = ConnectionStatus(
     state: .idle,
@@ -510,16 +523,53 @@ public actor Realtime {
     )
   }
 
-  /// Returns the current access token, calling the provider if one is configured.
+  /// Returns the current access token for channel join, consulting stored state in order:
   ///
-  /// Returns `nil` if no provider is set (anonymous / public channels).
+  /// 1. `_overrideToken` — set by `updateToken(_:)`; takes highest precedence.
+  /// 2. `accessTokenProvider` — async closure supplied at init.
+  /// 3. `nil` — anonymous / public channels (no token configured).
+  ///
+  /// This ordering ensures a token pushed via `updateToken(_:)` is immediately
+  /// used for any subsequent joins, regardless of whether a provider is also set.
   func accessTokenForJoin() async throws(RealtimeError) -> String? {
+    if let override = _overrideToken { return override }
     guard let provider = accessTokenProvider else { return nil }
     do {
       return try await provider()
     } catch {
       throw .authenticationFailed(
         reason: "Access token provider threw an error.", underlying: error)
+    }
+  }
+
+  // MARK: - Token management
+
+  /// Updates the access token used for future channel joins and pushes it to all
+  /// currently-joined channels via the Phoenix `access_token` event.
+  ///
+  /// ## Behavior
+  /// The new token is stored immediately (before any network I/O) so subsequent
+  /// `subscribe()` calls always use it, even if the socket is currently down.
+  ///
+  /// For each channel in the registry that is currently `.joined`, an `access_token`
+  /// frame is sent best-effort via `Channel.pushAccessToken(_:)`. The backend does
+  /// **not** send a `phx_reply` to this event (Finding I1), so `updateToken` returns
+  /// after queueing the pushes rather than awaiting an ACK.
+  ///
+  /// If `sendText` throws (e.g. socket is down), the per-channel push failure is
+  /// swallowed — the stored token still applies on the next reconnect/rejoin.
+  ///
+  /// - Parameter newToken: The new JWT to store and distribute.
+  /// - Throws: `RealtimeError` only if an unexpected non-send error occurs. Send
+  ///   failures are swallowed (best-effort push semantics).
+  public func updateToken(_ newToken: String) async throws(RealtimeError) {
+    // Store the token first so future joins always pick it up, even if push fails.
+    _overrideToken = newToken
+
+    // Push to each joined channel. Failures are swallowed (best-effort).
+    for channel in channels.values {
+      // Channel.pushAccessToken is a no-op unless the channel is .joined.
+      await channel.pushAccessToken(newToken)
     }
   }
 
