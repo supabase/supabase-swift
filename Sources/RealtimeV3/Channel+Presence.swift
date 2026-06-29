@@ -232,10 +232,15 @@ extension Channel {
         continuation.yield(PresenceState(active: snapshot, lastDiff: nil))
 
       } else if message.event == .presenceDiff {
-        // Incremental diff: decode and apply.
-        guard let diff = try? decodePresenceDiff(jsonValue, as: T.self) else { return }
+        // Incremental diff: decode once (ref-aware) and derive the public
+        // `PresenceDiff<T>` by stripping the phx_refs, avoiding a redundant
+        // second decode pass on the same payload.
         guard let rawDiff = try? decodePresenceDiffWithRefs(jsonValue, as: T.self)
         else { return }
+        let diff = PresenceDiff<T>(
+          joined: rawDiff.joined.flatMap { key, pairs in pairs.map { (key, $0.value) } },
+          left: rawDiff.left.flatMap { key, pairs in pairs.map { (key, $0.value) } }
+        )
 
         // Apply the diff to the accumulated active map.
         active.withValue { map in
