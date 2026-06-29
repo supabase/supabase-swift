@@ -38,6 +38,11 @@ public actor Channel {
   /// Mirrors the pattern used by `Realtime.statusContinuations`.
   private var stateContinuations: [UUID: AsyncStream<ChannelState>.Continuation] = [:]
 
+  /// Per-call fan-out table for `messages()` streams.
+  /// Each `messages()` call registers a fresh continuation here; `receive(_:)` yields
+  /// every incoming frame to all registered continuations.
+  private var messagesContinuations: [UUID: AsyncStream<PhoenixMessage>.Continuation] = [:]
+
   /// The joinRef assigned during the most recent successful (or in-progress) `subscribe()`.
   /// Stored so subsequent frames for this channel (which carry the joinRef) can be validated.
   private(set) var joinRef: String?
@@ -72,17 +77,49 @@ public actor Channel {
     return stream
   }
 
+  // MARK: - Messages feed
+
+  /// Returns a fresh `AsyncStream<PhoenixMessage>` that receives every frame routed
+  /// to this channel by the frame router.
+  ///
+  /// ## Per-call fan-out
+  /// Each call mints an independent stream. All registered streams receive a copy of
+  /// every frame delivered via `receive(_:)`. Streams created before `subscribe()` are
+  /// valid — they start producing once frames arrive after the join.
+  ///
+  /// ## Termination
+  /// The stream finishes automatically when `leave()` (or any terminal close) is called.
+  /// Consumers' `for await` loops will end cleanly without an error.
+  public func messages() -> AsyncStream<PhoenixMessage> {
+    let id = UUID()
+    let (stream, continuation) = AsyncStream<PhoenixMessage>.makeStream()
+    messagesContinuations[id] = continuation
+    continuation.onTermination = { [weak self] _ in
+      Task { [weak self] in await self?.removeMessagesContinuation(id: id) }
+    }
+    return stream
+  }
+
   // MARK: - Private helpers
 
   private func removeStateContinuation(id: UUID) {
     stateContinuations.removeValue(forKey: id)
   }
 
+  private func removeMessagesContinuation(id: UUID) {
+    messagesContinuations.removeValue(forKey: id)
+  }
+
   /// Transitions the channel to `newState` and broadcasts to all state observers.
+  /// When transitioning to a terminal `.closed` state, all `messages()` streams are
+  /// finished so consumers' `for await` loops end cleanly.
   func transition(to newState: ChannelState) {
     channelState = newState
     for continuation in stateContinuations.values {
       continuation.yield(newState)
+    }
+    if case .closed = newState {
+      finishAllMessagesContinuations()
     }
   }
 
@@ -329,8 +366,21 @@ public actor Channel {
   // MARK: - Frame router entry point
 
   /// Called by the frame router when a message arrives for this channel's topic.
-  /// Expanded in Task 19: fan-out to messages() consumers.
+  /// Fans the message out to all registered `messages()` consumers.
   func receive(_ message: PhoenixMessage) {
-    _ = message
+    for continuation in messagesContinuations.values {
+      continuation.yield(message)
+    }
+  }
+
+  // MARK: - Messages stream teardown
+
+  /// Finishes all open `messages()` continuations so consumers' `for await` loops end.
+  /// Called from `leave()` and any terminal close transition.
+  private func finishAllMessagesContinuations() {
+    for continuation in messagesContinuations.values {
+      continuation.finish()
+    }
+    messagesContinuations.removeAll()
   }
 }
