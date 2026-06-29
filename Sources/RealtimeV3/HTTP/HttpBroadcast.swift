@@ -30,7 +30,7 @@ public struct HttpBroadcastMessage: Sendable {
     self.topic = topic
     self.event = event
     self.payload = payload
-    self.isPrivate = false
+    self.isPrivate = isPrivate
   }
 }
 
@@ -106,8 +106,16 @@ extension Realtime {
       currentToken = nil
     }
 
-    // When no token is available, inject the apikey header explicitly.
-    let headers: [String: String]? = currentToken == nil ? ["apikey": apiKey] : nil
+    // Auth header selection (spec §3.3, Finding E2):
+    //   • Token available → "Authorization: Bearer <token>" (standard bearer auth)
+    //   • No token       → "apikey: <key>" (anon/public channel access)
+    // The _HTTPClient is built without a tokenProvider, so we inject auth explicitly.
+    let headers: [String: String]
+    if let token = currentToken {
+      headers = ["Authorization": "Bearer \(token)"]
+    } else {
+      headers = ["apikey": apiKey]
+    }
 
     // Build the absolute URL by appending "api/broadcast" to the HTTP base URL.
     // We use the absolute-URL overload of fetchData to preserve the full path prefix
