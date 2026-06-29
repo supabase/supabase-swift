@@ -87,11 +87,41 @@ final class TransportServer: Sendable {
       AsyncStream<TransportFrame>.Continuation?
     >
 
+  // Multicast subscribers: each registered continuation receives a copy of every
+  // client-sent frame. This allows multiple autoReply* helpers to coexist without
+  // competing with each other or with direct `clientSentFrames` consumers.
+  let broadcastSubscribers: LockIsolated<[UUID: AsyncStream<TransportFrame>.Continuation]>
+
   init() {
     let (clientSentStream, clientSentCont) = AsyncStream.makeStream(of: TransportFrame.self)
     self.clientSentFrames = clientSentStream
     self.clientSentContinuation = LockIsolated(clientSentCont)
     self.activeServerToClientContinuation = LockIsolated(nil)
+    self.broadcastSubscribers = LockIsolated([:])
+  }
+
+  /// Returns a new `AsyncStream<TransportFrame>` that receives a copy of every
+  /// client-sent frame. Multiple streams may coexist — each gets every frame.
+  ///
+  /// Frames are published to subscribers in `notifyBroadcastSubscribers(_:)`,
+  /// called by `InMemoryConnection.send()` alongside the main `clientSentFrames` yield.
+  ///
+  /// The caller is responsible for breaking out of the loop when done (task
+  /// cancellation is the canonical mechanism).
+  func subscribeToClientFrames() -> AsyncStream<TransportFrame> {
+    let id = UUID()
+    let (stream, continuation) = AsyncStream<TransportFrame>.makeStream()
+    broadcastSubscribers.withValue { $0[id] = continuation }
+    return stream
+  }
+
+  /// Called by `InMemoryConnection.send()` to fan each frame out to all broadcast subscribers.
+  func notifyBroadcastSubscribers(_ frame: TransportFrame) {
+    broadcastSubscribers.withValue { dict in
+      for cont in dict.values {
+        cont.yield(frame)
+      }
+    }
   }
 
   /// Inject a frame that the connected client will receive on its `frames` stream.
@@ -108,9 +138,12 @@ final class TransportServer: Sendable {
 
   // MARK: - autoReplyToJoins
 
-  /// Spawns a background task that watches `clientSentFrames` for `phx_join` text frames and
+  /// Spawns a background task that watches client-sent frames for `phx_join` text frames and
   /// automatically replies with a `phx_reply` carrying the same `ref` and the supplied `status`
   /// / `response`. The task is detached and runs until the test ends or the stream is cancelled.
+  ///
+  /// Uses `subscribeToClientFrames()` so it can coexist with `autoReplyToLeaves()` without
+  /// competing for frames — each helper gets its own broadcast copy of every frame.
   ///
   /// - Parameters:
   ///   - status: The reply status — `"ok"` by default, use `"error"` to test rejection.
@@ -133,8 +166,9 @@ final class TransportServer: Sendable {
     }
 
     let server = self
+    let frames = subscribeToClientFrames()
     Task.detached {
-      for await frame in server.clientSentFrames {
+      for await frame in frames {
         guard case .text(let text) = frame else { continue }
         // Only process phx_join frames.
         guard text.contains("phx_join") else { continue }
@@ -154,6 +188,37 @@ final class TransportServer: Sendable {
     }
   }
 
+  // MARK: - autoReplyToLeaves
+
+  /// Spawns a background task that watches client-sent frames for `phx_leave` text frames and
+  /// automatically replies with a `phx_reply` carrying the same `ref` and the supplied `status`.
+  /// The task is detached and runs until the test ends or the stream is cancelled.
+  ///
+  /// Uses `subscribeToClientFrames()` so it can coexist with `autoReplyToJoins()` without
+  /// competing for frames — each helper gets its own broadcast copy of every frame.
+  ///
+  /// - Parameters:
+  ///   - status: The reply status — `"ok"` by default.
+  func autoReplyToLeaves(status: String = "ok") {
+    let server = self
+    let frames = subscribeToClientFrames()
+    Task.detached {
+      for await frame in frames {
+        guard case .text(let text) = frame else { continue }
+        // Only process phx_leave frames.
+        guard text.contains("phx_leave") else { continue }
+
+        guard let ref = parseRef(from: text) else { continue }
+        guard let topic = parseTopic(from: text) else { continue }
+
+        // Inject the reply with the same ref so the in-flight registry resolves it.
+        let reply =
+          "[null,\"\(ref)\",\"\(topic)\",\"phx_reply\",{\"status\":\"\(status)\",\"response\":{}}]"
+        server.send(.text(reply))
+      }
+    }
+  }
+
   /// Called by InMemoryTransport on each connect() to produce a fresh connection object.
   /// Installs a new server→client continuation, replacing the previous (possibly finished) one.
   fileprivate func makeConnection() -> InMemoryConnection {
@@ -166,7 +231,8 @@ final class TransportServer: Sendable {
 
     return InMemoryConnection(
       serverToClientStream: serverToClientStream,
-      clientSentContinuation: clientSentContinuation
+      clientSentContinuation: clientSentContinuation,
+      server: self
     )
   }
 }
@@ -202,10 +268,12 @@ private final class InMemoryConnection: RealtimeConnection, Sendable {
   let frames: AsyncThrowingStream<TransportFrame, any Error & Sendable>
   private let clientSentContinuation: LockIsolated<AsyncStream<TransportFrame>.Continuation?>
   private let bridgeTask: Task<Void, Never>
+  private let server: TransportServer
 
   init(
     serverToClientStream: AsyncStream<TransportFrame>,
-    clientSentContinuation: LockIsolated<AsyncStream<TransportFrame>.Continuation?>
+    clientSentContinuation: LockIsolated<AsyncStream<TransportFrame>.Continuation?>,
+    server: TransportServer
   ) {
     // Wrap the plain AsyncStream in AsyncThrowingStream as required by the protocol.
     // Use makeStream() so the bridging Task can be stored and cancelled on close().
@@ -214,6 +282,7 @@ private final class InMemoryConnection: RealtimeConnection, Sendable {
     >.makeStream()
     self.frames = throwingStream
     self.clientSentContinuation = clientSentContinuation
+    self.server = server
     self.bridgeTask = Task {
       // defer ensures the throwing-stream continuation is always finished, whether the
       // forwarding loop exits normally (end-of-stream) or because the task was cancelled
@@ -226,7 +295,10 @@ private final class InMemoryConnection: RealtimeConnection, Sendable {
   }
 
   func send(_ frame: TransportFrame) async throws {
+    // Publish to the single-consumer clientSentFrames stream.
     _ = clientSentContinuation.withValue { $0?.yield(frame) }
+    // Also fan out to all broadcast subscribers (autoReply* helpers).
+    server.notifyBroadcastSubscribers(frame)
   }
 
   func close(code: Int, reason: String) async {

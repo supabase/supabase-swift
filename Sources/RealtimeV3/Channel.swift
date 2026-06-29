@@ -214,6 +214,118 @@ public actor Channel {
     }
   }
 
+  // MARK: - Leave
+
+  /// Unsubscribes the channel from its topic by performing the `phx_leave` handshake.
+  ///
+  /// ## State machine
+  /// `.joined` → `.leaving` → `.closed(.userRequested)` (on ok reply)
+  ///
+  /// ## Idempotency
+  /// If the channel is already `.closed` or `.unsubscribed`, this is a no-op.
+  /// Calling `leave()` a second time on an already-closed channel returns immediately.
+  ///
+  /// ## In-flight join
+  /// If a `subscribe()` join is currently in flight, `leave()` awaits its completion
+  /// first (best-effort), then proceeds to leave. This ensures the join/leave handshake
+  /// is always well-ordered on the server.
+  ///
+  /// ## Error semantics
+  /// On transport failure or timeout the channel's local state is set to
+  /// `.closed(.userRequested)` regardless — the local handle is torn down. The
+  /// error is then rethrown so the caller can detect that the server may not have
+  /// confirmed the leave.
+  ///
+  /// ## Re-subscribe
+  /// After leave, the channel is `.closed(.userRequested)`. Calling `subscribe()`
+  /// again from this state performs a fresh `phx_join` (the state machine guard in
+  /// `subscribe()` already permits `.closed`).
+  ///
+  /// - Throws: `RealtimeError.channelJoinTimeout` if no reply arrives within `leaveTimeout`.
+  public func leave() async throws(RealtimeError) {
+    // If the owning Realtime is gone, there is nothing to leave.
+    guard let realtime else {
+      transition(to: .closed(.userRequested))
+      return
+    }
+
+    // Idempotent: already closed/unsubscribed — no-op.
+    switch channelState {
+    case .closed, .unsubscribed:
+      return
+    default:
+      break
+    }
+
+    // If a join is in flight, await it first so leave is well-ordered on the server.
+    if let existing = joinTask {
+      // Best-effort: ignore any join error; we are leaving regardless.
+      try? await existing.value
+      // After the join resolves the state is either .joined or .closed(rejected/timeout).
+      // If it ended up closed, we are done — nothing to leave.
+      switch channelState {
+      case .closed, .unsubscribed:
+        return
+      default:
+        break
+      }
+    }
+
+    // Transition to .leaving to signal in-progress leave.
+    transition(to: .leaving)
+
+    // Generate a ref for the phx_leave push.
+    let ref = realtime.nextRef()
+
+    // Use the stored joinRef (set during subscribe). If somehow nil, use the ref as fallback.
+    let currentJoinRef = joinRef ?? ref
+
+    // Encode the phx_leave text frame.
+    let text: String
+    do {
+      text = try realtime.serializer.encodeText(
+        joinRef: currentJoinRef,
+        ref: ref,
+        topic: topic,
+        event: PhoenixEvent.leave.rawValue,
+        payload: [:]
+      )
+    } catch {
+      // Encoding failed: close locally and rethrow.
+      transition(to: .closed(.userRequested))
+      joinRef = nil
+      throw error as? RealtimeError ?? .encoding(underlying: error)
+    }
+
+    // Send the phx_leave frame. On transport failure, close locally and rethrow.
+    do {
+      try await realtime.sendText(text)
+    } catch let sendError as RealtimeError {
+      transition(to: .closed(.userRequested))
+      joinRef = nil
+      throw sendError
+    }
+
+    // Await the phx_reply. On timeout, close locally and rethrow.
+    // Phoenix replies to phx_leave with a phx_reply; awaiting that is sufficient.
+    do {
+      _ = try await realtime.awaitReply(
+        ref: ref,
+        timeout: realtime.configuration.leaveTimeout,
+        timeoutError: .channelJoinTimeout
+      )
+    } catch let replyError as RealtimeError {
+      // Local teardown regardless of server confirmation failure.
+      transition(to: .closed(.userRequested))
+      joinRef = nil
+      throw replyError
+    }
+
+    // Success: transition to closed and reset joinRef so a future subscribe() gets a fresh ref.
+    transition(to: .closed(.userRequested))
+    joinRef = nil
+  }
+
   // MARK: - Frame router entry point
 
   /// Called by the frame router when a message arrives for this channel's topic.
