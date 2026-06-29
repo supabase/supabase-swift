@@ -49,8 +49,14 @@ public actor Realtime {
   // Swift `private` does not cross file boundaries; `internal` is the tightest we can use here.
   var routingTask: Task<Void, Never>?
 
+  /// Background task that sends periodic heartbeat frames and checks replies.
+  var heartbeatTask: Task<Void, Never>?
+
   /// Registry tracking in-flight pushes awaiting a `phx_reply`.
   let inflightPushRegistry = InflightPushRegistry()
+
+  /// Monotonic ref generator shared across all protocol frames.
+  let refGenerator = RefGenerator()
 
   /// Serializer for encoding/decoding Phoenix protocol frames.
   let serializer = PhoenixSerializer()
@@ -203,8 +209,8 @@ public actor Realtime {
     statusContinuations.removeValue(forKey: id)
   }
 
-  func transition(to state: ConnectionStatus.State) {
-    currentStatus = ConnectionStatus(state: state, since: Date(), latency: nil)
+  func transition(to state: ConnectionStatus.State, latency: Duration? = nil) {
+    currentStatus = ConnectionStatus(state: state, since: Date(), latency: latency)
     for continuation in statusContinuations.values {
       continuation.yield(currentStatus)
     }
@@ -241,6 +247,83 @@ public actor Realtime {
 
     // Start the background frame routing loop.
     startFrameRouting(connection: conn)
+
+    // Start the periodic heartbeat loop.
+    startHeartbeat(connection: conn)
+  }
+
+  // MARK: - Heartbeat
+
+  /// Starts the heartbeat loop and stores the task handle so it can be cancelled.
+  private func startHeartbeat(connection: any RealtimeConnection) {
+    heartbeatTask?.cancel()
+    let heartbeatDuration = configuration.heartbeat
+    let clock = configuration.clock
+    let registry = inflightPushRegistry
+    let gen = refGenerator
+
+    let heartbeater = Heartbeater(
+      heartbeat: heartbeatDuration,
+      clock: clock,
+      refGenerator: gen,
+      sendFrame: { text in
+        // connection is captured by-value (protocol existential, not a class).
+        // If it has been cleared the send is a no-op.
+        try await connection.send(.text(text))
+      },
+      awaitReply: { [weak self] ref in
+        guard self != nil else { throw RealtimeError.disconnected }
+        return try await registry.awaitReply(
+          ref: ref,
+          timeout: heartbeatDuration,
+          clock: clock,
+          timeoutError: .disconnected
+        )
+      },
+      updateLatency: { [weak self] duration in
+        await self?.updateLatency(duration)
+      },
+      onConnectionLost: { [weak self] error in
+        await self?.handleConnectionLost(error)
+      }
+    )
+    heartbeatTask = heartbeater.start()
+  }
+
+  /// Updates `currentStatus.latency` in-place while preserving the current state.
+  private func updateLatency(_ latency: Duration) {
+    currentStatus = ConnectionStatus(
+      state: currentStatus.state,
+      since: currentStatus.since,
+      latency: latency
+    )
+    for continuation in statusContinuations.values {
+      continuation.yield(currentStatus)
+    }
+  }
+
+  // MARK: - Connection loss
+
+  /// Minimal connection-loss handler. Cancels heartbeat + routing tasks, clears the
+  /// connection, and transitions status to `.idle`.
+  ///
+  /// Expanded in Task 13 (reconnection).
+  func handleConnectionLost(_ error: RealtimeError) async {
+    // Cancel background tasks.
+    heartbeatTask?.cancel()
+    heartbeatTask = nil
+    routingTask?.cancel()
+    routingTask = nil
+
+    // Fail all pending pushes so callers don't hang indefinitely.
+    await inflightPushRegistry.failAll(error)
+
+    // Close and clear the connection.
+    await connection?.close(code: 1001, reason: "connection lost")
+    connection = nil
+
+    // Transition to idle so status stream consumers know the socket is gone.
+    transition(to: .idle)
   }
 
   // MARK: - Test shims
