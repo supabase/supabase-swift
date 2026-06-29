@@ -10,6 +10,9 @@ import Foundation
 /// Represents the current connection state and associated metadata.
 public struct ConnectionStatus: Sendable {
   /// The discrete connection states.
+  // Note: `Equatable` synthesis is intentionally omitted because `.reconnecting` and
+  // `.closed` carry `(any Error & Sendable)?` associated values, which do not conform
+  // to `Equatable` and would prevent automatic synthesis for the entire enum.
   public enum State: Sendable {
     case idle
     case connecting(attempt: Int)

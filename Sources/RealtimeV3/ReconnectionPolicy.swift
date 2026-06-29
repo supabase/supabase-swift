@@ -55,7 +55,7 @@ public struct ReconnectionPolicy: Sendable {
         // Deterministic: odd attempts subtract jitter/2, even attempts add jitter/2
         jitterFraction = attempt % 2 == 0 ? jitter / 2 : -(jitter / 2)
       }
-      let finalSeconds = baseSeconds * (1 + jitterFraction)
+      let finalSeconds = Swift.max(0, baseSeconds * (1 + jitterFraction))
       let nanoseconds = Int64(finalSeconds * 1_000_000_000)
       return .nanoseconds(nanoseconds)
     }
