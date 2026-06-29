@@ -154,6 +154,45 @@ public actor Realtime {
 
   // MARK: - Connect
 
+  // MARK: - Disconnect
+
+  /// Closes the socket and awaits close completion.
+  ///
+  /// Does NOT evict the channel cache or call leave() on any channel (Decision 29).
+  /// The reconnection policy does NOT auto-reopen after a manual disconnect; the
+  /// next `connect()` starts a fresh session.
+  ///
+  /// Idempotent: if already disconnected, this is a no-op.
+  public func disconnect() async {
+    // Guard: if there is no active connection AND no reconnect in progress, nothing to do.
+    // We still set intentionalDisconnect=true to block any in-flight handleConnectionLost.
+    intentionalDisconnect = true
+
+    // Cancel a running reconnection loop if any.
+    reconnectTask?.cancel()
+    reconnectTask = nil
+
+    // Cancel background tasks.
+    heartbeatTask?.cancel()
+    heartbeatTask = nil
+    routingTask?.cancel()
+    routingTask = nil
+
+    // Fail all in-flight pushes so callers don't hang.
+    await inflightPushRegistry.failAll(.disconnected)
+
+    // Close and clear the active connection (if any).
+    if let conn = connection {
+      connection = nil
+      await conn.close(code: 1000, reason: "client disconnected")
+    }
+
+    // Transition to closed state.
+    transition(to: .closed(.clientDisconnected))
+  }
+
+  // MARK: - Connect
+
   /// Establishes the WebSocket connection to the Realtime server.
   ///
   /// Idempotent: if already connected or connecting, this call joins the in-flight task
@@ -165,6 +204,9 @@ public actor Realtime {
   ///
   /// - Throws: `RealtimeError.transportFailure` if the underlying transport fails.
   public func connect() async throws(RealtimeError) {
+    // Clear the intentional-disconnect flag so reconnection works for the new session.
+    intentionalDisconnect = false
+
     // Already connected — no-op.
     if case .connected = currentStatus.state {
       return
@@ -341,9 +383,9 @@ public actor Realtime {
     // Close the connection we captured above.
     await lostConnection.close(code: 1001, reason: "connection lost")
 
-    // If the disconnect was intentional (set by disconnect() in Task 14), stay closed.
+    // If the disconnect was intentional (set by disconnect()), stay closed.
+    // Do NOT overwrite .closed(.clientDisconnected) and do NOT trigger reconnection.
     if intentionalDisconnect {
-      transition(to: .closed(.transportFailure))
       return
     }
 
