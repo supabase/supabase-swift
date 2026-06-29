@@ -70,6 +70,7 @@ private final class URLSessionConnection: RealtimeConnection, @unchecked Sendabl
   private let continuation: AsyncThrowingStream<TransportFrame, any Error & Sendable>.Continuation
   private let task: URLSessionWebSocketTask
   private let receiveLoop: Task<Void, Never>
+  private let _isClosed = LockIsolated(false)
 
   init(task: URLSessionWebSocketTask) {
     self.task = task
@@ -111,6 +112,7 @@ private final class URLSessionConnection: RealtimeConnection, @unchecked Sendabl
   }
 
   func send(_ frame: TransportFrame) async throws {
+    guard !_isClosed.value else { return }
     switch frame {
     case .text(let text):
       try await task.send(.string(text))
@@ -120,6 +122,7 @@ private final class URLSessionConnection: RealtimeConnection, @unchecked Sendabl
   }
 
   func close(code: Int, reason: String) async {
+    _isClosed.setValue(true)
     receiveLoop.cancel()
     // URLSessionWebSocketTask accepts close codes 1000 or 3000–4999.
     // Map any invalid code to 1000 to avoid a precondition failure.

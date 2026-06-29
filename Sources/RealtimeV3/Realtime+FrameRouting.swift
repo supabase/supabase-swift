@@ -7,6 +7,7 @@
 
 import Clocks
 import Foundation
+import IssueReporting
 
 extension Realtime {
   // MARK: - Internal routing entry point
@@ -33,6 +34,7 @@ extension Realtime {
     } catch {
       // Stream ended with an error (e.g. network loss). Log and fall through.
       // Reconnection logic is Task 13.
+      reportIssue("Realtime frame stream ended with error: \(error)")
     }
     // Stream finished (normal or error). Transition to idle so callers know
     // the connection is gone. Reconnection is Task 13.

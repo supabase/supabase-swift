@@ -25,7 +25,10 @@ import Testing
     while await rt._test_pendingCount == 0 {
       try await Task.sleep(nanoseconds: 1_000_000)  // 1ms
       attempts += 1
-      if attempts > 1000 { throw CancellationError() }
+      if attempts > 1000 {
+        Issue.record("push not registered within timeout")
+        return
+      }
     }
 
     // Inject a phx_reply frame from the server.

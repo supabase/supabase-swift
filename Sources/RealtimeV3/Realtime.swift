@@ -45,6 +45,8 @@ public actor Realtime {
   private var connectTask: Task<Void, any Error>?
 
   /// Background task that consumes `connection.frames` and routes messages.
+  // intra-module: read/written by Realtime+FrameRouting.swift (same module, separate file).
+  // Swift `private` does not cross file boundaries; `internal` is the tightest we can use here.
   var routingTask: Task<Void, Never>?
 
   /// Registry tracking in-flight pushes awaiting a `phx_reply`.
