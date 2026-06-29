@@ -459,6 +459,8 @@ public actor Realtime {
         // Policy says give up: fail all (in case new pushes arrived), go to closed.
         await inflightPushRegistry.failAll(initialError)
         transition(to: .closed(.transportFailure))
+        // Terminate all eligible channels so their streams throw/finish (Task 29).
+        await terminateChannelsOnGiveUp()
         return
       }
 
@@ -481,12 +483,63 @@ public actor Realtime {
         connection = conn
         transition(to: .connected)
         startConnectionTasks(connection: conn)
+        // Re-join eligible channels (Task 29).
+        await rejoinEligibleChannels()
         return
       } catch {
         // Reconnect attempt failed — record and loop.
         lastError = error
         attempt += 1
       }
+    }
+  }
+
+  // MARK: - Channel rejoin on reconnect (Task 29)
+
+  /// Re-joins all channels that were previously joined and not explicitly left by the user.
+  ///
+  /// Called after every successful reconnect. Channels with `shouldRejoin == true` are
+  /// eligible (they were transport-dropped, not user-left). Each channel's existing streams
+  /// (messages, broadcasts, postgres, presence) stay open across the gap — only the
+  /// `phx_join` handshake is re-sent.
+  ///
+  /// Channels are re-joined concurrently so a slow join on one topic does not block others.
+  private func rejoinEligibleChannels() async {
+    // Snapshot the full channel list. We check eligibility per-channel (actor hop).
+    let allChannels = Array(channels.values)
+    guard !allChannels.isEmpty else { return }
+
+    // Re-join concurrently. Each channel's rejoin() checks its own shouldRejoin flag
+    // at the start and is a no-op if not eligible.
+    await withTaskGroup(of: Void.self) { group in
+      for channel in allChannels {
+        group.addTask {
+          // Only rejoin if this channel was previously joined (actor-isolated read).
+          guard await channel.shouldRejoin else { return }
+          await channel.rejoin()
+        }
+      }
+    }
+  }
+
+  /// Terminates all eligible channels when the reconnection policy gives up.
+  ///
+  /// Called from the give-up path in `runReconnectionLoop`. For each channel with
+  /// `shouldRejoin == true`, transitions it to `.closed(.transportFailure)`, which
+  /// cascades stream terminations via the existing `transition(to:)` logic.
+  /// Those channels are then evicted from the registry.
+  private func terminateChannelsOnGiveUp() async {
+    // Snapshot topic+channel pairs. We check eligibility per-channel (actor hop).
+    let snapshot = Array(channels)
+    var toEvict: [String] = []
+    for (topic, channel) in snapshot {
+      if await channel.shouldRejoin {
+        await channel.transition(to: .closed(.transportFailure))
+        toEvict.append(topic)
+      }
+    }
+    for topic in toEvict {
+      channels.removeValue(forKey: topic)
     }
   }
 

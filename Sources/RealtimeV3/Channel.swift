@@ -117,6 +117,17 @@ public actor Channel {
   /// In-flight join task — coalesces concurrent `subscribe()` callers (Decision 14h).
   private var joinTask: Task<Void, any Error>?
 
+  // MARK: - Rejoin eligibility (Task 29)
+
+  /// Tracks whether this channel should be automatically re-joined after a transport reconnect.
+  ///
+  /// Set to `true` when `subscribe()` completes successfully (channel transitions to `.joined`).
+  /// Cleared to `false` when the user explicitly calls `leave()`.
+  ///
+  /// Channels that were transport-dropped (not user-left) and had `.joined` state are eligible
+  /// for transparent re-join (Decision 6 / Decision 18).
+  var shouldRejoin: Bool = false
+
   // MARK: - Presence tracking state (Task 24)
 
   /// The last encoded presence state sent via `sendPresenceTrack`. Stored for re-track on
@@ -344,6 +355,8 @@ public actor Channel {
       // The server assigns integer ids in the same order as the client's postgres_changes
       // entries. Map each server id → set of client registration UUIDs.
       _buildServerIDRouting(from: reply.response)
+      // Mark this channel as eligible for transparent re-join on reconnect (Task 29).
+      shouldRejoin = true
       transition(to: .joined)
     } else {
       // Extract a human-readable reason from the response if available.
@@ -358,6 +371,153 @@ public actor Channel {
       transition(to: .closed(.unauthorized))
       throw RealtimeError.channelJoinRejected(reason: reason)
     }
+  }
+
+  // MARK: - Rejoin (Task 29)
+
+  /// Re-sends `phx_join` after a transparent transport reconnect.
+  ///
+  /// Called exclusively from the `Realtime` reconnection loop after a successful reconnect.
+  /// Unlike `subscribe()`, this method:
+  /// - Does NOT check `shouldRejoin` — the caller is responsible for the eligibility check.
+  /// - Does NOT guard on `.joined` idempotency (the channel may still appear `.joined`
+  ///   from the previous connection's state, so we always re-send).
+  /// - Does NOT terminate any open streams (Decision 6 — streams survive the transport gap).
+  /// - Re-tracks presence if `isPresenceTracked` is true (Decision 18).
+  ///
+  /// On success, the channel remains / transitions to `.joined`.
+  /// On failure (timeout or rejection), the channel transitions to `.closed(...)`.
+  func rejoin() async {
+    guard let realtime else {
+      transition(to: .closed(.clientDisconnected))
+      return
+    }
+
+    // Reset the joinTask so a concurrent subscribe() doesn't coalesce onto a stale task.
+    joinTask = nil
+
+    // Generate a fresh joinRef for this connection's join.
+    let ref = realtime.nextRef()
+    joinRef = ref
+
+    // Transition to .joining. We call transition(to:) which emits to state observers.
+    // .joining is not a terminal state so no finishers are invoked — streams stay open.
+    transition(to: .joining)
+
+    // Build the join payload.
+    let accessToken: String?
+    do {
+      accessToken = try await realtime.accessTokenForJoin()
+    } catch {
+      // Auth failure: close the channel.
+      transition(to: .closed(.unauthorized))
+      return
+    }
+
+    let joinPayload = JoinPayload.make(
+      from: options, accessToken: accessToken, registrations: pendingRegistrations
+    )
+
+    let payloadObject: JSONObject
+    do {
+      payloadObject = try joinPayload.toJSONObject()
+    } catch {
+      transition(to: .closed(.transportFailure))
+      return
+    }
+
+    let text: String
+    do {
+      text = try realtime.serializer.encodeText(
+        joinRef: ref,
+        ref: ref,
+        topic: topic,
+        event: PhoenixEvent.join.rawValue,
+        payload: payloadObject
+      )
+    } catch {
+      transition(to: .closed(.transportFailure))
+      return
+    }
+
+    do {
+      try await realtime.sendText(text)
+    } catch {
+      transition(to: .closed(.transportFailure))
+      return
+    }
+
+    let joinTimeout = realtime.configuration.joinTimeout
+    let reply: PushReply
+    do {
+      reply = try await realtime.awaitReply(
+        ref: ref,
+        timeout: joinTimeout,
+        timeoutError: .channelJoinTimeout
+      )
+    } catch {
+      transition(to: .closed(.transportFailure))
+      return
+    }
+
+    if reply.status == "ok" {
+      _buildServerIDRouting(from: reply.response)
+      // shouldRejoin stays true — still eligible for future reconnects.
+      transition(to: .joined)
+
+      // Re-track presence if it was active before the disconnect (Decision 18).
+      if isPresenceTracked, let payload = lastTrackedPresencePayload {
+        await _retrackPresence(payload: payload, realtime: realtime)
+      }
+    } else {
+      // Server rejected the rejoin.
+      transition(to: .closed(.unauthorized))
+    }
+  }
+
+  /// Re-sends a presence track frame using the last stored payload. Called after a successful
+  /// rejoin when `isPresenceTracked` is true (Decision 18).
+  ///
+  /// Failures are swallowed — the presence state will be stale but the channel stays open.
+  private func _retrackPresence(payload: JSONObject, realtime: Realtime) async {
+    let ref = realtime.nextRef()
+    let currentJoinRef = joinRef
+
+    let text: String
+    do {
+      text = try realtime.serializer.encodeText(
+        joinRef: currentJoinRef,
+        ref: ref,
+        topic: topic,
+        event: PhoenixEvent.presence.rawValue,
+        payload: payload
+      )
+    } catch {
+      // Encoding failure — swallow; presence state is stale but channel is still open.
+      return
+    }
+
+    let broadcastAckTimeout = realtime.configuration.broadcastAckTimeout
+    let registry = realtime.inflightPushRegistry
+    let clock = realtime.configuration.clock
+    let replyTask = Task<PushReply, any Error> {
+      try await registry.awaitReply(
+        ref: ref,
+        timeout: broadcastAckTimeout,
+        clock: clock,
+        timeoutError: RealtimeError.broadcastAckTimeout
+      )
+    }
+
+    do {
+      try await realtime.sendText(text)
+    } catch {
+      replyTask.cancel()
+      return
+    }
+
+    // Await the ACK best-effort; swallow failure.
+    _ = try? await replyTask.value
   }
 
   // MARK: - Leave
@@ -416,6 +576,9 @@ public actor Channel {
         break
       }
     }
+
+    // Clear the rejoin flag: a user-initiated leave must NOT trigger transparent re-join (Task 29).
+    shouldRejoin = false
 
     // Transition to .leaving to signal in-progress leave.
     transition(to: .leaving)
