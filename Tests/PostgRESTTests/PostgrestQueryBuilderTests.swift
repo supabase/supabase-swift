@@ -12,10 +12,7 @@ import TestHelpers
 import XCTest
 
 final class PostgrestQueryBuilderTests: PostgrestQueryTests {
-  override func setUp() {
-    super.setUp()
-    //    isRecording = true
-  }
+
 
   func testSetAuth() {
     XCTAssertNil(sut.configuration.headers["Authorization"])

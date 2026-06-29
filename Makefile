@@ -82,7 +82,7 @@ format:
 		| xargs -0 xcrun swift-format --ignore-unparsable-files --in-place
 
 lint:
-	swiftlint lint --baseline .swiftlint-baseline --strict
+	swiftlint lint --strict
 
 lint-fix:
 	swiftlint lint --fix

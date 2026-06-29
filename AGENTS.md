@@ -88,13 +88,7 @@ make lint-fix
 This uses [SwiftLint](https://github.com/realm/SwiftLint) for code-smell and
 correctness rules; `swift-format` remains the source of truth for formatting,
 so the SwiftLint config (`.swiftlint.yml`) disables the purely stylistic rules
-that overlap with it.
-
-Existing violations are grandfathered in `.swiftlint-baseline`, so `make lint`
-only fails on *new* violations. The baseline should shrink over time — when you
-fix violations in a file, regenerate it with
-`swiftlint lint --write-baseline .swiftlint-baseline`. Install SwiftLint locally
-with `brew install swiftlint`.
+that overlap with it. Install SwiftLint locally with `brew install swiftlint`.
 
 ### Documentation
 

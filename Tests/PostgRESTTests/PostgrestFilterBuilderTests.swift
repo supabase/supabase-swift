@@ -12,10 +12,7 @@ import XCTest
 
 final class PostgrestFilterBuilderTests: PostgrestQueryTests {
 
-  override func setUp() {
-    super.setUp()
-    // isRecording = true
-  }
+
 
   func testNotFilter() async throws {
     Mock(
