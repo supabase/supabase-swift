@@ -1,0 +1,124 @@
+# SwiftLint configuration for supabase-swift
+# https://github.com/realm/SwiftLint
+#
+# Pinned version: 0.65.0
+# Install locally: brew install swiftlint
+# CI pins the exact binary via portable_swiftlint.zip from GitHub releases.
+#
+# This project uses Apple's swift-format for formatting/whitespace/layout
+# (run via `make format`). SwiftLint is therefore scoped to code-smell and
+# correctness rules, and all purely stylistic rules that swift-format already
+# governs are disabled to avoid the two tools fighting each other.
+#
+# Run locally with `make lint` (or `make lint-fix` to autocorrect).
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - Tests/IntegrationTests/supabase
+  - "**/__Snapshots__"
+  # Legacy code kept for backwards-compatibility; not subject to new lint rules.
+  - Sources/Realtime/Deprecated
+
+# ── Rule configuration ────────────────────────────────────────────────────────
+
+identifier_name:
+  # Allow single-character names used for crypto/math fields (n, e, x, y, k)
+  # and common loop variables (i, h, l, r).
+  min_length:
+    warning: 1
+    error: 1
+  max_length:
+    warning: 50
+    error: 60
+  # Internal helpers are intentionally underscore-prefixed (_getAccessToken,
+  # _remove, _path, _task, _clock, JWKS_TTL, _20240101, etc.).
+  validates_start_with_lowercase: false
+  allowed_symbols: ["_"]
+  excluded:
+    - id
+    - db
+    - to
+    - vs
+    # Decodable struct properties whose names are dictated by the server response.
+    - Key
+    - Id
+
+type_name:
+  # Private/internal types use leading underscores (_WeakPassword, _Clock…)
+  # and some public types exceed 40 chars (AuthMFAGetAuthenticatorAssuranceLevelResponse).
+  min_length: 2
+  max_length:
+    warning: 50
+    error: 60
+  allowed_symbols: ["_"]
+
+# The project has deliberately large source files and types; raise limits to
+# avoid noise on code that is intentionally structured this way.
+file_length:
+  warning: 3400
+  error: 4000
+
+type_body_length:
+  warning: 2800
+  error: 3000
+
+function_body_length:
+  warning: 330
+  error: 400
+
+cyclomatic_complexity:
+  warning: 20
+  error: 30
+
+function_parameter_count:
+  warning: 6
+  error: 10
+
+# Types nested 2 levels deep appear legitimately in MultipartFormData and tests.
+nesting:
+  type_level:
+    warning: 2
+    error: 3
+
+# ── Opt-in rules ──────────────────────────────────────────────────────────────
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+
+# ── Disabled rules ────────────────────────────────────────────────────────────
+
+disabled_rules:
+  # Owned by swift-format — let it be the single source of truth for layout.
+  - trailing_whitespace
+  - trailing_comma
+  - opening_brace
+  - comment_spacing
+  - vertical_whitespace
+  - trailing_newline
+  - closure_parameter_position
+  - line_length
+
+  # Intentionally used in Sources (StorageApi, RealtimeChannelV2) and heavily
+  # in tests. Remove from disabled_rules once the codebase is cleaned up.
+  - force_try
+  - force_cast
+
+  # Pervasive in test helpers for String <-> Data conversions.
+  - non_optional_string_data_conversion
+  - optional_data_string_conversion
+
+  # `let _ = subscription` is an intentional pattern in tests to retain
+  # ObservationToken long enough for the callback to fire (see EventEmitter.swift).
+  - redundant_discardable_let
+
+  # Style preferences that don't affect correctness.
+  - multiple_closures_with_trailing_closure
+  - for_where
+  - implicit_optional_initialization
+  # swift-format handles wrapping of very long function names across lines.
+  - function_name_whitespace
