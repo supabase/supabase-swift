@@ -168,6 +168,7 @@ let package = Package(
       dependencies: [
         "Helpers",
         .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+        .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
       ]
     ),
     .testTarget(
@@ -176,6 +177,7 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
         "Mocker",
         "TestHelpers",
         "Storage",
