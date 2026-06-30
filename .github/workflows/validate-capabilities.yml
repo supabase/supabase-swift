@@ -11,6 +11,4 @@ permissions:
 
 jobs:
   validate:
-    uses: supabase/sdk/.github/workflows/validate-sdk-compliance.yml@main
-    with:
-      language: swift
+    uses: supabase/sdk/.github/workflows/validate-sdk-compliance-swift.yml@main
