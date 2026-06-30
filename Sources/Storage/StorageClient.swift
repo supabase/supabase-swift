@@ -140,7 +140,7 @@ public final class StorageClient: Sendable {
   public let configuration: StorageClientConfiguration
 
   package let http: _HTTPClient
-  private let generatedClient: Client
+  let generatedClient: Client
   private let usesTokenProvider: Bool
 
   let downloadDelegate: DownloadSessionDelegate

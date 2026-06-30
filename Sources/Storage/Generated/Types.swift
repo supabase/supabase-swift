@@ -53,6 +53,12 @@ internal protocol APIProtocol: Sendable {
     /// - Remark: HTTP `DELETE /object/{bucketId}`.
     /// - Remark: Generated from `#/paths//object/{bucketId}/delete(DeleteObjects)`.
     func DeleteObjects(_ input: Operations.DeleteObjects.Input) async throws -> Operations.DeleteObjects.Output
+    /// - Remark: HTTP `POST /object/{bucketId}/{wildcardPath+}`.
+    /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/post(UploadObject)`.
+    func UploadObject(_ input: Operations.UploadObject.Input) async throws -> Operations.UploadObject.Output
+    /// - Remark: HTTP `PUT /object/{bucketId}/{wildcardPath+}`.
+    /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/put(UpdateObject)`.
+    func UpdateObject(_ input: Operations.UpdateObject.Input) async throws -> Operations.UpdateObject.Output
     /// - Remark: HTTP `HEAD /object/{bucketId}/{wildcardPath+}`.
     /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/head(HeadObject)`.
     func HeadObject(_ input: Operations.HeadObject.Input) async throws -> Operations.HeadObject.Output
@@ -213,6 +219,32 @@ extension APIProtocol {
         body: Operations.DeleteObjects.Input.Body
     ) async throws -> Operations.DeleteObjects.Output {
         try await DeleteObjects(Operations.DeleteObjects.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /object/{bucketId}/{wildcardPath+}`.
+    /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/post(UploadObject)`.
+    internal func UploadObject(
+        path: Operations.UploadObject.Input.Path,
+        headers: Operations.UploadObject.Input.Headers = .init(),
+        body: Operations.UploadObject.Input.Body
+    ) async throws -> Operations.UploadObject.Output {
+        try await UploadObject(Operations.UploadObject.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `PUT /object/{bucketId}/{wildcardPath+}`.
+    /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/put(UpdateObject)`.
+    internal func UpdateObject(
+        path: Operations.UpdateObject.Input.Path,
+        headers: Operations.UpdateObject.Input.Headers = .init(),
+        body: Operations.UpdateObject.Input.Body
+    ) async throws -> Operations.UpdateObject.Output {
+        try await UpdateObject(Operations.UpdateObject.Input(
             path: path,
             headers: headers,
             body: body
@@ -921,6 +953,29 @@ internal enum Components {
                 case _public = "public"
                 case file_size_limit
                 case allowed_mime_types
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/FileUploadedResponse`.
+        internal struct FileUploadedResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/FileUploadedResponse/Key`.
+            internal var Key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/FileUploadedResponse/Id`.
+            internal var Id: Swift.String
+            /// Creates a new `FileUploadedResponse`.
+            ///
+            /// - Parameters:
+            ///   - Key:
+            ///   - Id:
+            internal init(
+                Key: Swift.String,
+                Id: Swift.String
+            ) {
+                self.Key = Key
+                self.Id = Id
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case Key
+                case Id
             }
         }
     }
@@ -3325,6 +3380,515 @@ internal enum Operations {
             /// - Throws: An error if `self` is not `.badRequest`.
             /// - SeeAlso: `.badRequest`.
             internal var badRequest: Operations.DeleteObjects.Output.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /object/{bucketId}/{wildcardPath+}`.
+    /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/post(UploadObject)`.
+    internal enum UploadObject {
+        internal static let id: Swift.String = "UploadObject"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/path`.
+            internal struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/path/bucketId`.
+                internal var bucketId: Swift.String
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/path/wildcardPath+`.
+                internal var wildcardPath_plus_: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - bucketId:
+                ///   - wildcardPath_plus_:
+                internal init(
+                    bucketId: Swift.String,
+                    wildcardPath_plus_: Swift.String
+                ) {
+                    self.bucketId = bucketId
+                    self.wildcardPath_plus_ = wildcardPath_plus_
+                }
+            }
+            internal var path: Operations.UploadObject.Input.Path
+            /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/header`.
+            internal struct Headers: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/header/x-upsert`.
+                internal var x_hyphen_upsert: Swift.String?
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.UploadObject.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - x_hyphen_upsert:
+                ///   - accept:
+                internal init(
+                    x_hyphen_upsert: Swift.String? = nil,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.UploadObject.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.x_hyphen_upsert = x_hyphen_upsert
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.UploadObject.Input.Headers
+            /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/requestBody`.
+            internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/requestBody/multipartForm`.
+                internal enum multipartFormPayload: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/requestBody/multipartForm/cacheControl`.
+                    internal struct cacheControlPayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `cacheControlPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case cacheControl(OpenAPIRuntime.MultipartPart<Operations.UploadObject.Input.Body.multipartFormPayload.cacheControlPayload>)
+                    /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/requestBody/multipartForm/metadata`.
+                    internal struct metadataPayload: Sendable, Hashable {
+                        /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/requestBody/multipartForm/metadata/content/body`.
+                        internal struct bodyPayload: Codable, Hashable, Sendable {
+                            /// A container of undocumented properties.
+                            internal var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+                            /// Creates a new `bodyPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - additionalProperties: A container of undocumented properties.
+                            internal init(additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()) {
+                                self.additionalProperties = additionalProperties
+                            }
+                            internal init(from decoder: any Swift.Decoder) throws {
+                                additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                            }
+                            internal func encode(to encoder: any Swift.Encoder) throws {
+                                try encoder.encodeAdditionalProperties(additionalProperties)
+                            }
+                        }
+                        internal var body: Operations.UploadObject.Input.Body.multipartFormPayload.metadataPayload.bodyPayload
+                        /// Creates a new `metadataPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: Operations.UploadObject.Input.Body.multipartFormPayload.metadataPayload.bodyPayload) {
+                            self.body = body
+                        }
+                    }
+                    case metadata(OpenAPIRuntime.MultipartPart<Operations.UploadObject.Input.Body.multipartFormPayload.metadataPayload>)
+                    /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/requestBody/multipartForm/file`.
+                    internal struct filePayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `filePayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case file(OpenAPIRuntime.MultipartPart<Operations.UploadObject.Input.Body.multipartFormPayload.filePayload>)
+                    case undocumented(OpenAPIRuntime.MultipartRawPart)
+                }
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/requestBody/content/multipart\/form-data`.
+                case multipartForm(OpenAPIRuntime.MultipartBody<Operations.UploadObject.Input.Body.multipartFormPayload>)
+            }
+            internal var body: Operations.UploadObject.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            internal init(
+                path: Operations.UploadObject.Input.Path,
+                headers: Operations.UploadObject.Input.Headers = .init(),
+                body: Operations.UploadObject.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/responses/200/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.FileUploadedResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.FileUploadedResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.UploadObject.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.UploadObject.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Upload successful
+            ///
+            /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/post(UploadObject)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.UploadObject.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.UploadObject.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct BadRequest: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/responses/400/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/POST/responses/400/content/application\/json`.
+                    case json(Components.Schemas.StorageErrorResponseContent)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.StorageErrorResponseContent {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.UploadObject.Output.BadRequest.Body
+                /// Creates a new `BadRequest`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.UploadObject.Output.BadRequest.Body) {
+                    self.body = body
+                }
+            }
+            /// StorageError 400 response
+            ///
+            /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/post(UploadObject)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Operations.UploadObject.Output.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            internal var badRequest: Operations.UploadObject.Output.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `PUT /object/{bucketId}/{wildcardPath+}`.
+    /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/put(UpdateObject)`.
+    internal enum UpdateObject {
+        internal static let id: Swift.String = "UpdateObject"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/path`.
+            internal struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/path/bucketId`.
+                internal var bucketId: Swift.String
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/path/wildcardPath+`.
+                internal var wildcardPath_plus_: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - bucketId:
+                ///   - wildcardPath_plus_:
+                internal init(
+                    bucketId: Swift.String,
+                    wildcardPath_plus_: Swift.String
+                ) {
+                    self.bucketId = bucketId
+                    self.wildcardPath_plus_ = wildcardPath_plus_
+                }
+            }
+            internal var path: Operations.UpdateObject.Input.Path
+            /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/header`.
+            internal struct Headers: Sendable, Hashable {
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.UpdateObject.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                internal init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.UpdateObject.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.UpdateObject.Input.Headers
+            /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/requestBody`.
+            internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/requestBody/multipartForm`.
+                internal enum multipartFormPayload: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/requestBody/multipartForm/cacheControl`.
+                    internal struct cacheControlPayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `cacheControlPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case cacheControl(OpenAPIRuntime.MultipartPart<Operations.UpdateObject.Input.Body.multipartFormPayload.cacheControlPayload>)
+                    /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/requestBody/multipartForm/metadata`.
+                    internal struct metadataPayload: Sendable, Hashable {
+                        /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/requestBody/multipartForm/metadata/content/body`.
+                        internal struct bodyPayload: Codable, Hashable, Sendable {
+                            /// A container of undocumented properties.
+                            internal var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+                            /// Creates a new `bodyPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - additionalProperties: A container of undocumented properties.
+                            internal init(additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()) {
+                                self.additionalProperties = additionalProperties
+                            }
+                            internal init(from decoder: any Swift.Decoder) throws {
+                                additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                            }
+                            internal func encode(to encoder: any Swift.Encoder) throws {
+                                try encoder.encodeAdditionalProperties(additionalProperties)
+                            }
+                        }
+                        internal var body: Operations.UpdateObject.Input.Body.multipartFormPayload.metadataPayload.bodyPayload
+                        /// Creates a new `metadataPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: Operations.UpdateObject.Input.Body.multipartFormPayload.metadataPayload.bodyPayload) {
+                            self.body = body
+                        }
+                    }
+                    case metadata(OpenAPIRuntime.MultipartPart<Operations.UpdateObject.Input.Body.multipartFormPayload.metadataPayload>)
+                    /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/requestBody/multipartForm/file`.
+                    internal struct filePayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `filePayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case file(OpenAPIRuntime.MultipartPart<Operations.UpdateObject.Input.Body.multipartFormPayload.filePayload>)
+                    case undocumented(OpenAPIRuntime.MultipartRawPart)
+                }
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/requestBody/content/multipart\/form-data`.
+                case multipartForm(OpenAPIRuntime.MultipartBody<Operations.UpdateObject.Input.Body.multipartFormPayload>)
+            }
+            internal var body: Operations.UpdateObject.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            internal init(
+                path: Operations.UpdateObject.Input.Path,
+                headers: Operations.UpdateObject.Input.Headers = .init(),
+                body: Operations.UpdateObject.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/responses/200/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/responses/200/content/application\/json`.
+                    case json(Components.Schemas.FileUploadedResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.FileUploadedResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.UpdateObject.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.UpdateObject.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Upload successful
+            ///
+            /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/put(UpdateObject)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.UpdateObject.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.UpdateObject.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct BadRequest: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/responses/400/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/object/{bucketId}/{wildcardPath+}/PUT/responses/400/content/application\/json`.
+                    case json(Components.Schemas.StorageErrorResponseContent)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.StorageErrorResponseContent {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.UpdateObject.Output.BadRequest.Body
+                /// Creates a new `BadRequest`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.UpdateObject.Output.BadRequest.Body) {
+                    self.body = body
+                }
+            }
+            /// StorageError 400 response
+            ///
+            /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/put(UpdateObject)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Operations.UpdateObject.Output.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            internal var badRequest: Operations.UpdateObject.Output.BadRequest {
                 get throws {
                     switch self {
                     case let .badRequest(response):
