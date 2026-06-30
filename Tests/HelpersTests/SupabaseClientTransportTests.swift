@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 30/06/26.
 //
 
+import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import OpenAPIRuntime
@@ -89,7 +90,11 @@ struct SupabaseClientTransportTests {
 // MARK: - Thread-safe capture box
 
 final class RequestBox: @unchecked Sendable {
-  var value: URLRequest?
+  private let _value = LockIsolated<URLRequest?>(nil)
+  var value: URLRequest? {
+    get { _value.value }
+    set { _value.withValue { $0 = newValue } }
+  }
 }
 
 // MARK: - URLSession mock helper
