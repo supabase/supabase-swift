@@ -7,6 +7,7 @@
 
 import Foundation
 import Helpers
+import OpenAPIRuntime
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -177,47 +178,49 @@ actor TUSUploadEngine {
   // MARK: - TUS protocol
 
   private func createUpload(totalBytes: Int64) async throws -> URL {
-    var request = try await makeRequest(
-      url: client.url.appendingPathComponent("upload/resumable"),
-      method: .post
-    )
-    request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
-    request.setValue("\(totalBytes)", forHTTPHeaderField: "Upload-Length")
-    request.setValue(tusMetadata(), forHTTPHeaderField: "Upload-Metadata")
-    request.setValue("0", forHTTPHeaderField: "Content-Length")
-    if options.upsert {
-      request.setValue("true", forHTTPHeaderField: "x-upsert")
-    }
-
-    let (_, response) = try await client.http.session.data(for: request)
-    guard let httpResponse = response as? HTTPURLResponse else {
-      throw StorageError(message: "Invalid response", errorCode: .unknown)
-    }
-    guard httpResponse.statusCode == 201,
-      let location = httpResponse.value(forHTTPHeaderField: "Location"),
-      let locationURL = URL(string: location)
-    else {
-      throw StorageError(
-        message: "TUS create failed",
-        errorCode: .unknown,
-        statusCode: httpResponse.statusCode
+    let output = try await client.generatedClient.CreateTusUpload(
+      headers: .init(
+        Tus_hyphen_Resumable: "1.0.0",
+        Upload_hyphen_Length: Double(totalBytes),
+        Upload_hyphen_Metadata: tusMetadata(),
+        x_hyphen_upsert: options.upsert ? "true" : nil
       )
+    )
+    switch output {
+    case .created(let created):
+      guard let locationURL = URL(string: created.headers.Location) else {
+        throw StorageError(message: "TUS create: invalid Location header", errorCode: .unknown)
+      }
+      return locationURL
+    case .badRequest(let err):
+      switch err.body {
+      case .json(let body):
+        throw StorageError(message: body.message ?? "TUS create failed", errorCode: .unknown)
+      }
+    case .undocumented(let code, _):
+      throw StorageError(message: "TUS create HTTP \(code)", errorCode: .unknown)
     }
-    return locationURL
   }
 
   private func fetchOffset(uploadURL: URL) async throws -> Int64 {
-    var request = try await makeRequest(url: uploadURL, method: .head)
-    request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
-
-    let (_, response) = try await client.http.session.data(for: request)
-    guard let httpResponse = response as? HTTPURLResponse,
-      let offsetString = httpResponse.value(forHTTPHeaderField: "Upload-Offset"),
-      let offset = Int64(offsetString)
-    else {
-      throw StorageError(message: "TUS HEAD failed", errorCode: .unknown)
+    guard let uploadId = uploadURL.pathComponents.last, !uploadId.isEmpty else {
+      throw StorageError(message: "Invalid upload URL", errorCode: .unknown)
     }
-    return offset
+    let output = try await client.generatedClient.GetUploadOffset(
+      path: .init(uploadId: uploadId),
+      headers: .init(Tus_hyphen_Resumable: "1.0.0")
+    )
+    switch output {
+    case .ok(let ok):
+      return Int64(ok.headers.Upload_hyphen_Offset)
+    case .badRequest(let err):
+      switch err.body {
+      case .json(let body):
+        throw StorageError(message: body.message ?? "TUS HEAD failed", errorCode: .unknown)
+      }
+    case .undocumented(let code, _):
+      throw StorageError(message: "TUS HEAD HTTP \(code)", errorCode: .unknown)
+    }
   }
 
   private func uploadChunks(to uploadURL: URL, from startOffset: Int64, totalBytes: Int64)
@@ -242,52 +245,45 @@ actor TUSUploadEngine {
         )
       }
 
-      var request = try await makeRequest(url: uploadURL, method: .patch)
-      request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
-      request.setValue("\(offset)", forHTTPHeaderField: "Upload-Offset")
-      request.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
-      // Content-Length is set automatically by URLSession.upload(for:from:)
+      let uploadId = uploadURL.pathComponents.last ?? ""
+      let patchOutput = try await client.generatedClient.UploadChunk(
+        path: .init(uploadId: uploadId),
+        headers: .init(
+          Tus_hyphen_Resumable: "1.0.0",
+          Upload_hyphen_Offset: Double(offset)
+        ),
+        body: .binary(HTTPBody(chunk))
+      )
 
-      let (_, response) = try await client.http.session.upload(for: request, from: chunk)
-      guard let httpResponse = response as? HTTPURLResponse else {
-        throw StorageError(message: "Invalid PATCH response", errorCode: .unknown)
-      }
-
-      if httpResponse.statusCode == 409 {
-        consecutive409s += 1
-        // TUS spec does not define a retry limit; guard against a misbehaving server
-        // that permanently rejects our offset by capping consecutive 409 resyncs.
-        guard consecutive409s <= 3 else {
-          throw StorageError(
-            message: "TUS upload stalled: server returned 409 four times in a row",
-            errorCode: .unknown)
+      switch patchOutput {
+      case .noContent(let noContent):
+        consecutive409s = 0
+        offset = Int64(noContent.headers.Upload_hyphen_Offset)
+      case .badRequest(let err):
+        switch err.body {
+        case .json(let body):
+          throw StorageError(message: body.message ?? "TUS PATCH failed", errorCode: .unknown)
         }
-        let serverOffset = try await fetchOffset(uploadURL: uploadURL)
-        offset = serverOffset
-        // The server may report offset == totalBytes (file already fully uploaded).
-        // Break so the post-loop completion block handles it instead of re-entering
-        // the loop body with a zero-length chunk.
-        if offset >= totalBytes { break }
-        continue
+      case .undocumented(let statusCode, _):
+        if statusCode == 409 {
+          consecutive409s += 1
+          // TUS spec does not define a retry limit; guard against a misbehaving server
+          // that permanently rejects our offset by capping consecutive 409 resyncs.
+          guard consecutive409s <= 3 else {
+            throw StorageError(
+              message: "TUS upload stalled: server returned 409 four times in a row",
+              errorCode: .unknown)
+          }
+          let serverOffset = try await fetchOffset(uploadURL: uploadURL)
+          offset = serverOffset
+          // The server may report offset == totalBytes (file already fully uploaded).
+          // Break so the post-loop completion block handles it instead of re-entering
+          // the loop body with a zero-length chunk.
+          if offset >= totalBytes { break }
+          continue
+        }
+        throw StorageError(message: "TUS PATCH HTTP \(statusCode)", errorCode: .unknown)
       }
-
-      guard httpResponse.statusCode == 200 || httpResponse.statusCode == 204 else {
-        throw StorageError(
-          message: "TUS PATCH failed",
-          errorCode: .unknown,
-          statusCode: httpResponse.statusCode
-        )
-      }
-
-      guard
-        let newOffsetString = httpResponse.value(forHTTPHeaderField: "Upload-Offset"),
-        let newOffset = Int64(newOffsetString)
-      else {
-        throw StorageError(message: "Missing Upload-Offset in PATCH response", errorCode: .unknown)
-      }
-
-      consecutive409s = 0
-      offset = newOffset
 
       eventsContinuation.yield(
         .progress(
@@ -319,10 +315,6 @@ actor TUSUploadEngine {
   }
 
   // MARK: - Helpers
-
-  private func makeRequest(url: URL, method: HTTPMethod) async throws -> URLRequest {
-    try await client.http.createRequest(method, url: url, headers: client.mergedHeaders())
-  }
 
   // The upload URL last path component is base64("{bucket}/{path}/{uuid}").
   // Extract the UUID so it can be included in the FileUploadResponse.

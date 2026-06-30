@@ -1,5 +1,6 @@
 import Foundation
 import Helpers
+import OpenAPIRuntime
 import XCTestDynamicOverlay
 
 #if canImport(FoundationNetworking)
@@ -150,8 +151,15 @@ public struct StorageFileAPI: Sendable {
       return TUSUploadEngine.makeTask(
         bucketId: bucketId, path: path, source: .data(data), options: options, client: client)
     } else {
-      return MultipartUploadEngine.makeTask(
-        bucketId: bucketId, path: path, source: .data(data), options: options, client: client)
+      return generatedUploadTask(path: path) {
+        let parts = self.buildUploadParts(data: data, options: options)
+        let output = try await self.client.generatedClient.UploadObject(
+          path: .init(bucketId: self.bucketId, wildcardPath_plus_: path),
+          headers: .init(x_hyphen_upsert: options.upsert ? "true" : nil),
+          body: .multipartForm(MultipartBody(parts))
+        )
+        return try self.extractUploadedResponse(from: output)
+      }
     }
   }
 
@@ -201,8 +209,15 @@ public struct StorageFileAPI: Sendable {
       return TUSUploadEngine.makeTask(
         bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options, client: client)
     } else {
-      return MultipartUploadEngine.makeTask(
-        bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options, client: client)
+      return generatedUploadTask(path: path) {
+        let parts = self.buildUploadParts(fileURL: fileURL, options: options)
+        let output = try await self.client.generatedClient.UploadObject(
+          path: .init(bucketId: self.bucketId, wildcardPath_plus_: path),
+          headers: .init(x_hyphen_upsert: options.upsert ? "true" : nil),
+          body: .multipartForm(MultipartBody(parts))
+        )
+        return try self.extractUploadedResponse(from: output)
+      }
     }
   }
 
@@ -233,9 +248,14 @@ public struct StorageFileAPI: Sendable {
     data: Data,
     options: FileOptions = FileOptions()
   ) -> StorageUploadTask {
-    MultipartUploadEngine.makeTask(
-      bucketId: bucketId, path: path, source: .data(data), options: options,
-      httpMethod: .put, client: client)
+    return generatedUploadTask(path: path) {
+      let parts = self.buildUpdateParts(data: data, options: options)
+      let output = try await self.client.generatedClient.UpdateObject(
+        path: .init(bucketId: self.bucketId, wildcardPath_plus_: path),
+        body: .multipartForm(MultipartBody(parts))
+      )
+      return try self.extractUpdatedResponse(from: output)
+    }
   }
 
   /// Replaces an existing file at the specified path with the contents of a local `URL`.
@@ -265,9 +285,14 @@ public struct StorageFileAPI: Sendable {
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) -> StorageUploadTask {
-    MultipartUploadEngine.makeTask(
-      bucketId: bucketId, path: path, source: .fileURL(fileURL), options: options,
-      httpMethod: .put, client: client)
+    return generatedUploadTask(path: path) {
+      let parts = self.buildUpdateParts(fileURL: fileURL, options: options)
+      let output = try await self.client.generatedClient.UpdateObject(
+        path: .init(bucketId: self.bucketId, wildcardPath_plus_: path),
+        body: .multipartForm(MultipartBody(parts))
+      )
+      return try self.extractUpdatedResponse(from: output)
+    }
   }
 
   /// Moves an existing file to a new path within the same or a different bucket.
@@ -1142,6 +1167,195 @@ public struct StorageFileAPI: Sendable {
   private func _getFinalPath(_ path: String) -> String {
     let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
     return "\(bucketId)/\(trimmed)"
+  }
+
+  // MARK: - Generated client helpers
+
+  private func generatedUploadTask(
+    path: String,
+    operation: @Sendable @escaping () async throws -> FileUploadResponse
+  ) -> StorageUploadTask {
+    let (eventStream, _) = AsyncStream<TransferEvent<FileUploadResponse>>.makeStream()
+    let resultTask = Task<FileUploadResponse, any Error> {
+      try await operation()
+    }
+    return StorageUploadTask(
+      events: eventStream,
+      resultTask: resultTask,
+      pause: {},
+      resume: {},
+      cancel: { resultTask.cancel() }
+    )
+  }
+
+  private func buildUploadParts(
+    data: Data,
+    options: FileOptions
+  ) -> [Operations.UploadObject.Input.Body.multipartFormPayload] {
+    typealias Part = Operations.UploadObject.Input.Body.multipartFormPayload
+    var parts: [Part] = [
+      .cacheControl(.init(payload: .init(body: HTTPBody(options.cacheControl)), filename: nil))
+    ]
+    if let metadata = options.metadata,
+      let container = try? OpenAPIObjectContainer(unvalidatedValue: metadata)
+    {
+      parts.append(
+        .metadata(
+          .init(payload: .init(body: .init(additionalProperties: container)), filename: nil)))
+    }
+    parts.append(.file(.init(payload: .init(body: HTTPBody(data)), filename: nil)))
+    return parts
+  }
+
+  private func buildUploadParts(
+    fileURL: URL,
+    options: FileOptions
+  ) -> [Operations.UploadObject.Input.Body.multipartFormPayload] {
+    typealias Part = Operations.UploadObject.Input.Body.multipartFormPayload
+    let fileSize = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap {
+      Int64($0)
+    }
+    let length: HTTPBody.Length = fileSize.map { .known($0) } ?? .unknown
+    let chunkSize = 65_536
+    let fileBody = HTTPBody(
+      AsyncStream<ArraySlice<UInt8>> { continuation in
+        Task {
+          guard let handle = try? FileHandle(forReadingFrom: fileURL) else {
+            continuation.finish()
+            return
+          }
+          defer { try? handle.close() }
+          while true {
+            let chunk = handle.readData(ofLength: chunkSize)
+            if chunk.isEmpty { break }
+            continuation.yield(ArraySlice(chunk))
+          }
+          continuation.finish()
+        }
+      },
+      length: length,
+      iterationBehavior: .single
+    )
+    var parts: [Part] = [
+      .cacheControl(.init(payload: .init(body: HTTPBody(options.cacheControl)), filename: nil))
+    ]
+    if let metadata = options.metadata,
+      let container = try? OpenAPIObjectContainer(unvalidatedValue: metadata)
+    {
+      parts.append(
+        .metadata(
+          .init(payload: .init(body: .init(additionalProperties: container)), filename: nil)))
+    }
+    parts.append(.file(.init(payload: .init(body: fileBody), filename: nil)))
+    return parts
+  }
+
+  private func buildUpdateParts(
+    data: Data,
+    options: FileOptions
+  ) -> [Operations.UpdateObject.Input.Body.multipartFormPayload] {
+    typealias Part = Operations.UpdateObject.Input.Body.multipartFormPayload
+    var parts: [Part] = [
+      .cacheControl(.init(payload: .init(body: HTTPBody(options.cacheControl)), filename: nil))
+    ]
+    if let metadata = options.metadata,
+      let container = try? OpenAPIObjectContainer(unvalidatedValue: metadata)
+    {
+      parts.append(
+        .metadata(
+          .init(payload: .init(body: .init(additionalProperties: container)), filename: nil)))
+    }
+    parts.append(.file(.init(payload: .init(body: HTTPBody(data)), filename: nil)))
+    return parts
+  }
+
+  private func buildUpdateParts(
+    fileURL: URL,
+    options: FileOptions
+  ) -> [Operations.UpdateObject.Input.Body.multipartFormPayload] {
+    typealias Part = Operations.UpdateObject.Input.Body.multipartFormPayload
+    let fileSize = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap {
+      Int64($0)
+    }
+    let length: HTTPBody.Length = fileSize.map { .known($0) } ?? .unknown
+    let chunkSize = 65_536
+    let fileBody = HTTPBody(
+      AsyncStream<ArraySlice<UInt8>> { continuation in
+        Task {
+          guard let handle = try? FileHandle(forReadingFrom: fileURL) else {
+            continuation.finish()
+            return
+          }
+          defer { try? handle.close() }
+          while true {
+            let chunk = handle.readData(ofLength: chunkSize)
+            if chunk.isEmpty { break }
+            continuation.yield(ArraySlice(chunk))
+          }
+          continuation.finish()
+        }
+      },
+      length: length,
+      iterationBehavior: .single
+    )
+    var parts: [Part] = [
+      .cacheControl(.init(payload: .init(body: HTTPBody(options.cacheControl)), filename: nil))
+    ]
+    if let metadata = options.metadata,
+      let container = try? OpenAPIObjectContainer(unvalidatedValue: metadata)
+    {
+      parts.append(
+        .metadata(
+          .init(payload: .init(body: .init(additionalProperties: container)), filename: nil)))
+    }
+    parts.append(.file(.init(payload: .init(body: fileBody), filename: nil)))
+    return parts
+  }
+
+  private func extractUploadedResponse(
+    from output: Operations.UploadObject.Output
+  ) throws -> FileUploadResponse {
+    switch output {
+    case .ok(let ok):
+      switch ok.body {
+      case .json(let body):
+        return FileUploadResponse(
+          id: UUID(uuidString: body.Id) ?? UUID(),
+          path: body.Key,
+          fullPath: body.Key
+        )
+      }
+    case .badRequest(let err):
+      switch err.body {
+      case .json(let body):
+        throw StorageError(message: body.message ?? "Upload failed", errorCode: .unknown)
+      }
+    case .undocumented(let code, _):
+      throw StorageError(message: "HTTP \(code)", errorCode: .unknown)
+    }
+  }
+
+  private func extractUpdatedResponse(
+    from output: Operations.UpdateObject.Output
+  ) throws -> FileUploadResponse {
+    switch output {
+    case .ok(let ok):
+      switch ok.body {
+      case .json(let body):
+        return FileUploadResponse(
+          id: UUID(uuidString: body.Id) ?? UUID(),
+          path: body.Key,
+          fullPath: body.Key
+        )
+      }
+    case .badRequest(let err):
+      switch err.body {
+      case .json(let body):
+        throw StorageError(message: body.message ?? "Update failed", errorCode: .unknown)
+      }
+    case .undocumented(let code, _):
+      throw StorageError(message: "HTTP \(code)", errorCode: .unknown)
+    }
   }
 }
 
