@@ -97,15 +97,17 @@ endef
 
 generate-smithy:
 	cd smithy && smithy build
+	cp smithy/build/smithy/storage-openapi/openapi/StorageService.openapi.json smithy/output/openapi/StorageService.openapi.json
+	cp smithy/build/smithy/functions-openapi/openapi/FunctionsService.openapi.json smithy/output/openapi/FunctionsService.openapi.json
 
 generate-swift-storage:
-	swift-openapi-generator generate \
+	$(HOME)/bin/swift-openapi-generator generate \
 	  --config Sources/Storage/openapi-generator-config.yaml \
 	  --output-directory Sources/Storage/Generated \
 	  smithy/output/openapi/StorageService.openapi.json
 
 generate-swift-functions:
-	swift-openapi-generator generate \
+	$(HOME)/bin/swift-openapi-generator generate \
 	  --config Sources/Functions/openapi-generator-config.yaml \
 	  --output-directory Sources/Functions/Generated \
 	  smithy/output/openapi/FunctionsService.openapi.json

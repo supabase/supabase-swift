@@ -1,0 +1,82 @@
+{
+    "openapi": "3.0.2",
+    "info": {
+        "title": "Supabase Functions API",
+        "version": "1.0"
+    },
+    "paths": {
+        "/functions/v1/{functionName}": {
+            "post": {
+                "operationId": "InvokeFunction",
+                "requestBody": {
+                    "content": {
+                        "application/octet-stream": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InvokeFunctionInputPayload"
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "functionName",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "x-region",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "InvokeFunction 200 response",
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvokeFunctionOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "FunctionsError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FunctionsErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "FunctionsErrorResponseContent": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    }
+                }
+            },
+            "InvokeFunctionInputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "InvokeFunctionOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            }
+        }
+    }
+}

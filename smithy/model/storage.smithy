@@ -40,7 +40,6 @@ operation ListBuckets {
 
 structure ListBucketsOutput {
   @required
-  @httpPayload
   items: BucketList
 }
 
@@ -77,6 +76,7 @@ structure CreateBucketInput {
 }
 
 @http(method: "PUT", uri: "/bucket/{id}", code: 200)
+@idempotent
 operation UpdateBucket {
   input: UpdateBucketInput
   errors: [StorageError]
@@ -105,6 +105,7 @@ structure EmptyBucketInput {
 }
 
 @http(method: "DELETE", uri: "/bucket/{id}", code: 200)
+@idempotent
 operation DeleteBucket {
   input: DeleteBucketInput
   errors: [StorageError]
@@ -150,6 +151,8 @@ structure CopyObjectOutput {
 }
 
 @http(method: "DELETE", uri: "/object/{bucketId}", code: 200)
+@idempotent
+@suppress(["HttpMethodSemantics.UnexpectedPayload"])
 operation DeleteObjects {
   input: DeleteObjectsInput
   output: DeleteObjectsOutput
@@ -166,7 +169,6 @@ structure DeleteObjectsInput {
 
 structure DeleteObjectsOutput {
   @required
-  @httpPayload
   items: FileObjectList
 }
 
@@ -199,7 +201,6 @@ structure SortBy {
 
 structure ListObjectsOutput {
   @required
-  @httpPayload
   items: FileObjectList
 }
 
@@ -260,7 +261,6 @@ structure CreateSignedUrlsInput {
 
 structure CreateSignedUrlsOutput {
   @required
-  @httpPayload
   items: SignedUrlResultList
 }
 
