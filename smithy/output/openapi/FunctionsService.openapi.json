@@ -6,13 +6,13 @@
     },
     "paths": {
         "/functions/v1/{functionName}": {
-            "post": {
-                "operationId": "InvokeFunction",
+            "delete": {
+                "operationId": "InvokeFunctionDelete",
                 "requestBody": {
                     "content": {
                         "application/octet-stream": {
                             "schema": {
-                                "$ref": "#/components/schemas/InvokeFunctionInputPayload"
+                                "$ref": "#/components/schemas/InvokeFunctionDeleteInputPayload"
                             }
                         }
                     }
@@ -36,11 +36,206 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "InvokeFunction 200 response",
+                        "description": "InvokeFunctionDelete 200 response",
                         "content": {
                             "application/octet-stream": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/InvokeFunctionOutputPayload"
+                                    "$ref": "#/components/schemas/InvokeFunctionDeleteOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "FunctionsError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FunctionsErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "operationId": "InvokeFunctionGet",
+                "parameters": [
+                    {
+                        "name": "functionName",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "x-region",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "InvokeFunctionGet 200 response",
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvokeFunctionGetOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "FunctionsError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FunctionsErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "InvokeFunctionPatch",
+                "requestBody": {
+                    "content": {
+                        "application/octet-stream": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InvokeFunctionPatchInputPayload"
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "functionName",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "x-region",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "InvokeFunctionPatch 200 response",
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvokeFunctionPatchOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "FunctionsError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FunctionsErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "InvokeFunctionPost",
+                "requestBody": {
+                    "content": {
+                        "application/octet-stream": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InvokeFunctionPostInputPayload"
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "functionName",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "x-region",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "InvokeFunctionPost 200 response",
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvokeFunctionPostOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "FunctionsError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FunctionsErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "operationId": "InvokeFunctionPut",
+                "requestBody": {
+                    "content": {
+                        "application/octet-stream": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InvokeFunctionPutInputPayload"
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "functionName",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "x-region",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "InvokeFunctionPut 200 response",
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvokeFunctionPutOutputPayload"
                                 }
                             }
                         }
@@ -69,11 +264,39 @@
                     }
                 }
             },
-            "InvokeFunctionInputPayload": {
+            "InvokeFunctionDeleteInputPayload": {
                 "type": "string",
                 "format": "byte"
             },
-            "InvokeFunctionOutputPayload": {
+            "InvokeFunctionDeleteOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "InvokeFunctionGetOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "InvokeFunctionPatchInputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "InvokeFunctionPatchOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "InvokeFunctionPostInputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "InvokeFunctionPostOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "InvokeFunctionPutInputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "InvokeFunctionPutOutputPayload": {
                 "type": "string",
                 "format": "byte"
             }

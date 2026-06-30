@@ -160,13 +160,8 @@ public actor FunctionsClient {
     var options = FunctionInvokeOptions()
     applyOptions(&options)
 
-    let input = Operations.InvokeFunction.Input(
-      path: .init(functionName: functionName),
-      headers: .init(x_hyphen_region: (options.region ?? region)?.rawValue),
-      body: options.body.map { .binary(HTTPBody($0)) }
-    )
-
-    let output = try await generatedClient.InvokeFunction(input)
+    let output = try await invokeGeneratedClient(
+      functionName: functionName, options: options)
 
     switch output {
     case .ok(let response):
@@ -211,13 +206,8 @@ public actor FunctionsClient {
       var options = FunctionInvokeOptions()
       applyOptions(&options)
 
-      let input = Operations.InvokeFunction.Input(
-        path: .init(functionName: functionName),
-        headers: .init(x_hyphen_region: (options.region ?? region)?.rawValue),
-        body: options.body.map { .binary(HTTPBody($0)) }
-      )
-
-      let output = try await generatedClient.InvokeFunction(input)
+      let output = try await invokeGeneratedClient(
+        functionName: functionName, options: options)
 
       switch output {
       case .ok(let response):
@@ -261,6 +251,46 @@ public actor FunctionsClient {
   #endif
 
   // MARK: - Private
+
+  private func invokeGeneratedClient(
+    functionName: String,
+    options: FunctionInvokeOptions
+  ) async throws -> Operations.InvokeFunctionOutput {
+    let region = (options.region ?? self.region)?.rawValue
+    let body = options.body.map { Operations.InvokeFunctionBodyInput.Body.binary(HTTPBody($0)) }
+
+    switch options.method ?? .post {
+    case .get:
+      return try await generatedClient.InvokeFunctionGet(
+        path: .init(functionName: functionName),
+        headers: .init(x_hyphen_region: region)
+      )
+    case .post:
+      return try await generatedClient.InvokeFunctionPost(
+        path: .init(functionName: functionName),
+        headers: .init(x_hyphen_region: region),
+        body: body
+      )
+    case .put:
+      return try await generatedClient.InvokeFunctionPut(
+        path: .init(functionName: functionName),
+        headers: .init(x_hyphen_region: region),
+        body: body
+      )
+    case .patch:
+      return try await generatedClient.InvokeFunctionPatch(
+        path: .init(functionName: functionName),
+        headers: .init(x_hyphen_region: region),
+        body: body
+      )
+    case .delete:
+      return try await generatedClient.InvokeFunctionDelete(
+        path: .init(functionName: functionName),
+        headers: .init(x_hyphen_region: region),
+        body: body
+      )
+    }
+  }
 
   private func fabricatedResponse(functionName: String, statusCode: Int) -> HTTPURLResponse {
     HTTPURLResponse(
