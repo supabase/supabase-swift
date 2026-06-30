@@ -248,7 +248,7 @@ public final class StorageClient: Sendable {
       tokenProvider: tokenProvider
     )
 
-    let transport = SupabaseClientTransport(session: configuration.session)
+    let transport = URLSessionTransport(configuration: .init(session: configuration.session))
     let middleware = SupabaseMiddleware(
       headers: configuration.headers,
       tokenProvider: tokenProvider

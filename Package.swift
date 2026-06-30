@@ -44,7 +44,6 @@ let package = Package(
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-        .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
       ]
     ),
     .testTarget(
