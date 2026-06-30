@@ -188,6 +188,18 @@ final class TransportServer: Sendable {
         let reply =
           "[null,\"\(ref)\",\"\(topic)\",\"phx_reply\",{\"status\":\"\(status)\",\"response\":\(responseJSON)}]"
         server.send(.text(reply))
+
+        // When the join carries a non-empty postgres_changes set, the real server confirms the
+        // subscription is live with a follow-up `system` event — and the SDK now waits for it
+        // before declaring the channel joined. Mirror that here so postgres subscribes complete.
+        // (The join payload always includes the key; `[]` means no registrations.)
+        if status == "ok", text.contains("postgres_changes"),
+          !text.contains("\"postgres_changes\":[]")
+        {
+          let system =
+            "[null,null,\"\(topic)\",\"system\",{\"status\":\"ok\",\"extension\":\"postgres_changes\",\"message\":\"Subscribed to PostgreSQL\"}]"
+          server.send(.text(system))
+        }
       }
     }
   }

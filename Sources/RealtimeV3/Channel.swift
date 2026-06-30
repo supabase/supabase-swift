@@ -438,6 +438,13 @@ public actor Channel {
     log(.info, .channel, "Joining channel", metadata: ["topic": topic])
     transition(to: .joining)
 
+    // If this join carries postgres_changes registrations, the server activates replication
+    // asynchronously and confirms via a `system` event — the phx_reply alone is premature
+    // (early INSERTs would be missed). Subscribe to the event feed *before* sending the join
+    // so that confirmation cannot be missed.
+    let postgresEvents: AsyncStream<ChannelEvent>? =
+      pendingRegistrations.isEmpty ? nil : _subscribeEvents()
+
     // Build the join payload, baking in any pending postgres-changes registrations.
     let accessToken = try await realtime.accessTokenForJoin()
     let joinPayload = JoinPayload.make(
@@ -464,6 +471,14 @@ public actor Channel {
       _buildServerIDRouting(from: reply.response)
       // Mark this channel as eligible for transparent re-join on reconnect (Task 29).
       shouldRejoin = true
+      // Wait for the postgres_changes `system` confirmation before declaring joined.
+      if let postgresEvents {
+        try await _awaitPostgresSubscribed(
+          postgresEvents,
+          timeout: realtime.configuration.joinTimeout,
+          clock: realtime.configuration.clock
+        )
+      }
       log(.info, .channel, "Channel joined", metadata: ["topic": topic])
       transition(to: .joined)
     } else {
@@ -512,6 +527,11 @@ public actor Channel {
     // .joining is not a terminal state so no finishers are invoked — streams stay open.
     transition(to: .joining)
 
+    // As in `_performJoin`: a postgres-bearing join is only live after the server's `system`
+    // confirmation. Subscribe to the feed before sending so it can't be missed.
+    let postgresEvents: AsyncStream<ChannelEvent>? =
+      pendingRegistrations.isEmpty ? nil : _subscribeEvents()
+
     // Build the join payload.
     let accessToken: String?
     do {
@@ -549,6 +569,20 @@ public actor Channel {
 
     if reply.status == "ok" {
       _buildServerIDRouting(from: reply.response)
+      // Wait for the postgres_changes `system` confirmation; a failure or timeout is treated
+      // as a recoverable transport drop (shouldRejoin stays true, next reconnect retries).
+      if let postgresEvents {
+        do {
+          try await _awaitPostgresSubscribed(
+            postgresEvents,
+            timeout: realtime.configuration.joinTimeout,
+            clock: realtime.configuration.clock
+          )
+        } catch {
+          transition(to: .closed(.transportFailure))
+          return
+        }
+      }
       // shouldRejoin stays true — still eligible for future reconnects.
       transition(to: .joined)
     } else {
@@ -559,6 +593,70 @@ public actor Channel {
       // intentionally keep `shouldRejoin` true so the next reconnect retries.
       shouldRejoin = false
       transition(to: .closed(.unauthorized))
+    }
+  }
+
+  // MARK: - Postgres subscription confirmation
+
+  /// Awaits the server's `system` confirmation that this channel's `postgres_changes`
+  /// subscription is live, racing against `timeout`.
+  ///
+  /// A join whose payload carried registrations is only really subscribed once the server
+  /// finishes setting up replication and emits a `system` event
+  /// (`extension == "postgres_changes"`): `status == "ok"` succeeds, `status == "error"`
+  /// throws `.postgresSubscriptionFailed`. The phx_reply arrives earlier and merely echoes
+  /// the requested subscriptions, so relying on it alone drops the first changes.
+  ///
+  /// `events` must be a feed subscription created *before* the join was sent, so the
+  /// confirmation cannot arrive in the gap before we start listening.
+  private func _awaitPostgresSubscribed(
+    _ events: AsyncStream<ChannelEvent>,
+    timeout: Duration,
+    clock: any Clock<Duration> & Sendable
+  ) async throws(RealtimeError) {
+    let outcome: Result<Void, RealtimeError> = await withTaskGroup(
+      of: Result<Void, RealtimeError>.self
+    ) { group in
+      group.addTask {
+        for await event in events {
+          switch event {
+          case .terminated(let reason):
+            return .failure(.channelClosed(reason))
+          case .message(let message):
+            guard message.event == .system,
+              case .json(let json) = message.payload,
+              let obj = json.objectValue,
+              obj["extension"]?.stringValue == "postgres_changes"
+            else { continue }
+            switch obj["status"]?.stringValue {
+            case "ok":
+              return .success(())
+            case "error":
+              return .failure(
+                .postgresSubscriptionFailed(
+                  reason: obj["message"]?.stringValue ?? "postgres_changes subscription failed"))
+            default:
+              continue
+            }
+          }
+        }
+        // Feed ended before confirmation (channel deallocated) — treat as a join timeout.
+        return .failure(.channelJoinTimeout)
+      }
+      group.addTask {
+        try? await clock.sleep(for: timeout)
+        return .failure(.channelJoinTimeout)
+      }
+      let first = await group.next() ?? .failure(.channelJoinTimeout)
+      group.cancelAll()
+      return first
+    }
+
+    switch outcome {
+    case .success:
+      return
+    case .failure(let error):
+      throw error
     }
   }
 
