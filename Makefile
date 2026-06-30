@@ -93,21 +93,25 @@ endef
 
 # ── Code generation ────────────────────────────────────────────────────────────
 
-.PHONY: generate-smithy generate-swift-storage generate-swift-functions generate check-generate
+.PHONY: generate-smithy generate-swift-storage generate-swift-functions generate check-generate check-swift-openapi-generator
+
+check-swift-openapi-generator:
+	@which swift-openapi-generator > /dev/null 2>&1 || \
+	  (echo "Error: swift-openapi-generator not found in PATH. Build from source: https://github.com/apple/swift-openapi-generator" && exit 1)
 
 generate-smithy:
 	cd smithy && smithy build
 	cp smithy/build/smithy/storage-openapi/openapi/StorageService.openapi.json smithy/output/openapi/StorageService.openapi.json
 	cp smithy/build/smithy/functions-openapi/openapi/FunctionsService.openapi.json smithy/output/openapi/FunctionsService.openapi.json
 
-generate-swift-storage:
-	$(HOME)/bin/swift-openapi-generator generate \
+generate-swift-storage: check-swift-openapi-generator
+	swift-openapi-generator generate \
 	  --config Sources/Storage/openapi-generator-config.yaml \
 	  --output-directory Sources/Storage/Generated \
 	  smithy/output/openapi/StorageService.openapi.json
 
-generate-swift-functions:
-	$(HOME)/bin/swift-openapi-generator generate \
+generate-swift-functions: check-swift-openapi-generator
+	swift-openapi-generator generate \
 	  --config Sources/Functions/openapi-generator-config.yaml \
 	  --output-directory Sources/Functions/Generated \
 	  smithy/output/openapi/FunctionsService.openapi.json
