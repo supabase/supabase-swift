@@ -31,15 +31,14 @@ public actor Channel {
   /// The options applied at channel creation. Immutable after creation (Decision 33).
   public nonisolated let options: ChannelOptions
 
-  /// Weak back-reference to the owning `Realtime` actor.
+  /// Weak back-reference to the owning client, abstracted behind ``ChannelHost`` so `Channel`
+  /// is decoupled from the concrete `Realtime` actor (and exercisable against a test double).
   ///
-  /// **Cycle-break (Task 16):** `Realtime.channels` holds the `Channel` strongly.
-  /// If `Channel` also held `Realtime` strongly, neither could ever deinit — which
-  /// would defeat Task 32's leaked-channel `deinit` warning. Storing it weakly
-  /// breaks the cycle. Future channel methods (Task 17+) will guard-unwrap this
-  /// reference and throw `.channelClosed(...)` if `Realtime` has already been
-  /// deallocated.
-  weak var realtime: Realtime?
+  /// **Cycle-break (Task 16):** the host's registry holds the `Channel` strongly. If `Channel`
+  /// also held the host strongly, neither could ever deinit — which would defeat Task 32's
+  /// leaked-channel `deinit` warning. Storing it weakly breaks the cycle; channel methods
+  /// guard-unwrap it and throw `.channelClosed(.clientDisconnected)` if the host is gone.
+  weak var realtime: (any ChannelHost)?
 
   // MARK: - Channel state
 
@@ -113,7 +112,7 @@ public actor Channel {
 
   // MARK: - Init
 
-  init(topic: String, options: ChannelOptions, realtime: Realtime) {
+  init(topic: String, options: ChannelOptions, realtime: any ChannelHost) {
     self.topic = topic
     self.options = options
     self.realtime = realtime
@@ -336,7 +335,8 @@ public actor Channel {
   ) async throws(RealtimeError) -> PushReply? {
     guard let realtime else { throw .channelClosed(.clientDisconnected) }
     return try await realtime._push(
-      topic: topic, event, body, ref: ref, joinRef: joinRef ?? self.joinRef, ack: ack)
+      topic: topic, event, body, ref: ref, joinRef: joinRef ?? self.joinRef,
+      lazyConnect: true, ack: ack)
   }
 
   /// Gates a send on the channel being `.joined`, mapping other states to the
@@ -422,7 +422,7 @@ public actor Channel {
   /// Failures throw (and leave the channel in `.joining` for the transport/timeout cases, so the
   /// caller may retry); a server rejection transitions to `.closed(.unauthorized)` and throws
   /// `.channelJoinRejected`.
-  private func _performJoin(realtime: Realtime) async throws(RealtimeError) {
+  private func _performJoin(realtime: any ChannelHost) async throws(RealtimeError) {
     // Guard: only start a fresh join from a quiescent state.
     // (.joining / .leaving with no in-flight task should not happen given the
     // coalescing in subscribe(), but guard defensively to avoid duplicate
@@ -526,7 +526,8 @@ public actor Channel {
   /// Throws on any wire failure (auth, encode, transport, timeout, postgres subscription error).
   /// Performs no terminal state transition itself — each caller maps the outcome (and any thrown
   /// error) to its own state-machine policy.
-  private func _sendJoin(ref: String, realtime: Realtime) async throws(RealtimeError) -> JoinOutcome
+  private func _sendJoin(ref: String, realtime: any ChannelHost) async throws(RealtimeError)
+    -> JoinOutcome
   {
     // If this join carries postgres_changes registrations, the server activates replication
     // asynchronously and confirms via a `system` event — the phx_reply alone is premature
