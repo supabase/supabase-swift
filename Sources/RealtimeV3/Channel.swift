@@ -418,6 +418,10 @@ public actor Channel {
   }
 
   /// Performs the actual `phx_join` wire handshake. Called exclusively from `subscribe()`.
+  ///
+  /// Failures throw (and leave the channel in `.joining` for the transport/timeout cases, so the
+  /// caller may retry); a server rejection transitions to `.closed(.unauthorized)` and throws
+  /// `.channelJoinRejected`.
   private func _performJoin(realtime: Realtime) async throws(RealtimeError) {
     // Guard: only start a fresh join from a quiescent state.
     // (.joining / .leaving with no in-flight task should not happen given the
@@ -439,59 +443,11 @@ public actor Channel {
     log(.info, .channel, "Joining channel", metadata: ["topic": topic])
     transition(to: .joining)
 
-    // If this join carries postgres_changes registrations, the server activates replication
-    // asynchronously and confirms via a `system` event — the phx_reply alone is premature
-    // (early INSERTs would be missed). Subscribe to the event feed *before* sending the join
-    // so that confirmation cannot be missed.
-    let postgresEvents: AsyncStream<ChannelEvent>? =
-      pendingRegistrations.isEmpty ? nil : _subscribeEvents()
-
-    // Build the join payload, baking in any pending postgres-changes registrations.
-    let accessToken = try await realtime.accessTokenForJoin()
-    let joinPayload = JoinPayload.make(
-      from: options, accessToken: accessToken, registrations: pendingRegistrations
-    )
-
-    let payloadObject: JSONObject
-    do {
-      payloadObject = try joinPayload.toJSONObject()
-    } catch {
-      throw .encoding(underlying: error)
-    }
-
-    // Encode + send the phx_join (ref == joinRef) and await the reply.
-    let reply = try await _push(
-      .join, .text(payloadObject), ref: ref, joinRef: ref,
-      ack: .require(timeout: realtime.configuration.joinTimeout, error: .channelJoinTimeout)
-    )!
-
-    if reply.status == "ok" {
-      // Build the server-id routing map from the join reply's postgres_changes array.
-      // The server assigns integer ids in the same order as the client's postgres_changes
-      // entries. Map each server id → set of client registration UUIDs.
-      _buildServerIDRouting(from: reply.response)
-      // Mark this channel as eligible for transparent re-join on reconnect (Task 29).
-      shouldRejoin = true
-      // Wait for the postgres_changes `system` confirmation before declaring joined.
-      if let postgresEvents {
-        try await _awaitPostgresSubscribed(
-          postgresEvents,
-          timeout: realtime.configuration.joinTimeout,
-          clock: realtime.configuration.clock
-        )
-      }
+    switch try await _sendJoin(ref: ref, realtime: realtime) {
+    case .joined:
       log(.info, .channel, "Channel joined", metadata: ["topic": topic])
       transition(to: .joined)
-    } else {
-      // Extract a human-readable reason from the response if available.
-      let reason: String
-      if let obj = reply.response.objectValue,
-        let r = obj["reason"]?.stringValue
-      {
-        reason = r
-      } else {
-        reason = "Server rejected the channel join (status: \(reply.status))."
-      }
+    case .rejected(let reason):
       log(.warn, .channel, "Channel join rejected: \(reason)", metadata: ["topic": topic])
       transition(to: .closed(.unauthorized))
       throw RealtimeError.channelJoinRejected(reason: reason)
@@ -528,21 +484,59 @@ public actor Channel {
     // .joining is not a terminal state so no finishers are invoked — streams stay open.
     transition(to: .joining)
 
-    // As in `_performJoin`: a postgres-bearing join is only live after the server's `system`
-    // confirmation. Subscribe to the feed before sending so it can't be missed.
+    do {
+      switch try await _sendJoin(ref: ref, realtime: realtime) {
+      case .joined:
+        // shouldRejoin stays true — still eligible for future reconnects.
+        transition(to: .joined)
+      case .rejected:
+        // Server rejected the rejoin (e.g. revoked auth). This is terminal: clear
+        // `shouldRejoin` so the channel is NOT re-attempted on every subsequent reconnect
+        // (which would loop indefinitely). The caller must explicitly `subscribe()` again.
+        shouldRejoin = false
+        transition(to: .closed(.unauthorized))
+      }
+    } catch {
+      // Wire failure. An auth failure is treated as `.unauthorized`; transport/timeout/encode
+      // are recoverable drops — `shouldRejoin` stays true so the next reconnect retries.
+      if case .authenticationFailed = error {
+        transition(to: .closed(.unauthorized))
+      } else {
+        transition(to: .closed(.transportFailure))
+      }
+    }
+  }
+
+  // MARK: - Join wire handshake (shared)
+
+  /// The outcome of a `phx_join` reply: the server accepted the join, or rejected it.
+  private enum JoinOutcome: Sendable {
+    case joined
+    case rejected(reason: String)
+  }
+
+  /// Shared `phx_join` wire handshake used by both `subscribe()` (`_performJoin`) and `rejoin()`.
+  ///
+  /// Assumes the channel is already `.joining` with `joinRef == ref`. Builds the join payload
+  /// (baking in any pending postgres registrations), sends it, and awaits the reply. On an `ok`
+  /// reply it builds the server-id routing map, marks the channel rejoin-eligible, and — when the
+  /// join carried registrations — waits for the postgres `system` confirmation before returning
+  /// `.joined`. A non-ok reply returns `.rejected`.
+  ///
+  /// Throws on any wire failure (auth, encode, transport, timeout, postgres subscription error).
+  /// Performs no terminal state transition itself — each caller maps the outcome (and any thrown
+  /// error) to its own state-machine policy.
+  private func _sendJoin(ref: String, realtime: Realtime) async throws(RealtimeError) -> JoinOutcome
+  {
+    // If this join carries postgres_changes registrations, the server activates replication
+    // asynchronously and confirms via a `system` event — the phx_reply alone is premature
+    // (early changes would be missed). Subscribe to the event feed *before* sending the join so
+    // that confirmation cannot be missed.
     let postgresEvents: AsyncStream<ChannelEvent>? =
       pendingRegistrations.isEmpty ? nil : _subscribeEvents()
 
-    // Build the join payload.
-    let accessToken: String?
-    do {
-      accessToken = try await realtime.accessTokenForJoin()
-    } catch {
-      // Auth failure: close the channel.
-      transition(to: .closed(.unauthorized))
-      return
-    }
-
+    // Build the join payload, baking in any pending postgres-changes registrations.
+    let accessToken = try await realtime.accessTokenForJoin()
     let joinPayload = JoinPayload.make(
       from: options, accessToken: accessToken, registrations: pendingRegistrations
     )
@@ -551,50 +545,37 @@ public actor Channel {
     do {
       payloadObject = try joinPayload.toJSONObject()
     } catch {
-      transition(to: .closed(.transportFailure))
-      return
+      throw .encoding(underlying: error)
     }
 
-    // Encode + send the phx_join (ref == joinRef) and await the reply. Encode, transport,
-    // and timeout failures are all treated as a recoverable transport drop here.
-    let reply: PushReply
-    do {
-      reply = try await _push(
-        .join, .text(payloadObject), ref: ref, joinRef: ref,
-        ack: .require(timeout: realtime.configuration.joinTimeout, error: .channelJoinTimeout)
-      )!
-    } catch {
-      transition(to: .closed(.transportFailure))
-      return
+    // Encode + send the phx_join (ref == joinRef) and await the reply.
+    let reply = try await _push(
+      .join, .text(payloadObject), ref: ref, joinRef: ref,
+      ack: .require(timeout: realtime.configuration.joinTimeout, error: .channelJoinTimeout)
+    )!
+
+    guard reply.status == "ok" else {
+      let reason =
+        reply.response.objectValue?["reason"]?.stringValue
+        ?? "Server rejected the channel join (status: \(reply.status))."
+      return .rejected(reason: reason)
     }
 
-    if reply.status == "ok" {
-      _buildServerIDRouting(from: reply.response)
-      // Wait for the postgres_changes `system` confirmation; a failure or timeout is treated
-      // as a recoverable transport drop (shouldRejoin stays true, next reconnect retries).
-      if let postgresEvents {
-        do {
-          try await _awaitPostgresSubscribed(
-            postgresEvents,
-            timeout: realtime.configuration.joinTimeout,
-            clock: realtime.configuration.clock
-          )
-        } catch {
-          transition(to: .closed(.transportFailure))
-          return
-        }
-      }
-      // shouldRejoin stays true — still eligible for future reconnects.
-      transition(to: .joined)
-    } else {
-      // Server rejected the rejoin (e.g. revoked auth). This is terminal: clear
-      // `shouldRejoin` so the channel is NOT re-attempted on every subsequent
-      // reconnect (which would loop indefinitely). The caller must explicitly
-      // `subscribe()` again to re-establish. Transient transport failures above
-      // intentionally keep `shouldRejoin` true so the next reconnect retries.
-      shouldRejoin = false
-      transition(to: .closed(.unauthorized))
+    // Build the server-id routing map from the join reply's postgres_changes array (the server
+    // assigns integer ids in the same order as the client's entries). Mark rejoin-eligible
+    // BEFORE the (possibly slow) postgres wait so a confirmation failure still leaves the channel
+    // eligible for a future reconnect.
+    _buildServerIDRouting(from: reply.response)
+    shouldRejoin = true
+
+    if let postgresEvents {
+      try await _awaitPostgresSubscribed(
+        postgresEvents,
+        timeout: realtime.configuration.joinTimeout,
+        clock: realtime.configuration.clock
+      )
     }
+    return .joined
   }
 
   // MARK: - Postgres subscription confirmation
