@@ -90,3 +90,26 @@ coverage:
 define udid_for
 $(shell xcrun simctl list --json devices available '$(1)' | jq -r '[.devices|to_entries|sort_by(.key)|reverse|.[].value|select(length > 0)|.[0]][0].udid')
 endef
+
+# ── Code generation ────────────────────────────────────────────────────────────
+
+generate-smithy:
+	cd smithy && smithy build
+
+generate-swift-storage:
+	swift-openapi-generator generate \
+	  --config Sources/Storage/openapi-generator-config.yaml \
+	  --output-directory Sources/Storage/Generated \
+	  smithy/output/openapi/StorageService.openapi.json
+
+generate-swift-functions:
+	swift-openapi-generator generate \
+	  --config Sources/Functions/openapi-generator-config.yaml \
+	  --output-directory Sources/Functions/Generated \
+	  smithy/output/openapi/FunctionsService.openapi.json
+
+generate: generate-smithy generate-swift-storage generate-swift-functions
+
+check-generate:
+	$(MAKE) generate
+	git diff --exit-code || (echo "Generated artifacts are out of date. Run 'make generate' and commit." && exit 1)
