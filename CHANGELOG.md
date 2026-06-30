@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.49.0](https://github.com/supabase/supabase-swift/compare/v2.48.0...v2.49.0) (2026-06-30)
+
+
+### Features
+
+* add sdk-compliance.yaml for supabase/sdk capability matrix ([#1022](https://github.com/supabase/supabase-swift/issues/1022)) ([df79431](https://github.com/supabase/supabase-swift/commit/df794313d8786ec57ce7b9373470a978b8c71875))
+* **auth:** add WebAuthn/passkey support ([#1013](https://github.com/supabase/supabase-swift/issues/1013)) landed in 2.48.0 and ([df79431](https://github.com/supabase/supabase-swift/commit/df794313d8786ec57ce7b9373470a978b8c71875))
+
 ## [2.48.0](https://github.com/supabase/supabase-swift/compare/v2.47.2...v2.48.0) (2026-06-17)
 
 
