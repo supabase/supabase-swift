@@ -69,7 +69,8 @@ public actor Realtime {
   let httpClient: _HTTPClient
 
   /// Active connection returned by the transport after `connect()`.
-  private var connection: (any RealtimeConnection)?
+  /// Internal (not private) so `_rawSend` in `Realtime+Push.swift` can reach it.
+  var connection: (any RealtimeConnection)?
 
   /// In-flight connect task — used for coalescing concurrent `connect()` callers
   /// and for idempotency once connected.
@@ -163,16 +164,18 @@ public actor Realtime {
   var _overrideToken: String?
 
   /// Current connection status.
-  private var currentStatus: ConnectionStatus = ConnectionStatus(
+  /// Internal (not private) so `updateLatency` in `Realtime+Heartbeat.swift` can update it.
+  var currentStatus: ConnectionStatus = ConnectionStatus(
     state: .idle,
     since: Date(),
     latency: nil
   )
 
   /// Broadcast list of `status` stream continuations.
+  /// Internal (not private) so `updateLatency` in `Realtime+Heartbeat.swift` can yield to them.
   /// `LockIsolated` because continuations are yielded from actor-isolated context,
   /// so a plain array is fine — but we use a value wrapper to allow capture in closures.
-  private var statusContinuations: [UUID: AsyncStream<ConnectionStatus>.Continuation] = [:]
+  var statusContinuations: [UUID: AsyncStream<ConnectionStatus>.Continuation] = [:]
 
   // MARK: - Initializer
 
@@ -504,228 +507,10 @@ public actor Realtime {
     startHeartbeat()
   }
 
-  // MARK: - Heartbeat
-
-  /// Starts the heartbeat loop and stores the task handle so it can be cancelled.
-  private func startHeartbeat() {
-    heartbeatTask?.cancel()
-    let heartbeater = Heartbeater(
-      heartbeat: configuration.heartbeat,
-      clock: configuration.clock,
-      beat: { [weak self] in try await self?._sendHeartbeat() },
-      onConnectionLost: { [weak self] error in
-        await self?.handleConnectionLost(error)
-      }
-    )
-    heartbeatTask = heartbeater.start()
-  }
-
-  /// Sends one `[null, ref, "phoenix", "heartbeat", {}]` frame on the current connection and
-  /// awaits its reply, updating `ConnectionStatus.latency` with the measured round-trip.
-  ///
-  /// Routes through ``_push`` with `lazyConnect: false`: a dead socket must surface as a
-  /// `.disconnected`/timeout (→ `onConnectionLost`) rather than trigger a reconnect. Throws
-  /// if the send fails or the reply times out, which the heartbeat loop maps to connection loss.
-  func _sendHeartbeat() async throws(RealtimeError) {
-    // Wall clock for round-trip measurement; scheduling/timeout uses `configuration.clock`.
-    let wallClock = ContinuousClock()
-    let sentAt = wallClock.now
-    _ = try await _push(
-      topic: "phoenix", .heartbeat, .text([:]),
-      joinRef: nil, lazyConnect: false,
-      ack: .require(timeout: configuration.heartbeat, error: .disconnected)
-    )
-    updateLatency(sentAt.duration(to: wallClock.now))
-  }
-
-  /// Updates `currentStatus.latency` in-place while preserving the current state.
-  private func updateLatency(_ latency: Duration) {
-    currentStatus = ConnectionStatus(
-      state: currentStatus.state,
-      since: currentStatus.since,
-      latency: latency
-    )
-    for continuation in statusContinuations.values {
-      continuation.yield(currentStatus)
-    }
-    // Emit heartbeat RTT metric as a log event (spec §10 metrics-as-logs).
-    log(
-      .debug, .connection, "Heartbeat round-trip complete",
-      metadata: ["heartbeat.rtt_ms": "\(latency.inMilliseconds)"]
-    )
-  }
-
-  // MARK: - Connection loss
-
-  /// Connection-loss handler with automatic reconnection.
-  ///
-  /// When `intentionalDisconnect` is false (the default), this drives the reconnection
-  /// loop: it consults `configuration.reconnection.nextDelay`, sleeps on
-  /// `configuration.clock`, and retries `transport.connect` until success or the
-  /// policy returns `nil` (give up).
-  ///
-  /// Idempotency: re-entry is prevented by the `connection == nil` guard at the top of
-  /// this function. The guard atomically claims and clears the connection reference before
-  /// any suspension point, so a concurrent or re-entrant call (e.g. both the frame-routing
-  /// stream and the heartbeat firing almost simultaneously) will see `connection == nil`
-  /// and return immediately, preventing overlapping cleanup or reconnection loops.
-  ///
-  /// `isReconnecting` is reserved for Task 14 (disconnect()/state introspection) and is
-  /// NOT the idempotency mechanism.
-  func handleConnectionLost(_ error: RealtimeError) async {
-    // Atomically claim and clear the connection reference before any suspension point.
-    // This is the single-ownership guard: any concurrent or re-entrant call will see
-    // connection == nil and return immediately, preventing overlapping cleanup or
-    // reconnection loops.
-    guard let lostConnection = connection else { return }
-    connection = nil
-
-    // Cancel background tasks.
-    heartbeatTask?.cancel()
-    heartbeatTask = nil
-    routingTask?.cancel()
-    routingTask = nil
-
-    // Fail all pending pushes so callers don't hang indefinitely.
-    await inflightPushRegistry.failAll(error)
-
-    // Close the connection we captured above.
-    await lostConnection.close(code: 1001, reason: "connection lost")
-
-    // If the disconnect was intentional (set by disconnect()), stay closed.
-    // Do NOT overwrite .closed(.clientDisconnected) and do NOT trigger reconnection.
-    if intentionalDisconnect {
-      return
-    }
-
-    // If the socket was closed by the idle-close timer, suppress reconnection.
-    // The idle close already transitioned status to .idle and cleared the connection.
-    // A future connect() call (from subscribe()) will re-open the socket.
-    if idleClosed {
-      return
-    }
-
-    // Spawn reconnection as an unstructured Task so it runs independently of the routing
-    // task (which may be the caller and may be cancelled). The reconnection loop must NOT
-    // inherit cancellation from the routing task — it needs to outlive it.
-    reconnectTask = Task {
-      await runReconnectionLoop(initialError: error)
-    }
-  }
-
-  /// Reconnection loop. Runs in its own unstructured Task so it is not affected by the
-  /// cancellation of the routing task that detected the connection loss.
-  private func runReconnectionLoop(initialError: RealtimeError) async {
-    isReconnecting = true
-    // Clear reconnectTask on ALL exit paths (success, give-up, cancellation) so Task 14
-    // can reliably check `reconnectTask == nil` to determine whether reconnection is in progress.
-    defer {
-      isReconnecting = false
-      reconnectTask = nil
-    }
-
-    var attempt = 1
-    var lastError: any Error & Sendable = initialError
-
-    while true {
-      // Consult the policy for the delay before this attempt.
-      guard let delay = configuration.reconnection.nextDelay(attempt, lastError) else {
-        // Policy says give up: fail all (in case new pushes arrived), go to closed.
-        await inflightPushRegistry.failAll(initialError)
-        transition(to: .closed(.transportFailure))
-        // Terminate all eligible channels so their streams throw/finish (Task 29).
-        await terminateChannelsOnGiveUp()
-        return
-      }
-
-      // Signal reconnecting.
-      log(
-        .info, .connection, "Reconnecting to Realtime server",
-        metadata: ["reconnect.attempt": "\(attempt)"]
-      )
-      transition(to: .reconnecting(attempt: attempt, lastError: lastError))
-
-      // Wait the backoff delay on the configured clock.
-      do {
-        try await configuration.clock.sleep(for: delay)
-      } catch {
-        // CancellationError: actor is being torn down — exit silently.
-        return
-      }
-
-      // Attempt to reconnect.
-      do {
-        let conn = try await _openConnection()
-        // Successfully reconnected: bind fresh tasks to the new connection.
-        // (reconnectTask is cleared by the defer at the top of this function.)
-        connection = conn
-        log(.info, .connection, "Reconnected to Realtime server")
-        transition(to: .connected)
-        startConnectionTasks(connection: conn)
-        // Re-join eligible channels (Task 29).
-        await rejoinEligibleChannels()
-        return
-      } catch {
-        // Reconnect attempt failed — record and loop.
-        log(.warn, .connection, "Reconnect attempt \(attempt) failed: \(error)")
-        lastError = error
-        attempt += 1
-      }
-    }
-  }
-
-  // MARK: - Channel rejoin on reconnect (Task 29)
-
-  /// Re-joins all channels that were previously joined and not explicitly left by the user.
-  ///
-  /// Called after every successful reconnect. Channels with `shouldRejoin == true` are
-  /// eligible (they were transport-dropped, not user-left). Each channel's existing streams
-  /// (messages, broadcasts, postgres, presence) stay open across the gap — only the
-  /// `phx_join` handshake is re-sent.
-  ///
-  /// Channels are re-joined concurrently so a slow join on one topic does not block others.
-  private func rejoinEligibleChannels() async {
-    // Snapshot the full channel list. We check eligibility per-channel (actor hop).
-    let allChannels = Array(channels.values)
-    guard !allChannels.isEmpty else { return }
-
-    // Re-join concurrently. Each channel's rejoin() checks its own shouldRejoin flag
-    // at the start and is a no-op if not eligible.
-    await withTaskGroup(of: Void.self) { group in
-      for channel in allChannels {
-        group.addTask {
-          // Only rejoin if this channel was previously joined (actor-isolated read).
-          guard await channel.shouldRejoin else { return }
-          await channel.rejoin()
-        }
-      }
-    }
-  }
-
-  /// Terminates all eligible channels when the reconnection policy gives up.
-  ///
-  /// Called from the give-up path in `runReconnectionLoop`. For each channel with
-  /// `shouldRejoin == true`, transitions it to `.closed(.transportFailure)`, which
-  /// cascades stream terminations via the existing `transition(to:)` logic.
-  /// Those channels are then evicted from the registry.
-  private func terminateChannelsOnGiveUp() async {
-    // Snapshot topic+channel pairs. We check eligibility per-channel (actor hop).
-    let snapshot = Array(channels)
-    var toEvict: [String] = []
-    for (topic, channel) in snapshot {
-      if await channel.shouldRejoin {
-        await channel.transition(to: .closed(.transportFailure))
-        toEvict.append(topic)
-      }
-    }
-    for topic in toEvict {
-      channels.removeValue(forKey: topic)
-    }
-  }
-
   /// Builds the connect URL and headers, then calls transport.connect.
   /// Used by both initial connect and reconnect.
-  private func _openConnection() async throws -> any RealtimeConnection {
+  /// Internal (not private) so the reconnection loop in `Realtime+Reconnection.swift` can reuse it.
+  func _openConnection() async throws -> any RealtimeConnection {
     var components =
       URLComponents(url: url, resolvingAgainstBaseURL: false)
       ?? URLComponents()
@@ -898,162 +683,6 @@ public actor Realtime {
     transition(to: .idle)
   }
 
-  // MARK: - Channel seam (internal API consumed by Channel)
-
-  /// Returns the next monotonic ref string from the shared generator.
-  nonisolated func nextRef() -> String {
-    refGenerator.next()
-  }
-
-  /// Sends a raw frame on the current connection without lazy-connecting.
-  ///
-  /// Throws `.disconnected` if no connection is available, `.transportFailure` if the send
-  /// fails. This is the single point where any frame reaches the socket.
-  func _rawSend(_ frame: TransportFrame) async throws(RealtimeError) {
-    guard let conn = connection else {
-      throw .disconnected
-    }
-    do {
-      try await conn.send(frame)
-    } catch {
-      throw .transportFailure(underlying: error)
-    }
-  }
-
-  /// Encodes and sends a single Phoenix frame, optionally awaiting its `phx_reply`.
-  ///
-  /// The single funnel for every framed send — channel pushes (broadcast, presence, join,
-  /// leave, access_token) and the connection heartbeat all route through here. Handles ref
-  /// generation, text/binary encoding (mapping encode failures to `.encoding`), the send,
-  /// and — when `ack == .require` — reply correlation via the in-flight registry. Send
-  /// failures (`.transportFailure`/`.disconnected`) propagate unchanged.
-  ///
-  /// Because the registry buffers early replies, awaiting *after* sending is race-free, so
-  /// every ack site uses this one flow (no manual pre-register task needed).
-  ///
-  /// - Parameters:
-  ///   - topic: The Phoenix topic (e.g. a channel's `realtime:` topic, or `"phoenix"` for heartbeat).
-  ///   - event: The Phoenix event for the frame.
-  ///   - body: The wire payload (text JSON, or a binary broadcast frame).
-  ///   - ref: The push ref. Defaults to a fresh `nextRef()`; `join` passes its own ref so
-  ///     `ref == joinRef`.
-  ///   - joinRef: The join ref stamped on the frame.
-  ///   - lazyConnect: When `true` (default) the socket is opened if needed before sending
-  ///     (spec §6.1). The heartbeat passes `false` — it must report a dead connection via the
-  ///     ack timeout rather than trigger a reconnect.
-  ///   - ack: Whether to await a reply.
-  /// - Returns: The `phx_reply` when `ack == .require`, otherwise `nil`.
-  @discardableResult
-  func _push(
-    topic: String,
-    _ event: PhoenixEvent,
-    _ body: PushBody,
-    ref: String? = nil,
-    joinRef: String? = nil,
-    lazyConnect: Bool = true,
-    ack: AckPolicy = .none
-  ) async throws(RealtimeError) -> PushReply? {
-    let ref = ref ?? nextRef()
-
-    let frame: TransportFrame
-    do {
-      switch body {
-      case .text(let payload):
-        frame = .text(
-          try serializer.encodeText(
-            joinRef: joinRef, ref: ref, topic: topic, event: event.rawValue, payload: payload))
-      case .broadcastJSON(let payload):
-        frame = .binary(
-          try serializer.encodeBroadcastPush(
-            joinRef: joinRef, ref: ref, topic: topic, event: event.rawValue, jsonPayload: payload))
-      case .broadcastData(let payload):
-        frame = .binary(
-          try serializer.encodeBroadcastPush(
-            joinRef: joinRef, ref: ref, topic: topic, event: event.rawValue, binaryPayload: payload)
-        )
-      }
-    } catch {
-      throw .encoding(underlying: error)
-    }
-
-    // Lazy connect (idempotent) then send. The heartbeat opts out so a dead socket surfaces
-    // as `.disconnected` rather than kicking off a reconnect that races the recovery loop.
-    if lazyConnect {
-      try await connect()
-    }
-    let wallClock = ContinuousClock()
-    let sentAt = wallClock.now
-    try await _rawSend(frame)
-
-    switch ack {
-    case .none:
-      return nil
-    case .require(let timeout, let error):
-      let reply = try await awaitReply(ref: ref, timeout: timeout, timeoutError: error)
-      // Emit the acked-broadcast round-trip metric (spec §10 metrics-as-logs). The heartbeat
-      // reports its own `heartbeat.rtt_ms`; join/leave/presence acks have no defined metric.
-      if event == .broadcast {
-        log(
-          .debug, .broadcast, "Broadcast acknowledged",
-          metadata: [
-            "broadcast.ack_latency_ms": "\(sentAt.duration(to: wallClock.now).inMilliseconds)"
-          ]
-        )
-      }
-      return reply
-    }
-  }
-
-  /// Encodes an `Encodable` value to `AnyJSON` using `configuration.encoder`, mapping any
-  /// failure to `.encoding`. Shared by channel broadcast/presence payloads and HTTP broadcast.
-  ///
-  /// `nonisolated`: it only reads the immutable, Sendable `configuration` and does pure
-  /// encoding, so callers (including the synchronous `Channel._encodeToJSON`) need no `await`.
-  nonisolated func _encodeToJSON<T: Encodable & Sendable>(_ value: T) throws(RealtimeError)
-    -> AnyJSON
-  {
-    do {
-      let data = try configuration.encoder.encode(value)
-      return try JSONDecoder().decode(AnyJSON.self, from: data)
-    } catch {
-      throw .encoding(underlying: error)
-    }
-  }
-
-  /// Registers `ref` with the in-flight registry and suspends until the matching
-  /// `phx_reply` arrives or `timeout` elapses on `configuration.clock`.
-  func awaitReply(
-    ref: String,
-    timeout: Duration,
-    timeoutError: RealtimeError
-  ) async throws(RealtimeError) -> PushReply {
-    try await inflightPushRegistry.awaitReply(
-      ref: ref,
-      timeout: timeout,
-      clock: configuration.clock,
-      timeoutError: timeoutError
-    )
-  }
-
-  /// Returns the current access token for channel join, consulting stored state in order:
-  ///
-  /// 1. `_overrideToken` — set by `updateToken(_:)`; takes highest precedence.
-  /// 2. `accessTokenProvider` — async closure supplied at init.
-  /// 3. `nil` — anonymous / public channels (no token configured).
-  ///
-  /// This ordering ensures a token pushed via `updateToken(_:)` is immediately
-  /// used for any subsequent joins, regardless of whether a provider is also set.
-  func accessTokenForJoin() async throws(RealtimeError) -> String? {
-    if let override = _overrideToken { return override }
-    guard let provider = accessTokenProvider else { return nil }
-    do {
-      return try await provider()
-    } catch {
-      throw .authenticationFailed(
-        reason: "Access token provider threw an error.", underlying: error)
-    }
-  }
-
   // MARK: - Token management
 
   /// Updates the access token used for future channel joins and pushes it to all
@@ -1142,7 +771,8 @@ public actor Realtime {
 
 extension Duration {
   /// Whole milliseconds, for metric logging (`heartbeat.rtt_ms`, `broadcast.ack_latency_ms`).
-  fileprivate var inMilliseconds: Int64 {
+  /// Internal (not fileprivate) so `_push` in `Realtime+Push.swift` can use it too.
+  var inMilliseconds: Int64 {
     components.seconds * 1000 + components.attoseconds / 1_000_000_000_000_000
   }
 }

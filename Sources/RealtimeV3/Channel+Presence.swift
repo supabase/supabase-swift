@@ -201,6 +201,66 @@ extension Channel {
   }
 }
 
+// MARK: - Channel + presence send seam (Task 24)
+
+extension Channel {
+  /// Encodes and sends a presence track frame, then awaits the server ACK.
+  ///
+  /// ## State gating
+  /// - `.unsubscribed` / `.joining` → throws `.notSubscribed`
+  /// - `.leaving` / `.closed` → throws `.channelClosed(reason)`
+  /// - `.joined` → encodes `state` as `{ "event": "track", "payload": <encodedState> }`,
+  ///   sends as a `"presence"` channel event (text frame), and awaits the phx_reply.
+  ///
+  /// ## Tracked flag
+  /// `isPresenceTracked` is set to `true` so a later `untrack` is not a no-op.
+  ///
+  /// ## Ack timeout
+  /// Uses `broadcastAckTimeout` — presence track semantics are analogous to an acked push.
+  func sendPresenceTrack<T: Codable & Sendable>(_ state: T) async throws(RealtimeError) {
+    guard let realtime else { throw .channelClosed(.clientDisconnected) }
+    try _requireJoinedForSend()
+
+    // Build the presence track outer payload (user state encoded via Configuration.encoder).
+    let outerPayload: JSONObject = [
+      "event": .string("track"),
+      "payload": try _encodeToJSON(state),
+    ]
+
+    // Send and await the server ACK.
+    _ = try await _push(
+      .presence, .text(outerPayload),
+      ack: .require(
+        timeout: realtime.configuration.broadcastAckTimeout, error: .broadcastAckTimeout)
+    )
+
+    log(.debug, .presence, "Presence tracked", metadata: ["topic": topic])
+    isPresenceTracked = true
+  }
+
+  /// Sends a presence untrack frame, awaits the server ACK, and clears tracked state.
+  ///
+  /// Idempotent: if `isPresenceTracked` is already `false`, returns immediately (no-op).
+  func sendPresenceUntrack() async throws(RealtimeError) {
+    // Idempotent guard.
+    guard isPresenceTracked else { return }
+
+    guard let realtime else { throw .channelClosed(.clientDisconnected) }
+    try _requireJoinedForSend()
+
+    // Send the presence untrack frame and await the server ACK.
+    _ = try await _push(
+      .presence, .text(["event": .string("untrack")]),
+      ack: .require(
+        timeout: realtime.configuration.broadcastAckTimeout, error: .broadcastAckTimeout)
+    )
+
+    // Clear tracked state.
+    log(.debug, .presence, "Presence untracked", metadata: ["topic": topic])
+    isPresenceTracked = false
+  }
+}
+
 // MARK: - Channel + presence stream registration
 
 extension Channel {
