@@ -1,4 +1,3 @@
-import ConcurrencyExtras
 import Foundation
 import Helpers
 import OpenAPIRuntime
@@ -36,69 +35,36 @@ let version = Helpers.version
 ///
 /// When used via ``SupabaseClient``, authentication tokens are automatically refreshed and injected
 /// into every request. You do not need to manage ``setAuth(token:)`` manually in that case.
+///
+/// ## Spike limitations
+///
+/// The generated client is POST-only. `FunctionInvokeOptions.method` and
+/// `FunctionInvokeOptions.query` are accepted by the API for future compatibility but are not
+/// forwarded to the server in this spike implementation. The Smithy model needs to be extended
+/// to support custom HTTP methods and query parameters.
+///
+/// The `HTTPURLResponse` returned by `invoke` is fabricated (status code only, no headers),
+/// because the generated `ClientMiddleware` layer does not yet expose per-request response headers
+/// to the caller. This is a known limitation.
 public actor FunctionsClient {
   /// The maximum time an Edge Function may be idle before the gateway returns a 504.
-  ///
-  /// Supabase enforces a 150-second request idle timeout for Edge Functions. The client
-  /// configures the underlying `URLSession` with this value so local timeouts align with
-  /// the server-side limit.
-  ///
-  /// See: https://supabase.com/docs/guides/functions/limits
   public static let requestIdleTimeout: TimeInterval = 150
 
   /// The base URL used to build per-function request URLs.
-  ///
-  /// Individual function URLs are formed by appending the function name to this URL,
-  /// e.g. `https://<project-ref>.supabase.co/functions/v1/my-function`.
   public let url: URL
 
   /// The default region in which functions are invoked.
-  ///
-  /// Per-invocation overrides via ``FunctionInvokeOptions/region`` take
-  /// precedence over this value. Pass `nil` to let Supabase route to the nearest region
-  /// automatically.
   public let region: FunctionRegion?
 
   /// The JSON decoder used to decode response bodies in ``invokeDecodable(_:as:decoder:options:)``.
-  ///
-  /// Per-call override is also available via the `decoder`
-  /// parameter of ``invokeDecodable(_:as:decoder:options:)``.
   public let decoder: JSONDecoder
 
   /// The HTTP headers sent with every request.
-  ///
-  /// Per-invocation headers supplied via ``FunctionInvokeOptions/headers`` are merged on
-  /// top of these values, with the per-invocation values winning on collision.
   public private(set) var headers: [String: String] = [:]
 
-  private let http: _HTTPClient
-  private let generatedClient: Client?
+  private let generatedClient: Client
 
   /// Creates a `FunctionsClient` for standalone use (without a ``SupabaseClient``).
-  ///
-  /// Use this initialiser when you want to call Edge Functions independently, without the
-  /// broader Supabase client stack. For most apps you should create a ``SupabaseClient`` and
-  /// access its `functions` property instead.
-  ///
-  /// - Parameters:
-  ///   - url: The base URL for the functions endpoint,
-  ///     e.g. `https://<project-ref>.supabase.co/functions/v1`.
-  ///   - headers: Additional headers included in every request. Defaults to an empty dictionary.
-  ///     An `X-Client-Info` header is always added automatically.
-  ///   - region: The default region to invoke functions in. Defaults to `nil` (automatic routing).
-  ///   - session: The `URLSession` used to perform HTTP requests. Defaults to a new session with
-  ///     ``requestIdleTimeout`` applied to `timeoutIntervalForRequest`.
-  ///   - decoder: The `JSONDecoder` used by ``invokeDecodable(_:as:decoder:options:)``.
-  ///     Defaults to `JSONDecoder()`.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// let functions = FunctionsClient(
-  ///   url: URL(string: "https://<project-ref>.supabase.co/functions/v1")!,
-  ///   headers: ["apikey": "<publishable-or-secret-key>", "Authorization": "Bearer <authorization-token>"]
-  /// )
-  /// ```
   public init(
     url: URL,
     headers: [String: String] = [:],
@@ -128,11 +94,6 @@ public actor FunctionsClient {
     self.region = region
     self.decoder = decoder
     session.configuration.timeoutIntervalForRequest = Self.requestIdleTimeout
-    self.http = _HTTPClient(
-      host: url,
-      session: session,
-      tokenProvider: tokenProvider
-    )
     let transport = URLSessionTransport(configuration: .init(session: session))
     let middleware = SupabaseMiddleware(headers: headers, tokenProvider: tokenProvider)
     generatedClient = Client(
@@ -146,14 +107,7 @@ public actor FunctionsClient {
     }
   }
 
-  /// Creates a `FunctionsClient` backed by the generated OpenAPI client for testing.
-  ///
-  /// - Parameters:
-  ///   - url: The base URL for the functions endpoint.
-  ///   - headers: Additional headers included in every request.
-  ///   - region: The default region to invoke functions in.
-  ///   - transport: A `ClientTransport` used by the generated client (e.g. `MockTransport` in tests).
-  ///   - decoder: The `JSONDecoder` used by `invokeDecodable`.
+  /// Creates a `FunctionsClient` backed by a custom transport (e.g. `MockTransport` in tests).
   package init(
     url: URL,
     headers: [String: String] = [:],
@@ -164,7 +118,6 @@ public actor FunctionsClient {
     self.url = url
     self.region = region
     self.decoder = decoder
-    self.http = _HTTPClient(host: url)
     self.generatedClient = Client(serverURL: url, transport: transport)
     self.headers = headers
     if self.headers["X-Client-Info"] == nil {
@@ -173,25 +126,6 @@ public actor FunctionsClient {
   }
 
   /// Updates the `Authorization` header used for subsequent requests.
-  ///
-  /// Pass a JWT to attach a `Bearer` token, or `nil` to remove the header entirely (e.g. for
-  /// public functions that don't require authentication).
-  ///
-  /// When using ``SupabaseClient``, this method is called automatically whenever the
-  /// authenticated session changes — you do not need to call it yourself.
-  ///
-  /// - Parameter token: A JWT access token, or `nil` to clear the authorization header.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// // Attach a token before invoking a protected function
-  /// await functions.setAuth(token: session.accessToken)
-  /// let (data, _) = try await functions.invoke("protected-function")
-  ///
-  /// // Remove the token for a public function call
-  /// await functions.setAuth(token: nil)
-  /// ```
   public func setAuth(token: String?) {
     if let token {
       headers["Authorization"] = "Bearer \(token)"
@@ -201,33 +135,6 @@ public actor FunctionsClient {
   }
 
   /// Invokes a function and decodes the JSON response body into the inferred `Decodable` type.
-  ///
-  /// The response body is decoded using the `decoder` parameter if provided, otherwise the
-  /// instance-level ``decoder`` is used.
-  ///
-  /// - Parameters:
-  ///   - functionName: The name of the Edge Function to invoke.
-  ///   - decoder: An optional `JSONDecoder` to use for this call. When `nil`, falls back to the
-  ///     instance ``decoder``. Defaults to `nil`.
-  ///   - options: A closure that configures ``FunctionInvokeOptions`` before the request is sent.
-  ///     Defaults to a no-op closure.
-  /// - Returns: A tuple of the decoded value and the raw `HTTPURLResponse`.
-  /// - Throws: ``FunctionsError`` on relay or HTTP errors, or a decoding error if the response
-  ///   body cannot be decoded into `T`.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// struct HelloResponse: Decodable {
-  ///   let message: String
-  /// }
-  ///
-  /// let (response, _) = try await functions.invokeDecodable("hello", as: HelloResponse.self) {
-  ///   $0.method = .get
-  ///   $0.query = ["name": "world"]
-  /// }
-  /// print(response.message) // "Hello, world!"
-  /// ```
   public func invokeDecodable<T: Decodable>(
     _ functionName: String,
     as _: T.Type = T.self,
@@ -241,33 +148,10 @@ public actor FunctionsClient {
     )
   }
 
-  /// Invokes a function and returns the raw response body and `HTTPURLResponse`.
+  /// Invokes a function and returns the raw response body and a fabricated `HTTPURLResponse`.
   ///
-  /// Use this method when you need full control over response handling — for example, when the
-  /// function returns non-JSON data, or when you want to inspect status codes and headers directly.
-  ///
-  /// - Parameters:
-  ///   - functionName: The name of the Edge Function to invoke.
-  ///   - options: A closure that configures ``FunctionInvokeOptions`` before the request is sent.
-  ///     Defaults to a no-op closure.
-  /// - Returns: A tuple of the raw `Data` body and the `HTTPURLResponse`.
-  /// - Throws: ``FunctionsError/relayError`` if the relay reports an error,
-  ///   ``FunctionsError/httpError(code:data:)`` for non-2xx responses, or a transport-level error.
-  ///
-  /// ## Example
-  ///
-  /// ```swift
-  /// struct RequestBody: Encodable {
-  ///   let userId: String
-  /// }
-  ///
-  /// let (data, response) = try await functions.invoke("process-user") {
-  ///   $0.method = .post
-  ///   $0.body = try! JSONEncoder().encode(RequestBody(userId: "abc123"))
-  ///   $0.headers["Content-Type"] = "application/json"
-  /// }
-  /// print(response.statusCode) // 200
-  /// ```
+  /// - Note: The returned `HTTPURLResponse` carries the HTTP status code only. Response headers
+  ///   are not yet available through the generated client.
   @discardableResult
   public func invoke(
     _ functionName: String,
@@ -276,46 +160,6 @@ public actor FunctionsClient {
     var options = FunctionInvokeOptions()
     applyOptions(&options)
 
-    if let generatedClient {
-      return try await invokeViaGeneratedClient(
-        functionName: functionName,
-        options: options,
-        generatedClient: generatedClient
-      )
-    }
-
-    let (functionURL, method, query, allHeaders, body) = requestComponents(
-      functionName: functionName,
-      options: options
-    )
-
-    do {
-      let (data, response) = try await http.fetchData(
-        method,
-        url: functionURL,
-        query: query.isEmpty ? nil : query,
-        body: body,
-        headers: allHeaders.isEmpty ? nil : allHeaders
-      )
-
-      if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
-        throw FunctionsError.relayError
-      }
-
-      return (data, response)
-    } catch let error as HTTPClientError {
-      if case .responseError(let response, let data) = error {
-        throw FunctionsError.httpError(code: response.statusCode, data: data)
-      }
-      throw error
-    }
-  }
-
-  private func invokeViaGeneratedClient(
-    functionName: String,
-    options: FunctionInvokeOptions,
-    generatedClient: Client
-  ) async throws -> (Data, HTTPURLResponse) {
     let input = Operations.InvokeFunction.Input(
       path: .init(functionName: functionName),
       headers: .init(x_hyphen_region: (options.region ?? region)?.rawValue),
@@ -326,24 +170,18 @@ public actor FunctionsClient {
 
     switch output {
     case .ok(let response):
-      let data = try await Data(collecting: response.body.binary, upTo: .max)
-      let httpResponse = HTTPURLResponse(
-        url: url.appendingPathComponent(functionName),
-        statusCode: 200,
-        httpVersion: nil,
-        headerFields: nil
-      )!
-      return (data, httpResponse)
+      let httpBody = try response.body.binary
+      let data = try await Data(collecting: httpBody, upTo: .max)
+      return (data, fabricatedResponse(functionName: functionName, statusCode: 200))
+
     case .badRequest(let response):
-      let rawBody = response.body
       let data: Data
-      switch rawBody {
+      switch response.body {
       case .json(let body):
-        // Collect raw bytes so callers can inspect the full error payload.
-        let encoded = try JSONEncoder().encode(body)
-        data = encoded
+        data = (try? JSONEncoder().encode(body)) ?? Data()
       }
       throw FunctionsError.httpError(code: 400, data: data)
+
     case .undocumented(let statusCode, let payload):
       let data: Data
       if let body = payload.body {
@@ -352,13 +190,7 @@ public actor FunctionsClient {
         data = Data()
       }
       if statusCode >= 200 && statusCode < 300 {
-        let httpResponse = HTTPURLResponse(
-          url: url.appendingPathComponent(functionName),
-          statusCode: statusCode,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-        return (data, httpResponse)
+        return (data, fabricatedResponse(functionName: functionName, statusCode: statusCode))
       }
       throw FunctionsError.httpError(code: statusCode, data: data)
     }
@@ -367,29 +199,10 @@ public actor FunctionsClient {
   #if canImport(Darwin)
     /// Invokes a function and returns an async byte stream for the response body.
     ///
-    /// Use this method for functions that return large payloads or use server-sent events /
-    /// chunked transfer encoding. The stream yields individual `UInt8` bytes as they arrive.
+    /// The stream is backed directly by the `HTTPBody` from the generated client — bytes are
+    /// yielded chunk-by-chunk as they arrive from the server without any intermediate buffering.
     ///
-    /// - Parameters:
-    ///   - functionName: The name of the Edge Function to invoke.
-    ///   - options: A closure that configures ``FunctionInvokeOptions`` before the request is sent.
-    ///     Defaults to a no-op closure.
-    /// - Returns: A tuple of an `AsyncThrowingStream<UInt8, Error>` and the initial
-    ///   `HTTPURLResponse`.
-    /// - Throws: ``FunctionsError/relayError`` if the relay reports an error,
-    ///   ``FunctionsError/httpError(code:data:)`` for non-2xx responses, or a transport-level error.
-    ///
-    /// ## Example
-    ///
-    /// ```swift
-    /// let (stream, _) = try await functions.invokeStream("stream-data")
-    ///
-    /// var buffer = Data()
-    /// for try await byte in stream {
-    ///   buffer.append(byte)
-    /// }
-    /// print(String(data: buffer, encoding: .utf8) ?? "")
-    /// ```
+    /// - Note: The returned `HTTPURLResponse` carries the HTTP status code only.
     @available(macOS 12.0, *)
     public func invokeStream(
       _ functionName: String,
@@ -397,57 +210,64 @@ public actor FunctionsClient {
     ) async throws -> (AsyncThrowingStream<UInt8, any Error>, HTTPURLResponse) {
       var options = FunctionInvokeOptions()
       applyOptions(&options)
-      let (functionURL, method, query, allHeaders, body) = requestComponents(
-        functionName: functionName,
-        options: options
+
+      let input = Operations.InvokeFunction.Input(
+        path: .init(functionName: functionName),
+        headers: .init(x_hyphen_region: (options.region ?? region)?.rawValue),
+        body: options.body.map { .binary(HTTPBody($0)) }
       )
 
-      do {
-        let (bytes, response) = try await http.fetchStream(
-          method,
-          url: functionURL,
-          query: query.isEmpty ? nil : query,
-          body: body,
-          headers: allHeaders.isEmpty ? nil : allHeaders
-        )
+      let output = try await generatedClient.InvokeFunction(input)
 
-        if response.value(forHTTPHeaderField: "x-relay-error") == "true" {
-          throw FunctionsError.relayError
+      switch output {
+      case .ok(let response):
+        // Bridge HTTPBody (AsyncSequence<ArraySlice<UInt8>>) to AsyncThrowingStream<UInt8>.
+        // Bytes are forwarded chunk-by-chunk without intermediate buffering.
+        let httpBody = try response.body.binary
+        let stream = AsyncThrowingStream<UInt8, any Error> { continuation in
+          Task {
+            do {
+              for try await chunk in httpBody {
+                for byte in chunk {
+                  continuation.yield(byte)
+                }
+              }
+              continuation.finish()
+            } catch {
+              continuation.finish(throwing: error)
+            }
+          }
         }
+        return (stream, fabricatedResponse(functionName: functionName, statusCode: 200))
 
-        return (bytes, response)
-      } catch let error as HTTPClientError {
-        if case .responseError(let response, let data) = error {
-          throw FunctionsError.httpError(code: response.statusCode, data: data)
+      case .badRequest(let response):
+        let data: Data
+        switch response.body {
+        case .json(let body):
+          data = (try? JSONEncoder().encode(body)) ?? Data()
         }
-        throw error
+        throw FunctionsError.httpError(code: 400, data: data)
+
+      case .undocumented(let statusCode, let payload):
+        let data: Data
+        if let body = payload.body {
+          data = try await Data(collecting: body, upTo: .max)
+        } else {
+          data = Data()
+        }
+        throw FunctionsError.httpError(code: statusCode, data: data)
       }
     }
   #endif
 
-  private func requestComponents(
-    functionName: String,
-    options: FunctionInvokeOptions
-  ) -> (
-    url: URL,
-    method: HTTPMethod,
-    query: [String: String],
-    headers: [String: String],
-    body: RequestBody?
-  ) {
-    let method =
-      options.method.flatMap { HTTPMethod(rawValue: $0.rawValue) } ?? .post
-    var query = options.query
-    var allHeaders = headers.merging(options.headers) { _, new in new }
+  // MARK: - Private
 
-    if let region = (options.region ?? region)?.rawValue {
-      allHeaders["x-region"] = region
-      query["forceFunctionRegion"] = region
-    }
-
-    let body: RequestBody? = options.body.map { .data($0) }
-    return (
-      url.appendingPathComponent(functionName), method, query, allHeaders, body
-    )
+  private func fabricatedResponse(functionName: String, statusCode: Int) -> HTTPURLResponse {
+    HTTPURLResponse(
+      url: url.appendingPathComponent(functionName),
+      statusCode: statusCode,
+      httpVersion: nil,
+      headerFields: nil
+    )!
   }
 }
