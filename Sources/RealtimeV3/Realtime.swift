@@ -411,6 +411,8 @@ public actor Realtime {
     if let existing = connectTask {
       do {
         try await existing.value
+      } catch let error as RealtimeError {
+        throw error
       } catch {
         throw .transportFailure(underlying: error)
       }
@@ -426,9 +428,14 @@ public actor Realtime {
     do {
       try await task.value
       connectTask = nil
+    } catch let error as RealtimeError {
+      // Preserve a specific RealtimeError (e.g. from _openConnection); only wrap raw
+      // transport errors as `.transportFailure`.
+      connectTask = nil
+      throw error
     } catch {
       connectTask = nil
-      throw RealtimeError.transportFailure(underlying: error)
+      throw .transportFailure(underlying: error)
     }
   }
 
@@ -504,37 +511,42 @@ public actor Realtime {
   /// Used by both initial connect and reconnect.
   /// Internal (not private) so the reconnection loop in `Realtime+Reconnection.swift` can reuse it.
   func _openConnection() async throws -> any RealtimeConnection {
-    var components =
-      URLComponents(url: url, resolvingAgainstBaseURL: false)
-      ?? URLComponents()
-    // Append the Phoenix WebSocket endpoint path component if not already present.
-    // Supabase Realtime routes WebSocket upgrades at `.../websocket`.
-    // Guard against double-append in case the caller already included `/websocket`.
-    let existingPath = components.path
-    if !existingPath.hasSuffix("/websocket") {
-      components.path =
-        existingPath.hasSuffix("/")
-        ? existingPath + "websocket"
-        : existingPath + "/websocket"
-    }
-    var queryItems = components.queryItems ?? []
-    // Remove any pre-existing apikey / vsn entries to avoid duplication.
-    queryItems.removeAll { $0.name == "apikey" || $0.name == "vsn" }
-    queryItems.append(URLQueryItem(name: "apikey", value: apiKey))
-    // Send vsn so the backend can negotiate the binary serializer format.
-    // Configuration.protocolVersion carries the negotiated version (default: v2 = "2.0.0").
-    queryItems.append(
-      URLQueryItem(name: "vsn", value: configuration.protocolVersion.rawValue)
-    )
-    components.queryItems = queryItems
-    guard let connectURL = components.url else {
-      throw RealtimeError.transportFailure(underlying: URLError(.badURL))
-    }
+    let connectURL = try Self._connectURL(
+      base: url, apiKey: apiKey, vsn: configuration.protocolVersion.rawValue)
 
     var headers = configuration.headers
     headers["x-api-key"] = apiKey
 
     return try await transport.connect(to: connectURL, headers: headers)
+  }
+
+  /// Builds the WebSocket connect URL from `base`: appends the Phoenix `/websocket` endpoint
+  /// (idempotently — guards against a caller-supplied suffix), and sets the `apikey` + `vsn`
+  /// query items, replacing any pre-existing ones. Pure and synchronous so it is unit-testable
+  /// without a transport.
+  nonisolated static func _connectURL(
+    base: URL, apiKey: String, vsn: String
+  ) throws(RealtimeError) -> URL {
+    var components = URLComponents(url: base, resolvingAgainstBaseURL: false) ?? URLComponents()
+
+    // Supabase Realtime routes WebSocket upgrades at `.../websocket`.
+    let existingPath = components.path
+    if !existingPath.hasSuffix("/websocket") {
+      components.path =
+        existingPath.hasSuffix("/") ? existingPath + "websocket" : existingPath + "/websocket"
+    }
+
+    var queryItems = components.queryItems ?? []
+    queryItems.removeAll { $0.name == "apikey" || $0.name == "vsn" }
+    queryItems.append(URLQueryItem(name: "apikey", value: apiKey))
+    // `vsn` lets the backend negotiate the serializer format (default v2 = "2.0.0").
+    queryItems.append(URLQueryItem(name: "vsn", value: vsn))
+    components.queryItems = queryItems
+
+    guard let url = components.url else {
+      throw .transportFailure(underlying: URLError(.badURL))
+    }
+    return url
   }
 
   // MARK: - Leaked-channel deinit warning (Task 32)
@@ -712,25 +724,28 @@ public actor Realtime {
 
   // MARK: - Test shims
 
-  /// Registers a pending push with the in-flight registry and suspends until the
-  /// matching `phx_reply` arrives or the timeout fires.
-  ///
-  /// - Note: **Test-only**. Named with a leading underscore to discourage production use.
-  func _test_awaitReply(ref: String, timeoutError: RealtimeError) async throws -> PushReply {
-    try await inflightPushRegistry.awaitReply(
-      ref: ref,
-      timeout: configuration.joinTimeout,
-      clock: configuration.clock,
-      timeoutError: timeoutError
-    )
-  }
+  #if DEBUG
+    /// Registers a pending push with the in-flight registry and suspends until the
+    /// matching `phx_reply` arrives or the timeout fires.
+    ///
+    /// - Note: **Test-only**, compiled out of release builds.
+    func _test_awaitReply(ref: String, timeoutError: RealtimeError) async throws -> PushReply {
+      try await inflightPushRegistry.awaitReply(
+        ref: ref,
+        timeout: configuration.joinTimeout,
+        clock: configuration.clock,
+        timeoutError: timeoutError
+      )
+    }
 
-  /// The number of pushes currently registered with the in-flight registry.
-  ///
-  /// - Note: **Test-only**. Used to synchronize tests before injecting reply frames.
-  var _test_pendingCount: Int {
-    inflightPushRegistry.pendingCount
-  }
+    /// The number of pushes currently registered with the in-flight registry.
+    ///
+    /// - Note: **Test-only**, compiled out of release builds. Used to synchronize tests
+    ///   before injecting reply frames.
+    var _test_pendingCount: Int {
+      inflightPushRegistry.pendingCount
+    }
+  #endif
 
   // MARK: - Logging helper
 

@@ -605,18 +605,15 @@ public actor Channel {
           case .terminated(let reason):
             return .failure(.channelClosed(reason))
           case .message(let message):
-            guard message.event == .system,
-              case .json(let json) = message.payload,
-              let obj = json.objectValue,
-              obj["extension"]?.stringValue == "postgres_changes"
+            guard let system = SystemEventPayload(message), system.isPostgresChanges
             else { continue }
-            switch obj["status"]?.stringValue {
+            switch system.status {
             case "ok":
               return .success(())
             case "error":
               return .failure(
                 .postgresSubscriptionFailed(
-                  reason: obj["message"]?.stringValue ?? "postgres_changes subscription failed"))
+                  reason: system.message ?? "postgres_changes subscription failed"))
             default:
               continue
             }

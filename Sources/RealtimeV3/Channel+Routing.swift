@@ -137,23 +137,18 @@ extension Channel {
   /// The channel-close path guards on the current state so it is idempotent when the
   /// channel is already `.closed` or `.leaving`.
   private func _routeSystemEvent(_ message: PhoenixMessage) {
-    guard case .json(let jsonValue) = message.payload,
-      let obj = jsonValue.objectValue
-    else { return }
-
-    let ext = obj["extension"]?.stringValue
-    let status = obj["status"]?.stringValue
-    let msgText = obj["message"]?.stringValue
+    guard let system = SystemEventPayload(message) else { return }
+    let msgText = system.message
 
     // postgres_changes subscription error → handled by the postgres transforms; channel stays open.
-    if ext == "postgres_changes", status == "error" {
+    if system.isPostgresChanges, system.status == "error" {
       let reason = msgText ?? "Unknown postgres subscription error"
       log(.error, .postgres, "Postgres subscription error: \(reason)", metadata: ["topic": topic])
       return
     }
 
     // Non-postgres system error → close the whole channel.
-    guard status == "error" else { return }
+    guard system.status == "error" else { return }
 
     // Idempotency guard: if already terminal/leaving, do nothing.
     switch channelState {

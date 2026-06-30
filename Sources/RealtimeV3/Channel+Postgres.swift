@@ -218,12 +218,10 @@ extension Channel {
       switch message.event {
       case .system:
         // postgres_changes subscription error (H6) → fail this stream.
-        guard case .json(let jsonValue) = message.payload,
-          let obj = jsonValue.objectValue,
-          obj["extension"]?.stringValue == "postgres_changes",
-          obj["status"]?.stringValue == "error"
+        guard let system = SystemEventPayload(message),
+          system.isPostgresChanges, system.status == "error"
         else { return }
-        let reason = obj["message"]?.stringValue ?? "Unknown postgres subscription error"
+        let reason = system.message ?? "Unknown postgres subscription error"
         throw RealtimeError.postgresSubscriptionFailed(reason: reason)
 
       case .postgresChanges:
@@ -252,7 +250,7 @@ extension Channel {
           guard let record = dataObj["record"] else {
             throw decodeError("Insert<JSONValue>: missing record")
           }
-          element = record as! E.Element
+          element = try postgresElement(record, for: E.self)
 
         case .update:
           // E == Update<JSONValue>, E.Element == PostgresUpdate<JSONValue>
@@ -261,7 +259,7 @@ extension Channel {
           }
           let oldRecord: JSONValue? = dataObj["old_record"]
           let update = PostgresUpdate<JSONValue>(record: record, oldRecord: oldRecord)
-          element = update as! E.Element
+          element = try postgresElement(update, for: E.self)
 
         case .delete:
           // E == Delete<JSONValue>, E.Element == PostgresDelete<JSONValue>
@@ -270,7 +268,7 @@ extension Channel {
             throw decodeError("Delete<JSONValue>: missing old_record")
           }
           let del = PostgresDelete<JSONValue>(oldRecord: oldRecord)
-          element = del as! E.Element
+          element = try postgresElement(del, for: E.self)
 
         case .anyEvent:
           // E == AnyEvent<JSONValue>, E.Element == PostgresChange<JSONValue>
@@ -292,7 +290,7 @@ extension Channel {
             // Unrecognized event type is a decode failure for this stream.
             throw decodeError("AnyEvent<JSONValue>: unknown type '\(type_)'")
           }
-          element = change as! E.Element
+          element = try postgresElement(change, for: E.self)
         }
         continuation.yield(element)
 
@@ -309,6 +307,18 @@ private func decodeError(_ typeDescription: String) -> RealtimeError {
     type: typeDescription,
     underlying: PostgresDecodeError(description: "malformed postgres_changes data")
   )
+}
+
+/// Casts a constructed variant payload to `E.Element`. The cast holds by construction —
+/// `variantKind` is bound to `E` at registration — but throwing instead of force-casting honors
+/// the never-crash policy should that invariant ever be violated.
+private func postgresElement<E: ChangeEventVariant>(
+  _ value: Any, for _: E.Type
+) throws(RealtimeError) -> E.Element {
+  guard let element = value as? E.Element else {
+    throw decodeError("postgres_changes element type mismatch for \(E.Element.self)")
+  }
+  return element
 }
 
 // MARK: - State guard (internal)
