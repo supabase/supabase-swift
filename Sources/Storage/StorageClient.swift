@@ -248,11 +248,13 @@ public final class StorageClient: Sendable {
       tokenProvider: tokenProvider
     )
 
-    let transport = SupabaseClientTransport(
-      session: configuration.session,
+    let transport = SupabaseClientTransport(session: configuration.session)
+    let middleware = SupabaseMiddleware(
+      headers: configuration.headers,
       tokenProvider: tokenProvider
     )
-    generatedClient = try! Client(serverURL: resolvedURL, transport: transport)
+    generatedClient = try! Client(
+      serverURL: resolvedURL, transport: transport, middlewares: [middleware])
 
     let downloadDelegate = DownloadSessionDelegate()
     self.downloadDelegate = downloadDelegate
@@ -298,7 +300,9 @@ public final class StorageClient: Sendable {
       tokenProvider: nil
     )
 
-    generatedClient = try! Client(serverURL: resolvedURL, transport: transport)
+    let middleware = SupabaseMiddleware(headers: configuration.headers, tokenProvider: nil)
+    generatedClient = try! Client(
+      serverURL: resolvedURL, transport: transport, middlewares: [middleware])
 
     let downloadDelegate = DownloadSessionDelegate()
     self.downloadDelegate = downloadDelegate
