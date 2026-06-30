@@ -20,27 +20,6 @@ enum ChannelEvent: Sendable {
   case terminated(CloseReason)
 }
 
-/// The wire form of an outgoing channel push, consumed by `Channel._push`.
-///
-/// `text` is a JSON text frame (join, leave, presence, access_token); the two
-/// `broadcast*` cases are Phoenix binary broadcast frames (kind `0x03`) carrying
-/// either a JSON envelope or raw bytes.
-enum PushBody: Sendable {
-  case text(JSONObject)
-  case broadcastJSON(JSONObject)
-  case broadcastData(Data)
-}
-
-/// Whether an outgoing push awaits a `phx_reply`.
-///
-/// `require` suspends until the matching reply arrives or `timeout` elapses, throwing
-/// `error` on timeout. Best-effort sends (e.g. access_token) use `none` and/or a
-/// `try?` at the call site.
-enum AckPolicy: Sendable {
-  case none
-  case require(timeout: Duration, error: RealtimeError)
-}
-
 /// A Realtime channel that represents a named topic on the server.
 ///
 /// Obtain a `Channel` by calling `Realtime.channel(_:configure:)`. The channel's
@@ -334,19 +313,15 @@ public actor Channel {
   /// Encodes and sends a single Phoenix frame for this channel, optionally awaiting its
   /// `phx_reply`.
   ///
-  /// Centralizes the wire mechanics shared by every send path: ref generation, text/binary
-  /// encoding (mapping encode failures to `.encoding`), lazy-connect send, and — when
-  /// `ack == .require` — reply correlation via the in-flight registry. Send failures
-  /// (`.transportFailure`/`.disconnected`) propagate unchanged.
-  ///
-  /// Because the registry buffers early replies, awaiting *after* sending is race-free, so
-  /// every ack site uses this one flow (no manual pre-register task needed).
+  /// Thin wrapper over ``Realtime/_push(topic:_:_:ref:joinRef:lazyConnect:ack:)`` that
+  /// supplies this channel's `topic` and defaults `joinRef` to the channel's current
+  /// `joinRef`. All send paths (broadcast, presence, join, leave, access_token) funnel
+  /// through here.
   ///
   /// - Parameters:
   ///   - event: The Phoenix event for the frame.
   ///   - body: The wire payload (text JSON, or a binary broadcast frame).
-  ///   - ref: The push ref. Defaults to a fresh `nextRef()`; `join` passes its own ref so
-  ///     `ref == joinRef`.
+  ///   - ref: The push ref. Defaults to a fresh ref; `join` passes its own so `ref == joinRef`.
   ///   - joinRef: The join ref stamped on the frame. Defaults to the channel's current `joinRef`.
   ///   - ack: Whether to await a reply.
   /// - Returns: The `phx_reply` when `ack == .require`, otherwise `nil`.
@@ -359,39 +334,8 @@ public actor Channel {
     ack: AckPolicy = .none
   ) async throws(RealtimeError) -> PushReply? {
     guard let realtime else { throw .channelClosed(.clientDisconnected) }
-    let ref = ref ?? realtime.nextRef()
-    let jr = joinRef ?? self.joinRef
-    let serializer = realtime.serializer
-
-    do {
-      switch body {
-      case .text(let payload):
-        let text = try serializer.encodeText(
-          joinRef: jr, ref: ref, topic: topic, event: event.rawValue, payload: payload)
-        try await realtime.sendText(text)
-      case .broadcastJSON(let payload):
-        let data = try serializer.encodeBroadcastPush(
-          joinRef: jr, ref: ref, topic: topic, event: event.rawValue, jsonPayload: payload)
-        try await realtime.sendBinary(data)
-      case .broadcastData(let payload):
-        let data = try serializer.encodeBroadcastPush(
-          joinRef: jr, ref: ref, topic: topic, event: event.rawValue, binaryPayload: payload)
-        try await realtime.sendBinary(data)
-      }
-    } catch let error as RealtimeError {
-      // Send-side failures (transport/disconnect) propagate unchanged.
-      throw error
-    } catch {
-      // Encode failures map to `.encoding`.
-      throw .encoding(underlying: error)
-    }
-
-    switch ack {
-    case .none:
-      return nil
-    case .require(let timeout, let error):
-      return try await realtime.awaitReply(ref: ref, timeout: timeout, timeoutError: error)
-    }
+    return try await realtime._push(
+      topic: topic, event, body, ref: ref, joinRef: joinRef ?? self.joinRef, ack: ack)
   }
 
   /// Gates a send on the channel being `.joined`, mapping other states to the

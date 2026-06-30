@@ -11,6 +11,27 @@ import Foundation
 import Helpers
 import IssueReporting
 
+/// The wire form of an outgoing push, consumed by ``Realtime/_push(topic:_:_:ref:joinRef:lazyConnect:ack:)``.
+///
+/// `text` is a JSON text frame (join, leave, presence, access_token, heartbeat); the two
+/// `broadcast*` cases are Phoenix binary broadcast frames (kind `0x03`) carrying either a
+/// JSON envelope or raw bytes.
+enum PushBody: Sendable {
+  case text(JSONObject)
+  case broadcastJSON(JSONObject)
+  case broadcastData(Data)
+}
+
+/// Whether an outgoing push awaits a `phx_reply`.
+///
+/// `require` suspends until the matching reply arrives or `timeout` elapses, throwing
+/// `error` on timeout. Best-effort sends (e.g. access_token) use `none` and/or a
+/// `try?` at the call site.
+enum AckPolicy: Sendable {
+  case none
+  case require(timeout: Duration, error: RealtimeError)
+}
+
 /// The top-level Realtime client. Manages the WebSocket connection, channel registry,
 /// and distributes `ConnectionStatus` events to subscribers.
 ///
@@ -480,44 +501,41 @@ public actor Realtime {
   /// Cancels any pre-existing tasks first so they are never duplicated.
   func startConnectionTasks(connection: any RealtimeConnection) {
     startFrameRouting(connection: connection)
-    startHeartbeat(connection: connection)
+    startHeartbeat()
   }
 
   // MARK: - Heartbeat
 
   /// Starts the heartbeat loop and stores the task handle so it can be cancelled.
-  private func startHeartbeat(connection: any RealtimeConnection) {
+  private func startHeartbeat() {
     heartbeatTask?.cancel()
-    let heartbeatDuration = configuration.heartbeat
-    let clock = configuration.clock
-    let registry = inflightPushRegistry
-    let gen = refGenerator
-
     let heartbeater = Heartbeater(
-      heartbeat: heartbeatDuration,
-      clock: clock,
-      refGenerator: gen,
-      sendFrame: { text in
-        // connection is captured by-value (protocol existential, not a class).
-        // If it has been cleared the send is a no-op.
-        try await connection.send(.text(text))
-      },
-      awaitReply: { ref in
-        try await registry.awaitReply(
-          ref: ref,
-          timeout: heartbeatDuration,
-          clock: clock,
-          timeoutError: .disconnected
-        )
-      },
-      updateLatency: { [weak self] duration in
-        await self?.updateLatency(duration)
-      },
+      heartbeat: configuration.heartbeat,
+      clock: configuration.clock,
+      beat: { [weak self] in try await self?._sendHeartbeat() },
       onConnectionLost: { [weak self] error in
         await self?.handleConnectionLost(error)
       }
     )
     heartbeatTask = heartbeater.start()
+  }
+
+  /// Sends one `[null, ref, "phoenix", "heartbeat", {}]` frame on the current connection and
+  /// awaits its reply, updating `ConnectionStatus.latency` with the measured round-trip.
+  ///
+  /// Routes through ``_push`` with `lazyConnect: false`: a dead socket must surface as a
+  /// `.disconnected`/timeout (→ `onConnectionLost`) rather than trigger a reconnect. Throws
+  /// if the send fails or the reply times out, which the heartbeat loop maps to connection loss.
+  func _sendHeartbeat() async throws(RealtimeError) {
+    // Wall clock for round-trip measurement; scheduling/timeout uses `configuration.clock`.
+    let wallClock = ContinuousClock()
+    let sentAt = wallClock.now
+    _ = try await _push(
+      topic: "phoenix", .heartbeat, .text([:]),
+      joinRef: nil, lazyConnect: false,
+      ack: .require(timeout: configuration.heartbeat, error: .disconnected)
+    )
+    updateLatency(sentAt.duration(to: wallClock.now))
   }
 
   /// Updates `currentStatus.latency` in-place while preserving the current state.
@@ -889,41 +907,89 @@ public actor Realtime {
     refGenerator.next()
   }
 
-  /// Ensures the socket is connected (lazy open per spec §6.1), then sends a text frame.
+  /// Sends a raw frame on the current connection without lazy-connecting.
   ///
-  /// Throws `.disconnected` if no connection is available after the connect attempt.
-  func sendText(_ text: String) async throws(RealtimeError) {
-    // Lazy connect: establish the socket if not already connected.
-    // `connect()` is idempotent — a no-op if already connected.
-    try await connect()
-
+  /// Throws `.disconnected` if no connection is available, `.transportFailure` if the send
+  /// fails. This is the single point where any frame reaches the socket.
+  func _rawSend(_ frame: TransportFrame) async throws(RealtimeError) {
     guard let conn = connection else {
       throw .disconnected
     }
-
     do {
-      try await conn.send(.text(text))
+      try await conn.send(frame)
     } catch {
       throw .transportFailure(underlying: error)
     }
   }
 
-  /// Ensures the socket is connected (lazy open per spec §6.1), then sends a binary frame.
+  /// Encodes and sends a single Phoenix frame, optionally awaiting its `phx_reply`.
   ///
-  /// Used by `Channel.broadcast(_:as:)` which always sends the Phoenix binary push format
-  /// (kind byte `0x03`). Throws `.disconnected` if no connection is available.
-  func sendBinary(_ data: Data) async throws(RealtimeError) {
-    // Lazy connect: establish the socket if not already connected.
-    try await connect()
+  /// The single funnel for every framed send — channel pushes (broadcast, presence, join,
+  /// leave, access_token) and the connection heartbeat all route through here. Handles ref
+  /// generation, text/binary encoding (mapping encode failures to `.encoding`), the send,
+  /// and — when `ack == .require` — reply correlation via the in-flight registry. Send
+  /// failures (`.transportFailure`/`.disconnected`) propagate unchanged.
+  ///
+  /// Because the registry buffers early replies, awaiting *after* sending is race-free, so
+  /// every ack site uses this one flow (no manual pre-register task needed).
+  ///
+  /// - Parameters:
+  ///   - topic: The Phoenix topic (e.g. a channel's `realtime:` topic, or `"phoenix"` for heartbeat).
+  ///   - event: The Phoenix event for the frame.
+  ///   - body: The wire payload (text JSON, or a binary broadcast frame).
+  ///   - ref: The push ref. Defaults to a fresh `nextRef()`; `join` passes its own ref so
+  ///     `ref == joinRef`.
+  ///   - joinRef: The join ref stamped on the frame.
+  ///   - lazyConnect: When `true` (default) the socket is opened if needed before sending
+  ///     (spec §6.1). The heartbeat passes `false` — it must report a dead connection via the
+  ///     ack timeout rather than trigger a reconnect.
+  ///   - ack: Whether to await a reply.
+  /// - Returns: The `phx_reply` when `ack == .require`, otherwise `nil`.
+  @discardableResult
+  func _push(
+    topic: String,
+    _ event: PhoenixEvent,
+    _ body: PushBody,
+    ref: String? = nil,
+    joinRef: String? = nil,
+    lazyConnect: Bool = true,
+    ack: AckPolicy = .none
+  ) async throws(RealtimeError) -> PushReply? {
+    let ref = ref ?? nextRef()
 
-    guard let conn = connection else {
-      throw .disconnected
+    let frame: TransportFrame
+    do {
+      switch body {
+      case .text(let payload):
+        frame = .text(
+          try serializer.encodeText(
+            joinRef: joinRef, ref: ref, topic: topic, event: event.rawValue, payload: payload))
+      case .broadcastJSON(let payload):
+        frame = .binary(
+          try serializer.encodeBroadcastPush(
+            joinRef: joinRef, ref: ref, topic: topic, event: event.rawValue, jsonPayload: payload))
+      case .broadcastData(let payload):
+        frame = .binary(
+          try serializer.encodeBroadcastPush(
+            joinRef: joinRef, ref: ref, topic: topic, event: event.rawValue, binaryPayload: payload)
+        )
+      }
+    } catch {
+      throw .encoding(underlying: error)
     }
 
-    do {
-      try await conn.send(.binary(data))
-    } catch {
-      throw .transportFailure(underlying: error)
+    // Lazy connect (idempotent) then send. The heartbeat opts out so a dead socket surfaces
+    // as `.disconnected` rather than kicking off a reconnect that races the recovery loop.
+    if lazyConnect {
+      try await connect()
+    }
+    try await _rawSend(frame)
+
+    switch ack {
+    case .none:
+      return nil
+    case .require(let timeout, let error):
+      return try await awaitReply(ref: ref, timeout: timeout, timeoutError: error)
     }
   }
 
