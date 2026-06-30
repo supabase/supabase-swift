@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import OpenAPIRuntime
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -70,6 +71,7 @@ public actor FunctionsClient {
   public private(set) var headers: [String: String] = [:]
 
   private let http: _HTTPClient
+  private let generatedClient: Client?
 
   /// Creates a `FunctionsClient` for standalone use (without a ``SupabaseClient``).
   ///
@@ -130,6 +132,33 @@ public actor FunctionsClient {
       session: session,
       tokenProvider: tokenProvider
     )
+    self.generatedClient = nil
+    self.headers = headers
+    if self.headers["X-Client-Info"] == nil {
+      self.headers["X-Client-Info"] = "functions-swift/\(version)"
+    }
+  }
+
+  /// Creates a `FunctionsClient` backed by the generated OpenAPI client for testing.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL for the functions endpoint.
+  ///   - headers: Additional headers included in every request.
+  ///   - region: The default region to invoke functions in.
+  ///   - transport: A `ClientTransport` used by the generated client (e.g. `MockTransport` in tests).
+  ///   - decoder: The `JSONDecoder` used by `invokeDecodable`.
+  package init(
+    url: URL,
+    headers: [String: String] = [:],
+    region: FunctionRegion? = nil,
+    transport: any ClientTransport,
+    decoder: JSONDecoder = JSONDecoder()
+  ) {
+    self.url = url
+    self.region = region
+    self.decoder = decoder
+    self.http = _HTTPClient(host: url)
+    self.generatedClient = Client(serverURL: url, transport: transport)
     self.headers = headers
     if self.headers["X-Client-Info"] == nil {
       self.headers["X-Client-Info"] = "functions-swift/\(version)"
@@ -239,6 +268,15 @@ public actor FunctionsClient {
   ) async throws -> (Data, HTTPURLResponse) {
     var options = FunctionInvokeOptions()
     applyOptions(&options)
+
+    if let generatedClient {
+      return try await invokeViaGeneratedClient(
+        functionName: functionName,
+        options: options,
+        generatedClient: generatedClient
+      )
+    }
+
     let (functionURL, method, query, allHeaders, body) = requestComponents(
       functionName: functionName,
       options: options
@@ -263,6 +301,57 @@ public actor FunctionsClient {
         throw FunctionsError.httpError(code: response.statusCode, data: data)
       }
       throw error
+    }
+  }
+
+  private func invokeViaGeneratedClient(
+    functionName: String,
+    options: FunctionInvokeOptions,
+    generatedClient: Client
+  ) async throws -> (Data, HTTPURLResponse) {
+    let input = Operations.InvokeFunction.Input(
+      path: .init(functionName: functionName),
+      headers: .init(x_hyphen_region: (options.region ?? region)?.rawValue),
+      body: options.body.map { .binary(HTTPBody($0)) }
+    )
+
+    let output = try await generatedClient.InvokeFunction(input)
+
+    switch output {
+    case .ok(let response):
+      let data = try await Data(collecting: response.body.binary, upTo: .max)
+      let httpResponse = HTTPURLResponse(
+        url: url.appendingPathComponent(functionName),
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: nil
+      )!
+      return (data, httpResponse)
+    case .badRequest(let response):
+      let body = try response.body.json
+      let data = (body.message ?? "").data(using: .utf8) ?? Data()
+      throw FunctionsError.httpError(code: 400, data: data)
+    case .undocumented(let statusCode, let payload):
+      // Check for relay error header in undocumented responses.
+      if payload.headerFields[.init("x-relay-error")!] == "true" {
+        throw FunctionsError.relayError
+      }
+      let data: Data
+      if let body = payload.body {
+        data = try await Data(collecting: body, upTo: .max)
+      } else {
+        data = Data()
+      }
+      if statusCode >= 200 && statusCode < 300 {
+        let httpResponse = HTTPURLResponse(
+          url: url.appendingPathComponent(functionName),
+          statusCode: statusCode,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+        return (data, httpResponse)
+      }
+      throw FunctionsError.httpError(code: statusCode, data: data)
     }
   }
 

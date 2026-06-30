@@ -95,6 +95,7 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "Replay", package: "Replay"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Functions",
         "Mocker",
