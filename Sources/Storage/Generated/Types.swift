@@ -62,6 +62,23 @@ internal protocol APIProtocol: Sendable {
     /// - Remark: HTTP `HEAD /object/{bucketId}/{wildcardPath+}`.
     /// - Remark: Generated from `#/paths//object/{bucketId}/{wildcardPath+}/head(HeadObject)`.
     func HeadObject(_ input: Operations.HeadObject.Input) async throws -> Operations.HeadObject.Output
+    /// Step 1: Create a new TUS upload session.
+    /// The server responds with a Location header containing the upload URL.
+    ///
+    /// - Remark: HTTP `POST /upload/resumable`.
+    /// - Remark: Generated from `#/paths//upload/resumable/post(CreateTusUpload)`.
+    func CreateTusUpload(_ input: Operations.CreateTusUpload.Input) async throws -> Operations.CreateTusUpload.Output
+    /// Step 2: Upload a chunk of data to an existing TUS session.
+    /// Repeat with increasing Upload-Offset until all bytes are sent.
+    ///
+    /// - Remark: HTTP `PATCH /upload/resumable/{uploadId}`.
+    /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/patch(UploadChunk)`.
+    func UploadChunk(_ input: Operations.UploadChunk.Input) async throws -> Operations.UploadChunk.Output
+    /// Step 3: Query the server-side offset of a TUS session (used when resuming).
+    ///
+    /// - Remark: HTTP `HEAD /upload/resumable/{uploadId}`.
+    /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/head(GetUploadOffset)`.
+    func GetUploadOffset(_ input: Operations.GetUploadOffset.Input) async throws -> Operations.GetUploadOffset.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -257,6 +274,43 @@ extension APIProtocol {
         headers: Operations.HeadObject.Input.Headers = .init()
     ) async throws -> Operations.HeadObject.Output {
         try await HeadObject(Operations.HeadObject.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Step 1: Create a new TUS upload session.
+    /// The server responds with a Location header containing the upload URL.
+    ///
+    /// - Remark: HTTP `POST /upload/resumable`.
+    /// - Remark: Generated from `#/paths//upload/resumable/post(CreateTusUpload)`.
+    internal func CreateTusUpload(headers: Operations.CreateTusUpload.Input.Headers) async throws -> Operations.CreateTusUpload.Output {
+        try await CreateTusUpload(Operations.CreateTusUpload.Input(headers: headers))
+    }
+    /// Step 2: Upload a chunk of data to an existing TUS session.
+    /// Repeat with increasing Upload-Offset until all bytes are sent.
+    ///
+    /// - Remark: HTTP `PATCH /upload/resumable/{uploadId}`.
+    /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/patch(UploadChunk)`.
+    internal func UploadChunk(
+        path: Operations.UploadChunk.Input.Path,
+        headers: Operations.UploadChunk.Input.Headers,
+        body: Operations.UploadChunk.Input.Body
+    ) async throws -> Operations.UploadChunk.Output {
+        try await UploadChunk(Operations.UploadChunk.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Step 3: Query the server-side offset of a TUS session (used when resuming).
+    ///
+    /// - Remark: HTTP `HEAD /upload/resumable/{uploadId}`.
+    /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/head(GetUploadOffset)`.
+    internal func GetUploadOffset(
+        path: Operations.GetUploadOffset.Input.Path,
+        headers: Operations.GetUploadOffset.Input.Headers
+    ) async throws -> Operations.GetUploadOffset.Output {
+        try await GetUploadOffset(Operations.GetUploadOffset.Input(
             path: path,
             headers: headers
         ))
@@ -955,6 +1009,10 @@ internal enum Components {
                 case allowed_mime_types
             }
         }
+        /// Raw chunk bytes, streamed directly — never buffered.
+        ///
+        /// - Remark: Generated from `#/components/schemas/UploadChunkInputPayload`.
+        internal typealias UploadChunkInputPayload = OpenAPIRuntime.HTTPBody
         /// - Remark: Generated from `#/components/schemas/FileUploadedResponse`.
         internal struct FileUploadedResponse: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/FileUploadedResponse/Key`.
@@ -4057,6 +4115,574 @@ internal enum Operations {
             /// - Throws: An error if `self` is not `.badRequest`.
             /// - SeeAlso: `.badRequest`.
             internal var badRequest: Operations.HeadObject.Output.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Step 1: Create a new TUS upload session.
+    /// The server responds with a Location header containing the upload URL.
+    ///
+    /// - Remark: HTTP `POST /upload/resumable`.
+    /// - Remark: Generated from `#/paths//upload/resumable/post(CreateTusUpload)`.
+    internal enum CreateTusUpload {
+        internal static let id: Swift.String = "CreateTusUpload"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/upload/resumable/POST/header`.
+            internal struct Headers: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/POST/header/Tus-Resumable`.
+                internal var Tus_hyphen_Resumable: Swift.String
+                /// Total size of the file in bytes.
+                ///
+                /// - Remark: Generated from `#/paths/upload/resumable/POST/header/Upload-Length`.
+                internal var Upload_hyphen_Length: Swift.Double
+                /// Base64-encoded TUS metadata (bucketName, objectName, contentType, cacheControl).
+                ///
+                /// - Remark: Generated from `#/paths/upload/resumable/POST/header/Upload-Metadata`.
+                internal var Upload_hyphen_Metadata: Swift.String
+                /// Set to "true" to overwrite an existing object at the same path.
+                ///
+                /// - Remark: Generated from `#/paths/upload/resumable/POST/header/x-upsert`.
+                internal var x_hyphen_upsert: Swift.String?
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateTusUpload.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - Tus_hyphen_Resumable:
+                ///   - Upload_hyphen_Length: Total size of the file in bytes.
+                ///   - Upload_hyphen_Metadata: Base64-encoded TUS metadata (bucketName, objectName, contentType, cacheControl).
+                ///   - x_hyphen_upsert: Set to "true" to overwrite an existing object at the same path.
+                ///   - accept:
+                internal init(
+                    Tus_hyphen_Resumable: Swift.String,
+                    Upload_hyphen_Length: Swift.Double,
+                    Upload_hyphen_Metadata: Swift.String,
+                    x_hyphen_upsert: Swift.String? = nil,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateTusUpload.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.Tus_hyphen_Resumable = Tus_hyphen_Resumable
+                    self.Upload_hyphen_Length = Upload_hyphen_Length
+                    self.Upload_hyphen_Metadata = Upload_hyphen_Metadata
+                    self.x_hyphen_upsert = x_hyphen_upsert
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.CreateTusUpload.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            internal init(headers: Operations.CreateTusUpload.Input.Headers) {
+                self.headers = headers
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/POST/responses/201/headers`.
+                internal struct Headers: Sendable, Hashable {
+                    /// Full URL of the created upload session. Used in subsequent PATCH/HEAD requests.
+                    ///
+                    /// - Remark: Generated from `#/paths/upload/resumable/POST/responses/201/headers/Location`.
+                    internal var Location: Swift.String
+                    /// Creates a new `Headers`.
+                    ///
+                    /// - Parameters:
+                    ///   - Location: Full URL of the created upload session. Used in subsequent PATCH/HEAD requests.
+                    internal init(Location: Swift.String) {
+                        self.Location = Location
+                    }
+                }
+                /// Received HTTP response headers
+                internal var headers: Operations.CreateTusUpload.Output.Created.Headers
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - headers: Received HTTP response headers
+                internal init(headers: Operations.CreateTusUpload.Output.Created.Headers) {
+                    self.headers = headers
+                }
+            }
+            /// CreateTusUpload 201 response
+            ///
+            /// - Remark: Generated from `#/paths//upload/resumable/post(CreateTusUpload)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.CreateTusUpload.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            internal var created: Operations.CreateTusUpload.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct BadRequest: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/POST/responses/400/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/upload/resumable/POST/responses/400/content/application\/json`.
+                    case json(Components.Schemas.StorageErrorResponseContent)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.StorageErrorResponseContent {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.CreateTusUpload.Output.BadRequest.Body
+                /// Creates a new `BadRequest`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.CreateTusUpload.Output.BadRequest.Body) {
+                    self.body = body
+                }
+            }
+            /// StorageError 400 response
+            ///
+            /// - Remark: Generated from `#/paths//upload/resumable/post(CreateTusUpload)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Operations.CreateTusUpload.Output.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            internal var badRequest: Operations.CreateTusUpload.Output.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Step 2: Upload a chunk of data to an existing TUS session.
+    /// Repeat with increasing Upload-Offset until all bytes are sent.
+    ///
+    /// - Remark: HTTP `PATCH /upload/resumable/{uploadId}`.
+    /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/patch(UploadChunk)`.
+    internal enum UploadChunk {
+        internal static let id: Swift.String = "UploadChunk"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/PATCH/path`.
+            internal struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/PATCH/path/uploadId`.
+                internal var uploadId: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - uploadId:
+                internal init(uploadId: Swift.String) {
+                    self.uploadId = uploadId
+                }
+            }
+            internal var path: Operations.UploadChunk.Input.Path
+            /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/PATCH/header`.
+            internal struct Headers: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/PATCH/header/Tus-Resumable`.
+                internal var Tus_hyphen_Resumable: Swift.String
+                /// Byte offset at which this chunk begins.
+                ///
+                /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/PATCH/header/Upload-Offset`.
+                internal var Upload_hyphen_Offset: Swift.Double
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.UploadChunk.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - Tus_hyphen_Resumable:
+                ///   - Upload_hyphen_Offset: Byte offset at which this chunk begins.
+                ///   - accept:
+                internal init(
+                    Tus_hyphen_Resumable: Swift.String,
+                    Upload_hyphen_Offset: Swift.Double,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.UploadChunk.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.Tus_hyphen_Resumable = Tus_hyphen_Resumable
+                    self.Upload_hyphen_Offset = Upload_hyphen_Offset
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.UploadChunk.Input.Headers
+            /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/PATCH/requestBody`.
+            internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/PATCH/requestBody/content/application\/octet-stream`.
+                case binary(OpenAPIRuntime.HTTPBody)
+            }
+            internal var body: Operations.UploadChunk.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            internal init(
+                path: Operations.UploadChunk.Input.Path,
+                headers: Operations.UploadChunk.Input.Headers,
+                body: Operations.UploadChunk.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct NoContent: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/PATCH/responses/204/headers`.
+                internal struct Headers: Sendable, Hashable {
+                    /// New server-side offset after the chunk was accepted.
+                    ///
+                    /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/PATCH/responses/204/headers/Upload-Offset`.
+                    internal var Upload_hyphen_Offset: Swift.Double
+                    /// Creates a new `Headers`.
+                    ///
+                    /// - Parameters:
+                    ///   - Upload_hyphen_Offset: New server-side offset after the chunk was accepted.
+                    internal init(Upload_hyphen_Offset: Swift.Double) {
+                        self.Upload_hyphen_Offset = Upload_hyphen_Offset
+                    }
+                }
+                /// Received HTTP response headers
+                internal var headers: Operations.UploadChunk.Output.NoContent.Headers
+                /// Creates a new `NoContent`.
+                ///
+                /// - Parameters:
+                ///   - headers: Received HTTP response headers
+                internal init(headers: Operations.UploadChunk.Output.NoContent.Headers) {
+                    self.headers = headers
+                }
+            }
+            /// UploadChunk 204 response
+            ///
+            /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/patch(UploadChunk)/responses/204`.
+            ///
+            /// HTTP response code: `204 noContent`.
+            case noContent(Operations.UploadChunk.Output.NoContent)
+            /// The associated value of the enum case if `self` is `.noContent`.
+            ///
+            /// - Throws: An error if `self` is not `.noContent`.
+            /// - SeeAlso: `.noContent`.
+            internal var noContent: Operations.UploadChunk.Output.NoContent {
+                get throws {
+                    switch self {
+                    case let .noContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "noContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct BadRequest: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/PATCH/responses/400/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/PATCH/responses/400/content/application\/json`.
+                    case json(Components.Schemas.StorageErrorResponseContent)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.StorageErrorResponseContent {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.UploadChunk.Output.BadRequest.Body
+                /// Creates a new `BadRequest`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.UploadChunk.Output.BadRequest.Body) {
+                    self.body = body
+                }
+            }
+            /// StorageError 400 response
+            ///
+            /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/patch(UploadChunk)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Operations.UploadChunk.Output.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            internal var badRequest: Operations.UploadChunk.Output.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Step 3: Query the server-side offset of a TUS session (used when resuming).
+    ///
+    /// - Remark: HTTP `HEAD /upload/resumable/{uploadId}`.
+    /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/head(GetUploadOffset)`.
+    internal enum GetUploadOffset {
+        internal static let id: Swift.String = "GetUploadOffset"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/HEAD/path`.
+            internal struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/HEAD/path/uploadId`.
+                internal var uploadId: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - uploadId:
+                internal init(uploadId: Swift.String) {
+                    self.uploadId = uploadId
+                }
+            }
+            internal var path: Operations.GetUploadOffset.Input.Path
+            /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/HEAD/header`.
+            internal struct Headers: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/HEAD/header/Tus-Resumable`.
+                internal var Tus_hyphen_Resumable: Swift.String
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetUploadOffset.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - Tus_hyphen_Resumable:
+                ///   - accept:
+                internal init(
+                    Tus_hyphen_Resumable: Swift.String,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetUploadOffset.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.Tus_hyphen_Resumable = Tus_hyphen_Resumable
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.GetUploadOffset.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            internal init(
+                path: Operations.GetUploadOffset.Input.Path,
+                headers: Operations.GetUploadOffset.Input.Headers
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/HEAD/responses/200/headers`.
+                internal struct Headers: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/HEAD/responses/200/headers/Upload-Offset`.
+                    internal var Upload_hyphen_Offset: Swift.Double
+                    /// Creates a new `Headers`.
+                    ///
+                    /// - Parameters:
+                    ///   - Upload_hyphen_Offset:
+                    internal init(Upload_hyphen_Offset: Swift.Double) {
+                        self.Upload_hyphen_Offset = Upload_hyphen_Offset
+                    }
+                }
+                /// Received HTTP response headers
+                internal var headers: Operations.GetUploadOffset.Output.Ok.Headers
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - headers: Received HTTP response headers
+                internal init(headers: Operations.GetUploadOffset.Output.Ok.Headers) {
+                    self.headers = headers
+                }
+            }
+            /// GetUploadOffset 200 response
+            ///
+            /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/head(GetUploadOffset)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetUploadOffset.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.GetUploadOffset.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct BadRequest: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/HEAD/responses/400/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/upload/resumable/{uploadId}/HEAD/responses/400/content/application\/json`.
+                    case json(Components.Schemas.StorageErrorResponseContent)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.StorageErrorResponseContent {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetUploadOffset.Output.BadRequest.Body
+                /// Creates a new `BadRequest`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetUploadOffset.Output.BadRequest.Body) {
+                    self.body = body
+                }
+            }
+            /// StorageError 400 response
+            ///
+            /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/head(GetUploadOffset)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Operations.GetUploadOffset.Output.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            internal var badRequest: Operations.GetUploadOffset.Output.BadRequest {
                 get throws {
                     switch self {
                     case let .badRequest(response):

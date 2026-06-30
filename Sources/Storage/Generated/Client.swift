@@ -1519,4 +1519,255 @@ internal struct Client: APIProtocol {
             }
         )
     }
+    /// Step 1: Create a new TUS upload session.
+    /// The server responds with a Location header containing the upload URL.
+    ///
+    /// - Remark: HTTP `POST /upload/resumable`.
+    /// - Remark: Generated from `#/paths//upload/resumable/post(CreateTusUpload)`.
+    internal func CreateTusUpload(_ input: Operations.CreateTusUpload.Input) async throws -> Operations.CreateTusUpload.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.CreateTusUpload.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/upload/resumable",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .post
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "Tus-Resumable",
+                    value: input.headers.Tus_hyphen_Resumable
+                )
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "Upload-Length",
+                    value: input.headers.Upload_hyphen_Length
+                )
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "Upload-Metadata",
+                    value: input.headers.Upload_hyphen_Metadata
+                )
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "x-upsert",
+                    value: input.headers.x_hyphen_upsert
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 201:
+                    let headers: Operations.CreateTusUpload.Output.Created.Headers = .init(Location: try converter.getRequiredHeaderFieldAsURI(
+                        in: response.headerFields,
+                        name: "Location",
+                        as: Swift.String.self
+                    ))
+                    return .created(.init(headers: headers))
+                case 400:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.CreateTusUpload.Output.BadRequest.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.StorageErrorResponseContent.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .badRequest(.init(body: body))
+                default:
+                    return .undocumented(
+                        statusCode: response.status.code,
+                        .init(
+                            headerFields: response.headerFields,
+                            body: responseBody
+                        )
+                    )
+                }
+            }
+        )
+    }
+    /// Step 2: Upload a chunk of data to an existing TUS session.
+    /// Repeat with increasing Upload-Offset until all bytes are sent.
+    ///
+    /// - Remark: HTTP `PATCH /upload/resumable/{uploadId}`.
+    /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/patch(UploadChunk)`.
+    internal func UploadChunk(_ input: Operations.UploadChunk.Input) async throws -> Operations.UploadChunk.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.UploadChunk.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/upload/resumable/{}",
+                    parameters: [
+                        input.path.uploadId
+                    ]
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .patch
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "Tus-Resumable",
+                    value: input.headers.Tus_hyphen_Resumable
+                )
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "Upload-Offset",
+                    value: input.headers.Upload_hyphen_Offset
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                let body: OpenAPIRuntime.HTTPBody?
+                switch input.body {
+                case let .binary(value):
+                    body = try converter.setRequiredRequestBodyAsBinary(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/octet-stream"
+                    )
+                }
+                return (request, body)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 204:
+                    let headers: Operations.UploadChunk.Output.NoContent.Headers = .init(Upload_hyphen_Offset: try converter.getRequiredHeaderFieldAsURI(
+                        in: response.headerFields,
+                        name: "Upload-Offset",
+                        as: Swift.Double.self
+                    ))
+                    return .noContent(.init(headers: headers))
+                case 400:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.UploadChunk.Output.BadRequest.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.StorageErrorResponseContent.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .badRequest(.init(body: body))
+                default:
+                    return .undocumented(
+                        statusCode: response.status.code,
+                        .init(
+                            headerFields: response.headerFields,
+                            body: responseBody
+                        )
+                    )
+                }
+            }
+        )
+    }
+    /// Step 3: Query the server-side offset of a TUS session (used when resuming).
+    ///
+    /// - Remark: HTTP `HEAD /upload/resumable/{uploadId}`.
+    /// - Remark: Generated from `#/paths//upload/resumable/{uploadId}/head(GetUploadOffset)`.
+    internal func GetUploadOffset(_ input: Operations.GetUploadOffset.Input) async throws -> Operations.GetUploadOffset.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetUploadOffset.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/upload/resumable/{}",
+                    parameters: [
+                        input.path.uploadId
+                    ]
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .head
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "Tus-Resumable",
+                    value: input.headers.Tus_hyphen_Resumable
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let headers: Operations.GetUploadOffset.Output.Ok.Headers = .init(Upload_hyphen_Offset: try converter.getRequiredHeaderFieldAsURI(
+                        in: response.headerFields,
+                        name: "Upload-Offset",
+                        as: Swift.Double.self
+                    ))
+                    return .ok(.init(headers: headers))
+                case 400:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetUploadOffset.Output.BadRequest.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.StorageErrorResponseContent.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .badRequest(.init(body: body))
+                default:
+                    return .undocumented(
+                        statusCode: response.status.code,
+                        .init(
+                            headerFields: response.headerFields,
+                            body: responseBody
+                        )
+                    )
+                }
+            }
+        )
+    }
 }

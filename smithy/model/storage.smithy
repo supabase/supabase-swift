@@ -25,6 +25,9 @@ service StorageService {
     CreateSignedUrl
     CreateSignedUrls
     CreateSignedUploadUrl
+    CreateTusUpload
+    UploadChunk
+    GetUploadOffset
   ]
   errors: [StorageError]
 }
@@ -289,6 +292,113 @@ structure CreateSignedUploadUrlInput {
 
 structure CreateSignedUploadUrlOutput {
   @required url: String
+}
+
+// ─── TUS Resumable Upload Operations ───────────────────────────────────────
+//
+// Models the three HTTP operations of the TUS 1.0.0 protocol. The application-
+// level state machine (chunk sequencing, 409 retry, pause/resume) is NOT
+// generated — it lives in TUSUploadEngine, which calls these operations.
+
+/// Step 1: Create a new TUS upload session.
+/// The server responds with a Location header containing the upload URL.
+@http(method: "POST", uri: "/upload/resumable", code: 201)
+operation CreateTusUpload {
+  input: CreateTusUploadInput
+  output: CreateTusUploadOutput
+  errors: [StorageError]
+}
+
+structure CreateTusUploadInput {
+  /// Total size of the file in bytes.
+  @httpHeader("Upload-Length")
+  @required
+  uploadLength: Long
+
+  /// Base64-encoded TUS metadata (bucketName, objectName, contentType, cacheControl).
+  @httpHeader("Upload-Metadata")
+  @required
+  uploadMetadata: String
+
+  @httpHeader("Tus-Resumable")
+  @required
+  tusResumable: String
+
+  /// Set to "true" to overwrite an existing object at the same path.
+  @httpHeader("x-upsert")
+  upsert: String
+}
+
+structure CreateTusUploadOutput {
+  /// Full URL of the created upload session. Used in subsequent PATCH/HEAD requests.
+  @httpHeader("Location")
+  @required
+  location: String
+}
+
+/// Step 2: Upload a chunk of data to an existing TUS session.
+/// Repeat with increasing Upload-Offset until all bytes are sent.
+@http(method: "PATCH", uri: "/upload/resumable/{uploadId}", code: 204)
+@suppress(["HttpMethodSemantics.UnexpectedPayload"])
+operation UploadChunk {
+  input: UploadChunkInput
+  output: UploadChunkOutput
+  errors: [StorageError]
+}
+
+@streaming
+blob ChunkBody
+
+structure UploadChunkInput {
+  @httpLabel
+  @required
+  uploadId: String
+
+  /// Byte offset at which this chunk begins.
+  @httpHeader("Upload-Offset")
+  @required
+  uploadOffset: Long
+
+  @httpHeader("Tus-Resumable")
+  @required
+  tusResumable: String
+
+  /// Raw chunk bytes, streamed directly — never buffered.
+  @httpPayload
+  @required
+  body: ChunkBody
+}
+
+structure UploadChunkOutput {
+  /// New server-side offset after the chunk was accepted.
+  @httpHeader("Upload-Offset")
+  @required
+  uploadOffset: Long
+}
+
+/// Step 3: Query the server-side offset of a TUS session (used when resuming).
+@http(method: "HEAD", uri: "/upload/resumable/{uploadId}", code: 200)
+@readonly
+operation GetUploadOffset {
+  input: GetUploadOffsetInput
+  output: GetUploadOffsetOutput
+  errors: [StorageError]
+}
+
+structure GetUploadOffsetInput {
+  @httpLabel
+  @required
+  uploadId: String
+
+  @httpHeader("Tus-Resumable")
+  @required
+  tusResumable: String
+}
+
+structure GetUploadOffsetOutput {
+  @httpHeader("Upload-Offset")
+  @required
+  uploadOffset: Long
 }
 
 // ─── Shared Shapes ─────────────────────────────────────────────────────────

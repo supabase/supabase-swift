@@ -103,6 +103,7 @@ generate-smithy:
 	cd smithy && smithy build
 	cp smithy/build/smithy/storage-openapi/openapi/StorageService.openapi.json smithy/output/openapi/StorageService.openapi.json
 	cp smithy/build/smithy/functions-openapi/openapi/FunctionsService.openapi.json smithy/output/openapi/FunctionsService.openapi.json
+	python3 smithy/patch-openapi.py smithy/output/openapi/StorageService.openapi.json
 
 generate-swift-storage: check-swift-openapi-generator
 	swift-openapi-generator generate \
