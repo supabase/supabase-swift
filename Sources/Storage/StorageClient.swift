@@ -248,8 +248,11 @@ public final class StorageClient: Sendable {
       tokenProvider: tokenProvider
     )
 
-    generatedClient = try! Client(
-      serverURL: resolvedURL, transport: URLSessionTransport(configuration: .init(session: configuration.session)))
+    let transport = SupabaseClientTransport(
+      session: configuration.session,
+      tokenProvider: tokenProvider
+    )
+    generatedClient = try! Client(serverURL: resolvedURL, transport: transport)
 
     let downloadDelegate = DownloadSessionDelegate()
     self.downloadDelegate = downloadDelegate

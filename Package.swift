@@ -86,7 +86,8 @@ let package = Package(
       dependencies: [
         "Helpers",
         .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-      ]
+      ],
+      exclude: ["openapi-generator-config.yaml"]
     ),
     .testTarget(
       name: "FunctionsTests",
@@ -170,7 +171,8 @@ let package = Package(
         "Helpers",
         .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
         .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
-      ]
+      ],
+      exclude: ["openapi-generator-config.yaml"]
     ),
     .testTarget(
       name: "StorageTests",
