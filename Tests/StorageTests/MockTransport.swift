@@ -7,7 +7,7 @@
 
 import Foundation
 import HTTPTypes
-@_spi(Generated) import OpenAPIRuntime
+import OpenAPIRuntime
 
 struct MockTransport: ClientTransport, Sendable {
   let responseData: Data
