@@ -549,11 +549,9 @@ public actor Realtime {
       continuation.yield(currentStatus)
     }
     // Emit heartbeat RTT metric as a log event (spec §10 metrics-as-logs).
-    let ms =
-      latency.components.seconds * 1000 + latency.components.attoseconds / 1_000_000_000_000_000
     log(
       .debug, .connection, "Heartbeat round-trip complete",
-      metadata: ["heartbeat.rtt_ms": "\(ms)"]
+      metadata: ["heartbeat.rtt_ms": "\(latency.inMilliseconds)"]
     )
   }
 
@@ -983,13 +981,42 @@ public actor Realtime {
     if lazyConnect {
       try await connect()
     }
+    let wallClock = ContinuousClock()
+    let sentAt = wallClock.now
     try await _rawSend(frame)
 
     switch ack {
     case .none:
       return nil
     case .require(let timeout, let error):
-      return try await awaitReply(ref: ref, timeout: timeout, timeoutError: error)
+      let reply = try await awaitReply(ref: ref, timeout: timeout, timeoutError: error)
+      // Emit the acked-broadcast round-trip metric (spec §10 metrics-as-logs). The heartbeat
+      // reports its own `heartbeat.rtt_ms`; join/leave/presence acks have no defined metric.
+      if event == .broadcast {
+        log(
+          .debug, .broadcast, "Broadcast acknowledged",
+          metadata: [
+            "broadcast.ack_latency_ms": "\(sentAt.duration(to: wallClock.now).inMilliseconds)"
+          ]
+        )
+      }
+      return reply
+    }
+  }
+
+  /// Encodes an `Encodable` value to `AnyJSON` using `configuration.encoder`, mapping any
+  /// failure to `.encoding`. Shared by channel broadcast/presence payloads and HTTP broadcast.
+  ///
+  /// `nonisolated`: it only reads the immutable, Sendable `configuration` and does pure
+  /// encoding, so callers (including the synchronous `Channel._encodeToJSON`) need no `await`.
+  nonisolated func _encodeToJSON<T: Encodable & Sendable>(_ value: T) throws(RealtimeError)
+    -> AnyJSON
+  {
+    do {
+      let data = try configuration.encoder.encode(value)
+      return try JSONDecoder().decode(AnyJSON.self, from: data)
+    } catch {
+      throw .encoding(underlying: error)
     }
   }
 
@@ -1110,5 +1137,12 @@ public actor Realtime {
         metadata: metadata
       )
     )
+  }
+}
+
+extension Duration {
+  /// Whole milliseconds, for metric logging (`heartbeat.rtt_ms`, `broadcast.ack_latency_ms`).
+  fileprivate var inMilliseconds: Int64 {
+    components.seconds * 1000 + components.attoseconds / 1_000_000_000_000_000
   }
 }

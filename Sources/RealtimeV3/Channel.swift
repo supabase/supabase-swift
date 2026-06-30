@@ -356,14 +356,10 @@ public actor Channel {
 
   /// Encodes an `Encodable` value to `AnyJSON` using the configured encoder, mapping any
   /// failure to `.encoding`. Used to embed user payloads in broadcast/presence frames.
+  /// Thin wrapper over ``Realtime/_encodeToJSON(_:)``.
   func _encodeToJSON<T: Encodable & Sendable>(_ value: T) throws(RealtimeError) -> AnyJSON {
     guard let realtime else { throw .channelClosed(.clientDisconnected) }
-    do {
-      let data = try realtime.configuration.encoder.encode(value)
-      return try JSONDecoder().decode(AnyJSON.self, from: data)
-    } catch {
-      throw .encoding(underlying: error)
-    }
+    return try realtime._encodeToJSON(value)
   }
 
   // MARK: - Subscribe
