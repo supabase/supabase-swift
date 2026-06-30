@@ -135,7 +135,7 @@ public actor FunctionsClient {
     )
     let transport = URLSessionTransport(configuration: .init(session: session))
     let middleware = SupabaseMiddleware(headers: headers, tokenProvider: tokenProvider)
-    generatedClient = try? Client(
+    generatedClient = Client(
       serverURL: url,
       transport: transport,
       middlewares: [middleware, RelayErrorMiddleware()]
