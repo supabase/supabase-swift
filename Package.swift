@@ -85,6 +85,7 @@ let package = Package(
       dependencies: [
         "Helpers",
         .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+        .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
       ],
       exclude: ["openapi-generator-config.yaml"]
     ),
@@ -96,6 +97,7 @@ let package = Package(
         .product(name: "Replay", package: "Replay"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Functions",
         "Mocker",

@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import Foundation
 import Helpers
 import OpenAPIRuntime
+import OpenAPIURLSession
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -132,7 +133,13 @@ public actor FunctionsClient {
       session: session,
       tokenProvider: tokenProvider
     )
-    self.generatedClient = nil
+    let transport = URLSessionTransport(configuration: .init(session: session))
+    let middleware = SupabaseMiddleware(headers: headers, tokenProvider: tokenProvider)
+    generatedClient = try? Client(
+      serverURL: url,
+      transport: transport,
+      middlewares: [middleware, RelayErrorMiddleware()]
+    )
     self.headers = headers
     if self.headers["X-Client-Info"] == nil {
       self.headers["X-Client-Info"] = "functions-swift/\(version)"
@@ -338,10 +345,6 @@ public actor FunctionsClient {
       }
       throw FunctionsError.httpError(code: 400, data: data)
     case .undocumented(let statusCode, let payload):
-      // Check for relay error header in undocumented responses.
-      if payload.headerFields[.init("x-relay-error")!] == "true" {
-        throw FunctionsError.relayError
-      }
       let data: Data
       if let body = payload.body {
         data = try await Data(collecting: body, upTo: .max)
