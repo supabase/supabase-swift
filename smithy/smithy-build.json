@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "maven": {
+    "dependencies": [
+      "software.amazon.smithy:smithy-openapi:1.52.1",
+      "software.amazon.smithy:smithy-aws-traits:1.52.1"
+    ]
+  },
+  "sources": ["model"],
+  "projections": {
+    "storage-openapi": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": ["io.supabase.storage#StorageService"]
+          }
+        }
+      ],
+      "plugins": {
+        "openapi": {
+          "service": "io.supabase.storage#StorageService",
+          "protocol": "aws.protocols#restJson1"
+        }
+      }
+    },
+    "functions-openapi": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": ["io.supabase.functions#FunctionsService"]
+          }
+        }
+      ],
+      "plugins": {
+        "openapi": {
+          "service": "io.supabase.functions#FunctionsService",
+          "protocol": "aws.protocols#restJson1"
+        }
+      }
+    }
+  }
+}
