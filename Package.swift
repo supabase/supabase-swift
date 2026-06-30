@@ -18,6 +18,7 @@ let package = Package(
     .library(name: "Functions", targets: ["Functions"]),
     .library(name: "PostgREST", targets: ["PostgREST"]),
     .library(name: "Realtime", targets: ["Realtime"]),
+    .library(name: "RealtimeV3", targets: ["RealtimeV3"]),
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Supabase", targets: ["Supabase"]),
   ],
@@ -157,6 +158,40 @@ let package = Package(
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Realtime",
         "TestHelpers",
+      ]
+    ),
+    .target(
+      name: "RealtimeV3",
+      dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "Clocks", package: "swift-clocks"),
+        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        "Helpers",
+      ]
+    ),
+    .testTarget(
+      name: "RealtimeV3Tests",
+      dependencies: [
+        .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "Clocks", package: "swift-clocks"),
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        "Mocker",
+        "RealtimeV3",
+        "TestHelpers",
+      ]
+    ),
+    .testTarget(
+      name: "RealtimeV3IntegrationTests",
+      dependencies: [
+        .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        "RealtimeV3",
+        "PostgREST",
+        "Helpers",
+      ],
+      exclude: [
+        "supabase",
       ]
     ),
     .target(
