@@ -43,16 +43,12 @@ extension Realtime {
     updateLatency(sentAt.duration(to: wallClock.now))
   }
 
-  /// Updates `currentStatus.latency` in-place while preserving the current state.
+  /// Updates `ConnectionStatus.latency` in-place while preserving the current state.
   private func updateLatency(_ latency: Duration) {
-    currentStatus = ConnectionStatus(
-      state: currentStatus.state,
-      since: currentStatus.since,
-      latency: latency
+    let current = statusBroadcaster.current
+    statusBroadcaster.emit(
+      ConnectionStatus(state: current.state, since: current.since, latency: latency)
     )
-    for continuation in statusContinuations.values {
-      continuation.yield(currentStatus)
-    }
     // Emit heartbeat RTT metric as a log event (spec §10 metrics-as-logs).
     log(
       .debug, .connection, "Heartbeat round-trip complete",

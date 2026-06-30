@@ -81,7 +81,7 @@ extension Realtime {
     }
 
     // Route to the matching channel (if registered).
-    if let channel = channels[message.topic] {
+    if let channel = registry.channel(for: message.topic) {
       await channel.receive(message)
     }
   }

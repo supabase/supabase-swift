@@ -147,8 +147,8 @@ public actor Realtime {
   /// Serializer for encoding/decoding Phoenix protocol frames.
   nonisolated let serializer = PhoenixSerializer()
 
-  /// Topic → Channel registry. First-call-wins (Decision 33).
-  var channels: [String: Channel] = [:]
+  /// Topic → Channel collection. First-call-wins (Decision 33).
+  var registry = ChannelRegistry()
 
   /// Explicitly-set access token, stored by `updateToken(_:)`.
   ///
@@ -163,19 +163,11 @@ public actor Realtime {
   ///   3. `nil` (anonymous / public channels)
   var _overrideToken: String?
 
-  /// Current connection status.
+  /// Holds the current `ConnectionStatus` and fans transitions out to `status` subscribers.
   /// Internal (not private) so `updateLatency` in `Realtime+Heartbeat.swift` can update it.
-  var currentStatus: ConnectionStatus = ConnectionStatus(
-    state: .idle,
-    since: Date(),
-    latency: nil
+  var statusBroadcaster = ConnectionStatusBroadcaster(
+    initial: ConnectionStatus(state: .idle, since: Date(), latency: nil)
   )
-
-  /// Broadcast list of `status` stream continuations.
-  /// Internal (not private) so `updateLatency` in `Realtime+Heartbeat.swift` can yield to them.
-  /// `LockIsolated` because continuations are yielded from actor-isolated context,
-  /// so a plain array is fine — but we use a value wrapper to allow capture in closures.
-  var statusContinuations: [UUID: AsyncStream<ConnectionStatus>.Continuation] = [:]
 
   // MARK: - Initializer
 
@@ -294,7 +286,7 @@ public actor Realtime {
     // already passes the fully-qualified form (e.g. "realtime:room:1").
     let fullTopic = topic.hasPrefix("realtime:") ? topic : "realtime:\(topic)"
 
-    if let existing = channels[fullTopic] {
+    if let existing = registry.channel(for: fullTopic) {
       // Decision 33: first-call-wins — warn only if the caller requested different options.
       var requested = ChannelOptions()
       configure(&requested)
@@ -311,7 +303,7 @@ public actor Realtime {
     var options = ChannelOptions()
     configure(&options)
     let ch = Channel(topic: fullTopic, options: options, realtime: self)
-    channels[fullTopic] = ch
+    registry.insert(ch, for: fullTopic)
     return ch
   }
 
@@ -381,7 +373,7 @@ public actor Realtime {
     guard !intentionalDisconnect else { return }
 
     // Already connected — no-op.
-    if case .connected = currentStatus.state { return }
+    if case .connected = statusBroadcaster.current.state { return }
 
     // Already reconnecting — no-op (the running loop will recover).
     if isReconnecting { return }
@@ -416,7 +408,7 @@ public actor Realtime {
     _startLifecycleObserverIfNeeded()
 
     // Already connected — no-op.
-    if case .connected = currentStatus.state {
+    if case .connected = statusBroadcaster.current.state {
       return
     }
 
@@ -453,28 +445,19 @@ public actor Realtime {
   /// receive future transitions. The stream completes only when the continuation is
   /// explicitly cancelled (e.g. task cancellation).
   public var status: AsyncStream<ConnectionStatus> {
-    let id = UUID()
-    let current = currentStatus
-    let (stream, continuation) = AsyncStream<ConnectionStatus>.makeStream()
-    continuation.yield(current)
-    statusContinuations[id] = continuation
-    continuation.onTermination = { [weak self] _ in
+    statusBroadcaster.makeStream { [weak self] id in
       Task { [weak self] in await self?.removeStatusContinuation(id: id) }
     }
-    return stream
   }
 
   // MARK: - Private helpers
 
   private func removeStatusContinuation(id: UUID) {
-    statusContinuations.removeValue(forKey: id)
+    statusBroadcaster.remove(id)
   }
 
   func transition(to state: ConnectionStatus.State, latency: Duration? = nil) {
-    currentStatus = ConnectionStatus(state: state, since: Date(), latency: latency)
-    for continuation in statusContinuations.values {
-      continuation.yield(currentStatus)
-    }
+    statusBroadcaster.emit(ConnectionStatus(state: state, since: Date(), latency: latency))
   }
 
   /// Signals connecting, opens the transport, stores the connection, signals connected,
@@ -708,7 +691,7 @@ public actor Realtime {
     _overrideToken = newToken
 
     // Push to each joined channel. Failures are swallowed (best-effort).
-    for channel in channels.values {
+    for channel in registry.all {
       // Channel.pushAccessToken is a no-op unless the channel is .joined.
       await channel.pushAccessToken(newToken)
     }

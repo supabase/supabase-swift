@@ -140,7 +140,7 @@ extension Realtime {
   /// Channels are re-joined concurrently so a slow join on one topic does not block others.
   private func rejoinEligibleChannels() async {
     // Snapshot the full channel list. We check eligibility per-channel (actor hop).
-    let allChannels = Array(channels.values)
+    let allChannels = registry.all
     guard !allChannels.isEmpty else { return }
 
     // Re-join concurrently. Each channel's rejoin() checks its own shouldRejoin flag
@@ -164,7 +164,7 @@ extension Realtime {
   /// Those channels are then evicted from the registry.
   private func terminateChannelsOnGiveUp() async {
     // Snapshot topic+channel pairs. We check eligibility per-channel (actor hop).
-    let snapshot = Array(channels)
+    let snapshot = registry.allByTopic
     var toEvict: [String] = []
     for (topic, channel) in snapshot {
       if await channel.shouldRejoin {
@@ -173,7 +173,7 @@ extension Realtime {
       }
     }
     for topic in toEvict {
-      channels.removeValue(forKey: topic)
+      registry.remove(topic: topic)
     }
   }
 }
