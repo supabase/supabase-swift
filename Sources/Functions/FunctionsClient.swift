@@ -328,8 +328,14 @@ public actor FunctionsClient {
       )!
       return (data, httpResponse)
     case .badRequest(let response):
-      let body = try response.body.json
-      let data = (body.message ?? "").data(using: .utf8) ?? Data()
+      let rawBody = response.body
+      let data: Data
+      switch rawBody {
+      case .json(let body):
+        // Collect raw bytes so callers can inspect the full error payload.
+        let encoded = try JSONEncoder().encode(body)
+        data = encoded
+      }
       throw FunctionsError.httpError(code: 400, data: data)
     case .undocumented(let statusCode, let payload):
       // Check for relay error header in undocumented responses.
