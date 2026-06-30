@@ -340,14 +340,9 @@ public actor Realtime {
     reconnectTask?.cancel()
     reconnectTask = nil
 
-    // Cancel background tasks.
-    heartbeatTask?.cancel()
-    heartbeatTask = nil
-    routingTask?.cancel()
-    routingTask = nil
-
-    // Fail all in-flight pushes so callers don't hang.
-    await inflightPushRegistry.failAll(.disconnected)
+    // Cancel the connection's background loops and fail any in-flight pushes (runs even with no
+    // live socket, e.g. mid-reconnect, so queued pushes don't hang).
+    await _teardownConnectionTasks(failPushesWith: .disconnected)
 
     // Close and clear the active connection (if any).
     if let conn = connection {
@@ -458,6 +453,21 @@ public actor Realtime {
 
   func transition(to state: ConnectionStatus.State, latency: Duration? = nil) {
     statusBroadcaster.emit(ConnectionStatus(state: state, since: Date(), latency: latency))
+  }
+
+  /// Stops the background work bound to the active connection: cancels the heartbeat and
+  /// frame-routing loops and fails all in-flight pushes with `error`.
+  ///
+  /// Shared teardown for `disconnect()`, the idle-close timer, and connection-loss handling.
+  /// Each caller owns clearing `connection`, closing the socket (with its own code/reason), any
+  /// caller-specific tasks/flags, and the subsequent status transition.
+  /// Internal (not private) so `handleConnectionLost` in `Realtime+Reconnection.swift` can call it.
+  func _teardownConnectionTasks(failPushesWith error: RealtimeError) async {
+    heartbeatTask?.cancel()
+    heartbeatTask = nil
+    routingTask?.cancel()
+    routingTask = nil
+    await inflightPushRegistry.failAll(error)
   }
 
   /// Signals connecting, opens the transport, stores the connection, signals connected,
@@ -650,14 +660,8 @@ public actor Realtime {
     idleClosed = true
     idleCloseTask = nil
 
-    // Cancel background tasks.
-    heartbeatTask?.cancel()
-    heartbeatTask = nil
-    routingTask?.cancel()
-    routingTask = nil
-
-    // Fail in-flight pushes so callers don't hang.
-    await inflightPushRegistry.failAll(.disconnected)
+    // Cancel the connection's background loops and fail in-flight pushes.
+    await _teardownConnectionTasks(failPushesWith: .disconnected)
 
     // Close the underlying connection.
     await conn.close(code: 1000, reason: "idle close")

@@ -34,14 +34,8 @@ extension Realtime {
     guard let lostConnection = connection else { return }
     connection = nil
 
-    // Cancel background tasks.
-    heartbeatTask?.cancel()
-    heartbeatTask = nil
-    routingTask?.cancel()
-    routingTask = nil
-
-    // Fail all pending pushes so callers don't hang indefinitely.
-    await inflightPushRegistry.failAll(error)
+    // Cancel the connection's background loops and fail all pending pushes.
+    await _teardownConnectionTasks(failPushesWith: error)
 
     // Close the connection we captured above.
     await lostConnection.close(code: 1001, reason: "connection lost")
