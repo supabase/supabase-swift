@@ -93,6 +93,8 @@ endef
 
 # ── Code generation ────────────────────────────────────────────────────────────
 
+.PHONY: generate-smithy generate-swift-storage generate-swift-functions generate check-generate
+
 generate-smithy:
 	cd smithy && smithy build
 
