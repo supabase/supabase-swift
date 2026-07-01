@@ -1,0 +1,741 @@
+{
+    "openapi": "3.0.2",
+    "info": {
+        "title": "Supabase Database API",
+        "version": "1.0",
+        "description": "PostgREST-backed database API.\n\nBase URL: https://{project-ref}.supabase.co/rest/v1\n\nKnown limitations:\n  1. Write operations return 204 (no body) by default and 200 with a body when\n     Prefer: return=representation \u2014 the model uses 200 throughout so generators\n     always produce body-parsing code; clients must tolerate empty bodies.\n  2. RPC GET arguments are function-specific; they are expressed via the same\n     @httpQueryParams map as row filters, with function-defined keys."
+    },
+    "paths": {
+        "/rpc/{functionName}": {
+            "get": {
+                "operationId": "CallRpcGet",
+                "parameters": [
+                    {
+                        "name": "functionName",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "select",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "args",
+                        "in": "query",
+                        "description": "Function arguments \u2014 each entry becomes a query parameter.\nKeys and value formats are defined by the PostgreSQL function signature.",
+                        "style": "form",
+                        "schema": {
+                            "$ref": "#/components/schemas/StringMap"
+                        }
+                    },
+                    {
+                        "name": "Accept-Profile",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "CallRpcGet 200 response",
+                        "headers": {
+                            "Content-Range": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CallRpcGetOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "DatabaseError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DatabaseErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "CallRpcPost",
+                "requestBody": {
+                    "content": {
+                        "application/octet-stream": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CallRpcPostInputPayload"
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "functionName",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "select",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Content-Profile",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Prefer",
+                        "in": "header",
+                        "description": "e.g. \"params=single-object\" \u2014 treat the entire body as a single parameter.",
+                        "schema": {
+                            "type": "string",
+                            "description": "e.g. \"params=single-object\" \u2014 treat the entire body as a single parameter."
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "CallRpcPost 200 response",
+                        "headers": {
+                            "Content-Range": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CallRpcPostOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "DatabaseError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DatabaseErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/{table}": {
+            "delete": {
+                "operationId": "DeleteRows",
+                "parameters": [
+                    {
+                        "name": "table",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "select",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filters",
+                        "in": "query",
+                        "description": "Horizontal filters \u2014 rows matching these filters will be deleted.",
+                        "style": "form",
+                        "schema": {
+                            "$ref": "#/components/schemas/StringMap"
+                        }
+                    },
+                    {
+                        "name": "Content-Profile",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Prefer",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "DeleteRows 200 response",
+                        "headers": {
+                            "Content-Range": {
+                                "description": "Pagination info \u2014 e.g. \"0-9/200\" (range/total) or \"0-9/*\" (unknown count).",
+                                "schema": {
+                                    "type": "string",
+                                    "description": "Pagination info \u2014 e.g. \"0-9/200\" (range/total) or \"0-9/*\" (unknown count)."
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeleteRowsOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "DatabaseError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DatabaseErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "operationId": "SelectRows",
+                "parameters": [
+                    {
+                        "name": "table",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "select",
+                        "in": "query",
+                        "description": "Column selection \u2014 comma-separated, supports aliasing, casting, embedded\nresources, and JSON operators. e.g. \"id,name,orders(total,status)\".",
+                        "schema": {
+                            "type": "string",
+                            "description": "Column selection \u2014 comma-separated, supports aliasing, casting, embedded\nresources, and JSON operators. e.g. \"id,name,orders(total,status)\"."
+                        }
+                    },
+                    {
+                        "name": "order",
+                        "in": "query",
+                        "description": "Ordering \u2014 e.g. \"name.asc,age.desc.nullslast\"",
+                        "schema": {
+                            "type": "string",
+                            "description": "Ordering \u2014 e.g. \"name.asc,age.desc.nullslast\""
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Maximum number of rows to return.",
+                        "schema": {
+                            "type": "number",
+                            "description": "Maximum number of rows to return."
+                        }
+                    },
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "description": "Row offset for pagination.",
+                        "schema": {
+                            "type": "number",
+                            "description": "Row offset for pagination."
+                        }
+                    },
+                    {
+                        "name": "filters",
+                        "in": "query",
+                        "description": "Horizontal filters \u2014 each entry becomes a query parameter.\nKey: column name (or \"or\"/\"and\" for logical groups).\nValue: \"{operator}.{value}\" e.g. {\"id\": \"eq.5\", \"name\": \"like.foo*\"}.\nSee FilterOperator for the full list of operators.",
+                        "style": "form",
+                        "schema": {
+                            "$ref": "#/components/schemas/StringMap"
+                        }
+                    },
+                    {
+                        "name": "Accept",
+                        "in": "header",
+                        "description": "Response format. e.g. \"application/json\" (default), \"text/csv\",\n\"application/vnd.pgrst.object+json\" (singular-row mode).",
+                        "schema": {
+                            "type": "string",
+                            "description": "Response format. e.g. \"application/json\" (default), \"text/csv\",\n\"application/vnd.pgrst.object+json\" (singular-row mode)."
+                        }
+                    },
+                    {
+                        "name": "Accept-Profile",
+                        "in": "header",
+                        "description": "Target a non-default schema exposed by PostgREST.",
+                        "schema": {
+                            "type": "string",
+                            "description": "Target a non-default schema exposed by PostgREST."
+                        }
+                    },
+                    {
+                        "name": "Prefer",
+                        "in": "header",
+                        "description": "Counting mode. e.g. \"count=exact\", \"count=planned\", \"count=estimated\".",
+                        "schema": {
+                            "type": "string",
+                            "description": "Counting mode. e.g. \"count=exact\", \"count=planned\", \"count=estimated\"."
+                        }
+                    },
+                    {
+                        "name": "Range",
+                        "in": "header",
+                        "description": "Range-based pagination \u2014 e.g. \"0-9\" (ten rows starting at 0).",
+                        "schema": {
+                            "type": "string",
+                            "description": "Range-based pagination \u2014 e.g. \"0-9\" (ten rows starting at 0)."
+                        }
+                    },
+                    {
+                        "name": "Range-Unit",
+                        "in": "header",
+                        "description": "Unit for the Range header. Defaults to \"items\".",
+                        "schema": {
+                            "type": "string",
+                            "description": "Unit for the Range header. Defaults to \"items\"."
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SelectRows 200 response",
+                        "headers": {
+                            "Content-Range": {
+                                "description": "Pagination info \u2014 e.g. \"0-9/200\" (range/total) or \"0-9/*\" (unknown count).",
+                                "schema": {
+                                    "type": "string",
+                                    "description": "Pagination info \u2014 e.g. \"0-9/200\" (range/total) or \"0-9/*\" (unknown count)."
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SelectRowsOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "DatabaseError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DatabaseErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "UpdateRows",
+                "requestBody": {
+                    "content": {
+                        "application/octet-stream": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateRowsInputPayload"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "parameters": [
+                    {
+                        "name": "table",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "select",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filters",
+                        "in": "query",
+                        "description": "Horizontal filters \u2014 rows matching these filters will be updated.\nKey: column name. Value: \"{operator}.{value}\" e.g. {\"id\": \"eq.5\"}.",
+                        "style": "form",
+                        "schema": {
+                            "$ref": "#/components/schemas/StringMap"
+                        }
+                    },
+                    {
+                        "name": "Content-Profile",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Prefer",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "UpdateRows 200 response",
+                        "headers": {
+                            "Content-Range": {
+                                "description": "Pagination info \u2014 e.g. \"0-9/200\" (range/total) or \"0-9/*\" (unknown count).",
+                                "schema": {
+                                    "type": "string",
+                                    "description": "Pagination info \u2014 e.g. \"0-9/200\" (range/total) or \"0-9/*\" (unknown count)."
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UpdateRowsOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "DatabaseError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DatabaseErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "InsertRows",
+                "requestBody": {
+                    "content": {
+                        "application/octet-stream": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InsertRowsInputPayload"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "parameters": [
+                    {
+                        "name": "table",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "select",
+                        "in": "query",
+                        "description": "Columns to select in the returned representation (requires return=representation).",
+                        "schema": {
+                            "type": "string",
+                            "description": "Columns to select in the returned representation (requires return=representation)."
+                        }
+                    },
+                    {
+                        "name": "columns",
+                        "in": "query",
+                        "description": "Restrict which columns may be populated (useful with CSV uploads).",
+                        "schema": {
+                            "type": "string",
+                            "description": "Restrict which columns may be populated (useful with CSV uploads)."
+                        }
+                    },
+                    {
+                        "name": "Content-Profile",
+                        "in": "header",
+                        "description": "Target a non-default schema for the write.",
+                        "schema": {
+                            "type": "string",
+                            "description": "Target a non-default schema for the write."
+                        }
+                    },
+                    {
+                        "name": "Prefer",
+                        "in": "header",
+                        "description": "Return behavior and conflict handling.\ne.g. \"return=representation\", \"return=minimal\" (default),\n     \"return=headers-only\", \"resolution=merge-duplicates\".",
+                        "schema": {
+                            "type": "string",
+                            "description": "Return behavior and conflict handling.\ne.g. \"return=representation\", \"return=minimal\" (default),\n     \"return=headers-only\", \"resolution=merge-duplicates\"."
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "InsertRows 201 response",
+                        "headers": {
+                            "Content-Range": {
+                                "description": "Pagination info \u2014 e.g. \"0-9/200\" (range/total) or \"0-9/*\" (unknown count).",
+                                "schema": {
+                                    "type": "string",
+                                    "description": "Pagination info \u2014 e.g. \"0-9/200\" (range/total) or \"0-9/*\" (unknown count)."
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InsertRowsOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "DatabaseError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DatabaseErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "operationId": "UpsertRows",
+                "requestBody": {
+                    "content": {
+                        "application/octet-stream": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpsertRowsInputPayload"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "parameters": [
+                    {
+                        "name": "table",
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "select",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "on_conflict",
+                        "in": "query",
+                        "description": "Columns to match for conflict detection (if not the primary key).",
+                        "schema": {
+                            "type": "string",
+                            "description": "Columns to match for conflict detection (if not the primary key)."
+                        }
+                    },
+                    {
+                        "name": "filters",
+                        "in": "query",
+                        "description": "Horizontal filters \u2014 rows matching these filters will be upserted.",
+                        "style": "form",
+                        "schema": {
+                            "$ref": "#/components/schemas/StringMap"
+                        }
+                    },
+                    {
+                        "name": "Content-Profile",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Prefer",
+                        "in": "header",
+                        "description": "e.g. \"return=representation\", \"resolution=merge-duplicates\",\n     \"resolution=ignore-duplicates\".",
+                        "schema": {
+                            "type": "string",
+                            "description": "e.g. \"return=representation\", \"resolution=merge-duplicates\",\n     \"resolution=ignore-duplicates\"."
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "UpsertRows 200 response",
+                        "headers": {
+                            "Content-Range": {
+                                "description": "Pagination info \u2014 e.g. \"0-9/200\" (range/total) or \"0-9/*\" (unknown count).",
+                                "schema": {
+                                    "type": "string",
+                                    "description": "Pagination info \u2014 e.g. \"0-9/200\" (range/total) or \"0-9/*\" (unknown count)."
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UpsertRowsOutputPayload"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "DatabaseError 400 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DatabaseErrorResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "CallRpcGetOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "CallRpcPostInputPayload": {
+                "type": "string",
+                "description": "Named parameters as a JSON object, or a single argument when combined\nwith Prefer: params=single-object.",
+                "format": "byte"
+            },
+            "CallRpcPostOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "DatabaseErrorResponseContent": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "PostgreSQL error code (e.g. \"23505\") or PostgREST error code (e.g. \"PGRST301\")."
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Human-readable error message."
+                    },
+                    "details": {
+                        "type": "string",
+                        "description": "Extra context \u2014 constraint name, offending column, etc."
+                    },
+                    "hint": {
+                        "type": "string",
+                        "description": "Hint from PostgreSQL."
+                    }
+                }
+            },
+            "DeleteRowsOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "InsertRowsInputPayload": {
+                "type": "string",
+                "description": "JSON object or array of objects to insert.",
+                "format": "byte"
+            },
+            "InsertRowsOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "SelectRowsOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "StringMap": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "string"
+                },
+                "description": "Generic string-to-string map \u2014 used for arbitrary query parameter collections\n(e.g. PostgREST filter params, RPC GET arguments)."
+            },
+            "UpdateRowsInputPayload": {
+                "type": "string",
+                "description": "Partial JSON object with fields to update.",
+                "format": "byte"
+            },
+            "UpdateRowsOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "UpsertRowsInputPayload": {
+                "type": "string",
+                "description": "JSON object or array of objects to upsert.",
+                "format": "byte"
+            },
+            "UpsertRowsOutputPayload": {
+                "type": "string",
+                "format": "byte"
+            },
+            "FilterOperator": {
+                "type": "string",
+                "description": "PostgREST column filter operators. Format a filter value as \"{operator}.{value}\", e.g. \"eq.5\". Prefix with \"not.\" to negate: \"not.eq.5\". For logical grouping use keys \"or\" / \"and\" in the filters map.",
+                "enum": [
+                    "eq",
+                    "neq",
+                    "lt",
+                    "lte",
+                    "gt",
+                    "gte",
+                    "like",
+                    "ilike",
+                    "match",
+                    "imatch",
+                    "is",
+                    "isdistinct",
+                    "in",
+                    "cs",
+                    "cd",
+                    "ov",
+                    "sl",
+                    "sr",
+                    "nxl",
+                    "nxr",
+                    "adj",
+                    "fts",
+                    "plfts",
+                    "phfts",
+                    "wfts"
+                ]
+            }
+        }
+    }
+}
