@@ -62,10 +62,18 @@ paths:
       requestBody:
         required: false
         content:
+          application/json:
+            schema: {}
           application/octet-stream:
             schema:
               type: string
               format: binary
+          text/plain:
+            schema:
+              type: string
+          application/x-www-form-urlencoded:
+            schema:
+              type: string
     put:
       operationId: FunctionInvocations_invokePut
       parameters:
@@ -96,10 +104,18 @@ paths:
       requestBody:
         required: false
         content:
+          application/json:
+            schema: {}
           application/octet-stream:
             schema:
               type: string
               format: binary
+          text/plain:
+            schema:
+              type: string
+          application/x-www-form-urlencoded:
+            schema:
+              type: string
     patch:
       operationId: FunctionInvocations_invokePatch
       parameters:
@@ -130,10 +146,18 @@ paths:
       requestBody:
         required: false
         content:
+          application/json:
+            schema: {}
           application/octet-stream:
             schema:
               type: string
               format: binary
+          text/plain:
+            schema:
+              type: string
+          application/x-www-form-urlencoded:
+            schema:
+              type: string
     delete:
       operationId: FunctionInvocations_invokeDelete
       parameters:
@@ -164,10 +188,18 @@ paths:
       requestBody:
         required: false
         content:
+          application/json:
+            schema: {}
           application/octet-stream:
             schema:
               type: string
               format: binary
+          text/plain:
+            schema:
+              type: string
+          application/x-www-form-urlencoded:
+            schema:
+              type: string
 components:
   schemas:
     FunctionsError:

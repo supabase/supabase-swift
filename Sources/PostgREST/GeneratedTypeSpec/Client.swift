@@ -199,11 +199,11 @@ internal struct Client: APIProtocol {
                 )
                 let body: OpenAPIRuntime.HTTPBody?
                 switch input.body {
-                case let .binary(value):
-                    body = try converter.setRequiredRequestBodyAsBinary(
+                case let .json(value):
+                    body = try converter.setRequiredRequestBodyAsJSON(
                         value,
                         headerFields: &request.headerFields,
-                        contentType: "application/octet-stream"
+                        contentType: "application/json; charset=utf-8"
                     )
                 }
                 return (request, body)
@@ -480,11 +480,11 @@ internal struct Client: APIProtocol {
                 )
                 let body: OpenAPIRuntime.HTTPBody?
                 switch input.body {
-                case let .binary(value):
-                    body = try converter.setRequiredRequestBodyAsBinary(
+                case let .json(value):
+                    body = try converter.setRequiredRequestBodyAsJSON(
                         value,
                         headerFields: &request.headerFields,
-                        contentType: "application/octet-stream"
+                        contentType: "application/json; charset=utf-8"
                     )
                 }
                 return (request, body)
@@ -612,11 +612,11 @@ internal struct Client: APIProtocol {
                 )
                 let body: OpenAPIRuntime.HTTPBody?
                 switch input.body {
-                case let .binary(value):
-                    body = try converter.setRequiredRequestBodyAsBinary(
+                case let .json(value):
+                    body = try converter.setRequiredRequestBodyAsJSON(
                         value,
                         headerFields: &request.headerFields,
-                        contentType: "application/octet-stream"
+                        contentType: "application/json; charset=utf-8"
                     )
                 }
                 return (request, body)
@@ -751,11 +751,11 @@ internal struct Client: APIProtocol {
                 )
                 let body: OpenAPIRuntime.HTTPBody?
                 switch input.body {
-                case let .binary(value):
-                    body = try converter.setRequiredRequestBodyAsBinary(
+                case let .json(value):
+                    body = try converter.setRequiredRequestBodyAsJSON(
                         value,
                         headerFields: &request.headerFields,
-                        contentType: "application/octet-stream"
+                        contentType: "application/json; charset=utf-8"
                     )
                 }
                 return (request, body)

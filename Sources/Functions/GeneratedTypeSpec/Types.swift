@@ -390,8 +390,14 @@ internal enum Operations {
             internal var headers: Operations.FunctionInvocations_invokePost.Input.Headers
             /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/requestBody`.
             internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/requestBody/content/application\/json`.
+                case json(OpenAPIRuntime.OpenAPIValueContainer)
                 /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/requestBody/content/application\/octet-stream`.
                 case binary(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/requestBody/content/text\/plain`.
+                case plainText(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/requestBody/content/application\/x-www-form-urlencoded`.
+                case urlEncodedForm(Swift.String)
             }
             internal var body: Operations.FunctionInvocations_invokePost.Input.Body?
             /// Creates a new `Input`.
@@ -585,8 +591,14 @@ internal enum Operations {
             internal var headers: Operations.FunctionInvocations_invokePatch.Input.Headers
             /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/requestBody`.
             internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/requestBody/content/application\/json`.
+                case json(OpenAPIRuntime.OpenAPIValueContainer)
                 /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/requestBody/content/application\/octet-stream`.
                 case binary(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/requestBody/content/text\/plain`.
+                case plainText(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/requestBody/content/application\/x-www-form-urlencoded`.
+                case urlEncodedForm(Swift.String)
             }
             internal var body: Operations.FunctionInvocations_invokePatch.Input.Body?
             /// Creates a new `Input`.
@@ -780,8 +792,14 @@ internal enum Operations {
             internal var headers: Operations.FunctionInvocations_invokePut.Input.Headers
             /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/requestBody`.
             internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/requestBody/content/application\/json`.
+                case json(OpenAPIRuntime.OpenAPIValueContainer)
                 /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/requestBody/content/application\/octet-stream`.
                 case binary(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/requestBody/content/text\/plain`.
+                case plainText(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/requestBody/content/application\/x-www-form-urlencoded`.
+                case urlEncodedForm(Swift.String)
             }
             internal var body: Operations.FunctionInvocations_invokePut.Input.Body?
             /// Creates a new `Input`.
@@ -975,8 +993,14 @@ internal enum Operations {
             internal var headers: Operations.FunctionInvocations_invokeDelete.Input.Headers
             /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/requestBody`.
             internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/requestBody/content/application\/json`.
+                case json(OpenAPIRuntime.OpenAPIValueContainer)
                 /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/requestBody/content/application\/octet-stream`.
                 case binary(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/requestBody/content/text\/plain`.
+                case plainText(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/requestBody/content/application\/x-www-form-urlencoded`.
+                case urlEncodedForm(Swift.String)
             }
             internal var body: Operations.FunctionInvocations_invokeDelete.Input.Body?
             /// Creates a new `Input`.

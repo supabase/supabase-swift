@@ -150,11 +150,29 @@ internal struct Client: APIProtocol {
                 switch input.body {
                 case .none:
                     body = nil
+                case let .json(value):
+                    body = try converter.setOptionalRequestBodyAsJSON(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/json; charset=utf-8"
+                    )
                 case let .binary(value):
                     body = try converter.setOptionalRequestBodyAsBinary(
                         value,
                         headerFields: &request.headerFields,
                         contentType: "application/octet-stream"
+                    )
+                case let .plainText(value):
+                    body = try converter.setOptionalRequestBodyAsBinary(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "text/plain"
+                    )
+                case let .urlEncodedForm(value):
+                    body = try converter.setOptionalRequestBodyAsURLEncodedForm(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/x-www-form-urlencoded"
                     )
                 }
                 return (request, body)
@@ -243,11 +261,29 @@ internal struct Client: APIProtocol {
                 switch input.body {
                 case .none:
                     body = nil
+                case let .json(value):
+                    body = try converter.setOptionalRequestBodyAsJSON(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/json; charset=utf-8"
+                    )
                 case let .binary(value):
                     body = try converter.setOptionalRequestBodyAsBinary(
                         value,
                         headerFields: &request.headerFields,
                         contentType: "application/octet-stream"
+                    )
+                case let .plainText(value):
+                    body = try converter.setOptionalRequestBodyAsBinary(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "text/plain"
+                    )
+                case let .urlEncodedForm(value):
+                    body = try converter.setOptionalRequestBodyAsURLEncodedForm(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/x-www-form-urlencoded"
                     )
                 }
                 return (request, body)
@@ -336,11 +372,29 @@ internal struct Client: APIProtocol {
                 switch input.body {
                 case .none:
                     body = nil
+                case let .json(value):
+                    body = try converter.setOptionalRequestBodyAsJSON(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/json; charset=utf-8"
+                    )
                 case let .binary(value):
                     body = try converter.setOptionalRequestBodyAsBinary(
                         value,
                         headerFields: &request.headerFields,
                         contentType: "application/octet-stream"
+                    )
+                case let .plainText(value):
+                    body = try converter.setOptionalRequestBodyAsBinary(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "text/plain"
+                    )
+                case let .urlEncodedForm(value):
+                    body = try converter.setOptionalRequestBodyAsURLEncodedForm(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/x-www-form-urlencoded"
                     )
                 }
                 return (request, body)
@@ -429,11 +483,29 @@ internal struct Client: APIProtocol {
                 switch input.body {
                 case .none:
                     body = nil
+                case let .json(value):
+                    body = try converter.setOptionalRequestBodyAsJSON(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/json; charset=utf-8"
+                    )
                 case let .binary(value):
                     body = try converter.setOptionalRequestBodyAsBinary(
                         value,
                         headerFields: &request.headerFields,
                         contentType: "application/octet-stream"
+                    )
+                case let .plainText(value):
+                    body = try converter.setOptionalRequestBodyAsBinary(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "text/plain"
+                    )
+                case let .urlEncodedForm(value):
+                    body = try converter.setOptionalRequestBodyAsURLEncodedForm(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/x-www-form-urlencoded"
                     )
                 }
                 return (request, body)

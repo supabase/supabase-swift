@@ -622,8 +622,8 @@ internal enum Operations {
             internal var headers: Operations.RpcOperations_rpc.Input.Headers
             /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/requestBody`.
             internal enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/requestBody/content/application\/octet-stream`.
-                case binary(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/requestBody/content/application\/json`.
+                case json(OpenAPIRuntime.OpenAPIValueContainer)
             }
             internal var body: Operations.RpcOperations_rpc.Input.Body
             /// Creates a new `Input`.
@@ -1181,8 +1181,8 @@ internal enum Operations {
             internal var headers: Operations.TableOperations_insert.Input.Headers
             /// - Remark: Generated from `#/paths/{table}/POST/requestBody`.
             internal enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/{table}/POST/requestBody/content/application\/octet-stream`.
-                case binary(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/{table}/POST/requestBody/content/application\/json`.
+                case json(OpenAPIRuntime.OpenAPIValueContainer)
             }
             internal var body: Operations.TableOperations_insert.Input.Body
             /// Creates a new `Input`.
@@ -1457,8 +1457,8 @@ internal enum Operations {
             internal var headers: Operations.TableOperations_update.Input.Headers
             /// - Remark: Generated from `#/paths/{table}/PATCH/requestBody`.
             internal enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/{table}/PATCH/requestBody/content/application\/octet-stream`.
-                case binary(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/{table}/PATCH/requestBody/content/application\/json`.
+                case json(OpenAPIRuntime.OpenAPIValueContainer)
             }
             internal var body: Operations.TableOperations_update.Input.Body
             /// Creates a new `Input`.
@@ -1740,8 +1740,8 @@ internal enum Operations {
             internal var headers: Operations.TableOperations_upsert.Input.Headers
             /// - Remark: Generated from `#/paths/{table}/PUT/requestBody`.
             internal enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/{table}/PUT/requestBody/content/application\/octet-stream`.
-                case binary(OpenAPIRuntime.HTTPBody)
+                /// - Remark: Generated from `#/paths/{table}/PUT/requestBody/content/application\/json`.
+                case json(OpenAPIRuntime.OpenAPIValueContainer)
             }
             internal var body: Operations.TableOperations_upsert.Input.Body
             /// Creates a new `Input`.
