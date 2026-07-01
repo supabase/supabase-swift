@@ -49,10 +49,18 @@ paths:
         '200':
           description: The request has succeeded.
           content:
+            application/json:
+              schema:
+                anyOf:
+                  - {}
+                  - {}
             application/octet-stream:
               schema:
                 type: string
                 format: binary
+            text/plain:
+              schema:
+                type: string
         default:
           description: An unexpected error response.
           content:
@@ -91,10 +99,18 @@ paths:
         '200':
           description: The request has succeeded.
           content:
+            application/json:
+              schema:
+                anyOf:
+                  - {}
+                  - {}
             application/octet-stream:
               schema:
                 type: string
                 format: binary
+            text/plain:
+              schema:
+                type: string
         default:
           description: An unexpected error response.
           content:
@@ -133,10 +149,18 @@ paths:
         '200':
           description: The request has succeeded.
           content:
+            application/json:
+              schema:
+                anyOf:
+                  - {}
+                  - {}
             application/octet-stream:
               schema:
                 type: string
                 format: binary
+            text/plain:
+              schema:
+                type: string
         default:
           description: An unexpected error response.
           content:
@@ -175,10 +199,18 @@ paths:
         '200':
           description: The request has succeeded.
           content:
+            application/json:
+              schema:
+                anyOf:
+                  - {}
+                  - {}
             application/octet-stream:
               schema:
                 type: string
                 format: binary
+            text/plain:
+              schema:
+                type: string
         default:
           description: An unexpected error response.
           content:
