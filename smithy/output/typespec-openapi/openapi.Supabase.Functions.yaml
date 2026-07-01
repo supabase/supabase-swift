@@ -1,0 +1,183 @@
+openapi: 3.0.0
+info:
+  title: Supabase Edge Functions API
+  version: '1.0'
+tags: []
+paths:
+  /functions/v1/{functionName}:
+    get:
+      operationId: FunctionInvocations_invokeGet
+      parameters:
+        - name: functionName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-region
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionsError'
+    post:
+      operationId: FunctionInvocations_invokePost
+      parameters:
+        - name: functionName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-region
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionsError'
+      requestBody:
+        required: false
+        content:
+          '*/*':
+            schema:
+              type: string
+              format: binary
+    put:
+      operationId: FunctionInvocations_invokePut
+      parameters:
+        - name: functionName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-region
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionsError'
+      requestBody:
+        required: false
+        content:
+          '*/*':
+            schema:
+              type: string
+              format: binary
+    patch:
+      operationId: FunctionInvocations_invokePatch
+      parameters:
+        - name: functionName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-region
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionsError'
+      requestBody:
+        required: false
+        content:
+          '*/*':
+            schema:
+              type: string
+              format: binary
+    delete:
+      operationId: FunctionInvocations_invokeDelete
+      parameters:
+        - name: functionName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-region
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunctionsError'
+      requestBody:
+        required: false
+        content:
+          '*/*':
+            schema:
+              type: string
+              format: binary
+components:
+  schemas:
+    FunctionsError:
+      type: object
+      properties:
+        message:
+          type: string
+servers:
+  - url: '{baseUrl}'
+    description: Supabase Edge Functions endpoint
+    variables:
+      baseUrl:
+        default: ''

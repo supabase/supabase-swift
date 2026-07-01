@@ -31,6 +31,8 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
     .package(url: "https://github.com/mattt/Replay.git", from: "0.4.0"),
+    .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.0.0"),
+    .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.0.0"),
   ],
   targets: [
     .target(
@@ -41,11 +43,13 @@ let package = Package(
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
       ]
     ),
     .testTarget(
       name: "HelpersTests",
       dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         "Helpers",
       ]
@@ -79,10 +83,11 @@ let package = Package(
     .target(
       name: "Functions",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
-      ]
+        .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+        .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+      ],
+      exclude: ["openapi-generator-config.yaml"]
     ),
     .testTarget(
       name: "FunctionsTests",
@@ -91,6 +96,8 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "Replay", package: "Replay"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Functions",
         "Mocker",
@@ -162,10 +169,11 @@ let package = Package(
     .target(
       name: "Storage",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
-      ]
+        .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+        .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+      ],
+      exclude: ["openapi-generator-config.yaml"]
     ),
     .testTarget(
       name: "StorageTests",
@@ -173,6 +181,7 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
         "Mocker",
         "TestHelpers",
         "Storage",

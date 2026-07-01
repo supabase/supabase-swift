@@ -1,5 +1,7 @@
 import Foundation
 import Helpers
+import OpenAPIRuntime
+import OpenAPIURLSession
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -138,6 +140,7 @@ public final class StorageClient: Sendable {
   public let configuration: StorageClientConfiguration
 
   package let http: _HTTPClient
+  let generatedClient: Client
   private let usesTokenProvider: Bool
 
   let downloadDelegate: DownloadSessionDelegate
@@ -150,6 +153,55 @@ public final class StorageClient: Sendable {
   }()
 
   let decoder = JSONDecoder.supabase()
+
+  /// Pre-compiled regex used to detect Supabase hostnames for the new-hostname rewrite.
+  private static let supabaseHostRegex: NSRegularExpression = try! NSRegularExpression(
+    pattern: "supabase.(co|in|red)$")
+
+  /// Normalises the `X-Client-Info` header in `headers`, deduplicating case-insensitive variants
+  /// and ensuring the canonical casing `"X-Client-Info"` is used.
+  private static func normalizeClientInfoHeaders(in headers: inout [String: String]) {
+    let clientInfoHeader = "X-Client-Info"
+    let existing = headers.keys.filter {
+      $0.caseInsensitiveCompare(clientInfoHeader) == .orderedSame
+    }
+    if let first = existing.first {
+      let value = headers[first]
+      for duplicate in existing.dropFirst() {
+        headers.removeValue(forKey: duplicate)
+      }
+      if first != clientInfoHeader {
+        headers.removeValue(forKey: first)
+        headers[clientInfoHeader] = value
+      }
+    } else {
+      headers[clientInfoHeader] = "storage-swift/\(version)"
+    }
+  }
+
+  /// Rewrites a legacy Supabase hostname to the dedicated storage subdomain when
+  /// `configuration.useNewHostname` is `true`.
+  private static func resolveStorageURL(
+    url: URL,
+    configuration: StorageClientConfiguration
+  ) -> URL {
+    guard configuration.useNewHostname == true else { return url }
+    guard
+      var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+      let host = components.host
+    else {
+      fatalError("Client initialized with invalid URL: \(url)")
+    }
+    let isSupabaseHost =
+      supabaseHostRegex.firstMatch(
+        in: host,
+        range: NSRange(location: 0, length: host.utf16.count)
+      ) != nil
+    if isSupabaseHost, !host.contains("storage.supabase.") {
+      components.host = host.replacingOccurrences(of: "supabase.", with: "storage.supabase.")
+    }
+    return components.url!
+  }
 
   /// Creates a `StorageClient` for standalone use (without a ``SupabaseClient``).
   ///
@@ -180,54 +232,11 @@ public final class StorageClient: Sendable {
   package init(url: URL, configuration: StorageClientConfiguration, tokenProvider: TokenProvider?) {
     var configuration = configuration
 
-    let clientInfoHeader = "X-Client-Info"
-    let clientInfoHeaders = configuration.headers.keys.filter {
-      $0.caseInsensitiveCompare(clientInfoHeader) == .orderedSame
-    }
-
-    if let firstClientInfoHeader = clientInfoHeaders.first {
-      let clientInfo = configuration.headers[firstClientInfoHeader]
-      for duplicateHeader in clientInfoHeaders.dropFirst() {
-        configuration.headers.removeValue(forKey: duplicateHeader)
-      }
-
-      if firstClientInfoHeader != clientInfoHeader {
-        configuration.headers.removeValue(forKey: firstClientInfoHeader)
-        configuration.headers[clientInfoHeader] = clientInfo
-      }
-    } else {
-      configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
-    }
-
-    var resolvedURL = url
+    StorageClient.normalizeClientInfoHeaders(in: &configuration.headers)
 
     // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
     // "project-ref.supabase.co" becomes "project-ref.storage.supabase.co"
-    if configuration.useNewHostname == true {
-      guard
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-        let host = components.host
-      else {
-        fatalError("Client initialized with invalid URL: \(url)")
-      }
-
-      let regex = try! NSRegularExpression(pattern: "supabase.(co|in|red)$")
-
-      let isSupabaseHost =
-        regex.firstMatch(
-          in: host,
-          range: NSRange(location: 0, length: host.utf16.count)
-        ) != nil
-
-      if isSupabaseHost, !host.contains("storage.supabase.") {
-        components.host = host.replacingOccurrences(
-          of: "supabase.",
-          with: "storage.supabase."
-        )
-      }
-
-      resolvedURL = components.url!
-    }
+    let resolvedURL = StorageClient.resolveStorageURL(url: url, configuration: configuration)
 
     self.url = resolvedURL
     self.configuration = configuration
@@ -238,6 +247,14 @@ public final class StorageClient: Sendable {
       session: configuration.session,
       tokenProvider: tokenProvider
     )
+
+    let transport = URLSessionTransport(configuration: .init(session: configuration.session))
+    let middleware = SupabaseMiddleware(
+      headers: configuration.headers,
+      tokenProvider: tokenProvider
+    )
+    generatedClient = try! Client(
+      serverURL: resolvedURL, transport: transport, middlewares: [middleware])
 
     let downloadDelegate = DownloadSessionDelegate()
     self.downloadDelegate = downloadDelegate
@@ -261,6 +278,55 @@ public final class StorageClient: Sendable {
       delegate: downloadDelegate,
       delegateQueue: nil
     )
+  }
+
+  package init(
+    url: URL,
+    configuration: StorageClientConfiguration,
+    transport: any ClientTransport
+  ) {
+    var configuration = configuration
+
+    StorageClient.normalizeClientInfoHeaders(in: &configuration.headers)
+    let resolvedURL = StorageClient.resolveStorageURL(url: url, configuration: configuration)
+
+    self.url = resolvedURL
+    self.configuration = configuration
+    usesTokenProvider = false
+
+    http = _HTTPClient(
+      host: resolvedURL,
+      session: configuration.session,
+      tokenProvider: nil
+    )
+
+    let middleware = SupabaseMiddleware(headers: configuration.headers, tokenProvider: nil)
+    generatedClient = try! Client(
+      serverURL: resolvedURL, transport: transport, middlewares: [middleware])
+
+    let downloadDelegate = DownloadSessionDelegate()
+    self.downloadDelegate = downloadDelegate
+
+    let downloadSessionConfig: URLSessionConfiguration = .default
+    self.downloadSession = URLSession(
+      configuration: downloadSessionConfig,
+      delegate: downloadDelegate,
+      delegateQueue: nil
+    )
+  }
+
+  /// Builds a ``StorageError`` from an undocumented HTTP response, extracting body detail when
+  /// available.
+  private func storageError(
+    statusCode: Int,
+    body: OpenAPIRuntime.UndocumentedPayload?
+  ) async -> StorageError {
+    var detail: String? = nil
+    if let httpBody = body?.body {
+      detail = try? await String(collecting: httpBody, upTo: 4096)
+    }
+    let message = detail.flatMap { $0.isEmpty ? nil : $0 } ?? "Unexpected status \(statusCode)"
+    return StorageError(message: message, errorCode: .unknown, statusCode: statusCode)
   }
 
   func mergedHeaders(_ headers: [String: String]? = nil) -> [String: String] {
@@ -432,7 +498,21 @@ public final class StorageClient: Sendable {
   /// }
   /// ```
   public func listBuckets() async throws -> [Bucket] {
-    try await fetchDecoded(.get, "bucket")
+    let output = try await generatedClient.ListBuckets()
+    switch output {
+    case .ok(let response):
+      let content = try response.body.json
+      return content.items.map(Bucket.init(generated:))
+    case .badRequest(let response):
+      let error = try response.body.json
+      throw StorageError(
+        message: error.message ?? error.error ?? "Bad request",
+        errorCode: error.error.map(StorageErrorCode.init(_:)) ?? .unknown,
+        statusCode: 400
+      )
+    case .undocumented(let statusCode, let payload):
+      throw await storageError(statusCode: statusCode, body: payload)
+    }
   }
 
   /// Retrieves the details of a single Storage bucket.
@@ -448,7 +528,21 @@ public final class StorageClient: Sendable {
   /// print("Bucket is \(bucket.isPublic ? "public" : "private")")
   /// ```
   public func getBucket(_ id: String) async throws -> Bucket {
-    try await fetchDecoded(.get, "bucket/\(id)")
+    let output = try await generatedClient.GetBucket(path: .init(id: id))
+    switch output {
+    case .ok(let response):
+      let content = try response.body.json
+      return Bucket(generated: content)
+    case .badRequest(let response):
+      let error = try response.body.json
+      throw StorageError(
+        message: error.message ?? error.error ?? "Bad request",
+        errorCode: error.error.map(StorageErrorCode.init(_:)) ?? .unknown,
+        statusCode: 400
+      )
+    case .undocumented(let statusCode, let payload):
+      throw await storageError(statusCode: statusCode, body: payload)
+    }
   }
 
   struct BucketParameters: Encodable {
@@ -493,21 +587,27 @@ public final class StorageClient: Sendable {
   public func createBucket(_ id: String, options: BucketOptions = .init())
     async throws
   {
-    try await fetchData(
-      .post,
-      "bucket",
-      body: .data(
-        encoder.encode(
-          BucketParameters(
-            id: id,
-            name: id,
-            isPublic: options.isPublic,
-            fileSizeLimit: options.fileSizeLimit?.bytes,
-            allowedMimeTypes: options.allowedMimeTypes
-          )
-        )
-      )
+    let body = Components.Schemas.CreateBucketRequestContent(
+      id: id,
+      name: id,
+      _public: options.isPublic,
+      file_size_limit: options.fileSizeLimit.map { Double($0.bytes) },
+      allowed_mime_types: options.allowedMimeTypes
     )
+    let output = try await generatedClient.CreateBucket(body: .json(body))
+    switch output {
+    case .ok:
+      return
+    case .badRequest(let response):
+      let error = try response.body.json
+      throw StorageError(
+        message: error.message ?? error.error ?? "Bad request",
+        errorCode: error.error.map(StorageErrorCode.init(_:)) ?? .unknown,
+        statusCode: 400
+      )
+    case .undocumented(let statusCode, let payload):
+      throw await storageError(statusCode: statusCode, body: payload)
+    }
   }
 
   /// Updates the configuration of an existing Storage bucket.
@@ -524,21 +624,25 @@ public final class StorageClient: Sendable {
   /// try await storage.updateBucket("avatars", options: BucketOptions(isPublic: true))
   /// ```
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
-    try await fetchData(
-      .put,
-      "bucket/\(id)",
-      body: .data(
-        encoder.encode(
-          BucketParameters(
-            id: id,
-            name: id,
-            isPublic: options.isPublic,
-            fileSizeLimit: options.fileSizeLimit?.bytes,
-            allowedMimeTypes: options.allowedMimeTypes
-          )
-        )
-      )
+    let body = Components.Schemas.UpdateBucketRequestContent(
+      _public: options.isPublic,
+      file_size_limit: options.fileSizeLimit.map { Double($0.bytes) },
+      allowed_mime_types: options.allowedMimeTypes
     )
+    let output = try await generatedClient.UpdateBucket(path: .init(id: id), body: .json(body))
+    switch output {
+    case .ok:
+      return
+    case .badRequest(let response):
+      let error = try response.body.json
+      throw StorageError(
+        message: error.message ?? error.error ?? "Bad request",
+        errorCode: error.error.map(StorageErrorCode.init(_:)) ?? .unknown,
+        statusCode: 400
+      )
+    case .undocumented(let statusCode, let payload):
+      throw await storageError(statusCode: statusCode, body: payload)
+    }
   }
 
   /// Removes all objects inside a bucket without deleting the bucket itself.
@@ -556,7 +660,20 @@ public final class StorageClient: Sendable {
   /// try await storage.deleteBucket("temp-uploads")
   /// ```
   public func emptyBucket(_ id: String) async throws {
-    try await fetchData(.post, "bucket/\(id)/empty")
+    let output = try await generatedClient.EmptyBucket(path: .init(id: id))
+    switch output {
+    case .ok:
+      return
+    case .badRequest(let response):
+      let error = try response.body.json
+      throw StorageError(
+        message: error.message ?? error.error ?? "Bad request",
+        errorCode: error.error.map(StorageErrorCode.init(_:)) ?? .unknown,
+        statusCode: 400
+      )
+    case .undocumented(let statusCode, let payload):
+      throw await storageError(statusCode: statusCode, body: payload)
+    }
   }
 
   /// Deletes an existing Storage bucket.
@@ -574,6 +691,19 @@ public final class StorageClient: Sendable {
   /// try await storage.deleteBucket("old-bucket")
   /// ```
   public func deleteBucket(_ id: String) async throws {
-    try await fetchData(.delete, "bucket/\(id)")
+    let output = try await generatedClient.DeleteBucket(path: .init(id: id))
+    switch output {
+    case .ok:
+      return
+    case .badRequest(let response):
+      let error = try response.body.json
+      throw StorageError(
+        message: error.message ?? error.error ?? "Bad request",
+        errorCode: error.error.map(StorageErrorCode.init(_:)) ?? .unknown,
+        statusCode: 400
+      )
+    case .undocumented(let statusCode, let payload):
+      throw await storageError(statusCode: statusCode, body: payload)
+    }
   }
 }

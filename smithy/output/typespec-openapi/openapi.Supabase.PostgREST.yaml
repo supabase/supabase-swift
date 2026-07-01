@@ -1,0 +1,532 @@
+openapi: 3.0.0
+info:
+  title: Supabase PostgREST API
+  version: '1.0'
+tags: []
+paths:
+  /rpc/{functionName}:
+    post:
+      operationId: RpcOperations_rpc
+      description: Call an RPC function via POST with a JSON body.
+      parameters:
+        - name: functionName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: select
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: false
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Content-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+    get:
+      operationId: RpcOperations_rpcGet
+      description: |-
+        Call a read-only RPC function via GET.
+        Function arguments are passed as query params (each arg is its own param).
+      parameters:
+        - name: functionName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: select
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: false
+        - name: args
+          in: query
+          required: false
+          description: Function arguments — each entry becomes its own query parameter.
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+  /{table}:
+    get:
+      operationId: TableOperations_from
+      description: |-
+        SELECT rows from a table.
+
+        Fixed params (select, order, limit, offset) are named so generators emit
+        typed, documented parameters. Column filters are passed via `filters`:
+        each map entry becomes its own query parameter when serialized
+        (explode: true), e.g. {"id": "eq.5"} → ?id=eq.5.
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: select
+          in: query
+          required: false
+          description: |-
+            Column selection — comma-separated list, supports aliasing, casting,
+            embedded resources, and JSON operators. e.g. "id,name,orders(total)".
+          schema:
+            type: string
+          explode: false
+        - name: order
+          in: query
+          required: false
+          description: Ordering — e.g. "name.asc,age.desc.nullslast"
+          schema:
+            type: string
+          explode: false
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of rows to return.
+          schema:
+            type: integer
+          explode: false
+        - name: offset
+          in: query
+          required: false
+          description: Row offset for pagination.
+          schema:
+            type: integer
+          explode: false
+        - name: filters
+          in: query
+          required: false
+          description: |-
+            Horizontal filters — each entry becomes a separate query parameter.
+            Key: column name (or "or"/"and" for logical groups).
+            Value: "{operator}.{value}" e.g. {"id": "eq.5", "name": "like.foo*"}.
+            See FilterOperator for the full operator list.
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+    post:
+      operationId: TableOperations_insert
+      description: INSERT rows into a table.
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: select
+          in: query
+          required: false
+          description: 'Column selection for the returned representation (requires Prefer: return=representation).'
+          schema:
+            type: string
+          explode: false
+        - name: columns
+          in: query
+          required: false
+          description: Columns hint for bulk insert.
+          schema:
+            type: string
+          explode: false
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Content-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+    put:
+      operationId: TableOperations_upsert
+      description: UPSERT rows (PUT).
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: select
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: false
+        - name: on_conflict
+          in: query
+          required: false
+          description: Comma-separated columns to use as the conflict target for upsert.
+          schema:
+            type: string
+          explode: false
+        - name: filters
+          in: query
+          required: false
+          description: Horizontal filters — each entry becomes a separate query parameter.
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Content-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+    patch:
+      operationId: TableOperations_update
+      description: UPDATE rows matching the filter.
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: select
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: false
+        - name: filters
+          in: query
+          required: false
+          description: Horizontal filters — each entry becomes a separate query parameter.
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Content-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+    delete:
+      operationId: TableOperations_deleteRows
+      description: DELETE rows matching the filter.
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: select
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: false
+        - name: filters
+          in: query
+          required: false
+          description: Horizontal filters — each entry becomes a separate query parameter.
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Content-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+components:
+  schemas:
+    FilterOperator:
+      type: string
+      enum:
+        - eq
+        - neq
+        - lt
+        - lte
+        - gt
+        - gte
+        - like
+        - ilike
+        - match
+        - imatch
+        - is
+        - isdistinct
+        - in
+        - cs
+        - cd
+        - ov
+        - sl
+        - sr
+        - nxl
+        - nxr
+        - adj
+        - fts
+        - plfts
+        - phfts
+        - wfts
+      description: |-
+        PostgREST column filter operators.
+        Format a filter value as "{operator}.{value}", e.g. "eq.5".
+        Prefix with "not." to negate: "not.eq.5".
+        For logical grouping use keys "or" / "and" in the filters map.
+    PostgRESTError:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        details:
+          type: string
+        hint:
+          type: string
+servers:
+  - url: '{baseUrl}'
+    description: Supabase PostgREST endpoint
+    variables:
+      baseUrl:
+        default: ''

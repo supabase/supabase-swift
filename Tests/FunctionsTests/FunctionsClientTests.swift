@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
+import Testing
 import XCTest
 
 @testable import Functions
@@ -419,4 +420,53 @@ final class FunctionsClientTests: XCTestCase {
       }
     }
   #endif
+}
+
+// MARK: - Generated client tests (Swift Testing)
+
+@Suite("FunctionsClient via generated client")
+struct FunctionsClientGeneratedTests {
+  @Test("invoke returns response data")
+  func invokesFunction() async throws {
+    let responseData = Data("{\"result\":\"ok\"}".utf8)
+    let transport = MockTransport(responseData: responseData, statusCode: 200)
+    let client = FunctionsClient(
+      url: URL(string: "https://x.supabase.co/functions/v1")!,
+      transport: transport
+    )
+
+    let (data, _) = try await client.invoke("hello")
+    #expect(data == responseData)
+  }
+
+  @Test("invoke throws httpError on non-2xx response")
+  func throwsOnError() async throws {
+    let errorData = Data("{\"error\":\"not found\"}".utf8)
+    let transport = MockTransport(responseData: errorData, statusCode: 404)
+    let client = FunctionsClient(
+      url: URL(string: "https://x.supabase.co/functions/v1")!,
+      transport: transport
+    )
+
+    await #expect(throws: FunctionsError.self) {
+      _ = try await client.invoke("missing")
+    }
+  }
+
+  @Test("invoke throws relayError when x-relay-error header is present")
+  func throwsRelayError() async throws {
+    var transport = MockTransport(responseData: Data(), statusCode: 299)
+    transport.responseHeaders = [.init("x-relay-error")!: "true"]
+    let client = FunctionsClient(
+      url: URL(string: "https://x.supabase.co/functions/v1")!,
+      transport: transport
+    )
+
+    await #expect {
+      _ = try await client.invoke("relay-fn")
+    } throws: { error in
+      guard case FunctionsError.relayError = error else { return false }
+      return true
+    }
+  }
 }

@@ -115,3 +115,4 @@ yarn-debug.log*
 yarn-error.log*
 .jj/
 .treq/
+smithy/build/

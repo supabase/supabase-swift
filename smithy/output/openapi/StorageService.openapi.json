@@ -1,0 +1,1388 @@
+{
+  "openapi": "3.0.2",
+  "info": {
+    "title": "Supabase Storage API",
+    "version": "1.0"
+  },
+  "paths": {
+    "/bucket": {
+      "get": {
+        "operationId": "ListBuckets",
+        "responses": {
+          "200": {
+            "description": "ListBuckets 200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBucketsResponseContent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "CreateBucket",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBucketRequestContent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "CreateBucket 200 response"
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bucket/{id}": {
+      "delete": {
+        "operationId": "DeleteBucket",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "DeleteBucket 200 response"
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "GetBucket",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GetBucket 200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBucketResponseContent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "UpdateBucket",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBucketRequestContent"
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "UpdateBucket 200 response"
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bucket/{id}/empty": {
+      "post": {
+        "operationId": "EmptyBucket",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EmptyBucket 200 response"
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/object/copy": {
+      "post": {
+        "operationId": "CopyObject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyObjectRequestContent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "CopyObject 200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopyObjectResponseContent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/object/info/{bucketId}/{wildcardPath+}": {
+      "get": {
+        "operationId": "GetObjectInfo",
+        "parameters": [
+          {
+            "name": "bucketId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "wildcardPath+",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GetObjectInfo 200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetObjectInfoResponseContent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/object/list/{bucketId}": {
+      "post": {
+        "operationId": "ListObjects",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListObjectsRequestContent"
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "bucketId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ListObjects 200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListObjectsResponseContent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/object/move": {
+      "post": {
+        "operationId": "MoveObject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveObjectRequestContent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "MoveObject 200 response"
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/object/sign/{bucketId}": {
+      "post": {
+        "operationId": "CreateSignedUrls",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSignedUrlsRequestContent"
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "bucketId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CreateSignedUrls 200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSignedUrlsResponseContent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/object/sign/{bucketId}/{wildcardPath+}": {
+      "post": {
+        "operationId": "CreateSignedUrl",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSignedUrlRequestContent"
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "bucketId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "wildcardPath+",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CreateSignedUrl 200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSignedUrlResponseContent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/object/upload/sign/{bucketId}/{wildcardPath+}": {
+      "post": {
+        "operationId": "CreateSignedUploadUrl",
+        "parameters": [
+          {
+            "name": "bucketId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "wildcardPath+",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "x-upsert",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CreateSignedUploadUrl 200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSignedUploadUrlResponseContent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/object/{bucketId}": {
+      "delete": {
+        "operationId": "DeleteObjects",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteObjectsRequestContent"
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "bucketId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "DeleteObjects 200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteObjectsResponseContent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/object/{bucketId}/{wildcardPath+}": {
+      "head": {
+        "operationId": "HeadObject",
+        "parameters": [
+          {
+            "name": "bucketId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "wildcardPath+",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HeadObject 200 response"
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "UploadObject",
+        "parameters": [
+          {
+            "name": "bucketId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "wildcardPath+",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "x-upsert",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cacheControl": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileUploadedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "UpdateObject",
+        "parameters": [
+          {
+            "name": "bucketId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "wildcardPath+",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cacheControl": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileUploadedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload/resumable": {
+      "post": {
+        "description": "Step 1: Create a new TUS upload session.\nThe server responds with a Location header containing the upload URL.",
+        "operationId": "CreateTusUpload",
+        "parameters": [
+          {
+            "name": "Tus-Resumable",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "Upload-Length",
+            "in": "header",
+            "description": "Total size of the file in bytes.",
+            "schema": {
+              "type": "number",
+              "description": "Total size of the file in bytes."
+            },
+            "required": true
+          },
+          {
+            "name": "Upload-Metadata",
+            "in": "header",
+            "description": "Base64-encoded TUS metadata (bucketName, objectName, contentType, cacheControl).",
+            "schema": {
+              "type": "string",
+              "description": "Base64-encoded TUS metadata (bucketName, objectName, contentType, cacheControl)."
+            },
+            "required": true
+          },
+          {
+            "name": "x-upsert",
+            "in": "header",
+            "description": "Set to \"true\" to overwrite an existing object at the same path.",
+            "schema": {
+              "type": "string",
+              "description": "Set to \"true\" to overwrite an existing object at the same path."
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "CreateTusUpload 201 response",
+            "headers": {
+              "Location": {
+                "description": "Full URL of the created upload session. Used in subsequent PATCH/HEAD requests.",
+                "schema": {
+                  "type": "string",
+                  "description": "Full URL of the created upload session. Used in subsequent PATCH/HEAD requests."
+                },
+                "required": true
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload/resumable/{uploadId}": {
+      "head": {
+        "description": "Step 3: Query the server-side offset of a TUS session (used when resuming).",
+        "operationId": "GetUploadOffset",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "Tus-Resumable",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GetUploadOffset 200 response",
+            "headers": {
+              "Upload-Offset": {
+                "schema": {
+                  "type": "number"
+                },
+                "required": true
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "description": "Step 2: Upload a chunk of data to an existing TUS session.\nRepeat with increasing Upload-Offset until all bytes are sent.",
+        "operationId": "UploadChunk",
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadChunkInputPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "uploadId",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "Tus-Resumable",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "Upload-Offset",
+            "in": "header",
+            "description": "Byte offset at which this chunk begins.",
+            "schema": {
+              "type": "number",
+              "description": "Byte offset at which this chunk begins."
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "UploadChunk 204 response",
+            "headers": {
+              "Upload-Offset": {
+                "description": "New server-side offset after the chunk was accepted.",
+                "schema": {
+                  "type": "number",
+                  "description": "New server-side offset after the chunk was accepted."
+                },
+                "required": true
+              }
+            }
+          },
+          "400": {
+            "description": "StorageError 400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageErrorResponseContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Bucket": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "public": {
+            "type": "boolean"
+          },
+          "file_size_limit": {
+            "type": "number"
+          },
+          "allowed_mime_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Common string list shape reused across services."
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "public"
+        ]
+      },
+      "CopyObjectRequestContent": {
+        "type": "object",
+        "properties": {
+          "bucketId": {
+            "type": "string"
+          },
+          "sourceKey": {
+            "type": "string"
+          },
+          "destinationKey": {
+            "type": "string"
+          },
+          "destinationBucket": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bucketId",
+          "destinationKey",
+          "sourceKey"
+        ]
+      },
+      "CopyObjectResponseContent": {
+        "type": "object",
+        "properties": {
+          "Key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "Key"
+        ]
+      },
+      "CreateBucketRequestContent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "public": {
+            "type": "boolean"
+          },
+          "file_size_limit": {
+            "type": "number"
+          },
+          "allowed_mime_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Common string list shape reused across services."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "public"
+        ]
+      },
+      "CreateSignedUploadUrlResponseContent": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "CreateSignedUrlRequestContent": {
+        "type": "object",
+        "properties": {
+          "expiresIn": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "expiresIn"
+        ]
+      },
+      "CreateSignedUrlResponseContent": {
+        "type": "object",
+        "properties": {
+          "signedURL": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "signedURL"
+        ]
+      },
+      "CreateSignedUrlsRequestContent": {
+        "type": "object",
+        "properties": {
+          "expiresIn": {
+            "type": "number"
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Common string list shape reused across services."
+          }
+        },
+        "required": [
+          "expiresIn",
+          "paths"
+        ]
+      },
+      "CreateSignedUrlsResponseContent": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SignedUrlResult"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "DeleteObjectsRequestContent": {
+        "type": "object",
+        "properties": {
+          "prefixes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Common string list shape reused across services."
+          }
+        },
+        "required": [
+          "prefixes"
+        ]
+      },
+      "DeleteObjectsResponseContent": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileObject"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "FileMetadata": {
+        "type": "object",
+        "properties": {
+          "eTag": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "mimetype": {
+            "type": "string"
+          },
+          "cacheControl": {
+            "type": "string"
+          },
+          "lastModified": {
+            "type": "string"
+          },
+          "contentLength": {
+            "type": "number"
+          },
+          "httpStatusCode": {
+            "type": "number"
+          }
+        }
+      },
+      "FileObject": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "last_accessed_at": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/FileMetadata"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "GetBucketResponseContent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "public": {
+            "type": "boolean"
+          },
+          "file_size_limit": {
+            "type": "number"
+          },
+          "allowed_mime_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Common string list shape reused across services."
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "public"
+        ]
+      },
+      "GetObjectInfoResponseContent": {
+        "type": "object",
+        "properties": {
+          "eTag": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "mimetype": {
+            "type": "string"
+          },
+          "cacheControl": {
+            "type": "string"
+          },
+          "lastModified": {
+            "type": "string"
+          },
+          "contentLength": {
+            "type": "number"
+          },
+          "httpStatusCode": {
+            "type": "number"
+          }
+        }
+      },
+      "ListBucketsResponseContent": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Bucket"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ListObjectsRequestContent": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "offset": {
+            "type": "number"
+          },
+          "sortBy": {
+            "$ref": "#/components/schemas/SortBy"
+          }
+        },
+        "required": [
+          "prefix"
+        ]
+      },
+      "ListObjectsResponseContent": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileObject"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "MoveObjectRequestContent": {
+        "type": "object",
+        "properties": {
+          "bucketId": {
+            "type": "string"
+          },
+          "sourceKey": {
+            "type": "string"
+          },
+          "destinationKey": {
+            "type": "string"
+          },
+          "destinationBucket": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bucketId",
+          "destinationKey",
+          "sourceKey"
+        ]
+      },
+      "SignedUrlResult": {
+        "type": "object",
+        "properties": {
+          "signedURL": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "SortBy": {
+        "type": "object",
+        "properties": {
+          "column": {
+            "type": "string"
+          },
+          "order": {
+            "type": "string"
+          }
+        }
+      },
+      "StorageErrorResponseContent": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "statusCode": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateBucketRequestContent": {
+        "type": "object",
+        "properties": {
+          "public": {
+            "type": "boolean"
+          },
+          "file_size_limit": {
+            "type": "number"
+          },
+          "allowed_mime_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Common string list shape reused across services."
+          }
+        },
+        "required": [
+          "public"
+        ]
+      },
+      "UploadChunkInputPayload": {
+        "type": "string",
+        "description": "Raw chunk bytes, streamed directly \u2014 never buffered.",
+        "format": "binary"
+      },
+      "FileUploadedResponse": {
+        "type": "object",
+        "properties": {
+          "Key": {
+            "type": "string"
+          },
+          "Id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "Key",
+          "Id"
+        ]
+      }
+    }
+  }
+}
