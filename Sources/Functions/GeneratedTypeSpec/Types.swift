@@ -219,16 +219,16 @@ internal enum Operations {
             internal struct Ok: Sendable, Hashable {
                 /// - Remark: Generated from `#/paths/functions/v1/{functionName}/GET/responses/200/content`.
                 internal enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/GET/responses/200/content/application\/octet-stream`.
-                    case binary(OpenAPIRuntime.HTTPBody)
-                    /// The associated value of the enum case if `self` is `.binary`.
+                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/GET/responses/200/content/*\/*`.
+                    case any(OpenAPIRuntime.HTTPBody)
+                    /// The associated value of the enum case if `self` is `.any`.
                     ///
-                    /// - Throws: An error if `self` is not `.binary`.
-                    /// - SeeAlso: `.binary`.
-                    internal var binary: OpenAPIRuntime.HTTPBody {
+                    /// - Throws: An error if `self` is not `.any`.
+                    /// - SeeAlso: `.any`.
+                    internal var any: OpenAPIRuntime.HTTPBody {
                         get throws {
                             switch self {
-                            case let .binary(body):
+                            case let .any(body):
                                 return body
                             }
                         }
@@ -320,13 +320,13 @@ internal enum Operations {
             }
         }
         internal enum AcceptableContentType: AcceptableProtocol {
-            case binary
+            case any
             case json
             case other(Swift.String)
             internal init?(rawValue: Swift.String) {
                 switch rawValue.lowercased() {
-                case "application/octet-stream":
-                    self = .binary
+                case "*/*":
+                    self = .any
                 case "application/json":
                     self = .json
                 default:
@@ -337,15 +337,15 @@ internal enum Operations {
                 switch self {
                 case let .other(string):
                     return string
-                case .binary:
-                    return "application/octet-stream"
+                case .any:
+                    return "*/*"
                 case .json:
                     return "application/json"
                 }
             }
             internal static var allCases: [Self] {
                 [
-                    .binary,
+                    .any,
                     .json
                 ]
             }
@@ -390,14 +390,8 @@ internal enum Operations {
             internal var headers: Operations.FunctionInvocations_invokePost.Input.Headers
             /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/requestBody`.
             internal enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/requestBody/content/application\/json`.
-                case json(OpenAPIRuntime.OpenAPIValueContainer)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/requestBody/content/application\/octet-stream`.
-                case binary(OpenAPIRuntime.HTTPBody)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/requestBody/content/text\/plain`.
-                case plainText(OpenAPIRuntime.HTTPBody)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/requestBody/content/application\/x-www-form-urlencoded`.
-                case urlEncodedForm(Swift.String)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/requestBody/content/*\/*`.
+                case any(OpenAPIRuntime.HTTPBody)
             }
             internal var body: Operations.FunctionInvocations_invokePost.Input.Body?
             /// Creates a new `Input`.
@@ -420,105 +414,17 @@ internal enum Operations {
             internal struct Ok: Sendable, Hashable {
                 /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/responses/200/content`.
                 internal enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/responses/200/content/json`.
-                    internal struct jsonPayload: Codable, Hashable, Sendable {
-                        /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/responses/200/content/json/value1`.
-                        internal var value1: OpenAPIRuntime.OpenAPIValueContainer?
-                        /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/responses/200/content/json/value2`.
-                        internal var value2: OpenAPIRuntime.OpenAPIValueContainer?
-                        /// Creates a new `jsonPayload`.
-                        ///
-                        /// - Parameters:
-                        ///   - value1:
-                        ///   - value2:
-                        internal init(
-                            value1: OpenAPIRuntime.OpenAPIValueContainer? = nil,
-                            value2: OpenAPIRuntime.OpenAPIValueContainer? = nil
-                        ) {
-                            self.value1 = value1
-                            self.value2 = value2
-                        }
-                        internal init(from decoder: any Swift.Decoder) throws {
-                            var errors: [any Swift.Error] = []
-                            do {
-                                self.value1 = try .init(from: decoder)
-                            } catch {
-                                errors.append(error)
-                            }
-                            do {
-                                self.value2 = try .init(from: decoder)
-                            } catch {
-                                errors.append(error)
-                            }
-                            try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                                [
-                                    self.value1,
-                                    self.value2
-                                ],
-                                type: Self.self,
-                                codingPath: decoder.codingPath,
-                                errors: errors
-                            )
-                        }
-                        internal func encode(to encoder: any Swift.Encoder) throws {
-                            try self.value1?.encode(to: encoder)
-                            try self.value2?.encode(to: encoder)
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/responses/200/content/application\/json`.
-                    case json(Operations.FunctionInvocations_invokePost.Output.Ok.Body.jsonPayload)
-                    /// The associated value of the enum case if `self` is `.json`.
+                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/responses/200/content/*\/*`.
+                    case any(OpenAPIRuntime.HTTPBody)
+                    /// The associated value of the enum case if `self` is `.any`.
                     ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    internal var json: Operations.FunctionInvocations_invokePost.Output.Ok.Body.jsonPayload {
+                    /// - Throws: An error if `self` is not `.any`.
+                    /// - SeeAlso: `.any`.
+                    internal var any: OpenAPIRuntime.HTTPBody {
                         get throws {
                             switch self {
-                            case let .json(body):
+                            case let .any(body):
                                 return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "application/json",
-                                    body: self
-                                )
-                            }
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/responses/200/content/application\/octet-stream`.
-                    case binary(OpenAPIRuntime.HTTPBody)
-                    /// The associated value of the enum case if `self` is `.binary`.
-                    ///
-                    /// - Throws: An error if `self` is not `.binary`.
-                    /// - SeeAlso: `.binary`.
-                    internal var binary: OpenAPIRuntime.HTTPBody {
-                        get throws {
-                            switch self {
-                            case let .binary(body):
-                                return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "application/octet-stream",
-                                    body: self
-                                )
-                            }
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/POST/responses/200/content/text\/plain`.
-                    case plainText(OpenAPIRuntime.HTTPBody)
-                    /// The associated value of the enum case if `self` is `.plainText`.
-                    ///
-                    /// - Throws: An error if `self` is not `.plainText`.
-                    /// - SeeAlso: `.plainText`.
-                    internal var plainText: OpenAPIRuntime.HTTPBody {
-                        get throws {
-                            switch self {
-                            case let .plainText(body):
-                                return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "text/plain",
-                                    body: self
-                                )
                             }
                         }
                     }
@@ -609,18 +515,15 @@ internal enum Operations {
             }
         }
         internal enum AcceptableContentType: AcceptableProtocol {
+            case any
             case json
-            case binary
-            case plainText
             case other(Swift.String)
             internal init?(rawValue: Swift.String) {
                 switch rawValue.lowercased() {
+                case "*/*":
+                    self = .any
                 case "application/json":
                     self = .json
-                case "application/octet-stream":
-                    self = .binary
-                case "text/plain":
-                    self = .plainText
                 default:
                     self = .other(rawValue)
                 }
@@ -629,19 +532,16 @@ internal enum Operations {
                 switch self {
                 case let .other(string):
                     return string
+                case .any:
+                    return "*/*"
                 case .json:
                     return "application/json"
-                case .binary:
-                    return "application/octet-stream"
-                case .plainText:
-                    return "text/plain"
                 }
             }
             internal static var allCases: [Self] {
                 [
-                    .json,
-                    .binary,
-                    .plainText
+                    .any,
+                    .json
                 ]
             }
         }
@@ -685,14 +585,8 @@ internal enum Operations {
             internal var headers: Operations.FunctionInvocations_invokePatch.Input.Headers
             /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/requestBody`.
             internal enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/requestBody/content/application\/json`.
-                case json(OpenAPIRuntime.OpenAPIValueContainer)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/requestBody/content/application\/octet-stream`.
-                case binary(OpenAPIRuntime.HTTPBody)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/requestBody/content/text\/plain`.
-                case plainText(OpenAPIRuntime.HTTPBody)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/requestBody/content/application\/x-www-form-urlencoded`.
-                case urlEncodedForm(Swift.String)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/requestBody/content/*\/*`.
+                case any(OpenAPIRuntime.HTTPBody)
             }
             internal var body: Operations.FunctionInvocations_invokePatch.Input.Body?
             /// Creates a new `Input`.
@@ -715,105 +609,17 @@ internal enum Operations {
             internal struct Ok: Sendable, Hashable {
                 /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/responses/200/content`.
                 internal enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/responses/200/content/json`.
-                    internal struct jsonPayload: Codable, Hashable, Sendable {
-                        /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/responses/200/content/json/value1`.
-                        internal var value1: OpenAPIRuntime.OpenAPIValueContainer?
-                        /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/responses/200/content/json/value2`.
-                        internal var value2: OpenAPIRuntime.OpenAPIValueContainer?
-                        /// Creates a new `jsonPayload`.
-                        ///
-                        /// - Parameters:
-                        ///   - value1:
-                        ///   - value2:
-                        internal init(
-                            value1: OpenAPIRuntime.OpenAPIValueContainer? = nil,
-                            value2: OpenAPIRuntime.OpenAPIValueContainer? = nil
-                        ) {
-                            self.value1 = value1
-                            self.value2 = value2
-                        }
-                        internal init(from decoder: any Swift.Decoder) throws {
-                            var errors: [any Swift.Error] = []
-                            do {
-                                self.value1 = try .init(from: decoder)
-                            } catch {
-                                errors.append(error)
-                            }
-                            do {
-                                self.value2 = try .init(from: decoder)
-                            } catch {
-                                errors.append(error)
-                            }
-                            try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                                [
-                                    self.value1,
-                                    self.value2
-                                ],
-                                type: Self.self,
-                                codingPath: decoder.codingPath,
-                                errors: errors
-                            )
-                        }
-                        internal func encode(to encoder: any Swift.Encoder) throws {
-                            try self.value1?.encode(to: encoder)
-                            try self.value2?.encode(to: encoder)
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/responses/200/content/application\/json`.
-                    case json(Operations.FunctionInvocations_invokePatch.Output.Ok.Body.jsonPayload)
-                    /// The associated value of the enum case if `self` is `.json`.
+                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/responses/200/content/*\/*`.
+                    case any(OpenAPIRuntime.HTTPBody)
+                    /// The associated value of the enum case if `self` is `.any`.
                     ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    internal var json: Operations.FunctionInvocations_invokePatch.Output.Ok.Body.jsonPayload {
+                    /// - Throws: An error if `self` is not `.any`.
+                    /// - SeeAlso: `.any`.
+                    internal var any: OpenAPIRuntime.HTTPBody {
                         get throws {
                             switch self {
-                            case let .json(body):
+                            case let .any(body):
                                 return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "application/json",
-                                    body: self
-                                )
-                            }
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/responses/200/content/application\/octet-stream`.
-                    case binary(OpenAPIRuntime.HTTPBody)
-                    /// The associated value of the enum case if `self` is `.binary`.
-                    ///
-                    /// - Throws: An error if `self` is not `.binary`.
-                    /// - SeeAlso: `.binary`.
-                    internal var binary: OpenAPIRuntime.HTTPBody {
-                        get throws {
-                            switch self {
-                            case let .binary(body):
-                                return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "application/octet-stream",
-                                    body: self
-                                )
-                            }
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PATCH/responses/200/content/text\/plain`.
-                    case plainText(OpenAPIRuntime.HTTPBody)
-                    /// The associated value of the enum case if `self` is `.plainText`.
-                    ///
-                    /// - Throws: An error if `self` is not `.plainText`.
-                    /// - SeeAlso: `.plainText`.
-                    internal var plainText: OpenAPIRuntime.HTTPBody {
-                        get throws {
-                            switch self {
-                            case let .plainText(body):
-                                return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "text/plain",
-                                    body: self
-                                )
                             }
                         }
                     }
@@ -904,18 +710,15 @@ internal enum Operations {
             }
         }
         internal enum AcceptableContentType: AcceptableProtocol {
+            case any
             case json
-            case binary
-            case plainText
             case other(Swift.String)
             internal init?(rawValue: Swift.String) {
                 switch rawValue.lowercased() {
+                case "*/*":
+                    self = .any
                 case "application/json":
                     self = .json
-                case "application/octet-stream":
-                    self = .binary
-                case "text/plain":
-                    self = .plainText
                 default:
                     self = .other(rawValue)
                 }
@@ -924,19 +727,16 @@ internal enum Operations {
                 switch self {
                 case let .other(string):
                     return string
+                case .any:
+                    return "*/*"
                 case .json:
                     return "application/json"
-                case .binary:
-                    return "application/octet-stream"
-                case .plainText:
-                    return "text/plain"
                 }
             }
             internal static var allCases: [Self] {
                 [
-                    .json,
-                    .binary,
-                    .plainText
+                    .any,
+                    .json
                 ]
             }
         }
@@ -980,14 +780,8 @@ internal enum Operations {
             internal var headers: Operations.FunctionInvocations_invokePut.Input.Headers
             /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/requestBody`.
             internal enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/requestBody/content/application\/json`.
-                case json(OpenAPIRuntime.OpenAPIValueContainer)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/requestBody/content/application\/octet-stream`.
-                case binary(OpenAPIRuntime.HTTPBody)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/requestBody/content/text\/plain`.
-                case plainText(OpenAPIRuntime.HTTPBody)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/requestBody/content/application\/x-www-form-urlencoded`.
-                case urlEncodedForm(Swift.String)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/requestBody/content/*\/*`.
+                case any(OpenAPIRuntime.HTTPBody)
             }
             internal var body: Operations.FunctionInvocations_invokePut.Input.Body?
             /// Creates a new `Input`.
@@ -1010,105 +804,17 @@ internal enum Operations {
             internal struct Ok: Sendable, Hashable {
                 /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/responses/200/content`.
                 internal enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/responses/200/content/json`.
-                    internal struct jsonPayload: Codable, Hashable, Sendable {
-                        /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/responses/200/content/json/value1`.
-                        internal var value1: OpenAPIRuntime.OpenAPIValueContainer?
-                        /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/responses/200/content/json/value2`.
-                        internal var value2: OpenAPIRuntime.OpenAPIValueContainer?
-                        /// Creates a new `jsonPayload`.
-                        ///
-                        /// - Parameters:
-                        ///   - value1:
-                        ///   - value2:
-                        internal init(
-                            value1: OpenAPIRuntime.OpenAPIValueContainer? = nil,
-                            value2: OpenAPIRuntime.OpenAPIValueContainer? = nil
-                        ) {
-                            self.value1 = value1
-                            self.value2 = value2
-                        }
-                        internal init(from decoder: any Swift.Decoder) throws {
-                            var errors: [any Swift.Error] = []
-                            do {
-                                self.value1 = try .init(from: decoder)
-                            } catch {
-                                errors.append(error)
-                            }
-                            do {
-                                self.value2 = try .init(from: decoder)
-                            } catch {
-                                errors.append(error)
-                            }
-                            try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                                [
-                                    self.value1,
-                                    self.value2
-                                ],
-                                type: Self.self,
-                                codingPath: decoder.codingPath,
-                                errors: errors
-                            )
-                        }
-                        internal func encode(to encoder: any Swift.Encoder) throws {
-                            try self.value1?.encode(to: encoder)
-                            try self.value2?.encode(to: encoder)
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/responses/200/content/application\/json`.
-                    case json(Operations.FunctionInvocations_invokePut.Output.Ok.Body.jsonPayload)
-                    /// The associated value of the enum case if `self` is `.json`.
+                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/responses/200/content/*\/*`.
+                    case any(OpenAPIRuntime.HTTPBody)
+                    /// The associated value of the enum case if `self` is `.any`.
                     ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    internal var json: Operations.FunctionInvocations_invokePut.Output.Ok.Body.jsonPayload {
+                    /// - Throws: An error if `self` is not `.any`.
+                    /// - SeeAlso: `.any`.
+                    internal var any: OpenAPIRuntime.HTTPBody {
                         get throws {
                             switch self {
-                            case let .json(body):
+                            case let .any(body):
                                 return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "application/json",
-                                    body: self
-                                )
-                            }
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/responses/200/content/application\/octet-stream`.
-                    case binary(OpenAPIRuntime.HTTPBody)
-                    /// The associated value of the enum case if `self` is `.binary`.
-                    ///
-                    /// - Throws: An error if `self` is not `.binary`.
-                    /// - SeeAlso: `.binary`.
-                    internal var binary: OpenAPIRuntime.HTTPBody {
-                        get throws {
-                            switch self {
-                            case let .binary(body):
-                                return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "application/octet-stream",
-                                    body: self
-                                )
-                            }
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/PUT/responses/200/content/text\/plain`.
-                    case plainText(OpenAPIRuntime.HTTPBody)
-                    /// The associated value of the enum case if `self` is `.plainText`.
-                    ///
-                    /// - Throws: An error if `self` is not `.plainText`.
-                    /// - SeeAlso: `.plainText`.
-                    internal var plainText: OpenAPIRuntime.HTTPBody {
-                        get throws {
-                            switch self {
-                            case let .plainText(body):
-                                return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "text/plain",
-                                    body: self
-                                )
                             }
                         }
                     }
@@ -1199,18 +905,15 @@ internal enum Operations {
             }
         }
         internal enum AcceptableContentType: AcceptableProtocol {
+            case any
             case json
-            case binary
-            case plainText
             case other(Swift.String)
             internal init?(rawValue: Swift.String) {
                 switch rawValue.lowercased() {
+                case "*/*":
+                    self = .any
                 case "application/json":
                     self = .json
-                case "application/octet-stream":
-                    self = .binary
-                case "text/plain":
-                    self = .plainText
                 default:
                     self = .other(rawValue)
                 }
@@ -1219,19 +922,16 @@ internal enum Operations {
                 switch self {
                 case let .other(string):
                     return string
+                case .any:
+                    return "*/*"
                 case .json:
                     return "application/json"
-                case .binary:
-                    return "application/octet-stream"
-                case .plainText:
-                    return "text/plain"
                 }
             }
             internal static var allCases: [Self] {
                 [
-                    .json,
-                    .binary,
-                    .plainText
+                    .any,
+                    .json
                 ]
             }
         }
@@ -1275,14 +975,8 @@ internal enum Operations {
             internal var headers: Operations.FunctionInvocations_invokeDelete.Input.Headers
             /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/requestBody`.
             internal enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/requestBody/content/application\/json`.
-                case json(OpenAPIRuntime.OpenAPIValueContainer)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/requestBody/content/application\/octet-stream`.
-                case binary(OpenAPIRuntime.HTTPBody)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/requestBody/content/text\/plain`.
-                case plainText(OpenAPIRuntime.HTTPBody)
-                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/requestBody/content/application\/x-www-form-urlencoded`.
-                case urlEncodedForm(Swift.String)
+                /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/requestBody/content/*\/*`.
+                case any(OpenAPIRuntime.HTTPBody)
             }
             internal var body: Operations.FunctionInvocations_invokeDelete.Input.Body?
             /// Creates a new `Input`.
@@ -1305,105 +999,17 @@ internal enum Operations {
             internal struct Ok: Sendable, Hashable {
                 /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/responses/200/content`.
                 internal enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/responses/200/content/json`.
-                    internal struct jsonPayload: Codable, Hashable, Sendable {
-                        /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/responses/200/content/json/value1`.
-                        internal var value1: OpenAPIRuntime.OpenAPIValueContainer?
-                        /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/responses/200/content/json/value2`.
-                        internal var value2: OpenAPIRuntime.OpenAPIValueContainer?
-                        /// Creates a new `jsonPayload`.
-                        ///
-                        /// - Parameters:
-                        ///   - value1:
-                        ///   - value2:
-                        internal init(
-                            value1: OpenAPIRuntime.OpenAPIValueContainer? = nil,
-                            value2: OpenAPIRuntime.OpenAPIValueContainer? = nil
-                        ) {
-                            self.value1 = value1
-                            self.value2 = value2
-                        }
-                        internal init(from decoder: any Swift.Decoder) throws {
-                            var errors: [any Swift.Error] = []
-                            do {
-                                self.value1 = try .init(from: decoder)
-                            } catch {
-                                errors.append(error)
-                            }
-                            do {
-                                self.value2 = try .init(from: decoder)
-                            } catch {
-                                errors.append(error)
-                            }
-                            try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                                [
-                                    self.value1,
-                                    self.value2
-                                ],
-                                type: Self.self,
-                                codingPath: decoder.codingPath,
-                                errors: errors
-                            )
-                        }
-                        internal func encode(to encoder: any Swift.Encoder) throws {
-                            try self.value1?.encode(to: encoder)
-                            try self.value2?.encode(to: encoder)
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/responses/200/content/application\/json`.
-                    case json(Operations.FunctionInvocations_invokeDelete.Output.Ok.Body.jsonPayload)
-                    /// The associated value of the enum case if `self` is `.json`.
+                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/responses/200/content/*\/*`.
+                    case any(OpenAPIRuntime.HTTPBody)
+                    /// The associated value of the enum case if `self` is `.any`.
                     ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    internal var json: Operations.FunctionInvocations_invokeDelete.Output.Ok.Body.jsonPayload {
+                    /// - Throws: An error if `self` is not `.any`.
+                    /// - SeeAlso: `.any`.
+                    internal var any: OpenAPIRuntime.HTTPBody {
                         get throws {
                             switch self {
-                            case let .json(body):
+                            case let .any(body):
                                 return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "application/json",
-                                    body: self
-                                )
-                            }
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/responses/200/content/application\/octet-stream`.
-                    case binary(OpenAPIRuntime.HTTPBody)
-                    /// The associated value of the enum case if `self` is `.binary`.
-                    ///
-                    /// - Throws: An error if `self` is not `.binary`.
-                    /// - SeeAlso: `.binary`.
-                    internal var binary: OpenAPIRuntime.HTTPBody {
-                        get throws {
-                            switch self {
-                            case let .binary(body):
-                                return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "application/octet-stream",
-                                    body: self
-                                )
-                            }
-                        }
-                    }
-                    /// - Remark: Generated from `#/paths/functions/v1/{functionName}/DELETE/responses/200/content/text\/plain`.
-                    case plainText(OpenAPIRuntime.HTTPBody)
-                    /// The associated value of the enum case if `self` is `.plainText`.
-                    ///
-                    /// - Throws: An error if `self` is not `.plainText`.
-                    /// - SeeAlso: `.plainText`.
-                    internal var plainText: OpenAPIRuntime.HTTPBody {
-                        get throws {
-                            switch self {
-                            case let .plainText(body):
-                                return body
-                            default:
-                                try throwUnexpectedResponseBody(
-                                    expectedContent: "text/plain",
-                                    body: self
-                                )
                             }
                         }
                     }
@@ -1494,18 +1100,15 @@ internal enum Operations {
             }
         }
         internal enum AcceptableContentType: AcceptableProtocol {
+            case any
             case json
-            case binary
-            case plainText
             case other(Swift.String)
             internal init?(rawValue: Swift.String) {
                 switch rawValue.lowercased() {
+                case "*/*":
+                    self = .any
                 case "application/json":
                     self = .json
-                case "application/octet-stream":
-                    self = .binary
-                case "text/plain":
-                    self = .plainText
                 default:
                     self = .other(rawValue)
                 }
@@ -1514,19 +1117,16 @@ internal enum Operations {
                 switch self {
                 case let .other(string):
                     return string
+                case .any:
+                    return "*/*"
                 case .json:
                     return "application/json"
-                case .binary:
-                    return "application/octet-stream"
-                case .plainText:
-                    return "text/plain"
                 }
             }
             internal static var allCases: [Self] {
                 [
-                    .json,
-                    .binary,
-                    .plainText
+                    .any,
+                    .json
                 ]
             }
         }
