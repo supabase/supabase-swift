@@ -1,0 +1,344 @@
+openapi: 3.0.0
+info:
+  title: Supabase PostgREST API
+  version: '1.0'
+tags: []
+paths:
+  /rpc/{functionName}:
+    post:
+      operationId: RpcOperations_rpc
+      parameters:
+        - name: functionName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: params
+          in: query
+          required: false
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Content-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+  /{table}:
+    get:
+      operationId: TableOperations_from
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: params
+          in: query
+          required: false
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/json:
+              schema: {}
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+    post:
+      operationId: TableOperations_insert
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: params
+          in: query
+          required: false
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Content-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/json:
+              schema: {}
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+    put:
+      operationId: TableOperations_upsert
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: params
+          in: query
+          required: false
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Content-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/json:
+              schema: {}
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+    patch:
+      operationId: TableOperations_update
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: params
+          in: query
+          required: false
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Content-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/json:
+              schema: {}
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+    delete:
+      operationId: TableOperations_deleteRows
+      parameters:
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: params
+          in: query
+          required: false
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Content-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: Accept-Profile
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            Content-Range:
+              required: false
+              schema:
+                type: string
+            Preference-Applied:
+              required: false
+              schema:
+                type: string
+          content:
+            application/json:
+              schema: {}
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostgRESTError'
+components:
+  schemas:
+    PostgRESTError:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        details:
+          type: string
+        hint:
+          type: string
+servers:
+  - url: '{baseUrl}'
+    description: Supabase PostgREST endpoint
+    variables:
+      baseUrl:
+        default: ''

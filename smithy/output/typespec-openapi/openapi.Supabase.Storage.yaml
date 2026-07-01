@@ -1,0 +1,723 @@
+openapi: 3.0.0
+info:
+  title: Supabase Storage API
+  version: '1.0'
+tags: []
+paths:
+  /bucket:
+    get:
+      operationId: Buckets_list
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Bucket'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+    post:
+      operationId: Buckets_create
+      parameters: []
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBucketInput'
+  /bucket/{id}:
+    get:
+      operationId: Buckets_get
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bucket'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+    put:
+      operationId: Buckets_update
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBucketInput'
+    delete:
+      operationId: Buckets_deleteBucket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+  /bucket/{id}/empty:
+    post:
+      operationId: Buckets_empty
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+  /object/copy:
+    post:
+      operationId: Objects_copy
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopyObjectOutput'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopyObjectInput'
+  /object/info/{bucketId}/{wildcardPath}:
+    get:
+      operationId: Objects_info
+      parameters:
+        - name: bucketId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: wildcardPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileInfo'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+  /object/list/{bucketId}:
+    post:
+      operationId: Objects_list
+      parameters:
+        - name: bucketId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileObject'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListObjectsInput'
+  /object/move:
+    post:
+      operationId: Objects_move
+      parameters: []
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveObjectInput'
+  /object/sign/{bucketId}:
+    post:
+      operationId: Objects_createSignedUrls
+      parameters:
+        - name: bucketId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SignedUrlResult'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSignedUrlsInput'
+  /object/sign/{bucketId}/{wildcardPath}:
+    post:
+      operationId: Objects_createSignedUrl
+      parameters:
+        - name: bucketId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: wildcardPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSignedUrlOutput'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSignedUrlInput'
+  /object/upload/sign/{bucketId}/{wildcardPath}:
+    post:
+      operationId: Objects_createSignedUploadUrl
+      parameters:
+        - name: bucketId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: wildcardPath
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-upsert
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSignedUploadUrlOutput'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+  /object/{bucketId}:
+    delete:
+      operationId: Objects_deleteObjects
+      parameters:
+        - name: bucketId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileObject'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prefixes:
+                  type: array
+                  items:
+                    type: string
+              required:
+                - prefixes
+  /object/{bucketId}/{wildcardPath}:
+    head:
+      operationId: Objects_head
+      parameters:
+        - name: bucketId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: wildcardPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+  /upload/resumable:
+    post:
+      operationId: TusUploads_create
+      parameters:
+        - name: Upload-Length
+          in: header
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: Upload-Metadata
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: Tus-Resumable
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: x-upsert
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          headers:
+            location:
+              required: true
+              schema:
+                type: string
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+  /upload/resumable/{uploadId}:
+    patch:
+      operationId: TusUploads_uploadChunk
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Upload-Offset
+          in: header
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: Tus-Resumable
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+          headers:
+            Upload-Offset:
+              required: true
+              schema:
+                type: integer
+                format: int64
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+    head:
+      operationId: TusUploads_getOffset
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Tus-Resumable
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            Upload-Offset:
+              required: true
+              schema:
+                type: integer
+                format: int64
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageError'
+components:
+  schemas:
+    Bucket:
+      type: object
+      required:
+        - id
+        - name
+        - public
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        public:
+          type: boolean
+        file_size_limit:
+          type: integer
+          format: int64
+        allowed_mime_types:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
+    CopyObjectInput:
+      type: object
+      required:
+        - bucketId
+        - sourceKey
+        - destinationKey
+      properties:
+        bucketId:
+          type: string
+        sourceKey:
+          type: string
+        destinationKey:
+          type: string
+        destinationBucket:
+          type: string
+    CopyObjectOutput:
+      type: object
+      required:
+        - Key
+      properties:
+        Key:
+          type: string
+    CreateBucketInput:
+      type: object
+      required:
+        - id
+        - name
+        - public
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        public:
+          type: boolean
+        file_size_limit:
+          type: integer
+          format: int64
+        allowed_mime_types:
+          type: array
+          items:
+            type: string
+    CreateSignedUploadUrlOutput:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+    CreateSignedUrlInput:
+      type: object
+      required:
+        - expiresIn
+      properties:
+        expiresIn:
+          type: integer
+          format: int32
+    CreateSignedUrlOutput:
+      type: object
+      required:
+        - signedURL
+      properties:
+        signedURL:
+          type: string
+    CreateSignedUrlsInput:
+      type: object
+      required:
+        - expiresIn
+        - paths
+      properties:
+        expiresIn:
+          type: integer
+          format: int32
+        paths:
+          type: array
+          items:
+            type: string
+    FileInfo:
+      type: object
+      properties:
+        eTag:
+          type: string
+        size:
+          type: integer
+          format: int64
+        mimetype:
+          type: string
+        cacheControl:
+          type: string
+        lastModified:
+          type: string
+        contentLength:
+          type: integer
+          format: int64
+        httpStatusCode:
+          type: integer
+          format: int32
+    FileMetadata:
+      type: object
+      properties:
+        eTag:
+          type: string
+        size:
+          type: integer
+          format: int64
+        mimetype:
+          type: string
+        cacheControl:
+          type: string
+        lastModified:
+          type: string
+        contentLength:
+          type: integer
+          format: int64
+        httpStatusCode:
+          type: integer
+          format: int32
+    FileObject:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        id:
+          type: string
+        updated_at:
+          type: string
+        created_at:
+          type: string
+        last_accessed_at:
+          type: string
+        metadata:
+          $ref: '#/components/schemas/FileMetadata'
+    ListObjectsInput:
+      type: object
+      required:
+        - prefix
+      properties:
+        prefix:
+          type: string
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+        sortBy:
+          $ref: '#/components/schemas/SortBy'
+    MoveObjectInput:
+      type: object
+      required:
+        - bucketId
+        - sourceKey
+        - destinationKey
+      properties:
+        bucketId:
+          type: string
+        sourceKey:
+          type: string
+        destinationKey:
+          type: string
+        destinationBucket:
+          type: string
+    SignedUrlResult:
+      type: object
+      required:
+        - path
+      properties:
+        signedURL:
+          type: string
+        path:
+          type: string
+        error:
+          type: string
+    SortBy:
+      type: object
+      properties:
+        column:
+          type: string
+        order:
+          type: string
+    StorageError:
+      type: object
+      properties:
+        message:
+          type: string
+        error:
+          type: string
+        statusCode:
+          type: string
+    UpdateBucketInput:
+      type: object
+      required:
+        - public
+      properties:
+        public:
+          type: boolean
+        file_size_limit:
+          type: integer
+          format: int64
+        allowed_mime_types:
+          type: array
+          items:
+            type: string
+servers:
+  - url: '{baseUrl}'
+    description: Supabase Storage endpoint
+    variables:
+      baseUrl:
+        default: ''
