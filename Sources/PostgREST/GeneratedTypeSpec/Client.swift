@@ -103,16 +103,16 @@ internal struct Client: APIProtocol {
                     let chosenContentType = try converter.bestContentType(
                         received: contentType,
                         options: [
-                            "application/json"
+                            "application/octet-stream"
                         ]
                     )
                     switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            OpenAPIRuntime.OpenAPIValueContainer.self,
+                    case "application/octet-stream":
+                        body = try converter.getResponseBodyAsBinary(
+                            OpenAPIRuntime.HTTPBody.self,
                             from: responseBody,
                             transforming: { value in
-                                .json(value)
+                                .binary(value)
                             }
                         )
                     default:
@@ -199,11 +199,11 @@ internal struct Client: APIProtocol {
                 )
                 let body: OpenAPIRuntime.HTTPBody?
                 switch input.body {
-                case let .json(value):
-                    body = try converter.setRequiredRequestBodyAsJSON(
+                case let .binary(value):
+                    body = try converter.setRequiredRequestBodyAsBinary(
                         value,
                         headerFields: &request.headerFields,
-                        contentType: "application/json; charset=utf-8"
+                        contentType: "application/octet-stream"
                     )
                 }
                 return (request, body)
@@ -228,16 +228,16 @@ internal struct Client: APIProtocol {
                     let chosenContentType = try converter.bestContentType(
                         received: contentType,
                         options: [
-                            "application/json"
+                            "application/octet-stream"
                         ]
                     )
                     switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            OpenAPIRuntime.OpenAPIValueContainer.self,
+                    case "application/octet-stream":
+                        body = try converter.getResponseBodyAsBinary(
+                            OpenAPIRuntime.HTTPBody.self,
                             from: responseBody,
                             transforming: { value in
-                                .json(value)
+                                .binary(value)
                             }
                         )
                     default:
@@ -377,16 +377,16 @@ internal struct Client: APIProtocol {
                     let chosenContentType = try converter.bestContentType(
                         received: contentType,
                         options: [
-                            "application/json"
+                            "application/octet-stream"
                         ]
                     )
                     switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            OpenAPIRuntime.OpenAPIValueContainer.self,
+                    case "application/octet-stream":
+                        body = try converter.getResponseBodyAsBinary(
+                            OpenAPIRuntime.HTTPBody.self,
                             from: responseBody,
                             transforming: { value in
-                                .json(value)
+                                .binary(value)
                             }
                         )
                     default:
@@ -480,11 +480,11 @@ internal struct Client: APIProtocol {
                 )
                 let body: OpenAPIRuntime.HTTPBody?
                 switch input.body {
-                case let .json(value):
-                    body = try converter.setRequiredRequestBodyAsJSON(
+                case let .binary(value):
+                    body = try converter.setRequiredRequestBodyAsBinary(
                         value,
                         headerFields: &request.headerFields,
-                        contentType: "application/json; charset=utf-8"
+                        contentType: "application/octet-stream"
                     )
                 }
                 return (request, body)
@@ -509,16 +509,16 @@ internal struct Client: APIProtocol {
                     let chosenContentType = try converter.bestContentType(
                         received: contentType,
                         options: [
-                            "application/json"
+                            "application/octet-stream"
                         ]
                     )
                     switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            OpenAPIRuntime.OpenAPIValueContainer.self,
+                    case "application/octet-stream":
+                        body = try converter.getResponseBodyAsBinary(
+                            OpenAPIRuntime.HTTPBody.self,
                             from: responseBody,
                             transforming: { value in
-                                .json(value)
+                                .binary(value)
                             }
                         )
                     default:
@@ -612,11 +612,11 @@ internal struct Client: APIProtocol {
                 )
                 let body: OpenAPIRuntime.HTTPBody?
                 switch input.body {
-                case let .json(value):
-                    body = try converter.setRequiredRequestBodyAsJSON(
+                case let .binary(value):
+                    body = try converter.setRequiredRequestBodyAsBinary(
                         value,
                         headerFields: &request.headerFields,
-                        contentType: "application/json; charset=utf-8"
+                        contentType: "application/octet-stream"
                     )
                 }
                 return (request, body)
@@ -641,16 +641,16 @@ internal struct Client: APIProtocol {
                     let chosenContentType = try converter.bestContentType(
                         received: contentType,
                         options: [
-                            "application/json"
+                            "application/octet-stream"
                         ]
                     )
                     switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            OpenAPIRuntime.OpenAPIValueContainer.self,
+                    case "application/octet-stream":
+                        body = try converter.getResponseBodyAsBinary(
+                            OpenAPIRuntime.HTTPBody.self,
                             from: responseBody,
                             transforming: { value in
-                                .json(value)
+                                .binary(value)
                             }
                         )
                     default:
@@ -751,11 +751,11 @@ internal struct Client: APIProtocol {
                 )
                 let body: OpenAPIRuntime.HTTPBody?
                 switch input.body {
-                case let .json(value):
-                    body = try converter.setRequiredRequestBodyAsJSON(
+                case let .binary(value):
+                    body = try converter.setRequiredRequestBodyAsBinary(
                         value,
                         headerFields: &request.headerFields,
-                        contentType: "application/json; charset=utf-8"
+                        contentType: "application/octet-stream"
                     )
                 }
                 return (request, body)
@@ -780,16 +780,16 @@ internal struct Client: APIProtocol {
                     let chosenContentType = try converter.bestContentType(
                         received: contentType,
                         options: [
-                            "application/json"
+                            "application/octet-stream"
                         ]
                     )
                     switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            OpenAPIRuntime.OpenAPIValueContainer.self,
+                    case "application/octet-stream":
+                        body = try converter.getResponseBodyAsBinary(
+                            OpenAPIRuntime.HTTPBody.self,
                             from: responseBody,
                             transforming: { value in
-                                .json(value)
+                                .binary(value)
                             }
                         )
                     default:
@@ -903,16 +903,16 @@ internal struct Client: APIProtocol {
                     let chosenContentType = try converter.bestContentType(
                         received: contentType,
                         options: [
-                            "application/json"
+                            "application/octet-stream"
                         ]
                     )
                     switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            OpenAPIRuntime.OpenAPIValueContainer.self,
+                    case "application/octet-stream":
+                        body = try converter.getResponseBodyAsBinary(
+                            OpenAPIRuntime.HTTPBody.self,
                             from: responseBody,
                             transforming: { value in
-                                .json(value)
+                                .binary(value)
                             }
                         )
                     default:

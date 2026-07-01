@@ -48,8 +48,10 @@ paths:
               schema:
                 type: string
           content:
-            application/json:
-              schema: {}
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         default:
           description: An unexpected error response.
           content:
@@ -59,8 +61,10 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
-            schema: {}
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
     get:
       operationId: RpcOperations_rpcGet
       description: |-
@@ -104,8 +108,10 @@ paths:
               schema:
                 type: string
           content:
-            application/json:
-              schema: {}
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         default:
           description: An unexpected error response.
           content:
@@ -198,8 +204,10 @@ paths:
               schema:
                 type: string
           content:
-            application/json:
-              schema: {}
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         default:
           description: An unexpected error response.
           content:
@@ -257,8 +265,10 @@ paths:
               schema:
                 type: string
           content:
-            application/json:
-              schema: {}
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         default:
           description: An unexpected error response.
           content:
@@ -268,8 +278,10 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
-            schema: {}
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
     put:
       operationId: TableOperations_upsert
       description: UPSERT rows (PUT).
@@ -328,8 +340,10 @@ paths:
               schema:
                 type: string
           content:
-            application/json:
-              schema: {}
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         default:
           description: An unexpected error response.
           content:
@@ -339,8 +353,10 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
-            schema: {}
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
     patch:
       operationId: TableOperations_update
       description: UPDATE rows matching the filter.
@@ -392,8 +408,10 @@ paths:
               schema:
                 type: string
           content:
-            application/json:
-              schema: {}
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         default:
           description: An unexpected error response.
           content:
@@ -403,8 +421,10 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
-            schema: {}
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
     delete:
       operationId: TableOperations_deleteRows
       description: DELETE rows matching the filter.
@@ -456,8 +476,10 @@ paths:
               schema:
                 type: string
           content:
-            application/json:
-              schema: {}
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         default:
           description: An unexpected error response.
           content:
