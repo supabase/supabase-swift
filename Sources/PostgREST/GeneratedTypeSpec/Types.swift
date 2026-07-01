@@ -11,21 +11,44 @@ import struct Foundation.Date
 #endif
 /// A type that performs HTTP operations defined by the OpenAPI document.
 internal protocol APIProtocol: Sendable {
+    /// Call a read-only RPC function via GET.
+    /// Function arguments are passed as query params (each arg is its own param).
+    ///
+    /// - Remark: HTTP `GET /rpc/{functionName}`.
+    /// - Remark: Generated from `#/paths//rpc/{functionName}/get(RpcOperations_rpcGet)`.
+    func RpcOperations_rpcGet(_ input: Operations.RpcOperations_rpcGet.Input) async throws -> Operations.RpcOperations_rpcGet.Output
+    /// Call an RPC function via POST with a JSON body.
+    ///
     /// - Remark: HTTP `POST /rpc/{functionName}`.
     /// - Remark: Generated from `#/paths//rpc/{functionName}/post(RpcOperations_rpc)`.
     func RpcOperations_rpc(_ input: Operations.RpcOperations_rpc.Input) async throws -> Operations.RpcOperations_rpc.Output
+    /// SELECT rows from a table.
+    ///
+    /// Fixed params (select, order, limit, offset) are named so generators emit
+    /// typed, documented parameters. Column filters are passed via `filters`:
+    /// each map entry becomes its own query parameter when serialized
+    /// (explode: true), e.g. {"id": "eq.5"} → ?id=eq.5.
+    ///
     /// - Remark: HTTP `GET /{table}`.
     /// - Remark: Generated from `#/paths//{table}/get(TableOperations_from)`.
     func TableOperations_from(_ input: Operations.TableOperations_from.Input) async throws -> Operations.TableOperations_from.Output
+    /// INSERT rows into a table.
+    ///
     /// - Remark: HTTP `POST /{table}`.
     /// - Remark: Generated from `#/paths//{table}/post(TableOperations_insert)`.
     func TableOperations_insert(_ input: Operations.TableOperations_insert.Input) async throws -> Operations.TableOperations_insert.Output
+    /// UPDATE rows matching the filter.
+    ///
     /// - Remark: HTTP `PATCH /{table}`.
     /// - Remark: Generated from `#/paths//{table}/patch(TableOperations_update)`.
     func TableOperations_update(_ input: Operations.TableOperations_update.Input) async throws -> Operations.TableOperations_update.Output
+    /// UPSERT rows (PUT).
+    ///
     /// - Remark: HTTP `PUT /{table}`.
     /// - Remark: Generated from `#/paths//{table}/put(TableOperations_upsert)`.
     func TableOperations_upsert(_ input: Operations.TableOperations_upsert.Input) async throws -> Operations.TableOperations_upsert.Output
+    /// DELETE rows matching the filter.
+    ///
     /// - Remark: HTTP `DELETE /{table}`.
     /// - Remark: Generated from `#/paths//{table}/delete(TableOperations_deleteRows)`.
     func TableOperations_deleteRows(_ input: Operations.TableOperations_deleteRows.Input) async throws -> Operations.TableOperations_deleteRows.Output
@@ -33,6 +56,24 @@ internal protocol APIProtocol: Sendable {
 
 /// Convenience overloads for operation inputs.
 extension APIProtocol {
+    /// Call a read-only RPC function via GET.
+    /// Function arguments are passed as query params (each arg is its own param).
+    ///
+    /// - Remark: HTTP `GET /rpc/{functionName}`.
+    /// - Remark: Generated from `#/paths//rpc/{functionName}/get(RpcOperations_rpcGet)`.
+    internal func RpcOperations_rpcGet(
+        path: Operations.RpcOperations_rpcGet.Input.Path,
+        query: Operations.RpcOperations_rpcGet.Input.Query = .init(),
+        headers: Operations.RpcOperations_rpcGet.Input.Headers = .init()
+    ) async throws -> Operations.RpcOperations_rpcGet.Output {
+        try await RpcOperations_rpcGet(Operations.RpcOperations_rpcGet.Input(
+            path: path,
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Call an RPC function via POST with a JSON body.
+    ///
     /// - Remark: HTTP `POST /rpc/{functionName}`.
     /// - Remark: Generated from `#/paths//rpc/{functionName}/post(RpcOperations_rpc)`.
     internal func RpcOperations_rpc(
@@ -48,6 +89,13 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// SELECT rows from a table.
+    ///
+    /// Fixed params (select, order, limit, offset) are named so generators emit
+    /// typed, documented parameters. Column filters are passed via `filters`:
+    /// each map entry becomes its own query parameter when serialized
+    /// (explode: true), e.g. {"id": "eq.5"} → ?id=eq.5.
+    ///
     /// - Remark: HTTP `GET /{table}`.
     /// - Remark: Generated from `#/paths//{table}/get(TableOperations_from)`.
     internal func TableOperations_from(
@@ -61,6 +109,8 @@ extension APIProtocol {
             headers: headers
         ))
     }
+    /// INSERT rows into a table.
+    ///
     /// - Remark: HTTP `POST /{table}`.
     /// - Remark: Generated from `#/paths//{table}/post(TableOperations_insert)`.
     internal func TableOperations_insert(
@@ -76,6 +126,8 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// UPDATE rows matching the filter.
+    ///
     /// - Remark: HTTP `PATCH /{table}`.
     /// - Remark: Generated from `#/paths//{table}/patch(TableOperations_update)`.
     internal func TableOperations_update(
@@ -91,6 +143,8 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// UPSERT rows (PUT).
+    ///
     /// - Remark: HTTP `PUT /{table}`.
     /// - Remark: Generated from `#/paths//{table}/put(TableOperations_upsert)`.
     internal func TableOperations_upsert(
@@ -106,6 +160,8 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// DELETE rows matching the filter.
+    ///
     /// - Remark: HTTP `DELETE /{table}`.
     /// - Remark: Generated from `#/paths//{table}/delete(TableOperations_deleteRows)`.
     internal func TableOperations_deleteRows(
@@ -163,6 +219,39 @@ internal enum Servers {
 internal enum Components {
     /// Types generated from the `#/components/schemas` section of the OpenAPI document.
     internal enum Schemas {
+        /// PostgREST column filter operators.
+        /// Format a filter value as "{operator}.{value}", e.g. "eq.5".
+        /// Prefix with "not." to negate: "not.eq.5".
+        /// For logical grouping use keys "or" / "and" in the filters map.
+        ///
+        /// - Remark: Generated from `#/components/schemas/FilterOperator`.
+        internal enum FilterOperator: String, Codable, Hashable, Sendable, CaseIterable {
+            case eq = "eq"
+            case neq = "neq"
+            case lt = "lt"
+            case lte = "lte"
+            case gt = "gt"
+            case gte = "gte"
+            case like = "like"
+            case ilike = "ilike"
+            case match = "match"
+            case imatch = "imatch"
+            case _is = "is"
+            case isdistinct = "isdistinct"
+            case _in = "in"
+            case cs = "cs"
+            case cd = "cd"
+            case ov = "ov"
+            case sl = "sl"
+            case sr = "sr"
+            case nxl = "nxl"
+            case nxr = "nxr"
+            case adj = "adj"
+            case fts = "fts"
+            case plfts = "plfts"
+            case phfts = "phfts"
+            case wfts = "wfts"
+        }
         /// - Remark: Generated from `#/components/schemas/PostgRESTError`.
         internal struct PostgRESTError: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PostgRESTError/message`.
@@ -211,6 +300,260 @@ internal enum Components {
 
 /// API operations, with input and output types, generated from `#/paths` in the OpenAPI document.
 internal enum Operations {
+    /// Call a read-only RPC function via GET.
+    /// Function arguments are passed as query params (each arg is its own param).
+    ///
+    /// - Remark: HTTP `GET /rpc/{functionName}`.
+    /// - Remark: Generated from `#/paths//rpc/{functionName}/get(RpcOperations_rpcGet)`.
+    internal enum RpcOperations_rpcGet {
+        internal static let id: Swift.String = "RpcOperations_rpcGet"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/path`.
+            internal struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/path/functionName`.
+                internal var functionName: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - functionName:
+                internal init(functionName: Swift.String) {
+                    self.functionName = functionName
+                }
+            }
+            internal var path: Operations.RpcOperations_rpcGet.Input.Path
+            /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/query`.
+            internal struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/query/select`.
+                internal var select: Swift.String?
+                /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/query/args`.
+                internal struct argsPayload: Codable, Hashable, Sendable {
+                    /// A container of undocumented properties.
+                    internal var additionalProperties: [String: Swift.String]
+                    /// Creates a new `argsPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - additionalProperties: A container of undocumented properties.
+                    internal init(additionalProperties: [String: Swift.String] = .init()) {
+                        self.additionalProperties = additionalProperties
+                    }
+                    internal init(from decoder: any Swift.Decoder) throws {
+                        additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                    }
+                    internal func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeAdditionalProperties(additionalProperties)
+                    }
+                }
+                /// Function arguments — each entry becomes its own query parameter.
+                ///
+                /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/query/args`.
+                internal var args: Operations.RpcOperations_rpcGet.Input.Query.argsPayload?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - select:
+                ///   - args: Function arguments — each entry becomes its own query parameter.
+                internal init(
+                    select: Swift.String? = nil,
+                    args: Operations.RpcOperations_rpcGet.Input.Query.argsPayload? = nil
+                ) {
+                    self.select = select
+                    self.args = args
+                }
+            }
+            internal var query: Operations.RpcOperations_rpcGet.Input.Query
+            /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/header`.
+            internal struct Headers: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/header/Accept-Profile`.
+                internal var Accept_hyphen_Profile: Swift.String?
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RpcOperations_rpcGet.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - Accept_hyphen_Profile:
+                ///   - accept:
+                internal init(
+                    Accept_hyphen_Profile: Swift.String? = nil,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RpcOperations_rpcGet.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.Accept_hyphen_Profile = Accept_hyphen_Profile
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.RpcOperations_rpcGet.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - query:
+            ///   - headers:
+            internal init(
+                path: Operations.RpcOperations_rpcGet.Input.Path,
+                query: Operations.RpcOperations_rpcGet.Input.Query = .init(),
+                headers: Operations.RpcOperations_rpcGet.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.query = query
+                self.headers = headers
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/responses/200/headers`.
+                internal struct Headers: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/responses/200/headers/Content-Range`.
+                    internal var Content_hyphen_Range: Swift.String?
+                    /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/responses/200/headers/Preference-Applied`.
+                    internal var Preference_hyphen_Applied: Swift.String?
+                    /// Creates a new `Headers`.
+                    ///
+                    /// - Parameters:
+                    ///   - Content_hyphen_Range:
+                    ///   - Preference_hyphen_Applied:
+                    internal init(
+                        Content_hyphen_Range: Swift.String? = nil,
+                        Preference_hyphen_Applied: Swift.String? = nil
+                    ) {
+                        self.Content_hyphen_Range = Content_hyphen_Range
+                        self.Preference_hyphen_Applied = Preference_hyphen_Applied
+                    }
+                }
+                /// Received HTTP response headers
+                internal var headers: Operations.RpcOperations_rpcGet.Output.Ok.Headers
+                /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/responses/200/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/responses/200/content/application\/json`.
+                    case json(OpenAPIRuntime.OpenAPIValueContainer)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: OpenAPIRuntime.OpenAPIValueContainer {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.RpcOperations_rpcGet.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - headers: Received HTTP response headers
+                ///   - body: Received HTTP response body
+                internal init(
+                    headers: Operations.RpcOperations_rpcGet.Output.Ok.Headers = .init(),
+                    body: Operations.RpcOperations_rpcGet.Output.Ok.Body
+                ) {
+                    self.headers = headers
+                    self.body = body
+                }
+            }
+            /// The request has succeeded.
+            ///
+            /// - Remark: Generated from `#/paths//rpc/{functionName}/get(RpcOperations_rpcGet)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.RpcOperations_rpcGet.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.RpcOperations_rpcGet.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/responses/default/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/rpc/{functionName}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.PostgRESTError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.PostgRESTError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.RpcOperations_rpcGet.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.RpcOperations_rpcGet.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// An unexpected error response.
+            ///
+            /// - Remark: Generated from `#/paths//rpc/{functionName}/get(RpcOperations_rpcGet)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.RpcOperations_rpcGet.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            internal var `default`: Operations.RpcOperations_rpcGet.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Call an RPC function via POST with a JSON body.
+    ///
     /// - Remark: HTTP `POST /rpc/{functionName}`.
     /// - Remark: Generated from `#/paths//rpc/{functionName}/post(RpcOperations_rpc)`.
     internal enum RpcOperations_rpc {
@@ -231,32 +574,14 @@ internal enum Operations {
             internal var path: Operations.RpcOperations_rpc.Input.Path
             /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/query`.
             internal struct Query: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/query/params`.
-                internal struct paramsPayload: Codable, Hashable, Sendable {
-                    /// A container of undocumented properties.
-                    internal var additionalProperties: [String: Swift.String]
-                    /// Creates a new `paramsPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - additionalProperties: A container of undocumented properties.
-                    internal init(additionalProperties: [String: Swift.String] = .init()) {
-                        self.additionalProperties = additionalProperties
-                    }
-                    internal init(from decoder: any Swift.Decoder) throws {
-                        additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
-                    }
-                    internal func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeAdditionalProperties(additionalProperties)
-                    }
-                }
-                /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/query/params`.
-                internal var params: Operations.RpcOperations_rpc.Input.Query.paramsPayload?
+                /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/query/select`.
+                internal var select: Swift.String?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
-                ///   - params:
-                internal init(params: Operations.RpcOperations_rpc.Input.Query.paramsPayload? = nil) {
-                    self.params = params
+                ///   - select:
+                internal init(select: Swift.String? = nil) {
+                    self.select = select
                 }
             }
             internal var query: Operations.RpcOperations_rpc.Input.Query
@@ -316,6 +641,27 @@ internal enum Operations {
         }
         internal enum Output: Sendable, Hashable {
             internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/responses/200/headers`.
+                internal struct Headers: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/responses/200/headers/Content-Range`.
+                    internal var Content_hyphen_Range: Swift.String?
+                    /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/responses/200/headers/Preference-Applied`.
+                    internal var Preference_hyphen_Applied: Swift.String?
+                    /// Creates a new `Headers`.
+                    ///
+                    /// - Parameters:
+                    ///   - Content_hyphen_Range:
+                    ///   - Preference_hyphen_Applied:
+                    internal init(
+                        Content_hyphen_Range: Swift.String? = nil,
+                        Preference_hyphen_Applied: Swift.String? = nil
+                    ) {
+                        self.Content_hyphen_Range = Content_hyphen_Range
+                        self.Preference_hyphen_Applied = Preference_hyphen_Applied
+                    }
+                }
+                /// Received HTTP response headers
+                internal var headers: Operations.RpcOperations_rpc.Output.Ok.Headers
                 /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/responses/200/content`.
                 internal enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/rpc/{functionName}/POST/responses/200/content/application\/json`.
@@ -338,8 +684,13 @@ internal enum Operations {
                 /// Creates a new `Ok`.
                 ///
                 /// - Parameters:
+                ///   - headers: Received HTTP response headers
                 ///   - body: Received HTTP response body
-                internal init(body: Operations.RpcOperations_rpc.Output.Ok.Body) {
+                internal init(
+                    headers: Operations.RpcOperations_rpc.Output.Ok.Headers = .init(),
+                    body: Operations.RpcOperations_rpc.Output.Ok.Body
+                ) {
+                    self.headers = headers
                     self.body = body
                 }
             }
@@ -444,6 +795,13 @@ internal enum Operations {
             }
         }
     }
+    /// SELECT rows from a table.
+    ///
+    /// Fixed params (select, order, limit, offset) are named so generators emit
+    /// typed, documented parameters. Column filters are passed via `filters`:
+    /// each map entry becomes its own query parameter when serialized
+    /// (explode: true), e.g. {"id": "eq.5"} → ?id=eq.5.
+    ///
     /// - Remark: HTTP `GET /{table}`.
     /// - Remark: Generated from `#/paths//{table}/get(TableOperations_from)`.
     internal enum TableOperations_from {
@@ -464,11 +822,28 @@ internal enum Operations {
             internal var path: Operations.TableOperations_from.Input.Path
             /// - Remark: Generated from `#/paths/{table}/GET/query`.
             internal struct Query: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/{table}/GET/query/params`.
-                internal struct paramsPayload: Codable, Hashable, Sendable {
+                /// Column selection — comma-separated list, supports aliasing, casting,
+                /// embedded resources, and JSON operators. e.g. "id,name,orders(total)".
+                ///
+                /// - Remark: Generated from `#/paths/{table}/GET/query/select`.
+                internal var select: Swift.String?
+                /// Ordering — e.g. "name.asc,age.desc.nullslast"
+                ///
+                /// - Remark: Generated from `#/paths/{table}/GET/query/order`.
+                internal var order: Swift.String?
+                /// Maximum number of rows to return.
+                ///
+                /// - Remark: Generated from `#/paths/{table}/GET/query/limit`.
+                internal var limit: Swift.Int?
+                /// Row offset for pagination.
+                ///
+                /// - Remark: Generated from `#/paths/{table}/GET/query/offset`.
+                internal var offset: Swift.Int?
+                /// - Remark: Generated from `#/paths/{table}/GET/query/filters`.
+                internal struct filtersPayload: Codable, Hashable, Sendable {
                     /// A container of undocumented properties.
                     internal var additionalProperties: [String: Swift.String]
-                    /// Creates a new `paramsPayload`.
+                    /// Creates a new `filtersPayload`.
                     ///
                     /// - Parameters:
                     ///   - additionalProperties: A container of undocumented properties.
@@ -482,14 +857,33 @@ internal enum Operations {
                         try encoder.encodeAdditionalProperties(additionalProperties)
                     }
                 }
-                /// - Remark: Generated from `#/paths/{table}/GET/query/params`.
-                internal var params: Operations.TableOperations_from.Input.Query.paramsPayload?
+                /// Horizontal filters — each entry becomes a separate query parameter.
+                /// Key: column name (or "or"/"and" for logical groups).
+                /// Value: "{operator}.{value}" e.g. {"id": "eq.5", "name": "like.foo*"}.
+                /// See FilterOperator for the full operator list.
+                ///
+                /// - Remark: Generated from `#/paths/{table}/GET/query/filters`.
+                internal var filters: Operations.TableOperations_from.Input.Query.filtersPayload?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
-                ///   - params:
-                internal init(params: Operations.TableOperations_from.Input.Query.paramsPayload? = nil) {
-                    self.params = params
+                ///   - select: Column selection — comma-separated list, supports aliasing, casting,
+                ///   - order: Ordering — e.g. "name.asc,age.desc.nullslast"
+                ///   - limit: Maximum number of rows to return.
+                ///   - offset: Row offset for pagination.
+                ///   - filters: Horizontal filters — each entry becomes a separate query parameter.
+                internal init(
+                    select: Swift.String? = nil,
+                    order: Swift.String? = nil,
+                    limit: Swift.Int? = nil,
+                    offset: Swift.Int? = nil,
+                    filters: Operations.TableOperations_from.Input.Query.filtersPayload? = nil
+                ) {
+                    self.select = select
+                    self.order = order
+                    self.limit = limit
+                    self.offset = offset
+                    self.filters = filters
                 }
             }
             internal var query: Operations.TableOperations_from.Input.Query
@@ -694,6 +1088,8 @@ internal enum Operations {
             }
         }
     }
+    /// INSERT rows into a table.
+    ///
     /// - Remark: HTTP `POST /{table}`.
     /// - Remark: Generated from `#/paths//{table}/post(TableOperations_insert)`.
     internal enum TableOperations_insert {
@@ -714,32 +1110,25 @@ internal enum Operations {
             internal var path: Operations.TableOperations_insert.Input.Path
             /// - Remark: Generated from `#/paths/{table}/POST/query`.
             internal struct Query: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/{table}/POST/query/params`.
-                internal struct paramsPayload: Codable, Hashable, Sendable {
-                    /// A container of undocumented properties.
-                    internal var additionalProperties: [String: Swift.String]
-                    /// Creates a new `paramsPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - additionalProperties: A container of undocumented properties.
-                    internal init(additionalProperties: [String: Swift.String] = .init()) {
-                        self.additionalProperties = additionalProperties
-                    }
-                    internal init(from decoder: any Swift.Decoder) throws {
-                        additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
-                    }
-                    internal func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeAdditionalProperties(additionalProperties)
-                    }
-                }
-                /// - Remark: Generated from `#/paths/{table}/POST/query/params`.
-                internal var params: Operations.TableOperations_insert.Input.Query.paramsPayload?
+                /// Column selection for the returned representation (requires Prefer: return=representation).
+                ///
+                /// - Remark: Generated from `#/paths/{table}/POST/query/select`.
+                internal var select: Swift.String?
+                /// Columns hint for bulk insert.
+                ///
+                /// - Remark: Generated from `#/paths/{table}/POST/query/columns`.
+                internal var columns: Swift.String?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
-                ///   - params:
-                internal init(params: Operations.TableOperations_insert.Input.Query.paramsPayload? = nil) {
-                    self.params = params
+                ///   - select: Column selection for the returned representation (requires Prefer: return=representation).
+                ///   - columns: Columns hint for bulk insert.
+                internal init(
+                    select: Swift.String? = nil,
+                    columns: Swift.String? = nil
+                ) {
+                    self.select = select
+                    self.columns = columns
                 }
             }
             internal var query: Operations.TableOperations_insert.Input.Query
@@ -953,6 +1342,8 @@ internal enum Operations {
             }
         }
     }
+    /// UPDATE rows matching the filter.
+    ///
     /// - Remark: HTTP `PATCH /{table}`.
     /// - Remark: Generated from `#/paths//{table}/patch(TableOperations_update)`.
     internal enum TableOperations_update {
@@ -973,11 +1364,13 @@ internal enum Operations {
             internal var path: Operations.TableOperations_update.Input.Path
             /// - Remark: Generated from `#/paths/{table}/PATCH/query`.
             internal struct Query: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/{table}/PATCH/query/params`.
-                internal struct paramsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/paths/{table}/PATCH/query/select`.
+                internal var select: Swift.String?
+                /// - Remark: Generated from `#/paths/{table}/PATCH/query/filters`.
+                internal struct filtersPayload: Codable, Hashable, Sendable {
                     /// A container of undocumented properties.
                     internal var additionalProperties: [String: Swift.String]
-                    /// Creates a new `paramsPayload`.
+                    /// Creates a new `filtersPayload`.
                     ///
                     /// - Parameters:
                     ///   - additionalProperties: A container of undocumented properties.
@@ -991,14 +1384,21 @@ internal enum Operations {
                         try encoder.encodeAdditionalProperties(additionalProperties)
                     }
                 }
-                /// - Remark: Generated from `#/paths/{table}/PATCH/query/params`.
-                internal var params: Operations.TableOperations_update.Input.Query.paramsPayload?
+                /// Horizontal filters — each entry becomes a separate query parameter.
+                ///
+                /// - Remark: Generated from `#/paths/{table}/PATCH/query/filters`.
+                internal var filters: Operations.TableOperations_update.Input.Query.filtersPayload?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
-                ///   - params:
-                internal init(params: Operations.TableOperations_update.Input.Query.paramsPayload? = nil) {
-                    self.params = params
+                ///   - select:
+                ///   - filters: Horizontal filters — each entry becomes a separate query parameter.
+                internal init(
+                    select: Swift.String? = nil,
+                    filters: Operations.TableOperations_update.Input.Query.filtersPayload? = nil
+                ) {
+                    self.select = select
+                    self.filters = filters
                 }
             }
             internal var query: Operations.TableOperations_update.Input.Query
@@ -1212,6 +1612,8 @@ internal enum Operations {
             }
         }
     }
+    /// UPSERT rows (PUT).
+    ///
     /// - Remark: HTTP `PUT /{table}`.
     /// - Remark: Generated from `#/paths//{table}/put(TableOperations_upsert)`.
     internal enum TableOperations_upsert {
@@ -1232,11 +1634,17 @@ internal enum Operations {
             internal var path: Operations.TableOperations_upsert.Input.Path
             /// - Remark: Generated from `#/paths/{table}/PUT/query`.
             internal struct Query: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/{table}/PUT/query/params`.
-                internal struct paramsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/paths/{table}/PUT/query/select`.
+                internal var select: Swift.String?
+                /// Comma-separated columns to use as the conflict target for upsert.
+                ///
+                /// - Remark: Generated from `#/paths/{table}/PUT/query/on_conflict`.
+                internal var on_conflict: Swift.String?
+                /// - Remark: Generated from `#/paths/{table}/PUT/query/filters`.
+                internal struct filtersPayload: Codable, Hashable, Sendable {
                     /// A container of undocumented properties.
                     internal var additionalProperties: [String: Swift.String]
-                    /// Creates a new `paramsPayload`.
+                    /// Creates a new `filtersPayload`.
                     ///
                     /// - Parameters:
                     ///   - additionalProperties: A container of undocumented properties.
@@ -1250,14 +1658,24 @@ internal enum Operations {
                         try encoder.encodeAdditionalProperties(additionalProperties)
                     }
                 }
-                /// - Remark: Generated from `#/paths/{table}/PUT/query/params`.
-                internal var params: Operations.TableOperations_upsert.Input.Query.paramsPayload?
+                /// Horizontal filters — each entry becomes a separate query parameter.
+                ///
+                /// - Remark: Generated from `#/paths/{table}/PUT/query/filters`.
+                internal var filters: Operations.TableOperations_upsert.Input.Query.filtersPayload?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
-                ///   - params:
-                internal init(params: Operations.TableOperations_upsert.Input.Query.paramsPayload? = nil) {
-                    self.params = params
+                ///   - select:
+                ///   - on_conflict: Comma-separated columns to use as the conflict target for upsert.
+                ///   - filters: Horizontal filters — each entry becomes a separate query parameter.
+                internal init(
+                    select: Swift.String? = nil,
+                    on_conflict: Swift.String? = nil,
+                    filters: Operations.TableOperations_upsert.Input.Query.filtersPayload? = nil
+                ) {
+                    self.select = select
+                    self.on_conflict = on_conflict
+                    self.filters = filters
                 }
             }
             internal var query: Operations.TableOperations_upsert.Input.Query
@@ -1471,6 +1889,8 @@ internal enum Operations {
             }
         }
     }
+    /// DELETE rows matching the filter.
+    ///
     /// - Remark: HTTP `DELETE /{table}`.
     /// - Remark: Generated from `#/paths//{table}/delete(TableOperations_deleteRows)`.
     internal enum TableOperations_deleteRows {
@@ -1491,11 +1911,13 @@ internal enum Operations {
             internal var path: Operations.TableOperations_deleteRows.Input.Path
             /// - Remark: Generated from `#/paths/{table}/DELETE/query`.
             internal struct Query: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/{table}/DELETE/query/params`.
-                internal struct paramsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/paths/{table}/DELETE/query/select`.
+                internal var select: Swift.String?
+                /// - Remark: Generated from `#/paths/{table}/DELETE/query/filters`.
+                internal struct filtersPayload: Codable, Hashable, Sendable {
                     /// A container of undocumented properties.
                     internal var additionalProperties: [String: Swift.String]
-                    /// Creates a new `paramsPayload`.
+                    /// Creates a new `filtersPayload`.
                     ///
                     /// - Parameters:
                     ///   - additionalProperties: A container of undocumented properties.
@@ -1509,14 +1931,21 @@ internal enum Operations {
                         try encoder.encodeAdditionalProperties(additionalProperties)
                     }
                 }
-                /// - Remark: Generated from `#/paths/{table}/DELETE/query/params`.
-                internal var params: Operations.TableOperations_deleteRows.Input.Query.paramsPayload?
+                /// Horizontal filters — each entry becomes a separate query parameter.
+                ///
+                /// - Remark: Generated from `#/paths/{table}/DELETE/query/filters`.
+                internal var filters: Operations.TableOperations_deleteRows.Input.Query.filtersPayload?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
-                ///   - params:
-                internal init(params: Operations.TableOperations_deleteRows.Input.Query.paramsPayload? = nil) {
-                    self.params = params
+                ///   - select:
+                ///   - filters: Horizontal filters — each entry becomes a separate query parameter.
+                internal init(
+                    select: Swift.String? = nil,
+                    filters: Operations.TableOperations_deleteRows.Input.Query.filtersPayload? = nil
+                ) {
+                    self.select = select
+                    self.filters = filters
                 }
             }
             internal var query: Operations.TableOperations_deleteRows.Input.Query

@@ -37,6 +37,122 @@ internal struct Client: APIProtocol {
     private var converter: Converter {
         client.converter
     }
+    /// Call a read-only RPC function via GET.
+    /// Function arguments are passed as query params (each arg is its own param).
+    ///
+    /// - Remark: HTTP `GET /rpc/{functionName}`.
+    /// - Remark: Generated from `#/paths//rpc/{functionName}/get(RpcOperations_rpcGet)`.
+    internal func RpcOperations_rpcGet(_ input: Operations.RpcOperations_rpcGet.Input) async throws -> Operations.RpcOperations_rpcGet.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.RpcOperations_rpcGet.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/rpc/{}",
+                    parameters: [
+                        input.path.functionName
+                    ]
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: false,
+                    name: "select",
+                    value: input.query.select
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "args",
+                    value: input.query.args
+                )
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "Accept-Profile",
+                    value: input.headers.Accept_hyphen_Profile
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let headers: Operations.RpcOperations_rpcGet.Output.Ok.Headers = .init(
+                        Content_hyphen_Range: try converter.getOptionalHeaderFieldAsURI(
+                            in: response.headerFields,
+                            name: "Content-Range",
+                            as: Swift.String.self
+                        ),
+                        Preference_hyphen_Applied: try converter.getOptionalHeaderFieldAsURI(
+                            in: response.headerFields,
+                            name: "Preference-Applied",
+                            as: Swift.String.self
+                        )
+                    )
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.RpcOperations_rpcGet.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            OpenAPIRuntime.OpenAPIValueContainer.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(
+                        headers: headers,
+                        body: body
+                    ))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.RpcOperations_rpcGet.Output.Default.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.PostgRESTError.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// Call an RPC function via POST with a JSON body.
+    ///
     /// - Remark: HTTP `POST /rpc/{functionName}`.
     /// - Remark: Generated from `#/paths//rpc/{functionName}/post(RpcOperations_rpc)`.
     internal func RpcOperations_rpc(_ input: Operations.RpcOperations_rpc.Input) async throws -> Operations.RpcOperations_rpc.Output {
@@ -58,9 +174,9 @@ internal struct Client: APIProtocol {
                 try converter.setQueryItemAsURI(
                     in: &request,
                     style: .form,
-                    explode: true,
-                    name: "params",
-                    value: input.query.params
+                    explode: false,
+                    name: "select",
+                    value: input.query.select
                 )
                 try converter.setHeaderFieldAsURI(
                     in: &request.headerFields,
@@ -95,6 +211,18 @@ internal struct Client: APIProtocol {
             deserializer: { response, responseBody in
                 switch response.status.code {
                 case 200:
+                    let headers: Operations.RpcOperations_rpc.Output.Ok.Headers = .init(
+                        Content_hyphen_Range: try converter.getOptionalHeaderFieldAsURI(
+                            in: response.headerFields,
+                            name: "Content-Range",
+                            as: Swift.String.self
+                        ),
+                        Preference_hyphen_Applied: try converter.getOptionalHeaderFieldAsURI(
+                            in: response.headerFields,
+                            name: "Preference-Applied",
+                            as: Swift.String.self
+                        )
+                    )
                     let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
                     let body: Operations.RpcOperations_rpc.Output.Ok.Body
                     let chosenContentType = try converter.bestContentType(
@@ -115,7 +243,10 @@ internal struct Client: APIProtocol {
                     default:
                         preconditionFailure("bestContentType chose an invalid content type.")
                     }
-                    return .ok(.init(body: body))
+                    return .ok(.init(
+                        headers: headers,
+                        body: body
+                    ))
                 default:
                     let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
                     let body: Operations.RpcOperations_rpc.Output.Default.Body
@@ -145,6 +276,13 @@ internal struct Client: APIProtocol {
             }
         )
     }
+    /// SELECT rows from a table.
+    ///
+    /// Fixed params (select, order, limit, offset) are named so generators emit
+    /// typed, documented parameters. Column filters are passed via `filters`:
+    /// each map entry becomes its own query parameter when serialized
+    /// (explode: true), e.g. {"id": "eq.5"} → ?id=eq.5.
+    ///
     /// - Remark: HTTP `GET /{table}`.
     /// - Remark: Generated from `#/paths//{table}/get(TableOperations_from)`.
     internal func TableOperations_from(_ input: Operations.TableOperations_from.Input) async throws -> Operations.TableOperations_from.Output {
@@ -166,9 +304,37 @@ internal struct Client: APIProtocol {
                 try converter.setQueryItemAsURI(
                     in: &request,
                     style: .form,
+                    explode: false,
+                    name: "select",
+                    value: input.query.select
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: false,
+                    name: "order",
+                    value: input.query.order
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: false,
+                    name: "limit",
+                    value: input.query.limit
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: false,
+                    name: "offset",
+                    value: input.query.offset
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
                     explode: true,
-                    name: "params",
-                    value: input.query.params
+                    name: "filters",
+                    value: input.query.filters
                 )
                 try converter.setHeaderFieldAsURI(
                     in: &request.headerFields,
@@ -259,6 +425,8 @@ internal struct Client: APIProtocol {
             }
         )
     }
+    /// INSERT rows into a table.
+    ///
     /// - Remark: HTTP `POST /{table}`.
     /// - Remark: Generated from `#/paths//{table}/post(TableOperations_insert)`.
     internal func TableOperations_insert(_ input: Operations.TableOperations_insert.Input) async throws -> Operations.TableOperations_insert.Output {
@@ -280,9 +448,16 @@ internal struct Client: APIProtocol {
                 try converter.setQueryItemAsURI(
                     in: &request,
                     style: .form,
-                    explode: true,
-                    name: "params",
-                    value: input.query.params
+                    explode: false,
+                    name: "select",
+                    value: input.query.select
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: false,
+                    name: "columns",
+                    value: input.query.columns
                 )
                 try converter.setHeaderFieldAsURI(
                     in: &request.headerFields,
@@ -382,6 +557,8 @@ internal struct Client: APIProtocol {
             }
         )
     }
+    /// UPDATE rows matching the filter.
+    ///
     /// - Remark: HTTP `PATCH /{table}`.
     /// - Remark: Generated from `#/paths//{table}/patch(TableOperations_update)`.
     internal func TableOperations_update(_ input: Operations.TableOperations_update.Input) async throws -> Operations.TableOperations_update.Output {
@@ -403,9 +580,16 @@ internal struct Client: APIProtocol {
                 try converter.setQueryItemAsURI(
                     in: &request,
                     style: .form,
+                    explode: false,
+                    name: "select",
+                    value: input.query.select
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
                     explode: true,
-                    name: "params",
-                    value: input.query.params
+                    name: "filters",
+                    value: input.query.filters
                 )
                 try converter.setHeaderFieldAsURI(
                     in: &request.headerFields,
@@ -505,6 +689,8 @@ internal struct Client: APIProtocol {
             }
         )
     }
+    /// UPSERT rows (PUT).
+    ///
     /// - Remark: HTTP `PUT /{table}`.
     /// - Remark: Generated from `#/paths//{table}/put(TableOperations_upsert)`.
     internal func TableOperations_upsert(_ input: Operations.TableOperations_upsert.Input) async throws -> Operations.TableOperations_upsert.Output {
@@ -526,9 +712,23 @@ internal struct Client: APIProtocol {
                 try converter.setQueryItemAsURI(
                     in: &request,
                     style: .form,
+                    explode: false,
+                    name: "select",
+                    value: input.query.select
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: false,
+                    name: "on_conflict",
+                    value: input.query.on_conflict
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
                     explode: true,
-                    name: "params",
-                    value: input.query.params
+                    name: "filters",
+                    value: input.query.filters
                 )
                 try converter.setHeaderFieldAsURI(
                     in: &request.headerFields,
@@ -628,6 +828,8 @@ internal struct Client: APIProtocol {
             }
         )
     }
+    /// DELETE rows matching the filter.
+    ///
     /// - Remark: HTTP `DELETE /{table}`.
     /// - Remark: Generated from `#/paths//{table}/delete(TableOperations_deleteRows)`.
     internal func TableOperations_deleteRows(_ input: Operations.TableOperations_deleteRows.Input) async throws -> Operations.TableOperations_deleteRows.Output {
@@ -649,9 +851,16 @@ internal struct Client: APIProtocol {
                 try converter.setQueryItemAsURI(
                     in: &request,
                     style: .form,
+                    explode: false,
+                    name: "select",
+                    value: input.query.select
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
                     explode: true,
-                    name: "params",
-                    value: input.query.params
+                    name: "filters",
+                    value: input.query.filters
                 )
                 try converter.setHeaderFieldAsURI(
                     in: &request.headerFields,
