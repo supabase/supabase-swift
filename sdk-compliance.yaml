@@ -363,7 +363,18 @@ features:
 
   # ── Storage ────────────────────────────────────────────────────────────────
 
-  storage.file_buckets.create_file_bucket: implemented
+  storage.file_buckets.create_file_bucket:
+    status: implemented
+    symbols:
+      - StorageByteCount
+      - StorageByteCount.init
+      - StorageByteCount.intValue
+      - StorageByteCount.kilobytes
+      - StorageByteCount.megabytes
+      - StorageByteCount.gigabytes
+      - StorageByteCount.stringValue
+      - StorageByteCount.encode
+      - BucketOptions.isPublic
   storage.file_buckets.get_bucket: implemented
   storage.file_buckets.list_file_buckets: implemented
   storage.file_buckets.update_bucket: implemented
@@ -372,11 +383,24 @@ features:
   storage.file_buckets.access_bucket: implemented
   storage.file_buckets.upload: implemented
   storage.file_buckets.download: implemented
-  storage.file_buckets.list_files: implemented
+  storage.file_buckets.list_files:
+    status: implemented
+    symbols:
+      - SortOrder
+      - SortOrder.init
+      - SortOrder.rawValue
+      - SortOrder.ascending
+      - SortOrder.descending
+      - SortOrder.encode
   storage.file_buckets.move: implemented
   storage.file_buckets.copy: implemented
   storage.file_buckets.remove: implemented
-  storage.file_buckets.get_public_url: implemented
+  storage.file_buckets.get_public_url:
+    status: implemented
+    symbols:
+      - DownloadBehavior
+      - DownloadBehavior.withOriginalName
+      - DownloadBehavior.named
   storage.file_buckets.create_signed_url: implemented
   storage.file_buckets.create_signed_urls: implemented
   storage.file_buckets.create_signed_upload_url: implemented
@@ -385,7 +409,23 @@ features:
   storage.file_buckets.file_exists: implemented
   storage.file_buckets.file_info: implemented
   storage.file_buckets.list_files_paginated: implemented
-  storage.file_buckets.download_with_transform: implemented
+  storage.file_buckets.download_with_transform:
+    status: implemented
+    symbols:
+      - ResizeMode
+      - ResizeMode.init
+      - ResizeMode.rawValue
+      - ResizeMode.cover
+      - ResizeMode.contain
+      - ResizeMode.fill
+      - ResizeMode.encode
+      - ImageFormat
+      - ImageFormat.init
+      - ImageFormat.rawValue
+      - ImageFormat.origin
+      - ImageFormat.webp
+      - ImageFormat.avif
+      - ImageFormat.encode
   storage.file_buckets.copy_cross_bucket: implemented
   storage.file_buckets.move_cross_bucket: implemented
   storage.file_buckets.upload_with_metadata: implemented

@@ -33,6 +33,56 @@ extension StorageClientConfiguration {
 }
 
 extension StorageFileApi {
+  @available(
+    *, deprecated,
+    message: "Use download: DownloadBehavior? instead. Pass .withOriginalName to trigger download."
+  )
+  public func createSignedURL(
+    path: String,
+    expiresIn: Int,
+    download: Bool,
+    transform: TransformOptions? = nil,
+    cacheNonce: String? = nil
+  ) async throws -> URL {
+    try await createSignedURL(
+      path: path,
+      expiresIn: expiresIn,
+      download: download ? DownloadBehavior.withOriginalName : nil,
+      transform: transform,
+      cacheNonce: cacheNonce
+    )
+  }
+
+  @available(*, deprecated, message: "Use download: DownloadBehavior? instead.")
+  public func createSignedURLs(
+    paths: [String],
+    expiresIn: Int,
+    download: Bool,
+    cacheNonce: String? = nil
+  ) async throws -> [SignedURLResult] {
+    try await createSignedURLs(
+      paths: paths,
+      expiresIn: expiresIn,
+      download: download ? DownloadBehavior.withOriginalName : nil,
+      cacheNonce: cacheNonce
+    )
+  }
+
+  @available(*, deprecated, message: "Use download: DownloadBehavior? instead.")
+  public func getPublicURL(
+    path: String,
+    download: Bool,
+    options: TransformOptions? = nil,
+    cacheNonce: String? = nil
+  ) throws -> URL {
+    try getPublicURL(
+      path: path,
+      download: download ? DownloadBehavior.withOriginalName : nil,
+      options: options,
+      cacheNonce: cacheNonce
+    )
+  }
+
   @_disfavoredOverload
   @available(
     *,
@@ -204,5 +254,73 @@ extension Data {
       allowLossyConversion: true
     )
     append(data!)
+  }
+}
+
+extension BucketOptions {
+  @available(*, deprecated, renamed: "isPublic")
+  public var `public`: Bool {
+    get { isPublic }
+    set { isPublic = newValue }
+  }
+
+  @_disfavoredOverload
+  @available(*, deprecated, renamed: "init(isPublic:fileSizeLimit:allowedMimeTypes:)")
+  public init(
+    public isPublic: Bool = false,
+    fileSizeLimit: String? = nil,
+    allowedMimeTypes: [String]? = nil
+  ) {
+    self.init(
+      isPublic: isPublic,
+      fileSizeLimit: fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
+      allowedMimeTypes: allowedMimeTypes
+    )
+  }
+
+  @_disfavoredOverload
+  @available(
+    *, deprecated,
+    message: "Use `init(isPublic:fileSizeLimit:allowedMimeTypes:)` with StorageByteCount instead."
+  )
+  public init(
+    isPublic: Bool = false,
+    fileSizeLimit: String? = nil,
+    allowedMimeTypes: [String]? = nil
+  ) {
+    self.isPublic = isPublic
+    self.fileSizeLimit = fileSizeLimit
+    self.allowedMimeTypes = allowedMimeTypes
+  }
+
+}
+
+extension SortBy {
+  @available(*, deprecated, message: "Use `init` with `SortOrder` instead.")
+  public init(column: String? = nil, order: String? = nil) {
+    self.column = column
+    self.order = order
+  }
+}
+
+extension TransformOptions {
+  @_disfavoredOverload
+  @available(
+    *, deprecated,
+    message:
+      "Use `init(width:height:resize:quality:format:)` with ResizeMode and ImageFormat instead."
+  )
+  public init(
+    width: Int? = nil,
+    height: Int? = nil,
+    resize: String? = nil,
+    quality: Int? = nil,
+    format: String? = nil
+  ) {
+    self.width = width
+    self.height = height
+    self.resize = resize
+    self.quality = quality
+    self.format = format
   }
 }
