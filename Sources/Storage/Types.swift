@@ -436,23 +436,6 @@ public enum DownloadBehavior: Sendable {
   }
 }
 
-// MARK: - UploadMethod
-
-/// The upload protocol used when uploading files to Storage.
-///
-/// Pass to upload methods to override automatic protocol selection.
-/// ```swift
-/// storage.from("videos").upload("clip.mp4", fileURL: url, method: .resumable)
-/// ```
-public enum UploadMethod: Sendable {
-  /// Choose automatically: files ≤ 6 MB use multipart, larger files use TUS resumable.
-  case auto
-  /// Force a single multipart HTTP request regardless of file size.
-  case multipart
-  /// Force TUS resumable uploads regardless of file size. Supports pause/resume/cancel.
-  case resumable
-}
-
 // MARK: - BucketOptions
 
 /// Options used when creating or updating a Storage bucket.

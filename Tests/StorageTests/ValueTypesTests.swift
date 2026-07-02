@@ -119,12 +119,3 @@ import Testing
     #expect(DownloadBehavior.named("report.pdf").queryValue == "report.pdf")
   }
 }
-
-// MARK: - UploadMethod
-
-@Suite struct UploadMethodTests {
-  @Test func casesExist() {
-    let methods: [UploadMethod] = [.auto, .multipart, .resumable]
-    #expect(methods.count == 3)
-  }
-}
