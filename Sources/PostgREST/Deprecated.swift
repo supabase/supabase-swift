@@ -135,6 +135,30 @@ extension PostgrestFilterBuilder {
   }
 }
 
+extension PostgrestTransformBuilder {
+  /// Return `data` as the EXPLAIN plan for the query, using a string `format`.
+  @available(
+    *, deprecated, message: "Use the `ExplainFormat` overload, e.g. `explain(format: .json)`."
+  )
+  public func explain(
+    analyze: Bool = false,
+    verbose: Bool = false,
+    settings: Bool = false,
+    buffers: Bool = false,
+    wal: Bool = false,
+    format: String
+  ) -> PostgrestTransformBuilder {
+    explain(
+      analyze: analyze,
+      verbose: verbose,
+      settings: settings,
+      buffers: buffers,
+      wal: wal,
+      format: ExplainFormat(rawValue: format)
+    )
+  }
+}
+
 @available(
   *,
   deprecated,

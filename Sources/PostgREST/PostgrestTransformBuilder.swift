@@ -174,46 +174,6 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
     wal: Bool = false,
     format: ExplainFormat = .text
   ) -> PostgrestTransformBuilder {
-    explain(
-      analyze: analyze,
-      verbose: verbose,
-      settings: settings,
-      buffers: buffers,
-      wal: wal,
-      formatValue: format.rawValue
-    )
-  }
-
-  /// Return `data` as the EXPLAIN plan for the query, using a string `format`.
-  @available(
-    *, deprecated, message: "Use the `ExplainFormat` overload, e.g. `explain(format: .json)`."
-  )
-  public func explain(
-    analyze: Bool = false,
-    verbose: Bool = false,
-    settings: Bool = false,
-    buffers: Bool = false,
-    wal: Bool = false,
-    format: String
-  ) -> PostgrestTransformBuilder {
-    explain(
-      analyze: analyze,
-      verbose: verbose,
-      settings: settings,
-      buffers: buffers,
-      wal: wal,
-      formatValue: format
-    )
-  }
-
-  private func explain(
-    analyze: Bool,
-    verbose: Bool,
-    settings: Bool,
-    buffers: Bool,
-    wal: Bool,
-    formatValue: String
-  ) -> PostgrestTransformBuilder {
     mutableState.withValue {
       let options = [
         analyze ? "analyze" : nil,
@@ -226,7 +186,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
       .joined(separator: "|")
       let forMediaType = $0.request.headers[.accept] ?? "application/json"
       $0.request.headers[.accept] =
-        "application/vnd.pgrst.plan+\(formatValue); for=\"\(forMediaType)\"; options=\(options);"
+        "application/vnd.pgrst.plan+\(format.rawValue); for=\"\(forMediaType)\"; options=\(options);"
     }
 
     return self
