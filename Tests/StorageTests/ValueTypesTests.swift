@@ -30,6 +30,29 @@ import Testing
   @Test func equality() {
     #expect(StorageByteCount.megabytes(1) == StorageByteCount(1_048_576))
   }
+
+  @Test func stringLiteralNumeric() {
+    let count: StorageByteCount = "1048576"
+    #expect(count.bytes == 1_048_576)
+  }
+
+  @Test func stringLiteralHumanReadable() {
+    let count: StorageByteCount = "1mb"
+    #expect(count.bytes == nil)
+  }
+
+  @Test func encodesAsNumber() throws {
+    let encoded = try JSONEncoder().encode(StorageByteCount.megabytes(1))
+    let json = String(decoding: encoded, as: UTF8.self)
+    #expect(json == "1048576")
+  }
+
+  @Test func encodesAsString() throws {
+    let count: StorageByteCount = "1mb"
+    let encoded = try JSONEncoder().encode(count)
+    let json = String(decoding: encoded, as: UTF8.self)
+    #expect(json == "\"1mb\"")
+  }
 }
 
 // MARK: - ResizeMode

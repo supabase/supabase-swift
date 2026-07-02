@@ -54,4 +54,19 @@ final class BucketOptionsTests: XCTestCase {
     let options = BucketOptions(public: false, fileSizeLimit: nil)
     XCTAssertNil(options.fileSizeLimit)
   }
+
+  func testStringLiteralHumanReadable() {
+    let options = BucketOptions(isPublic: false, fileSizeLimit: "1mb")
+    XCTAssertNil(options.fileSizeLimit?.bytes)
+  }
+
+  func testStringLiteralNumeric() {
+    let options = BucketOptions(isPublic: false, fileSizeLimit: "5242880")
+    XCTAssertEqual(options.fileSizeLimit?.bytes, 5_242_880)
+  }
+
+  func testDeprecatedStringBridgeHumanReadable() {
+    let options = BucketOptions(public: false, fileSizeLimit: "1mb")
+    XCTAssertNil(options.fileSizeLimit?.bytes)
+  }
 }

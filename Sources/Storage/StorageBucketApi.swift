@@ -36,7 +36,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
     var id: String
     var name: String
     var `public`: Bool
-    var fileSizeLimit: Int64?
+    var fileSizeLimit: StorageByteCount?
     var allowedMimeTypes: [String]?
   }
 
@@ -56,7 +56,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
             id: id,
             name: id,
             public: options.isPublic,
-            fileSizeLimit: options.fileSizeLimit?.bytes,
+            fileSizeLimit: options.fileSizeLimit,
             allowedMimeTypes: options.allowedMimeTypes
           )
         )
@@ -78,7 +78,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
             id: id,
             name: id,
             public: options.isPublic,
-            fileSizeLimit: options.fileSizeLimit?.bytes,
+            fileSizeLimit: options.fileSizeLimit,
             allowedMimeTypes: options.allowedMimeTypes
           )
         )

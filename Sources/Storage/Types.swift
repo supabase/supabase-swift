@@ -296,12 +296,19 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
 /// ```swift
 /// BucketOptions(fileSizeLimit: .megabytes(5))
 /// BucketOptions(fileSizeLimit: 10_485_760)  // raw bytes via integer literal
+/// BucketOptions(fileSizeLimit: "1mb")        // human-readable string, passed verbatim to the server
 /// ```
 public struct StorageByteCount: Sendable, Hashable {
-  /// The raw byte count.
-  public let bytes: Int64
+  /// The raw byte count, or `nil` when the value is a human-readable string such as `"1mb"`.
+  public let bytes: Int64?
 
-  public init(_ bytes: Int64) { self.bytes = bytes }
+  // Stored verbatim and sent to the server when non-nil (e.g. "1mb", "500kb").
+  let _stringValue: String?
+
+  public init(_ bytes: Int64) {
+    self.bytes = bytes
+    self._stringValue = nil
+  }
 
   public static func bytes(_ value: Int64) -> Self { Self(value) }
   public static func kilobytes(_ value: Int64) -> Self { Self(value * 1_024) }
@@ -311,6 +318,32 @@ public struct StorageByteCount: Sendable, Hashable {
 
 extension StorageByteCount: ExpressibleByIntegerLiteral {
   public init(integerLiteral value: Int64) { self.init(value) }
+}
+
+extension StorageByteCount: ExpressibleByStringLiteral {
+  /// Accepts a human-readable size string (e.g. `"1mb"`, `"500kb"`, `"2gb"`) or a plain
+  /// numeric string (e.g. `"10485760"`). Plain numeric strings are converted to a byte count;
+  /// all other strings are stored verbatim and forwarded to the server as-is.
+  public init(stringLiteral value: String) {
+    if let n = Int64(value) {
+      bytes = n
+      _stringValue = nil
+    } else {
+      bytes = nil
+      _stringValue = value
+    }
+  }
+}
+
+extension StorageByteCount: Encodable {
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    if let string = _stringValue {
+      try container.encode(string)
+    } else {
+      try container.encode(bytes ?? 0)
+    }
+  }
 }
 
 // MARK: - ResizeMode
@@ -480,7 +513,7 @@ public struct BucketOptions: Sendable {
   ) {
     self.init(
       isPublic: isPublic,
-      fileSizeLimit: fileSizeLimit.flatMap { Int64($0).map { StorageByteCount($0) } },
+      fileSizeLimit: fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
       allowedMimeTypes: allowedMimeTypes
     )
   }

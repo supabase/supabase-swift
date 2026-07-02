@@ -343,4 +343,43 @@ final class StorageBucketAPITests: XCTestCase {
       options: BucketOptions(isPublic: false, fileSizeLimit: .megabytes(10))
     )
   }
+
+  func testCreateBucketWithHumanReadableFileSizeLimit() async throws {
+    Mock(
+      url: url.appendingPathComponent("bucket"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "id": "newbucket",
+            "name": "newbucket",
+            "owner": "owner123",
+            "public": false,
+            "created_at": "2024-01-01T00:00:00.000Z",
+            "updated_at": "2024-01-01T00:00:00.000Z"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 76" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"file_size_limit\":\"1mb\",\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":false}" \
+      	"http://localhost:54321/storage/v1/bucket"
+      """#
+    }
+    .register()
+
+    try await storage.createBucket(
+      "newbucket",
+      options: BucketOptions(isPublic: false, fileSizeLimit: "1mb")
+    )
+  }
 }
