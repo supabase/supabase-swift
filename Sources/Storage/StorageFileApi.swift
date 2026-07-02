@@ -558,7 +558,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///  - options: Transform the asset before retrieving it on the client.
   ///  - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
   ///
-  ///  - Note: The bucket needs to be set to public by going to Storage on [supabase.com/dashboard](https://supabase.com/dashboard), clicking the overflow menu on a bucket and choosing "Make public".
+  ///  - Note: The bucket needs to be set to public.
   @_disfavoredOverload
   public func getPublicURL(
     path: String,
@@ -606,7 +606,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///  - options: Transform the asset before retrieving it on the client.
   ///  - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
   ///
-  ///  - Note: The bucket needs to be set to public by going to Storage on [supabase.com/dashboard](https://supabase.com/dashboard), clicking the overflow menu on a bucket and choosing "Make public".
+  ///  - Note: The bucket needs to be set to public.
   public func getPublicURL(
     path: String,
     download: DownloadBehavior? = nil,
@@ -628,7 +628,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///  - options: Transform the asset before retrieving it on the client.
   ///  - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
   ///
-  ///  - Note: The bucket needs to be set to public by going to Storage on [supabase.com/dashboard](https://supabase.com/dashboard), clicking the overflow menu on a bucket and choosing "Make public".
+  ///  - Note: The bucket needs to be set to public.
   /// Creates a signed upload URL. Signed upload URLs can be used to upload files to the bucket without further authentication. They are valid for 2 hours.
   /// - Parameter path: The file path, including the current file name. For example `folder/image.png`.
   /// - Returns: A URL that can be used to upload files to the bucket without further
