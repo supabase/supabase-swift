@@ -33,6 +33,56 @@ extension StorageClientConfiguration {
 }
 
 extension StorageFileApi {
+  @available(
+    *, deprecated,
+    message: "Use download: DownloadBehavior? instead. Pass .withOriginalName to trigger download."
+  )
+  public func createSignedURL(
+    path: String,
+    expiresIn: Int,
+    download: Bool,
+    transform: TransformOptions? = nil,
+    cacheNonce: String? = nil
+  ) async throws -> URL {
+    try await createSignedURL(
+      path: path,
+      expiresIn: expiresIn,
+      download: download ? DownloadBehavior.withOriginalName : nil,
+      transform: transform,
+      cacheNonce: cacheNonce
+    )
+  }
+
+  @available(*, deprecated, message: "Use download: DownloadBehavior? instead.")
+  public func createSignedURLs(
+    paths: [String],
+    expiresIn: Int,
+    download: Bool,
+    cacheNonce: String? = nil
+  ) async throws -> [SignedURLResult] {
+    try await createSignedURLs(
+      paths: paths,
+      expiresIn: expiresIn,
+      download: download ? DownloadBehavior.withOriginalName : nil,
+      cacheNonce: cacheNonce
+    )
+  }
+
+  @available(*, deprecated, message: "Use download: DownloadBehavior? instead.")
+  public func getPublicURL(
+    path: String,
+    download: Bool,
+    options: TransformOptions? = nil,
+    cacheNonce: String? = nil
+  ) throws -> URL {
+    try getPublicURL(
+      path: path,
+      download: download ? DownloadBehavior.withOriginalName : nil,
+      options: options,
+      cacheNonce: cacheNonce
+    )
+  }
+
   @_disfavoredOverload
   @available(
     *,

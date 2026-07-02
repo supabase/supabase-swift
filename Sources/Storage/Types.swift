@@ -302,19 +302,20 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
 /// `"1kb"` = 1,000 bytes, `"1mb"` = 1,000,000 bytes, `"1gb"` = 1,000,000,000 bytes.
 public struct StorageByteCount: Sendable, Hashable {
   /// The exact byte count when initialized from an integer, or `nil` for string-based values.
-  public let bytes: Int64?
+  public let intValue: Int64?
 
-  // Verbatim string forwarded to the server (e.g. "1.5mb", "500kb").
-  let _stringValue: String?
+  /// The verbatim string forwarded to the server (e.g. `"1.5mb"`, `"500kb"`),
+  /// or `nil` when initialized from an integer.
+  public let stringValue: String?
 
-  public init(_ bytes: Int64) {
-    self.bytes = bytes
-    self._stringValue = nil
+  public init(_ intValue: Int64) {
+    self.intValue = intValue
+    self.stringValue = nil
   }
 
   private init(serverString: String) {
-    self.bytes = nil
-    self._stringValue = serverString
+    self.intValue = nil
+    self.stringValue = serverString
   }
 
   private static func formatValue(_ value: Double) -> String {
@@ -338,15 +339,15 @@ extension StorageByteCount: ExpressibleByIntegerLiteral {
 
 extension StorageByteCount: ExpressibleByStringLiteral {
   /// Accepts a human-readable size string (e.g. `"1mb"`, `"500kb"`, `"2gb"`) or a plain
-  /// numeric string (e.g. `"10485760"`). Plain numeric strings are converted to a byte count;
-  /// all other strings are stored verbatim and forwarded to the server as-is.
+  /// numeric string (e.g. `"10485760"`). Plain numeric strings are stored as `intValue`;
+  /// all other strings are stored as `stringValue` and forwarded to the server as-is.
   public init(stringLiteral value: String) {
     if let n = Int64(value) {
-      bytes = n
-      _stringValue = nil
+      intValue = n
+      stringValue = nil
     } else {
-      bytes = nil
-      _stringValue = value
+      intValue = nil
+      stringValue = value
     }
   }
 }
@@ -354,10 +355,10 @@ extension StorageByteCount: ExpressibleByStringLiteral {
 extension StorageByteCount: Encodable {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
-    if let string = _stringValue {
+    if let string = stringValue {
       try container.encode(string)
     } else {
-      try container.encode(bytes ?? 0)
+      try container.encode(intValue ?? 0)
     }
   }
 }

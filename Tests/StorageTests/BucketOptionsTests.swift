@@ -19,7 +19,7 @@ final class BucketOptionsTests: XCTestCase {
     )
 
     XCTAssertTrue(options.public)
-    XCTAssertEqual(options.fileSizeLimit?.bytes, 5_000_000)
+    XCTAssertEqual(options.fileSizeLimit?.intValue, 5_000_000)
     XCTAssertEqual(options.allowedMimeTypes, ["image/jpeg", "image/png"])
   }
 
@@ -30,18 +30,18 @@ final class BucketOptionsTests: XCTestCase {
 
   func testFileSizeLimitInteger() {
     let options = BucketOptions(isPublic: false, fileSizeLimit: StorageByteCount(5_000_000))
-    XCTAssertEqual(options.fileSizeLimit?.bytes, 5_000_000)
+    XCTAssertEqual(options.fileSizeLimit?.intValue, 5_000_000)
   }
 
   func testFileSizeLimitMegabytes() {
     let options = BucketOptions(isPublic: false, fileSizeLimit: .megabytes(1.5))
-    XCTAssertNil(options.fileSizeLimit?.bytes)
-    XCTAssertEqual(options.fileSizeLimit?._stringValue, "1.5mb")
+    XCTAssertNil(options.fileSizeLimit?.intValue)
+    XCTAssertEqual(options.fileSizeLimit?.stringValue, "1.5mb")
   }
 
   func testFileSizeLimitIntegerLiteral() {
     let options = BucketOptions(fileSizeLimit: 5_000_000)
-    XCTAssertEqual(options.fileSizeLimit?.bytes, 5_000_000)
+    XCTAssertEqual(options.fileSizeLimit?.intValue, 5_000_000)
   }
 
   func testDeprecatedPublicBridge() {
@@ -53,7 +53,7 @@ final class BucketOptionsTests: XCTestCase {
 
   func testDeprecatedStringFileSizeLimitBridge() {
     let options = BucketOptions(public: false, fileSizeLimit: "5242880")
-    XCTAssertEqual(options.fileSizeLimit?.bytes, 5_242_880)
+    XCTAssertEqual(options.fileSizeLimit?.intValue, 5_242_880)
   }
 
   func testDeprecatedStringFileSizeLimitNil() {
@@ -63,16 +63,16 @@ final class BucketOptionsTests: XCTestCase {
 
   func testStringLiteralHumanReadable() {
     let options = BucketOptions(isPublic: false, fileSizeLimit: "1mb")
-    XCTAssertNil(options.fileSizeLimit?.bytes)
+    XCTAssertNil(options.fileSizeLimit?.intValue)
   }
 
   func testStringLiteralNumeric() {
     let options = BucketOptions(isPublic: false, fileSizeLimit: "5242880")
-    XCTAssertEqual(options.fileSizeLimit?.bytes, 5_242_880)
+    XCTAssertEqual(options.fileSizeLimit?.intValue, 5_242_880)
   }
 
   func testDeprecatedStringBridgeHumanReadable() {
     let options = BucketOptions(public: false, fileSizeLimit: "1mb")
-    XCTAssertNil(options.fileSizeLimit?.bytes)
+    XCTAssertNil(options.fileSizeLimit?.intValue)
   }
 }

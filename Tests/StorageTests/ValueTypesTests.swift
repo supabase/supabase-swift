@@ -8,12 +8,12 @@ import Testing
 @Suite struct StorageByteCountTests {
   @Test func integerInit() {
     let count = StorageByteCount(5_000_000)
-    #expect(count.bytes == 5_000_000)
+    #expect(count.intValue == 5_000_000)
   }
 
   @Test func integerLiteral() {
     let count: StorageByteCount = 2048
-    #expect(count.bytes == 2048)
+    #expect(count.intValue == 2048)
   }
 
   @Test func equality() {
@@ -22,30 +22,30 @@ import Testing
 
   @Test func kilobytes() {
     let count = StorageByteCount.kilobytes(500)
-    #expect(count.bytes == nil)
-    #expect(count._stringValue == "500kb")
+    #expect(count.intValue == nil)
+    #expect(count.stringValue == "500kb")
   }
 
   @Test func megabytes() {
     let count = StorageByteCount.megabytes(1.5)
-    #expect(count.bytes == nil)
-    #expect(count._stringValue == "1.5mb")
+    #expect(count.intValue == nil)
+    #expect(count.stringValue == "1.5mb")
   }
 
   @Test func gigabytes() {
     let count = StorageByteCount.gigabytes(2)
-    #expect(count.bytes == nil)
-    #expect(count._stringValue == "2gb")
+    #expect(count.intValue == nil)
+    #expect(count.stringValue == "2gb")
   }
 
   @Test func stringLiteralNumeric() {
     let count: StorageByteCount = "1000000"
-    #expect(count.bytes == 1_000_000)
+    #expect(count.intValue == 1_000_000)
   }
 
   @Test func stringLiteralHumanReadable() {
     let count: StorageByteCount = "1mb"
-    #expect(count.bytes == nil)
+    #expect(count.intValue == nil)
   }
 
   @Test func encodesAsNumber() throws {
