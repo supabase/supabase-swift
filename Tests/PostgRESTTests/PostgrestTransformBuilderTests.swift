@@ -416,6 +416,35 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
     XCTAssertTrue(explain.contains("Aggregate"))
   }
 
+  func testExplainWithJSONFormat() async throws {
+    Mock(
+      url: url.appendingPathComponent("countries"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/vnd.pgrst.plan+\"json\"; for=application/json; options=analyze;" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/countries?select=*"
+      """#
+    }
+    .register()
+
+    _ =
+      try await sut
+      .from("countries")
+      .select()
+      .explain(analyze: true, format: .json)
+      .execute()
+  }
+
   func testMaxAffectedOnUpdate() async throws {
     Mock(
       url: url.appendingPathComponent("users"),
