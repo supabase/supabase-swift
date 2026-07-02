@@ -272,6 +272,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - download: Trigger a download with the specified file name.
   ///   - transform: Transform the asset before serving it to the client.
   ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  @_disfavoredOverload
   public func createSignedURL(
     path: String,
     expiresIn: Int,
@@ -304,9 +305,38 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - path: The file path, including the current file name. For example `folder/image.png`.
   ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL which is valid for one minute.
+  ///   - download: Controls the `Content-Disposition` header. Pass `.withOriginalName` to
+  ///     trigger a download using the original filename, or `.named("custom.pdf")` for a
+  ///     custom name. `nil` (default) serves the file inline.
+  ///   - transform: Transform the asset before serving it to the client.
+  ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  public func createSignedURL(
+    path: String,
+    expiresIn: Int,
+    download: DownloadBehavior? = nil,
+    transform: TransformOptions? = nil,
+    cacheNonce: String? = nil
+  ) async throws -> URL {
+    try await createSignedURL(
+      path: path,
+      expiresIn: expiresIn,
+      download: download?.queryValue,
+      transform: transform,
+      cacheNonce: cacheNonce
+    )
+  }
+
+  /// Creates a signed URL. Use a signed URL to share a file for a fixed amount of time.
+  /// - Parameters:
+  ///   - path: The file path, including the current file name. For example `folder/image.png`.
+  ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL which is valid for one minute.
   ///   - download: Trigger a download with the default file name.
   ///   - transform: Transform the asset before serving it to the client.
   ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  @available(
+    *, deprecated,
+    message: "Use download: DownloadBehavior? instead. Pass .withOriginalName to trigger download."
+  )
   public func createSignedURL(
     path: String,
     expiresIn: Int,
@@ -317,7 +347,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     try await createSignedURL(
       path: path,
       expiresIn: expiresIn,
-      download: download ? "" : nil,
+      download: download ? DownloadBehavior.withOriginalName : nil,
       transform: transform,
       cacheNonce: cacheNonce
     )
@@ -332,6 +362,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs which are valid for one minute.
   ///   - download: Trigger a download with the specified file name.
   ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  @_disfavoredOverload
   public func createSignedURLs(
     paths: [String],
     expiresIn: Int,
@@ -373,8 +404,32 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - paths: The file paths to be downloaded, including the current file names. For example `["folder/image.png", "folder2/image2.png"]`.
   ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs which are valid for one minute.
+  ///   - download: Controls the `Content-Disposition` header for all URLs.
+  ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  public func createSignedURLs(
+    paths: [String],
+    expiresIn: Int,
+    download: DownloadBehavior? = nil,
+    cacheNonce: String? = nil
+  ) async throws -> [SignedURLResult] {
+    try await createSignedURLs(
+      paths: paths,
+      expiresIn: expiresIn,
+      download: download?.queryValue,
+      cacheNonce: cacheNonce
+    )
+  }
+
+  /// Creates multiple signed URLs. Use a signed URL to share a file for a fixed amount of time.
+  ///
+  /// Each item in the returned array is a ``SignedURLResult``: either `.success(path:signedURL:)` or
+  /// `.failure(path:error:)`. Exactly one case is guaranteed per item.
+  /// - Parameters:
+  ///   - paths: The file paths to be downloaded, including the current file names. For example `["folder/image.png", "folder2/image2.png"]`.
+  ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs which are valid for one minute.
   ///   - download: Trigger a download with the default file name.
   ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  @available(*, deprecated, message: "Use download: DownloadBehavior? instead.")
   public func createSignedURLs(
     paths: [String],
     expiresIn: Int,
@@ -382,7 +437,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     cacheNonce: String? = nil
   ) async throws -> [SignedURLResult] {
     try await createSignedURLs(
-      paths: paths, expiresIn: expiresIn, download: download ? "" : nil, cacheNonce: cacheNonce)
+      paths: paths,
+      expiresIn: expiresIn,
+      download: download ? DownloadBehavior.withOriginalName : nil,
+      cacheNonce: cacheNonce
+    )
   }
 
   private func makeSignedURL(_ signedURL: String, download: String?, cacheNonce: String? = nil)
@@ -542,6 +601,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///  - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
   ///
   ///  - Note: The bucket needs to be set to public, either via ``StorageBucketApi/updateBucket(_:options:)`` or by going to Storage on [supabase.com/dashboard](https://supabase.com/dashboard), clicking the overflow menu on a bucket and choosing "Make public".
+  @_disfavoredOverload
   public func getPublicURL(
     path: String,
     download: String? = nil,
@@ -582,11 +642,36 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// A simple convenience function to get the URL for an asset in a public bucket. If you do not want to use this function, you can construct the public URL by concatenating the bucket URL with the path to the asset. This function does not verify if the bucket is public. If a public URL is created for a bucket which is not public, you will not be able to download the asset.
   /// - Parameters:
   ///  - path: The path and name of the file to generate the public URL for. For example `folder/image.png`.
+  ///  - download: Controls the `Content-Disposition` header. Pass `.withOriginalName` to
+  ///    trigger a download using the original filename, or `.named("custom.pdf")` for a
+  ///    custom name. `nil` (default) serves the file inline.
+  ///  - options: Transform the asset before retrieving it on the client.
+  ///  - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
+  ///
+  ///  - Note: The bucket needs to be set to public, either via ``StorageBucketApi/updateBucket(_:options:)`` or by going to Storage on [supabase.com/dashboard](https://supabase.com/dashboard), clicking the overflow menu on a bucket and choosing "Make public".
+  public func getPublicURL(
+    path: String,
+    download: DownloadBehavior? = nil,
+    options: TransformOptions? = nil,
+    cacheNonce: String? = nil
+  ) throws -> URL {
+    try getPublicURL(
+      path: path,
+      download: download?.queryValue,
+      options: options,
+      cacheNonce: cacheNonce
+    )
+  }
+
+  /// A simple convenience function to get the URL for an asset in a public bucket. If you do not want to use this function, you can construct the public URL by concatenating the bucket URL with the path to the asset. This function does not verify if the bucket is public. If a public URL is created for a bucket which is not public, you will not be able to download the asset.
+  /// - Parameters:
+  ///  - path: The path and name of the file to generate the public URL for. For example `folder/image.png`.
   ///  - download: Trigger a download with the default file name.
   ///  - options: Transform the asset before retrieving it on the client.
   ///  - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
   ///
   ///  - Note: The bucket needs to be set to public, either via ``StorageBucketApi/updateBucket(_:options:)`` or by going to Storage on [supabase.com/dashboard](https://supabase.com/dashboard), clicking the overflow menu on a bucket and choosing "Make public".
+  @available(*, deprecated, message: "Use download: DownloadBehavior? instead.")
   public func getPublicURL(
     path: String,
     download: Bool,
@@ -594,7 +679,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     cacheNonce: String? = nil
   ) throws -> URL {
     try getPublicURL(
-      path: path, download: download ? "" : nil, options: options, cacheNonce: cacheNonce)
+      path: path,
+      download: download ? DownloadBehavior.withOriginalName : nil,
+      options: options,
+      cacheNonce: cacheNonce
+    )
   }
 
   /// Creates a signed upload URL. Signed upload URLs can be used to upload files to the bucket without further authentication. They are valid for 2 hours.
