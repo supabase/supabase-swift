@@ -471,6 +471,7 @@ public struct BucketOptions: Sendable {
     set { isPublic = newValue }
   }
 
+  @_disfavoredOverload
   @available(*, deprecated, renamed: "init(isPublic:fileSizeLimit:allowedMimeTypes:)")
   public init(
     public isPublic: Bool = false,

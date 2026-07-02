@@ -139,7 +139,7 @@ struct BucketOperationsView: View {
 
       var options = BucketOptions(public: isPublic)
       if !fileSizeLimit.isEmpty, let limit = Int64(fileSizeLimit) {
-        options.fileSizeLimit = String(limit)
+        options.fileSizeLimit = StorageByteCount(limit)
       }
 
       try await supabase.storage.createBucket(bucketName, options: options)

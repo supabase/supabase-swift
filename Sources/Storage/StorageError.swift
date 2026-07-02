@@ -26,7 +26,7 @@ extension StorageError: LocalizedError {
 /// codes not listed here, the type is open-ended: any unrecognised string is representable
 /// without breaking existing `switch` statements.
 public struct StorageErrorCode: RawRepresentable, Sendable, Hashable {
-  public var rawValue: String
+  public let rawValue: String
   public init(rawValue: String) { self.rawValue = rawValue }
   public init(_ rawValue: String) { self.init(rawValue: rawValue) }
 }
