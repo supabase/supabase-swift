@@ -33,13 +33,13 @@ jobs:
 
           echo "Checking for breaking API changes against $BASELINE_TREEISH"
 
-          # Run the breaking changes check and capture output
+          # Run the breaking changes check.
+          # stdout receives only the filtered "API breakage:" lines (see the script).
+          # stderr (full build log) flows directly to the CI log for debugging.
           set +e
-          API_OUTPUT=$(bash scripts/check-for-breaking-api-changes.sh 2>&1)
+          API_OUTPUT=$(bash scripts/check-for-breaking-api-changes.sh)
           API_EXIT_CODE=$?
           set -e
-
-          echo "$API_OUTPUT"
 
           if [ $API_EXIT_CODE -eq 0 ]; then
             echo "✅ No breaking API changes detected"
@@ -92,11 +92,13 @@ jobs:
               echo "⚠️ Breaking API changes detected but not acknowledged"
               echo "has_breaking_changes=true" >> $GITHUB_OUTPUT
 
-              # Save the API output for the comment (escape for multiline)
+              # Save the API output for the comment.
+              # Use a random delimiter to prevent injection if output contains "EOF".
+              API_OUTPUT_DELIMITER="$(openssl rand -hex 8)"
               {
-                echo 'api_output<<EOF'
+                echo "api_output<<${API_OUTPUT_DELIMITER}"
                 echo "$API_OUTPUT"
-                echo 'EOF'
+                echo "${API_OUTPUT_DELIMITER}"
               } >> $GITHUB_OUTPUT
             fi
           fi
