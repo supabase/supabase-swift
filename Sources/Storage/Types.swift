@@ -293,21 +293,42 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
 
 /// A file size limit passed to the Storage server without client-side conversion.
 ///
-/// The server accepts two forms:
-/// - An exact byte count as an integer: `BucketOptions(fileSizeLimit: 5_000_000)`
-/// - A human-readable string the server parses itself: `BucketOptions(fileSizeLimit: "5mb")`
-///   The server uses SI (decimal) multipliers: `"1mb"` = 1,000,000 bytes,
-///   `"1kb"` = 1,000 bytes, `"1gb"` = 1,000,000,000 bytes.
+/// Three ways to express a limit:
+/// - Factory methods: `BucketOptions(fileSizeLimit: .megabytes(1.5))`  → sends `"1.5mb"`
+/// - String literal:  `BucketOptions(fileSizeLimit: "500kb")`           → sends `"500kb"`
+/// - Exact integer:   `BucketOptions(fileSizeLimit: 5_000_000)`         → sends `5000000`
+///
+/// The server uses SI (decimal) multipliers for string values:
+/// `"1kb"` = 1,000 bytes, `"1mb"` = 1,000,000 bytes, `"1gb"` = 1,000,000,000 bytes.
 public struct StorageByteCount: Sendable, Hashable {
   /// The exact byte count when initialized from an integer, or `nil` for string-based values.
   public let bytes: Int64?
 
-  // Verbatim string forwarded to the server (e.g. "5mb", "500kb").
+  // Verbatim string forwarded to the server (e.g. "1.5mb", "500kb").
   let _stringValue: String?
 
   public init(_ bytes: Int64) {
     self.bytes = bytes
     self._stringValue = nil
+  }
+
+  private init(serverString: String) {
+    self.bytes = nil
+    self._stringValue = serverString
+  }
+
+  private static func formatValue(_ value: Double) -> String {
+    value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int64(value)) : String(value)
+  }
+
+  public static func kilobytes(_ value: Double) -> Self {
+    Self(serverString: "\(formatValue(value))kb")
+  }
+  public static func megabytes(_ value: Double) -> Self {
+    Self(serverString: "\(formatValue(value))mb")
+  }
+  public static func gigabytes(_ value: Double) -> Self {
+    Self(serverString: "\(formatValue(value))gb")
   }
 }
 

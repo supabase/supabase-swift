@@ -20,6 +20,24 @@ import Testing
     #expect(StorageByteCount(1_000_000) == StorageByteCount(1_000_000))
   }
 
+  @Test func kilobytes() {
+    let count = StorageByteCount.kilobytes(500)
+    #expect(count.bytes == nil)
+    #expect(count._stringValue == "500kb")
+  }
+
+  @Test func megabytes() {
+    let count = StorageByteCount.megabytes(1.5)
+    #expect(count.bytes == nil)
+    #expect(count._stringValue == "1.5mb")
+  }
+
+  @Test func gigabytes() {
+    let count = StorageByteCount.gigabytes(2)
+    #expect(count.bytes == nil)
+    #expect(count._stringValue == "2gb")
+  }
+
   @Test func stringLiteralNumeric() {
     let count: StorageByteCount = "1000000"
     #expect(count.bytes == 1_000_000)

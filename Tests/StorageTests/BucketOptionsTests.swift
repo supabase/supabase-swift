@@ -28,9 +28,15 @@ final class BucketOptionsTests: XCTestCase {
     XCTAssertTrue(options.isPublic)
   }
 
-  func testFileSizeLimitStorageByteCount() {
+  func testFileSizeLimitInteger() {
     let options = BucketOptions(isPublic: false, fileSizeLimit: StorageByteCount(5_000_000))
     XCTAssertEqual(options.fileSizeLimit?.bytes, 5_000_000)
+  }
+
+  func testFileSizeLimitMegabytes() {
+    let options = BucketOptions(isPublic: false, fileSizeLimit: .megabytes(1.5))
+    XCTAssertNil(options.fileSizeLimit?.bytes)
+    XCTAssertEqual(options.fileSizeLimit?._stringValue, "1.5mb")
   }
 
   func testFileSizeLimitIntegerLiteral() {

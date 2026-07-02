@@ -119,7 +119,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testUploadFileWithinFileSizeLimit() async throws {
     bucketName = try await newBucket(
       prefix: "with-limit",
-      options: BucketOptions(isPublic: true, fileSizeLimit: "1mb")
+      options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1))
     )
 
     try await storage.from(bucketName).upload(uploadPath, data: file)
@@ -128,7 +128,7 @@ final class StorageFileIntegrationTests: XCTestCase {
   func testUploadFileThatExceedFileSizeLimit() async throws {
     bucketName = try await newBucket(
       prefix: "with-limit",
-      options: BucketOptions(isPublic: true, fileSizeLimit: "1kb")
+      options: BucketOptions(isPublic: true, fileSizeLimit: .kilobytes(1))
     )
 
     do {
