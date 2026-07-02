@@ -452,3 +452,87 @@ public enum UploadMethod: Sendable {
   /// Force TUS resumable uploads regardless of file size. Supports pause/resume/cancel.
   case resumable
 }
+
+// MARK: - BucketOptions
+
+public struct BucketOptions: Sendable {
+  /// The visibility of the bucket. Public buckets don't require an authorization token to download objects, but still require a valid token for all other operations. Bu default, buckets are private.
+  public var `public`: Bool
+  /// Specifies the allowed mime types that this bucket can accept during upload. The default value is null, which allows files with all mime types to be uploaded. Each mime type specified can be a wildcard, e.g. image/*, or a specific mime type, e.g. image/png.
+  public var fileSizeLimit: String?
+  /// Specifies the max file size in bytes that can be uploaded to this bucket. The global file size limit takes precedence over this value. The default value is null, which doesn't set a per bucket file size limit.
+  public var allowedMimeTypes: [String]?
+
+  public init(
+    public: Bool = false,
+    fileSizeLimit: String? = nil,
+    allowedMimeTypes: [String]? = nil
+  ) {
+    self.public = `public`
+    self.fileSizeLimit = fileSizeLimit
+    self.allowedMimeTypes = allowedMimeTypes
+  }
+}
+
+// MARK: - TransformOptions
+
+/// Transform the asset before serving it to the client.
+public struct TransformOptions: Encodable, Sendable {
+  /// The width of the image in pixels.
+  public var width: Int?
+  /// The height of the image in pixels.
+  public var height: Int?
+  /// The resize mode can be cover, contain or fill. Defaults to cover.
+  /// Cover resizes the image to maintain it's aspect ratio while filling the entire width and height.
+  /// Contain resizes the image to maintain it's aspect ratio while fitting the entire image within the width and height.
+  /// Fill resizes the image to fill the entire width and height. If the object's aspect ratio does not match the width and height, the image will be stretched to fit.
+  public var resize: String?
+  /// Set the quality of the returned image. A number from 20 to 100, with 100 being the highest quality. Defaults to 80.
+  public var quality: Int?
+  /// Specify the format of the image requested.
+  public var format: String?
+
+  public init(
+    width: Int? = nil,
+    height: Int? = nil,
+    resize: String? = nil,
+    quality: Int? = nil,
+    format: String? = nil
+  ) {
+    self.width = width
+    self.height = height
+    self.resize = resize
+    self.quality = quality
+    self.format = format
+  }
+
+  var isEmpty: Bool {
+    queryItems.isEmpty
+  }
+
+  var queryItems: [URLQueryItem] {
+    var items = [URLQueryItem]()
+
+    if let width {
+      items.append(URLQueryItem(name: "width", value: String(width)))
+    }
+
+    if let height {
+      items.append(URLQueryItem(name: "height", value: String(height)))
+    }
+
+    if let resize {
+      items.append(URLQueryItem(name: "resize", value: resize))
+    }
+
+    if let quality {
+      items.append(URLQueryItem(name: "quality", value: String(quality)))
+    }
+
+    if let format {
+      items.append(URLQueryItem(name: "format", value: format))
+    }
+
+    return items
+  }
+}
