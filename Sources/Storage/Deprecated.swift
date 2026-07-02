@@ -307,7 +307,8 @@ extension TransformOptions {
   @_disfavoredOverload
   @available(
     *, deprecated,
-    message: "Use `init(width:height:resize:quality:format:)` with ResizeMode and ImageFormat instead."
+    message:
+      "Use `init(width:height:resize:quality:format:)` with ResizeMode and ImageFormat instead."
   )
   public init(
     width: Int? = nil,
