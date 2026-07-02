@@ -234,7 +234,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
       .joined(separator: "|")
       let forMediaType = $0.request.headers[.accept] ?? "application/json"
       $0.request.headers[.accept] =
-        "application/vnd.pgrst.plan+\"\(formatValue)\"; for=\(forMediaType); options=\(options);"
+        "application/vnd.pgrst.plan+\(formatValue); for=\"\(forMediaType)\"; options=\(options);"
     }
 
     return self
