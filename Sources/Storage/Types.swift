@@ -31,9 +31,9 @@ public struct SearchOptions: Encodable, Sendable {
 
 public struct SortBy: Encodable, Sendable {
   public var column: String?
-  public var order: String?
+  public var order: SortOrder?
 
-  public init(column: String? = nil, order: String? = nil) {
+  public init(column: String? = nil, order: SortOrder? = nil) {
     self.column = column
     self.order = order
   }
