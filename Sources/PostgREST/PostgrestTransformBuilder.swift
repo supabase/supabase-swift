@@ -151,14 +151,6 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
     return self
   }
 
-  /// The output format of an ``explain(analyze:verbose:settings:buffers:wal:format:)`` plan.
-  public enum ExplainFormat: String, Sendable {
-    /// Human-readable text output (default).
-    case text
-    /// Machine-readable JSON output.
-    case json
-  }
-
   /// Return `data` as the EXPLAIN plan for the query.
   ///
   /// You need to enable the [db_plan_enabled](https://supabase.com/docs/guides/database/debugging-performance#enabling-explain)

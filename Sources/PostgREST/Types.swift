@@ -71,6 +71,20 @@ public enum TextSearchType: String, Sendable {
   case websearch = "w"
 }
 
+/// The output format of an EXPLAIN plan.
+public struct ExplainFormat: RawRepresentable, Hashable, Sendable {
+  public let rawValue: String
+
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Human-readable text output (default).
+  public static let text = ExplainFormat(rawValue: "text")
+  /// Machine-readable JSON output.
+  public static let json = ExplainFormat(rawValue: "json")
+}
+
 /// Options for querying Supabase.
 public struct FetchOptions: Sendable {
   /// Set head to true if you only want the count value and not the underlying data.
