@@ -31,12 +31,15 @@ git -C "${REPO_ROOT}" fetch "${BASELINE_REPO_URL}" "${BASELINE_TREEISH}"
 BASELINE_COMMIT=$(git -C "${REPO_ROOT}" rev-parse FETCH_HEAD)
 
 log "Checking for API changes since ${BASELINE_REPO_URL}#${BASELINE_TREEISH} (${BASELINE_COMMIT})..."
-swift package --package-path "${REPO_ROOT}" diagnose-api-breaking-changes \
-  "${BASELINE_COMMIT}" \
-  && RC=$? || RC=$?
+SWIFT_OUTPUT=$(swift package --package-path "${REPO_ROOT}" diagnose-api-breaking-changes \
+  "${BASELINE_COMMIT}" 2>&1) && RC=0 || RC=$?
+
+# Print full output to stderr so it appears in CI logs for debugging
+echo "$SWIFT_OUTPUT" >&2
 
 if [ "${RC}" -ne 0 ]; then
+  # Print only the breaking change lines to stdout (captured by the caller)
+  echo "$SWIFT_OUTPUT" | grep "API breakage:" || true
   fatal "❌ Breaking API changes detected."
-  exit "${RC}"
 fi
 log "✅ No breaking API changes detected."
