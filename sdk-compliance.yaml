@@ -422,6 +422,7 @@ features:
       - ImageFormat
       - ImageFormat.init
       - ImageFormat.rawValue
+      - ImageFormat.origin
       - ImageFormat.webp
       - ImageFormat.avif
       - ImageFormat.encode
