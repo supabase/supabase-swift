@@ -367,6 +367,12 @@ features:
     status: implemented
     symbols:
       - StorageByteCount
+      - StorageByteCount.init
+      - StorageByteCount.intValue
+      - StorageByteCount.kilobytes
+      - StorageByteCount.megabytes
+      - StorageByteCount.gigabytes
+      - StorageByteCount.encode
       - BucketOptions.isPublic
   storage.file_buckets.get_bucket: implemented
   storage.file_buckets.list_file_buckets: implemented
@@ -380,6 +386,9 @@ features:
     status: implemented
     symbols:
       - SortOrder
+      - SortOrder.init
+      - SortOrder.rawValue
+      - SortOrder.encode
   storage.file_buckets.move: implemented
   storage.file_buckets.copy: implemented
   storage.file_buckets.remove: implemented
@@ -399,7 +408,16 @@ features:
     status: implemented
     symbols:
       - ResizeMode
+      - ResizeMode.init
+      - ResizeMode.cover
+      - ResizeMode.contain
+      - ResizeMode.encode
       - ImageFormat
+      - ImageFormat.init
+      - ImageFormat.rawValue
+      - ImageFormat.webp
+      - ImageFormat.avif
+      - ImageFormat.encode
   storage.file_buckets.copy_cross_bucket: implemented
   storage.file_buckets.move_cross_bucket: implemented
   storage.file_buckets.upload_with_metadata: implemented
