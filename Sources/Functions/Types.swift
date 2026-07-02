@@ -21,76 +21,21 @@ public enum FunctionsError: Error, LocalizedError {
 
 /// Options for invoking a function.
 public struct FunctionInvokeOptions: Sendable {
-  /// Method to use in the function invocation.
-  let method: Method?
+  /// HTTP method to use in the function invocation.
+  public var method: Method?
   /// Headers to be included in the function invocation.
-  let headers: HTTPFields
+  public var headers: [String: String] = [:]
   /// Body data to be sent with the function invocation.
-  let body: Data?
-  /// The Region to invoke the function in.
-  let region: String?
-  /// The query to be included in the function invocation.
-  let query: [URLQueryItem]
+  public var body: Data?
+  /// The region to invoke the function in.
+  public var region: FunctionRegion?
+  /// Query parameters to be included in the function invocation.
+  public var query: [String: String] = [:]
 
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - query: The query to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation.
-  ///   - encoder: The JSON encoder to use for encoding the body. (Default: `JSONEncoder()`)
-  @_disfavoredOverload
-  public init(
-    method: Method? = nil,
-    query: [URLQueryItem] = [],
-    headers: [String: String] = [:],
-    region: String? = nil,
-    body: some Encodable,
-    encoder: JSONEncoder = JSONEncoder()
-  ) {
-    var defaultHeaders = HTTPFields()
+  /// Creates a `FunctionInvokeOptions` with default values.
+  public init() {}
 
-    switch body {
-    case let string as String:
-      defaultHeaders[.contentType] = "text/plain"
-      self.body = string.data(using: .utf8)
-    case let data as Data:
-      defaultHeaders[.contentType] = "application/octet-stream"
-      self.body = data
-    default:
-      defaultHeaders[.contentType] = "application/json"
-      self.body = try? encoder.encode(body)
-    }
-
-    self.method = method
-    self.headers = defaultHeaders.merging(with: HTTPFields(headers))
-    self.region = region
-    self.query = query
-  }
-
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - query: The query to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  @_disfavoredOverload
-  public init(
-    method: Method? = nil,
-    query: [URLQueryItem] = [],
-    headers: [String: String] = [:],
-    region: String? = nil
-  ) {
-    self.method = method
-    self.headers = HTTPFields(headers)
-    self.region = region
-    self.query = query
-    body = nil
-  }
-
+  /// HTTP methods available for function invocation.
   public enum Method: String, Sendable {
     case get = "GET"
     case post = "POST"
@@ -101,18 +46,12 @@ public struct FunctionInvokeOptions: Sendable {
 
   static func httpMethod(_ method: Method?) -> HTTPTypes.HTTPRequest.Method? {
     switch method {
-    case .get:
-      .get
-    case .post:
-      .post
-    case .put:
-      .put
-    case .patch:
-      .patch
-    case .delete:
-      .delete
-    case nil:
-      nil
+    case .get: .get
+    case .post: .post
+    case .put: .put
+    case .patch: .patch
+    case .delete: .delete
+    case nil: nil
     }
   }
 }
@@ -159,15 +98,58 @@ extension FunctionRegion: ExpressibleByStringLiteral {
   }
 }
 
+// MARK: - Deprecated initializers
+
 extension FunctionInvokeOptions {
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation.
-  ///   - encoder: The JSON encoder to use for encoding the body. (Default: `JSONEncoder()`)
+  @available(*, deprecated, message: "Use the builder-style invoke API instead.")
+  @_disfavoredOverload
+  public init(
+    method: Method? = nil,
+    query: [URLQueryItem] = [],
+    headers: [String: String] = [:],
+    region: String? = nil,
+    body: some Encodable,
+    encoder: JSONEncoder = JSONEncoder()
+  ) {
+    self.init()
+    self.method = method
+    self.region = region.map { FunctionRegion(rawValue: $0) }
+    self.query = query.reduce(into: [:]) { dict, item in
+      if let value = item.value { dict[item.name] = value }
+    }
+    var computedHeaders: [String: String] = [:]
+    switch body {
+    case let string as String:
+      computedHeaders["Content-Type"] = "text/plain"
+      self.body = string.data(using: .utf8)
+    case let data as Data:
+      computedHeaders["Content-Type"] = "application/octet-stream"
+      self.body = data
+    default:
+      computedHeaders["Content-Type"] = "application/json"
+      self.body = try? encoder.encode(body)
+    }
+    self.headers = computedHeaders.merging(headers) { _, new in new }
+  }
+
+  @available(*, deprecated, message: "Use the builder-style invoke API instead.")
+  @_disfavoredOverload
+  public init(
+    method: Method? = nil,
+    query: [URLQueryItem] = [],
+    headers: [String: String] = [:],
+    region: String? = nil
+  ) {
+    self.init()
+    self.method = method
+    self.headers = headers
+    self.region = region.map { FunctionRegion(rawValue: $0) }
+    self.query = query.reduce(into: [:]) { dict, item in
+      if let value = item.value { dict[item.name] = value }
+    }
+  }
+
+  @available(*, deprecated, message: "Use the builder-style invoke API instead.")
   public init(
     method: Method? = nil,
     headers: [String: String] = [:],
@@ -176,25 +158,16 @@ extension FunctionInvokeOptions {
     encoder: JSONEncoder = JSONEncoder()
   ) {
     self.init(
-      method: method,
-      headers: headers,
-      region: region?.rawValue,
-      body: body,
-      encoder: encoder
-    )
+      method: method, query: [], headers: headers, region: region?.rawValue, body: body,
+      encoder: encoder)
   }
 
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
-  /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
+  @available(*, deprecated, message: "Use the builder-style invoke API instead.")
   public init(
     method: Method? = nil,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil
   ) {
-    self.init(method: method, headers: headers, region: region?.rawValue)
+    self.init(method: method, query: [], headers: headers, region: region?.rawValue)
   }
 }
