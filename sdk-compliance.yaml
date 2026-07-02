@@ -372,6 +372,7 @@ features:
       - StorageByteCount.kilobytes
       - StorageByteCount.megabytes
       - StorageByteCount.gigabytes
+      - StorageByteCount.stringValue
       - StorageByteCount.encode
       - BucketOptions.isPublic
   storage.file_buckets.get_bucket: implemented
@@ -388,6 +389,8 @@ features:
       - SortOrder
       - SortOrder.init
       - SortOrder.rawValue
+      - SortOrder.ascending
+      - SortOrder.descending
       - SortOrder.encode
   storage.file_buckets.move: implemented
   storage.file_buckets.copy: implemented
@@ -396,6 +399,8 @@ features:
     status: implemented
     symbols:
       - DownloadBehavior
+      - DownloadBehavior.withOriginalName
+      - DownloadBehavior.named
   storage.file_buckets.create_signed_url: implemented
   storage.file_buckets.create_signed_urls: implemented
   storage.file_buckets.create_signed_upload_url: implemented
@@ -409,8 +414,10 @@ features:
     symbols:
       - ResizeMode
       - ResizeMode.init
+      - ResizeMode.rawValue
       - ResizeMode.cover
       - ResizeMode.contain
+      - ResizeMode.fill
       - ResizeMode.encode
       - ImageFormat
       - ImageFormat.init
