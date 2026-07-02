@@ -291,21 +291,18 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
 
 // MARK: - StorageByteCount
 
-/// A convenience type for defining file size limit.
+/// A file size limit for a Storage bucket.
 ///
-/// Three ways to express a limit:
-/// - Factory methods: `BucketOptions(fileSizeLimit: .megabytes(1.5))`  → sends `"1.5mb"`
-/// - String literal:  `BucketOptions(fileSizeLimit: "500kb")`           → sends `"500kb"`
-/// - Exact integer:   `BucketOptions(fileSizeLimit: 5_000_000)`         → sends `5000000`
-///
-/// The server uses SI (decimal) multipliers for string values:
-/// `"1kb"` = 1,000 bytes, `"1mb"` = 1,000,000 bytes, `"1gb"` = 1,000,000,000 bytes.
+/// ```swift
+/// BucketOptions(fileSizeLimit: .megabytes(1.5))
+/// BucketOptions(fileSizeLimit: "500kb")
+/// BucketOptions(fileSizeLimit: 5_000_000)
+/// ```
 public struct StorageByteCount: Sendable, Hashable {
-  /// The exact byte count when initialized from an integer, or `nil` for string-based values.
+  /// The exact byte count, or `nil` when a string value is used.
   public let intValue: Int64?
 
-  /// The verbatim string forwarded to the server (e.g. `"1.5mb"`, `"500kb"`),
-  /// or `nil` when initialized from an integer.
+  /// A human-readable size string (e.g. `"1.5mb"`, `"500kb"`), or `nil` when an integer is used.
   public let stringValue: String?
 
   public init(_ intValue: Int64) {
@@ -343,8 +340,6 @@ extension StorageByteCount: ExpressibleByIntegerLiteral {
 }
 
 extension StorageByteCount: ExpressibleByStringLiteral {
-  /// Accepts a human-readable size string (e.g. `"1mb"`, `"500kb"`, `"2gb"`) or a plain
-  /// numeric string (e.g. `"10485760"`). Numeric strings are stored as `intValue`.
   public init(stringLiteral value: String) {
     if let n = Int64(value) {
       self.init(n)
@@ -370,7 +365,6 @@ extension StorageByteCount: Encodable {
 /// Resize mode for on-the-fly image transformation.
 /// ```swift
 /// TransformOptions(resize: .cover)
-/// TransformOptions(resize: "cover")  // string literal still works
 /// ```
 public struct ResizeMode: RawRepresentable, Hashable, Sendable {
   public let rawValue: String
@@ -400,11 +394,8 @@ extension ResizeMode: Codable {
 // MARK: - ImageFormat
 
 /// Output format for on-the-fly image transformation.
-///
-/// Open-ended struct so custom backend values don't require an SDK update.
 /// ```swift
 /// TransformOptions(format: .webp)
-/// TransformOptions(format: "webp")  // string literal still works
 /// ```
 public struct ImageFormat: RawRepresentable, Hashable, Sendable {
   public let rawValue: String
@@ -434,11 +425,8 @@ extension ImageFormat: Codable {
 // MARK: - SortOrder
 
 /// Sort direction for ``StorageFileApi/list(path:options:)`` results.
-///
-/// Open-ended struct so custom backend values don't require an SDK update.
 /// ```swift
 /// SortBy(column: "name", order: .ascending)
-/// SortBy(column: "name", order: "asc")  // string literal still works
 /// ```
 public struct SortOrder: RawRepresentable, Hashable, Sendable {
   public let rawValue: String
@@ -466,16 +454,16 @@ extension SortOrder: Codable {
 
 // MARK: - DownloadBehavior
 
-/// Controls the `?download=` query parameter on signed and public URLs.
+/// Controls download behavior for signed and public URLs.
 ///
 /// ```swift
 /// storage.from("docs").getPublicURL(path: "report.pdf", download: .withOriginalName)
 /// storage.from("docs").getPublicURL(path: "report.pdf", download: .named("annual-2024.pdf"))
 /// ```
 public enum DownloadBehavior: Sendable {
-  /// Trigger a browser download using the file's original name. Wire: `?download=`
+  /// Trigger a download using the file's original name.
   case withOriginalName
-  /// Trigger a browser download with a custom filename. Wire: `?download=<name>`
+  /// Trigger a download with a custom filename.
   case named(String)
 
   var queryValue: String {
@@ -493,13 +481,10 @@ public struct BucketOptions: Sendable {
   /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool
 
-  /// Maximum file size limit for uploads to this bucket, stored as the wire value
-  /// sent to the server. Accepts an integer (exact bytes) or a human-readable string
-  /// such as `"1mb"`, `"500kb"`, `"2gb"`.
+  /// Maximum file size allowed for uploads to this bucket.
   public var fileSizeLimit: String?
 
-  /// MIME types accepted during upload. Each entry can be exact (`"image/png"`) or
-  /// a wildcard (`"image/*"`). `nil` allows all MIME types.
+  /// MIME types accepted during upload, e.g. `["image/png", "image/*"]`. `nil` allows all types.
   public var allowedMimeTypes: [String]?
 
   public init(
@@ -521,11 +506,11 @@ public struct TransformOptions: Encodable, Sendable {
   public var width: Int?
   /// The height of the image in pixels.
   public var height: Int?
-  /// The resize mode can be cover, contain or fill. Defaults to cover. Stored as the wire value.
+  /// How the image is resized to fit the target dimensions. Defaults to `cover`.
   public var resize: String?
-  /// Set the quality of the returned image. A number from 20 to 100, with 100 being the highest quality. Defaults to 80.
+  /// Quality of the returned image, from 20 to 100. Defaults to 80.
   public var quality: Int?
-  /// Specify the format of the image requested. Stored as the wire value.
+  /// Output format of the image.
   public var format: String?
 
   public init(

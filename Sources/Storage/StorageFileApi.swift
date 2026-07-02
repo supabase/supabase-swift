@@ -305,9 +305,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - path: The file path, including the current file name. For example `folder/image.png`.
   ///   - expiresIn: The number of seconds until the signed URL expires. For example, `60` for a URL which is valid for one minute.
-  ///   - download: Controls the `Content-Disposition` header. Pass `.withOriginalName` to
-  ///     trigger a download using the original filename, or `.named("custom.pdf")` for a
-  ///     custom name. `nil` (default) serves the file inline.
+  ///   - download: Trigger a download with the file's original name or a custom name.
   ///   - transform: Transform the asset before serving it to the client.
   ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
   public func createSignedURL(
@@ -377,7 +375,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - paths: The file paths to be downloaded, including the current file names. For example `["folder/image.png", "folder2/image2.png"]`.
   ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs which are valid for one minute.
-  ///   - download: Controls the `Content-Disposition` header for all URLs.
+  ///   - download: Trigger a download with the file's original name or a custom name.
   ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
   public func createSignedURLs(
     paths: [String],
@@ -551,7 +549,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     }
   }
 
-  /// A simple convenience function to get the URL for an asset in a public bucket. This function does not verify if the bucket is public. If a public URL is created for a bucket which is not public, you will not be able to download the asset.
+  /// Returns the public URL for a file in a public bucket.
   /// - Parameters:
   ///  - path: The path and name of the file to generate the public URL for. For example `folder/image.png`.
   ///  - download: Trigger a download with the specified file name.
@@ -597,12 +595,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     return generatedUrl
   }
 
-  /// A simple convenience function to get the URL for an asset in a public bucket. This function does not verify if the bucket is public. If a public URL is created for a bucket which is not public, you will not be able to download the asset.
+  /// Returns the public URL for a file in a public bucket.
   /// - Parameters:
   ///  - path: The path and name of the file to generate the public URL for. For example `folder/image.png`.
-  ///  - download: Controls the `Content-Disposition` header. Pass `.withOriginalName` to
-  ///    trigger a download using the original filename, or `.named("custom.pdf")` for a
-  ///    custom name. `nil` (default) serves the file inline.
+  ///  - download: Trigger a download with the file's original name or a custom name.
   ///  - options: Transform the asset before retrieving it on the client.
   ///  - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
   ///
@@ -621,7 +617,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     )
   }
 
-  /// A simple convenience function to get the URL for an asset in a public bucket. This function does not verify if the bucket is public. If a public URL is created for a bucket which is not public, you will not be able to download the asset.
+  /// Returns the public URL for a file in a public bucket.
   /// - Parameters:
   ///  - path: The path and name of the file to generate the public URL for. For example `folder/image.png`.
   ///  - download: Trigger a download with the default file name.
