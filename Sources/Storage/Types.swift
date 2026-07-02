@@ -291,7 +291,7 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
 
 // MARK: - StorageByteCount
 
-/// A file size limit passed to the Storage server without client-side conversion.
+/// A convenience type for defining file size limit.
 ///
 /// Three ways to express a limit:
 /// - Factory methods: `BucketOptions(fileSizeLimit: .megabytes(1.5))`  → sends `"1.5mb"`
@@ -368,8 +368,6 @@ extension StorageByteCount: Encodable {
 // MARK: - ResizeMode
 
 /// Resize mode for on-the-fly image transformation.
-///
-/// Open-ended struct so custom backend values don't require an SDK update.
 /// ```swift
 /// TransformOptions(resize: .cover)
 /// TransformOptions(resize: "cover")  // string literal still works
