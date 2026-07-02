@@ -256,3 +256,49 @@ extension Data {
     append(data!)
   }
 }
+
+extension BucketOptions {
+  @available(*, deprecated, renamed: "isPublic")
+  public var `public`: Bool {
+    get { isPublic }
+    set { isPublic = newValue }
+  }
+
+  @_disfavoredOverload
+  @available(*, deprecated, renamed: "init(isPublic:fileSizeLimit:allowedMimeTypes:)")
+  public init(
+    public isPublic: Bool = false,
+    fileSizeLimit: String? = nil,
+    allowedMimeTypes: [String]? = nil
+  ) {
+    self.init(
+      isPublic: isPublic,
+      fileSizeLimit: fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
+      allowedMimeTypes: allowedMimeTypes
+    )
+  }
+
+  @_disfavoredOverload
+  @available(
+    *, deprecated,
+    message: "Use `init(isPublic:fileSizeLimit:allowedMimeTypes:)` with StorageByteCount instead."
+  )
+  public init(
+    isPublic: Bool = false,
+    fileSizeLimit: String? = nil,
+    allowedMimeTypes: [String]? = nil
+  ) {
+    self.isPublic = isPublic
+    self.fileSizeLimit = fileSizeLimit
+    self.allowedMimeTypes = allowedMimeTypes
+  }
+
+}
+
+extension SortBy {
+  @available(*, deprecated, message: "Use `init` with `SortOrder` instead.")
+  public init(column: String? = nil, order: String? = nil) {
+    self.column = column
+    self.order = order
+  }
+}

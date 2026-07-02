@@ -31,11 +31,11 @@ public struct SearchOptions: Encodable, Sendable {
 
 public struct SortBy: Encodable, Sendable {
   public var column: String?
-  public var order: SortOrder?
+  public var order: String?
 
   public init(column: String? = nil, order: SortOrder? = nil) {
     self.column = column
-    self.order = order
+    self.order = order?.rawValue
   }
 }
 
@@ -313,23 +313,28 @@ public struct StorageByteCount: Sendable, Hashable {
     self.stringValue = nil
   }
 
-  private init(serverString: String) {
+  public init(stringValue: String) {
     self.intValue = nil
-    self.stringValue = serverString
+    self.stringValue = stringValue
   }
 
   private static func formatValue(_ value: Double) -> String {
     value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int64(value)) : String(value)
   }
 
+  /// Creates a ``StorageByteCount`` from a number of kilobytes.
   public static func kilobytes(_ value: Double) -> Self {
-    Self(serverString: "\(formatValue(value))kb")
+    Self(stringValue: "\(formatValue(value))kb")
   }
+
+  /// Creates a ``StorageByteCount`` from a number of megabytes.
   public static func megabytes(_ value: Double) -> Self {
-    Self(serverString: "\(formatValue(value))mb")
+    Self(stringValue: "\(formatValue(value))mb")
   }
+
+  /// Creates a ``StorageByteCount`` from a number of gigabytes.
   public static func gigabytes(_ value: Double) -> Self {
-    Self(serverString: "\(formatValue(value))gb")
+    Self(stringValue: "\(formatValue(value))gb")
   }
 }
 
@@ -339,15 +344,12 @@ extension StorageByteCount: ExpressibleByIntegerLiteral {
 
 extension StorageByteCount: ExpressibleByStringLiteral {
   /// Accepts a human-readable size string (e.g. `"1mb"`, `"500kb"`, `"2gb"`) or a plain
-  /// numeric string (e.g. `"10485760"`). Plain numeric strings are stored as `intValue`;
-  /// all other strings are stored as `stringValue` and forwarded to the server as-is.
+  /// numeric string (e.g. `"10485760"`). Numeric strings are stored as `intValue`.
   public init(stringLiteral value: String) {
     if let n = Int64(value) {
-      intValue = n
-      stringValue = nil
+      self.init(n)
     } else {
-      intValue = nil
-      stringValue = value
+      self.init(stringValue: value)
     }
   }
 }
@@ -493,11 +495,10 @@ public struct BucketOptions: Sendable {
   /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool
 
-  /// The maximum file size allowed for uploads.
-  ///
-  /// Pass an exact byte count (`5_000_000`) or a human-readable string the server parses
-  /// (`"5mb"`, `"500kb"`, `"2gb"`). `nil` means no per-bucket limit.
-  public var fileSizeLimit: StorageByteCount?
+  /// Maximum file size limit for uploads to this bucket, stored as the wire value
+  /// sent to the server. Accepts an integer (exact bytes) or a human-readable string
+  /// such as `"1mb"`, `"500kb"`, `"2gb"`.
+  public var fileSizeLimit: String?
 
   /// MIME types accepted during upload. Each entry can be exact (`"image/png"`) or
   /// a wildcard (`"image/*"`). `nil` allows all MIME types.
@@ -509,30 +510,8 @@ public struct BucketOptions: Sendable {
     allowedMimeTypes: [String]? = nil
   ) {
     self.isPublic = isPublic
-    self.fileSizeLimit = fileSizeLimit
+    self.fileSizeLimit = fileSizeLimit?.stringValue ?? fileSizeLimit?.intValue.map(String.init)
     self.allowedMimeTypes = allowedMimeTypes
-  }
-
-  // MARK: Deprecated bridges
-
-  @available(*, deprecated, renamed: "isPublic")
-  public var `public`: Bool {
-    get { isPublic }
-    set { isPublic = newValue }
-  }
-
-  @_disfavoredOverload
-  @available(*, deprecated, renamed: "init(isPublic:fileSizeLimit:allowedMimeTypes:)")
-  public init(
-    public isPublic: Bool = false,
-    fileSizeLimit: String? = nil,
-    allowedMimeTypes: [String]? = nil
-  ) {
-    self.init(
-      isPublic: isPublic,
-      fileSizeLimit: fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
-      allowedMimeTypes: allowedMimeTypes
-    )
   }
 }
 

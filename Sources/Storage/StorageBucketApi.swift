@@ -36,7 +36,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
     var id: String
     var name: String
     var `public`: Bool
-    var fileSizeLimit: StorageByteCount?
+    var fileSizeLimit: String?
     var allowedMimeTypes: [String]?
   }
 
