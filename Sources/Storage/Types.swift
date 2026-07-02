@@ -428,7 +428,7 @@ public enum DownloadBehavior: Sendable {
   /// Trigger a browser download with a custom filename. Wire: `?download=<name>`
   case named(String)
 
-  public var queryValue: String {
+  var queryValue: String {
     switch self {
     case .withOriginalName: return ""
     case .named(let name): return name
