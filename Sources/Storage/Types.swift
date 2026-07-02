@@ -486,18 +486,18 @@ public struct TransformOptions: Encodable, Sendable {
   /// Cover resizes the image to maintain it's aspect ratio while filling the entire width and height.
   /// Contain resizes the image to maintain it's aspect ratio while fitting the entire image within the width and height.
   /// Fill resizes the image to fill the entire width and height. If the object's aspect ratio does not match the width and height, the image will be stretched to fit.
-  public var resize: String?
+  public var resize: ResizeMode?
   /// Set the quality of the returned image. A number from 20 to 100, with 100 being the highest quality. Defaults to 80.
   public var quality: Int?
   /// Specify the format of the image requested.
-  public var format: String?
+  public var format: ImageFormat?
 
   public init(
     width: Int? = nil,
     height: Int? = nil,
-    resize: String? = nil,
+    resize: ResizeMode? = nil,
     quality: Int? = nil,
-    format: String? = nil
+    format: ImageFormat? = nil
   ) {
     self.width = width
     self.height = height
@@ -522,7 +522,7 @@ public struct TransformOptions: Encodable, Sendable {
     }
 
     if let resize {
-      items.append(URLQueryItem(name: "resize", value: resize))
+      items.append(URLQueryItem(name: "resize", value: resize.rawValue))
     }
 
     if let quality {
@@ -530,7 +530,7 @@ public struct TransformOptions: Encodable, Sendable {
     }
 
     if let format {
-      items.append(URLQueryItem(name: "format", value: format))
+      items.append(URLQueryItem(name: "format", value: format.rawValue))
     }
 
     return items
