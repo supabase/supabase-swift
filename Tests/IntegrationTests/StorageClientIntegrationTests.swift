@@ -61,7 +61,7 @@ final class StorageClientIntegrationTests: XCTestCase {
     XCTAssertTrue(buckets.contains { $0.id == bucket.id })
 
     try await storage.updateBucket(
-      bucketName, options: BucketOptions(allowedMimeTypes: ["image/jpeg"]))
+      bucketName, options: BucketOptions(isPublic: false, allowedMimeTypes: ["image/jpeg"]))
 
     bucket = try await storage.getBucket(bucketName)
     XCTAssertEqual(bucket.allowedMimeTypes, ["image/jpeg"])

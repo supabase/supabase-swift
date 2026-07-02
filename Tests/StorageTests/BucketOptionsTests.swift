@@ -4,7 +4,7 @@ import XCTest
 
 final class BucketOptionsTests: XCTestCase {
   func testDefaultInitialization() {
-    let options = BucketOptions()
+    let options = BucketOptions(isPublic: false)
 
     XCTAssertFalse(options.public)
     XCTAssertNil(options.fileSizeLimit)
