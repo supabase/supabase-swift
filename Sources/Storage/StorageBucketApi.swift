@@ -36,7 +36,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
     var id: String
     var name: String
     var `public`: Bool
-    var fileSizeLimit: String?
+    var fileSizeLimit: Int64?
     var allowedMimeTypes: [String]?
   }
 
@@ -44,7 +44,9 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - id: A unique identifier for the bucket you are creating.
   ///   - options: Options for creating the bucket.
-  public func createBucket(_ id: String, options: BucketOptions = .init()) async throws {
+  public func createBucket(_ id: String, options: BucketOptions = BucketOptions(isPublic: false))
+    async throws
+  {
     try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("bucket"),
@@ -53,8 +55,8 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
           BucketParameters(
             id: id,
             name: id,
-            public: options.public,
-            fileSizeLimit: options.fileSizeLimit,
+            public: options.isPublic,
+            fileSizeLimit: options.fileSizeLimit?.bytes,
             allowedMimeTypes: options.allowedMimeTypes
           )
         )
@@ -75,8 +77,8 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
           BucketParameters(
             id: id,
             name: id,
-            public: options.public,
-            fileSizeLimit: options.fileSizeLimit,
+            public: options.isPublic,
+            fileSizeLimit: options.fileSizeLimit?.bytes,
             allowedMimeTypes: options.allowedMimeTypes
           )
         )

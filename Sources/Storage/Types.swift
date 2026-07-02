@@ -455,22 +455,50 @@ public enum UploadMethod: Sendable {
 
 // MARK: - BucketOptions
 
+/// Options used when creating or updating a Storage bucket.
 public struct BucketOptions: Sendable {
-  /// The visibility of the bucket. Public buckets don't require an authorization token to download objects, but still require a valid token for all other operations. Bu default, buckets are private.
-  public var `public`: Bool
-  /// Specifies the allowed mime types that this bucket can accept during upload. The default value is null, which allows files with all mime types to be uploaded. Each mime type specified can be a wildcard, e.g. image/*, or a specific mime type, e.g. image/png.
-  public var fileSizeLimit: String?
-  /// Specifies the max file size in bytes that can be uploaded to this bucket. The global file size limit takes precedence over this value. The default value is null, which doesn't set a per bucket file size limit.
+  /// Whether the bucket is publicly accessible without an authorization token.
+  public var isPublic: Bool
+
+  /// The maximum file size allowed for uploads.
+  ///
+  /// Use ``StorageByteCount`` factory methods: `.megabytes(5)`, `.gigabytes(1)`,
+  /// or an integer literal for raw bytes. `nil` means no per-bucket limit.
+  public var fileSizeLimit: StorageByteCount?
+
+  /// MIME types accepted during upload. Each entry can be exact (`"image/png"`) or
+  /// a wildcard (`"image/*"`). `nil` allows all MIME types.
   public var allowedMimeTypes: [String]?
 
   public init(
-    public: Bool = false,
+    isPublic: Bool = false,
+    fileSizeLimit: StorageByteCount? = nil,
+    allowedMimeTypes: [String]? = nil
+  ) {
+    self.isPublic = isPublic
+    self.fileSizeLimit = fileSizeLimit
+    self.allowedMimeTypes = allowedMimeTypes
+  }
+
+  // MARK: Deprecated bridges
+
+  @available(*, deprecated, renamed: "isPublic")
+  public var `public`: Bool {
+    get { isPublic }
+    set { isPublic = newValue }
+  }
+
+  @available(*, deprecated, renamed: "init(isPublic:fileSizeLimit:allowedMimeTypes:)")
+  public init(
+    public isPublic: Bool = false,
     fileSizeLimit: String? = nil,
     allowedMimeTypes: [String]? = nil
   ) {
-    self.public = `public`
-    self.fileSizeLimit = fileSizeLimit
-    self.allowedMimeTypes = allowedMimeTypes
+    self.init(
+      isPublic: isPublic,
+      fileSizeLimit: fileSizeLimit.flatMap { Int64($0).map { StorageByteCount($0) } },
+      allowedMimeTypes: allowedMimeTypes
+    )
   }
 }
 
