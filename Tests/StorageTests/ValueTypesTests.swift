@@ -1,151 +1,151 @@
 import Foundation
-import Testing
+import XCTest
 
 @testable import Storage
 
 // MARK: - StorageByteCount
 
-@Suite struct StorageByteCountTests {
-  @Test func integerInit() {
+final class StorageByteCountTests: XCTestCase {
+  func testIntegerInit() {
     let count = StorageByteCount(5_000_000)
-    #expect(count.intValue == 5_000_000)
+    XCTAssertEqual(count.intValue, 5_000_000)
   }
 
-  @Test func integerLiteral() {
+  func testIntegerLiteral() {
     let count: StorageByteCount = 2048
-    #expect(count.intValue == 2048)
+    XCTAssertEqual(count.intValue, 2048)
   }
 
-  @Test func equality() {
-    #expect(StorageByteCount(1_000_000) == StorageByteCount(1_000_000))
+  func testEquality() {
+    XCTAssertEqual(StorageByteCount(1_000_000), StorageByteCount(1_000_000))
   }
 
-  @Test func kilobytes() {
+  func testKilobytes() {
     let count = StorageByteCount.kilobytes(500)
-    #expect(count.intValue == nil)
-    #expect(count.stringValue == "500kb")
+    XCTAssertNil(count.intValue)
+    XCTAssertEqual(count.stringValue, "500kb")
   }
 
-  @Test func megabytes() {
+  func testMegabytes() {
     let count = StorageByteCount.megabytes(1.5)
-    #expect(count.intValue == nil)
-    #expect(count.stringValue == "1.5mb")
+    XCTAssertNil(count.intValue)
+    XCTAssertEqual(count.stringValue, "1.5mb")
   }
 
-  @Test func gigabytes() {
+  func testGigabytes() {
     let count = StorageByteCount.gigabytes(2)
-    #expect(count.intValue == nil)
-    #expect(count.stringValue == "2gb")
+    XCTAssertNil(count.intValue)
+    XCTAssertEqual(count.stringValue, "2gb")
   }
 
-  @Test func stringLiteralNumeric() {
+  func testStringLiteralNumeric() {
     let count: StorageByteCount = "1000000"
-    #expect(count.intValue == 1_000_000)
+    XCTAssertEqual(count.intValue, 1_000_000)
   }
 
-  @Test func stringLiteralHumanReadable() {
+  func testStringLiteralHumanReadable() {
     let count: StorageByteCount = "1mb"
-    #expect(count.intValue == nil)
+    XCTAssertNil(count.intValue)
   }
 
-  @Test func encodesAsNumber() throws {
+  func testEncodesAsNumber() throws {
     let encoded = try JSONEncoder().encode(StorageByteCount(1_000_000))
     let json = String(decoding: encoded, as: UTF8.self)
-    #expect(json == "1000000")
+    XCTAssertEqual(json, "1000000")
   }
 
-  @Test func encodesAsString() throws {
+  func testEncodesAsString() throws {
     let count: StorageByteCount = "1mb"
     let encoded = try JSONEncoder().encode(count)
     let json = String(decoding: encoded, as: UTF8.self)
-    #expect(json == "\"1mb\"")
+    XCTAssertEqual(json, "\"1mb\"")
   }
 }
 
 // MARK: - ResizeMode
 
-@Suite struct ResizeModeTests {
-  @Test func staticConstants() {
-    #expect(ResizeMode.cover.rawValue == "cover")
-    #expect(ResizeMode.contain.rawValue == "contain")
-    #expect(ResizeMode.fill.rawValue == "fill")
+final class ResizeModeTests: XCTestCase {
+  func testStaticConstants() {
+    XCTAssertEqual(ResizeMode.cover.rawValue, "cover")
+    XCTAssertEqual(ResizeMode.contain.rawValue, "contain")
+    XCTAssertEqual(ResizeMode.fill.rawValue, "fill")
   }
 
-  @Test func stringLiteral() {
+  func testStringLiteral() {
     let mode: ResizeMode = "cover"
-    #expect(mode == .cover)
+    XCTAssertEqual(mode, .cover)
   }
 
-  @Test func customValue() {
+  func testCustomValue() {
     let mode = ResizeMode(rawValue: "custom")
-    #expect(mode.rawValue == "custom")
+    XCTAssertEqual(mode.rawValue, "custom")
   }
 
-  @Test func encodes() throws {
+  func testEncodes() throws {
     let encoded = try JSONEncoder().encode(ResizeMode.cover)
-    #expect(String(data: encoded, encoding: .utf8) == "\"cover\"")
+    XCTAssertEqual(String(data: encoded, encoding: .utf8), "\"cover\"")
   }
 
-  @Test func decodes() throws {
+  func testDecodes() throws {
     let data = "\"contain\"".data(using: .utf8)!
     let mode = try JSONDecoder().decode(ResizeMode.self, from: data)
-    #expect(mode == .contain)
+    XCTAssertEqual(mode, .contain)
   }
 }
 
 // MARK: - ImageFormat
 
-@Suite struct ImageFormatTests {
-  @Test func staticConstants() {
-    #expect(ImageFormat.origin.rawValue == "origin")
-    #expect(ImageFormat.webp.rawValue == "webp")
-    #expect(ImageFormat.avif.rawValue == "avif")
+final class ImageFormatTests: XCTestCase {
+  func testStaticConstants() {
+    XCTAssertEqual(ImageFormat.origin.rawValue, "origin")
+    XCTAssertEqual(ImageFormat.webp.rawValue, "webp")
+    XCTAssertEqual(ImageFormat.avif.rawValue, "avif")
   }
 
-  @Test func stringLiteral() {
+  func testStringLiteral() {
     let format: ImageFormat = "webp"
-    #expect(format == .webp)
+    XCTAssertEqual(format, .webp)
   }
 
-  @Test func encodes() throws {
+  func testEncodes() throws {
     let encoded = try JSONEncoder().encode(ImageFormat.webp)
-    #expect(String(data: encoded, encoding: .utf8) == "\"webp\"")
+    XCTAssertEqual(String(data: encoded, encoding: .utf8), "\"webp\"")
   }
 
-  @Test func decodes() throws {
+  func testDecodes() throws {
     let data = "\"avif\"".data(using: .utf8)!
     let format = try JSONDecoder().decode(ImageFormat.self, from: data)
-    #expect(format == .avif)
+    XCTAssertEqual(format, .avif)
   }
 }
 
 // MARK: - SortOrder
 
-@Suite struct SortOrderTests {
-  @Test func staticConstants() {
-    #expect(Storage.SortOrder.ascending.rawValue == "asc")
-    #expect(Storage.SortOrder.descending.rawValue == "desc")
+final class SortOrderTests: XCTestCase {
+  func testStaticConstants() {
+    XCTAssertEqual(Storage.SortOrder.ascending.rawValue, "asc")
+    XCTAssertEqual(Storage.SortOrder.descending.rawValue, "desc")
   }
 
-  @Test func stringLiteral() {
+  func testStringLiteral() {
     let order: Storage.SortOrder = "asc"
-    #expect(order == .ascending)
+    XCTAssertEqual(order, .ascending)
   }
 
-  @Test func encodes() throws {
+  func testEncodes() throws {
     let encoded = try JSONEncoder().encode(Storage.SortOrder.descending)
-    #expect(String(data: encoded, encoding: .utf8) == "\"desc\"")
+    XCTAssertEqual(String(data: encoded, encoding: .utf8), "\"desc\"")
   }
 }
 
 // MARK: - DownloadBehavior
 
-@Suite struct DownloadBehaviorTests {
-  @Test func withOriginalNameQueryValue() {
-    #expect(DownloadBehavior.withOriginalName.queryValue == "")
+final class DownloadBehaviorValueTests: XCTestCase {
+  func testWithOriginalNameQueryValue() {
+    XCTAssertEqual(DownloadBehavior.withOriginalName.queryValue, "")
   }
 
-  @Test func namedQueryValue() {
-    #expect(DownloadBehavior.named("report.pdf").queryValue == "report.pdf")
+  func testNamedQueryValue() {
+    XCTAssertEqual(DownloadBehavior.named("report.pdf").queryValue, "report.pdf")
   }
 }

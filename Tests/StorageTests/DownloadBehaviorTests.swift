@@ -5,39 +5,44 @@
 
 import Foundation
 import Storage
-import Testing
+import XCTest
 
-@Suite struct DownloadBehaviorURLTests {
-  let bucket = SupabaseStorageClient.test(
-    supabaseURL: "http://localhost:54321/storage/v1",
-    apiKey: "test-api-key"
-  ).from("test-bucket")
+final class DownloadBehaviorURLTests: XCTestCase {
+  var bucket: StorageFileApi!
 
-  @Test func getPublicURL_noDownload() throws {
+  override func setUp() {
+    super.setUp()
+    bucket = SupabaseStorageClient.test(
+      supabaseURL: "http://localhost:54321/storage/v1",
+      apiKey: "test-api-key"
+    ).from("test-bucket")
+  }
+
+  func testGetPublicURL_noDownload() throws {
     let url = try bucket.getPublicURL(path: "image.png")
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
-    #expect(downloadItem == nil)
+    XCTAssertNil(downloadItem)
   }
 
-  @Test func getPublicURL_withOriginalName() throws {
+  func testGetPublicURL_withOriginalName() throws {
     let url = try bucket.getPublicURL(path: "image.png", download: .withOriginalName)
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
-    #expect(downloadItem?.value == "")
+    XCTAssertEqual(downloadItem?.value, "")
   }
 
-  @Test func getPublicURL_namedDownload() throws {
+  func testGetPublicURL_namedDownload() throws {
     let url = try bucket.getPublicURL(path: "image.png", download: .named("photo.jpg"))
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
-    #expect(downloadItem?.value == "photo.jpg")
+    XCTAssertEqual(downloadItem?.value, "photo.jpg")
   }
 
-  @Test func getPublicURL_nilDownload() throws {
+  func testGetPublicURL_nilDownload() throws {
     let url = try bucket.getPublicURL(path: "image.png", download: Optional<DownloadBehavior>.none)
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
-    #expect(downloadItem == nil)
+    XCTAssertNil(downloadItem)
   }
 }

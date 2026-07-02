@@ -363,7 +363,11 @@ features:
 
   # ── Storage ────────────────────────────────────────────────────────────────
 
-  storage.file_buckets.create_file_bucket: implemented
+  storage.file_buckets.create_file_bucket:
+    status: implemented
+    symbols:
+      - StorageByteCount
+      - BucketOptions.isPublic
   storage.file_buckets.get_bucket: implemented
   storage.file_buckets.list_file_buckets: implemented
   storage.file_buckets.update_bucket: implemented
@@ -372,11 +376,17 @@ features:
   storage.file_buckets.access_bucket: implemented
   storage.file_buckets.upload: implemented
   storage.file_buckets.download: implemented
-  storage.file_buckets.list_files: implemented
+  storage.file_buckets.list_files:
+    status: implemented
+    symbols:
+      - SortOrder
   storage.file_buckets.move: implemented
   storage.file_buckets.copy: implemented
   storage.file_buckets.remove: implemented
-  storage.file_buckets.get_public_url: implemented
+  storage.file_buckets.get_public_url:
+    status: implemented
+    symbols:
+      - DownloadBehavior
   storage.file_buckets.create_signed_url: implemented
   storage.file_buckets.create_signed_urls: implemented
   storage.file_buckets.create_signed_upload_url: implemented
@@ -385,7 +395,11 @@ features:
   storage.file_buckets.file_exists: implemented
   storage.file_buckets.file_info: implemented
   storage.file_buckets.list_files_paginated: implemented
-  storage.file_buckets.download_with_transform: implemented
+  storage.file_buckets.download_with_transform:
+    status: implemented
+    symbols:
+      - ResizeMode
+      - ImageFormat
   storage.file_buckets.copy_cross_bucket: implemented
   storage.file_buckets.move_cross_bucket: implemented
   storage.file_buckets.upload_with_metadata: implemented
