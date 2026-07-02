@@ -323,7 +323,7 @@ extension StorageByteCount: ExpressibleByIntegerLiteral {
 /// TransformOptions(resize: "cover")  // string literal still works
 /// ```
 public struct ResizeMode: RawRepresentable, Hashable, Sendable {
-  public var rawValue: String
+  public let rawValue: String
   public init(rawValue: String) { self.rawValue = rawValue }
 
   public static let cover = ResizeMode(rawValue: "cover")
@@ -343,7 +343,7 @@ extension ResizeMode: Codable {
 
   public init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
-    rawValue = try container.decode(String.self)
+    self.init(rawValue: try container.decode(String.self))
   }
 }
 
@@ -357,7 +357,7 @@ extension ResizeMode: Codable {
 /// TransformOptions(format: "webp")  // string literal still works
 /// ```
 public struct ImageFormat: RawRepresentable, Hashable, Sendable {
-  public var rawValue: String
+  public let rawValue: String
   public init(rawValue: String) { self.rawValue = rawValue }
 
   public static let origin = ImageFormat(rawValue: "origin")
@@ -377,7 +377,7 @@ extension ImageFormat: Codable {
 
   public init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
-    rawValue = try container.decode(String.self)
+    self.init(rawValue: try container.decode(String.self))
   }
 }
 
@@ -391,7 +391,7 @@ extension ImageFormat: Codable {
 /// SortBy(column: "name", order: "asc")  // string literal still works
 /// ```
 public struct SortOrder: RawRepresentable, Hashable, Sendable {
-  public var rawValue: String
+  public let rawValue: String
   public init(rawValue: String) { self.rawValue = rawValue }
 
   public static let ascending = SortOrder(rawValue: "asc")
@@ -410,7 +410,7 @@ extension SortOrder: Codable {
 
   public init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
-    rawValue = try container.decode(String.self)
+    self.init(rawValue: try container.decode(String.self))
   }
 }
 
