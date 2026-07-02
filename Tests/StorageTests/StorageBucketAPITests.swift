@@ -340,7 +340,7 @@ final class StorageBucketAPITests: XCTestCase {
 
     try await storage.createBucket(
       "newbucket",
-      options: BucketOptions(isPublic: false, fileSizeLimit: .megabytes(10))
+      options: BucketOptions(isPublic: false, fileSizeLimit: 10_485_760)
     )
   }
 

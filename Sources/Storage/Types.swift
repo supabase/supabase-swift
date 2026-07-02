@@ -291,29 +291,24 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
 
 // MARK: - StorageByteCount
 
-/// A strongly-typed file size value.
+/// A file size limit passed to the Storage server without client-side conversion.
 ///
-/// ```swift
-/// BucketOptions(fileSizeLimit: .megabytes(5))
-/// BucketOptions(fileSizeLimit: 10_485_760)  // raw bytes via integer literal
-/// BucketOptions(fileSizeLimit: "1mb")        // human-readable string, passed verbatim to the server
-/// ```
+/// The server accepts two forms:
+/// - An exact byte count as an integer: `BucketOptions(fileSizeLimit: 5_000_000)`
+/// - A human-readable string the server parses itself: `BucketOptions(fileSizeLimit: "5mb")`
+///   The server uses SI (decimal) multipliers: `"1mb"` = 1,000,000 bytes,
+///   `"1kb"` = 1,000 bytes, `"1gb"` = 1,000,000,000 bytes.
 public struct StorageByteCount: Sendable, Hashable {
-  /// The raw byte count, or `nil` when the value is a human-readable string such as `"1mb"`.
+  /// The exact byte count when initialized from an integer, or `nil` for string-based values.
   public let bytes: Int64?
 
-  // Stored verbatim and sent to the server when non-nil (e.g. "1mb", "500kb").
+  // Verbatim string forwarded to the server (e.g. "5mb", "500kb").
   let _stringValue: String?
 
   public init(_ bytes: Int64) {
     self.bytes = bytes
     self._stringValue = nil
   }
-
-  public static func bytes(_ value: Int64) -> Self { Self(value) }
-  public static func kilobytes(_ value: Int64) -> Self { Self(value * 1_024) }
-  public static func megabytes(_ value: Int64) -> Self { Self(value * 1_024 * 1_024) }
-  public static func gigabytes(_ value: Int64) -> Self { Self(value * 1_024 * 1_024 * 1_024) }
 }
 
 extension StorageByteCount: ExpressibleByIntegerLiteral {
@@ -478,8 +473,8 @@ public struct BucketOptions: Sendable {
 
   /// The maximum file size allowed for uploads.
   ///
-  /// Use ``StorageByteCount`` factory methods: `.megabytes(5)`, `.gigabytes(1)`,
-  /// or an integer literal for raw bytes. `nil` means no per-bucket limit.
+  /// Pass an exact byte count (`5_000_000`) or a human-readable string the server parses
+  /// (`"5mb"`, `"500kb"`, `"2gb"`). `nil` means no per-bucket limit.
   public var fileSizeLimit: StorageByteCount?
 
   /// MIME types accepted during upload. Each entry can be exact (`"image/png"`) or

@@ -6,20 +6,9 @@ import Testing
 // MARK: - StorageByteCount
 
 @Suite struct StorageByteCountTests {
-  @Test func bytes() {
-    #expect(StorageByteCount.bytes(1024).bytes == 1024)
-  }
-
-  @Test func kilobytes() {
-    #expect(StorageByteCount.kilobytes(10).bytes == 10_240)
-  }
-
-  @Test func megabytes() {
-    #expect(StorageByteCount.megabytes(5).bytes == 5_242_880)
-  }
-
-  @Test func gigabytes() {
-    #expect(StorageByteCount.gigabytes(1).bytes == 1_073_741_824)
+  @Test func integerInit() {
+    let count = StorageByteCount(5_000_000)
+    #expect(count.bytes == 5_000_000)
   }
 
   @Test func integerLiteral() {
@@ -28,12 +17,12 @@ import Testing
   }
 
   @Test func equality() {
-    #expect(StorageByteCount.megabytes(1) == StorageByteCount(1_048_576))
+    #expect(StorageByteCount(1_000_000) == StorageByteCount(1_000_000))
   }
 
   @Test func stringLiteralNumeric() {
-    let count: StorageByteCount = "1048576"
-    #expect(count.bytes == 1_048_576)
+    let count: StorageByteCount = "1000000"
+    #expect(count.bytes == 1_000_000)
   }
 
   @Test func stringLiteralHumanReadable() {
@@ -42,9 +31,9 @@ import Testing
   }
 
   @Test func encodesAsNumber() throws {
-    let encoded = try JSONEncoder().encode(StorageByteCount.megabytes(1))
+    let encoded = try JSONEncoder().encode(StorageByteCount(1_000_000))
     let json = String(decoding: encoded, as: UTF8.self)
-    #expect(json == "1048576")
+    #expect(json == "1000000")
   }
 
   @Test func encodesAsString() throws {

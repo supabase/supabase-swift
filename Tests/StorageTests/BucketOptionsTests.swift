@@ -14,12 +14,12 @@ final class BucketOptionsTests: XCTestCase {
   func testCustomInitialization() {
     let options = BucketOptions(
       public: true,
-      fileSizeLimit: "5242880",
+      fileSizeLimit: "5000000",
       allowedMimeTypes: ["image/jpeg", "image/png"]
     )
 
     XCTAssertTrue(options.public)
-    XCTAssertEqual(options.fileSizeLimit?.bytes, 5_242_880)
+    XCTAssertEqual(options.fileSizeLimit?.bytes, 5_000_000)
     XCTAssertEqual(options.allowedMimeTypes, ["image/jpeg", "image/png"])
   }
 
@@ -29,13 +29,13 @@ final class BucketOptionsTests: XCTestCase {
   }
 
   func testFileSizeLimitStorageByteCount() {
-    let options = BucketOptions(isPublic: false, fileSizeLimit: .megabytes(5))
-    XCTAssertEqual(options.fileSizeLimit?.bytes, 5_242_880)
+    let options = BucketOptions(isPublic: false, fileSizeLimit: StorageByteCount(5_000_000))
+    XCTAssertEqual(options.fileSizeLimit?.bytes, 5_000_000)
   }
 
   func testFileSizeLimitIntegerLiteral() {
-    let options = BucketOptions(fileSizeLimit: 10_485_760)
-    XCTAssertEqual(options.fileSizeLimit?.bytes, 10_485_760)
+    let options = BucketOptions(fileSizeLimit: 5_000_000)
+    XCTAssertEqual(options.fileSizeLimit?.bytes, 5_000_000)
   }
 
   func testDeprecatedPublicBridge() {
