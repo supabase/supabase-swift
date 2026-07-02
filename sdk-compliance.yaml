@@ -296,7 +296,10 @@ features:
   database.using_modifiers.strip_nulls: implemented
   database.using_modifiers.format_csv: implemented
   database.using_modifiers.format_geojson: implemented
-  database.using_modifiers.explain: implemented
+  database.using_modifiers.explain:
+    status: implemented
+    symbols:
+      - ExplainFormat
   database.using_modifiers.max_affected_rows: implemented
   database.using_modifiers.request_cancellation: implemented
   database.using_modifiers.relationship_embed:

@@ -441,7 +441,7 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
       try await sut
       .from("countries")
       .select()
-      .explain(analyze: true, format: "json")
+      .explain(analyze: true, format: .json)
       .execute()
   }
 

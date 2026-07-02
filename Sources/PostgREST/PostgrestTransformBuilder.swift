@@ -164,14 +164,15 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   /// planning
   ///   - buffers: If `true`, include information on buffer usage
   ///   - wal: If `true`, include information on WAL record generation
-  ///   - format: The format of the output, can be `"text"` (default) or `"json"`
+  ///   - format: The format of the output, either ``ExplainFormat/text`` (default) or
+  /// ``ExplainFormat/json``
   public func explain(
     analyze: Bool = false,
     verbose: Bool = false,
     settings: Bool = false,
     buffers: Bool = false,
     wal: Bool = false,
-    format: String = "text"
+    format: ExplainFormat = .text
   ) -> PostgrestTransformBuilder {
     mutableState.withValue {
       let options = [
@@ -185,7 +186,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
       .joined(separator: "|")
       let forMediaType = $0.request.headers[.accept] ?? "application/json"
       $0.request.headers[.accept] =
-        "application/vnd.pgrst.plan+\(format); for=\"\(forMediaType)\"; options=\(options);"
+        "application/vnd.pgrst.plan+\(format.rawValue); for=\"\(forMediaType)\"; options=\(options);"
     }
 
     return self
