@@ -302,3 +302,24 @@ extension SortBy {
     self.order = order
   }
 }
+
+extension TransformOptions {
+  @_disfavoredOverload
+  @available(
+    *, deprecated,
+    message: "Use `init(width:height:resize:quality:format:)` with ResizeMode and ImageFormat instead."
+  )
+  public init(
+    width: Int? = nil,
+    height: Int? = nil,
+    resize: String? = nil,
+    quality: Int? = nil,
+    format: String? = nil
+  ) {
+    self.width = width
+    self.height = height
+    self.resize = resize
+    self.quality = quality
+    self.format = format
+  }
+}

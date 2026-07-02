@@ -48,9 +48,9 @@ final class TransformOptionsTests: XCTestCase {
 
     XCTAssertEqual(options.width, 100)
     XCTAssertEqual(options.height, 200)
-    XCTAssertEqual(options.resize, .cover)
+    XCTAssertEqual(options.resize, "cover")
     XCTAssertEqual(options.quality, 90)
-    XCTAssertEqual(options.format, .webp)
+    XCTAssertEqual(options.format, "webp")
   }
 
   func testQueryItemsGeneration() {
