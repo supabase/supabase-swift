@@ -123,4 +123,61 @@ final class PostgresJoinConfigTests: XCTestCase {
 
     XCTAssertNotEqual(config1.hashValue, config2.hashValue)
   }
+
+  // `select` must NOT affect equality/hashing: the server echoes back
+  // postgres_changes without `select`, and the echoed config is matched against
+  // the locally-registered one to route incoming changes to the right callback.
+  func testConfigDifferingOnlyBySelectAreEqual() {
+    let config1 = PostgresJoinConfig(
+      event: .insert,
+      schema: "public",
+      table: "users",
+      filter: "id=1",
+      select: ["id", "name"],
+      id: 1
+    )
+    let config2 = PostgresJoinConfig(
+      event: .insert,
+      schema: "public",
+      table: "users",
+      filter: "id=1",
+      select: nil,
+      id: 1
+    )
+
+    XCTAssertEqual(config1, config2)
+    XCTAssertEqual(config1.hashValue, config2.hashValue)
+  }
+
+  func testSelectEncodesAsArray() throws {
+    let config = PostgresJoinConfig(
+      event: .insert,
+      schema: "public",
+      table: "users",
+      filter: nil,
+      select: ["id", "first_name"],
+      id: 1
+    )
+
+    let data = try JSONEncoder().encode(config)
+    let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+    XCTAssertEqual(jsonObject?["select"] as? [String], ["id", "first_name"])
+  }
+
+  func testSelectOmittedWhenNil() throws {
+    let config = PostgresJoinConfig(
+      event: .insert,
+      schema: "public",
+      table: "users",
+      filter: nil,
+      select: nil,
+      id: 1
+    )
+
+    let data = try JSONEncoder().encode(config)
+    let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+    XCTAssertNil(jsonObject?["select"])
+  }
 }

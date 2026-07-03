@@ -184,6 +184,46 @@ final class RealtimeJoinConfigTests: XCTestCase {
     XCTAssertFalse(config.receiveOwnBroadcasts)
   }
 
+  func testBroadcastJoinConfigReplicationReadyDefaultsFalse() {
+    let config = BroadcastJoinConfig()
+
+    XCTAssertFalse(config.replicationReady)
+  }
+
+  // The opt-in must only be forwarded when enabled, so existing clients' join
+  // payloads stay unchanged.
+  func testBroadcastJoinConfigOmitsReplicationReadyWhenFalse() throws {
+    let config = BroadcastJoinConfig()
+
+    let data = try JSONEncoder().encode(config)
+    let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+    XCTAssertNil(jsonObject?["replication_ready"])
+  }
+
+  func testBroadcastJoinConfigEncodesReplicationReadyWhenTrue() throws {
+    let config = BroadcastJoinConfig(replicationReady: true)
+
+    let data = try JSONEncoder().encode(config)
+    let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+    XCTAssertEqual(jsonObject?["replication_ready"] as? Bool, true)
+  }
+
+  func testBroadcastJoinConfigDecodesReplicationReady() throws {
+    let jsonData = """
+      {
+        "ack": false,
+        "self": false,
+        "replication_ready": true
+      }
+      """.data(using: .utf8)!
+
+    let config = try JSONDecoder().decode(BroadcastJoinConfig.self, from: jsonData)
+
+    XCTAssertTrue(config.replicationReady)
+  }
+
   // MARK: - PresenceJoinConfig Tests
 
   func testPresenceJoinConfigDefaults() {
