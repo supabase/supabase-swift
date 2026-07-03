@@ -165,7 +165,7 @@ public class PostgrestBuilder: @unchecked Sendable {
           request: currentRequest, response: nil, error: error, retryEnabled: retryEnabled,
           attempt: attempt)
         {
-          try await _clock.sleep(for: retryDelay(attempt: attempt))
+          try await _clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
           attempt += 1
           continue
         }
@@ -182,7 +182,7 @@ public class PostgrestBuilder: @unchecked Sendable {
         request: currentRequest, response: response, error: nil, retryEnabled: retryEnabled,
         attempt: attempt)
       {
-        try await _clock.sleep(for: retryDelay(attempt: attempt))
+        try await _clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
         attempt += 1
         continue
       }

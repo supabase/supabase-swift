@@ -399,7 +399,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       state.pendingDisconnectTask?.cancel()
       state.pendingDisconnectTask = Task { [weak self, clock] in
         do {
-          try await clock.sleep(for: delay)
+          try await clock.sleep(for: .seconds(delay))
           self?.disconnect()
         } catch {
           // Cancelled: a new channel was added or disconnect() was called directly.
@@ -512,7 +512,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
       state.heartbeatTask = Task { [weak self, options, clock] in
         while !Task.isCancelled {
-          try? await clock.sleep(for: options.heartbeatInterval)
+          try? await clock.sleep(for: .seconds(options.heartbeatInterval))
           guard let self, !Task.isCancelled else {
             break
           }

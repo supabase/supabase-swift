@@ -190,7 +190,7 @@ actor ConnectionManager {
 
   private func initiateReconnect(reason: String) {
     let reconnectTask = Task {
-      try await clock.sleep(for: reconnectDelay)
+      try await clock.sleep(for: .seconds(reconnectDelay))
       logger?.debug("Attempting to reconnect...")
       try await performConnection()
     }

@@ -8,12 +8,6 @@
 import ConcurrencyExtras
 import Foundation
 
-extension Clock where Duration == Swift.Duration {
-  package func sleep(for duration: TimeInterval) async throws {
-    try await sleep(for: .seconds(duration), tolerance: nil)
-  }
-}
-
 private let __clock = LockIsolated<any Clock<Swift.Duration>>(ContinuousClock())
 
 #if DEBUG
