@@ -518,7 +518,7 @@ public actor AuthClient {
   ///   - data: User's metadata.
   ///   - captchaToken: Captcha verification token.
   ///
-  /// - Note: You need to configure a WhatsApp sender on Twillo if you are using phone sign in with the `whatsapp` channel.
+  /// - Note: You need to configure a WhatsApp sender on Twilio if you are using phone sign in with the `whatsapp` channel.
   public func signInWithOTP(
     phone: String,
     channel: MessagingChannel = .sms,
@@ -728,7 +728,7 @@ public actor AuthClient {
         try await withCheckedThrowingContinuation { [configuration] continuation in
           guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
             preconditionFailure(
-              "Please, provide a valid redirect URL, either thorugh `redirectTo` param, or globally thorugh `AuthClient.Configuration.redirectToURL`."
+              "Please, provide a valid redirect URL, either through `redirectTo` param, or globally through `AuthClient.Configuration.redirectToURL`."
             )
           }
 

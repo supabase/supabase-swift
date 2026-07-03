@@ -1,0 +1,12 @@
+{
+  "name": "supabase-swift-node-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pins dependencies like cspell. Never published.",
+  "devDependencies": {
+    "cspell": "10.0.1"
+  },
+  "scripts": {
+    "spell-check": "cd ../.. && cspell lint --no-progress \"**/*.swift\" \"**/*.md\""
+  }
+}

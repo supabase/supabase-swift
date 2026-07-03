@@ -1042,7 +1042,7 @@ public struct ListUsersPaginatedResponse: Hashable, Sendable {
 //  /// The email link to send to the users.
 //  /// The action link follows the following format: auth/v1/verify?type={verification_type}&token={hashed_token}&redirect_to={redirect_to}
 //  public let actionLink: URL
-//  /// The raw ramil OTP.
+//  /// The raw email OTP.
 //  /// You should send this in the email if you want your users to verify using an OTP instead of the action link.
 //  public let emailOTP: String
 //  /// The hashed token appended to the action link.

@@ -75,6 +75,17 @@ make format
 
 This uses `swift-format` to automatically format code. All code should be formatted before committing.
 
+### Spell Checking
+
+Spell-checking uses [cSpell](https://cspell.org), via Node/npm:
+
+```bash
+npm ci --prefix tools/node   # one-time setup (re-run only when tools/node/package-lock.json changes)
+make spell-check             # cspell - Swift and Markdown sources
+```
+
+Legitimate technical terms and project-specific words go in `dictionary.txt` at the repository root.
+
 ### Documentation
 
 ```bash

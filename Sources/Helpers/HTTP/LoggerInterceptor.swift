@@ -27,7 +27,7 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
       logger.verbose(
         """
         Request: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
-        Body: \(stringfy(request.body))
+        Body: \(stringify(request.body))
         """
       )
 
@@ -38,7 +38,7 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
           Response: Status code: \(response.statusCode) Content-Length: \(
             response.underlyingResponse.expectedContentLength
           )
-          Body: \(stringfy(response.data))
+          Body: \(stringify(response.data))
           """
         )
         return response
@@ -50,7 +50,7 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
   }
 }
 
-func stringfy(_ data: Data?) -> String {
+func stringify(_ data: Data?) -> String {
   guard let data else {
     return "<none>"
   }

@@ -59,7 +59,7 @@ struct FileObjectDetailView: View {
       if let lastActionResult {
         Section("Last action result") {
           Text(lastActionResult.action)
-          Text(stringfy(lastActionResult.result))
+          Text(stringify(lastActionResult.result))
         }
       }
     }
