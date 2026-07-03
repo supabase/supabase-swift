@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.49.0](https://github.com/supabase/supabase-swift/compare/v2.48.0...v2.49.0) (2026-07-03)
+
+
+### Features
+
+* add sdk-compliance.yaml for supabase/sdk capability matrix ([#1022](https://github.com/supabase/supabase-swift/issues/1022)) ([df79431](https://github.com/supabase/supabase-swift/commit/df794313d8786ec57ce7b9373470a978b8c71875))
+* **auth:** add WebAuthn/passkey support ([#1013](https://github.com/supabase/supabase-swift/issues/1013)) landed in 2.48.0 and ([df79431](https://github.com/supabase/supabase-swift/commit/df794313d8786ec57ce7b9373470a978b8c71875))
+* **postgrest:** add ExplainFormat enum for explain(format:) ([#1050](https://github.com/supabase/supabase-swift/issues/1050)) ([441abb8](https://github.com/supabase/supabase-swift/commit/441abb80294c6f4b37820de1b2c21402a5830e1f))
+* **storage:** backport typed value types and API ergonomics from v3 ([#1049](https://github.com/supabase/supabase-swift/issues/1049)) ([d464945](https://github.com/supabase/supabase-swift/commit/d464945de0829186a5883182fe112c22c69f3cec))
+
+
+### Bug Fixes
+
+* **postgrest:** quote in() filter values containing reserved characters ([#1061](https://github.com/supabase/supabase-swift/issues/1061)) ([a09725f](https://github.com/supabase/supabase-swift/commit/a09725fc56ee08338422f1bec88f5c0af2961062))
+* **postgrest:** remove invalid quotes from explain() plan media type ([#1048](https://github.com/supabase/supabase-swift/issues/1048)) ([261aba0](https://github.com/supabase/supabase-swift/commit/261aba01229111c72d5f30fc2e87b9a519b919ea))
+* **realtime:** backport Swift 6 strict concurrency fixes from v3 ([#1052](https://github.com/supabase/supabase-swift/issues/1052)) ([3de1327](https://github.com/supabase/supabase-swift/commit/3de1327b1dd158bf032a1b1f861671982eb895ff))
+* **storage:** restore source compatibility for deprecated overloads ([#1062](https://github.com/supabase/supabase-swift/issues/1062)) ([0485d41](https://github.com/supabase/supabase-swift/commit/0485d4170c7565722539e4be0b1b7b2b925eac36))
+* support new realtime features ([#1063](https://github.com/supabase/supabase-swift/issues/1063)) ([52c71dd](https://github.com/supabase/supabase-swift/commit/52c71dd21381a60a52f407bae18418a71aa992db))
+
 ## [2.48.0](https://github.com/supabase/supabase-swift/compare/v2.47.2...v2.48.0) (2026-06-17)
 
 
