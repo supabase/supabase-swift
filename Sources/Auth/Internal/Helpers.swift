@@ -8,15 +8,14 @@ func extractParams(from url: URL) -> [String: String] {
 
   var result: [String: String] = [:]
 
-  if let fragment = components.fragment {
-    let items = extractParams(from: fragment)
-    for item in items {
+  if let fragment = components.percentEncodedFragment {
+    for item in extractParams(from: fragment) {
       result[item.name] = item.value
     }
   }
 
-  if let items = components.queryItems {
-    for item in items {
+  if let query = components.percentEncodedQuery {
+    for item in extractParams(from: query) {
       result[item.name] = item.value
     }
   }
@@ -24,17 +23,18 @@ func extractParams(from url: URL) -> [String: String] {
   return result
 }
 
-private func extractParams(from fragment: String) -> [URLQueryItem] {
-  let components =
-    fragment
+private func extractParams(from percentEncodedString: String) -> [URLQueryItem] {
+  percentEncodedString
     .split(separator: "&")
-    .map { $0.split(separator: "=") }
-
-  return
-    components
-    .compactMap {
-      $0.count == 2
-        ? URLQueryItem(name: String($0[0]), value: String($0[1]))
-        : nil
+    .map { pair in
+      let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+      let name = decodeFormComponent(parts[0])
+      let value = parts.count == 2 ? decodeFormComponent(parts[1]) : ""
+      return URLQueryItem(name: name, value: value)
     }
+}
+
+private func decodeFormComponent(_ component: Substring) -> String {
+  let plusDecoded = component.replacingOccurrences(of: "+", with: " ")
+  return plusDecoded.removingPercentEncoding ?? plusDecoded
 }

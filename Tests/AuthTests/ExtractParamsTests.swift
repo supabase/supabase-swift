@@ -37,4 +37,64 @@ final class ExtractParamsTests: XCTestCase {
     let params = extractParams(from: url)
     XCTAssertEqual(params, ["code": "123"])
   }
+
+  func testExtractParamsInFragmentWithEqualSignInValue() {
+    let url = URL(string: "io.supabase.flutterquickstart://login-callback/#token=abc=&expires=a=b")!
+    let params = extractParams(from: url)
+    XCTAssertEqual(params, ["token": "abc=", "expires": "a=b"])
+  }
+
+  func testExtractParamsInFragmentPercentDecodesValues() {
+    let url = URL(
+      string:
+        "io.supabase.flutterquickstart://login-callback/#error=access_denied&error_description=Invalid%20login%20credentials"
+    )!
+    let params = extractParams(from: url)
+    XCTAssertEqual(
+      params,
+      ["error": "access_denied", "error_description": "Invalid login credentials"]
+    )
+  }
+
+  func testExtractParamsInFragmentDecodesPlusAsSpace() {
+    let url = URL(
+      string:
+        "io.supabase.flutterquickstart://login-callback/#error_description=Email+link+is+invalid+or+has+expired"
+    )!
+    let params = extractParams(from: url)
+    XCTAssertEqual(params, ["error_description": "Email link is invalid or has expired"])
+  }
+
+  func testExtractParamsInFragmentDecodesAfterSplitting() {
+    let url = URL(
+      string:
+        "io.supabase.flutterquickstart://login-callback/#message=a%26b%3Dc&percent=100%2520off"
+    )!
+    let params = extractParams(from: url)
+    XCTAssertEqual(params, ["message": "a&b=c", "percent": "100%20off"])
+  }
+
+  func testExtractParamsInQueryDecodesPlusAsSpace() {
+    let url = URL(
+      string:
+        "io.supabase.flutterquickstart://login-callback/?error_description=Email+link+is+invalid+or+has+expired"
+    )!
+    let params = extractParams(from: url)
+    XCTAssertEqual(params, ["error_description": "Email link is invalid or has expired"])
+  }
+
+  func testExtractParamsInQueryDecodesAfterSplitting() {
+    let url = URL(
+      string:
+        "io.supabase.flutterquickstart://login-callback/?message=a%26b%3Dc&percent=100%2520off"
+    )!
+    let params = extractParams(from: url)
+    XCTAssertEqual(params, ["message": "a&b=c", "percent": "100%20off"])
+  }
+
+  func testExtractParamsInFragmentWithKeyWithoutValue() {
+    let url = URL(string: "io.supabase.flutterquickstart://login-callback/#flag&code=123")!
+    let params = extractParams(from: url)
+    XCTAssertEqual(params, ["flag": "", "code": "123"])
+  }
 }
