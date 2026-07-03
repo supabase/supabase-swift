@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Helpers
 import IssueReporting
 
 /// Value accepted by the ``RealtimePostgresFilter/is(_:value:)`` operator.
@@ -135,19 +136,8 @@ public enum RealtimePostgresFilter {
     }
   }
 
-  private static let reservedCharacters: Set<Character> = [",", "(", ")", "\"", "\\"]
-
-  private static func needsQuoting(_ value: String) -> Bool {
-    value.contains(where: reservedCharacters.contains)
-      || value != value.trimmingCharacters(in: .whitespaces)
-  }
-
   private static func serialize(_ value: any RealtimePostgresFilterValue) -> String {
-    let raw = value.rawValue
-    guard needsQuoting(raw) else { return raw }
-    let escaped = raw.replacingOccurrences(of: "\\", with: "\\\\")
-      .replacingOccurrences(of: "\"", with: "\\\"")
-    return "\"\(escaped)\""
+    escapePostgRESTFilterValue(value.rawValue)
   }
 
   private static func dedupe(_ values: [any RealtimePostgresFilterValue])

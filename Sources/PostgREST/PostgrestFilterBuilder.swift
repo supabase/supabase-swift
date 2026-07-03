@@ -1,4 +1,5 @@
 import Foundation
+import Helpers
 
 /// Filter builder for applying WHERE clauses to queries.
 ///
@@ -310,7 +311,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
     _ column: String,
     values: [any PostgrestFilterValue]
   ) -> PostgrestFilterBuilder {
-    let queryValues = values.map(\.rawValue)
+    let queryValues = values.map { escapePostgRESTFilterValue($0.rawValue) }
     mutableState.withValue {
       $0.request.query.append(
         URLQueryItem(
