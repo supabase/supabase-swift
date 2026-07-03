@@ -175,6 +175,7 @@ import XCTest
                 "config" : {
                   "broadcast" : {
                     "ack" : false,
+                    "replication_ready" : false,
                     "self" : false
                   },
                   "postgres_changes" : [
@@ -267,6 +268,7 @@ import XCTest
               "config" : {
                 "broadcast" : {
                   "ack" : false,
+                  "replication_ready" : false,
                   "self" : false
                 },
                 "postgres_changes" : [
@@ -291,6 +293,7 @@ import XCTest
               "config" : {
                 "broadcast" : {
                   "ack" : false,
+                  "replication_ready" : false,
                   "self" : false
                 },
                 "postgres_changes" : [

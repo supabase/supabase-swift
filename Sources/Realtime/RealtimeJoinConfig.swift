@@ -56,21 +56,32 @@ public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
   public var receiveOwnBroadcasts: Bool = false
   /// Configures broadcast replay from a specific timestamp
   public var replay: ReplayOption?
+  /// Instructs the server to emit a `system` event once the Postgres replication
+  /// connection backing this channel is established and ready to stream changes.
+  ///
+  /// Listen for it with ``RealtimeChannelV2/onSystem(callback:)-(_)`` (or the
+  /// ``RealtimeChannelV2/system()`` async stream): the message's `status` is
+  /// `.ok` (message `"Replication connection established"`) on success, or
+  /// `.error` if the connection is not ready in time.
+  public var replicationReady: Bool = false
 
   public init(
     acknowledgeBroadcasts: Bool = false,
     receiveOwnBroadcasts: Bool = false,
-    replay: ReplayOption? = nil
+    replay: ReplayOption? = nil,
+    replicationReady: Bool = false
   ) {
     self.acknowledgeBroadcasts = acknowledgeBroadcasts
     self.receiveOwnBroadcasts = receiveOwnBroadcasts
     self.replay = replay
+    self.replicationReady = replicationReady
   }
 
   enum CodingKeys: String, CodingKey {
     case acknowledgeBroadcasts = "ack"
     case receiveOwnBroadcasts = "self"
     case replay
+    case replicationReady = "replication_ready"
   }
 }
 
@@ -92,8 +103,12 @@ struct PostgresJoinConfig: Codable, Hashable, Sendable {
   var schema: String
   var table: String?
   var filter: String?
+  /// Restricts the change payload to a subset of columns instead of the full row.
+  var select: [String]?
   var id: Int = 0
 
+  // `select` is excluded from `==`/`hash`: the server-echoed config used for
+  // callback-id matching does not carry it.
   static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.schema == rhs.schema
       && lhs.table == rhs.table
@@ -114,6 +129,7 @@ struct PostgresJoinConfig: Codable, Hashable, Sendable {
     try container.encode(schema, forKey: .schema)
     try container.encodeIfPresent(table, forKey: .table)
     try container.encodeIfPresent(filter, forKey: .filter)
+    try container.encodeIfPresent(select, forKey: .select)
 
     if id != 0 {
       try container.encode(id, forKey: .id)

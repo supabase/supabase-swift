@@ -47,7 +47,7 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let jsonData = """
       {
         "config": {
-          "broadcast": {"ack": false, "self": false},
+          "broadcast": {"ack": false, "self": false, "replication_ready": false},
           "presence": {"key": "", "enabled": false},
           "postgres_changes": [],
           "private": false
@@ -173,7 +173,8 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let jsonData = """
       {
         "ack": true,
-        "self": false
+        "self": false,
+        "replication_ready": false
       }
       """.data(using: .utf8)!
 
@@ -182,6 +183,44 @@ final class RealtimeJoinConfigTests: XCTestCase {
 
     XCTAssertTrue(config.acknowledgeBroadcasts)
     XCTAssertFalse(config.receiveOwnBroadcasts)
+  }
+
+  func testBroadcastJoinConfigReplicationReadyDefaultsFalse() {
+    let config = BroadcastJoinConfig()
+
+    XCTAssertFalse(config.replicationReady)
+  }
+
+  func testBroadcastJoinConfigEncodesReplicationReadyWhenFalse() throws {
+    let config = BroadcastJoinConfig()
+
+    let data = try JSONEncoder().encode(config)
+    let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+    XCTAssertEqual(jsonObject?["replication_ready"] as? Bool, false)
+  }
+
+  func testBroadcastJoinConfigEncodesReplicationReadyWhenTrue() throws {
+    let config = BroadcastJoinConfig(replicationReady: true)
+
+    let data = try JSONEncoder().encode(config)
+    let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+    XCTAssertEqual(jsonObject?["replication_ready"] as? Bool, true)
+  }
+
+  func testBroadcastJoinConfigDecodesReplicationReady() throws {
+    let jsonData = """
+      {
+        "ack": false,
+        "self": false,
+        "replication_ready": true
+      }
+      """.data(using: .utf8)!
+
+    let config = try JSONDecoder().decode(BroadcastJoinConfig.self, from: jsonData)
+
+    XCTAssertTrue(config.replicationReady)
   }
 
   // MARK: - PresenceJoinConfig Tests
