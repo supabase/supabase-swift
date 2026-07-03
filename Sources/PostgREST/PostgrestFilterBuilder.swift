@@ -202,7 +202,12 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
 
   /// Matches only rows where `column` equals `value`.
   ///
-  /// To test for NULL, use ``is(_:value:)`` instead, because `NULL = NULL` is false in SQL.
+  /// To test for NULL, use ``is(_:value:)`` instead — `NULL = NULL` is false in SQL.
+  ///
+  /// ```swift
+  /// // Rows where status equals "active"
+  /// .eq("status", value: "active")
+  /// ```
   ///
   /// - Parameters:
   ///   - column: The column to filter on.
@@ -221,6 +226,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
 
   /// Matches only rows where `column` is not equal to `value`.
   ///
+  /// ```swift
+  /// // Rows where status is not "inactive"
+  /// .neq("status", value: "inactive")
+  /// ```
+  ///
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
@@ -237,6 +247,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   }
 
   /// Matches only rows where `column` is greater than `value`.
+  ///
+  /// ```swift
+  /// // Rows where score is greater than 100
+  /// .gt("score", value: 100)
+  /// ```
   ///
   /// - Parameters:
   ///   - column: The column to filter on.
@@ -255,6 +270,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
 
   /// Matches only rows where `column` is greater than or equal to `value`.
   ///
+  /// ```swift
+  /// // Rows where score is at least 100
+  /// .gte("score", value: 100)
+  /// ```
+  ///
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
@@ -272,6 +292,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
 
   /// Matches only rows where `column` is less than `value`.
   ///
+  /// ```swift
+  /// // Rows where age is under 18
+  /// .lt("age", value: 18)
+  /// ```
+  ///
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
@@ -288,6 +313,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   }
 
   /// Matches only rows where `column` is less than or equal to `value`.
+  ///
+  /// ```swift
+  /// // Rows where age is 18 or under
+  /// .lte("age", value: 18)
+  /// ```
   ///
   /// - Parameters:
   ///   - column: The column to filter on.
@@ -330,6 +360,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
 
   /// Matches only rows where `column` matches **all** of the supplied LIKE `patterns` case-sensitively.
   ///
+  /// ```swift
+  /// // Rows where name starts with "J" and ends with "n"
+  /// .likeAllOf("name", patterns: ["J%", "%n"])
+  /// ```
+  ///
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - patterns: The LIKE patterns that must all match.
@@ -346,6 +381,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   }
 
   /// Matches only rows where `column` matches **any** of the supplied LIKE `patterns` case-sensitively.
+  ///
+  /// ```swift
+  /// // Rows where name starts with "Jo" or "Ma"
+  /// .likeAnyOf("name", patterns: ["Jo%", "Ma%"])
+  /// ```
   ///
   /// - Parameters:
   ///   - column: The column to filter on.
@@ -388,6 +428,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
 
   /// Matches only rows where `column` matches **all** of the supplied ILIKE `patterns` case-insensitively.
   ///
+  /// ```swift
+  /// // Rows where name starts with "j" and ends with "n" (case-insensitive)
+  /// .iLikeAllOf("name", patterns: ["j%", "%n"])
+  /// ```
+  ///
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - patterns: The ILIKE patterns that must all match.
@@ -404,6 +449,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   }
 
   /// Matches only rows where `column` matches **any** of the supplied ILIKE `patterns` case-insensitively.
+  ///
+  /// ```swift
+  /// // Rows where name starts with "jo" or "ma" (case-insensitive)
+  /// .iLikeAnyOf("name", patterns: ["jo%", "ma%"])
+  /// ```
   ///
   /// - Parameters:
   ///   - column: The column to filter on.
@@ -447,6 +497,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// Matches only rows where `column` matches the regular expression `pattern` case-insensitively.
   ///
   /// Uses PostgreSQL's `~*` operator. The pattern must be a valid POSIX regular expression.
+  ///
+  /// ```swift
+  /// // Rows where email ends with "@supabase.io" (case-insensitive)
+  /// .imatch("email", pattern: "@supabase\\.io$")
+  /// ```
   ///
   /// - Parameters:
   ///   - column: The column to filter on.
@@ -495,6 +550,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///
   /// Unlike ``neq(_:value:)``, this operator treats `NULL` as a comparable value: `NULL IS DISTINCT
   /// FROM NULL` evaluates to `false`, whereas `NULL != NULL` evaluates to `true` (unknown).
+  ///
+  /// ```swift
+  /// // Rows where deleted_at IS DISTINCT FROM NULL (i.e. has a value)
+  /// .isDistinct("deleted_at", value: "null")
+  /// ```
   ///
   /// - Parameters:
   ///   - column: The column to filter on.
@@ -568,6 +628,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///
   /// Applies the `<@` containment operator. Only relevant for `jsonb`, array, and range columns.
   ///
+  /// ```swift
+  /// // Rows where the tags array is a subset of ["swift", "ios", "macos"]
+  /// .containedBy("tags", value: ["swift", "ios", "macos"])
+  /// ```
+  ///
   /// - Parameters:
   ///   - column: The `jsonb`, array, or range column to filter on.
   ///   - value: The `jsonb`, array, or range value that must contain every element in `column`.
@@ -586,6 +651,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// Matches only rows where every element in `column` is strictly less than every element in `range`.
   ///
   /// Applies the `<<` (strictly left of) range operator. Only relevant for range columns.
+  ///
+  /// ```swift
+  /// // Rows where the scheduled range is entirely before [2024-01-01, 2024-06-01)
+  /// .rangeLt("scheduled", range: "[2024-01-01,2024-06-01)")
+  /// ```
   ///
   /// - Parameters:
   ///   - column: The range column to filter on.
@@ -606,6 +676,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///
   /// Applies the `>>` (strictly right of) range operator. Only relevant for range columns.
   ///
+  /// ```swift
+  /// // Rows where the scheduled range is entirely after [2024-01-01, 2024-06-01)
+  /// .rangeGt("scheduled", range: "[2024-01-01,2024-06-01)")
+  /// ```
+  ///
   /// - Parameters:
   ///   - column: The range column to filter on.
   ///   - range: The range value to compare against.
@@ -624,6 +699,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// Matches only rows where `column` does not extend to the left of `range`.
   ///
   /// Applies the `&>` (does not extend to left) range operator. Only relevant for range columns.
+  ///
+  /// ```swift
+  /// // Rows where the scheduled range does not extend before 2024-01-01
+  /// .rangeGte("scheduled", range: "[2024-01-01,)")
+  /// ```
   ///
   /// - Parameters:
   ///   - column: The range column to filter on.
@@ -644,6 +724,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///
   /// Applies the `&<` (does not extend to right) range operator. Only relevant for range columns.
   ///
+  /// ```swift
+  /// // Rows where the scheduled range does not extend past 2024-12-31
+  /// .rangeLte("scheduled", range: "[,2024-12-31]")
+  /// ```
+  ///
   /// - Parameters:
   ///   - column: The range column to filter on.
   ///   - range: The range value to compare against.
@@ -663,6 +748,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///
   /// Applies the `-|-` (adjacent to) range operator. There must be no element that lies between
   /// the two ranges. Only relevant for range columns.
+  ///
+  /// ```swift
+  /// // Rows where the scheduled range is adjacent to [2024-01-01, 2024-06-01)
+  /// .rangeAdjacent("scheduled", range: "[2024-01-01,2024-06-01)")
+  /// ```
   ///
   /// - Parameters:
   ///   - column: The range column to filter on.
@@ -745,6 +835,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// Matches only rows where `column` matches the full-text search `query` using `to_tsquery`.
   ///
   /// This is a convenience wrapper around ``textSearch(_:query:config:type:)`` with no ``TextSearchType``.
+  ///
+  /// ```swift
+  /// // Rows where content matches the full-text query "swift & programming"
+  /// .fts("content", query: "swift & programming", config: "english")
+  /// ```
   ///
   /// - Parameters:
   ///   - column: The `text` or `tsvector` column to search.
