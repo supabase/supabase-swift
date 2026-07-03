@@ -79,19 +79,17 @@ jobs:
     strategy:
       matrix:
         command: [test, ""]
-        platform: [IOS, MACOS, MAC_CATALYST]
+        # iOS is excluded here: Xcode 16.3 has no iOS platform support at all on
+        # this runner image (neither the Simulator runtime nor the device SDK
+        # support files are installed), and `xcodebuild -downloadPlatform iOS`
+        # can't reach Apple's platform-download service from this runner. iOS is
+        # still fully built and tested with a live simulator against the latest
+        # Xcode in the "macos" job above.
+        platform: [MACOS, MAC_CATALYST]
         xcode: ["16.3"]
         include:
           - { command: test, skip_release: 1 }
           - { command: "", skip_debug: 1 }
-        exclude:
-          # Xcode 16.3's iOS Simulator runtime (iOS 18.4) isn't installed on this
-          # runner image and can't be reliably downloaded in CI (no network access
-          # to Apple's platform-download service). iOS is still fully built+tested
-          # with a live simulator in the "macos" (latest Xcode) job above; here we
-          # only verify it still *builds* against the oldest supported Xcode, using
-          # a generic device destination that doesn't need a simulator.
-          - { command: test, platform: IOS }
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Cache derived data
@@ -117,7 +115,7 @@ jobs:
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
       - name: Release
         if: matrix.skip_release != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" ${{ matrix.platform == 'IOS' && 'DESTINATION=generic/platform=iOS' || '' }} xcodebuild
+        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
 
   spm:
     runs-on: macos-26
