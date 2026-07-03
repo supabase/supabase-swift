@@ -21,6 +21,7 @@ Backgrounded
 backgrounding
 bitbucket
 Bitbucket
+bytea
 chan
 checkmark
 Cloudflare
@@ -30,6 +31,7 @@ CREDENTIALW
 datastructure
 Dedup
 dedup
+dedupe
 decoratee
 dollarsign
 dont
