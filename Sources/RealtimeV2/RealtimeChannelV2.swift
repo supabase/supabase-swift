@@ -18,9 +18,26 @@ import IssueReporting
   }
 #endif
 
+/// Configuration for a ``RealtimeChannelV2``.
+///
+/// Pass a builder closure to ``RealtimeClientV2/channel(_:options:)`` to customise
+/// broadcast, presence, and privacy settings before subscribing.
+///
+/// ## Topics
+/// ### Configuration Properties
+/// - ``broadcast``
+/// - ``presence``
+/// - ``isPrivate``
 public struct RealtimeChannelConfig: Sendable {
+  /// Configuration for the broadcast feature of the channel.
   public var broadcast: BroadcastJoinConfig
+
+  /// Configuration for the presence feature of the channel.
   public var presence: PresenceJoinConfig
+
+  /// Whether the channel is private.
+  ///
+  /// Private channels restrict broadcast and presence to authenticated clients only.
   public var isPrivate: Bool
 }
 
@@ -32,13 +49,72 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
   var socket: any RealtimeClientProtocol { get }
 }
 
+/// A Realtime channel that joins a topic and dispatches incoming events to registered callbacks.
+///
+/// Obtain an instance from ``RealtimeClientV2/channel(_:options:)`` and call
+/// ``subscribeWithError()`` to start receiving events. Register all callbacks
+/// **before** subscribing — adding callbacks after ``subscribe()``/``subscribeWithError()``
+/// returns triggers a runtime warning.
+///
+/// ```swift
+/// let channel = client.channel("room:lobby") { config in
+///   config.broadcast.receiveOwnBroadcasts = true
+/// }
+///
+/// _ = channel.onBroadcast(event: "message") { payload in
+///   print(payload)
+/// }
+///
+/// try await channel.subscribeWithError()
+/// ```
+///
+/// ## Topics
+/// ### Identity
+/// - ``topic``
+/// - ``config``
+/// ### Status
+/// - ``status``
+/// - ``statusChange``
+/// - ``onStatusChange(_:)``
+/// ### Lifecycle
+/// - ``subscribeWithError()``
+/// - ``subscribe()``
+/// - ``unsubscribe()``
+/// ### Broadcasting
+/// - ``broadcast(event:message:)-7xyf5``
+/// - ``broadcast(event:message:)-2pvzp``
+/// - ``broadcast(event:data:)``
+/// - ``httpSend(event:message:timeout:)-8v03n``
+/// - ``httpSend(event:message:timeout:)-5hhoc``
+/// ### Presence
+/// - ``track(_:)``
+/// - ``track(state:)``
+/// - ``untrack()``
+/// - ``onPresenceChange(_:)``
+/// ### Postgres Changes
+/// - ``onPostgresChange(_:schema:table:filter:callback:)-8kn76``
+/// - ``onPostgresChange(_:schema:table:filter:callback:)-1j0l6``
+/// - ``onPostgresChange(_:schema:table:filter:callback:)-9c5h2``
+/// - ``onPostgresChange(_:schema:table:filter:callback:)-7srl6``
+/// ### Broadcast Events
+/// - ``onBroadcast(event:callback:)``
+/// - ``onBroadcastData(event:callback:)``
+/// ### System Events
+/// - ``onSystem(callback:)-7cnrp``
+/// - ``onSystem(callback:)-7cno3``
+/// ### Deprecated
+/// - ``updateAuth(jwt:)``
 public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
+  /// The fully-qualified topic string sent to the Realtime server (e.g. `"realtime:room:lobby"`).
   public let topic: String
 
   /// The channel's topic without the `realtime:` prefix, as expected by the
   /// broadcast REST endpoint (WebSocket frames use the full ``topic``).
   let subTopic: String
 
+  /// The channel's current configuration.
+  ///
+  /// Reflects the options passed to ``RealtimeClientV2/channel(_:options:)``.
   @MainActor public private(set) var config: RealtimeChannelConfig
 
   let logger: (any SupabaseLogger)?
@@ -56,20 +132,26 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   private let statusSubject = AsyncValueSubject<RealtimeChannelStatus>(.unsubscribed)
 
+  /// The current subscription status of the channel.
   public private(set) var status: RealtimeChannelStatus {
     get { statusSubject.value }
     set { statusSubject.yield(newValue) }
   }
 
+  /// An async stream that emits channel subscription status changes.
+  ///
+  /// The stream emits the current status immediately upon iteration and then each
+  /// subsequent change. Use ``onStatusChange(_:)`` for a closure-based alternative.
   public var statusChange: AsyncStream<RealtimeChannelStatus> {
     statusSubject.values
   }
 
-  /// Listen for connection status changes.
-  /// - Parameter listener: Closure that will be called when connection status changes.
-  /// - Returns: An observation handle that can be used to stop listening.
+  /// Registers a closure to be called whenever the channel subscription status changes.
   ///
-  /// - Note: Use ``statusChange`` if you prefer to use Async/Await.
+  /// - Parameter listener: A `@Sendable` closure called with the new ``RealtimeChannelStatus`` on every change.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  ///
+  /// > Note: Use ``statusChange`` if you prefer async iteration over closures.
   public func onStatusChange(
     _ listener: @escaping @Sendable (RealtimeChannelStatus) -> Void
   ) -> RealtimeSubscription {
@@ -145,19 +227,27 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Subscribes to the channel.
+  /// Joins the Realtime topic and suspends until the subscription is confirmed by the server.
+  ///
+  /// All callbacks (broadcast, presence, postgres changes) must be registered before calling
+  /// this method. Calling it more than once on an already-subscribed channel is a no-op.
+  ///
+  /// - Throws: A ``RealtimeError`` if the subscribe attempt fails or times out.
   public func subscribeWithError() async throws {
     logger?.debug("Subscribe requested for channel '\(topic)'")
     try await stateManager.subscribe()
   }
 
-  /// Subscribes to the channel.
+  /// Joins the Realtime topic, silently ignoring any errors.
+  ///
+  /// > Warning: Prefer ``subscribeWithError()`` so errors are surfaced to the caller.
   @available(*, deprecated, message: "Use `subscribeWithError` instead")
   @MainActor
   public func subscribe() async {
     try? await subscribeWithError()
   }
 
+  /// Leaves the Realtime topic and transitions the channel to ``RealtimeChannelStatus/unsubscribed``.
   public func unsubscribe() async {
     logger?.debug("Unsubscribe requested for channel '\(topic)'")
     await stateManager.unsubscribe()
@@ -196,6 +286,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
   }
 
+  /// Updates the JWT token for this channel directly.
+  ///
+  /// > Warning: Updating the token per-channel is deprecated. Use
+  /// > ``RealtimeClientV2/setAuth(_:)`` on the client instead.
   @available(
     *,
     deprecated,
@@ -210,17 +304,17 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
   }
 
-  /// Sends a broadcast message explicitly via REST API.
+  /// Sends a broadcast message via the REST API using a `Codable` payload.
   ///
-  /// This method always uses the REST API endpoint regardless of WebSocket connection state.
-  /// Useful when you want to guarantee REST delivery or when gradually migrating from implicit REST fallback.
+  /// This method always targets the REST broadcast endpoint regardless of the current
+  /// WebSocket state. Use it when you need guaranteed REST delivery or want to send
+  /// a broadcast before subscribing to the channel.
   ///
   /// - Parameters:
-  ///   - event: The name of the broadcast event.
-  ///   - message: Message payload (required).
-  ///   - timeout: Optional timeout interval. If not specified, uses the socket's default timeout.
-  /// - Returns: `true` if the message was accepted (HTTP 202), otherwise throws an error.
-  /// - Throws: An error if the access token is missing, payload is missing, or the request fails.
+  ///   - event: The broadcast event name.
+  ///   - message: A `Codable` value to send as the message payload.
+  ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
+  /// - Throws: A ``RealtimeError`` if the access token is missing or the request fails.
   public func httpSend(
     event: String,
     message: some Codable,
@@ -229,17 +323,17 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     try await httpSend(event: event, message: JSONObject(message), timeout: timeout)
   }
 
-  /// Sends a broadcast message explicitly via REST API.
+  /// Sends a broadcast message via the REST API using a raw `JSONObject` payload.
   ///
-  /// This method always uses the REST API endpoint regardless of WebSocket connection state.
-  /// Useful when you want to guarantee REST delivery or when gradually migrating from implicit REST fallback.
+  /// This method always targets the REST broadcast endpoint regardless of the current
+  /// WebSocket state. Use it when you need guaranteed REST delivery or want to send
+  /// a broadcast before subscribing to the channel.
   ///
   /// - Parameters:
-  ///   - event: The name of the broadcast event.
-  ///   - message: Message payload as a `JSONObject` (required).
-  ///   - timeout: Optional timeout interval. If not specified, uses the socket's default timeout.
-  /// - Returns: `true` if the message was accepted (HTTP 202), otherwise throws an error.
-  /// - Throws: An error if the access token is missing, payload is missing, or the request fails.
+  ///   - event: The broadcast event name.
+  ///   - message: A ``JSONObject`` to send as the message payload.
+  ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
+  /// - Throws: A ``RealtimeError`` if the access token is missing or the request fails.
   public func httpSend(
     event: String,
     message: JSONObject,
@@ -289,18 +383,28 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Send a broadcast message with `event` and a `Codable` payload.
+  /// Sends a broadcast message with a `Codable` payload over WebSocket (or falls back to REST).
+  ///
+  /// When the channel is subscribed, the message is sent over the existing WebSocket connection.
+  /// If not subscribed, the call falls back to the REST broadcast endpoint with a deprecation notice.
+  /// Prefer ``httpSend(event:message:timeout:)-8v03n`` for an explicit REST call.
+  ///
   /// - Parameters:
-  ///   - event: Broadcast message event.
-  ///   - message: Message payload.
+  ///   - event: The broadcast event name.
+  ///   - message: A `Codable` value to send as the message payload.
   public func broadcast(event: String, message: some Codable) async throws {
     try await broadcast(event: event, message: JSONObject(message))
   }
 
-  /// Send a broadcast message with `event` and a raw `JSON` payload.
+  /// Sends a broadcast message with a raw `JSONObject` payload over WebSocket (or falls back to REST).
+  ///
+  /// When the channel is subscribed, the message is sent over the existing WebSocket connection.
+  /// If not subscribed, the call falls back to the REST broadcast endpoint with a deprecation notice.
+  /// Prefer ``httpSend(event:message:timeout:)-5hhoc`` for an explicit REST call.
+  ///
   /// - Parameters:
-  ///   - event: Broadcast message event.
-  ///   - message: Message payload.
+  ///   - event: The broadcast event name.
+  ///   - message: A raw ``JSONObject`` payload.
   @MainActor
   public func broadcast(event: String, message: JSONObject) async {
     if status != .subscribed {
@@ -375,12 +479,15 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Send a broadcast message with `event` and a raw binary `Data` payload.
+  /// Sends a binary broadcast message over WebSocket.
   ///
-  /// Binary broadcasts require protocol version 2.0.0 (`vsn: .v2`).
+  /// Binary broadcasts require protocol version ``RealtimeProtocolVersion/v2`` and an active
+  /// subscription. An issue is reported (via `reportIssue`) if the channel is not subscribed or
+  /// if the client is running protocol 1.0.0.
+  ///
   /// - Parameters:
-  ///   - event: Broadcast message event.
-  ///   - data: Binary data payload.
+  ///   - event: The broadcast event name.
+  ///   - data: Raw binary data to send as the payload.
   @MainActor
   public func broadcast(event: String, data: Data) async {
     if status != .subscribed {
@@ -411,15 +518,21 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
   }
 
-  /// Tracks the given state in the channel.
-  /// - Parameter state: The state to be tracked, conforming to `Codable`.
-  /// - Throws: An error if the tracking fails.
+  /// Tracks the current client's presence state using a `Codable` value.
+  ///
+  /// The state is shared with all other clients on the same channel. Call this after subscribing.
+  ///
+  /// - Parameter state: A `Codable` value representing the client's presence state.
+  /// - Throws: An error if the state cannot be encoded.
   public func track(_ state: some Codable) async throws {
     try await track(state: JSONObject(state))
   }
 
-  /// Tracks the given state in the channel.
-  /// - Parameter state: The state to be tracked as a `JSONObject`.
+  /// Tracks the current client's presence state using a raw `JSONObject`.
+  ///
+  /// The state is shared with all other clients on the same channel. Call this after subscribing.
+  ///
+  /// - Parameter state: A ``JSONObject`` representing the client's presence state.
   public func track(state: JSONObject) async {
     if status != .subscribed {
       reportIssue(
@@ -437,7 +550,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
   }
 
-  /// Stops tracking the current state in the channel.
+  /// Stops tracking the current client's presence state on the channel.
   public func untrack() async {
     await push(
       ChannelEvent.presence,
@@ -601,7 +714,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Listen for clients joining / leaving the channel using presences.
+  /// Registers a closure that is called when clients join or leave the channel's presence set.
+  ///
+  /// Register this callback before calling ``subscribeWithError()``.
+  ///
+  /// - Parameter callback: A `@Sendable` closure receiving a ``PresenceAction`` value.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
   public func onPresenceChange(
     _ callback: @escaping @Sendable (any PresenceAction) -> Void
   ) -> RealtimeSubscription {
@@ -623,14 +741,19 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Registers a closure that is called for every Postgres change event on the specified table.
+  ///
+  /// Use ``AnyAction`` to receive insert, update, and delete changes in one callback.
+  /// Register this callback before calling ``subscribeWithError()``.
   ///
   /// - Parameters:
-  ///   - schema: The database schema to listen to. Defaults to `"public"`.
-  ///   - table: The table to listen to. Listens to all tables when `nil`.
-  ///   - filter: A ``RealtimePostgresFilter`` restricting which changes are received.
-  ///   - select: Restricts the change payload to a subset of columns instead of
-  ///     the full row. Requires an explicit `schema` and `table`.
+  ///   - type: Pass `AnyAction.self` to match all change types.
+  ///   - schema: The database schema to listen on. Defaults to `"public"`.
+  ///   - table: The table name to filter changes, or `nil` to listen to all tables in the schema.
+  ///   - filter: A ``RealtimePostgresFilter`` restricting which rows are received.
+  ///   - select: Restricts the change payload to a subset of columns. Requires an explicit `schema` and `table`.
+  ///   - callback: A `@Sendable` closure receiving an ``AnyAction`` for each change.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
   public func onPostgresChange(
     _: AnyAction.Type,
     schema: String = "public",
@@ -671,14 +794,18 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Registers a closure that is called for every `INSERT` change on the specified table.
+  ///
+  /// Register this callback before calling ``subscribeWithError()``.
   ///
   /// - Parameters:
-  ///   - schema: The database schema to listen to. Defaults to `"public"`.
-  ///   - table: The table to listen to. Listens to all tables when `nil`.
-  ///   - filter: A ``RealtimePostgresFilter`` restricting which changes are received.
-  ///   - select: Restricts the change payload to a subset of columns instead of
-  ///     the full row. Requires an explicit `schema` and `table`.
+  ///   - type: Pass `InsertAction.self`.
+  ///   - schema: The database schema to listen on. Defaults to `"public"`.
+  ///   - table: The table name to filter changes, or `nil` to listen to all tables in the schema.
+  ///   - filter: A ``RealtimePostgresFilter`` restricting which rows are received.
+  ///   - select: Restricts the change payload to a subset of columns. Requires an explicit `schema` and `table`.
+  ///   - callback: A `@Sendable` closure receiving an ``InsertAction`` for each insert.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
   public func onPostgresChange(
     _: InsertAction.Type,
     schema: String = "public",
@@ -721,14 +848,18 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Registers a closure that is called for every `UPDATE` change on the specified table.
+  ///
+  /// Register this callback before calling ``subscribeWithError()``.
   ///
   /// - Parameters:
-  ///   - schema: The database schema to listen to. Defaults to `"public"`.
-  ///   - table: The table to listen to. Listens to all tables when `nil`.
-  ///   - filter: A ``RealtimePostgresFilter`` restricting which changes are received.
-  ///   - select: Restricts the change payload to a subset of columns instead of
-  ///     the full row. Requires an explicit `schema` and `table`.
+  ///   - type: Pass `UpdateAction.self`.
+  ///   - schema: The database schema to listen on. Defaults to `"public"`.
+  ///   - table: The table name to filter changes, or `nil` to listen to all tables in the schema.
+  ///   - filter: A ``RealtimePostgresFilter`` restricting which rows are received.
+  ///   - select: Restricts the change payload to a subset of columns. Requires an explicit `schema` and `table`.
+  ///   - callback: A `@Sendable` closure receiving an ``UpdateAction`` for each update.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
   public func onPostgresChange(
     _: UpdateAction.Type,
     schema: String = "public",
@@ -771,14 +902,18 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Registers a closure that is called for every `DELETE` change on the specified table.
+  ///
+  /// Register this callback before calling ``subscribeWithError()``.
   ///
   /// - Parameters:
-  ///   - schema: The database schema to listen to. Defaults to `"public"`.
-  ///   - table: The table to listen to. Listens to all tables when `nil`.
-  ///   - filter: A ``RealtimePostgresFilter`` restricting which changes are received.
-  ///   - select: Restricts the change payload to a subset of columns instead of
-  ///     the full row. Requires an explicit `schema` and `table`.
+  ///   - type: Pass `DeleteAction.self`.
+  ///   - schema: The database schema to listen on. Defaults to `"public"`.
+  ///   - table: The table name to filter changes, or `nil` to listen to all tables in the schema.
+  ///   - filter: A ``RealtimePostgresFilter`` restricting which rows are received.
+  ///   - select: Restricts the change payload to a subset of columns. Requires an explicit `schema` and `table`.
+  ///   - callback: A `@Sendable` closure receiving a ``DeleteAction`` for each deletion.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
   public func onPostgresChange(
     _: DeleteAction.Type,
     schema: String = "public",
@@ -860,7 +995,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
+  /// Registers a closure that is called when a JSON broadcast message arrives for the given event.
+  ///
+  /// - Parameters:
+  ///   - event: The broadcast event name to listen for.
+  ///   - callback: A `@Sendable` closure receiving the ``JSONObject`` payload.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
   public func onBroadcast(
     event: String,
     callback: @escaping @Sendable (JSONObject) -> Void
@@ -872,9 +1012,15 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Listen for binary broadcast messages sent by other clients within the same channel under a specific `event`.
+  /// Registers a closure that is called when a binary broadcast message arrives for the given event.
   ///
-  /// Use this when you expect binary (non-JSON) broadcast payloads.
+  /// Use this when you expect binary (non-JSON) broadcast payloads sent via
+  /// ``broadcast(event:data:)``. Requires protocol ``RealtimeProtocolVersion/v2``.
+  ///
+  /// - Parameters:
+  ///   - event: The broadcast event name to listen for.
+  ///   - callback: A `@Sendable` closure receiving the raw `Data` payload.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
   public func onBroadcastData(
     event: String,
     callback: @escaping @Sendable (Data) -> Void
@@ -886,7 +1032,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Listen for `system` event.
+  /// Registers a closure that is called when a `system` event is received, providing the full message.
+  ///
+  /// System events are emitted by the server to convey channel-level status information.
+  ///
+  /// - Parameter callback: A `@Sendable` closure receiving the ``RealtimeMessageV2``.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
   public func onSystem(
     callback: @escaping @Sendable (RealtimeMessageV2) -> Void
   ) -> RealtimeSubscription {
@@ -897,7 +1048,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Listen for `system` event.
+  /// Registers a no-argument closure that is called when a `system` event is received.
+  ///
+  /// Use this overload when you only need to know that a system event occurred, not its contents.
+  ///
+  /// - Parameter callback: A `@Sendable` closure called on each system event.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
   public func onSystem(
     callback: @escaping @Sendable () -> Void
   ) -> RealtimeSubscription {
