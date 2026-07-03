@@ -339,10 +339,29 @@ features:
   realtime.channel.send: implemented
   realtime.channel.broadcast_http: implemented
 
-  realtime.subscriptions.broadcast: implemented
+  realtime.subscriptions.broadcast:
+    status: implemented
+    symbols:
+      - BroadcastJoinConfig.replicationReady
+      - BroadcastJoinConfig.encode
   realtime.subscriptions.postgres_changes: implemented
   realtime.subscriptions.subscribe_presence: implemented
-  realtime.subscriptions.postgres_changes_filter: implemented
+  realtime.subscriptions.postgres_changes_filter:
+    status: implemented
+    symbols:
+      - RealtimePostgresFilter.like
+      - RealtimePostgresFilter.ilike
+      - RealtimePostgresFilter.match
+      - RealtimePostgresFilter.imatch
+      - RealtimePostgresFilter.is
+      - RealtimePostgresFilter.isDistinct
+      - RealtimePostgresFilter.not
+      - RealtimePostgresFilter.and
+      - RealtimePostgresIsValue
+      - RealtimePostgresIsValue.null
+      - RealtimePostgresIsValue.true
+      - RealtimePostgresIsValue.false
+      - RealtimePostgresIsValue.unknown
   realtime.subscriptions.private_channel: implemented
   realtime.subscriptions.broadcast_self: implemented
   realtime.subscriptions.broadcast_ack: implemented

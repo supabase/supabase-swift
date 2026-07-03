@@ -98,7 +98,7 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
     }
   }
 
-  func testRpcWithGetMethodAndJSOBOjectShouldCleanArray() async throws {
+  func testRpcWithGetMethodAndJSONObjectShouldCleanArray() async throws {
     Mock(
       url: url.appendingPathComponent("rpc/sum"),
       ignoreQuery: true,

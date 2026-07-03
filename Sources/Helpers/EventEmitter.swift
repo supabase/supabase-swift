@@ -79,7 +79,7 @@ package final class EventEmitter<Event: Sendable>: Sendable {
 
   let mutableState: LockIsolated<MutableState>
 
-  /// The last event emitted by this Emiter, or the initial event.
+  /// The last event emitted by this Emitter, or the initial event.
   package var lastEvent: Event { mutableState.lastEvent }
 
   package let emitsLastEventWhenAttaching: Bool

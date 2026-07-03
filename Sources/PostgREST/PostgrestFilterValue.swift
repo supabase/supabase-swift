@@ -71,12 +71,12 @@ extension Optional: PostgrestFilterValue where Wrapped: PostgrestFilterValue {
 extension JSONObject: PostgrestFilterValue {
   public var rawValue: String {
     let value = mapValues(\.value)
-    return JSONSerialization.stringfy(value)!
+    return JSONSerialization.stringify(value)!
   }
 }
 
 extension JSONSerialization {
-  static func stringfy(_ object: Any) -> String? {
+  static func stringify(_ object: Any) -> String? {
     let data = try? data(
       withJSONObject: object, options: [.withoutEscapingSlashes, .sortedKeys]
     )

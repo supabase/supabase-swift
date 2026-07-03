@@ -34,7 +34,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Order the query result by `column`.
   ///
   /// You can call this method multiple times to order by multiple columns.
-  /// You can order referenced tables, but it only affects the ordering of theparent table if you use `!inner` in the query.
+  /// You can order referenced tables, but it only affects the ordering of the parent table if you use `!inner` in the query.
   ///
   /// - Parameters:
   ///   - column: The column to order by.

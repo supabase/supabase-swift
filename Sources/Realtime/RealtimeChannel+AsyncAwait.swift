@@ -28,10 +28,13 @@ extension RealtimeChannelV2 {
     _: InsertAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimePostgresFilter? = nil
+    filter: RealtimePostgresFilter? = nil,
+    select: [String]? = nil
   ) -> AsyncStream<InsertAction> {
-    postgresChange(event: .insert, schema: schema, table: table, filter: filter?.value)
-      .compactErase()
+    postgresChange(
+      event: .insert, schema: schema, table: table, filter: filter?.value, select: select
+    )
+    .compactErase()
   }
 
   /// Listen for postgres changes in a channel.
@@ -45,9 +48,10 @@ extension RealtimeChannelV2 {
     _: InsertAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: String? = nil
+    filter: String? = nil,
+    select: [String]? = nil
   ) -> AsyncStream<InsertAction> {
-    postgresChange(event: .insert, schema: schema, table: table, filter: filter)
+    postgresChange(event: .insert, schema: schema, table: table, filter: filter, select: select)
       .compactErase()
   }
 
@@ -56,10 +60,13 @@ extension RealtimeChannelV2 {
     _: UpdateAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimePostgresFilter? = nil
+    filter: RealtimePostgresFilter? = nil,
+    select: [String]? = nil
   ) -> AsyncStream<UpdateAction> {
-    postgresChange(event: .update, schema: schema, table: table, filter: filter?.value)
-      .compactErase()
+    postgresChange(
+      event: .update, schema: schema, table: table, filter: filter?.value, select: select
+    )
+    .compactErase()
   }
 
   /// Listen for postgres changes in a channel.
@@ -73,9 +80,10 @@ extension RealtimeChannelV2 {
     _: UpdateAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: String? = nil
+    filter: String? = nil,
+    select: [String]? = nil
   ) -> AsyncStream<UpdateAction> {
-    postgresChange(event: .update, schema: schema, table: table, filter: filter)
+    postgresChange(event: .update, schema: schema, table: table, filter: filter, select: select)
       .compactErase()
   }
 
@@ -84,10 +92,13 @@ extension RealtimeChannelV2 {
     _: DeleteAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimePostgresFilter? = nil
+    filter: RealtimePostgresFilter? = nil,
+    select: [String]? = nil
   ) -> AsyncStream<DeleteAction> {
-    postgresChange(event: .delete, schema: schema, table: table, filter: filter?.value)
-      .compactErase()
+    postgresChange(
+      event: .delete, schema: schema, table: table, filter: filter?.value, select: select
+    )
+    .compactErase()
   }
 
   /// Listen for postgres changes in a channel.
@@ -101,9 +112,10 @@ extension RealtimeChannelV2 {
     _: DeleteAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: String? = nil
+    filter: String? = nil,
+    select: [String]? = nil
   ) -> AsyncStream<DeleteAction> {
-    postgresChange(event: .delete, schema: schema, table: table, filter: filter)
+    postgresChange(event: .delete, schema: schema, table: table, filter: filter, select: select)
       .compactErase()
   }
 
@@ -112,9 +124,12 @@ extension RealtimeChannelV2 {
     _: AnyAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: RealtimePostgresFilter? = nil
+    filter: RealtimePostgresFilter? = nil,
+    select: [String]? = nil
   ) -> AsyncStream<AnyAction> {
-    postgresChange(event: .all, schema: schema, table: table, filter: filter?.value)
+    postgresChange(
+      event: .all, schema: schema, table: table, filter: filter?.value, select: select
+    )
   }
 
   /// Listen for postgres changes in a channel.
@@ -128,23 +143,26 @@ extension RealtimeChannelV2 {
     _: AnyAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: String? = nil
+    filter: String? = nil,
+    select: [String]? = nil
   ) -> AsyncStream<AnyAction> {
-    postgresChange(event: .all, schema: schema, table: table, filter: filter)
+    postgresChange(event: .all, schema: schema, table: table, filter: filter, select: select)
   }
 
   private func postgresChange(
     event: PostgresChangeEvent,
     schema: String,
     table: String?,
-    filter: String?
+    filter: String?,
+    select: [String]? = nil
   ) -> AsyncStream<AnyAction> {
     let (stream, continuation) = AsyncStream<AnyAction>.makeStream()
     let subscription = _onPostgresChange(
       event: event,
       schema: schema,
       table: table,
-      filter: filter
+      filter: filter,
+      select: select
     ) {
       continuation.yield($0)
     }

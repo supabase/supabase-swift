@@ -176,7 +176,7 @@ actor ChannelStateManager {
     case .subscribing(let task):
       logger?.debug("Cancelling in-flight subscribe to unsubscribe '\(topic)'")
       task.cancel()
-      // Subscribe hadn't completed yet, so the server may not recognise the
+      // Subscribe hadn't completed yet, so the server may not recognize the
       // channel and will likely never send `phx_close`. Don't wait for it.
       await beginUnsubscribe(waitForServerClose: false)
 

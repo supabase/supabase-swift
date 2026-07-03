@@ -35,6 +35,10 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   public let topic: String
 
+  /// The channel's topic without the `realtime:` prefix, as expected by the
+  /// broadcast REST endpoint (WebSocket frames use the full ``topic``).
+  let subTopic: String
+
   @MainActor public private(set) var config: RealtimeChannelConfig
 
   let logger: (any SupabaseLogger)?
@@ -80,6 +84,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     logger: (any SupabaseLogger)?
   ) {
     self.topic = topic
+    self.subTopic =
+      topic.hasPrefix("realtime:") ? String(topic.dropFirst("realtime:".count)) : topic
     self.config = config
     self.logger = logger
     self.socket = socket
@@ -253,7 +259,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       BroadcastMessagePayload(
         messages: [
           BroadcastMessagePayload.Message(
-            topic: topic,
+            topic: subTopic,
             event: event,
             payload: message,
             private: config.isPrivate
@@ -328,7 +334,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
               BroadcastMessagePayload(
                 messages: [
                   BroadcastMessagePayload.Message(
-                    topic: topic,
+                    topic: subTopic,
                     event: event,
                     payload: message,
                     private: config.isPrivate
@@ -618,36 +624,75 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Listen for postgres changes in a channel.
+  ///
+  /// - Parameters:
+  ///   - schema: The database schema to listen to. Defaults to `"public"`.
+  ///   - table: The table to listen to. Listens to all tables when `nil`.
+  ///   - filter: A ``RealtimePostgresFilter`` restricting which changes are received.
+  ///   - select: Restricts the change payload to a subset of columns instead of
+  ///     the full row. Requires an explicit `schema` and `table`.
   public func onPostgresChange(
     _: AnyAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: String? = nil,
+    filter: RealtimePostgresFilter? = nil,
+    select: [String]? = nil,
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> RealtimeSubscription {
     _onPostgresChange(
       event: .all,
       schema: schema,
       table: table,
-      filter: filter
+      filter: filter?.value,
+      select: select
     ) {
       callback($0)
     }
   }
 
   /// Listen for postgres changes in a channel.
+  @_disfavoredOverload
+  public func onPostgresChange(
+    _: AnyAction.Type,
+    schema: String = "public",
+    table: String? = nil,
+    filter: String? = nil,
+    select: [String]? = nil,
+    callback: @escaping @Sendable (AnyAction) -> Void
+  ) -> RealtimeSubscription {
+    _onPostgresChange(
+      event: .all,
+      schema: schema,
+      table: table,
+      filter: filter,
+      select: select
+    ) {
+      callback($0)
+    }
+  }
+
+  /// Listen for postgres changes in a channel.
+  ///
+  /// - Parameters:
+  ///   - schema: The database schema to listen to. Defaults to `"public"`.
+  ///   - table: The table to listen to. Listens to all tables when `nil`.
+  ///   - filter: A ``RealtimePostgresFilter`` restricting which changes are received.
+  ///   - select: Restricts the change payload to a subset of columns instead of
+  ///     the full row. Requires an explicit `schema` and `table`.
   public func onPostgresChange(
     _: InsertAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: String? = nil,
+    filter: RealtimePostgresFilter? = nil,
+    select: [String]? = nil,
     callback: @escaping @Sendable (InsertAction) -> Void
   ) -> RealtimeSubscription {
     _onPostgresChange(
       event: .insert,
       schema: schema,
       table: table,
-      filter: filter
+      filter: filter?.value,
+      select: select
     ) {
       guard case .insert(let action) = $0 else { return }
       callback(action)
@@ -655,18 +700,49 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Listen for postgres changes in a channel.
+  @_disfavoredOverload
+  public func onPostgresChange(
+    _: InsertAction.Type,
+    schema: String = "public",
+    table: String? = nil,
+    filter: String? = nil,
+    select: [String]? = nil,
+    callback: @escaping @Sendable (InsertAction) -> Void
+  ) -> RealtimeSubscription {
+    _onPostgresChange(
+      event: .insert,
+      schema: schema,
+      table: table,
+      filter: filter,
+      select: select
+    ) {
+      guard case .insert(let action) = $0 else { return }
+      callback(action)
+    }
+  }
+
+  /// Listen for postgres changes in a channel.
+  ///
+  /// - Parameters:
+  ///   - schema: The database schema to listen to. Defaults to `"public"`.
+  ///   - table: The table to listen to. Listens to all tables when `nil`.
+  ///   - filter: A ``RealtimePostgresFilter`` restricting which changes are received.
+  ///   - select: Restricts the change payload to a subset of columns instead of
+  ///     the full row. Requires an explicit `schema` and `table`.
   public func onPostgresChange(
     _: UpdateAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: String? = nil,
+    filter: RealtimePostgresFilter? = nil,
+    select: [String]? = nil,
     callback: @escaping @Sendable (UpdateAction) -> Void
   ) -> RealtimeSubscription {
     _onPostgresChange(
       event: .update,
       schema: schema,
       table: table,
-      filter: filter
+      filter: filter?.value,
+      select: select
     ) {
       guard case .update(let action) = $0 else { return }
       callback(action)
@@ -674,18 +750,71 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Listen for postgres changes in a channel.
+  @_disfavoredOverload
+  public func onPostgresChange(
+    _: UpdateAction.Type,
+    schema: String = "public",
+    table: String? = nil,
+    filter: String? = nil,
+    select: [String]? = nil,
+    callback: @escaping @Sendable (UpdateAction) -> Void
+  ) -> RealtimeSubscription {
+    _onPostgresChange(
+      event: .update,
+      schema: schema,
+      table: table,
+      filter: filter,
+      select: select
+    ) {
+      guard case .update(let action) = $0 else { return }
+      callback(action)
+    }
+  }
+
+  /// Listen for postgres changes in a channel.
+  ///
+  /// - Parameters:
+  ///   - schema: The database schema to listen to. Defaults to `"public"`.
+  ///   - table: The table to listen to. Listens to all tables when `nil`.
+  ///   - filter: A ``RealtimePostgresFilter`` restricting which changes are received.
+  ///   - select: Restricts the change payload to a subset of columns instead of
+  ///     the full row. Requires an explicit `schema` and `table`.
   public func onPostgresChange(
     _: DeleteAction.Type,
     schema: String = "public",
     table: String? = nil,
-    filter: String? = nil,
+    filter: RealtimePostgresFilter? = nil,
+    select: [String]? = nil,
     callback: @escaping @Sendable (DeleteAction) -> Void
   ) -> RealtimeSubscription {
     _onPostgresChange(
       event: .delete,
       schema: schema,
       table: table,
-      filter: filter
+      filter: filter?.value,
+      select: select
+    ) {
+      guard case .delete(let action) = $0 else { return }
+      callback(action)
+    }
+  }
+
+  /// Listen for postgres changes in a channel.
+  @_disfavoredOverload
+  public func onPostgresChange(
+    _: DeleteAction.Type,
+    schema: String = "public",
+    table: String? = nil,
+    filter: String? = nil,
+    select: [String]? = nil,
+    callback: @escaping @Sendable (DeleteAction) -> Void
+  ) -> RealtimeSubscription {
+    _onPostgresChange(
+      event: .delete,
+      schema: schema,
+      table: table,
+      filter: filter,
+      select: select
     ) {
       guard case .delete(let action) = $0 else { return }
       callback(action)
@@ -697,6 +826,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     schema: String,
     table: String?,
     filter: String?,
+    select: [String]? = nil,
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> RealtimeSubscription {
     guard status != .subscribed && status != .subscribing else {
@@ -713,7 +843,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       event: event,
       schema: schema,
       table: table,
-      filter: filter
+      filter: filter,
+      select: select
     )
 
     // Synchronous append — the buffer lives on the channel, not the actor,

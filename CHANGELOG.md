@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.49.0](https://github.com/supabase/supabase-swift/compare/v2.48.0...v2.49.0) (2026-07-03)
+
+
+### Features
+
+* **postgrest:** add ExplainFormat enum for explain(format:) ([#1050](https://github.com/supabase/supabase-swift/issues/1050)) ([441abb8](https://github.com/supabase/supabase-swift/commit/441abb80294c6f4b37820de1b2c21402a5830e1f))
+* **realtime:** support replication-ready system event, new postgres_changes filter operators, and broadcast `select` option ([#1063](https://github.com/supabase/supabase-swift/issues/1063)) ([52c71dd](https://github.com/supabase/supabase-swift/commit/52c71dd21381a60a52f407bae18418a71aa992db))
+* **storage:** add `StorageByteCount`, `ResizeMode`, `ImageFormat`, `SortOrder`, and `DownloadBehavior` typed value types, non-breaking backport from v3 ([#1049](https://github.com/supabase/supabase-swift/issues/1049)) ([d464945](https://github.com/supabase/supabase-swift/commit/d464945de0829186a5883182fe112c22c69f3cec))
+
+
+### Bug Fixes
+
+* **postgrest:** quote in() filter values containing reserved characters ([#1061](https://github.com/supabase/supabase-swift/issues/1061)) ([a09725f](https://github.com/supabase/supabase-swift/commit/a09725fc56ee08338422f1bec88f5c0af2961062))
+* **postgrest:** remove invalid quotes from explain() plan media type ([#1048](https://github.com/supabase/supabase-swift/issues/1048)) ([261aba0](https://github.com/supabase/supabase-swift/commit/261aba01229111c72d5f30fc2e87b9a519b919ea))
+* **realtime:** make `lifecycleManager` Sendable and `withTimeout` throwing, removing the `Result`-wrapping anti-pattern at call sites, backported from v3 ([#1052](https://github.com/supabase/supabase-swift/issues/1052)) ([3de1327](https://github.com/supabase/supabase-swift/commit/3de1327b1dd158bf032a1b1f861671982eb895ff))
+* **storage:** restore source compatibility for deprecated overloads ([#1062](https://github.com/supabase/supabase-swift/issues/1062)) ([0485d41](https://github.com/supabase/supabase-swift/commit/0485d4170c7565722539e4be0b1b7b2b925eac36))
+
 ## [2.48.0](https://github.com/supabase/supabase-swift/compare/v2.47.2...v2.48.0) (2026-06-17)
 
 

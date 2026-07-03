@@ -316,7 +316,9 @@ public struct StorageByteCount: Sendable, Hashable {
   }
 
   private static func formatValue(_ value: Double) -> String {
-    value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int64(value)) : String(value)
+    value.truncatingRemainder(dividingBy: 1) == 0
+      ? Int64(exactly: value).map(String.init) ?? String(value)
+      : String(value)
   }
 
   /// Creates a ``StorageByteCount`` from a number of kilobytes.
