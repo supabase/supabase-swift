@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public struct StorageClientConfiguration: Sendable {
   public var url: URL

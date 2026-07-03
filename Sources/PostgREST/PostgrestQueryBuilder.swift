@@ -1,4 +1,6 @@
+import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 
 /// Query builder for SELECT, INSERT, UPDATE, DELETE, and UPSERT operations.
 ///

@@ -1,10 +1,10 @@
 import ConcurrencyExtras
-import Foundation
+public import Foundation
 import HTTPTypes
 import IssueReporting
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 /// Supabase Client.

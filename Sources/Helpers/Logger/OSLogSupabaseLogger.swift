@@ -1,7 +1,7 @@
 import Foundation
 
 #if canImport(OSLog)
-  import OSLog
+  public import OSLog
 
   /// A SupabaseLogger implementation that logs to OSLog.
   ///

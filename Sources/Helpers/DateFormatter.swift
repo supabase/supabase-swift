@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 28/12/23.
 //
 
-import Foundation
+package import Foundation
 
 extension DateFormatter {
   fileprivate static func iso8601(includingFractionalSeconds: Bool) -> DateFormatter {

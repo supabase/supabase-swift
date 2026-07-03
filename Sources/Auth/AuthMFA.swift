@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 
 /// Contains the full multi-factor authentication API.
 public struct AuthMFA: Sendable {

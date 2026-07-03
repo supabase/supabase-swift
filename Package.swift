@@ -238,6 +238,8 @@ for target in package.targets {
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("ImmutableWeakCaptures"),
     .enableUpcomingFeature("InferIsolatedConformances"),
+    .enableUpcomingFeature("InternalImportsByDefault"),
+    .enableUpcomingFeature("MemberImportVisibility"),
     .enableExperimentalFeature("StrictConcurrency"),
   ]
 

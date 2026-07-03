@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 30/04/24.
 //
 
-import Foundation
-import HTTPTypes
+package import Foundation
+package import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

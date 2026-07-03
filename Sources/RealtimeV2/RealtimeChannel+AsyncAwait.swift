@@ -5,7 +5,8 @@
 //  Created by Guilherme Souza on 17/04/24.
 //
 
-import Foundation
+import ConcurrencyExtras
+public import Foundation
 
 extension RealtimeChannelV2 {
   /// Listen for clients joining / leaving the channel using presences.

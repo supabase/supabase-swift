@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 24/12/23.
 //
 
-import Foundation
+public import Foundation
 
 public struct PresenceV2: Hashable, Sendable {
   /// The presence reference of the object.

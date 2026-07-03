@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 23/12/23.
 //
 
-import Foundation
+public import Foundation
 
 public struct Column: Equatable, Codable, Sendable {
   public let name: String

@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 20/01/24.
 //
 
-import Foundation
+public import Foundation
 
 extension AnyJSON {
   /// The decoder instance used for transforming AnyJSON to some Codable type.

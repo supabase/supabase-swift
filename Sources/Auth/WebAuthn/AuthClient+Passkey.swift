@@ -6,9 +6,10 @@
 //
 
 import Foundation
+import HTTPTypes
 
 #if canImport(AuthenticationServices)
-  import AuthenticationServices
+  public import AuthenticationServices
 #endif
 
 extension AuthClient {

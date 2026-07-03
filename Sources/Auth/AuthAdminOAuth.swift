@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 02/10/25.
 //
 
-import Foundation
+public import Foundation
 import HTTPTypes
 
 /// Contains all OAuth client administration methods.

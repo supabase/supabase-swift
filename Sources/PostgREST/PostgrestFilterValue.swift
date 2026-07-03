@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// A value that can be used to filter Postgrest queries.
 public protocol PostgrestFilterValue {

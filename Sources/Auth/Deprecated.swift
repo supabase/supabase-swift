@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 14/12/23.
 //
 
-import Foundation
+public import Foundation
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 @available(*, deprecated, renamed: "AuthClient")

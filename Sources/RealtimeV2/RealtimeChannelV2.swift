@@ -1,5 +1,5 @@
 import ConcurrencyExtras
-import Foundation
+public import Foundation
 import HTTPTypes
 import IssueReporting
 

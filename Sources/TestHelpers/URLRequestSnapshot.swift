@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 22/01/25.
 //
 
-@preconcurrency import InlineSnapshotTesting
+@preconcurrency package import InlineSnapshotTesting
 
 #if !os(WASI)
-  import Foundation
+  package import Foundation
 
   #if canImport(FoundationNetworking)
     import FoundationNetworking

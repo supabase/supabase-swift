@@ -6,7 +6,7 @@
 //
 
 import ConcurrencyExtras
-import Foundation
+public import Foundation
 
 let version = Helpers.version
 

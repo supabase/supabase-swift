@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public struct StorageError: Error, Decodable, Sendable {
   public var statusCode: String?

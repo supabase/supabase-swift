@@ -7,7 +7,7 @@
 
 import Clocks
 import ConcurrencyExtras
-import Foundation
+package import Foundation
 
 package protocol _Clock: Sendable {
   func sleep(for duration: TimeInterval) async throws

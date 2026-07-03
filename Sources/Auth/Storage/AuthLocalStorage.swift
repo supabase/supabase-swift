@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public protocol AuthLocalStorage: Sendable {
   func store(key: String, value: Data) throws

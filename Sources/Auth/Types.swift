@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public enum AuthChangeEvent: String, Sendable {
   case initialSession = "INITIAL_SESSION"
