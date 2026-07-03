@@ -8,11 +8,11 @@
 import Foundation
 import HTTPTypes
 
-/// Admin-only Auth operations that require the service-role key.
+/// Admin-only Auth operations that require the secret key.
 ///
 /// Access this namespace via ``AuthClient/admin``.
 ///
-/// > Warning: These methods require the service-role (`secret`) key. Never expose this key
+/// > Warning: These methods require the secret key. Never expose this key
 /// > in a browser or mobile app — call these methods from a secure server-side environment only.
 ///
 /// ## Topics

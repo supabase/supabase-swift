@@ -208,7 +208,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   /// Third-party provider identities linked to this user.
   public var identities: [UserIdentity]?
 
-  /// Whether this is an anonymous (unauthenticated) user.
+  /// Whether this is an anonymous user.
   public var isAnonymous: Bool
 
   /// MFA factors registered for this user.

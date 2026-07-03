@@ -68,7 +68,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// ```swift
 /// let auth = AuthClient(
 ///   url: URL(string: "https://<project>.supabase.co/auth/v1")!,
-///   headers: ["apikey": "<anon-key>"],
+///   headers: ["apikey": "<publishable-key>"],
 ///   localStorage: KeychainLocalStorage()
 /// )
 ///

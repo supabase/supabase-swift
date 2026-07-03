@@ -13,7 +13,7 @@ import HTTPTypes
 /// Only relevant when the OAuth 2.1 server feature is enabled in Supabase Auth.
 /// Access this namespace via ``AuthAdmin/oauth``.
 ///
-/// > Warning: These methods require the service-role (`secret`) key. Never expose this key
+/// > Warning: These methods require the secret key. Never expose this key
 /// > in a browser or mobile app — call these methods from a secure server-side environment only.
 ///
 /// ## Topics
