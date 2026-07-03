@@ -7,12 +7,6 @@
 
 import Foundation
 
-#if canImport(MobileCoreServices)
-  import MobileCoreServices
-#elseif canImport(CoreServices)
-  import CoreServices
-#endif
-
 #if canImport(UniformTypeIdentifiers)
   import UniformTypeIdentifiers
 
@@ -25,18 +19,7 @@ import Foundation
   // MARK: - Private - Mime Type
 
   func mimeType(forPathExtension pathExtension: String) -> String {
-    #if canImport(CoreServices) || canImport(MobileCoreServices)
-      if let id = UTTypeCreatePreferredIdentifierForTag(
-        kUTTagClassFilenameExtension, pathExtension as CFString, nil
-      )?.takeRetainedValue(),
-        let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
-          .takeRetainedValue()
-      {
-        return contentType as String
-      }
-    #endif
-
-    return "application/octet-stream"
+    "application/octet-stream"
   }
 #endif
 

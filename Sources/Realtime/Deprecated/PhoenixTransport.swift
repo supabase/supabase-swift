@@ -42,7 +42,7 @@ public protocol PhoenixTransport {
 
   /**
    Connect to the server
-  
+
    - Parameters:
    - headers: Headers to include in the URLRequests when opening the Websocket connection. Can be empty [:]
    */
@@ -50,7 +50,7 @@ public protocol PhoenixTransport {
 
   /**
    Disconnect from the server.
-  
+
    - Parameters:
    - code: Status code as defined by <ahref="http://tools.ietf.org/html/rfc6455#section-7.4">Section 7.4 of RFC 6455</a>.
    - reason: Reason why the connection is closing. Optional.
@@ -59,7 +59,7 @@ public protocol PhoenixTransport {
 
   /**
    Sends a message to the server.
-  
+
    - Parameter data: Data to send.
    */
   func send(data: Data)
@@ -74,30 +74,30 @@ public protocol PhoenixTransport {
 public protocol PhoenixTransportDelegate {
   /**
    Notified when the `Transport` opens.
-  
+
    - Parameter response: Response from the server indicating that the WebSocket handshake was successful and the connection has been upgraded to webSockets
    */
   func onOpen(response: URLResponse?)
 
   /**
    Notified when the `Transport` receives an error.
-  
+
    - Parameter error: Client-side error from the underlying `Transport` implementation
    - Parameter response: Response from the server, if any, that occurred with the Error
-  
+
    */
   func onError(error: any Error, response: URLResponse?)
 
   /**
    Notified when the `Transport` receives a message from the server.
-  
+
    - Parameter message: Message received from the server
    */
   func onMessage(message: String)
 
   /**
    Notified when the `Transport` closes.
-  
+
    - Parameter code: Code that was sent when the `Transport` closed
    - Parameter reason: A concise human-readable prose explanation for the closure
    */
@@ -151,22 +151,22 @@ open class URLSessionTransport: NSObject, PhoenixTransport, URLSessionWebSocketD
 
   /**
    Initializes a `Transport` layer built using URLSession's WebSocket
-  
+
    Example:
-  
+
    ```swift
    let url = URL("wss://example.com/socket")
    let transport: Transport = URLSessionTransport(url: url)
    ```
-  
+
    Using a custom `URLSessionConfiguration`
-  
+
    ```swift
    let url = URL("wss://example.com/socket")
    let configuration = URLSessionConfiguration.default
    let transport: Transport = URLSessionTransport(url: url, configuration: configuration)
    ```
-  
+
    - parameter url: URL to connect to
    - parameter configuration: Provide your own URLSessionConfiguration. Uses `.default` if none provided
    */

@@ -27,12 +27,6 @@
 import Foundation
 import HTTPTypes
 
-#if canImport(MobileCoreServices)
-  import MobileCoreServices
-#elseif canImport(CoreServices)
-  import CoreServices
-#endif
-
 /// Constructs `multipart/form-data` for uploads within an HTTP or HTTPS body. There are currently two ways to encode
 /// multipart form data. The first way is to encode the data directly in memory. This is very efficient, but can lead
 /// to memory issues if the dataset is too large. The second way is designed for larger datasets and will write all the
@@ -606,18 +600,7 @@ class MultipartFormData {
     // MARK: - Private - Mime Type
 
     static func mimeType(forPathExtension pathExtension: String) -> String {
-      #if canImport(CoreServices) || canImport(MobileCoreServices)
-        if let id = UTTypeCreatePreferredIdentifierForTag(
-          kUTTagClassFilenameExtension, pathExtension as CFString, nil
-        )?.takeRetainedValue(),
-          let contentType = UTTypeCopyPreferredTagWithClass(id, kUTTagClassMIMEType)?
-            .takeRetainedValue()
-        {
-          return contentType as String
-        }
-      #endif
-
-      return "application/octet-stream"
+      "application/octet-stream"
     }
   }
 
