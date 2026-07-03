@@ -2435,7 +2435,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
-  func testgetUserById() async throws {
+  func testGetUserById() async throws {
     let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
     let sut = makeSUT()
 

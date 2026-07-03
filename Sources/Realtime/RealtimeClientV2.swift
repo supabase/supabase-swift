@@ -125,7 +125,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     return RealtimeSubscription { task.cancel() }
   }
 
-  /// Listen for heatbeat checks.
+  /// Listen for heartbeat checks.
   /// - Parameter listener: Closure that will be called when heartbeat status changes.
   /// - Returns: An observation handle that can be used to stop listening.
   ///

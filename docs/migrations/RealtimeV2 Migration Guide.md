@@ -16,7 +16,7 @@ for await status in supabase.realtimeV2.statusChange {
 }
 ```
 
-If you don't need observation, you can access the current status using `supabase.realtimev2.status`.
+If you don't need observation, you can access the current status using `supabase.realtimeV2.status`.
 
 ### Observing channel subscription status
 
@@ -34,7 +34,7 @@ Task {
 await channel.subscribe()
 ```
 
-If you don't need observation, you can access the current status uusing `channel.status`.
+If you don't need observation, you can access the current status using `channel.status`.
 
 ### Listening for Postgres Changes
 
@@ -142,7 +142,7 @@ await channel.untrack()
 
 ### Listening for Presence Joins and Leaves
 
-Use `presenceChange()` for obsering Presence state changes.
+Use `presenceChange()` for observing Presence state changes.
 
 ```swift
 for await presence in channel.presenceChange() {
