@@ -147,10 +147,12 @@ public struct DeleteAction: PostgresAction, HasOldRecord, HasRawMessage {
 /// A Postgres change event that wraps any of the concrete action types.
 ///
 /// Use this type when you want to receive `INSERT`, `UPDATE`, and `DELETE` changes
-/// with a single callback. Pattern-match on the cases to access the underlying action.
+/// with a single async stream. Pattern-match on the cases to access the underlying action.
 ///
 /// ```swift
-/// channel.onPostgresChange(AnyAction.self, schema: "public", table: "messages") { action in
+/// let changes = channel.postgresChange(AnyAction.self, schema: "public", table: "messages")
+/// try await channel.subscribeWithError()
+/// for await action in changes {
 ///   switch action {
 ///   case .insert(let insert): print(insert.record)
 ///   case .update(let update): print(update.record)

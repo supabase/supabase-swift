@@ -48,7 +48,7 @@ public struct ReplayOption: Codable, Hashable, Sendable {
   /// Unix timestamp in milliseconds. Messages broadcast after this point will be replayed.
   public var since: Int
 
-  /// Optional maximum number of messages to replay. When `nil`, all matching messages are returned.
+  /// Optional maximum number of messages to replay. When `nil`, the server default limit applies.
   public var limit: Int?
 
   /// Creates a ``ReplayOption``.

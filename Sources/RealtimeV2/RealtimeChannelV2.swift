@@ -37,7 +37,9 @@ public struct RealtimeChannelConfig: Sendable {
 
   /// Whether the channel is private.
   ///
-  /// Private channels restrict broadcast and presence to authenticated clients only.
+  /// Private channels enforce access control via RLS policies defined in your database.
+  /// See the [Realtime authorization guide](https://supabase.com/docs/guides/realtime/authorization)
+  /// for details.
   public var isPrivate: Bool
 }
 
@@ -61,11 +63,12 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 ///   config.broadcast.receiveOwnBroadcasts = true
 /// }
 ///
-/// _ = channel.onBroadcast(event: "message") { payload in
+/// let messages = channel.broadcastStream(event: "message")
+/// try await channel.subscribeWithError()
+///
+/// for await payload in messages {
 ///   print(payload)
 /// }
-///
-/// try await channel.subscribeWithError()
 /// ```
 ///
 /// ## Topics
@@ -718,6 +721,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// Register this callback before calling ``subscribeWithError()``.
   ///
+  /// ```swift
+  /// let subscription = channel.onPresenceChange { action in
+  ///   print("joins:", action.joins, "leaves:", action.leaves)
+  /// }
+  /// ```
+  ///
+  /// > Note: Use ``presenceChange()`` if you prefer async iteration over closures.
+  ///
   /// - Parameter callback: A `@Sendable` closure receiving a ``PresenceAction`` value.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
   public func onPresenceChange(
@@ -745,6 +756,18 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// Use ``AnyAction`` to receive insert, update, and delete changes in one callback.
   /// Register this callback before calling ``subscribeWithError()``.
+  ///
+  /// ```swift
+  /// let subscription = channel.onPostgresChange(AnyAction.self, schema: "public", table: "messages") { action in
+  ///   switch action {
+  ///   case .insert(let insert): print(insert.record)
+  ///   case .update(let update): print(update.record)
+  ///   case .delete(let delete): print(delete.oldRecord)
+  ///   }
+  /// }
+  /// ```
+  ///
+  /// > Note: Use ``postgresChange(_:schema:table:filter:)`` if you prefer async iteration over closures.
   ///
   /// - Parameters:
   ///   - type: Pass `AnyAction.self` to match all change types.
@@ -797,6 +820,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// Registers a closure that is called for every `INSERT` change on the specified table.
   ///
   /// Register this callback before calling ``subscribeWithError()``.
+  ///
+  /// ```swift
+  /// let subscription = channel.onPostgresChange(InsertAction.self, schema: "public", table: "messages") { insert in
+  ///   print(insert.record)
+  /// }
+  /// ```
+  ///
+  /// > Note: Use ``postgresChange(_:schema:table:filter:)`` if you prefer async iteration over closures.
   ///
   /// - Parameters:
   ///   - type: Pass `InsertAction.self`.
@@ -852,6 +883,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// Register this callback before calling ``subscribeWithError()``.
   ///
+  /// ```swift
+  /// let subscription = channel.onPostgresChange(UpdateAction.self, schema: "public", table: "messages") { update in
+  ///   print(update.record, update.oldRecord)
+  /// }
+  /// ```
+  ///
+  /// > Note: Use ``postgresChange(_:schema:table:filter:)`` if you prefer async iteration over closures.
+  ///
   /// - Parameters:
   ///   - type: Pass `UpdateAction.self`.
   ///   - schema: The database schema to listen on. Defaults to `"public"`.
@@ -905,6 +944,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// Registers a closure that is called for every `DELETE` change on the specified table.
   ///
   /// Register this callback before calling ``subscribeWithError()``.
+  ///
+  /// ```swift
+  /// let subscription = channel.onPostgresChange(DeleteAction.self, schema: "public", table: "messages") { delete in
+  ///   print(delete.oldRecord)
+  /// }
+  /// ```
+  ///
+  /// > Note: Use ``postgresChange(_:schema:table:filter:)`` if you prefer async iteration over closures.
   ///
   /// - Parameters:
   ///   - type: Pass `DeleteAction.self`.
@@ -997,6 +1044,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   /// Registers a closure that is called when a JSON broadcast message arrives for the given event.
   ///
+  /// ```swift
+  /// let subscription = channel.onBroadcast(event: "cursor") { payload in
+  ///   print(payload)
+  /// }
+  /// ```
+  ///
+  /// > Note: Use ``broadcastStream(event:)`` if you prefer async iteration over closures.
+  ///
   /// - Parameters:
   ///   - event: The broadcast event name to listen for.
   ///   - callback: A `@Sendable` closure receiving the ``JSONObject`` payload.
@@ -1017,6 +1072,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// Use this when you expect binary (non-JSON) broadcast payloads sent via
   /// ``broadcast(event:data:)``. Requires protocol ``RealtimeProtocolVersion/v2``.
   ///
+  /// ```swift
+  /// let subscription = channel.onBroadcastData(event: "frame") { data in
+  ///   process(data)
+  /// }
+  /// ```
+  ///
+  /// > Note: Use ``broadcastDataStream(event:)`` if you prefer async iteration over closures.
+  ///
   /// - Parameters:
   ///   - event: The broadcast event name to listen for.
   ///   - callback: A `@Sendable` closure receiving the raw `Data` payload.
@@ -1035,6 +1098,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// Registers a closure that is called when a `system` event is received, providing the full message.
   ///
   /// System events are emitted by the server to convey channel-level status information.
+  ///
+  /// ```swift
+  /// let subscription = channel.onSystem { message in
+  ///   print(message.payload)
+  /// }
+  /// ```
+  ///
+  /// > Note: Use ``system()`` if you prefer async iteration over closures.
   ///
   /// - Parameter callback: A `@Sendable` closure receiving the ``RealtimeMessageV2``.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
