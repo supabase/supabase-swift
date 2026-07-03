@@ -73,14 +73,14 @@ jobs:
           file: lcov.info
 
   macos-legacy:
-    name: xcodebuild (macOS legacy)
-    runs-on: macos-14
+    name: xcodebuild (legacy)
+    runs-on: macos-15
     timeout-minutes: 30
     strategy:
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS, MAC_CATALYST]
-        xcode: ["15.4"]
+        xcode: ["16.3"]
         include:
           - { command: test, skip_release: 1 }
           - { command: "", skip_debug: 1 }

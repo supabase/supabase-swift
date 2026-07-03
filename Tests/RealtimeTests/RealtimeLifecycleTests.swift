@@ -12,6 +12,7 @@ import TestHelpers
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 #if os(Linux)
   @available(

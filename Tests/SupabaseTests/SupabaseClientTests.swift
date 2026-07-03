@@ -7,6 +7,7 @@ import XCTest
 @testable import Auth
 @testable import Functions
 @testable import Realtime
+@testable import RealtimeV2
 @testable import Supabase
 
 final class AuthLocalStorageMock: AuthLocalStorage {
