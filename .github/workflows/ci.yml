@@ -79,14 +79,8 @@ jobs:
     strategy:
       matrix:
         command: [test, ""]
-        # iOS is excluded here: Xcode 16.3 has no iOS platform support at all on
-        # this runner image (neither the Simulator runtime nor the device SDK
-        # support files are installed), and `xcodebuild -downloadPlatform iOS`
-        # can't reach Apple's platform-download service from this runner. iOS is
-        # still fully built and tested with a live simulator against the latest
-        # Xcode in the "macos" job above.
-        platform: [MACOS, MAC_CATALYST]
-        xcode: ["16.3"]
+        platform: [IOS, MACOS, MAC_CATALYST]
+        xcode: ["16.4"]
         include:
           - { command: test, skip_release: 1 }
           - { command: "", skip_debug: 1 }
