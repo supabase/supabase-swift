@@ -249,5 +249,9 @@ for target in package.targets {
     swiftSettings.append(.swiftLanguageMode(.v5))
   }
 
+  #if compiler(>=6.4)
+    swiftSettings.append(.treatAllWarnings(as: .error))
+  #endif
+
   target.swiftSettings = swiftSettings
 }
