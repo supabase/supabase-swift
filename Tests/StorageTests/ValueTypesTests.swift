@@ -60,6 +60,39 @@ final class StorageByteCountTests: XCTestCase {
     let json = String(decoding: encoded, as: UTF8.self)
     XCTAssertEqual(json, "\"1mb\"")
   }
+
+  func testGigabytesWholeValueOutsideInt64Range() {
+    let count = StorageByteCount.gigabytes(1e19)
+    XCTAssertEqual(count.stringValue, "1e+19gb")
+  }
+}
+
+// MARK: - SortBy
+
+final class SortByTests: XCTestCase {
+  func testInitWithDefaultedOrder() {
+    let sortBy = SortBy(column: "name")
+    XCTAssertEqual(sortBy.column, "name")
+    XCTAssertNil(sortBy.order)
+  }
+
+  func testInitWithSortOrder() {
+    let sortBy = SortBy(column: "name", order: .ascending)
+    XCTAssertEqual(sortBy.order, "asc")
+  }
+
+  func testDeprecatedInitWithStringVariable() {
+    let order: String? = "desc"
+    let sortBy = SortBy(column: "name", order: order)
+    XCTAssertEqual(sortBy.order, "desc")
+  }
+
+  func testDeprecatedInitWithOrderVariableOnly() {
+    let order: String? = "asc"
+    let sortBy = SortBy(order: order)
+    XCTAssertNil(sortBy.column)
+    XCTAssertEqual(sortBy.order, "asc")
+  }
 }
 
 // MARK: - ResizeMode
