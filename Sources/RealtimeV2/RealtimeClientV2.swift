@@ -82,7 +82,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let serializer = RealtimeSerializer()
   // Captured at init time so parallel test classes that swap _clock cannot
   // change the timing of an already-running client.
-  let clock: any _Clock
+  let clock: any Clock<Duration>
 
   let connectionManager: ConnectionManager
 
@@ -168,7 +168,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     options: RealtimeClientOptions,
     wsTransport: @escaping WebSocketTransport,
     http: any HTTPClientType,
-    clock: any _Clock = _clock
+    clock: any Clock<Duration> = _clock
   ) {
     var options = options
     if options.headers[.xClientInfo] == nil {

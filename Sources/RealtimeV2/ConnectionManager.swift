@@ -19,7 +19,7 @@ actor ConnectionManager {
   private let logger: (any SupabaseLogger)?
   // Captured at init time so parallel test classes that swap _clock cannot
   // change the timing of an already-running client.
-  let clock: any _Clock
+  let clock: any Clock<Duration>
 
   /// Get current connection if connected, nil otherwise.
   var connection: (any WebSocket)? {
@@ -37,7 +37,7 @@ actor ConnectionManager {
     headers: [String: String],
     reconnectDelay: TimeInterval,
     logger: (any SupabaseLogger)?,
-    clock: any _Clock = _clock
+    clock: any Clock<Duration> = _clock
   ) {
     self.transport = transport
     self.url = url

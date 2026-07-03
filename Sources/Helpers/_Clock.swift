@@ -5,30 +5,19 @@
 //  Created by Guilherme Souza on 08/01/25.
 //
 
-import Clocks
 import ConcurrencyExtras
 import Foundation
 
-package protocol _Clock: Sendable {
-  func sleep(for duration: TimeInterval) async throws
-}
-
-extension ContinuousClock: _Clock {
+extension Clock where Duration == Swift.Duration {
   package func sleep(for duration: TimeInterval) async throws {
-    try await sleep(for: .seconds(duration))
+    try await sleep(for: .seconds(duration), tolerance: nil)
   }
 }
 
-extension TestClock<Duration>: _Clock {
-  package func sleep(for duration: TimeInterval) async throws {
-    try await sleep(for: .seconds(duration))
-  }
-}
-
-private let __clock = LockIsolated<any _Clock>(ContinuousClock())
+private let __clock = LockIsolated<any Clock<Swift.Duration>>(ContinuousClock())
 
 #if DEBUG
-  package var _clock: any _Clock {
+  package var _clock: any Clock<Swift.Duration> {
     get {
       __clock.value
     }
@@ -37,7 +26,7 @@ private let __clock = LockIsolated<any _Clock>(ContinuousClock())
     }
   }
 #else
-  package var _clock: any _Clock {
+  package var _clock: any Clock<Swift.Duration> {
     __clock.value
   }
 #endif
