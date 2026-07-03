@@ -8,10 +8,25 @@ import HTTPTypes
 
 /// Base class for Storage API operations.
 ///
-/// - Note: Thread Safety: This class is `@unchecked Sendable` because all mutable state
-///   is protected by `LockIsolated`. The `configuration` property is immutable (`let`),
-///   while mutable headers are managed separately via `mutableState`.
+/// ``StorageApi`` holds the ``StorageClientConfiguration`` and manages mutable per-instance HTTP
+/// headers behind a lock. Both ``StorageBucketApi`` and ``StorageFileApi`` inherit from this class.
+///
+/// > Note: This class is `@unchecked Sendable` because all mutable state is protected by
+/// > `LockIsolated`. The ``configuration`` property is immutable (`let`), while mutable headers are
+/// > managed separately.
+///
+/// ## Topics
+///
+/// ### Configuration
+///
+/// - ``configuration``
+/// - ``init(configuration:)``
+///
+/// ### Customising headers
+///
+/// - ``setHeader(_:forKey:)``
 public class StorageApi: @unchecked Sendable {
+  /// The configuration used to initialise this client instance.
   public let configuration: StorageClientConfiguration
 
   private struct MutableState {
@@ -21,6 +36,12 @@ public class StorageApi: @unchecked Sendable {
   private let mutableState: LockIsolated<MutableState>
   private let http: any HTTPClientType
 
+  /// Creates a ``StorageApi`` with the given configuration.
+  ///
+  /// Subclasses call this initialiser via `super.init(configuration:)`.
+  ///
+  /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
+  ///   headers, JSON codecs, and HTTP session.
   public init(configuration: StorageClientConfiguration) {
     var configuration = configuration
     if configuration.headers["X-Client-Info"] == nil {
@@ -64,14 +85,19 @@ public class StorageApi: @unchecked Sendable {
     )
   }
 
-  /// Sets an HTTP header for subsequent requests.
+  /// Sets an HTTP header that will be included in all subsequent requests made by this instance.
   ///
-  /// This method is thread-safe and updates the instance's headers using a `LockIsolated`-backed store.
+  /// This method is thread-safe. The header key is normalised to lowercase before being stored.
+  ///
+  /// ```swift
+  /// storage.from("avatars")
+  ///   .setHeader("x-custom-header", forKey: "X-Custom-Header")
+  /// ```
   ///
   /// - Parameters:
-  ///   - value: The value of the header.
-  ///   - key: The name of the header field.
-  /// - Returns: `self` to allow method chaining.
+  ///   - value: The value of the header field.
+  ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
+  /// - Returns: `self`, enabling method chaining.
   @discardableResult
   public func setHeader(_ value: String, forKey key: String) -> Self {
     mutableState.withValue { $0.headers[key.lowercased()] = value }
