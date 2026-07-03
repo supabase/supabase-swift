@@ -35,6 +35,10 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   public let topic: String
 
+  /// The channel's topic without the `realtime:` prefix, as expected by the
+  /// broadcast REST endpoint (WebSocket frames use the full ``topic``).
+  let subTopic: String
+
   @MainActor public private(set) var config: RealtimeChannelConfig
 
   let logger: (any SupabaseLogger)?
@@ -80,6 +84,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     logger: (any SupabaseLogger)?
   ) {
     self.topic = topic
+    self.subTopic =
+      topic.hasPrefix("realtime:") ? String(topic.dropFirst("realtime:".count)) : topic
     self.config = config
     self.logger = logger
     self.socket = socket
@@ -253,7 +259,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       BroadcastMessagePayload(
         messages: [
           BroadcastMessagePayload.Message(
-            topic: topic,
+            topic: subTopic,
             event: event,
             payload: message,
             private: config.isPrivate
@@ -328,7 +334,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
               BroadcastMessagePayload(
                 messages: [
                   BroadcastMessagePayload.Message(
-                    topic: topic,
+                    topic: subTopic,
                     event: event,
                     payload: message,
                     private: config.isPrivate
