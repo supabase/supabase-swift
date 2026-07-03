@@ -79,13 +79,7 @@ jobs:
     strategy:
       matrix:
         command: [test, ""]
-        # iOS is excluded here: Xcode 16.3 has no iOS platform support at all on
-        # this runner image (neither the Simulator runtime nor the device SDK
-        # support files are installed), and `xcodebuild -downloadPlatform iOS`
-        # can't reach Apple's platform-download service from this runner. iOS is
-        # still fully built and tested with a live simulator against the latest
-        # Xcode in the "macos" job above.
-        platform: [MACOS, MAC_CATALYST]
+        platform: [IOS, MACOS, MAC_CATALYST]
         xcode: ["16.3"]
         include:
           - { command: test, skip_release: 1 }
@@ -106,16 +100,36 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: List available devices
         run: xcrun simctl list devices available
+      - name: Resolve oldest available iOS Simulator (closest match to Xcode ${{ matrix.xcode }})
+        # udid_for in the Makefile picks the *newest* runtime, which Xcode 16.3
+        # can't use (this runner only has iOS 18.5+ installed; Xcode 16.3 pairs
+        # with iOS 18.4). Try the oldest available runtime instead as the closest
+        # possible match, overriding PLATFORM_IOS for just this job.
+        if: matrix.platform == 'IOS'
+        run: |
+          UDID=$(xcrun simctl list --json devices available 'iPhone \d+ Pro [^M]' | jq -r '[.devices|to_entries|sort_by(.key)|.[].value|select(length > 0)|.[0]][0].udid')
+          echo "Resolved oldest available iOS Simulator UDID: $UDID"
+          echo "LEGACY_IOS_UDID=$UDID" >> "$GITHUB_ENV"
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds
         uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
       - name: Debug
         if: matrix.skip_debug != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
+        run: |
+          if [ "${{ matrix.platform }}" = "IOS" ]; then
+            make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" PLATFORM_IOS="iOS Simulator,id=$LEGACY_IOS_UDID" xcodebuild
+          else
+            make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
+          fi
       - name: Release
         if: matrix.skip_release != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+        run: |
+          if [ "${{ matrix.platform }}" = "IOS" ]; then
+            make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" PLATFORM_IOS="iOS Simulator,id=$LEGACY_IOS_UDID" xcodebuild
+          else
+            make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+          fi
 
   spm:
     runs-on: macos-26
