@@ -39,7 +39,7 @@
 
 ### Requirements
 
-- iOS 13.0+ / macOS 10.15+ / tvOS 13+ / watchOS 6+ / visionOS 1+
+- iOS 16.0+ / macOS 13.0+ / tvOS 16+ / watchOS 9+ / visionOS 1+
 - Xcode 16.4+
 - Swift 6.1+
 
