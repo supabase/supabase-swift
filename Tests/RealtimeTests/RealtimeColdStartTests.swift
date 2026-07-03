@@ -192,7 +192,7 @@ final class RealtimeColdStartTests: XCTestCase {
   /// Detection strategy: instead of asserting on specific heartbeat statuses
   /// (which are sensitive to whether the reconnect was triggered by the
   /// malformed frame or by the heartbeat timer itself), we verify that after
-  /// the first reconnect the socket count stabilises. With the bug, socket 2's
+  /// the first reconnect the socket count stabilizes. With the bug, socket 2's
   /// first heartbeat immediately times out → a second reconnect → socket 3 →
   /// etc. With the fix, socket 2 stays connected.
   func testPendingHeartbeatDoesNotLeakAcrossReconnect() async throws {

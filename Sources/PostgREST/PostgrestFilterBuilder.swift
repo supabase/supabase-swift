@@ -505,7 +505,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
 
   /// Match only rows which satisfy the filter. This is an escape hatch - you should use the specific filter methods wherever possible.
   ///
-  /// Unlike most filters, `opearator` and `value` are used as-is and need to follow [PostgREST syntax](https://postgrest.org/en/stable/api.html#operators). You also need to make sure they are properly sanitized.
+  /// Unlike most filters, `operator` and `value` are used as-is and need to follow [PostgREST syntax](https://postgrest.org/en/stable/api.html#operators). You also need to make sure they are properly sanitized.
   ///
   /// - Parameters:
   ///   - column: The column to filter on

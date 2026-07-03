@@ -16,7 +16,7 @@ public enum ChannelEvent {
 
   public static let heartbeat = "heartbeat"
 
-  package static func isLifecyleEvent(_ event: String) -> Bool {
+  package static func isLifecycleEvent(_ event: String) -> Bool {
     switch event {
     case join, leave, reply, error, close: true
     default: false

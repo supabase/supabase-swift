@@ -53,7 +53,7 @@ final class RetryRequestInterceptorTests: XCTestCase {
     XCTAssertTrue(codes.contains(504))
   }
 
-  func testDefaultRetryableHTTPStatusCodesContainsCloudfareCodes() {
+  func testDefaultRetryableHTTPStatusCodesContainsCloudflareCodes() {
     let codes = RetryRequestInterceptor.defaultRetryableHTTPStatusCodes
     XCTAssertTrue(codes.contains(520), "520 (Cloudflare Unknown Error) should be retryable")
     XCTAssertTrue(codes.contains(521), "521 (Web Server Down) should be retryable")
@@ -68,9 +68,9 @@ final class RetryRequestInterceptorTests: XCTestCase {
   func testRetriesOnCloudflareErrorCodes() async throws {
     let interceptor = makeInterceptor(retryLimit: 2)
     let request = makeRequest()
-    let cloudfareCodes = [520, 521, 522, 523, 524, 530]
+    let cloudflareCodes = [520, 521, 522, 523, 524, 530]
 
-    for code in cloudfareCodes {
+    for code in cloudflareCodes {
       let callCount = LockIsolated(0)
       let finalResponse = try await interceptor.intercept(request) { _ in
         callCount.withValue { $0 += 1 }

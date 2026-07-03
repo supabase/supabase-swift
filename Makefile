@@ -87,6 +87,10 @@ format:
 coverage:
 	@DERIVED_DATA_PATH=$(DERIVED_DATA_PATH) ./scripts/generate-coverage.sh
 
+.PHONY: spell-check
+spell-check:
+	./scripts/spell-check.sh
+
 define udid_for
 $(shell xcrun simctl list --json devices available '$(1)' | jq -r '[.devices|to_entries|sort_by(.key)|reverse|.[].value|select(length > 0)|.[0]][0].udid')
 endef

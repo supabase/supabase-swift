@@ -25,7 +25,7 @@
 ///
 ///     let reconnectTimer = TimeoutTimer()
 ///
-///     // Receive a callbcak when the timer is fired
+///     // Receive a callback when the timer is fired
 ///     reconnectTimer.callback.delegate(to: self) { (_) in
 ///         print("timer was fired")
 ///     }
@@ -53,7 +53,7 @@ class TimeoutTimer {
   /// The work to be done when the queue fires
   var workItem: DispatchWorkItem?
 
-  /// The number of times the underlyingTimer hass been set off.
+  /// The number of times the underlyingTimer has been set off.
   var tries: Int = 0
 
   /// The Queue to execute on. In testing, this is overridden
@@ -94,7 +94,7 @@ class TimeoutTimer {
 /// Wrapper class around a DispatchQueue. Allows for providing a fake clock
 /// during tests.
 class TimerQueue {
-  // Can be overriden in tests
+  // Can be overridden in tests
   static var main = TimerQueue()
 
   func queue(timeInterval: TimeInterval, execute: DispatchWorkItem) {

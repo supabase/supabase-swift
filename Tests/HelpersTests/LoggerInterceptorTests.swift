@@ -201,44 +201,44 @@ final class LoggerInterceptorTests: XCTestCase {
 
   // MARK: - Stringify Function Tests
 
-  func testStringfyWithNilData() {
-    let result = stringfy(nil)
+  func testStringifyWithNilData() {
+    let result = stringify(nil)
     XCTAssertEqual(result, "<none>")
   }
 
-  func testStringfyWithJSONData() {
+  func testStringifyWithJSONData() {
     let jsonData = #"{"key": "value", "number": 42}"#.data(using: .utf8)!
-    let result = stringfy(jsonData)
+    let result = stringify(jsonData)
 
     XCTAssertTrue(result.contains("key"))
     XCTAssertTrue(result.contains("value"))
     XCTAssertTrue(result.contains("number"))
   }
 
-  func testStringfyWithNonJSONData() {
+  func testStringifyWithNonJSONData() {
     let textData = "Plain text content".data(using: .utf8)!
-    let result = stringfy(textData)
+    let result = stringify(textData)
 
     XCTAssertEqual(result, "Plain text content")
   }
 
-  func testStringfyWithInvalidUTF8Data() {
+  func testStringifyWithInvalidUTF8Data() {
     // Invalid UTF-8 sequence
     let invalidData = Data([0xFF, 0xFE, 0xFD])
-    let result = stringfy(invalidData)
+    let result = stringify(invalidData)
 
     XCTAssertEqual(result, "<failed>")
   }
 
-  func testStringfyWithEmptyData() {
+  func testStringifyWithEmptyData() {
     let emptyData = Data()
-    let result = stringfy(emptyData)
+    let result = stringify(emptyData)
 
     // Empty JSON object or empty string
     XCTAssertTrue(result.isEmpty)
   }
 
-  func testStringfyWithComplexJSON() {
+  func testStringifyWithComplexJSON() {
     let complexJSON = """
       {
         "users": [
@@ -252,32 +252,32 @@ final class LoggerInterceptorTests: XCTestCase {
       }
       """.data(using: .utf8)!
 
-    let result = stringfy(complexJSON)
+    let result = stringify(complexJSON)
 
     XCTAssertTrue(result.contains("users"))
     XCTAssertTrue(result.contains("Alice"))
     XCTAssertTrue(result.contains("nested"))
   }
 
-  func testStringfyWithArrayJSON() {
+  func testStringifyWithArrayJSON() {
     let arrayJSON = #"[1, 2, 3, 4, 5]"#.data(using: .utf8)!
-    let result = stringfy(arrayJSON)
+    let result = stringify(arrayJSON)
 
     XCTAssertTrue(result.contains("1"))
     XCTAssertTrue(result.contains("5"))
   }
 
-  func testStringfyWithBooleanJSON() {
+  func testStringifyWithBooleanJSON() {
     let boolJSON = #"{"active": true, "deleted": false}"#.data(using: .utf8)!
-    let result = stringfy(boolJSON)
+    let result = stringify(boolJSON)
 
     XCTAssertTrue(result.contains("active"))
     XCTAssertTrue(result.contains("true") || result.contains("1"))
   }
 
-  func testStringfyWithNullJSON() {
+  func testStringifyWithNullJSON() {
     let nullJSON = #"{"value": null}"#.data(using: .utf8)!
-    let result = stringfy(nullJSON)
+    let result = stringify(nullJSON)
 
     XCTAssertTrue(result.contains("value"))
   }
