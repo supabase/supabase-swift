@@ -105,14 +105,22 @@ jobs:
         # can't use (this runner only has iOS 18.5+ installed; Xcode 16.3 pairs
         # with iOS 18.4). Try the oldest available runtime instead as the closest
         # possible match, overriding PLATFORM_IOS for just this job.
+        #
+        # Note: `simctl list --json devices available <search term>` silently
+        # returns every runtime with an *empty* device array when a search term
+        # is passed (confirmed by debug output in a prior run) — unlike the
+        # plain-text listing, which filters correctly. So fetch the full,
+        # unfiltered JSON and do the name filtering entirely in jq instead.
         if: matrix.platform == 'IOS'
         run: |
-          RAW=$(xcrun simctl list --json devices available 'iPhone \d+ Pro [^M]')
-          echo "--- raw simctl --json output ---"
-          echo "$RAW"
-          echo "--- runtime keys with non-empty device lists ---"
-          echo "$RAW" | jq -r '.devices | to_entries[] | select(.value | length > 0) | .key'
-          UDID=$(echo "$RAW" | jq -r '[.devices|to_entries|sort_by(.key)|.[].value|select(length > 0)|.[0]][0].udid')
+          UDID=$(xcrun simctl list --json devices available | jq -r '
+            [.devices
+              | to_entries
+              | sort_by(.key)
+              | .[].value[]
+              | select(.name | test("iPhone [0-9]+ Pro") and (test("Max") | not))
+            ][0].udid
+          ')
           echo "Resolved oldest available iOS Simulator UDID: $UDID"
           echo "LEGACY_IOS_UDID=$UDID" >> "$GITHUB_ENV"
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
