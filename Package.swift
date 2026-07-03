@@ -236,6 +236,8 @@ for target in package.targets {
 
   var swiftSettings: [SwiftSetting] = [
     .enableUpcomingFeature("ExistentialAny"),
+    .enableUpcomingFeature("ImmutableWeakCaptures"),
+    .enableUpcomingFeature("InferIsolatedConformances"),
     .enableExperimentalFeature("StrictConcurrency"),
   ]
 
