@@ -247,6 +247,35 @@ import XCTest
       XCTAssertEqual(payload?["payload"]?.objectValue?["key"]?.stringValue, "value")
     }
 
+    // MARK: - REST broadcast body uses the sub-topic (without `realtime:` prefix)
+
+    func testHttpSend_bodyTopicHasNoRealtimePrefix() async throws {
+      await http.any { _ in
+        HTTPResponse(
+          data: Data(),
+          response: HTTPURLResponse(
+            url: self.sut.broadcastURL,
+            statusCode: 202,
+            httpVersion: nil,
+            headerFields: nil
+          )!
+        )
+      }
+
+      let channel = sut.channel("test")
+      XCTAssertEqual(channel.topic, "realtime:test")
+
+      try await channel.httpSend(
+        event: "my_event", message: ["hello": .string("world")] as JSONObject
+      )
+
+      let request = await http.receivedRequests.last
+      let body = try XCTUnwrap(request?.body)
+      let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+      let messages = json?["messages"] as? [[String: Any]]
+      XCTAssertEqual(messages?.first?["topic"] as? String, "test")
+    }
+
     // MARK: - End-to-end binary frame via WebSocket
 
     func testEndToEnd_binaryFrameViaWebSocket() async throws {
