@@ -243,7 +243,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
   override func tearDown() {
     super.tearDown()
     #if DEBUG
-      _clock = _resolveClock()
+      _clock = ContinuousClock()
     #endif
   }
 

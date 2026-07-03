@@ -5,14 +5,13 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
+@_spi(Experimental) @testable import Auth
 import ConcurrencyExtras
 import CustomDump
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
 import XCTest
-
-@_spi(Experimental) @testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -2202,7 +2201,6 @@ final class AuthClientTests: XCTestCase {
   }
 
   #if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
-    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
     @MainActor
     func testSignInWithPasskeyDrivesFullFlow() async throws {
       Mock(
@@ -2249,7 +2247,6 @@ final class AuthClientTests: XCTestCase {
         forwardedOptions.value?.objectValue?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
     }
 
-    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
     @MainActor
     func testRegisterPasskeyDrivesFullFlow() async throws {
       Mock(
@@ -2295,7 +2292,6 @@ final class AuthClientTests: XCTestCase {
       expectNoDifference(passkey.friendlyName, "My Passkey")
     }
 
-    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
     @MainActor
     func testEnrollWebAuthnFactorDrivesFullFlow() async throws {
       Mock(
@@ -2343,7 +2339,6 @@ final class AuthClientTests: XCTestCase {
       XCTAssertFalse(session.accessToken.isEmpty)
     }
 
-    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
     @MainActor
     func testVerifyWebAuthnFactorDrivesFullFlow() async throws {
       Mock(

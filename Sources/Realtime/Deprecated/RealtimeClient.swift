@@ -186,7 +186,6 @@ public class RealtimeClient: PhoenixTransportDelegate {
   // MARK: - Initialization
 
   // ----------------------------------------------------------------------
-  @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
   public convenience init(
     _ endPoint: String,
     headers: [String: String] = [:],
@@ -202,7 +201,6 @@ public class RealtimeClient: PhoenixTransportDelegate {
     )
   }
 
-  @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
   public convenience init(
     _ endPoint: String,
     headers: [String: String] = [:],
@@ -971,7 +969,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
      We use NORMAL here since the client is the one determining to close the
      connection. However, we set to close status to abnormal so that
      the client knows that it should attempt to reconnect.
-
+    
      If the server subsequently acknowledges with code 1000 (normal close),
      the socket will keep the `.abnormal` close status and trigger a reconnection.
      */
