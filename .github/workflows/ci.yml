@@ -84,6 +84,14 @@ jobs:
         include:
           - { command: test, skip_release: 1 }
           - { command: "", skip_debug: 1 }
+        exclude:
+          # Xcode 16.3's iOS Simulator runtime (iOS 18.4) isn't installed on this
+          # runner image and can't be reliably downloaded in CI (no network access
+          # to Apple's platform-download service). iOS is still fully built+tested
+          # with a live simulator in the "macos" (latest Xcode) job above; here we
+          # only verify it still *builds* against the oldest supported Xcode, using
+          # a generic device destination that doesn't need a simulator.
+          - { command: test, platform: IOS }
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Cache derived data
@@ -98,9 +106,6 @@ jobs:
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-      - name: Download iOS Simulator runtime for Xcode ${{ matrix.xcode }}
-        if: matrix.platform == 'IOS'
-        run: sudo xcodebuild -downloadPlatform iOS
       - name: List available devices
         run: xcrun simctl list devices available
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
@@ -112,7 +117,7 @@ jobs:
         run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
       - name: Release
         if: matrix.skip_release != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" ${{ matrix.platform == 'IOS' && 'DESTINATION=generic/platform=iOS' || '' }} xcodebuild
 
   spm:
     runs-on: macos-26
