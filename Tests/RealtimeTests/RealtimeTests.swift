@@ -693,6 +693,30 @@ import XCTest
       await sut.setAuth(token)
     }
 
+    func testSetAuthKeepsCurrentTokenWhenAccessTokenFetchFails() async {
+      struct FetchError: Error {}
+
+      let sut = RealtimeClientV2(
+        url: url,
+        options: RealtimeClientOptions(
+          headers: ["apikey": apiKey],
+          accessToken: { throw FetchError() }
+        ),
+        wsTransport: { _, _ in self.client },
+        http: http
+      )
+      defer { sut.disconnect() }
+
+      let validToken =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
+      await sut.setAuth(validToken)
+      XCTAssertEqual(sut.mutableState.accessToken, validToken)
+
+      await sut.setAuth()
+
+      XCTAssertEqual(sut.mutableState.accessToken, validToken)
+    }
+
     // MARK: - Task Lifecycle Tests
 
     func testListenForMessagesCancelsExistingTask() async {

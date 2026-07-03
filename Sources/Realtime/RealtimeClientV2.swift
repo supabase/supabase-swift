@@ -642,12 +642,19 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// If `token` is nil it will use the ``RealtimeClientOptions/accessToken`` callback function or the token set on the client.
   ///
   /// On callback used, it will set the value of the token internal to the client.
+  ///
+  /// If the callback throws, the client keeps the current token and no update is sent to channels.
   /// - Parameter token: A JWT string to override the token set on the client.
   public func setAuth(_ token: String? = nil) async {
     var tokenToSend = token
 
     if tokenToSend == nil {
-      tokenToSend = try? await options.accessToken?()
+      do {
+        tokenToSend = try await options.accessToken?()
+      } catch {
+        options.logger?.error("Failed to fetch access token: \(error)")
+        return
+      }
     }
 
     guard tokenToSend != mutableState.accessToken else {
