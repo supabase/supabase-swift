@@ -7,10 +7,10 @@
 
 import Foundation
 
-struct RealtimeError: LocalizedError {
-  var errorDescription: String?
+package struct RealtimeError: LocalizedError {
+  package var errorDescription: String?
 
-  init(_ errorDescription: String) {
+  package init(_ errorDescription: String) {
     self.errorDescription = errorDescription
   }
 }

@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 final class ChannelStateManagerTests: XCTestCase {
   /// Helper that returns a `ChannelStateManager` wired up with controllable

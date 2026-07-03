@@ -8,6 +8,7 @@
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 final class PostgresActionTests: XCTestCase {
   private let sampleMessage = RealtimeMessageV2(
