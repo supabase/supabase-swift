@@ -59,6 +59,93 @@ private actor GlobalJWKSCache {
 
 private let globalJWKSCache = GlobalJWKSCache()
 
+/// The primary interface to Supabase Auth.
+///
+/// Use `AuthClient` to sign users up, sign them in, manage sessions, and subscribe to
+/// authentication-state changes. It is an `actor`, so all mutable state is protected by Swift
+/// concurrency.
+///
+/// ```swift
+/// let auth = AuthClient(
+///   url: URL(string: "https://<project>.supabase.co/auth/v1")!,
+///   headers: ["apikey": "<anon-key>"],
+///   localStorage: KeychainLocalStorage()
+/// )
+///
+/// // Sign in
+/// let session = try await auth.signIn(email: "user@example.com", password: "secret")
+///
+/// // Listen for state changes
+/// for await (event, session) in auth.authStateChanges {
+///   print(event, session?.user.email ?? "signed out")
+/// }
+/// ```
+///
+/// ## Topics
+///
+/// ### Observing state
+/// - ``onAuthStateChange(_:)``
+/// - ``authStateChanges``
+/// - ``currentSession``
+/// - ``currentUser``
+/// - ``session``
+///
+/// ### Signing up
+/// - ``signUp(email:password:data:redirectTo:captchaToken:)``
+/// - ``signUp(phone:password:channel:data:captchaToken:)``
+/// - ``signInAnonymously(data:captchaToken:)``
+///
+/// ### Signing in
+/// - ``signIn(email:password:captchaToken:)``
+/// - ``signIn(phone:password:captchaToken:)``
+/// - ``signInWithIdToken(credentials:)``
+/// - ``signInWithOTP(email:redirectTo:shouldCreateUser:data:captchaToken:)``
+/// - ``signInWithOTP(phone:channel:shouldCreateUser:data:captchaToken:)``
+/// - ``signInWithSSO(domain:redirectTo:captchaToken:)``
+/// - ``signInWithSSO(providerId:redirectTo:captchaToken:)``
+/// - ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``
+///
+/// ### Session management
+/// - ``exchangeCodeForSession(authCode:)``
+/// - ``session(from:)``
+/// - ``setSession(accessToken:refreshToken:)``
+/// - ``refreshSession(refreshToken:)``
+/// - ``startAutoRefresh()``
+/// - ``stopAutoRefresh()``
+///
+/// ### Signing out
+/// - ``signOut(scope:)``
+///
+/// ### User management
+/// - ``user(jwt:)``
+/// - ``update(user:redirectTo:)``
+/// - ``verifyOTP(email:token:type:redirectTo:captchaToken:)``
+/// - ``verifyOTP(phone:token:type:captchaToken:)``
+/// - ``verifyOTP(tokenHash:type:)``
+/// - ``resend(email:type:emailRedirectTo:captchaToken:)``
+/// - ``resend(phone:type:captchaToken:)``
+/// - ``reauthenticate()``
+/// - ``resetPasswordForEmail(_:redirectTo:captchaToken:)``
+///
+/// ### Identities
+/// - ``userIdentities()``
+/// - ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``
+/// - ``linkIdentity(provider:scopes:redirectTo:queryParams:)``
+/// - ``linkIdentityWithIdToken(credentials:)``
+/// - ``getLinkIdentityURL(provider:scopes:redirectTo:queryParams:)``
+/// - ``unlinkIdentity(_:)``
+///
+/// ### JWT claims
+/// - ``getClaims(jwt:options:)``
+///
+/// ### Namespaces
+/// - ``mfa``
+/// - ``admin``
+///
+/// ### Notifications
+/// - ``didChangeAuthStateNotification``
+/// - ``authChangeEventInfoKey``
+/// - ``authChangeSessionInfoKey``
 public actor AuthClient {
   private static let _globalClientID = LockIsolated(0)
 

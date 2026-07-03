@@ -8,6 +8,25 @@
 import Foundation
 import HTTPTypes
 
+/// Admin-only Auth operations that require the service-role key.
+///
+/// Access this namespace via ``AuthClient/admin``.
+///
+/// > Warning: These methods require the service-role (`secret`) key. Never expose this key
+/// > in a browser or mobile app — call these methods from a secure server-side environment only.
+///
+/// ## Topics
+///
+/// ### User management
+/// - ``getUserById(_:)``
+/// - ``updateUserById(_:attributes:)``
+/// - ``createUser(attributes:)``
+/// - ``inviteUserByEmail(_:data:redirectTo:)``
+/// - ``deleteUser(id:shouldSoftDelete:)``
+/// - ``listUsers(params:)``
+///
+/// ### OAuth 2.1 clients
+/// - ``oauth``
 public struct AuthAdmin: Sendable {
   let clientID: AuthClientID
 
@@ -178,7 +197,7 @@ public struct AuthAdmin: Sendable {
   /*
    Generate link is commented out temporarily due issues with they Auth's decoding is configured.
    Will revisit it later.
-
+  
   /// Generates email links and OTPs to be sent via a custom email provider.
   ///
   /// - Parameter params: The parameters for the link generation.
