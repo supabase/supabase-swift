@@ -107,7 +107,12 @@ jobs:
         # possible match, overriding PLATFORM_IOS for just this job.
         if: matrix.platform == 'IOS'
         run: |
-          UDID=$(xcrun simctl list --json devices available 'iPhone \d+ Pro [^M]' | jq -r '[.devices|to_entries|sort_by(.key)|.[].value|select(length > 0)|.[0]][0].udid')
+          RAW=$(xcrun simctl list --json devices available 'iPhone \d+ Pro [^M]')
+          echo "--- raw simctl --json output ---"
+          echo "$RAW"
+          echo "--- runtime keys with non-empty device lists ---"
+          echo "$RAW" | jq -r '.devices | to_entries[] | select(.value | length > 0) | .key'
+          UDID=$(echo "$RAW" | jq -r '[.devices|to_entries|sort_by(.key)|.[].value|select(length > 0)|.[0]][0].udid')
           echo "Resolved oldest available iOS Simulator UDID: $UDID"
           echo "LEGACY_IOS_UDID=$UDID" >> "$GITHUB_ENV"
       - name: Set IgnoreFileSystemDeviceInodeChanges flag
