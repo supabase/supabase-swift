@@ -506,7 +506,7 @@ final class RealtimeChannelTests: XCTestCase {
 
     let body = try JSONDecoder().decode(BroadcastPayload.self, from: request.body ?? Data())
     XCTAssertEqual(body.messages.count, 1)
-    XCTAssertEqual(body.messages[0].topic, "realtime:test-topic")
+    XCTAssertEqual(body.messages[0].topic, "test-topic")
     XCTAssertEqual(body.messages[0].event, "test-event")
     XCTAssertEqual(body.messages[0].private, true)
   }

@@ -677,7 +677,7 @@ import XCTest
         	--header "Authorization: Bearer custom.access.token" \
         	--header "Content-Type: application/json" \
         	--header "apiKey: publishable.api.key" \
-        	--data "{\"messages\":[{\"event\":\"test\",\"payload\":{\"value\":42},\"private\":false,\"topic\":\"realtime:public:messages\"}]}" \
+        	--data "{\"messages\":[{\"event\":\"test\",\"payload\":{\"value\":42},\"private\":false,\"topic\":\"public:messages\"}]}" \
         	"http://localhost:54321/realtime/v1/api/broadcast"
         """#
       }
