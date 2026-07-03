@@ -913,12 +913,12 @@ extension SortOrder: Codable {
 /// - ``withOriginalName``
 /// - ``named(_:)``
 public enum DownloadBehavior: Sendable {
-  /// Triggers a browser download using the file's original name.
+  /// Triggers a download using the file's original name.
   case withOriginalName
 
-  /// Triggers a browser download using a custom filename.
+  /// Triggers a download using a custom filename.
   ///
-  /// - Parameter _: The filename the browser should suggest when saving the file.
+  /// - Parameter _: The filename to suggest when saving the file.
   case named(String)
 
   var queryValue: String {
