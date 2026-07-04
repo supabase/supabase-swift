@@ -1,4 +1,4 @@
-// swift-tools-version:5.10
+// swift-tools-version:6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import Foundation
@@ -136,12 +136,21 @@ let package = Package(
       ]
     ),
     .target(
-      name: "Realtime",
+      name: "RealtimeV2",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         "Helpers",
+      ]
+    ),
+    .target(
+      name: "Realtime",
+      dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        "Helpers",
+        "RealtimeV2",
       ]
     ),
     .testTarget(
@@ -151,6 +160,7 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Realtime",
+        "RealtimeV2",
         "TestHelpers",
       ]
     ),
@@ -215,9 +225,27 @@ let package = Package(
   ]
 )
 
-for target in package.targets where !target.isTest {
-  target.swiftSettings = [
+for target in package.targets {
+  // Test targets never opted into `StrictConcurrency`/`ExistentialAny` below, so bumping
+  // swift-tools-version to 6.1 must not silently switch their *default* language mode to
+  // Swift 6 either — pin them to v5 to preserve their pre-6.1 compilation behavior exactly.
+  if target.isTest {
+    target.swiftSettings = [.swiftLanguageMode(.v5)]
+    continue
+  }
+
+  var swiftSettings: [SwiftSetting] = [
     .enableUpcomingFeature("ExistentialAny"),
     .enableExperimentalFeature("StrictConcurrency"),
   ]
+
+  // The `Realtime` target hosts the legacy pre-async/await Phoenix client under
+  // `Deprecated/`, which predates Swift concurrency and isn't safe under Swift 6's
+  // strict checking. Keep it on the Swift 5 language mode so it keeps compiling
+  // unchanged, while `RealtimeV2` (its replacement) gets full Swift 6 checking.
+  if target.name == "Realtime" {
+    swiftSettings.append(.swiftLanguageMode(.v5))
+  }
+
+  target.swiftSettings = swiftSettings
 }
