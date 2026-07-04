@@ -97,4 +97,20 @@ final class ExtractParamsTests: XCTestCase {
     let params = extractParams(from: url)
     XCTAssertEqual(params, ["code": "123"])
   }
+
+  func testExtractParamsDropsBareQueryKeySoErrorFlowIsUnchanged() {
+    let url = URL(string: "myapp://callback?error&code=abc123")!
+    let params = extractParams(from: url)
+    XCTAssertNil(params["error"])
+    XCTAssertEqual(params, ["code": "abc123"])
+  }
+
+  func testExtractParamsPreservesLiteralPlusEncodedAsPercent2B() {
+    let url = URL(
+      string:
+        "io.supabase.flutterquickstart://login-callback/#error_description=Rate%2Blimit%20exceeded"
+    )!
+    let params = extractParams(from: url)
+    XCTAssertEqual(params, ["error_description": "Rate+limit exceeded"])
+  }
 }
