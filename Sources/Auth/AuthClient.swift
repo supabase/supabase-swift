@@ -858,9 +858,7 @@ public actor AuthClient {
     precondition(configuration.flowType == .implicit, "Method only allowed for implicit flow.")
 
     if let errorMessage = params["error_description"] ?? params["error"] {
-      throw AuthError.implicitGrantRedirect(
-        message: errorMessage.replacingOccurrences(of: "+", with: " ")
-      )
+      throw AuthError.implicitGrantRedirect(message: errorMessage)
     }
 
     guard
@@ -910,7 +908,7 @@ public actor AuthClient {
 
     if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
       throw AuthError.pkceGrantCodeExchange(
-        message: params["error_description"]?.replacingOccurrences(of: "+", with: " ")
+        message: params["error_description"]
           ?? "Error in URL with unspecified error_description.",
         error: params["error"] ?? "unspecified_error",
         code: params["error_code"] ?? "unspecified_code"
