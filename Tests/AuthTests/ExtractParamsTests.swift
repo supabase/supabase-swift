@@ -92,9 +92,9 @@ final class ExtractParamsTests: XCTestCase {
     XCTAssertEqual(params, ["message": "a&b=c", "percent": "100%20off"])
   }
 
-  func testExtractParamsInFragmentWithKeyWithoutValue() {
-    let url = URL(string: "io.supabase.flutterquickstart://login-callback/#flag&code=123")!
+  func testExtractParamsDropsPairsWithoutAValue() {
+    let url = URL(string: "io.supabase.flutterquickstart://login-callback/#flag&empty=&code=123")!
     let params = extractParams(from: url)
-    XCTAssertEqual(params, ["flag": "", "code": "123"])
+    XCTAssertEqual(params, ["code": "123"])
   }
 }

@@ -9,28 +9,29 @@ func extractParams(from url: URL) -> [String: String] {
   var result: [String: String] = [:]
 
   if let fragment = components.percentEncodedFragment {
-    for item in extractParams(from: fragment) {
-      result[item.name] = item.value
+    for (name, value) in parseFormEncodedPairs(fragment) {
+      result[name] = value
     }
   }
 
   if let query = components.percentEncodedQuery {
-    for item in extractParams(from: query) {
-      result[item.name] = item.value
+    for (name, value) in parseFormEncodedPairs(query) {
+      result[name] = value
     }
   }
 
   return result
 }
 
-private func extractParams(from percentEncodedString: String) -> [URLQueryItem] {
+private func parseFormEncodedPairs(_ percentEncodedString: String) -> [(
+  name: String, value: String
+)] {
   percentEncodedString
     .split(separator: "&")
-    .map { pair in
+    .compactMap { pair in
       let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
-      let name = decodeFormComponent(parts[0])
-      let value = parts.count == 2 ? decodeFormComponent(parts[1]) : ""
-      return URLQueryItem(name: name, value: value)
+      guard parts.count == 2, !parts[1].isEmpty else { return nil }
+      return (decodeFormComponent(parts[0]), decodeFormComponent(parts[1]))
     }
 }
 
