@@ -20,7 +20,7 @@
 
 import Foundation
 
-/// Represnts pushing data to a `Channel` through the `Socket`
+/// Represents pushing data to a `Channel` through the `Socket`
 public class Push {
   /// The channel sending the Push
   public weak var channel: RealtimeChannel?
@@ -117,7 +117,7 @@ public class Push {
   ///         }
   ///
   /// - parameter status: Status to receive
-  /// - parameter callback: Callback to fire when the status is recevied
+  /// - parameter callback: Callback to fire when the status is received
   @discardableResult
   public func receive(
     _ status: PushStatus,
@@ -143,7 +143,7 @@ public class Push {
   ///
   /// - parameter status: Status to receive
   /// - parameter owner: The class that is calling .receive. Usually `self`
-  /// - parameter callback: Callback to fire when the status is recevied
+  /// - parameter callback: Callback to fire when the status is received
   @discardableResult
   public func delegateReceive<Target: AnyObject>(
     _ status: PushStatus,
@@ -175,7 +175,7 @@ public class Push {
     return self
   }
 
-  /// Resets the Push as it was after it was first tnitialized.
+  /// Resets the Push as it was after it was first initialized.
   func reset() {
     cancelRefEvent()
     ref = nil

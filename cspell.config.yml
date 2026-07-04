@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json
+
+# The version of the configuration file format.
+version: "0.2"
+
+readonly: true
+language: en-US
+caseSensitive: true
+
+ignorePaths:
+  - node_modules/
+  - .build/
+  - .git/
+  - .serena/
+  - CHANGELOG.md
+  - Package.resolved
+  - "**/*.xcworkspace/**"
+  - "**/*.xcodeproj/**"
+  - "**/__Snapshots__/**"
+
+dictionaryDefinitions:
+  - name: local-codebase
+    path: dictionary.txt
+
+dictionaries: [local-codebase]
+
+patterns:
+
+  # GitHub is a proper noun, written "GitHub" in prose (which caseSensitive
+  # enforces). Its host in a URL is correctly lowercase, so this pattern
+  # captures the "github.com" host wherever it appears.
+  - name: github-url-host
+    pattern: /github\.com/g
+
+  # Long runs of base64/base64url characters - JWTs, encoded challenges,
+  # signatures and similar fixture data in tests - tokenize into meaningless
+  # fragments (e.g. a JWT header reliably splits into a chunk spelled "XVCJ").
+  # Enumerating every fragment in the dictionary is a losing game, so this
+  # pattern ignores any quoted run of 16+ base64/base64url characters instead.
+  - name: base64-blob
+    pattern: /['"][A-Za-z0-9+/_=-]{16,}['"]/g
+
+ignoreRegExpList:
+  - github-url-host
+  - base64-blob

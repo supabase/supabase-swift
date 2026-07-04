@@ -124,7 +124,7 @@ public final class Presence {
     }
   }
 
-  /// Presense Events
+  /// Presence Events
   public enum Events: String {
     case state
     case diff
@@ -132,7 +132,7 @@ public final class Presence {
 
   // ----------------------------------------------------------------------
 
-  // MARK: - Typaliases
+  // MARK: - Typealiases
 
   // ----------------------------------------------------------------------
   /// Meta details of a Presence. Just a dictionary of properties
@@ -211,7 +211,7 @@ public final class Presence {
     onLeave = callback
   }
 
-  /// Callback to be informed of synces
+  /// Callback to be informed of syncs
   public var onSync: OnSync {
     get { caller.onSync }
     set { caller.onSync = newValue }
@@ -274,7 +274,7 @@ public final class Presence {
     }
   }
 
-  /// Returns the array of presences, with deault selected metadata.
+  /// Returns the array of presences, with default selected metadata.
   public func list() -> [Map] {
     list(by: { _, pres in pres })
   }

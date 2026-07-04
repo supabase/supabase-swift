@@ -32,6 +32,26 @@ final class RealtimeChannelTests: XCTestCase {
     logger: nil
   )
 
+  func testTypedFilterAndSelectAreBufferedIntoPostgresJoinConfig() {
+    let subscription = sut.onPostgresChange(
+      UpdateAction.self,
+      table: "orders",
+      filter: .and([
+        .gt("amount", value: 100),
+        .not(.in("status", values: ["draft"])),
+      ]),
+      select: ["id", "name"]
+    ) { _ in }
+    defer { subscription.cancel() }
+
+    let changes = sut.clientChanges.value
+    XCTAssertEqual(changes.count, 1)
+    XCTAssertEqual(changes.first?.event, .update)
+    XCTAssertEqual(changes.first?.table, "orders")
+    XCTAssertEqual(changes.first?.filter, "amount=gt.100,status=not.in.(draft)")
+    XCTAssertEqual(changes.first?.select, ["id", "name"])
+  }
+
   // MARK: - Callback rejection tests
 
   #if canImport(Darwin)
@@ -293,6 +313,7 @@ final class RealtimeChannelTests: XCTestCase {
                 - some: "id=eq.1"
               - id: 0
               - schema: "public"
+              - select: Optional<Array<String>>.none
               ▿ table: Optional<String>
                 - some: "users"
             - id: 1
@@ -305,6 +326,7 @@ final class RealtimeChannelTests: XCTestCase {
               - filter: Optional<String>.none
               - id: 0
               - schema: "private"
+              - select: Optional<Array<String>>.none
               - table: Optional<String>.none
             - id: 2
         ▿ RealtimeCallback
@@ -316,6 +338,7 @@ final class RealtimeChannelTests: XCTestCase {
               - filter: Optional<String>.none
               - id: 0
               - schema: "public"
+              - select: Optional<Array<String>>.none
               ▿ table: Optional<String>
                 - some: "messages"
             - id: 3
@@ -328,6 +351,7 @@ final class RealtimeChannelTests: XCTestCase {
               - filter: Optional<String>.none
               - id: 0
               - schema: "public"
+              - select: Optional<Array<String>>.none
               - table: Optional<String>.none
             - id: 4
         ▿ RealtimeCallback
@@ -482,7 +506,7 @@ final class RealtimeChannelTests: XCTestCase {
 
     let body = try JSONDecoder().decode(BroadcastPayload.self, from: request.body ?? Data())
     XCTAssertEqual(body.messages.count, 1)
-    XCTAssertEqual(body.messages[0].topic, "realtime:test-topic")
+    XCTAssertEqual(body.messages[0].topic, "test-topic")
     XCTAssertEqual(body.messages[0].event, "test-event")
     XCTAssertEqual(body.messages[0].private, true)
   }

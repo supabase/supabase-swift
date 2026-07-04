@@ -16,7 +16,7 @@ for await status in supabase.realtimeV2.statusChange {
 }
 ```
 
-If you don't need observation, you can access the current status using `supabase.realtimev2.status`.
+If you don't need observation, you can access the current status using `supabase.realtimeV2.status`.
 
 ### Observing channel subscription status
 
@@ -34,7 +34,7 @@ Task {
 await channel.subscribe()
 ```
 
-If you don't need observation, you can access the current status uusing `channel.status`.
+If you don't need observation, you can access the current status using `channel.status`.
 
 ### Listening for Postgres Changes
 
@@ -70,6 +70,50 @@ for change in channel.postgresChange(AnyAction.self, table: "messages") {
 }
 ```
 
+#### Filtering changes
+
+Pass a `RealtimePostgresFilter` to receive only the changes matching a
+`column=operator.value` expression. In addition to `eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`,
+the following operators are supported: `like`, `ilike`, `match`, `imatch`, `is`
+and `isDistinct`. Any single condition can be negated with `.not(_:)`, and
+multiple conditions can be combined with `.and(_:)` (applied server-side as a
+logical `AND`).
+
+```swift
+// amount=gt.100,status=not.in.(draft),title=like.%foo%
+for await update in channel.postgresChange(
+    UpdateAction.self,
+    table: "orders",
+    filter: .and([
+        .gt("amount", value: 100),
+        .not(.in("status", values: ["draft"])),
+        .like("title", value: "%foo%"),
+    ])
+) {
+    // ...
+}
+```
+
+Values containing reserved characters (`,`, `(`, `)`, `"`, `\`) or surrounding
+whitespace are automatically double-quoted and escaped PostgREST-style.
+
+#### Selecting columns
+
+Use `select` to receive only a subset of columns instead of the full row. This
+reduces payload size (helpful for large `bytea`/`jsonb` columns). The listed
+columns must be selectable by the subscribing role, and an explicit `schema` and
+`table` are required.
+
+```swift
+for await change in channel.postgresChange(
+    AnyAction.self,
+    table: "users",
+    select: ["id", "first_name"]
+) {
+    // change payloads only contain { id, first_name }
+}
+```
+
 ### Tracking Presence
 
 Use `track(state:)` method for tracking Presence.
@@ -98,7 +142,7 @@ await channel.untrack()
 
 ### Listening for Presence Joins and Leaves
 
-Use `presenceChange()` for obsering Presence state changes.
+Use `presenceChange()` for observing Presence state changes.
 
 ```swift
 for await presence in channel.presenceChange() {
@@ -134,4 +178,28 @@ Use `broadcastStream()` method for observing broadcast events.
 for await event in channel.broadcastStream(event: "PING") {
     let message = try event.decode(as: PingEventMessage.self)
 }
+```
+
+### Knowing when the replication connection is ready
+
+Opt in with `broadcast.replicationReady` when creating the channel to have the
+server emit a `system` event once the Postgres replication connection backing
+the channel is established and ready to stream changes. The notification arrives
+through the existing `onSystem`/`system()` API — `status == .ok` means the
+connection is ready (message `"Replication connection established"`).
+
+```swift
+let channel = supabase.channel("room") {
+    $0.broadcast.replicationReady = true
+}
+
+Task {
+    for await message in channel.system() {
+        if message.status == .ok {
+            // Replication connection is ready.
+        }
+    }
+}
+
+await channel.subscribe()
 ```
