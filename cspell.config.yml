@@ -40,6 +40,12 @@ patterns:
   - name: base64-blob
     pattern: /['"][A-Za-z0-9+/_=-]{16,}['"]/g
 
+  # Percent-encoded URL fragments can produce artificial tokens such as
+  # "Blimit" from strings like "%3Blimit". Ignore those encoded fragments.
+  - name: url-encoded-fragment
+    pattern: /%[0-9A-Fa-f]{1,2}[A-Za-z][A-Za-z0-9._~!$&'()*+,;=:@/?-]*/g
+
 ignoreRegExpList:
   - github-url-host
   - base64-blob
+  - url-encoded-fragment
