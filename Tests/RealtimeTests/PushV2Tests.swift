@@ -10,6 +10,7 @@ import Foundation
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

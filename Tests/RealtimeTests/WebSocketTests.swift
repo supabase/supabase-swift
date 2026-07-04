@@ -9,6 +9,7 @@ import ConcurrencyExtras
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 final class WebSocketTests: XCTestCase {
 

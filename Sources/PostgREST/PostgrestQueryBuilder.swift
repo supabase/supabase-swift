@@ -81,7 +81,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
         $0.request.query.appendOrUpdate(
           URLQueryItem(
             name: "columns",
-            value: uniqueKeys.joined(separator: ",")
+            value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
           )
         )
       }
@@ -138,7 +138,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
         $0.request.query.appendOrUpdate(
           URLQueryItem(
             name: "columns",
-            value: uniqueKeys.joined(separator: ",")
+            value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
           )
         )
       }
