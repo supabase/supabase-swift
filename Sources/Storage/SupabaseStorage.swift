@@ -35,10 +35,10 @@ public struct StorageClientConfiguration: Sendable {
   /// HTTP headers sent with every request, such as the `Authorization` header.
   public var headers: [String: String]
 
-  /// The JSON encoder used to serialise request bodies.
+  /// The JSON encoder used to serialize request bodies.
   public let encoder: JSONEncoder
 
-  /// The JSON decoder used to deserialise response bodies.
+  /// The JSON decoder used to deserialize response bodies.
   public let decoder: JSONDecoder
 
   /// The HTTP session abstraction used to execute requests.

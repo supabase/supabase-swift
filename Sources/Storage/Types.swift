@@ -901,7 +901,7 @@ extension SortOrder: Codable {
 
 // MARK: - DownloadBehavior
 
-/// Controls the `Content-Disposition` header behaviour for signed and public URLs.
+/// Controls the `Content-Disposition` header behavior for signed and public URLs.
 ///
 /// ```swift
 /// storage.from("docs").getPublicURL(path: "report.pdf", download: .withOriginalName)

@@ -32,7 +32,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// Retrieves the details of all Storage buckets within the project.
   ///
   /// - Returns: An array of ``Bucket`` objects, one for each bucket in the project.
-  /// - Throws: ``StorageError`` if the request fails or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func listBuckets() async throws -> [Bucket] {
     try await execute(
       HTTPRequest(
@@ -47,7 +47,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   ///
   /// - Parameter id: The unique identifier of the bucket to retrieve.
   /// - Returns: The ``Bucket`` with the given identifier.
-  /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func getBucket(_ id: String) async throws -> Bucket {
     try await execute(
       HTTPRequest(
@@ -80,7 +80,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   ///   - options: Options that control visibility, file-size limits, and allowed MIME types.
   ///     Defaults to a private bucket with no size or type restrictions.
   /// - Throws: ``StorageError`` if a bucket with the same identifier already exists, or if the
-  ///   caller is not authorised.
+  ///   caller is not authorized.
   public func createBucket(_ id: String, options: BucketOptions = BucketOptions(isPublic: false))
     async throws
   {
@@ -113,7 +113,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - id: The unique identifier of the bucket to update.
   ///   - options: The new options to apply to the bucket.
-  /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
     try await execute(
       HTTPRequest(
@@ -138,7 +138,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// > deleted.
   ///
   /// - Parameter id: The unique identifier of the bucket to empty.
-  /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func emptyBucket(_ id: String) async throws {
     try await execute(
       HTTPRequest(
@@ -155,7 +155,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   ///
   /// - Parameter id: The unique identifier of the bucket to delete.
   /// - Throws: ``StorageError`` if the bucket is not empty, does not exist, or the caller is not
-  ///   authorised.
+  ///   authorized.
   public func deleteBucket(_ id: String) async throws {
     try await execute(
       HTTPRequest(
