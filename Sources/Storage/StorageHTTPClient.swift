@@ -1,7 +1,7 @@
 public import Foundation
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 /// An HTTP session abstraction used by the Storage client to perform network requests.

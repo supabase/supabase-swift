@@ -3,7 +3,7 @@ public import Foundation
 public import HTTPTypes
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 /// The main entry point for interacting with a PostgREST server.

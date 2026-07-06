@@ -4,7 +4,7 @@ import HTTPTypes
 public import Helpers
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 let version = Helpers.version

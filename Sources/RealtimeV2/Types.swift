@@ -9,7 +9,7 @@ public import Foundation
 package import HTTPTypes
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  package import FoundationNetworking
 #endif
 
 /// Phoenix protocol version used for WebSocket communication.

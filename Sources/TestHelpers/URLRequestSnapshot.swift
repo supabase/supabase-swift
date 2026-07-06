@@ -11,7 +11,7 @@
   package import Foundation
 
   #if canImport(FoundationNetworking)
-    import FoundationNetworking
+    package import FoundationNetworking
   #endif
 
   extension Snapshotting where Value == URLRequest, Format == String {
