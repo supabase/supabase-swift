@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 02/10/25.
 //
 
-import Foundation
+public import Foundation
 import HTTPTypes
 
 /// Admin operations for managing OAuth 2.1 clients registered in Supabase Auth.

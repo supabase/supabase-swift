@@ -6,7 +6,7 @@
 //
 
 import ConcurrencyExtras
-import Foundation
+package import Foundation
 
 private let __clock = LockIsolated<any Clock<Swift.Duration>>(ContinuousClock())
 

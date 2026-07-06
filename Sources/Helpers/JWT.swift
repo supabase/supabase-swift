@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 28/11/24.
 //
 
-import Foundation
+package import Foundation
 
 package struct DecodedJWT {
   package let header: [String: Any]

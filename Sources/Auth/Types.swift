@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// An event emitted when the authentication state of the current user changes.
 public enum AuthChangeEvent: String, Sendable {

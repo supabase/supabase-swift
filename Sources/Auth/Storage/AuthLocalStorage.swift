@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// A type that can persist, retrieve, and remove Auth session data on the local device.
 ///

@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 19/04/24.
 //
 
-import Foundation
+package import Foundation
 
 @discardableResult
 package func withTimeout<R: Sendable>(

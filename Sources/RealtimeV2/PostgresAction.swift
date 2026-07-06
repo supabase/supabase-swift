@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 23/12/23.
 //
 
-import Foundation
+public import Foundation
 
 /// Describes a single column returned in a Postgres change event.
 ///

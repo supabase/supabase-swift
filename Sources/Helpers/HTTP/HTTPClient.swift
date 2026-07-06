@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 30/04/24.
 //
 
-import Foundation
+package import Foundation
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  package import FoundationNetworking
 #endif
 
 package protocol HTTPClientType: Sendable {

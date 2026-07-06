@@ -1,4 +1,5 @@
-import HTTPTypes
+import Foundation
+package import HTTPTypes
 
 extension HTTPFields {
   package init(_ dictionary: [String: String]) {

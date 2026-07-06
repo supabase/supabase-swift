@@ -5,7 +5,7 @@
 //  Created by Lucas Abijmil on 19/02/2025.
 //
 
-import Foundation
+public import Foundation
 
 /// A value that can be used as a comparison operand in a ``RealtimePostgresFilter``.
 ///

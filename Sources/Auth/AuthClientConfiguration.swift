@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 29/04/24.
 //
 
-import Foundation
+public import Foundation
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 extension AuthClient {

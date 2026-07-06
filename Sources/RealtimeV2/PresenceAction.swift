@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 24/12/23.
 //
 
-import Foundation
+public import Foundation
 
 /// The presence state of a single client tracked on a Realtime channel.
 ///

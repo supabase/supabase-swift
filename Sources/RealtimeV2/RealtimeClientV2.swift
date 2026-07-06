@@ -6,7 +6,8 @@
 //
 
 import ConcurrencyExtras
-import Foundation
+public import Foundation
+import HTTPTypes
 import Helpers
 
 #if canImport(FoundationNetworking)

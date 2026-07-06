@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// An error returned by the Supabase Storage API.
 ///

@@ -7,6 +7,10 @@
 
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 package struct LoggerInterceptor: HTTPClientInterceptor {
   let logger: any SupabaseLogger
 

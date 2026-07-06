@@ -8,7 +8,7 @@
 import Foundation
 
 #if canImport(AuthenticationServices)
-  import AuthenticationServices
+  public import AuthenticationServices
 #endif
 
 #if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)

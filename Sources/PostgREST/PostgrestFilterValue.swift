@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// A value that can be used as a filter operand in PostgREST queries.
 ///

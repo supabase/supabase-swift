@@ -1,10 +1,10 @@
 import ConcurrencyExtras
-import Foundation
+public import Foundation
 import HTTPTypes
-import Helpers
+public import Helpers
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 let version = Helpers.version

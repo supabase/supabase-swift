@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Options for searching and paginating files within a bucket.
 ///

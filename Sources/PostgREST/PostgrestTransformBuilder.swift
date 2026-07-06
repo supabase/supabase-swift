@@ -1,4 +1,6 @@
+import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 
 /// Builder for applying result transformations such as ordering, pagination, and response format.
 ///

@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 25/01/24.
 //
 
-import Foundation
+public import Foundation
 import HTTPTypes
 
 /// Admin-only Auth operations that require the secret key.

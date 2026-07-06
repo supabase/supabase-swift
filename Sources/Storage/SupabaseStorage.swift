@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Configuration for the Supabase Storage client.
 ///

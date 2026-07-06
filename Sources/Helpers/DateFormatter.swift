@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 28/12/23.
 //
 
-import Foundation
+package import Foundation
 
 extension Date.ISO8601FormatStyle {
   fileprivate func currentTimestamp(includingFractionalSeconds: Bool) -> Self {
