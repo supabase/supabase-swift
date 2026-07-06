@@ -28,10 +28,12 @@ final class URLSessionWebSocket: WebSocket {
   ///   - _protocol: The negotiated WebSocket subprotocol, empty string if none.
   private init(
     _task: URLSessionWebSocketTask,
-    _protocol: String
+    _protocol: String,
+    session: URLSession
   ) {
     self._task = _task
     self._protocol = _protocol
+    self.session = session
 
     (events, eventsContinuation) = AsyncStream.makeStream()
 
@@ -104,7 +106,8 @@ final class URLSessionWebSocket: WebSocket {
       },
       onWebSocketTaskOpened: { session, task, `protocol` in
         mutableState.withValue {
-          $0.webSocket = URLSessionWebSocket(_task: task, _protocol: `protocol` ?? "")
+          $0.webSocket = URLSessionWebSocket(
+            _task: task, _protocol: `protocol` ?? "", session: session)
           $0.continuation.resume(returning: $0.webSocket!)
         }
       },
@@ -148,6 +151,7 @@ final class URLSessionWebSocket: WebSocket {
   let _task: URLSessionWebSocketTask
   /// The negotiated WebSocket subprotocol.
   let _protocol: String
+  private let session: URLSession
 
   /// Thread-safe mutable state for the WebSocket connection.
   struct MutableState {
@@ -299,9 +303,13 @@ final class URLSessionWebSocket: WebSocket {
 
       // Update state when connection closes
       if case .close(let code, let reason) = event {
+        let wasClosed = $0.isClosed
         $0.isClosed = true
         $0.closeCode = code
         $0.closeReason = reason
+        if !wasClosed {
+          session.finishTasksAndInvalidate()
+        }
       }
     }
   }
