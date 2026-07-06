@@ -298,7 +298,7 @@ final class URLSessionWebSocket: WebSocket {
   /// Triggers a WebSocket event and updates internal state if needed.
   /// - Parameter event: The event to trigger.
   private func _trigger(_ event: WebSocketEvent) {
-    mutableState.withValue {
+    let shouldInvalidate = mutableState.withValue {
       eventsContinuation.yield(event)
 
       // Update state when connection closes
@@ -307,10 +307,13 @@ final class URLSessionWebSocket: WebSocket {
         $0.isClosed = true
         $0.closeCode = code
         $0.closeReason = reason
-        if !wasClosed {
-          session.finishTasksAndInvalidate()
-        }
+        return !wasClosed
       }
+      return false
+    }
+
+    if shouldInvalidate {
+      session.finishTasksAndInvalidate()
     }
   }
 

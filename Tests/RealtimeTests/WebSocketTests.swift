@@ -100,43 +100,51 @@ final class WebSocketTests: XCTestCase {
   // MARK: - URLSessionWebSocket Lifecycle Tests
 
   #if canImport(Network)
-    func testSocketDeallocatesAfterClose() async throws {
+    func testSocketsDeallocateAfterClose() async throws {
       let server = try LoopbackWebSocketServer()
       let port = try server.start()
       defer { server.stop() }
 
       let url = URL(string: "ws://127.0.0.1:\(port)")!
 
-      weak var weakSocket: URLSessionWebSocket?
+      var deallocations: [XCTestExpectation] = []
 
-      func connectCloseAndDrop() async throws {
+      for index in 0..<5 {
+        let deallocated = expectation(description: "socket \(index) deallocated")
+        deallocations.append(deallocated)
+
         let socket = try await URLSessionWebSocket.connect(to: url)
-        weakSocket = socket
+        objc_setAssociatedObject(
+          socket,
+          &deinitNotifierKey,
+          DeinitNotifier { deallocated.fulfill() },
+          .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        )
         socket.close(code: 1000, reason: nil)
       }
 
-      try await connectCloseAndDrop()
-
-      let deadline = Date().addingTimeInterval(5)
-      while weakSocket != nil, Date() < deadline {
-        try await Task.sleep(nanoseconds: 10_000_000)
-      }
-
-      XCTAssertNil(
-        weakSocket,
-        "URLSessionWebSocket leaked after close: its delegate-backed URLSession was never invalidated"
-      )
+      await fulfillment(of: deallocations, timeout: 10)
     }
   #endif
 }
 
 #if canImport(Network)
   import Network
+  import ObjectiveC
+
+  private final class DeinitNotifier {
+    private let onDeinit: @Sendable () -> Void
+    init(_ onDeinit: @escaping @Sendable () -> Void) { self.onDeinit = onDeinit }
+    deinit { onDeinit() }
+  }
+
+  private nonisolated(unsafe) var deinitNotifierKey: UInt8 = 0
 
   private final class LoopbackWebSocketServer {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "co.supabase.LoopbackWebSocketServer")
     private var connections: [NWConnection] = []
+    private var isStopped = false
 
     init() throws {
       let parameters = NWParameters.tcp
@@ -155,7 +163,11 @@ final class WebSocketTests: XCTestCase {
 
       listener.newConnectionHandler = { [weak self] connection in
         guard let self else { return }
-        self.queue.async { self.connections.append(connection) }
+        if self.isStopped {
+          connection.cancel()
+          return
+        }
+        self.connections.append(connection)
         connection.start(queue: self.queue)
         self.receive(on: connection)
       }
@@ -173,7 +185,22 @@ final class WebSocketTests: XCTestCase {
     }
 
     private func receive(on connection: NWConnection) {
-      connection.receiveMessage { [weak self] _, _, _, error in
+      connection.receiveMessage { [weak self] _, context, _, error in
+        if let metadata = context?.protocolMetadata(definition: NWProtocolWebSocket.definition)
+          as? NWProtocolWebSocket.Metadata, metadata.opcode == .close
+        {
+          let closeMetadata = NWProtocolWebSocket.Metadata(opcode: .close)
+          let closeContext = NWConnection.ContentContext(
+            identifier: "close", metadata: [closeMetadata])
+          connection.send(
+            content: nil,
+            contentContext: closeContext,
+            isComplete: true,
+            completion: .contentProcessed { _ in connection.cancel() }
+          )
+          return
+        }
+
         guard error == nil else { return }
         self?.receive(on: connection)
       }
@@ -181,10 +208,11 @@ final class WebSocketTests: XCTestCase {
 
     func stop() {
       queue.sync {
+        isStopped = true
+        listener.cancel()
         for connection in connections { connection.cancel() }
         connections.removeAll()
       }
-      listener.cancel()
     }
   }
 #endif
