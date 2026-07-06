@@ -22,11 +22,11 @@ import HTTPTypes
 /// - ``configuration``
 /// - ``init(configuration:)``
 ///
-/// ### Customising headers
+/// ### Customizing headers
 ///
 /// - ``setHeader(_:forKey:)``
 public class StorageApi: @unchecked Sendable {
-  /// The configuration used to initialise this client instance.
+  /// The configuration used to initialize this client instance.
   public let configuration: StorageClientConfiguration
 
   private struct MutableState {
@@ -38,7 +38,7 @@ public class StorageApi: @unchecked Sendable {
 
   /// Creates a ``StorageApi`` with the given configuration.
   ///
-  /// Subclasses call this initialiser via `super.init(configuration:)`.
+  /// Subclasses call this initializer via `super.init(configuration:)`.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, JSON codecs, and HTTP session.
@@ -87,7 +87,7 @@ public class StorageApi: @unchecked Sendable {
 
   /// Sets an HTTP header that will be included in all subsequent requests made by this instance.
   ///
-  /// This method is thread-safe. The header key is normalised to lowercase before being stored.
+  /// This method is thread-safe. The header key is normalized to lowercase before being stored.
   ///
   /// ```swift
   /// storage.from("avatars")

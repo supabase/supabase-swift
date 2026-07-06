@@ -10,7 +10,7 @@ import Foundation
 /// the Storage client can be tested without a real network connection and can be configured to use
 /// a custom session (e.g. with background upload support).
 ///
-/// The default initialiser uses `URLSession.shared`.
+/// The default initializer uses `URLSession.shared`.
 ///
 /// ```swift
 /// // Use a custom URLSession with a specific configuration

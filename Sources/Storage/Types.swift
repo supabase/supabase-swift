@@ -172,7 +172,7 @@ public struct FileOptions: Sendable {
 
 /// A single signed URL returned as part of a batch sign operation.
 ///
-/// Returned by ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)-5lkmo``
+/// Returned by ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)-5lkmo`` // cspell:ignore lkmo
 /// (the legacy `[SignedURL]` overload). Prefer the ``SignedURLResult`` overload for new code.
 ///
 /// ## Topics
@@ -901,7 +901,7 @@ extension SortOrder: Codable {
 
 // MARK: - DownloadBehavior
 
-/// Controls the `Content-Disposition` header behaviour for signed and public URLs.
+/// Controls the `Content-Disposition` header behavior for signed and public URLs.
 ///
 /// ```swift
 /// storage.from("docs").getPublicURL(path: "report.pdf", download: .withOriginalName)

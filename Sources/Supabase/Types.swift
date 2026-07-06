@@ -4,7 +4,7 @@ import Foundation
   import FoundationNetworking
 #endif
 
-/// Configuration options for customizing ``SupabaseClient`` behaviour.
+/// Configuration options for customizing ``SupabaseClient`` behavior.
 ///
 /// Pass an instance of this struct to ``SupabaseClient/init(supabaseURL:supabaseKey:options:)``
 /// to override defaults for any sub-client.

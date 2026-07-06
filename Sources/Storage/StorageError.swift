@@ -3,7 +3,7 @@ import Foundation
 /// An error returned by the Supabase Storage API.
 ///
 /// ``StorageError`` is thrown whenever the server responds with a non-2xx status code or when the
-/// response body contains a recognisable error payload. Inspect ``message`` for a human-readable
+/// response body contains a recognizable error payload. Inspect ``message`` for a human-readable
 /// description, and ``statusCode`` for the HTTP status code string returned by the API.
 ///
 /// ```swift
