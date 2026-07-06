@@ -13,6 +13,14 @@ package import HTTPTypes
 #endif
 
 /// Phoenix protocol version used for WebSocket communication.
+///
+/// The version controls how messages are serialized on the wire between the client
+/// and the Realtime server.
+///
+/// ## Topics
+/// ### Protocol Versions
+/// - ``v1``
+/// - ``v2``
 public enum RealtimeProtocolVersion: String, Sendable {
   /// Protocol 1.0.0 — JSON object text frames for all messages.
   case v1 = "1.0.0"
@@ -23,6 +31,34 @@ public enum RealtimeProtocolVersion: String, Sendable {
 }
 
 /// Options for initializing ``RealtimeClientV2``.
+///
+/// Use this struct to customize the behavior of the Realtime client, including connection
+/// timing, authentication, protocol version, and app lifecycle handling.
+///
+/// ```swift
+/// let options = RealtimeClientOptions(
+///   heartbeatInterval: 30,
+///   vsn: .v2,
+///   handleAppLifecycle: true
+/// )
+/// let client = RealtimeClientV2(url: realtimeURL, options: options)
+/// ```
+///
+/// ## Topics
+/// ### Protocol and Lifecycle
+/// - ``vsn``
+/// - ``handleAppLifecycle``
+/// ### Default Values
+/// - ``defaultHeartbeatInterval``
+/// - ``defaultReconnectDelay``
+/// - ``defaultTimeoutInterval``
+/// - ``defaultDisconnectOnSessionLoss``
+/// - ``defaultConnectOnSubscribe``
+/// - ``defaultMaxRetryAttempts``
+/// - ``defaultDisconnectOnEmptyChannelsAfter``
+/// - ``defaultHandleAppLifecycle``
+/// ### Initialization
+/// - ``init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:fetch:accessToken:logger:handleAppLifecycle:)``
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
   var heartbeatInterval: TimeInterval
@@ -34,6 +70,9 @@ public struct RealtimeClientOptions: Sendable {
   var disconnectOnEmptyChannelsAfter: TimeInterval
 
   /// The Phoenix serializer protocol version.
+  ///
+  /// Defaults to ``RealtimeProtocolVersion/v2``. Use ``RealtimeProtocolVersion/v1`` only
+  /// when connecting to a Realtime server that does not support protocol 2.0.0.
   public var vsn: RealtimeProtocolVersion
 
   /// Whether to automatically handle app lifecycle changes (background/foreground).
@@ -57,12 +96,24 @@ public struct RealtimeClientOptions: Sendable {
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: (any SupabaseLogger)?
 
+  /// Default interval, in seconds, between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: TimeInterval = 25
+
+  /// Default delay, in seconds, before attempting to reconnect after a connection drop.
   public static let defaultReconnectDelay: TimeInterval = 7
+
+  /// Default maximum time, in seconds, to wait for a server reply before treating a request as timed out.
   public static let defaultTimeoutInterval: TimeInterval = 10
+
+  /// Default for whether to disconnect the channel when the session is lost.
   public static let defaultDisconnectOnSessionLoss = true
+
+  /// Default for whether to automatically connect the socket when subscribing to a channel.
   public static let defaultConnectOnSubscribe: Bool = true
+
+  /// Default maximum number of subscribe retry attempts before giving up.
   public static let defaultMaxRetryAttempts: Int = 5
+
   /// Defers the WebSocket disconnect after the last channel is removed, giving a window to reuse
   /// the existing connection when switching channels without a reconnect penalty. Defaults to
   /// `2 × defaultHeartbeatInterval`. Set to 0 for immediate disconnect. If a new channel is
@@ -70,6 +121,9 @@ public struct RealtimeClientOptions: Sendable {
   public static let defaultDisconnectOnEmptyChannelsAfter: TimeInterval =
     2 * defaultHeartbeatInterval
 
+  /// Default value for ``handleAppLifecycle``.
+  ///
+  /// Returns `true` on iOS, macOS, tvOS, and visionOS; `false` on all other platforms.
   public static let defaultHandleAppLifecycle: Bool = {
     #if os(iOS) || os(macOS) || os(tvOS) || os(visionOS)
       return true
@@ -78,6 +132,23 @@ public struct RealtimeClientOptions: Sendable {
     #endif
   }()
 
+  /// Creates a new ``RealtimeClientOptions`` with the specified configuration.
+  ///
+  /// - Parameters:
+  ///   - headers: Additional HTTP headers sent with each WebSocket upgrade request.
+  ///   - heartbeatInterval: Interval in seconds between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
+  ///   - reconnectDelay: Delay in seconds before attempting to reconnect after a disconnection. Defaults to ``defaultReconnectDelay``.
+  ///   - timeoutInterval: Maximum time in seconds to wait for a server reply. Defaults to ``defaultTimeoutInterval``.
+  ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
+  ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClientV2/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
+  ///   - maxRetryAttempts: Maximum number of subscribe retry attempts. Defaults to ``defaultMaxRetryAttempts``.
+  ///   - disconnectOnEmptyChannelsAfter: Seconds to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
+  ///   - vsn: The Phoenix protocol version to use. Defaults to ``RealtimeProtocolVersion/v2``.
+  ///   - logLevel: Optional log level for Realtime log output.
+  ///   - fetch: Optional custom HTTP fetch function used for REST broadcast calls.
+  ///   - accessToken: Optional async closure that returns the current access token.
+  ///   - logger: Optional logger conforming to `SupabaseLogger`.
+  ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
   public init(
     headers: [String: String] = [:],
     heartbeatInterval: TimeInterval = Self.defaultHeartbeatInterval,
@@ -149,18 +220,57 @@ public struct RealtimeClientOptions: Sendable {
   }
 }
 
+/// A token that represents a Realtime subscription and cancels it on deallocation.
+///
+/// Store the returned token from subscription methods (e.g. ``RealtimeChannelV2/onBroadcast(event:callback:)``)
+/// to keep the subscription alive. When the token is deallocated or ``ObservationToken/cancel()``
+/// is called, the underlying callback is removed.
+///
+/// ```swift
+/// let subscription = channel.onBroadcast(event: "message") { payload in
+///   print(payload)
+/// }
+/// defer { subscription.cancel() }
+/// ```
 public typealias RealtimeSubscription = ObservationToken
 
+/// Describes the subscription state of a ``RealtimeChannelV2``.
+///
+/// ## Topics
+/// ### States
+/// - ``unsubscribed``
+/// - ``subscribing``
+/// - ``subscribed``
+/// - ``unsubscribing``
 public enum RealtimeChannelStatus: Sendable {
+  /// The channel has not yet joined or has left the Realtime topic.
   case unsubscribed
+
+  /// The channel is in the process of joining the Realtime topic.
   case subscribing
+
+  /// The channel has successfully joined the Realtime topic and is receiving events.
   case subscribed
+
+  /// The channel is in the process of leaving the Realtime topic.
   case unsubscribing
 }
 
+/// Describes the connection state of a ``RealtimeClientV2``.
+///
+/// ## Topics
+/// ### States
+/// - ``disconnected``
+/// - ``connecting``
+/// - ``connected``
 public enum RealtimeClientStatus: Sendable, CustomStringConvertible {
+  /// The WebSocket is not connected.
   case disconnected
+
+  /// A WebSocket connection attempt is in progress.
   case connecting
+
+  /// The WebSocket is connected and ready to exchange messages.
   case connected
 
   public var description: String {
@@ -172,16 +282,33 @@ public enum RealtimeClientStatus: Sendable, CustomStringConvertible {
   }
 }
 
+/// Describes the result of a heartbeat cycle.
+///
+/// The Realtime client sends periodic heartbeat messages to keep the WebSocket
+/// connection alive. Use ``RealtimeClientV2/heartbeat`` or ``RealtimeClientV2/onHeartbeat(_:)``
+/// to observe heartbeat status changes.
+///
+/// ## Topics
+/// ### States
+/// - ``sent``
+/// - ``ok``
+/// - ``error``
+/// - ``timeout``
+/// - ``disconnected``
 public enum HeartbeatStatus: Sendable {
   /// Heartbeat was sent.
   case sent
-  /// Heartbeat was received.
+
+  /// Heartbeat was received and acknowledged by the server.
   case ok
-  /// Server responded with an error.
+
+  /// Server responded with an error to the heartbeat.
   case error
-  /// Heartbeat wasn't received in time.
+
+  /// Heartbeat was not acknowledged within the configured timeout interval.
   case timeout
-  /// Socket is disconnected.
+
+  /// Socket is disconnected; no heartbeat can be sent.
   case disconnected
 }
 
@@ -189,9 +316,25 @@ extension HTTPField.Name {
   static let apiKey = Self("apiKey")!
 }
 
-/// Log level for Realtime.
+/// Verbosity of log output emitted by the Realtime client.
+///
+/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:fetch:accessToken:logger:handleAppLifecycle:)``
+/// to control how much detail the Realtime server logs.
+///
+/// ## Topics
+/// ### Levels
+/// - ``info``
+/// - ``warn``
+/// - ``error``
 public enum LogLevel: String, Sendable {
-  case info, warn, error
+  /// Informational messages.
+  case info
+
+  /// Warning messages.
+  case warn
+
+  /// Error messages only.
+  case error
 }
 
 struct BroadcastMessagePayload: Encodable {

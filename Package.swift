@@ -7,11 +7,11 @@ import PackageDescription
 let package = Package(
   name: "Supabase",
   platforms: [
-    .iOS(.v13),
-    .macCatalyst(.v13),
-    .macOS(.v10_15),
-    .watchOS(.v6),
-    .tvOS(.v13),
+    .iOS(.v16),
+    .macCatalyst(.v16),
+    .macOS(.v13),
+    .watchOS(.v9),
+    .tvOS(.v16),
   ],
   products: [
     .library(name: "Auth", targets: ["Auth"]),
@@ -226,9 +226,9 @@ let package = Package(
 )
 
 for target in package.targets {
-  // Test targets never opted into `StrictConcurrency`/`ExistentialAny` below, so bumping
-  // swift-tools-version to 6.1 must not silently switch their *default* language mode to
-  // Swift 6 either — pin them to v5 to preserve their pre-6.1 compilation behavior exactly.
+  // Test targets never opted into `ExistentialAny` below, so bumping swift-tools-version
+  // to 6.1 must not silently switch their *default* language mode to Swift 6 either —
+  // pin them to v5 to preserve their pre-6.1 compilation behavior exactly.
   if target.isTest {
     target.swiftSettings = [.swiftLanguageMode(.v5)]
     continue
@@ -240,7 +240,6 @@ for target in package.targets {
     .enableUpcomingFeature("InferIsolatedConformances"),
     .enableUpcomingFeature("InternalImportsByDefault"),
     .enableUpcomingFeature("MemberImportVisibility"),
-    .enableExperimentalFeature("StrictConcurrency"),
   ]
 
   // The `Realtime` target hosts the legacy pre-async/await Phoenix client under

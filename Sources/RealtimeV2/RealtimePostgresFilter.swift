@@ -50,6 +50,28 @@ public enum RealtimePostgresIsValue: Sendable {
 /// Values containing reserved characters (`,`, `(`, `)`, `"`, `\`) — or
 /// surrounding whitespace — are automatically double-quoted and escaped the way
 /// PostgREST does, so they survive the server's filter parser.
+///
+/// ## Topics
+/// ### Equality Filters
+/// - ``eq(_:value:)``
+/// - ``neq(_:value:)``
+/// - ``is(_:value:)``
+/// - ``isDistinct(_:value:)``
+/// ### Comparison Filters
+/// - ``gt(_:value:)``
+/// - ``gte(_:value:)``
+/// - ``lt(_:value:)``
+/// - ``lte(_:value:)``
+/// ### Pattern Matching Filters
+/// - ``like(_:value:)``
+/// - ``ilike(_:value:)``
+/// - ``match(_:value:)``
+/// - ``imatch(_:value:)``
+/// ### List Filters
+/// - ``in(_:values:)``
+/// ### Logical Operators
+/// - ``not(_:)``
+/// - ``and(_:)``
 public enum RealtimePostgresFilter {
   /// Match rows where `column` equals `value` (`column=eq.value`).
   case eq(_ column: String, value: any RealtimePostgresFilterValue)

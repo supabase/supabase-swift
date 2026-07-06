@@ -9,17 +9,45 @@ public import Helpers
 
 let version = Helpers.version
 
-/// An actor representing a client for invoking functions.
+/// A client for invoking Supabase Edge Functions.
+///
+/// Obtain an instance from ``SupabaseClient/functions`` rather than creating one directly.
+///
+/// ```swift
+/// // Invoke and decode a response
+/// let order: Order = try await supabase.functions.invoke("get-order")
+///
+/// // Invoke with a body and no return value
+/// try await supabase.functions.invoke(
+///   "send-email",
+///   options: FunctionInvokeOptions(body: ["to": "user@example.com"])
+/// )
+/// ```
+///
+/// ## Topics
+///
+/// ### Creating a Client
+/// - ``init(url:headers:region:logger:fetch:decoder:)``
+/// - ``FetchHandler``
+///
+/// ### Invoking Functions
+/// - ``invoke(_:options:decode:)``
+/// - ``invoke(_:options:decoder:)``
+/// - ``invoke(_:options:)``
+/// - ``_invokeWithStreamedResponse(_:options:)``
+///
+/// ### Configuration
+/// - ``decoder``
+/// - ``requestIdleTimeout``
+/// - ``setAuth(token:)``
 public final class FunctionsClient: Sendable {
-  /// Fetch handler used to make requests.
+  /// A handler that performs the underlying HTTP request for a function invocation.
   public typealias FetchHandler =
     @Sendable (_ request: URLRequest) async throws -> (
       Data, URLResponse
     )
 
-  /// Request idle timeout: 150s (If an Edge Function doesn't send a response before the timeout, 504 Gateway Timeout will be returned)
-  ///
-  /// See more: https://supabase.com/docs/guides/functions/limits
+  /// The maximum time an Edge Function may run before the gateway returns a 504 error (150 seconds).
   public static let requestIdleTimeout: TimeInterval = 150
 
   /// The base URL for the functions.
@@ -28,7 +56,7 @@ public final class FunctionsClient: Sendable {
   /// The Region to invoke the functions in.
   let region: String?
 
-  /// The JSON decoder to use for decoding response bodies.
+  /// The JSON decoder used to decode function response bodies.
   public let decoder: JSONDecoder
 
   struct MutableState {
@@ -44,15 +72,14 @@ public final class FunctionsClient: Sendable {
     mutableState.headers
   }
 
-  /// Initializes a new instance of `FunctionsClient`.
-  ///
+  /// Creates a new Functions client.
   /// - Parameters:
-  ///   - url: The base URL for the functions.
-  ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
-  ///   - region: The Region to invoke the functions in.
-  ///   - logger: SupabaseLogger instance to use.
-  ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  ///   - decoder: The JSON decoder to use for decoding response bodies. (Default: `JSONDecoder()`)
+  ///   - url: The base URL of the Functions endpoint.
+  ///   - headers: Additional headers to include in every request.
+  ///   - region: The region string to invoke functions in.
+  ///   - logger: A logger for request and response diagnostics.
+  ///   - fetch: A custom fetch handler. Defaults to `URLSession.shared`.
+  ///   - decoder: The JSON decoder used to decode response bodies.
   @_disfavoredOverload
   public convenience init(
     url: URL,
@@ -121,15 +148,14 @@ public final class FunctionsClient: Sendable {
     }
   }
 
-  /// Initializes a new instance of `FunctionsClient`.
-  ///
+  /// Creates a new Functions client.
   /// - Parameters:
-  ///   - url: The base URL for the functions.
-  ///   - headers: Headers to be included in the requests. (Default: empty dictionary)
-  ///   - region: The Region to invoke the functions in.
-  ///   - logger: SupabaseLogger instance to use.
-  ///   - fetch: The fetch handler used to make requests. (Default: URLSession.shared.data(for:))
-  ///   - decoder: The JSON decoder to use for decoding response bodies. (Default: `JSONDecoder()`)
+  ///   - url: The base URL of the Functions endpoint.
+  ///   - headers: Additional headers to include in every request.
+  ///   - region: The region to invoke functions in.
+  ///   - logger: A logger for request and response diagnostics.
+  ///   - fetch: A custom fetch handler. Defaults to `URLSession.shared`.
+  ///   - decoder: The JSON decoder used to decode response bodies.
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
@@ -148,9 +174,8 @@ public final class FunctionsClient: Sendable {
     )
   }
 
-  /// Updates the authorization header.
-  ///
-  /// - Parameter token: The new JWT token sent in the authorization header.
+  /// Sets or clears the JWT used in the Authorization header for subsequent requests.
+  /// - Parameter token: The JWT to send, or `nil` to remove the Authorization header.
   public func setAuth(token: String?) {
     mutableState.withValue {
       if let token {
@@ -161,14 +186,14 @@ public final class FunctionsClient: Sendable {
     }
   }
 
-  /// Invokes a function and decodes the response.
-  ///
+  /// Invokes a function and decodes the response with a custom closure.
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
-  ///   - decode: A closure to decode the response data and HTTPURLResponse into a `Response`
-  /// object.
-  /// - Returns: The decoded `Response` object.
+  ///   - options: Options for the invocation.
+  ///   - decode: A closure that receives the raw response data and HTTP response, and returns the
+  ///     decoded value.
+  /// - Returns: The value returned by `decode`.
+  /// - Throws: ``FunctionsError`` if the function returns a non-2xx status or a relay error.
   public func invoke<Response>(
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
@@ -180,14 +205,14 @@ public final class FunctionsClient: Sendable {
     return try decode(response.data, response.underlyingResponse)
   }
 
-  /// Invokes a function and decodes the response as a specific type.
-  ///
+  /// Invokes a function and JSON-decodes the response body into `T`.
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
-  ///   - decoder: The JSON decoder to use for decoding the response. If `nil`, uses the client's
-  ///     decoder.
-  /// - Returns: The decoded object of type `T`.
+  ///   - options: Options for the invocation.
+  ///   - decoder: The JSON decoder to use. Defaults to the client's ``decoder`` when `nil`.
+  /// - Returns: The decoded `T`.
+  /// - Throws: ``FunctionsError`` if the function returns a non-2xx status or a relay error, or
+  ///   a decoding error if the response body cannot be decoded as `T`.
   public func invoke<T: Decodable>(
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
@@ -199,11 +224,11 @@ public final class FunctionsClient: Sendable {
     }
   }
 
-  /// Invokes a function without expecting a response.
-  ///
+  /// Invokes a function and discards any response body.
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - options: Options for invoking the function. (Default: empty `FunctionInvokeOptions`)
+  ///   - options: Options for the invocation.
+  /// - Throws: ``FunctionsError`` if the function returns a non-2xx status or a relay error.
   public func invoke(
     _ functionName: String,
     options: FunctionInvokeOptions = .init()
@@ -230,17 +255,17 @@ public final class FunctionsClient: Sendable {
     return response
   }
 
-  /// Invokes a function with streamed response.
+  /// Invokes a function and returns its response as a stream of raw `Data` chunks.
   ///
-  /// Function MUST return a `text/event-stream` content type for this method to work.
+  /// The function must return a `text/event-stream` content type for this to work correctly.
   ///
+  /// > Warning: Experimental — the API may change without a major version bump.
+  ///
+  /// > Note: This method uses a separate `URLSession` from the rest of the client.
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
-  ///   - invokeOptions: Options for invoking the function.
-  /// - Returns: A stream of Data.
-  ///
-  /// - Warning: Experimental method.
-  /// - Note: This method doesn't use the same underlying `URLSession` as the remaining methods in the library.
+  ///   - options: Options for the invocation.
+  /// - Returns: An `AsyncThrowingStream` that yields response data chunks as they arrive.
   public func _invokeWithStreamedResponse(
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()

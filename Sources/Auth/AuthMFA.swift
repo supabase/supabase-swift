@@ -2,6 +2,23 @@ import Foundation
 import HTTPTypes
 
 /// Contains the full multi-factor authentication API.
+///
+/// Access this namespace via ``AuthClient/mfa``.
+///
+/// ## Topics
+///
+/// ### Enrolling factors
+/// - ``enroll(params:)``
+/// - ``unenroll(params:)``
+///
+/// ### Verifying factors
+/// - ``challenge(params:)``
+/// - ``verify(params:)``
+/// - ``challengeAndVerify(params:)``
+///
+/// ### Listing factors
+/// - ``listFactors()``
+/// - ``getAuthenticatorAssuranceLevel()``
 public struct AuthMFA: Sendable {
   let clientID: AuthClientID
 

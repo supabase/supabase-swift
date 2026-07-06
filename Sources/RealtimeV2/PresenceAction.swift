@@ -7,12 +7,23 @@
 
 public import Foundation
 
+/// The presence state of a single client tracked on a Realtime channel.
+///
+/// Instances are received via ``PresenceAction/joins`` and ``PresenceAction/leaves``
+/// when other clients call ``RealtimeChannelV2/track(_:)`` or ``RealtimeChannelV2/untrack()``.
+///
+/// ## Topics
+/// ### Properties
+/// - ``ref``
+/// - ``state``
+/// ### Decoding
+/// - ``decodeState(as:decoder:)``
 public struct PresenceV2: Hashable, Sendable {
-  /// The presence reference of the object.
+  /// The server-assigned presence reference string that uniquely identifies this presence entry.
   public let ref: String
 
-  /// The object the other client is tracking. Can be done via the
-  /// ``RealtimeChannelV2/track(state:)`` method.
+  /// The arbitrary state payload the client published via ``RealtimeChannelV2/track(_:)``,
+  /// stored as a ``JSONObject``.
   public let state: JSONObject
 }
 
@@ -77,10 +88,16 @@ extension PresenceV2: Codable {
     try container.encode(state, forKey: _StringCodingKey("state"))
   }
 
-  /// Decode ``state``.
+  /// Decodes the ``state`` dictionary into a `Decodable` model.
   ///
-  /// - Note: You can also receive your own presence, but without your state so be aware of
-  /// exceptions.
+  /// > Note: You may receive your own presence entry, but without your state payload,
+  /// > so be prepared to handle decoding failures gracefully.
+  ///
+  /// - Parameters:
+  ///   - type: The target `Decodable` type. Can be inferred from context.
+  ///   - decoder: A `JSONDecoder` to use. Defaults to `AnyJSON.decoder`.
+  /// - Returns: An instance of `T` decoded from the state data.
+  /// - Throws: A `DecodingError` if the state cannot be decoded into `T`.
   public func decodeState<T: Decodable>(
     as _: T.Type = T.self,
     decoder: JSONDecoder = AnyJSON.decoder
@@ -89,24 +106,38 @@ extension PresenceV2: Codable {
   }
 }
 
-/// Represents a presence action.
+/// An event describing clients joining and leaving a Realtime channel's presence set.
+///
+/// Received via ``RealtimeChannelV2/onPresenceChange(_:)`` or
+/// ``RealtimeChannelV2/presenceChange()``.
+///
+/// ## Topics
+/// ### Presence Maps
+/// - ``joins``
+/// - ``leaves``
+/// ### Decoding Helpers
+/// - ``decodeJoins(as:ignoreOtherTypes:decoder:)``
+/// - ``decodeLeaves(as:ignoreOtherTypes:decoder:)``
 public protocol PresenceAction: Sendable, HasRawMessage {
-  /// Represents a map of ``PresenceV2`` objects indexed by their key.
-  ///
-  /// Your own key can be customized when creating the channel within the presence config.
+  /// A map of presence entries that joined the channel since the last event, keyed by the
+  /// client-defined presence key (configured via ``PresenceJoinConfig/key``).
   var joins: [String: PresenceV2] { get }
 
-  /// Represents a map of ``PresenceV2`` objects indexed by their key.
-  ///
-  /// Your own key can be customized when creating the channel within the presence config.
+  /// A map of presence entries that left the channel since the last event, keyed by the
+  /// client-defined presence key.
   var leaves: [String: PresenceV2] { get }
 }
 
 extension PresenceAction {
-  /// Decode all ``PresenceAction/joins`` values.
+  /// Decodes all ``joins`` entries into an array of `Decodable` values.
+  ///
   /// - Parameters:
-  ///   - ignoreOtherTypes: Whether to ignore presences which cannot be decoded such as your own
-  /// presence.
+  ///   - type: The target `Decodable` type. Can be inferred from context.
+  ///   - ignoreOtherTypes: When `true`, presences whose state cannot be decoded to `T` are
+  ///     silently skipped (e.g. your own presence without a state payload). Defaults to `true`.
+  ///   - decoder: A `JSONDecoder` to use. Defaults to `AnyJSON.decoder`.
+  /// - Returns: An array of `T` values decoded from the joined presences.
+  /// - Throws: A `DecodingError` when `ignoreOtherTypes` is `false` and any presence cannot be decoded.
   public func decodeJoins<T: Decodable>(
     as _: T.Type = T.self,
     ignoreOtherTypes: Bool = true,
@@ -119,10 +150,15 @@ extension PresenceAction {
     return try joins.values.map { try $0.decodeState(as: T.self, decoder: decoder) }
   }
 
-  /// Decode all ``PresenceAction/leaves`` values.
+  /// Decodes all ``leaves`` entries into an array of `Decodable` values.
+  ///
   /// - Parameters:
-  ///   - ignoreOtherTypes: Whether to ignore presences which cannot be decoded such as your own
-  /// presence.
+  ///   - type: The target `Decodable` type. Can be inferred from context.
+  ///   - ignoreOtherTypes: When `true`, presences whose state cannot be decoded to `T` are
+  ///     silently skipped. Defaults to `true`.
+  ///   - decoder: A `JSONDecoder` to use. Defaults to `AnyJSON.decoder`.
+  /// - Returns: An array of `T` values decoded from the leaving presences.
+  /// - Throws: A `DecodingError` when `ignoreOtherTypes` is `false` and any presence cannot be decoded.
   public func decodeLeaves<T: Decodable>(
     as _: T.Type = T.self,
     ignoreOtherTypes: Bool = true,

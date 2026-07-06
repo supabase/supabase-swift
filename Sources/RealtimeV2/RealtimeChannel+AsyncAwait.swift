@@ -9,7 +9,12 @@ import ConcurrencyExtras
 public import Foundation
 
 extension RealtimeChannelV2 {
-  /// Listen for clients joining / leaving the channel using presences.
+  /// Returns an async stream that emits a ``PresenceAction`` whenever clients join or leave.
+  ///
+  /// The stream terminates when the caller cancels the enclosing task or the channel is removed.
+  /// Register this stream before calling ``subscribeWithError()``.
+  ///
+  /// - Returns: An `AsyncStream` of ``PresenceAction`` values.
   public func presenceChange() -> AsyncStream<any PresenceAction> {
     let (stream, continuation) = AsyncStream<any PresenceAction>.makeStream()
 
@@ -24,7 +29,16 @@ extension RealtimeChannelV2 {
     return stream
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Returns an async stream of ``InsertAction`` values for the given table.
+  ///
+  /// Register this stream before calling ``subscribeWithError()``.
+  ///
+  /// - Parameters:
+  ///   - type: Pass `InsertAction.self`.
+  ///   - schema: The database schema. Defaults to `"public"`.
+  ///   - table: The table name, or `nil` to match all tables.
+  ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
+  /// - Returns: An `AsyncStream<InsertAction>`.
   public func postgresChange(
     _: InsertAction.Type,
     schema: String = "public",
@@ -38,7 +52,9 @@ extension RealtimeChannelV2 {
     .compactErase()
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Returns an async stream of ``InsertAction`` values for the given table using a raw filter string.
+  ///
+  /// > Warning: Use the ``RealtimePostgresFilter``-based overload instead.
   @available(
     *,
     deprecated,
@@ -56,7 +72,16 @@ extension RealtimeChannelV2 {
       .compactErase()
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Returns an async stream of ``UpdateAction`` values for the given table.
+  ///
+  /// Register this stream before calling ``subscribeWithError()``.
+  ///
+  /// - Parameters:
+  ///   - type: Pass `UpdateAction.self`.
+  ///   - schema: The database schema. Defaults to `"public"`.
+  ///   - table: The table name, or `nil` to match all tables.
+  ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
+  /// - Returns: An `AsyncStream<UpdateAction>`.
   public func postgresChange(
     _: UpdateAction.Type,
     schema: String = "public",
@@ -70,7 +95,9 @@ extension RealtimeChannelV2 {
     .compactErase()
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Returns an async stream of ``UpdateAction`` values for the given table using a raw filter string.
+  ///
+  /// > Warning: Use the ``RealtimePostgresFilter``-based overload instead.
   @available(
     *,
     deprecated,
@@ -88,7 +115,16 @@ extension RealtimeChannelV2 {
       .compactErase()
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Returns an async stream of ``DeleteAction`` values for the given table.
+  ///
+  /// Register this stream before calling ``subscribeWithError()``.
+  ///
+  /// - Parameters:
+  ///   - type: Pass `DeleteAction.self`.
+  ///   - schema: The database schema. Defaults to `"public"`.
+  ///   - table: The table name, or `nil` to match all tables.
+  ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
+  /// - Returns: An `AsyncStream<DeleteAction>`.
   public func postgresChange(
     _: DeleteAction.Type,
     schema: String = "public",
@@ -102,7 +138,9 @@ extension RealtimeChannelV2 {
     .compactErase()
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Returns an async stream of ``DeleteAction`` values for the given table using a raw filter string.
+  ///
+  /// > Warning: Use the ``RealtimePostgresFilter``-based overload instead.
   @available(
     *,
     deprecated,
@@ -120,7 +158,16 @@ extension RealtimeChannelV2 {
       .compactErase()
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Returns an async stream of ``AnyAction`` values for all change types on the given table.
+  ///
+  /// Register this stream before calling ``subscribeWithError()``.
+  ///
+  /// - Parameters:
+  ///   - type: Pass `AnyAction.self`.
+  ///   - schema: The database schema. Defaults to `"public"`.
+  ///   - table: The table name, or `nil` to match all tables.
+  ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
+  /// - Returns: An `AsyncStream<AnyAction>`.
   public func postgresChange(
     _: AnyAction.Type,
     schema: String = "public",
@@ -133,7 +180,9 @@ extension RealtimeChannelV2 {
     )
   }
 
-  /// Listen for postgres changes in a channel.
+  /// Returns an async stream of ``AnyAction`` values using a raw filter string.
+  ///
+  /// > Warning: Use the ``RealtimePostgresFilter``-based overload instead.
   @available(
     *,
     deprecated,
@@ -173,7 +222,12 @@ extension RealtimeChannelV2 {
     return stream
   }
 
-  /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
+  /// Returns an async stream of ``JSONObject`` broadcast payloads for the given event.
+  ///
+  /// The stream terminates when the caller cancels the enclosing task or the channel is removed.
+  ///
+  /// - Parameter event: The broadcast event name to listen for.
+  /// - Returns: An `AsyncStream<JSONObject>`.
   public func broadcastStream(event: String) -> AsyncStream<JSONObject> {
     let (stream, continuation) = AsyncStream<JSONObject>.makeStream()
 
@@ -188,7 +242,13 @@ extension RealtimeChannelV2 {
     return stream
   }
 
-  /// Listen for binary broadcast messages sent by other clients within the same channel under a specific `event`.
+  /// Returns an async stream of raw binary `Data` broadcast payloads for the given event.
+  ///
+  /// Use this when the sender is transmitting binary data via ``RealtimeChannelV2/broadcast(event:data:)``.
+  /// Requires protocol ``RealtimeProtocolVersion/v2``.
+  ///
+  /// - Parameter event: The broadcast event name to listen for.
+  /// - Returns: An `AsyncStream<Data>`.
   public func broadcastDataStream(event: String) -> AsyncStream<Data> {
     let (stream, continuation) = AsyncStream<Data>.makeStream()
 
@@ -203,7 +263,11 @@ extension RealtimeChannelV2 {
     return stream
   }
 
-  /// Listen for `system` event.
+  /// Returns an async stream that emits the ``RealtimeMessageV2`` for every `system` event.
+  ///
+  /// System events convey channel-level status information from the server.
+  ///
+  /// - Returns: An `AsyncStream<RealtimeMessageV2>`.
   public func system() -> AsyncStream<RealtimeMessageV2> {
     let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream()
 
@@ -218,7 +282,9 @@ extension RealtimeChannelV2 {
     return stream
   }
 
-  /// Listen for broadcast messages sent by other clients within the same channel under a specific `event`.
+  /// Returns an async stream of ``JSONObject`` broadcast payloads for the given event.
+  ///
+  /// > Warning: Renamed to ``broadcastStream(event:)``.
   @available(*, deprecated, renamed: "broadcastStream(event:)")
   public func broadcast(event: String) -> AsyncStream<JSONObject> {
     broadcastStream(event: event)
