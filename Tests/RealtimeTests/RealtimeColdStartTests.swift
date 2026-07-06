@@ -127,7 +127,7 @@ final class RealtimeColdStartTests: XCTestCase {
   /// must re-send `phx_join` on the new socket. Before this fix,
   /// `ChannelStateManager.subscribe()` was a no-op for `.subscribed` channels,
   /// so `rejoinChannels()` silently skipped them — channels went deaf after
-  /// the first reconnect (reported by rpiacent on PR #1003).
+  /// the first reconnect (reported by rpiacent on PR #1003). // cspell:ignore rpiacent
   func testChannelsRejoinAfterReconnect() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
