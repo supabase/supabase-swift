@@ -188,9 +188,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
   ///     The bucket must already exist before attempting to upload.
   ///   - data: The raw bytes to store in the bucket.
-  ///   - options: Upload options such as cache control, content type, and upsert behaviour.
+  ///   - options: Upload options such as cache control, content type, and upsert behavior.
   /// - Returns: A ``FileUploadResponse`` containing the stored object's identifier and path.
-  /// - Throws: ``StorageError`` if the upload fails or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
   @discardableResult
   public func upload(
     _ path: String,
@@ -215,9 +215,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
   ///     The bucket must already exist before attempting to upload.
   ///   - fileURL: A `file://` URL pointing to the local file to upload.
-  ///   - options: Upload options such as cache control, content type, and upsert behaviour.
+  ///   - options: Upload options such as cache control, content type, and upsert behavior.
   /// - Returns: A ``FileUploadResponse`` containing the stored object's identifier and path.
-  /// - Throws: ``StorageError`` if the upload fails or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
   @discardableResult
   public func upload(
     _ path: String,
@@ -243,7 +243,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - data: The raw bytes to overwrite the existing file with.
   ///   - options: Upload options such as cache control and content type.
   /// - Returns: A ``FileUploadResponse`` containing the updated object's identifier and path.
-  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   @discardableResult
   public func update(
     _ path: String,
@@ -269,7 +269,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - fileURL: A `file://` URL pointing to the local file to use as the replacement.
   ///   - options: Upload options such as cache control and content type.
   /// - Returns: A ``FileUploadResponse`` containing the updated object's identifier and path.
-  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   @discardableResult
   public func update(
     _ path: String,
@@ -295,7 +295,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - destination: The new file path including the new file name, e.g. `"archive/image.png"`.
   ///   - options: Optional ``DestinationOptions`` specifying a destination bucket. When `nil`,
   ///     the file is moved within the same bucket.
-  /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
   public func move(
     from source: String,
     to destination: String,
@@ -329,7 +329,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Optional ``DestinationOptions`` specifying a destination bucket. When `nil`,
   ///     the file is copied within the same bucket.
   /// - Returns: The full storage path of the newly created copy.
-  /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
   @discardableResult
   public func copy(
     from source: String,
@@ -369,7 +369,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: A signed `URL` ready to share.
-  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   @_disfavoredOverload
   public func createSignedURL(
     path: String,
@@ -423,7 +423,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: A signed `URL` ready to share.
-  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   public func createSignedURL(
     path: String,
     expiresIn: Int,
@@ -454,7 +454,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: An array of ``SignedURLResult`` values, one per requested path.
-  /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorised). Individual missing
+  /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
   ///   paths are reported as ``SignedURLResult/failure(path:error:)`` rather than thrown.
   @_disfavoredOverload
   public func createSignedURLs(
@@ -519,7 +519,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: An array of ``SignedURLResult`` values, one per requested path, preserving order.
-  /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorised). Individual missing
+  /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
   ///   paths are reported as ``SignedURLResult/failure(path:error:)`` rather than thrown.
   public func createSignedURLs(
     paths: [String],
@@ -585,7 +585,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameter paths: File paths to delete, including the file name,
   ///   e.g. `["folder/image.png", "other/doc.pdf"]`.
   /// - Returns: An array of ``FileObject`` values representing the files that were removed.
-  /// - Throws: ``StorageError`` if the request fails or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   @discardableResult
   public func remove(paths: [String]) async throws -> [FileObject] {
     try await execute(
@@ -609,7 +609,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Search options for filtering, sorting, and paginating results. Defaults to the
   ///     first 100 files sorted by name ascending.
   /// - Returns: An array of ``FileObject`` values representing the matching files and folders.
-  /// - Throws: ``StorageError`` if the request fails or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func list(
     path: String? = nil,
     options: SearchOptions? = nil
@@ -646,7 +646,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: The raw file data.
-  /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
   @discardableResult
   public func download(
     path: String,
@@ -681,7 +681,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///
   /// - Parameter path: The file path including the file name, e.g. `"folder/image.png"`.
   /// - Returns: A ``FileObjectV2`` containing size, content type, ETag, and other metadata.
-  /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
   public func info(path: String) async throws -> FileObjectV2 {
     let _path = _getFinalPath(path)
 
@@ -701,7 +701,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameter path: The file path including the file name, e.g. `"folder/image.png"`.
   /// - Returns: `true` if the file exists and is accessible, `false` if it does not exist.
   /// - Throws: ``StorageError`` for errors other than "not found" (e.g. network failure or
-  ///   authorisation errors).
+  ///   authorization errors).
   public func exists(path: String) async throws -> Bool {
     do {
       try await execute(
@@ -832,9 +832,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///
   /// - Parameters:
   ///   - path: The destination file path including the file name, e.g. `"folder/image.png"`.
-  ///   - options: Optional ``CreateSignedUploadURLOptions`` controlling upsert behaviour.
+  ///   - options: Optional ``CreateSignedUploadURLOptions`` controlling upsert behavior.
   /// - Returns: A ``SignedUploadURL`` containing the signed URL and an upload token.
-  /// - Throws: ``StorageError`` if the request fails or the caller is not authorised.
+  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func createSignedUploadURL(
     path: String,
     options: CreateSignedUploadURLOptions? = nil

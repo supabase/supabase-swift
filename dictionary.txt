@@ -55,6 +55,7 @@ Guilherme
 Gxlbmdl
 heartbeating
 Heartbeating
+hostnames
 HTTPURL
 Ilike
 ilike
@@ -68,8 +69,10 @@ JWKS
 kakao
 Kakao
 kiwicopple
+letterboxing
 libro
 libros
+lkmo
 lifecycles
 linkedin
 LinkedIn
