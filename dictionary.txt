@@ -83,11 +83,7 @@ Metas
 newbucket
 niled
 Nlci
-nawailas
-ndragarcia
-nkiwicopple
 nosec
-nsupabot
 NSEC
 NSPOSIX
 NSURL
@@ -123,7 +119,6 @@ refreshable
 refreshtoken
 resends
 Resends
-rpiacent
 Rlbn
 Rvci
 sadcat
