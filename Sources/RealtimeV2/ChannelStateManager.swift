@@ -306,7 +306,7 @@ actor ChannelStateManager {
         )
 
         do {
-          try await _clock.sleep(for: delay)
+          try await _clock.sleep(for: .seconds(delay))
           if !(await ensureSocketConnected()) {
             logger?.debug("Socket disconnected during retry delay for '\(topic)'")
             throw CancellationError()

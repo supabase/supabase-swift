@@ -18,7 +18,7 @@ private let _platform: String? = {
     #if targetEnvironment(macCatalyst)
       return "macCatalyst"
     #else
-      if #available(iOS 14.0, *), ProcessInfo.processInfo.isiOSAppOnMac {
+      if ProcessInfo.processInfo.isiOSAppOnMac {
         return "iOSAppOnMac"
       }
       return "iOS"

@@ -243,7 +243,7 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
   override func tearDown() {
     super.tearDown()
     #if DEBUG
-      _clock = _resolveClock()
+      _clock = ContinuousClock()
     #endif
   }
 
@@ -475,6 +475,9 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 }
 
 /// A no-op clock for tests — skips all sleep delays so retry tests run instantly.
-struct ImmediateRetryTestClock: _Clock {
-  func sleep(for duration: TimeInterval) async throws {}
+struct ImmediateRetryTestClock: Clock {
+  var now: ContinuousClock.Instant { ContinuousClock().now }
+  var minimumResolution: ContinuousClock.Instant.Duration { ContinuousClock().minimumResolution }
+
+  func sleep(until deadline: ContinuousClock.Instant, tolerance: Duration?) async throws {}
 }

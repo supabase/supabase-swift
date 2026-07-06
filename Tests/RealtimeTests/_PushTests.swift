@@ -14,7 +14,6 @@ import XCTest
 
 #if !os(Android) && !os(Linux) && !os(Windows)
   @MainActor
-  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   final class _PushTests: XCTestCase {
     var ws: FakeWebSocket!
     var socket: RealtimeClientV2!
