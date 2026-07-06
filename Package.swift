@@ -226,9 +226,9 @@ let package = Package(
 )
 
 for target in package.targets {
-  // Test targets never opted into `StrictConcurrency`/`ExistentialAny` below, so bumping
-  // swift-tools-version to 6.1 must not silently switch their *default* language mode to
-  // Swift 6 either — pin them to v5 to preserve their pre-6.1 compilation behavior exactly.
+  // Test targets never opted into `ExistentialAny` below, so bumping swift-tools-version
+  // to 6.1 must not silently switch their *default* language mode to Swift 6 either —
+  // pin them to v5 to preserve their pre-6.1 compilation behavior exactly.
   if target.isTest {
     target.swiftSettings = [.swiftLanguageMode(.v5)]
     continue
@@ -238,7 +238,6 @@ for target in package.targets {
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("ImmutableWeakCaptures"),
     .enableUpcomingFeature("InferIsolatedConformances"),
-    .enableExperimentalFeature("StrictConcurrency"),
   ]
 
   // The `Realtime` target hosts the legacy pre-async/await Phoenix client under
