@@ -14,7 +14,6 @@ import XCTest
 /// queue) — instead of the synchronous delivery of `FakeWebSocket`, which
 /// masks the races involved. They run against the real clock with compressed
 /// intervals, deliberately NOT under `withMainSerialExecutor`.
-@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class RealtimeColdStartTests: XCTestCase {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"

@@ -82,7 +82,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let serializer = RealtimeSerializer()
   // Captured at init time so parallel test classes that swap _clock cannot
   // change the timing of an already-running client.
-  let clock: any _Clock
+  let clock: any Clock<Duration>
 
   let connectionManager: ConnectionManager
 
@@ -168,7 +168,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     options: RealtimeClientOptions,
     wsTransport: @escaping WebSocketTransport,
     http: any HTTPClientType,
-    clock: any _Clock = _clock
+    clock: any Clock<Duration> = _clock
   ) {
     var options = options
     if options.headers[.xClientInfo] == nil {
@@ -399,7 +399,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       state.pendingDisconnectTask?.cancel()
       state.pendingDisconnectTask = Task { [weak self, clock] in
         do {
-          try await clock.sleep(for: delay)
+          try await clock.sleep(for: .seconds(delay))
           self?.disconnect()
         } catch {
           // Cancelled: a new channel was added or disconnect() was called directly.
@@ -512,7 +512,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
       state.heartbeatTask = Task { [weak self, options, clock] in
         while !Task.isCancelled {
-          try? await clock.sleep(for: options.heartbeatInterval)
+          try? await clock.sleep(for: .seconds(options.heartbeatInterval))
           guard let self, !Task.isCancelled else {
             break
           }
