@@ -804,7 +804,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// .textSearch("content", query: "swift programming")
   ///
   /// // Web-search syntax with a specific language configuration
-  /// .textSearch("content", query: "swift OR kotlin", config: "english", type: .websearch)
+  /// .textSearch("content", query: "swift OR ios", config: "english", type: .websearch)
   /// ```
   ///
   /// - Parameters:
@@ -859,7 +859,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// This is an escape hatch for filters not covered by the typed convenience methods. The
   /// `operator` and `value` strings are sent to PostgREST as-is and must follow
   /// [PostgREST syntax](https://postgrest.org/en/stable/api.html#operators). You are responsible
-  /// for sanitising user-supplied values to prevent injection.
+  /// for sanitizing user-supplied values to prevent injection.
   ///
   /// ```swift
   /// // Equivalent to .eq("status", value: "active")

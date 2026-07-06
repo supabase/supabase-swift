@@ -110,7 +110,7 @@ public enum CountOption: String, Sendable {
 
   /// Uses PostgreSQL statistics for a fast but approximate row count.
   ///
-  /// The estimate is derived from `pg_class.reltuples` and may be inaccurate
+  /// The estimate is derived from `pg_class.reltuples` and may be inaccurate  // cspell:ignore reltuples
   /// if the table statistics are stale.
   case planned
 
@@ -134,7 +134,7 @@ public enum PostgrestReturningOptions: String, Sendable {
   /// Returns nothing from the server after the write.
   ///
   /// Use this option when you do not need the affected rows, as it avoids
-  /// the overhead of serialising and transmitting them.
+  /// the overhead of serializing and transmitting them.
   case minimal
 
   /// Returns a copy of the written rows.
@@ -172,7 +172,7 @@ public enum TextSearchType: String, Sendable {
 /// The output format of a PostgREST EXPLAIN plan.
 ///
 /// Pass an ``ExplainFormat`` value to ``PostgrestTransformBuilder/explain(analyze:verbose:settings:buffers:wal:format:)``
-/// to choose how the query plan is serialised in the response.
+/// to choose how the query plan is serialized in the response.
 ///
 /// ## Topics
 ///
@@ -199,12 +199,12 @@ public struct ExplainFormat: RawRepresentable, Hashable, Sendable {
 
   /// Human-readable text output (the default).
   ///
-  /// Produces the same indented text that `EXPLAIN` prints in `psql`.
+  /// Produces the same indented text that `EXPLAIN` prints in `psql`. // cspell:ignore psql
   public static let text = ExplainFormat(rawValue: "text")
 
   /// Machine-readable JSON output.
   ///
-  /// Useful when you want to programmatically inspect or visualise the query plan.
+  /// Useful when you want to programmatically inspect or visualize the query plan.
   public static let json = ExplainFormat(rawValue: "json")
 }
 

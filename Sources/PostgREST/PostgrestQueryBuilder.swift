@@ -40,7 +40,7 @@ import Foundation
 ///
 /// - ``update(_:returning:count:)``
 ///
-/// ### Upserting Rows
+/// ### Upsert Rows
 ///
 /// - ``upsert(_:onConflict:returning:count:ignoreDuplicates:)``
 ///
@@ -133,7 +133,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   ///   - returning: Controls which rows PostgREST returns. Defaults to `nil` (server decides).
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
   /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
-  /// - Throws: An encoding error if `values` cannot be serialised, or ``PostgrestError`` on server error.
+  /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func insert(
     _ values: some Encodable,
     returning: PostgrestReturningOptions? = nil,
@@ -202,7 +202,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   ///   - ignoreDuplicates: When `true`, conflicting rows are silently ignored. When `false` (the
   ///     default), conflicting rows are merged with the supplied values.
   /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
-  /// - Throws: An encoding error if `values` cannot be serialised, or ``PostgrestError`` on server error.
+  /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func upsert(
     _ values: some Encodable,
     onConflict: String? = nil,
@@ -269,7 +269,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   ///   - returning: Controls which rows PostgREST returns after the update. Defaults to ``PostgrestReturningOptions/representation``.
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
   /// - Returns: A ``PostgrestFilterBuilder`` for scoping which rows are affected.
-  /// - Throws: An encoding error if `values` cannot be serialised, or ``PostgrestError`` on server error.
+  /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func update(
     _ values: some Encodable,
     returning: PostgrestReturningOptions = .representation,

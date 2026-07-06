@@ -56,7 +56,7 @@ public final class PostgrestClient: Sendable {
   /// A closure that performs an HTTP request and returns the raw response data and metadata.
   ///
   /// Provide a custom ``FetchHandler`` through ``Configuration`` when you need to intercept,
-  /// mock, or otherwise customise the HTTP transport layer. The default implementation uses
+  /// mock, or otherwise customize the HTTP transport layer. The default implementation uses
   /// `URLSession.shared`.
   public typealias FetchHandler =
     @Sendable (_ request: URLRequest) async throws -> (
@@ -106,12 +106,12 @@ public final class PostgrestClient: Sendable {
     /// testing or when you need to add authentication, logging, or other middleware.
     public var fetch: FetchHandler
 
-    /// The `JSONEncoder` used to serialise request bodies.
+    /// The `JSONEncoder` used to serialize request bodies.
     ///
     /// Defaults to ``jsonEncoder``, which is pre-configured with Supabase-compatible settings.
     public var encoder: JSONEncoder
 
-    /// The `JSONDecoder` used to deserialise response bodies.
+    /// The `JSONDecoder` used to deserialize response bodies.
     ///
     /// Defaults to ``jsonDecoder``, which is pre-configured with Supabase-compatible settings.
     public var decoder: JSONDecoder
@@ -179,7 +179,7 @@ public final class PostgrestClient: Sendable {
 
   /// Creates a ``PostgrestClient`` with individual configuration parameters.
   ///
-  /// This is a convenience initialiser that constructs a ``Configuration`` internally.
+  /// This is a convenience initializer that constructs a ``Configuration`` internally.
   /// Use ``init(configuration:)`` when you need to share or reuse a configuration value.
   ///
   /// - Parameters:
@@ -270,7 +270,7 @@ public final class PostgrestClient: Sendable {
   ///   - get: When `true`, parameters are sent as query string items and the function runs in read-only mode.
   ///   - count: The row-count algorithm to use for [set-returning functions](https://www.postgresql.org/docs/current/functions-srf.html), or `nil` to skip counting.
   /// - Returns: A ``PostgrestFilterBuilder`` that you can further filter or execute.
-  /// - Throws: ``PostgrestError`` if `params` cannot be serialised to a key-value JSON object when using `head` or `get`.
+  /// - Throws: ``PostgrestError`` if `params` cannot be serialized to a key-value JSON object when using `head` or `get`.
   public func rpc(
     _ fn: String,
     params: some Encodable,
