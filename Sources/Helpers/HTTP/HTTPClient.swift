@@ -8,7 +8,7 @@
 package import Foundation
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  package import FoundationNetworking
 #endif
 
 package protocol HTTPClientType: Sendable {

@@ -9,7 +9,7 @@ package import Foundation
 package import HTTPTypes
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  package import FoundationNetworking
 #endif
 
 package struct HTTPResponse: Sendable {
