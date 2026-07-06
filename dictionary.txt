@@ -55,6 +55,7 @@ Guilherme
 Gxlbmdl
 heartbeating
 Heartbeating
+hostnames
 HTTPURL
 Ilike
 ilike
@@ -68,6 +69,7 @@ JWKS
 kakao
 Kakao
 kiwicopple
+letterboxing
 libro
 libros
 lifecycles
@@ -81,11 +83,7 @@ Metas
 newbucket
 niled
 Nlci
-nawailas
-ndragarcia
-nkiwicopple
 nosec
-nsupabot
 NSEC
 NSPOSIX
 NSURL
@@ -121,7 +119,6 @@ refreshable
 refreshtoken
 resends
 Resends
-rpiacent
 Rlbn
 Rvci
 sadcat
