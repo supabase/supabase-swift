@@ -9,12 +9,12 @@
 #   DERIVED_DATA_PATH    (default: ~/.derivedData/$CONFIG)
 set -euo pipefail
 
-CONFIG="${CONFIG:-Debug}"
-PLATFORM="${PLATFORM:-IOS}"
-SCHEME="${SCHEME:-Supabase}"
-WORKSPACE="${WORKSPACE:-Supabase.xcworkspace}"
-XCODEBUILD_ARGUMENT="${XCODEBUILD_ARGUMENT:-test}"
-DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$HOME/.derivedData/$CONFIG}"
+CONFIG="${CONFIG-Debug}"
+PLATFORM="${PLATFORM-IOS}"
+SCHEME="${SCHEME-Supabase}"
+WORKSPACE="${WORKSPACE-Supabase.xcworkspace}"
+XCODEBUILD_ARGUMENT="${XCODEBUILD_ARGUMENT-test}"
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH-$HOME/.derivedData/$CONFIG}"
 
 udid_for() {
   xcrun simctl list --json devices available "$1" \
@@ -48,8 +48,14 @@ XCODEBUILD_FLAGS=(
   -workspace "$WORKSPACE"
 )
 
+XCODEBUILD_ARGS=()
+if [[ -n "$XCODEBUILD_ARGUMENT" ]]; then
+  XCODEBUILD_ARGS+=("$XCODEBUILD_ARGUMENT")
+fi
+XCODEBUILD_ARGS+=("${XCODEBUILD_FLAGS[@]}")
+
 if command -v xcbeautify >/dev/null 2>&1; then
-  xcodebuild "$XCODEBUILD_ARGUMENT" "${XCODEBUILD_FLAGS[@]}" | xcbeautify
+  xcodebuild "${XCODEBUILD_ARGS[@]}" | xcbeautify
 else
-  xcodebuild "$XCODEBUILD_ARGUMENT" "${XCODEBUILD_FLAGS[@]}"
+  xcodebuild "${XCODEBUILD_ARGS[@]}"
 fi
