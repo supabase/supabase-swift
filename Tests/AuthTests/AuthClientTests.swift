@@ -5,14 +5,13 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
+@_spi(Experimental) @testable import Auth
 import ConcurrencyExtras
 import CustomDump
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
 import XCTest
-
-@_spi(Experimental) @testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

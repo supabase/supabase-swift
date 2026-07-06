@@ -969,7 +969,7 @@ public class RealtimeClient: PhoenixTransportDelegate {
      We use NORMAL here since the client is the one determining to close the
      connection. However, we set to close status to abnormal so that
      the client knows that it should attempt to reconnect.
-
+    
      If the server subsequently acknowledges with code 1000 (normal close),
      the socket will keep the `.abnormal` close status and trigger a reconnection.
      */
