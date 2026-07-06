@@ -510,10 +510,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     mutableState.withValue { state in
       state.heartbeatTask?.cancel()
 
-      state.heartbeatTask = Task { [options, clock] in
+      state.heartbeatTask = Task { [weak self, options, clock] in
         while !Task.isCancelled {
           try? await clock.sleep(for: options.heartbeatInterval)
-          if Task.isCancelled {
+          guard let self, !Task.isCancelled else {
             break
           }
           await self.sendHeartbeat()
