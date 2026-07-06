@@ -195,6 +195,33 @@ import XCTest
       XCTAssertEqual(sut.status, .disconnected)
     }
 
+    func testHeartbeatTaskDoesNotRetainClient() async throws {
+      weak var weakClient: RealtimeClientV2?
+
+      func scope() async {
+        let sut = makeClient()
+        weakClient = sut
+        await sut.connect()
+        XCTAssertEqual(sut.status, .connected)
+
+        await testClock.advance(by: .seconds(30))
+
+        servers.value.last?.close(code: 4001, reason: "test teardown")
+      }
+      await scope()
+
+      let deadline = Date().addingTimeInterval(5)
+      while weakClient != nil, Date() < deadline {
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 10_000_000)
+      }
+
+      XCTAssertNil(
+        weakClient,
+        "RealtimeClientV2 leaked: the heartbeat task retained self, preventing deinit."
+      )
+    }
+
     func testHandleAppLifecycleFalseDoesNotInstallLifecycleManager() {
       let sut = makeClient(handleAppLifecycle: false)
       XCTAssertNil(sut.mutableState.lifecycleManager)
