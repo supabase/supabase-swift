@@ -7,6 +7,7 @@
 
 import Foundation
 
+// cspell:ignore pvzp
 struct RealtimeJoinPayload: Codable {
   var config: RealtimeJoinConfig
   var accessToken: String?

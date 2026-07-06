@@ -18,9 +18,10 @@ import IssueReporting
   }
 #endif
 
+// cspell:ignore pvzp hhoc cnrp
 /// Configuration for a ``RealtimeChannelV2``.
 ///
-/// Pass a builder closure to ``RealtimeClientV2/channel(_:options:)`` to customise
+/// Pass a builder closure to ``RealtimeClientV2/channel(_:options:)`` to customize
 /// broadcast, presence, and privacy settings before subscribing.
 ///
 /// ## Topics

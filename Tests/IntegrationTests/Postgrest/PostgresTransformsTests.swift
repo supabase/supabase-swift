@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 07/05/24.
 //
 
+// cspell:ignore nsupabot nkiwicopple nawailas ndragarcia
 import InlineSnapshotTesting
 import PostgREST
 import XCTest
@@ -280,7 +281,7 @@ final class PostgrestTransformsTests: XCTestCase {
       .csv().execute().string()
     assertInlineSnapshot(of: res, as: .json) {
       #"""
-      "username,data,age_range,status,catchphrase\nsupabot,,\"[1,2)\",ONLINE,\"'cat' 'fat'\"\nkiwicopple,,\"[25,35)\",OFFLINE,\"'bat' 'cat'\"\nawailas,,\"[25,35)\",ONLINE,\"'bat' 'rat'\"\ndragarcia,,\"[20,30)\",ONLINE,\"'fat' 'rat'\""  // cspell:ignore nsupabot nkiwicopple nawailas ndragarcia
+      "username,data,age_range,status,catchphrase\nsupabot,,\"[1,2)\",ONLINE,\"'cat' 'fat'\"\nkiwicopple,,\"[25,35)\",OFFLINE,\"'bat' 'cat'\"\nawailas,,\"[25,35)\",ONLINE,\"'bat' 'rat'\"\ndragarcia,,\"[20,30)\",ONLINE,\"'fat' 'rat'\""
       """#
     }
   }
