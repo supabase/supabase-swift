@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 07/05/24.
 //
 
+// cspell:ignore nsupabot nkiwicopple nawailas ndragarcia
 import InlineSnapshotTesting
 import PostgREST
 import XCTest

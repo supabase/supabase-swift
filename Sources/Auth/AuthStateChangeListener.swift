@@ -18,6 +18,11 @@ public protocol AuthStateChangeListenerRegistration: Sendable {
 
 extension ObservationToken: AuthStateChangeListenerRegistration {}
 
+/// A closure called whenever the authentication state changes.
+///
+/// - Parameters:
+///   - event: The ``AuthChangeEvent`` that triggered this invocation.
+///   - session: The current ``Session``, or `nil` when the user has signed out.
 public typealias AuthStateChangeListener =
   @Sendable (
     _ event: AuthChangeEvent,
