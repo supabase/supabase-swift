@@ -74,7 +74,7 @@ final class URLSessionWebSocket: WebSocket {
 
     let session = URLSession.sessionWithConfiguration(
       configuration ?? .default,
-      onComplete: { session, task, error in
+      onComplete: { _, _, error in
         mutableState.withValue {
           if let webSocket = $0.webSocket {
             // There are three possibilities here:
@@ -104,14 +104,14 @@ final class URLSessionWebSocket: WebSocket {
           }
         }
       },
-      onWebSocketTaskOpened: { session, task, `protocol` in
+      onWebSocketTaskOpened: { _, task, `protocol` in
         mutableState.withValue {
           $0.webSocket = URLSessionWebSocket(
             _task: task, _protocol: `protocol` ?? "", session: session)
           $0.continuation.resume(returning: $0.webSocket!)
         }
       },
-      onWebSocketTaskClosed: { session, task, code, reason in
+      onWebSocketTaskClosed: { _, _, code, reason in
         mutableState.withValue {
           assert($0.webSocket != nil, "connection should exist by this time")
           $0.webSocket!._connectionClosed(code: code, reason: reason)

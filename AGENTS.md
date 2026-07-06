@@ -86,6 +86,21 @@ npm ci --prefix tools/node   # one-time setup (re-run only when tools/node/packa
 
 Legitimate technical terms and project-specific words go in `dictionary.txt` at the repository root.
 
+### Linting
+
+```bash
+# Lint Sources and Tests (fails on any new violation)
+make lint
+
+# Autocorrect violations that SwiftLint can fix
+make lint-fix
+```
+
+This uses [SwiftLint](https://github.com/realm/SwiftLint) for code-smell and
+correctness rules; `swift-format` remains the source of truth for formatting,
+so the SwiftLint config (`.swiftlint.yml`) disables the purely stylistic rules
+that overlap with it. Install SwiftLint locally with `brew install swiftlint`.
+
 ### Documentation
 
 ```bash
@@ -297,6 +312,7 @@ supabase stop
 ## Important Notes for AI Coding Agents
 
 - Always run `./scripts/format.sh` before committing Swift code
+- Run `swiftlint lint --strict` before committing; it must not report new violations
 - Ensure new public APIs have DocC documentation comments
 - Add tests for all new functionality
 - Keep changes minimal and focused

@@ -38,11 +38,6 @@ final class FunctionsClientTests: XCTestCase {
     sessionConfiguration: sessionConfiguration
   )
 
-  override func setUp() {
-    super.setUp()
-    //    isRecording = true
-  }
-
   func testInit() async {
     let client = FunctionsClient(
       url: url,
