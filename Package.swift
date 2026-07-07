@@ -206,7 +206,9 @@ let package = Package(
     .testTarget(
       name: "SupabaseTests",
       dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         "Supabase",
       ]
