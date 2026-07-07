@@ -132,6 +132,60 @@ import XCTest
       XCTAssertNil(rsaKey, "RSA public key should be nil with invalid base64 modulus")
     }
 
+    func testRS256VerifyDoesNotCrashOnMalformedModulus() {
+      let jwk = JWK(
+        kty: "RSA",
+        keyOps: nil,
+        alg: "RS256",
+        kid: "malformed-key",
+        n: "AAAA",
+        e: "AQAB",
+        crv: nil,
+        x: nil,
+        y: nil,
+        k: nil
+      )
+
+      XCTAssertNil(jwk.rsaPublishKey, "Malformed modulus should not produce a key")
+
+      let header = #"{"alg":"RS256","typ":"JWT"}"#
+      let payload = #"{"sub":"1234567890"}"#
+      let headerB64 = Base64URL.encode(header.data(using: .utf8)!)
+      let payloadB64 = Base64URL.encode(payload.data(using: .utf8)!)
+      let signatureB64 = Base64URL.encode(Data([0x00, 0x01, 0x02, 0x03]))
+      let jwtString = "\(headerB64).\(payloadB64).\(signatureB64)"
+
+      guard let decoded = JWT.decode(jwtString) else {
+        XCTFail("Failed to decode JWT")
+        return
+      }
+
+      let isValid = JWTAlgorithm.rs256.verify(jwt: decoded, jwk: jwk)
+      XCTAssertFalse(isValid, "Verification with a malformed key should return false, not crash")
+    }
+
+    // MARK: - DER Encoding Tests
+
+    func testDEREncodeLongFormLengthWithInteriorZero() {
+      let content = [UInt8](repeating: 0xAB, count: 256)
+      let encoded = content.derEncode(as: 2)
+
+      XCTAssertEqual(encoded[0], 0x02, "Data type tag")
+      XCTAssertEqual(encoded[1], 0x82, "Long form with 2 length bytes")
+      XCTAssertEqual(encoded[2], 0x01, "High-order length byte")
+      XCTAssertEqual(encoded[3], 0x00, "Low-order length byte")
+      XCTAssertEqual(encoded.count, 4 + 256, "Header (4) + content (256)")
+    }
+
+    func testDEREncodeShortFormLength() {
+      let content = [UInt8](repeating: 0xAB, count: 5)
+      let encoded = content.derEncode(as: 2)
+
+      XCTAssertEqual(encoded[0], 0x02, "Data type tag")
+      XCTAssertEqual(encoded[1], 0x05, "Short form length")
+      XCTAssertEqual(encoded.count, 2 + 5, "Header (2) + content (5)")
+    }
+
     // MARK: - JWTAlgorithm Tests
 
     func testRS256VerificationWithValidSignature() {

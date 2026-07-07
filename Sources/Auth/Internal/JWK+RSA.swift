@@ -49,17 +49,14 @@ import Foundation
   }
 
   extension [UInt8] {
-    fileprivate func derEncode(as dataType: UInt8) -> [UInt8] {
+    func derEncode(as dataType: UInt8) -> [UInt8] {
       var encodedBytes: [UInt8] = [dataType]
-      var numberOfBytes = count
+      let numberOfBytes = count
       if numberOfBytes < 128 {
         encodedBytes.append(UInt8(numberOfBytes))
       } else {
-        let lengthData = Data(
-          bytes: &numberOfBytes,
-          count: MemoryLayout.size(ofValue: numberOfBytes)
-        )
-        let lengthBytes = [UInt8](lengthData).filter({ $0 != 0 }).reversed()
+        let lengthBytes = Swift.withUnsafeBytes(of: numberOfBytes.bigEndian) { Array($0) }
+          .drop { $0 == 0 }
         encodedBytes.append(UInt8(truncatingIfNeeded: lengthBytes.count) | 0b10000000)
         encodedBytes.append(contentsOf: lengthBytes)
       }
