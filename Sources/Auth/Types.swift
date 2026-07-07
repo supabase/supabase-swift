@@ -1161,6 +1161,8 @@ struct ResendEmailParams: Encodable {
   let type: ResendEmailType
   let email: String
   let gotrueMetaSecurity: AuthMetaSecurity?
+  let codeChallenge: String?
+  let codeChallengeMethod: String?
 }
 
 /// The type of mobile OTP to resend when calling ``AuthClient/resend(phone:type:captchaToken:)``.

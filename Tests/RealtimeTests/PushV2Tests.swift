@@ -299,7 +299,10 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
   private let _status = LockIsolated<RealtimeClientStatus>(.connected)
   let options: RealtimeClientOptions
   let http: any HTTPClientType = MockHTTPClient()
-  let broadcastURL = URL(string: "https://test.supabase.co/api/broadcast")!
+
+  func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL {
+    URL(string: "https://test.supabase.co/api/broadcast")!
+  }
 
   var status: RealtimeClientStatus {
     _status.value

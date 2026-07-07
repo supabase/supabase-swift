@@ -23,7 +23,7 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
   var status: RealtimeClientStatus { get }
   var options: RealtimeClientOptions { get }
   var http: any HTTPClientType { get }
-  var broadcastURL: URL { get }
+  func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL
 
   func connect() async
   func push(_ message: RealtimeMessageV2)
@@ -735,12 +735,18 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// is `nil`, the value is fetched from ``RealtimeClientOptions/accessToken`` if provided,
   /// or the token already stored on the client is used.
   ///
+  /// If ``RealtimeClientOptions/accessToken`` throws, the client keeps the current token and no update is sent to channels.
   /// - Parameter token: A JWT string, or `nil` to refresh from the configured `accessToken` callback.
   public func setAuth(_ token: String? = nil) async {
     var tokenToSend = token
 
     if tokenToSend == nil {
-      tokenToSend = try? await options.accessToken?()
+      do {
+        tokenToSend = try await options.accessToken?()
+      } catch {
+        options.logger?.error("Failed to fetch access token: \(error)")
+        return
+      }
     }
 
     guard tokenToSend != mutableState.accessToken else {
@@ -988,7 +994,47 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     return url
   }
 
-  var broadcastURL: URL {
-    url.appendingPathComponent("api/broadcast")
+  /// Builds the REST broadcast URL for a single event: `.../api/broadcast/{topic}/events/{event}`.
+  ///
+  /// Topic and event are percent-encoded as individual path segments (so values containing
+  /// `/` don't introduce extra path components), and a private channel adds `?private=true`.
+  func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL {
+    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+      return url
+    }
+
+    let encodedTopic =
+      topic.addingPercentEncoding(withAllowedCharacters: .sbURLPathComponentAllowed) ?? topic
+    let encodedEvent =
+      event.addingPercentEncoding(withAllowedCharacters: .sbURLPathComponentAllowed) ?? event
+
+    var path = components.percentEncodedPath
+    if path.hasSuffix("/") { path.removeLast() }
+    path += "/api/broadcast/\(encodedTopic)/events/\(encodedEvent)"
+    components.percentEncodedPath = path
+
+    if isPrivate {
+      components.queryItems = [URLQueryItem(name: "private", value: "true")]
+    }
+
+    guard let url = components.url else {
+      return url
+    }
+
+    return url
   }
+}
+
+extension CharacterSet {
+  /// Characters allowed in a single percent-encoded URL path segment (e.g. a broadcast
+  /// topic or event name).
+  ///
+  /// Restricted to RFC 3986 "unreserved" characters so values containing `/`, `:`, or other
+  /// reserved characters are always escaped rather than being interpreted as additional
+  /// path structure.
+  static let sbURLPathComponentAllowed: CharacterSet = {
+    var allowed = CharacterSet.alphanumerics
+    allowed.insert(charactersIn: "-._~")
+    return allowed
+  }()
 }

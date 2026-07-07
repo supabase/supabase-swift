@@ -151,10 +151,10 @@ Completion criterion: the catalog folder exists and the landing page compiles wi
 ## Step 5: Verify
 
 ```bash
-make test-docs
+./scripts/test-docs.sh
 ```
 
-If `make test-docs` is unavailable:
+If `./scripts/test-docs.sh` is unavailable:
 ```bash
 swift package generate-documentation --target ModuleName 2>&1 | grep -E "warning:|error:"
 ```

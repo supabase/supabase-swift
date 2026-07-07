@@ -650,12 +650,12 @@ import XCTest
 
     func testBroadcastWithHTTP() async throws {
       await http.when {
-        $0.url.path.hasSuffix("broadcast")
+        $0.url.path.contains("/api/broadcast/")
       } return: { _ in
         HTTPResponse(
           data: "{}".data(using: .utf8)!,
           response: HTTPURLResponse(
-            url: self.sut.broadcastURL,
+            url: self.url,
             statusCode: 200,
             httpVersion: nil,
             headerFields: nil
@@ -677,8 +677,8 @@ import XCTest
         	--header "Authorization: Bearer custom.access.token" \
         	--header "Content-Type: application/json" \
         	--header "apiKey: publishable.api.key" \
-        	--data "{\"messages\":[{\"event\":\"test\",\"payload\":{\"value\":42},\"private\":false,\"topic\":\"public:messages\"}]}" \
-        	"http://localhost:54321/realtime/v1/api/broadcast"
+        	--data "{\"value\":42}" \
+        	"http://localhost:54321/realtime/v1/api/broadcast/public%3Amessages/events/test"
         """#
       }
     }
@@ -694,6 +694,97 @@ import XCTest
     func testSetAuthWithNonJWT() async throws {
       let token = "sb-token"
       await sut.setAuth(token)
+    }
+
+    func testSetAuthKeepsCurrentTokenWhenAccessTokenFetchFails() async {
+      struct FetchError: Error {}
+
+      let sut = RealtimeClientV2(
+        url: url,
+        options: RealtimeClientOptions(
+          headers: ["apikey": apiKey],
+          accessToken: { throw FetchError() }
+        ),
+        wsTransport: { _, _ in self.client },
+        http: http
+      )
+      defer { sut.disconnect() }
+
+      let validToken =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
+      await sut.setAuth(validToken)
+      XCTAssertEqual(sut.mutableState.accessToken, validToken)
+
+      await sut.setAuth()
+
+      XCTAssertEqual(sut.mutableState.accessToken, validToken)
+    }
+
+    func testSetAuthDoesNotPushNullTokenToChannelsWhenFetchFails() async throws {
+      struct FetchError: Error {}
+
+      let validToken =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
+      let shouldThrow = LockIsolated(false)
+
+      let sut = RealtimeClientV2(
+        url: url,
+        options: RealtimeClientOptions(
+          headers: ["apikey": apiKey],
+          accessToken: {
+            if shouldThrow.value { throw FetchError() }
+            return validToken
+          }
+        ),
+        wsTransport: { _, _ in self.client },
+        http: http
+      )
+      defer { sut.disconnect() }
+
+      let serverTask = Task { @Sendable [server = server!] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "heartbeat" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef, ref: msg.ref, topic: "phoenix",
+                event: "phx_reply", payload: ["response": [:]]
+              )
+            )
+          } else if msg.event == "phx_join" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef, ref: msg.ref, topic: msg.topic,
+                event: "phx_reply",
+                payload: ["response": ["postgres_changes": .array([])], "status": "ok"]
+              )
+            )
+          }
+        }
+      }
+      defer { serverTask.cancel() }
+
+      await sut.connect()
+      await sut.setAuth(validToken)
+      XCTAssertEqual(sut.mutableState.accessToken, validToken)
+
+      let channel = sut.channel("room")
+      try await channel.subscribeWithError()
+
+      let sentBefore = client.sentEvents.count
+      shouldThrow.setValue(true)
+      await sut.setAuth()
+
+      let accessTokenPushes =
+        client.sentEvents
+        .dropFirst(sentBefore)
+        .compactMap { $0.realtimeMessage }
+        .filter { $0.event == ChannelEvent.accessToken }
+      XCTAssertTrue(
+        accessTokenPushes.isEmpty,
+        "No access_token update should be pushed to channels when the token fetch fails"
+      )
+      XCTAssertEqual(sut.mutableState.accessToken, validToken)
     }
 
     // MARK: - Task Lifecycle Tests

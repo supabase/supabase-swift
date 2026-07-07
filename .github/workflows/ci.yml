@@ -13,7 +13,11 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Only cancel in-progress runs for PRs (fast feedback on new pushes).
+  # Never cancel pushes to main/release branches: the Release workflow only
+  # fires when this CI run's conclusion is "success", so a cancelled run on
+  # a release-please release commit silently skips publishing the release.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -52,17 +56,17 @@ jobs:
         uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
       - name: Debug
         if: matrix.skip_debug != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
+        run: CONFIG=Debug PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
       - name: Release
         if: matrix.skip_release != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+        run: CONFIG=Release PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
       - name: Install lcov
         if: matrix.command == 'test' && matrix.platform == 'IOS'
         run: brew install lcov
       - name: Export code coverage
         id: coverage
         if: matrix.command == 'test' && matrix.platform == 'IOS'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" coverage
+        run: DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
       - name: Trust Coveralls Homebrew tap (Homebrew 6 requirement)
         if: steps.coverage.outcome == 'success'
         run: brew trust coverallsapp/coveralls
@@ -106,10 +110,10 @@ jobs:
         uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
       - name: Debug
         if: matrix.skip_debug != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Debug PLATFORM="${{ matrix.platform }}" xcodebuild
+        run: CONFIG=Debug PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
       - name: Release
         if: matrix.skip_release != '1'
-        run: make XCODEBUILD_ARGUMENT="${{ matrix.command }}" CONFIG=Release PLATFORM="${{ matrix.platform }}" xcodebuild
+        run: CONFIG=Release PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
 
   spm:
     runs-on: macos-26
@@ -213,7 +217,7 @@ jobs:
       - name: Select Xcode ${{ matrix.xcode }}
         run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
       - name: Build for library evolution
-        run: make build-for-library-evolution
+        run: ./scripts/build-for-library-evolution.sh
 
   examples:
     name: Examples (${{ matrix.scheme }})
@@ -240,7 +244,7 @@ jobs:
       - name: Update mtime for incremental builds
         uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
       - name: Build ${{ matrix.scheme }}
-        run: make DERIVED_DATA_PATH=~/.derivedData SCHEME="${{ matrix.scheme }}" XCODEBUILD_ARGUMENT=build xcodebuild
+        run: DERIVED_DATA_PATH=~/.derivedData SCHEME="${{ matrix.scheme }}" XCODEBUILD_ARGUMENT=build ./scripts/xcodebuild.sh
 
   # cSpell runs on Node, which the ubuntu-latest image already provides, so this
   # job needs no setup-go and no setup-node - the runner's Node is part of the
@@ -270,7 +274,7 @@ jobs:
           restore-keys: |
             docs-${{ runner.os }}-
       - name: Test docs
-        run: make test-docs
+        run: ./scripts/test-docs.sh
 
   format-check:
     name: Format check (changed files only)
@@ -308,7 +312,7 @@ jobs:
           # Check if formatting made any changes
           if ! git diff --exit-code; then
             echo "❌ Some files are not formatted correctly."
-            echo "📝 Please run 'make format' locally on the changed files and commit the changes."
+            echo "📝 Please run './scripts/format.sh' locally on the changed files and commit the changes."
             echo ""
             echo "Files that need formatting:"
             git diff --name-only
