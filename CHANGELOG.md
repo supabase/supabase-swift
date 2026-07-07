@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.50.0](https://github.com/supabase/supabase-swift/compare/v2.49.0...v2.50.0) (2026-07-06)
+
+
+### Features
+
+* drop Swift 5.10 support and require Swift 6.1+ ([#1066](https://github.com/supabase/supabase-swift/issues/1066)) ([1ba29f6](https://github.com/supabase/supabase-swift/commit/1ba29f606cea63fdb71bb638d4653eff49e8bbf6))
+* raise minimum platform versions to iOS 16 and equivalents ([#1067](https://github.com/supabase/supabase-swift/issues/1067)) ([9e292aa](https://github.com/supabase/supabase-swift/commit/9e292aa0bde4d7923a341cd5f81a392a446a64fe))
+
+
+### Bug Fixes
+
+* **auth:** decode callback URL params once, with form semantics ([#1070](https://github.com/supabase/supabase-swift/issues/1070)) ([3b749aa](https://github.com/supabase/supabase-swift/commit/3b749aaef919d873c1340d9b06c6e9e9d7326e54))
+* **postgrest:** quote column names in insert()/upsert() columns list ([#1068](https://github.com/supabase/supabase-swift/issues/1068)) ([6350a1c](https://github.com/supabase/supabase-swift/commit/6350a1c0f5927ceb78df00b8a27bc00fb8c017d4))
+* **realtime:** break retain cycle in heartbeat task ([#1078](https://github.com/supabase/supabase-swift/issues/1078)) ([5df4044](https://github.com/supabase/supabase-swift/commit/5df404499e8e8a41d763687d1dfa91e2afb9744c))
+* **realtime:** send bare topic in broadcast REST body ([#1065](https://github.com/supabase/supabase-swift/issues/1065)) ([94f3895](https://github.com/supabase/supabase-swift/commit/94f389500a08f0c7ab7dade2b00b2a013651cd48))
+
 ## [2.49.0](https://github.com/supabase/supabase-swift/compare/v2.48.0...v2.49.0) (2026-07-03)
 
 

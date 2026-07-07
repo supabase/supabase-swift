@@ -1,17 +1,28 @@
-import Foundation
+public import Foundation
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
+/// Configuration options for customizing ``SupabaseClient`` behavior.
+///
+/// Pass an instance of this struct to ``SupabaseClient/init(supabaseURL:supabaseKey:options:)``
+/// to override defaults for any sub-client.
 public struct SupabaseClientOptions: Sendable {
+  /// Options for the database (PostgREST) sub-client.
   public let db: DatabaseOptions
+  /// Options for the Auth sub-client.
   public let auth: AuthOptions
+  /// Options shared across all sub-clients.
   public let global: GlobalOptions
+  /// Options for the Edge Functions sub-client.
   public let functions: FunctionsOptions
+  /// Options for the Realtime sub-client.
   public let realtime: RealtimeClientOptions
+  /// Options for the Storage sub-client.
   public let storage: StorageOptions
 
+  /// Options for the database (PostgREST) sub-client.
   public struct DatabaseOptions: Sendable {
     /// The Postgres schema which your tables belong to. Must be on the list of exposed schemas in
     /// Supabase.
@@ -34,6 +45,7 @@ public struct SupabaseClientOptions: Sendable {
     }
   }
 
+  /// Options for the Auth sub-client.
   public struct AuthOptions: Sendable {
     /// A storage provider. Used to store the logged-in session.
     public let storage: any AuthLocalStorage
@@ -93,6 +105,7 @@ public struct SupabaseClientOptions: Sendable {
     }
   }
 
+  /// Options shared across all Supabase sub-clients.
   public struct GlobalOptions: Sendable {
     /// Optional headers for initializing the client, it will be passed down to all sub-clients.
     public let headers: [String: String]
@@ -114,6 +127,7 @@ public struct SupabaseClientOptions: Sendable {
     }
   }
 
+  /// Options for the Edge Functions sub-client.
   public struct FunctionsOptions: Sendable {
     /// The Region to invoke the functions in.
     public let region: String?
@@ -138,6 +152,7 @@ public struct SupabaseClientOptions: Sendable {
     }
   }
 
+  /// Options for the Storage sub-client.
   public struct StorageOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let useNewHostname: Bool
@@ -147,6 +162,14 @@ public struct SupabaseClientOptions: Sendable {
     }
   }
 
+  /// Creates a configuration with the given options.
+  /// - Parameters:
+  ///   - db: Options for the database (PostgREST) sub-client.
+  ///   - auth: Options for the Auth sub-client.
+  ///   - global: Options shared across all sub-clients.
+  ///   - functions: Options for the Edge Functions sub-client.
+  ///   - realtime: Options for the Realtime sub-client.
+  ///   - storage: Options for the Storage sub-client.
   public init(
     db: DatabaseOptions = .init(),
     auth: AuthOptions,

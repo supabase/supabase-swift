@@ -5,7 +5,7 @@
 //  Created by Claude on 06/10/25.
 //
 
-import Foundation
+package import Foundation
 
 package enum Base64URL {
   /// Decodes a base64url-encoded string to Data

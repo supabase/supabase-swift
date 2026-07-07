@@ -18,7 +18,6 @@ import XCTest
   final class RealtimeTests: XCTestCase {}
 #else
 
-  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   final class RealtimeTests: XCTestCase {
     let url = URL(string: "http://localhost:54321/realtime/v1")!
     let apiKey = "publishable.api.key"

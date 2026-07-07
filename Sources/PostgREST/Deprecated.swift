@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 16/01/24.
 //
 
-import Foundation
+public import Foundation
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 extension PostgrestClient.Configuration {

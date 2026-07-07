@@ -33,7 +33,6 @@ struct User: Codable, Hashable {
   let email: String
 }
 
-@available(iOS 15.0.0, macOS 12.0.0, tvOS 13.0, *)
 final class IntegrationTests: XCTestCase {
   let client = PostgrestClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,

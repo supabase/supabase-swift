@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 29/04/24.
 //
 
-import Foundation
+public import Foundation
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 extension AuthClient {
@@ -18,13 +18,43 @@ extension AuthClient {
       _ request: URLRequest
     ) async throws -> (Data, URLResponse)
 
-  /// Configuration struct represents the client configuration.
+  /// Configuration options for ``AuthClient``.
+  ///
+  /// ## Topics
+  ///
+  /// ### Networking
+  /// - ``url``
+  /// - ``headers``
+  /// - ``flowType``
+  /// - ``redirectToURL``
+  /// - ``fetch``
+  ///
+  /// ### Storage
+  /// - ``localStorage``
+  /// - ``storageKey``
+  ///
+  /// ### Encoding / decoding
+  /// - ``encoder``
+  /// - ``decoder``
+  /// - ``jsonEncoder``
+  /// - ``jsonDecoder``
+  ///
+  /// ### Token refresh
+  /// - ``autoRefreshToken``
+  /// - ``defaultAutoRefreshToken``
+  /// - ``emitLocalSessionAsInitialSession``
+  ///
+  /// ### Defaults
+  /// - ``defaultFlowType``
+  /// - ``defaultHeaders``
   public struct Configuration: Sendable {
     /// The URL of the Auth server.
     public let url: URL
 
     /// Any additional headers to send to the Auth server.
     public var headers: [String: String]
+
+    /// The OAuth / sign-in flow type to use (``AuthFlowType/implicit`` or ``AuthFlowType/pkce``).
     public let flowType: AuthFlowType
 
     /// Default URL to be used for redirect on the flows that requires it.
@@ -38,7 +68,11 @@ extension AuthClient {
 
     /// Custom SupabaseLogger implementation used to inspecting log messages from the Auth library.
     public let logger: (any SupabaseLogger)?
+
+    /// The JSON encoder used to serialize request bodies sent to the Auth server.
     public let encoder: JSONEncoder
+
+    /// The JSON decoder used to deserialize responses received from the Auth server.
     public let decoder: JSONDecoder
 
     /// A custom fetch implementation.

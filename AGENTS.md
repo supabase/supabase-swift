@@ -25,7 +25,7 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
 
 - Xcode 16.4+ (supports versions eligible for App Store submission)
 - Swift 6.1+
-- Supported platforms: iOS 13.0+, macOS 10.15+, tvOS 13+, watchOS 6+, visionOS 1+
+- Supported platforms: iOS 16.0+, macOS 13.0+, tvOS 16+, watchOS 9+, visionOS 1+
 - Linux is supported for building but not officially supported for production use
 
 ### Build Commands
@@ -39,11 +39,11 @@ swift build -c debug
 swift build -c release
 
 # Build with library evolution
-make build-for-library-evolution
+./scripts/build-for-library-evolution.sh
 
 # Build using Xcode
-make PLATFORM=IOS xcodebuild
-make PLATFORM=MACOS xcodebuild
+PLATFORM=IOS ./scripts/xcodebuild.sh
+PLATFORM=MACOS ./scripts/xcodebuild.sh
 ```
 
 ### Testing Commands
@@ -57,20 +57,20 @@ swift test --filter AuthTests
 swift test --filter StorageTests
 
 # Run tests via Xcode
-make PLATFORM=IOS XCODEBUILD_ARGUMENT=test xcodebuild
+PLATFORM=IOS XCODEBUILD_ARGUMENT=test ./scripts/xcodebuild.sh
 
 # Run integration tests (requires Supabase instance)
-make test-integration
+./scripts/test-integration.sh
 
 # Generate code coverage
-make coverage
+DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
 ```
 
 ### Code Formatting
 
 ```bash
 # Format all Swift files
-make format
+./scripts/format.sh
 ```
 
 This uses `swift-format` to automatically format code. All code should be formatted before committing.
@@ -81,7 +81,7 @@ Spell-checking uses [cSpell](https://cspell.org), via Node/npm:
 
 ```bash
 npm ci --prefix tools/node   # one-time setup (re-run only when tools/node/package-lock.json changes)
-make spell-check             # cspell - Swift and Markdown sources
+./scripts/spell-check.sh     # cspell - Swift and Markdown sources
 ```
 
 Legitimate technical terms and project-specific words go in `dictionary.txt` at the repository root.
@@ -90,7 +90,7 @@ Legitimate technical terms and project-specific words go in `dictionary.txt` at 
 
 ```bash
 # Test documentation build
-make test-docs
+./scripts/test-docs.sh
 ```
 
 Ensures DocC documentation builds without warnings.
@@ -262,7 +262,7 @@ Dropping support for older versions is NOT considered a breaking change and happ
 
 1. Create feature branch from `main`
 2. Implement feature with tests
-3. Run `make format` to format code
+3. Run `./scripts/format.sh` to format code
 4. Run `swift test` to verify tests pass
 5. Add documentation if needed
 6. Create PR with conventional commit title
@@ -296,7 +296,7 @@ supabase stop
 
 ## Important Notes for AI Coding Agents
 
-- Always run `make format` before committing Swift code
+- Always run `./scripts/format.sh` before committing Swift code
 - Ensure new public APIs have DocC documentation comments
 - Add tests for all new functionality
 - Keep changes minimal and focused

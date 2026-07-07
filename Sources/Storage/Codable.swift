@@ -6,7 +6,7 @@
 //
 
 import ConcurrencyExtras
-import Foundation
+public import Foundation
 
 extension JSONEncoder {
   @available(*, deprecated, message: "Access to storage encoder is going to be removed.")

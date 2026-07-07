@@ -96,4 +96,123 @@ final class WebSocketTests: XCTestCase {
 
     XCTAssertEqual(error.localizedDescription, "Connection failed Test error")
   }
+
+  // MARK: - URLSessionWebSocket Lifecycle Tests
+
+  #if canImport(Network)
+    func testSocketsDeallocateAfterClose() async throws {
+      let server = try LoopbackWebSocketServer()
+      let port = try server.start()
+      defer { server.stop() }
+
+      let url = URL(string: "ws://127.0.0.1:\(port)")!
+
+      var deallocations: [XCTestExpectation] = []
+
+      for index in 0..<5 {
+        let deallocated = expectation(description: "socket \(index) deallocated")
+        deallocations.append(deallocated)
+
+        let socket = try await URLSessionWebSocket.connect(to: url)
+        objc_setAssociatedObject(
+          socket,
+          &deinitNotifierKey,
+          DeinitNotifier { deallocated.fulfill() },
+          .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        )
+        socket.close(code: 1000, reason: nil)
+      }
+
+      await fulfillment(of: deallocations, timeout: 10)
+    }
+  #endif
 }
+
+#if canImport(Network)
+  import Network
+  import ObjectiveC
+
+  private final class DeinitNotifier {
+    private let onDeinit: @Sendable () -> Void
+    init(_ onDeinit: @escaping @Sendable () -> Void) { self.onDeinit = onDeinit }
+    deinit { onDeinit() }
+  }
+
+  private nonisolated(unsafe) var deinitNotifierKey: UInt8 = 0
+
+  private final class LoopbackWebSocketServer {
+    private let listener: NWListener
+    private let queue = DispatchQueue(label: "co.supabase.LoopbackWebSocketServer")
+    private var connections: [NWConnection] = []
+    private var isStopped = false
+
+    init() throws {
+      let parameters = NWParameters.tcp
+      let webSocketOptions = NWProtocolWebSocket.Options()
+      webSocketOptions.autoReplyPing = true
+      parameters.defaultProtocolStack.applicationProtocols.insert(webSocketOptions, at: 0)
+      listener = try NWListener(using: parameters, on: .any)
+    }
+
+    func start() throws -> UInt16 {
+      let ready = DispatchSemaphore(value: 0)
+
+      listener.stateUpdateHandler = { state in
+        if case .ready = state { ready.signal() }
+      }
+
+      listener.newConnectionHandler = { [weak self] connection in
+        guard let self else { return }
+        if self.isStopped {
+          connection.cancel()
+          return
+        }
+        self.connections.append(connection)
+        connection.start(queue: self.queue)
+        self.receive(on: connection)
+      }
+
+      listener.start(queue: queue)
+
+      guard ready.wait(timeout: .now() + 5) == .success, let port = listener.port else {
+        throw WebSocketError.connection(
+          message: "loopback server failed to start",
+          error: NSError(domain: "LoopbackWebSocketServer", code: -1)
+        )
+      }
+
+      return port.rawValue
+    }
+
+    private func receive(on connection: NWConnection) {
+      connection.receiveMessage { [weak self] _, context, _, error in
+        if let metadata = context?.protocolMetadata(definition: NWProtocolWebSocket.definition)
+          as? NWProtocolWebSocket.Metadata, metadata.opcode == .close
+        {
+          let closeMetadata = NWProtocolWebSocket.Metadata(opcode: .close)
+          let closeContext = NWConnection.ContentContext(
+            identifier: "close", metadata: [closeMetadata])
+          connection.send(
+            content: nil,
+            contentContext: closeContext,
+            isComplete: true,
+            completion: .contentProcessed { _ in connection.cancel() }
+          )
+          return
+        }
+
+        guard error == nil else { return }
+        self?.receive(on: connection)
+      }
+    }
+
+    func stop() {
+      queue.sync {
+        isStopped = true
+        listener.cancel()
+        for connection in connections { connection.cancel() }
+        connections.removeAll()
+      }
+    }
+  }
+#endif

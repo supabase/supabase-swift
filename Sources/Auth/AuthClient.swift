@@ -1,9 +1,11 @@
 import ConcurrencyExtras
-import Foundation
+public import Foundation
 import IssueReporting
 
+import struct HTTPTypes.HTTPFields
+
 #if canImport(AuthenticationServices)
-  import AuthenticationServices
+  public import AuthenticationServices
 #endif
 
 #if canImport(FoundationNetworking)
@@ -59,6 +61,93 @@ private actor GlobalJWKSCache {
 
 private let globalJWKSCache = GlobalJWKSCache()
 
+/// The primary interface to Supabase Auth.
+///
+/// Use `AuthClient` to sign users up, sign them in, manage sessions, and subscribe to
+/// authentication-state changes. It is an `actor`, so all mutable state is protected by Swift
+/// concurrency.
+///
+/// ```swift
+/// let auth = AuthClient(
+///   url: URL(string: "https://<project>.supabase.co/auth/v1")!,
+///   headers: ["apikey": "<publishable-key>"],
+///   localStorage: KeychainLocalStorage()
+/// )
+///
+/// // Sign in
+/// let session = try await auth.signIn(email: "user@example.com", password: "secret")
+///
+/// // Listen for state changes
+/// for await (event, session) in auth.authStateChanges {
+///   print(event, session?.user.email ?? "signed out")
+/// }
+/// ```
+///
+/// ## Topics
+///
+/// ### Observing state
+/// - ``onAuthStateChange(_:)``
+/// - ``authStateChanges``
+/// - ``currentSession``
+/// - ``currentUser``
+/// - ``session``
+///
+/// ### Signing up
+/// - ``signUp(email:password:data:redirectTo:captchaToken:)``
+/// - ``signUp(phone:password:channel:data:captchaToken:)``
+/// - ``signInAnonymously(data:captchaToken:)``
+///
+/// ### Signing in
+/// - ``signIn(email:password:captchaToken:)``
+/// - ``signIn(phone:password:captchaToken:)``
+/// - ``signInWithIdToken(credentials:)``
+/// - ``signInWithOTP(email:redirectTo:shouldCreateUser:data:captchaToken:)``
+/// - ``signInWithOTP(phone:channel:shouldCreateUser:data:captchaToken:)``
+/// - ``signInWithSSO(domain:redirectTo:captchaToken:)``
+/// - ``signInWithSSO(providerId:redirectTo:captchaToken:)``
+/// - ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``
+///
+/// ### Session management
+/// - ``exchangeCodeForSession(authCode:)``
+/// - ``session(from:)``
+/// - ``setSession(accessToken:refreshToken:)``
+/// - ``refreshSession(refreshToken:)``
+/// - ``startAutoRefresh()``
+/// - ``stopAutoRefresh()``
+///
+/// ### Signing out
+/// - ``signOut(scope:)``
+///
+/// ### User management
+/// - ``user(jwt:)``
+/// - ``update(user:redirectTo:)``
+/// - ``verifyOTP(email:token:type:redirectTo:captchaToken:)``
+/// - ``verifyOTP(phone:token:type:captchaToken:)``
+/// - ``verifyOTP(tokenHash:type:)``
+/// - ``resend(email:type:emailRedirectTo:captchaToken:)``
+/// - ``resend(phone:type:captchaToken:)``
+/// - ``reauthenticate()``
+/// - ``resetPasswordForEmail(_:redirectTo:captchaToken:)``
+///
+/// ### Identities
+/// - ``userIdentities()``
+/// - ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``
+/// - ``linkIdentity(provider:scopes:redirectTo:queryParams:)``
+/// - ``linkIdentityWithIdToken(credentials:)``
+/// - ``getLinkIdentityURL(provider:scopes:redirectTo:queryParams:)``
+/// - ``unlinkIdentity(_:)``
+///
+/// ### JWT claims
+/// - ``getClaims(jwt:options:)``
+///
+/// ### Namespaces
+/// - ``mfa``
+/// - ``admin``
+///
+/// ### Notifications
+/// - ``didChangeAuthStateNotification``
+/// - ``authChangeEventInfoKey``
+/// - ``authChangeSessionInfoKey``
 public actor AuthClient {
   private static let _globalClientID = LockIsolated(0)
 
@@ -156,10 +245,8 @@ public actor AuthClient {
 
       #if canImport(UIKit)
         #if canImport(WatchKit)
-          if #available(watchOS 7.0, *) {
-            didBecomeActiveNotification = WKExtension.applicationDidBecomeActiveNotification
-            willResignActiveNotification = WKExtension.applicationWillResignActiveNotification
-          }
+          didBecomeActiveNotification = WKExtension.applicationDidBecomeActiveNotification
+          willResignActiveNotification = WKExtension.applicationWillResignActiveNotification
         #else
           didBecomeActiveNotification = UIApplication.didBecomeActiveNotification
           willResignActiveNotification = UIApplication.willResignActiveNotification
@@ -710,7 +797,6 @@ public actor AuthClient {
     /// - Note: This method support the PKCE flow.
     /// - Warning: Do not call `start()` on the `ASWebAuthenticationSession` object inside the
     /// `configure` closure, as the method implementation calls it already.
-    @available(watchOS 6.2, tvOS 16.0, *)
     @discardableResult
     public func signInWithOAuth(
       provider: Provider,
@@ -858,9 +944,7 @@ public actor AuthClient {
     precondition(configuration.flowType == .implicit, "Method only allowed for implicit flow.")
 
     if let errorMessage = params["error_description"] ?? params["error"] {
-      throw AuthError.implicitGrantRedirect(
-        message: errorMessage.replacingOccurrences(of: "+", with: " ")
-      )
+      throw AuthError.implicitGrantRedirect(message: errorMessage)
     }
 
     guard
@@ -910,7 +994,7 @@ public actor AuthClient {
 
     if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
       throw AuthError.pkceGrantCodeExchange(
-        message: params["error_description"]?.replacingOccurrences(of: "+", with: " ")
+        message: params["error_description"]
           ?? "Error in URL with unspecified error_description.",
         error: params["error"] ?? "unspecified_error",
         code: params["error_code"] ?? "unspecified_code"

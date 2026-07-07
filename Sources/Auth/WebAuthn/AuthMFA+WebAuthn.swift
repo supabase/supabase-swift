@@ -8,11 +8,10 @@
 import Foundation
 
 #if canImport(AuthenticationServices)
-  import AuthenticationServices
+  public import AuthenticationServices
 #endif
 
 #if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
-  @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
   extension AuthMFA {
     // MARK: - WebAuthn MFA (high-level, native UI)
 

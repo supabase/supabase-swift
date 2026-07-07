@@ -5,11 +5,26 @@
 //  Created by Guilherme Souza on 02/10/25.
 //
 
-import Foundation
+public import Foundation
 import HTTPTypes
 
-/// Contains all OAuth client administration methods.
-/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+/// Admin operations for managing OAuth 2.1 clients registered in Supabase Auth.
+///
+/// Only relevant when the OAuth 2.1 server feature is enabled in Supabase Auth.
+/// Access this namespace via ``AuthAdmin/oauth``.
+///
+/// > Warning: These methods require the secret key. Never expose this key
+/// > in a browser or mobile app — call these methods from a secure server-side environment only.
+///
+/// ## Topics
+///
+/// ### Managing clients
+/// - ``listClients(params:)``
+/// - ``createClient(params:)``
+/// - ``getClient(clientId:)``
+/// - ``updateClient(clientId:params:)``
+/// - ``deleteClient(clientId:)``
+/// - ``regenerateClientSecret(clientId:)``
 public struct AuthAdminOAuth: Sendable {
   let clientID: AuthClientID
 

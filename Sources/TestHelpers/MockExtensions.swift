@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 21/01/25.
 //
 
-import Foundation
-import InlineSnapshotTesting
-import Mocker
+package import Foundation
+package import InlineSnapshotTesting
+package import Mocker
 
 extension Mock {
   package func snapshotRequest(

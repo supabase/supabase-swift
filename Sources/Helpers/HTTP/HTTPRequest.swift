@@ -5,11 +5,11 @@
 //  Created by Guilherme Souza on 23/04/24.
 //
 
-import Foundation
-import HTTPTypes
+package import Foundation
+package import HTTPTypes
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  package import FoundationNetworking
 #endif
 
 package struct HTTPRequest: Sendable {

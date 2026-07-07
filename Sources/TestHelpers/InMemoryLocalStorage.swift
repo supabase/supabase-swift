@@ -1,6 +1,6 @@
-import Auth
+package import Auth
 import ConcurrencyExtras
-import Foundation
+package import Foundation
 
 package final class InMemoryLocalStorage: AuthLocalStorage, @unchecked Sendable {
   let _storage = LockIsolated([String: Data]())

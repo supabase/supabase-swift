@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 19/04/24.
 //
 
-import Foundation
+package import Foundation
 
 @discardableResult
 package func withTimeout<R: Sendable>(
@@ -26,7 +26,7 @@ package func withTimeout<R: Sendable>(
     group.addTask {
       let interval = deadline.timeIntervalSinceNow
       if interval > 0 {
-        try await _clock.sleep(for: interval)
+        try await _clock.sleep(for: .seconds(interval))
       }
       try Task.checkCancellation()
       throw TimeoutError()
