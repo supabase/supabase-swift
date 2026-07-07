@@ -74,8 +74,8 @@ struct AuthClientIntegrationTests {
       )
 
       #expect(response.session != nil)
-      #expect(response.user.email == email)
-      #expect(response.user.userMetadata["test"] == 42)
+      #expect(response.user?.email == email)
+      #expect(response.user?.userMetadata["test"] == 42)
 
       try await authClient.signOut()
 
@@ -236,7 +236,7 @@ struct AuthClientIntegrationTests {
     let user = try await authClient.user(jwt: firstUserSession?.accessToken)
 
     #expect(user.id == firstUserSession?.user.id)
-    #expect(user.id != secondUserSession.user.id)
+    #expect(user.id != secondUserSession.user?.id)
   }
 
   @Test
@@ -254,7 +254,7 @@ struct AuthClientIntegrationTests {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
     let identities = try await authClient.userIdentities()
     expectNoDifference(
-      session.user.identities?.map(\.identityId) ?? [],
+      session.user?.identities?.map(\.identityId) ?? [],
       identities.map(\.identityId)
     )
   }
@@ -262,7 +262,7 @@ struct AuthClientIntegrationTests {
   @Test
   func unlinkIdentity_withOnlyOneIdentity() async throws {
     let identities = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
-      .user.identities
+      .user?.identities
     let identity = try #require(identities?.first)
 
     do {
