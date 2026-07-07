@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 
 struct SessionManager: Sendable {
   var session: @Sendable () async throws -> Session

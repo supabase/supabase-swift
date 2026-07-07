@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 11/06/26.
 //
 
-import Foundation
+public import Foundation
 import Helpers
 
 /// Parameters for enrolling a new WebAuthn (passkey) factor as a second factor (MFA).

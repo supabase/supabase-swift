@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 07/05/24.
 //
 
-import Foundation
+public import Foundation
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 /// A generic error from a HTTP request.

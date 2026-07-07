@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import Foundation
+public import Foundation
 
 /// A collection of default values and behaviors used across the Client
 public enum Defaults {

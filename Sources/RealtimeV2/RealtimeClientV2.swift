@@ -6,7 +6,8 @@
 //
 
 import ConcurrencyExtras
-import Foundation
+public import Foundation
+import HTTPTypes
 import Helpers
 
 #if canImport(FoundationNetworking)
@@ -37,6 +38,44 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
   func _remove(_ channel: any RealtimeChannelProtocol)
 }
 
+/// The entry point for Supabase Realtime subscriptions.
+///
+/// `RealtimeClientV2` manages the underlying WebSocket connection and routes
+/// incoming events to the appropriate ``RealtimeChannelV2`` instances. Create
+/// one client per Supabase project and reuse it across your app.
+///
+/// ```swift
+/// let client = RealtimeClientV2(
+///   url: URL(string: "https://<project>.supabase.co/realtime/v1")!,
+///   options: RealtimeClientOptions(accessToken: { session.accessToken })
+/// )
+///
+/// await client.connect()
+///
+/// let channel = client.channel("room:lobby")
+/// try await channel.subscribe()
+/// ```
+///
+/// ## Topics
+/// ### Channels
+/// - ``channels``
+/// - ``channel(_:options:)``
+/// - ``addChannel(_:)``
+/// - ``removeChannel(_:)``
+/// - ``removeAllChannels()``
+/// ### Connection Status
+/// - ``status``
+/// - ``statusChange``
+/// - ``onStatusChange(_:)``
+/// - ``connect()``
+/// - ``disconnect(code:reason:)``
+/// ### Heartbeat
+/// - ``heartbeat``
+/// - ``onHeartbeat(_:)``
+/// ### Authentication
+/// - ``setAuth(_:)``
+/// ### Sending Messages
+/// - ``push(_:)``
 public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   struct MutableState {
     var accessToken: String?
@@ -82,11 +121,15 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let serializer = RealtimeSerializer()
   // Captured at init time so parallel test classes that swap _clock cannot
   // change the timing of an already-running client.
-  let clock: any _Clock
+  let clock: any Clock<Duration>
 
   let connectionManager: ConnectionManager
 
   /// All managed channels indexed by their topics.
+  ///
+  /// The dictionary key is the fully-qualified topic string (e.g. `"realtime:room:lobby"`).
+  /// Channels are added by ``channel(_:options:)`` and removed by ``removeChannel(_:)``
+  /// or ``removeAllChannels()``.
   public var channels: [String: RealtimeChannelV2] {
     mutableState.channels
   }
@@ -94,30 +137,47 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   private let statusSubject = AsyncValueSubject<RealtimeClientStatus>(.disconnected)
   private let heartbeatSubject = AsyncValueSubject<HeartbeatStatus?>(nil)
 
-  /// Listen for connection status changes.
+  /// An async stream that emits connection status changes.
   ///
-  /// You can also use ``onStatusChange(_:)`` for a closure based method.
+  /// The stream emits the current status immediately upon iteration and then each
+  /// subsequent change. Use ``onStatusChange(_:)`` for a closure-based alternative.
+  ///
+  /// ```swift
+  /// for await status in client.statusChange {
+  ///   print("Status changed to \(status)")
+  /// }
+  /// ```
   public var statusChange: AsyncStream<RealtimeClientStatus> {
     statusSubject.values
   }
 
-  /// The current connection status.
+  /// The current WebSocket connection status.
+  ///
+  /// Reflects the last value emitted by ``statusChange``.
   public var status: RealtimeClientStatus {
     statusSubject.value
   }
 
-  /// Listen for heartbeat status.
+  /// An async stream that emits heartbeat status updates.
   ///
-  /// You can also use ``onHeartbeat(_:)`` for a closure based method.
+  /// The client sends a heartbeat at each ``RealtimeClientOptions/defaultHeartbeatInterval``
+  /// interval to keep the connection alive. Use ``onHeartbeat(_:)`` for a closure-based alternative.
+  ///
+  /// ```swift
+  /// for await beat in client.heartbeat {
+  ///   print("Heartbeat: \(beat)")
+  /// }
+  /// ```
   public var heartbeat: AsyncStream<HeartbeatStatus> {
     AsyncStream(heartbeatSubject.values.compactMap { $0 })
   }
 
-  /// Listen for connection status changes.
-  /// - Parameter listener: Closure that will be called when connection status changes.
-  /// - Returns: An observation handle that can be used to stop listening.
+  /// Registers a closure to be called whenever the connection status changes.
   ///
-  /// - Note: Use ``statusChange`` if you prefer to use Async/Await.
+  /// - Parameter listener: A `@Sendable` closure called with the new ``RealtimeClientStatus`` on every change.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  ///
+  /// > Note: Use ``statusChange`` if you prefer async iteration over closures.
   public func onStatusChange(
     _ listener: @escaping @Sendable (RealtimeClientStatus) -> Void
   ) -> RealtimeSubscription {
@@ -125,11 +185,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     return RealtimeSubscription { task.cancel() }
   }
 
-  /// Listen for heartbeat checks.
-  /// - Parameter listener: Closure that will be called when heartbeat status changes.
-  /// - Returns: An observation handle that can be used to stop listening.
+  /// Registers a closure to be called on every heartbeat cycle.
   ///
-  /// - Note: Use ``heartbeat`` if you prefer to use Async/Await.
+  /// - Parameter listener: A `@Sendable` closure called with the latest ``HeartbeatStatus``.
+  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  ///
+  /// > Note: Use ``heartbeat`` if you prefer async iteration over closures.
   public func onHeartbeat(
     _ listener: @escaping @Sendable (HeartbeatStatus) -> Void
   ) -> RealtimeSubscription {
@@ -140,6 +201,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     return RealtimeSubscription { task.cancel() }
   }
 
+  /// Creates a new ``RealtimeClientV2`` using the default URLSession WebSocket transport.
+  ///
+  /// - Parameters:
+  ///   - url: The Realtime server URL (e.g. `https://<project>.supabase.co/realtime/v1`).
+  ///   - options: Configuration options for the client.
   public convenience init(url: URL, options: RealtimeClientOptions) {
     var interceptors: [any HTTPClientInterceptor] = []
 
@@ -168,7 +234,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     options: RealtimeClientOptions,
     wsTransport: @escaping WebSocketTransport,
     http: any HTTPClientType,
-    clock: any _Clock = _clock
+    clock: any Clock<Duration> = _clock
   ) {
     var options = options
     if options.headers[.xClientInfo] == nil {
@@ -291,9 +357,14 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  /// Connects the socket.
+  /// Opens the WebSocket connection and suspends until it is established.
   ///
-  /// Suspends until connected.
+  /// Calling this method when already connected is a no-op. If ``RealtimeClientOptions/connectOnSubscribe``
+  /// is `true` (the default), this is called automatically when a channel is subscribed to.
+  ///
+  /// ```swift
+  /// await client.connect()
+  /// ```
   public func connect() async {
     options.logger?.debug("Connecting...")
     Self.yieldStatusIfChanged(statusSubject, .connecting)
@@ -313,13 +384,19 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  /// Creates a new channel and bind it to this client.
-  /// - Parameters:
-  ///   - topic: Channel's topic.
-  ///   - options: Configuration options for the channel.
-  /// - Returns: Channel instance.
+  /// Returns an existing channel for the given topic or creates a new one.
   ///
-  /// - Note: This method doesn't subscribe to the channel, call ``RealtimeChannelV2/subscribe()`` on the returned channel instance.
+  /// The fully-qualified topic sent to the server is `"realtime:<topic>"`. If a channel
+  /// with the same topic already exists, it is returned without modification.
+  ///
+  /// > Note: This method does not subscribe to the channel. Call ``RealtimeChannelV2/subscribeWithError()``
+  /// > on the returned instance to join the topic.
+  ///
+  /// - Parameters:
+  ///   - topic: The channel topic name (without the `realtime:` prefix).
+  ///   - options: A builder closure to configure ``RealtimeChannelConfig`` options such as
+  ///     broadcast, presence, and privacy settings.
+  /// - Returns: A ``RealtimeChannelV2`` bound to this client.
   public func channel(
     _ topic: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
@@ -355,6 +432,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
+  /// Registers an externally-created channel with this client.
+  ///
+  /// > Warning: The client now manages channels automatically via ``channel(_:options:)``.
+  /// > This method will be removed in the next major release.
   @available(
     *,
     deprecated,
@@ -367,10 +448,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  /// Unsubscribe and removes channel.
+  /// Unsubscribes from and removes a channel.
   ///
-  /// If there is no channel left, client is disconnected (or schedules a deferred disconnect when
-  /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter`` is positive).
+  /// If the channel is currently subscribed, it is unsubscribed first. After removal,
+  /// if no channels remain, the client disconnects (or schedules a deferred disconnect
+  /// based on ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter``).
+  ///
+  /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannelV2) async {
     if channel.status == .subscribed {
       await channel.unsubscribe()
@@ -399,7 +483,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       state.pendingDisconnectTask?.cancel()
       state.pendingDisconnectTask = Task { [weak self, clock] in
         do {
-          try await clock.sleep(for: delay)
+          try await clock.sleep(for: .seconds(delay))
           self?.disconnect()
         } catch {
           // Cancelled: a new channel was added or disconnect() was called directly.
@@ -414,8 +498,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  /// Unsubscribes and removes all channels, then disconnects immediately regardless of
-  /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``.
+  /// Unsubscribes from and removes all channels, then disconnects immediately.
+  ///
+  /// Unlike ``removeChannel(_:)``, this method ignores
+  /// ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter`` and
+  /// disconnects the WebSocket right away.
   public func removeAllChannels() async {
     await withTaskGroup(of: Void.self) { group in
       for channel in channels.values {
@@ -510,10 +597,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     mutableState.withValue { state in
       state.heartbeatTask?.cancel()
 
-      state.heartbeatTask = Task { [options, clock] in
+      state.heartbeatTask = Task { [weak self, options, clock] in
         while !Task.isCancelled {
-          try? await clock.sleep(for: options.heartbeatInterval)
-          if Task.isCancelled {
+          try? await clock.sleep(for: .seconds(options.heartbeatInterval))
+          guard let self, !Task.isCancelled else {
             break
           }
           await self.sendHeartbeat()
@@ -570,10 +657,15 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  /// Disconnects client.
+  /// Closes the WebSocket connection.
+  ///
+  /// Cancels pending tasks, clears the send buffer, and emits a ``RealtimeClientStatus/disconnected``
+  /// status. Any channels that are currently subscribed remain registered and will be re-joined
+  /// automatically if ``connect()`` is called again.
+  ///
   /// - Parameters:
-  ///   - code: A numeric status code to send on disconnect.
-  ///   - reason: A custom reason for the disconnect.
+  ///   - code: An optional numeric close code to send to the server.
+  ///   - reason: An optional human-readable reason string.
   public func disconnect(code: Int? = nil, reason: String? = nil) {
     options.logger?.debug("Closing WebSocket connection")
 
@@ -637,12 +729,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  /// Sets the JWT access token used for channel subscription authorization and Realtime RLS.
+  /// Updates the JWT access token used for channel authorization and Realtime RLS.
   ///
-  /// If `token` is nil it will use the ``RealtimeClientOptions/accessToken`` callback function or the token set on the client.
+  /// When called, the token is propagated to all currently-subscribed channels. If `token`
+  /// is `nil`, the value is fetched from ``RealtimeClientOptions/accessToken`` if provided,
+  /// or the token already stored on the client is used.
   ///
-  /// On callback used, it will set the value of the token internal to the client.
-  /// - Parameter token: A JWT string to override the token set on the client.
+  /// - Parameter token: A JWT string, or `nil` to refresh from the configured `accessToken` callback.
   public func setAuth(_ token: String? = nil) async {
     var tokenToSend = token
 
@@ -706,9 +799,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
   }
 
-  /// Push out a message if the socket is connected.
+  /// Sends a message over the WebSocket, buffering it if the socket is not yet connected.
   ///
-  /// If the socket is not connected, the message gets enqueued within a local buffer, and sent out when a connection is next established.
+  /// If the socket is connected, the message is serialized and sent immediately.
+  /// If the socket is not connected, the message is enqueued and flushed once the
+  /// connection is established.
+  ///
+  /// - Parameter message: The ``RealtimeMessageV2`` to send.
   public func push(_ message: RealtimeMessageV2) {
     let callback = { @Sendable (_ client: RealtimeClientV2) in
       do {

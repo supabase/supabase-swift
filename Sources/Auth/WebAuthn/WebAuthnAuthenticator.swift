@@ -87,7 +87,6 @@ extension AnyJSON {
   /// real device, an Associated Domains entitlement (`webcredentials:<rpId>`), and a relying-party
   /// server hosting `.well-known/apple-app-site-association`, so it can only be exercised
   /// end-to-end on-device.
-  @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
   struct WebAuthnAuthenticator: Sendable {
     /// Presents the registration UI for the given W3C creation options and returns the resulting
     /// W3C credential JSON.
@@ -102,7 +101,6 @@ extension AnyJSON {
         async throws -> AnyJSON
   }
 
-  @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
   extension WebAuthnAuthenticator {
     static let live = WebAuthnAuthenticator(
       register: { options, rpId, anchor in
@@ -131,7 +129,6 @@ extension AnyJSON {
   }
 
   /// Serializes a platform registration credential into the W3C JSON shape the backend expects.
-  @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
   private func registrationCredentialJSON(from authorization: ASAuthorization) throws -> AnyJSON {
     guard
       let credential = authorization.credential
@@ -151,7 +148,6 @@ extension AnyJSON {
   }
 
   /// Serializes a platform assertion credential into the W3C JSON shape the backend expects.
-  @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
   private func assertionCredentialJSON(from authorization: ASAuthorization) throws -> AnyJSON {
     guard
       let credential = authorization.credential
@@ -177,7 +173,6 @@ extension AnyJSON {
   /// `ASAuthorizationController` keeps only a weak reference to its delegate and is itself not
   /// retained by the system, so the ceremony retains both itself and the controller until a
   /// callback fires.
-  @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
   @MainActor
   private final class WebAuthnCeremony: NSObject, ASAuthorizationControllerDelegate,
     ASAuthorizationControllerPresentationContextProviding

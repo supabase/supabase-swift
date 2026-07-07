@@ -6,7 +6,7 @@
 //
 
 import ConcurrencyExtras
-import Foundation
+package import Foundation
 import XCTestDynamicOverlay
 
 extension JSONDecoder {

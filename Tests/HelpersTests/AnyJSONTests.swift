@@ -72,7 +72,9 @@ final class AnyJSONTests: XCTestCase {
 
   func testEncode() throws {
     let encoder = AnyJSON.encoder
+    let originalFormatting = encoder.outputFormatting
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    defer { encoder.outputFormatting = originalFormatting }
 
     let data = try encoder.encode(jsonObject)
     let decodedJSONString = try XCTUnwrap(String(data: data, encoding: .utf8))
