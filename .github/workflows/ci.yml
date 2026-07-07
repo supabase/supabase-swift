@@ -13,7 +13,11 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Only cancel in-progress runs for PRs (fast feedback on new pushes).
+  # Never cancel pushes to main/release branches: the Release workflow only
+  # fires when this CI run's conclusion is "success", so a cancelled run on
+  # a release-please release commit silently skips publishing the release.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
