@@ -135,8 +135,8 @@ We welcome contributions! Please see the steps below.
 1. Fork the repo and clone it locally.
 2. Create a feature branch (`git checkout -b feature/my-feature`).
 3. Make your changes and add tests.
-4. Run `make format` to format Swift code.
-5. Run `make PLATFORM=IOS XCODEBUILD_ARGUMENT=test xcodebuild` to verify tests pass.
+4. Run `./scripts/format.sh` to format Swift code.
+5. Run `PLATFORM=IOS XCODEBUILD_ARGUMENT=test ./scripts/xcodebuild.sh` to verify tests pass.
 6. Commit using [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat(auth): add PKCE support`).
 7. Open a pull request against `main`.
 
