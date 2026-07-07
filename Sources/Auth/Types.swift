@@ -598,9 +598,10 @@ public enum AuthResponse: Codable, Hashable, Sendable {
   /// Only a user record was returned, meaning email confirmation is still pending.
   case user(User)
 
-  /// Neither a session nor a user was returned. GoTrue returns this shape for intermediate
-  /// confirmation steps that don't carry user data, e.g. the first of the two confirmations
-  /// required for a secure email change.
+  /// Neither a session nor a user was returned. This is also the fallback for any response body
+  /// that doesn't match a ``Session`` or ``User`` shape. GoTrue returns this shape for
+  /// intermediate confirmation steps that don't carry user data, e.g. the first of the two
+  /// confirmations required for a secure email change.
   case none
 
   public init(from decoder: any Decoder) throws {
