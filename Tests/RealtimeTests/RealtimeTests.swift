@@ -650,12 +650,12 @@ import XCTest
 
     func testBroadcastWithHTTP() async throws {
       await http.when {
-        $0.url.path.hasSuffix("broadcast")
+        $0.url.path.contains("/api/broadcast/")
       } return: { _ in
         HTTPResponse(
           data: "{}".data(using: .utf8)!,
           response: HTTPURLResponse(
-            url: self.sut.broadcastURL,
+            url: self.url,
             statusCode: 200,
             httpVersion: nil,
             headerFields: nil
@@ -677,8 +677,8 @@ import XCTest
         	--header "Authorization: Bearer custom.access.token" \
         	--header "Content-Type: application/json" \
         	--header "apiKey: publishable.api.key" \
-        	--data "{\"messages\":[{\"event\":\"test\",\"payload\":{\"value\":42},\"private\":false,\"topic\":\"public:messages\"}]}" \
-        	"http://localhost:54321/realtime/v1/api/broadcast"
+        	--data "{\"value\":42}" \
+        	"http://localhost:54321/realtime/v1/api/broadcast/public%3Amessages/events/test"
         """#
       }
     }

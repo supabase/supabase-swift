@@ -499,17 +499,116 @@ final class RealtimeChannelTests: XCTestCase {
     XCTAssertEqual(requests.count, 1)
 
     let request = requests[0]
-    XCTAssertEqual(request.url.absoluteString, "https://localhost:54321/realtime/v1/api/broadcast")
+    XCTAssertEqual(
+      request.url.absoluteString,
+      "https://localhost:54321/realtime/v1/api/broadcast/test-topic/events/test-event?private=true"
+    )
     XCTAssertEqual(request.method, .post)
     XCTAssertEqual(request.headers[.authorization], "Bearer test-token")
     XCTAssertEqual(request.headers[.apiKey], "test-key")
     XCTAssertEqual(request.headers[.contentType], "application/json")
 
-    let body = try JSONDecoder().decode(BroadcastPayload.self, from: request.body ?? Data())
-    XCTAssertEqual(body.messages.count, 1)
-    XCTAssertEqual(body.messages[0].topic, "test-topic")
-    XCTAssertEqual(body.messages[0].event, "test-event")
-    XCTAssertEqual(body.messages[0].private, true)
+    let body = try JSONDecoder().decode([String: String].self, from: request.body ?? Data())
+    XCTAssertEqual(body, ["data": "explicit"])
+  }
+
+  func testHttpSendPercentEncodesTopicAndEventInURL() async throws {
+    let httpClient = HTTPClientMock()
+    await httpClient.when({ _ in true }) { _ in
+      HTTPResponse(
+        data: Data(),
+        response: HTTPURLResponse(
+          url: URL(string: "https://localhost:54321/api/broadcast")!,
+          statusCode: 202,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: httpClient
+    )
+
+    let channel = socket.channel("room/one")
+
+    try await channel.httpSend(event: "cursor move", message: ["x": 1])
+
+    let requests = await httpClient.receivedRequests
+    XCTAssertEqual(
+      requests[0].url.absoluteString,
+      "https://localhost:54321/realtime/v1/api/broadcast/room%2Fone/events/cursor%20move"
+    )
+  }
+
+  func testHttpSendWithBinaryDataSendsOctetStream() async throws {
+    let httpClient = HTTPClientMock()
+    await httpClient.when({ _ in true }) { _ in
+      HTTPResponse(
+        data: Data(),
+        response: HTTPURLResponse(
+          url: URL(string: "https://localhost:54321/api/broadcast")!,
+          statusCode: 202,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: httpClient
+    )
+
+    let channel = socket.channel("test-topic")
+
+    let payload = Data([0x01, 0x02, 0x03])
+    try await channel.httpSend(event: "binary-event", data: payload)
+
+    let requests = await httpClient.receivedRequests
+    XCTAssertEqual(requests.count, 1)
+
+    let request = requests[0]
+    XCTAssertEqual(
+      request.url.absoluteString,
+      "https://localhost:54321/realtime/v1/api/broadcast/test-topic/events/binary-event"
+    )
+    XCTAssertEqual(request.headers[.contentType], "application/octet-stream")
+    XCTAssertEqual(request.body, payload)
+  }
+
+  func testHttpSendWithBinaryDataThrowsWhenAccessTokenIsMissing() async {
+    let httpClient = HTTPClientMock()
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(headers: ["apikey": "test-key"]),
+      wsTransport: { _, _ in client },
+      http: httpClient
+    )
+
+    let channel = socket.channel("test-topic")
+
+    do {
+      try await channel.httpSend(event: "test", data: Data([0x01]))
+      XCTFail("Expected httpSend to throw an error when access token is missing")
+    } catch {
+      XCTAssertEqual(error.localizedDescription, "Access token is required for httpSend()")
+    }
   }
 
   func testHttpSendThrowsOnNon202Status() async {
@@ -692,18 +791,6 @@ final class RealtimeChannelTests: XCTestCase {
         "Expected status text fallback, got '\(error.localizedDescription)'"
       )
     }
-  }
-}
-
-// Helper struct for decoding broadcast payload in tests
-private struct BroadcastPayload: Decodable {
-  let messages: [Message]
-
-  struct Message: Decodable {
-    let topic: String
-    let event: String
-    let payload: [String: String]
-    let `private`: Bool
   }
 }
 
