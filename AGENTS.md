@@ -90,10 +90,10 @@ Legitimate technical terms and project-specific words go in `dictionary.txt` at 
 
 ```bash
 # Lint Sources and Tests (fails on any new violation)
-make lint
+swiftlint lint --strict
 
 # Autocorrect violations that SwiftLint can fix
-make lint-fix
+swiftlint lint --fix
 ```
 
 This uses [SwiftLint](https://github.com/realm/SwiftLint) for code-smell and
