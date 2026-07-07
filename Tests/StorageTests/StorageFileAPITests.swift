@@ -82,6 +82,84 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(result[0].name, "test.txt")
   }
 
+  func testListFilesWithPartialSortByColumn() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 66" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"asc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(sortBy: SortBy(column: "updated_at"))
+    )
+  }
+
+  func testListFilesWithPartialSortByOrder() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 61" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"desc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(sortBy: SortBy(order: .descending))
+    )
+  }
+
+  func testListFilesWithFullSortByOverride() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 67" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"desc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(sortBy: SortBy(column: "updated_at", order: .descending))
+    )
+  }
+
   func testMove() async throws {
     Mock(
       url: url.appendingPathComponent("object/move"),
