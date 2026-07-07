@@ -621,6 +621,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options.offset = options.offset ?? defaultSearchOptions.offset
     options.prefix = path ?? ""
 
+    var sortBy = options.sortBy ?? SortBy()
+    sortBy.column = sortBy.column ?? defaultSearchOptions.sortBy?.column
+    sortBy.order = sortBy.order ?? defaultSearchOptions.sortBy?.order
+    options.sortBy = sortBy
+
     return try await execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/list/\(bucketId)"),
