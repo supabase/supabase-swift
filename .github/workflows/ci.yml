@@ -351,7 +351,7 @@ jobs:
           fi
           echo "SwiftLint $INSTALLED"
       - name: Run SwiftLint
-        run: make lint
+        run: swiftlint lint --strict
 
   ci-success:
     name: CI Success

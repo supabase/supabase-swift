@@ -104,7 +104,7 @@ final class URLSessionWebSocket: WebSocket {
           }
         }
       },
-      onWebSocketTaskOpened: { _, task, `protocol` in
+      onWebSocketTaskOpened: { session, task, `protocol` in
         mutableState.withValue {
           $0.webSocket = URLSessionWebSocket(
             _task: task, _protocol: `protocol` ?? "", session: session)
