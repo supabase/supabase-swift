@@ -82,6 +82,58 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(result[0].name, "test.txt")
   }
 
+  func testListFilesPreservesDefaultLimitWhenOnlyOffsetProvided() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 84" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"limit\":100,\"offset\":10,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(offset: 10, sortBy: SortBy(column: "name", order: .ascending))
+    )
+  }
+
+  func testListFilesPreservesDefaultOffsetWhenOnlyLimitProvided() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 82" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"limit\":50,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(limit: 50, sortBy: SortBy(column: "name", order: .ascending))
+    )
+  }
+
   func testMove() async throws {
     Mock(
       url: url.appendingPathComponent("object/move"),

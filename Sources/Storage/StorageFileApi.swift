@@ -617,6 +617,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let encoder = JSONEncoder.unconfiguredEncoder
 
     var options = options ?? defaultSearchOptions
+    options.limit = options.limit ?? defaultSearchOptions.limit
+    options.offset = options.offset ?? defaultSearchOptions.offset
     options.prefix = path ?? ""
 
     return try await execute(
