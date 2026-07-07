@@ -336,14 +336,3 @@ public enum LogLevel: String, Sendable {
   /// Error messages only.
   case error
 }
-
-struct BroadcastMessagePayload: Encodable {
-  let messages: [Message]
-
-  struct Message: Encodable {
-    let topic: String
-    let event: String
-    let payload: JSONObject
-    let `private`: Bool
-  }
-}

@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 public import Foundation
 import HTTPTypes
+import Helpers
 import IssueReporting
 
 #if canImport(FoundationNetworking)
@@ -90,6 +91,7 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// - ``broadcast(event:data:)``
 /// - ``httpSend(event:message:timeout:)-8v03n``
 /// - ``httpSend(event:message:timeout:)-5hhoc``
+/// - ``httpSend(event:data:timeout:)``
 /// ### Presence
 /// - ``track(_:)``
 /// - ``track(state:)``
@@ -314,6 +316,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// WebSocket state. Use it when you need guaranteed REST delivery or want to send
   /// a broadcast before subscribing to the channel.
   ///
+  /// > Important: Requires a Realtime server version >= 2.97.0. Older servers don't expose
+  /// > the per-event `/api/broadcast/{topic}/events/{event}` endpoint this method targets.
+  ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A `Codable` value to send as the message payload.
@@ -333,6 +338,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// WebSocket state. Use it when you need guaranteed REST delivery or want to send
   /// a broadcast before subscribing to the channel.
   ///
+  /// > Important: Requires a Realtime server version >= 2.97.0. Older servers don't expose
+  /// > the per-event `/api/broadcast/{topic}/events/{event}` endpoint this method targets.
+  ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A ``JSONObject`` to send as the message payload.
@@ -347,27 +355,18 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       throw RealtimeError("Access token is required for httpSend()")
     }
 
+    let isPrivate = await config.isPrivate
+
     var headers: HTTPFields = [.contentType: "application/json"]
     if let apiKey = socket.options.apikey {
       headers[.apiKey] = apiKey
     }
     headers[.authorization] = "Bearer \(accessToken)"
 
-    let body = try await JSONEncoder.supabase().encode(
-      BroadcastMessagePayload(
-        messages: [
-          BroadcastMessagePayload.Message(
-            topic: subTopic,
-            event: event,
-            payload: message,
-            private: config.isPrivate
-          )
-        ]
-      )
-    )
+    let body = try JSONEncoder.supabase().encode(message)
 
     let request = HTTPRequest(
-      url: socket.broadcastURL,
+      url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: isPrivate),
       method: .post,
       headers: headers,
       body: body
@@ -377,6 +376,55 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       [self] in try await socket.http.send(request)
     }
 
+    try Self.validateHTTPSendResponse(response)
+  }
+
+  /// Sends a binary broadcast message via the REST API.
+  ///
+  /// This method always targets the REST broadcast endpoint regardless of the current
+  /// WebSocket state. The payload is sent as-is with an `application/octet-stream`
+  /// content type — use this for raw binary payloads (e.g. images, custom binary formats)
+  /// that shouldn't be JSON-encoded.
+  ///
+  /// > Important: Requires a Realtime server version >= 2.97.0.
+  ///
+  /// - Parameters:
+  ///   - event: The broadcast event name.
+  ///   - data: Raw binary data to send as the request body.
+  ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
+  /// - Throws: A ``RealtimeError`` if the access token is missing or the request fails.
+  public func httpSend(
+    event: String,
+    data: Data,
+    timeout: TimeInterval? = nil
+  ) async throws {
+    guard let accessToken = await socket._getAccessToken() else {
+      throw RealtimeError("Access token is required for httpSend()")
+    }
+
+    let isPrivate = await config.isPrivate
+
+    var headers: HTTPFields = [.contentType: "application/octet-stream"]
+    if let apiKey = socket.options.apikey {
+      headers[.apiKey] = apiKey
+    }
+    headers[.authorization] = "Bearer \(accessToken)"
+
+    let request = HTTPRequest(
+      url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: isPrivate),
+      method: .post,
+      headers: headers,
+      body: data
+    )
+
+    let response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) {
+      [self] in try await socket.http.send(request)
+    }
+
+    try Self.validateHTTPSendResponse(response)
+  }
+
+  private static func validateHTTPSendResponse(_ response: Helpers.HTTPResponse) throws {
     guard response.statusCode == 202 else {
       // Try to parse error message from response body
       var errorMessage = HTTPURLResponse.localizedString(forStatusCode: response.statusCode)
@@ -435,21 +483,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       let task = Task { [headers] in
         _ = try? await socket.http.send(
           HTTPRequest(
-            url: socket.broadcastURL,
+            url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: config.isPrivate),
             method: .post,
             headers: headers,
-            body: JSONEncoder.supabase().encode(
-              BroadcastMessagePayload(
-                messages: [
-                  BroadcastMessagePayload.Message(
-                    topic: subTopic,
-                    event: event,
-                    payload: message,
-                    private: config.isPrivate
-                  )
-                ]
-              )
-            )
+            body: JSONEncoder.supabase().encode(message)
           )
         )
       }
