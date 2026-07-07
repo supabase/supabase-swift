@@ -134,6 +134,33 @@ final class StorageFileAPITests: XCTestCase {
     )
   }
 
+  func testListFilesWithExplicitZeroLimitIsNotTreatedAsMissing() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 81" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"limit\":0,\"offset\":5,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(
+        limit: 0, offset: 5, sortBy: SortBy(column: "name", order: .ascending))
+    )
+  }
+
   func testMove() async throws {
     Mock(
       url: url.appendingPathComponent("object/move"),
