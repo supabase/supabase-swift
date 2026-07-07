@@ -1185,6 +1185,8 @@ public actor AuthClient {
     emailRedirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
+    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+
     _ = try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("resend"),
@@ -1201,7 +1203,9 @@ public actor AuthClient {
           ResendEmailParams(
             type: type,
             email: email,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+            codeChallenge: codeChallenge,
+            codeChallengeMethod: codeChallengeMethod
           )
         )
       )

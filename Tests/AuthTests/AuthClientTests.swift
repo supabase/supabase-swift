@@ -1360,6 +1360,38 @@ final class AuthClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Content-Length: 201" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"code_challenge\":\"hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY\",\"code_challenge_method\":\"s256\",\"email\":\"example@mail.com\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"type\":\"email_change\"}" \
+      	"http://localhost:54321/auth/v1/resend?redirect_to=https://supabase.com"
+      """#
+    }
+    .register()
+
+    let sut = makeSUT()
+
+    try await sut.resend(
+      email: "example@mail.com",
+      type: .emailChange,
+      emailRedirectTo: URL(string: "https://supabase.com"),
+      captchaToken: "captcha-token"
+    )
+  }
+
+  func testResendEmailImplicitFlow() async throws {
+    Mock(
+      url: clientURL.appendingPathComponent("resend"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: Data()]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
       	--header "Content-Length: 107" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
@@ -1371,7 +1403,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = makeSUT(flowType: .implicit)
 
     try await sut.resend(
       email: "example@mail.com",
