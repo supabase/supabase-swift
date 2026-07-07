@@ -735,7 +735,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// is `nil`, the value is fetched from ``RealtimeClientOptions/accessToken`` if provided,
   /// or the token already stored on the client is used.
   ///
-  /// If the callback throws, the client keeps the current token and no update is sent to channels.
+  /// If ``RealtimeClientOptions/accessToken`` throws, the client keeps the current token and no update is sent to channels.
   /// - Parameter token: A JWT string, or `nil` to refresh from the configured `accessToken` callback.
   public func setAuth(_ token: String? = nil) async {
     var tokenToSend = token
